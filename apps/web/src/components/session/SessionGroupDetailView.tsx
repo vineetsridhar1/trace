@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
 import {
@@ -8,7 +8,7 @@ import {
   START_SESSION_MUTATION,
 } from "../../lib/mutations";
 import { useDetailPanelStore } from "../../stores/detail-panel";
-import { useEntityField, useEntityStore } from "../../stores/entity";
+import { useEntityField, useEntityStore, useSessionIdsByGroup } from "../../stores/entity";
 import type { SessionEntity } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
 import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
@@ -24,8 +24,8 @@ import { CheckpointOpenContext } from "./CheckpointOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
 import { SidebarPanel } from "./SidebarPanel";
 import type { SidebarTab } from "./SidebarPanel";
-import { MonacoFileViewer } from "./MonacoFileViewer";
-import { MonacoDiffViewer } from "./MonacoDiffViewer";
+const MonacoFileViewer = lazy(() => import("./MonacoFileViewer").then(m => ({ default: m.MonacoFileViewer })));
+const MonacoDiffViewer = lazy(() => import("./MonacoDiffViewer").then(m => ({ default: m.MonacoDiffViewer })));
 import {
   getDisplaySessionStatus,
   isTerminalStatus,
@@ -165,12 +165,14 @@ export function SessionGroupDetailView({
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
 
+  const groupSessionIds = useSessionIdsByGroup(sessionGroupId);
+
   const groupSessions = useMemo(
     () =>
-      (Object.values(sessionsMap) as SessionEntity[]).filter(
-        (session) => session.sessionGroupId === sessionGroupId,
-      ),
-    [sessionGroupId, sessionsMap],
+      groupSessionIds
+        .map((id) => sessionsMap[id])
+        .filter(Boolean),
+    [groupSessionIds, sessionsMap],
   );
 
   const sessionsByRecency = useMemo(() => {
@@ -514,21 +516,25 @@ export function SessionGroupDetailView({
           <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
             {activeFilePath?.startsWith("diff:") ? (
               <div className="h-full">
-                <MonacoDiffViewer
-                  key={activeFilePath}
-                  sessionGroupId={sessionGroupId}
-                  filePath={activeFilePath.slice(5)}
-                  status={openFiles.find((f) => f.filePath === activeFilePath)?.diffStatus ?? "M"}
-                  defaultBranch={groupRepo?.defaultBranch ?? "main"}
-                />
+                <Suspense fallback={<div className="flex h-full items-center justify-center bg-[#1e1e1e]" />}>
+                  <MonacoDiffViewer
+                    key={activeFilePath}
+                    sessionGroupId={sessionGroupId}
+                    filePath={activeFilePath.slice(5)}
+                    status={openFiles.find((f) => f.filePath === activeFilePath)?.diffStatus ?? "M"}
+                    defaultBranch={groupRepo?.defaultBranch ?? "main"}
+                  />
+                </Suspense>
               </div>
             ) : activeFilePath ? (
               <div className="h-full">
-                <MonacoFileViewer
-                  key={activeFilePath}
-                  sessionGroupId={sessionGroupId}
-                  filePath={activeFilePath}
-                />
+                <Suspense fallback={<div className="flex h-full items-center justify-center bg-[#1e1e1e]" />}>
+                  <MonacoFileViewer
+                    key={activeFilePath}
+                    sessionGroupId={sessionGroupId}
+                    filePath={activeFilePath}
+                  />
+                </Suspense>
               </div>
             ) : activeTerminal ? (
               <div className="h-full bg-[#0a0a0a]">

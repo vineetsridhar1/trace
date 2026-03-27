@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useEntityStore } from "../../stores/entity";
+import { useEntityStore, useEntityIds } from "../../stores/entity";
 import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
 import { getSessionGroupChannelId } from "../../lib/session-group";
 import {
@@ -11,12 +11,15 @@ import type { SessionGroupRow } from "./sessions-table-types";
 export function useSessionGroupRows(channelId: string): SessionGroupRow[] {
   const sessionGroups = useEntityStore((s) => s.sessionGroups);
   const sessions = useEntityStore((s) => s.sessions);
+  const sessionIdsByGroup = useEntityStore((s) => s._sessionIdsByGroup);
 
   return useMemo(() => {
     return (Object.values(sessionGroups) as SessionGroupEntity[])
       .map((group) => {
-        const groupSessions = (Object.values(sessions) as SessionEntity[])
-          .filter((session) => session.sessionGroupId === group.id)
+        const groupSessionIds = sessionIdsByGroup[group.id] ?? [];
+        const groupSessions = groupSessionIds
+          .map((id) => sessions[id])
+          .filter(Boolean)
           .sort((a, b) => {
             const aSort = a._sortTimestamp ?? a.updatedAt ?? a.createdAt;
             const bSort = b._sortTimestamp ?? b.updatedAt ?? b.createdAt;
@@ -35,8 +38,6 @@ export function useSessionGroupRows(channelId: string): SessionGroupRow[] {
         const agentStatuses = groupSessions.map((session) => session.agentStatus);
         const sessionStatuses = groupSessions.map((session) => session.sessionStatus);
         const prUrl = group.prUrl as string | null | undefined;
-        // Server-derived status is authoritative; client derivation is a fallback
-        // for the brief window before the initial query populates group.status.
         const displaySessionStatus =
           (group.status as string | undefined)
           ?? getSessionGroupDisplayStatus(sessionStatuses, agentStatuses, prUrl);
@@ -69,5 +70,5 @@ export function useSessionGroupRows(channelId: string): SessionGroupRow[] {
         if (diff !== 0) return diff;
         return a.id.localeCompare(b.id);
       });
-  }, [channelId, sessionGroups, sessions]);
+  }, [channelId, sessionGroups, sessions, sessionIdsByGroup]);
 }

@@ -1486,6 +1486,7 @@ export type Subscription = {
   chatEvents: Event;
   conversationEvents: AiConversationEvent;
   orgEvents: Event;
+  sessionEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
   ticketEvents: Event;
@@ -1519,6 +1520,12 @@ export type SubscriptionConversationEventsArgs = {
 export type SubscriptionOrgEventsArgs = {
   organizationId: Scalars['ID']['input'];
   types?: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+
+export type SubscriptionSessionEventsArgs = {
+  organizationId: Scalars['ID']['input'];
+  sessionId: Scalars['ID']['input'];
 };
 
 

@@ -3,7 +3,18 @@ import jwt from "jsonwebtoken";
 import type { Context } from "../context.js";
 import { AuthenticationError } from "./errors.js";
 import { prisma } from "./db.js";
-import { createUserLoader } from "./dataloader.js";
+import {
+  createUserLoader,
+  createSessionLoader,
+  createSessionGroupLoader,
+  createRepoLoader,
+  createEventLoader,
+  createConversationLoader,
+  createBranchLoader,
+  createTurnLoader,
+  createChannelMembershipLoader,
+  createChatMembershipLoader,
+} from "./dataloader.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
 
@@ -108,6 +119,15 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
     role,
     actorType: "user",
     userLoader: createUserLoader(),
+    sessionLoader: createSessionLoader(),
+    sessionGroupLoader: createSessionGroupLoader(),
+    repoLoader: createRepoLoader(),
+    eventLoader: createEventLoader(),
+    conversationLoader: createConversationLoader(),
+    branchLoader: createBranchLoader(),
+    turnLoader: createTurnLoader(),
+    channelMembershipLoader: createChannelMembershipLoader(user.id),
+    chatMembershipLoader: createChatMembershipLoader(user.id),
   };
 }
 
@@ -157,5 +177,14 @@ export async function buildWsContext(connectionParams?: Record<string, unknown>,
     role,
     actorType: "user",
     userLoader: createUserLoader(),
+    sessionLoader: createSessionLoader(),
+    sessionGroupLoader: createSessionGroupLoader(),
+    repoLoader: createRepoLoader(),
+    eventLoader: createEventLoader(),
+    conversationLoader: createConversationLoader(),
+    branchLoader: createBranchLoader(),
+    turnLoader: createTurnLoader(),
+    channelMembershipLoader: createChannelMembershipLoader(user.id),
+    chatMembershipLoader: createChatMembershipLoader(user.id),
   };
 }

@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { gql } from "@urql/core";
 import { asJsonObject, type JsonObject } from "@trace/shared";
 import { client } from "../lib/urql";
-import { useEntityStore, eventScopeKey } from "../stores/entity";
+import { useEntityStore, eventScopeKey, StoreBatchWriter } from "../stores/entity";
 import type { SessionEntity, SessionGroupEntity } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore, navigateToSession } from "../stores/ui";
@@ -231,7 +231,7 @@ export function useOrgEvents() {
         if (!result.data?.orgEvents) return;
 
         const event = result.data.orgEvents as Event;
-        const { upsert, patch, remove, upsertScopedEvent } = useEntityStore.getState();
+        const batch = new StoreBatchWriter();
         const payload = asJsonObject(event.payload);
 
         const upsertSessionGroupFromPayload = () => {
@@ -239,8 +239,8 @@ export function useOrgEvents() {
           const sessionGroup =
             asJsonObject(payload?.sessionGroup) ?? asJsonObject(sessionFromPayload?.sessionGroup);
           if (sessionGroup && typeof sessionGroup.id === "string") {
-            const existing = useEntityStore.getState().sessionGroups[sessionGroup.id];
-            upsert("sessionGroups", sessionGroup.id, {
+            const existing = batch.get("sessionGroups", sessionGroup.id);
+            batch.upsert("sessionGroups", sessionGroup.id, {
               ...(existing ? { ...existing, ...sessionGroup } : sessionGroup),
               _sortTimestamp: event.timestamp,
             } as SessionGroupEntity);
@@ -248,14 +248,14 @@ export function useOrgEvents() {
         };
 
         // Always upsert the raw event into its scoped bucket
-        upsertScopedEvent(eventScopeKey(event.scopeType, event.scopeId), event.id, event);
+        batch.upsertScopedEvent(eventScopeKey(event.scopeType, event.scopeId), event.id, storedEvent);
 
         // Repo created or updated — upsert directly from payload
         if ((event.eventType === "repo_created" || event.eventType === "repo_updated") && payload) {
           const repo = asJsonObject(payload.repo);
           if (repo && typeof repo.id === "string") {
-            const existing = useEntityStore.getState().repos[repo.id];
-            upsert(
+            const existing = batch.get("repos", repo.id);
+            batch.upsert(
               "repos",
               repo.id,
               (existing ? { ...existing, ...repo } : repo) as unknown as Repo,
@@ -267,12 +267,12 @@ export function useOrgEvents() {
         if (event.eventType === "chat_created" && payload) {
           const chat = asJsonObject(payload.chat);
           if (chat && typeof chat.id === "string") {
-            upsert("chats", chat.id, chat as unknown as Chat);
+            batch.upsert("chats", chat.id, chat as unknown as Chat);
           }
         }
         if (event.eventType === "chat_renamed" && payload) {
           if (event.scopeType === "chat" && typeof payload.name === "string") {
-            patch("chats", event.scopeId, { name: payload.name } as Partial<Chat>);
+            batch.patch("chats", event.scopeId, { name: payload.name } as Partial<Chat>);
           }
         }
         if (
@@ -282,7 +282,7 @@ export function useOrgEvents() {
           if (event.scopeType === "chat") {
             const members = payload.members;
             if (Array.isArray(members)) {
-              patch("chats", event.scopeId, { members } as Partial<Chat>);
+              batch.patch("chats", event.scopeId, { members } as Partial<Chat>);
             }
           }
         }
@@ -291,7 +291,7 @@ export function useOrgEvents() {
         if (event.eventType === "channel_created" && payload) {
           const channel = asJsonObject(payload.channel);
           if (channel && typeof channel.id === "string") {
-            upsert("channels", channel.id, channel as unknown as Channel);
+            batch.upsert("channels", channel.id, channel as unknown as Channel);
           }
         }
 
@@ -301,13 +301,13 @@ export function useOrgEvents() {
             for (const ch of payload.channels) {
               const c = asJsonObject(ch);
               if (c && typeof c.id === "string") {
-                patch("channels", c.id, c as Partial<Channel>);
+                batch.patch("channels", c.id, c as Partial<Channel>);
               }
             }
           } else {
             const channel = asJsonObject(payload.channel);
             if (channel && typeof channel.id === "string") {
-              patch("channels", channel.id, channel as Partial<Channel>);
+              batch.patch("channels", channel.id, channel as Partial<Channel>);
             }
           }
         }
@@ -328,18 +328,15 @@ export function useOrgEvents() {
             channel &&
             typeof channel.id === "string"
           ) {
-            // Current user joined — add channel to store
-            upsert("channels", channel.id, channel as unknown as Channel);
+            batch.upsert("channels", channel.id, channel as unknown as Channel);
           } else if (event.eventType === "channel_member_removed" && userId === currentUserId) {
-            // Current user left — remove channel from store
-            remove("channels", event.scopeId);
+            batch.remove("channels", event.scopeId);
             const activeChannelId = useUIStore.getState().activeChannelId;
             if (activeChannelId === event.scopeId) {
               useUIStore.getState().setActiveChannelId(null);
             }
           } else if (channel && typeof channel.id === "string") {
-            // Another user joined/left — update channel members
-            patch("channels", channel.id, { members: channel.members } as Partial<Channel>);
+            batch.patch("channels", channel.id, { members: channel.members } as Partial<Channel>);
           }
         }
 
@@ -347,7 +344,7 @@ export function useOrgEvents() {
         if (event.eventType === "channel_group_created" && payload) {
           const group = asJsonObject(payload.channelGroup);
           if (group && typeof group.id === "string") {
-            upsert("channelGroups", group.id, group as unknown as ChannelGroup);
+            batch.upsert("channelGroups", group.id, group as unknown as ChannelGroup);
           }
         }
         if (event.eventType === "channel_group_updated" && payload) {
@@ -355,26 +352,25 @@ export function useOrgEvents() {
             for (const g of payload.groups) {
               const group = asJsonObject(g);
               if (group && typeof group.id === "string") {
-                patch("channelGroups", group.id, group as Partial<ChannelGroup>);
+                batch.patch("channelGroups", group.id, group as Partial<ChannelGroup>);
               }
             }
           } else {
             const group = asJsonObject(payload.channelGroup);
             if (group && typeof group.id === "string") {
-              patch("channelGroups", group.id, group as Partial<ChannelGroup>);
+              batch.patch("channelGroups", group.id, group as Partial<ChannelGroup>);
             }
           }
         }
         if (event.eventType === "channel_group_deleted" && payload) {
           if (typeof payload.channelGroupId === "string") {
-            remove("channelGroups", payload.channelGroupId);
+            batch.remove("channelGroups", payload.channelGroupId);
           }
-          // Patch channels that were ungrouped by this deletion
           if (Array.isArray(payload.ungroupedChannels)) {
             for (const ch of payload.ungroupedChannels) {
               const c = asJsonObject(ch);
               if (c && typeof c.id === "string") {
-                patch("channels", c.id, c as Partial<Channel>);
+                batch.patch("channels", c.id, c as Partial<Channel>);
               }
             }
           }
@@ -385,14 +381,13 @@ export function useOrgEvents() {
           const session = asJsonObject(payload.session);
           if (session && typeof session.id === "string") {
             upsertSessionGroupFromPayload();
-            const existingSession = useEntityStore.getState().sessions[session.id];
-            upsert("sessions", session.id, {
+            const existingSession = batch.get("sessions", session.id);
+            batch.upsert("sessions", session.id, {
               ...(existingSession ? { ...existingSession, ...session } : session),
               _sortTimestamp: (session.updatedAt as string | undefined) ?? event.timestamp,
             } as unknown as SessionEntity);
 
-            // Auto-navigate to continuation sessions: if the new session was created
-            // from the currently active session, open its tab and navigate to it.
+            // Auto-navigate to continuation sessions
             const sourceSessionId = payload.sourceSessionId;
             const ui = useUIStore.getState();
             if (
@@ -422,16 +417,17 @@ export function useOrgEvents() {
               : null;
           const sessionGroupId =
             payload && typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;
-          remove("sessions", deletedId);
+          batch.remove("sessions", deletedId);
           if (deletedSessionGroupId) {
-            remove("sessionGroups", deletedSessionGroupId);
+            batch.remove("sessionGroups", deletedSessionGroupId);
           }
 
           const ui = useUIStore.getState();
           if (deletedSessionGroupId && ui.activeSessionGroupId === deletedSessionGroupId) {
             ui.setActiveSessionId(null);
           } else if (ui.activeSessionId === deletedId) {
-            const remaining = Object.values(useEntityStore.getState().sessions)
+            const allSessions = batch.getAll("sessions");
+            const remaining = Object.values(allSessions)
               .filter((session) => session.sessionGroupId === sessionGroupId)
               .sort((a, b) => {
                 const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
@@ -465,22 +461,21 @@ export function useOrgEvents() {
             if (payload.worktreeDeleted === true) {
               sessionPatch.worktreeDeleted = true;
             }
-            patch("sessions", event.scopeId, sessionPatch);
+            batch.patch("sessions", event.scopeId, sessionPatch);
 
-            // PR merge transitions ALL sessions in the group, not just the event session.
-            // Patch sibling sessions so their tab indicators update immediately.
+            // PR merge transitions ALL sessions in the group
             if (event.eventType === "session_pr_merged") {
-              const mergedSession = useEntityStore.getState().sessions[event.scopeId];
+              const mergedSession = batch.get("sessions", event.scopeId);
               const groupId = mergedSession?.sessionGroupId;
               if (groupId) {
-                const allSessions = useEntityStore.getState().sessions;
+                const allSessions = batch.getAll("sessions");
                 for (const [siblingId, sibling] of Object.entries(allSessions)) {
                   if (
                     siblingId !== event.scopeId &&
                     sibling.sessionGroupId === groupId &&
                     sibling.sessionStatus !== "merged"
                   ) {
-                    patch("sessions", siblingId, {
+                    batch.patch("sessions", siblingId, {
                       agentStatus: "done" as AgentStatus,
                       sessionStatus: "merged" as SessionStatus,
                       worktreeDeleted: true,
@@ -494,7 +489,7 @@ export function useOrgEvents() {
           }
         }
 
-        // Route PR lifecycle events — review state is derived from sessionGroup.prUrl
+        // Route PR lifecycle events
         if (
           SESSION_PR_EVENTS.has(event.eventType) &&
           event.scopeType === ("session" satisfies ScopeType) &&
@@ -512,7 +507,7 @@ export function useOrgEvents() {
           upsertSessionGroupFromPayload();
           const sessionPatch = sessionPatchFromOutput(payload);
           if (sessionPatch) {
-            patch("sessions", event.scopeId, {
+            batch.patch("sessions", event.scopeId, {
               ...sessionPatch,
               updatedAt: event.timestamp,
               ...(shouldBumpSortTimestampForOutput(payload)
@@ -530,9 +525,9 @@ export function useOrgEvents() {
 
           const checkpoint = extractGitCheckpoint(payload);
           if (checkpoint) {
-            const existingSession = useEntityStore.getState().sessions[event.scopeId];
+            const existingSession = batch.get("sessions", event.scopeId);
             if (existingSession) {
-              patch("sessions", event.scopeId, {
+              batch.patch("sessions", event.scopeId, {
                 gitCheckpoints: mergeGitCheckpoints(
                   existingSession.gitCheckpoints as GitCheckpoint[] | undefined,
                   checkpoint,
@@ -540,9 +535,9 @@ export function useOrgEvents() {
               } as Partial<SessionEntity>);
             }
 
-            const existingGroup = useEntityStore.getState().sessionGroups[checkpoint.sessionGroupId];
+            const existingGroup = batch.get("sessionGroups", checkpoint.sessionGroupId);
             if (existingGroup) {
-              patch("sessionGroups", checkpoint.sessionGroupId, {
+              batch.patch("sessionGroups", checkpoint.sessionGroupId, {
                 gitCheckpoints: mergeGitCheckpoints(
                   existingGroup.gitCheckpoints as GitCheckpoint[] | undefined,
                   checkpoint,
@@ -553,9 +548,9 @@ export function useOrgEvents() {
 
           const rewrite = extractGitCheckpointRewrite(payload);
           if (rewrite) {
-            const existingSession = useEntityStore.getState().sessions[event.scopeId];
+            const existingSession = batch.get("sessions", event.scopeId);
             if (existingSession) {
-              patch("sessions", event.scopeId, {
+              batch.patch("sessions", event.scopeId, {
                 gitCheckpoints: rewriteGitCheckpoints(
                   existingSession.gitCheckpoints as GitCheckpoint[] | undefined,
                   rewrite.replacedCommitSha,
@@ -564,9 +559,9 @@ export function useOrgEvents() {
               } as Partial<SessionEntity>);
             }
 
-            const existingGroup = useEntityStore.getState().sessionGroups[rewrite.checkpoint.sessionGroupId];
+            const existingGroup = batch.get("sessionGroups", rewrite.checkpoint.sessionGroupId);
             if (existingGroup) {
-              patch("sessionGroups", rewrite.checkpoint.sessionGroupId, {
+              batch.patch("sessionGroups", rewrite.checkpoint.sessionGroupId, {
                 gitCheckpoints: rewriteGitCheckpoints(
                   existingGroup.gitCheckpoints as GitCheckpoint[] | undefined,
                   rewrite.replacedCommitSha,
@@ -577,15 +572,15 @@ export function useOrgEvents() {
           }
         }
 
-        // Chat activity — update sort timestamp when a new message arrives in a chat
+        // Chat activity
         if (
           event.eventType === "message_sent" &&
           event.scopeType === ("chat" satisfies ScopeType)
         ) {
-          patch("chats", event.scopeId, { updatedAt: event.timestamp } as Partial<Chat>);
+          batch.patch("chats", event.scopeId, { updatedAt: event.timestamp } as Partial<Chat>);
         }
 
-        // Route session activity events — update timestamp, and preview if it's a real message
+        // Route session activity events
         if (
           SESSION_ACTIVITY_EVENTS.has(event.eventType) &&
           event.scopeType === ("session" satisfies ScopeType) &&
@@ -602,22 +597,25 @@ export function useOrgEvents() {
           if (preview) {
             updates._lastEventPreview = preview;
           }
-          patch("sessions", event.scopeId, updates);
+          batch.patch("sessions", event.scopeId, updates);
         }
 
         // Inbox item events
         if (event.eventType === ("inbox_item_created" as EventType) && payload) {
           const item = asJsonObject(payload.inboxItem);
           if (item && typeof item.id === "string") {
-            upsert("inboxItems", item.id, item as unknown as InboxItem);
+            batch.upsert("inboxItems", item.id, item as unknown as InboxItem);
           }
         }
         if (event.eventType === ("inbox_item_resolved" as EventType) && payload) {
           const item = asJsonObject(payload.inboxItem);
           if (item && typeof item.id === "string") {
-            upsert("inboxItems", item.id, item as unknown as InboxItem);
+            batch.upsert("inboxItems", item.id, item as unknown as InboxItem);
           }
         }
+
+        // Flush all accumulated mutations as a single setState call
+        batch.flush();
 
         // Fire notification handlers after all store patches are applied
         notifyForEvent(event);

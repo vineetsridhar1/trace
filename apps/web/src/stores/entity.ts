@@ -67,7 +67,11 @@ interface EntityActions {
   removeScopedEvents: (scopeKey: string) => void;
 }
 
-type EntityState = Tables & { eventsByScope: EventsByScope } & EntityActions;
+type EntityState = Tables & {
+  eventsByScope: EventsByScope;
+  /** Reverse index: sessionGroupId → session IDs belonging to that group */
+  _sessionIdsByGroup: Record<string, string[]>;
+} & EntityActions;
 
 export const useEntityStore = create<EntityState>((set) => ({
   organizations: {},
@@ -83,12 +87,32 @@ export const useEntityStore = create<EntityState>((set) => ({
   inboxItems: {},
   messages: {},
   eventsByScope: {},
+  _sessionIdsByGroup: {},
 
   upsert: (entityType, id, data) =>
     set((state) => {
       const table = { ...(state[entityType] as Record<string, unknown>) };
       table[id] = data;
-      return { [entityType]: table } as Partial<Tables>;
+      const update: Record<string, unknown> = { [entityType]: table };
+
+      if (entityType === "sessions") {
+        const groupId = (data as unknown as SessionEntity).sessionGroupId as string | undefined;
+        const idx = { ...state._sessionIdsByGroup };
+        // Remove from any old bucket
+        for (const gid of Object.keys(idx)) {
+          const arr = idx[gid];
+          if (arr.includes(id)) {
+            idx[gid] = arr.filter((x) => x !== id);
+            break;
+          }
+        }
+        // Add to new bucket
+        if (groupId) {
+          idx[groupId] = [...(idx[groupId] ?? []).filter((x) => x !== id), id];
+        }
+        update._sessionIdsByGroup = idx;
+      }
+      return update;
     }),
 
   upsertMany: (entityType, items) =>
@@ -97,23 +121,74 @@ export const useEntityStore = create<EntityState>((set) => ({
       for (const item of items) {
         table[item.id] = item;
       }
-      return { [entityType]: table } as Partial<Tables>;
+      const update: Record<string, unknown> = { [entityType]: table };
+
+      if (entityType === "sessions") {
+        const idx = { ...state._sessionIdsByGroup };
+        for (const item of items) {
+          const groupId = (item as unknown as SessionEntity).sessionGroupId as string | undefined;
+          // Remove from any old bucket
+          for (const gid of Object.keys(idx)) {
+            const arr = idx[gid];
+            if (arr.includes(item.id)) {
+              idx[gid] = arr.filter((x) => x !== item.id);
+              break;
+            }
+          }
+          // Add to new bucket
+          if (groupId) {
+            idx[groupId] = [...(idx[groupId] ?? []).filter((x) => x !== item.id), item.id];
+          }
+        }
+        update._sessionIdsByGroup = idx;
+      }
+      return update;
     }),
 
   patch: (entityType, id, data) =>
     set((state) => {
       const table = { ...(state[entityType] as Record<string, unknown>) };
       const existing = table[id];
-      if (existing) {
-        table[id] = { ...(existing as object), ...data };
+      if (!existing) return {};
+      const oldGroupId =
+        entityType === "sessions"
+          ? ((existing as unknown as SessionEntity).sessionGroupId as string | undefined)
+          : undefined;
+      table[id] = { ...(existing as object), ...data };
+      const update: Record<string, unknown> = { [entityType]: table };
+
+      if (entityType === "sessions") {
+        const newGroupId = (table[id] as unknown as SessionEntity).sessionGroupId as string | undefined;
+        if (oldGroupId !== newGroupId) {
+          const idx = { ...state._sessionIdsByGroup };
+          if (oldGroupId && idx[oldGroupId]) {
+            idx[oldGroupId] = idx[oldGroupId].filter((x) => x !== id);
+          }
+          if (newGroupId) {
+            idx[newGroupId] = [...(idx[newGroupId] ?? []).filter((x) => x !== id), id];
+          }
+          update._sessionIdsByGroup = idx;
+        }
       }
-      return { [entityType]: table } as Partial<Tables>;
+      return update;
     }),
 
   remove: (entityType, id) =>
     set((state) => {
-      const { [id]: _, ...rest } = state[entityType] as Record<string, unknown>;
-      return { [entityType]: rest } as Partial<Tables>;
+      const { [id]: removed, ...rest } = state[entityType] as Record<string, unknown>;
+      const update: Record<string, unknown> = { [entityType]: rest };
+
+      if (entityType === "sessions" && removed) {
+        const groupId = (removed as unknown as SessionEntity).sessionGroupId as string | undefined;
+        if (groupId) {
+          const idx = { ...state._sessionIdsByGroup };
+          if (idx[groupId]) {
+            idx[groupId] = idx[groupId].filter((x) => x !== id);
+          }
+          update._sessionIdsByGroup = idx;
+        }
+      }
+      return update;
     }),
 
   upsertScopedEvent: (scopeKey, id, event) =>
@@ -138,6 +213,169 @@ export const useEntityStore = create<EntityState>((set) => ({
       return { eventsByScope: rest };
     }),
 }));
+
+// ---------------------------------------------------------------------------
+// StoreBatchWriter — accumulate multiple mutations and flush as a single
+// `setState`, so subscribers are notified exactly once per event.
+// ---------------------------------------------------------------------------
+
+export class StoreBatchWriter {
+  private tables: { [K in EntityType]: Record<string, EntityTableMap[K]> };
+  private eventsByScope: EventsByScope;
+  private _sessionIdsByGroup: Record<string, string[]>;
+  private dirty = new Set<string>();
+
+  constructor() {
+    const s = useEntityStore.getState();
+    // Shallow-copy top-level references so we can mutate without affecting the
+    // live store until flush().
+    this.tables = {} as typeof this.tables;
+    for (const key of ENTITY_KEYS) {
+      (this.tables as Record<string, unknown>)[key] = s[key];
+    }
+    this.eventsByScope = s.eventsByScope;
+    this._sessionIdsByGroup = s._sessionIdsByGroup;
+  }
+
+  /** Read the current (possibly batched) value of an entity */
+  get<T extends EntityType>(type: T, id: string): EntityTableMap[T] | undefined {
+    return (this.tables[type] as Record<string, EntityTableMap[T]>)[id];
+  }
+
+  /** Read all entities of a given type */
+  getAll<T extends EntityType>(type: T): Record<string, EntityTableMap[T]> {
+    return this.tables[type] as Record<string, EntityTableMap[T]>;
+  }
+
+  upsert<T extends EntityType>(type: T, id: string, data: EntityTableMap[T]): void {
+    const table = this.ensureTable(type);
+    table[id] = data;
+    this.dirty.add(type);
+
+    if (type === "sessions") {
+      this.updateSessionIndex(id, data as unknown as SessionEntity);
+    }
+  }
+
+  patch<T extends EntityType>(type: T, id: string, data: Partial<EntityTableMap[T]>): void {
+    const table = this.ensureTable(type);
+    const existing = table[id];
+    if (!existing) return;
+
+    const oldGroupId =
+      type === "sessions" ? (existing as unknown as SessionEntity).sessionGroupId : undefined;
+    table[id] = { ...(existing as object), ...data } as EntityTableMap[T];
+    this.dirty.add(type);
+
+    if (type === "sessions") {
+      const newGroupId = (table[id] as unknown as SessionEntity).sessionGroupId;
+      if (oldGroupId !== newGroupId) {
+        this.removeFromGroupIndex(id, oldGroupId as string | undefined);
+        this.addToGroupIndex(id, newGroupId as string | undefined);
+      }
+    }
+  }
+
+  remove(type: EntityType, id: string): void {
+    const table = this.ensureTable(type);
+    if (type === "sessions") {
+      const existing = table[id] as unknown as SessionEntity | undefined;
+      if (existing) {
+        this.removeFromGroupIndex(id, existing.sessionGroupId as string | undefined);
+      }
+    }
+    delete table[id];
+    this.dirty.add(type);
+  }
+
+  upsertScopedEvent(scopeKey: string, id: string, event: Event): void {
+    if (this.eventsByScope === useEntityStore.getState().eventsByScope) {
+      this.eventsByScope = { ...this.eventsByScope };
+    }
+    const bucket = this.eventsByScope[scopeKey];
+    this.eventsByScope[scopeKey] = bucket ? { ...bucket, [id]: event } : { [id]: event };
+    this.dirty.add("eventsByScope");
+  }
+
+  flush(): void {
+    if (this.dirty.size === 0) return;
+    const update: Record<string, unknown> = {};
+    for (const key of this.dirty) {
+      if (key === "eventsByScope") {
+        update.eventsByScope = this.eventsByScope;
+      } else if (key === "_sessionIdsByGroup") {
+        update._sessionIdsByGroup = this._sessionIdsByGroup;
+      } else {
+        update[key] = (this.tables as Record<string, unknown>)[key];
+      }
+    }
+    useEntityStore.setState(update);
+  }
+
+  // -- internal helpers --
+
+  private ensureTable<T extends EntityType>(type: T): Record<string, EntityTableMap[T]> {
+    const storeState = useEntityStore.getState();
+    if ((this.tables as Record<string, unknown>)[type] === storeState[type]) {
+      (this.tables as Record<string, unknown>)[type] = { ...storeState[type] };
+    }
+    return this.tables[type] as Record<string, EntityTableMap[T]>;
+  }
+
+  private updateSessionIndex(id: string, session: SessionEntity): void {
+    const groupId = session.sessionGroupId as string | undefined;
+    // Remove from any old bucket first (in case of overwrite)
+    this.removeFromGroupIndex(id);
+    this.addToGroupIndex(id, groupId);
+  }
+
+  private removeFromGroupIndex(id: string, groupId?: string): void {
+    // If groupId not provided, scan (rare — only on full upsert)
+    if (!groupId) {
+      for (const gid of Object.keys(this._sessionIdsByGroup)) {
+        const arr = this._sessionIdsByGroup[gid];
+        const idx = arr.indexOf(id);
+        if (idx !== -1) {
+          groupId = gid;
+          break;
+        }
+      }
+    }
+    if (!groupId) return;
+    this.ensureGroupBucket();
+    const arr = this._sessionIdsByGroup[groupId];
+    if (!arr) return;
+    const idx = arr.indexOf(id);
+    if (idx !== -1) {
+      this._sessionIdsByGroup[groupId] = arr.filter((x) => x !== id);
+      this.dirty.add("_sessionIdsByGroup");
+    }
+  }
+
+  private addToGroupIndex(id: string, groupId?: string): void {
+    if (!groupId) return;
+    this.ensureGroupBucket();
+    const arr = this._sessionIdsByGroup[groupId];
+    if (!arr) {
+      this._sessionIdsByGroup[groupId] = [id];
+    } else if (!arr.includes(id)) {
+      this._sessionIdsByGroup[groupId] = [...arr, id];
+    }
+    this.dirty.add("_sessionIdsByGroup");
+  }
+
+  private ensureGroupBucket(): void {
+    if (this._sessionIdsByGroup === useEntityStore.getState()._sessionIdsByGroup) {
+      this._sessionIdsByGroup = { ...this._sessionIdsByGroup };
+    }
+  }
+}
+
+const ENTITY_KEYS: EntityType[] = [
+  "organizations", "users", "repos", "projects", "channels",
+  "channelGroups", "sessionGroups", "chats", "sessions",
+  "tickets", "inboxItems", "messages",
+];
 
 /** Fine-grained selector: subscribe to a single field of a single entity */
 export function useEntityField<T extends EntityType, F extends keyof EntityTableMap[T]>(
@@ -219,4 +457,17 @@ export function useScopedEventField<F extends keyof Event>(
     const bucket = state.eventsByScope[scopeKey];
     return bucket?.[id]?.[field];
   });
+}
+
+const EMPTY_IDS: string[] = [];
+
+/** Subscribe to session IDs belonging to a specific group via the reverse index.
+ *  Uses shallow comparison — only re-renders when the list of IDs changes. */
+export function useSessionIdsByGroup(groupId: string | undefined): string[] {
+  return useEntityStore(
+    useShallow((state) => {
+      if (!groupId) return EMPTY_IDS;
+      return state._sessionIdsByGroup[groupId] ?? EMPTY_IDS;
+    }),
+  );
 }

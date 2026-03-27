@@ -9,4 +9,13 @@ export interface Context {
   role: UserRole | null;
   actorType: ActorType;
   userLoader: DataLoader<string, { id: string; name: string | null; avatarUrl: string | null } | null>;
+  sessionLoader: DataLoader<string, unknown | null>;
+  sessionGroupLoader: DataLoader<string, unknown | null>;
+  repoLoader: DataLoader<string, unknown | null>;
+  eventLoader: DataLoader<string, unknown | null>;
+  conversationLoader: DataLoader<string, unknown | null>;
+  branchLoader: DataLoader<string, unknown | null>;
+  turnLoader: DataLoader<string, unknown | null>;
+  channelMembershipLoader: DataLoader<string, boolean>;
+  chatMembershipLoader: DataLoader<string, boolean>;
 }
