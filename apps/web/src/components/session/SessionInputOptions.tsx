@@ -16,9 +16,18 @@ import {
   type InteractionMode,
   MODE_CONFIG,
 } from "./interactionModes";
-import { getModelsForTool, getDefaultModel } from "./modelOptions";
+import { getModelsForTool, getDefaultModel, getModelLabel } from "./modelOptions";
 import { CLOUD_RUNTIME_ID } from "./RuntimeSelector";
 import { cn } from "../../lib/utils";
+
+const TOOL_LABELS: Record<string, string> = {
+  claude_code: "Claude Code",
+  codex: "Codex",
+};
+
+function getToolLabel(tool: string): string {
+  return TOOL_LABELS[tool] ?? tool;
+}
 
 const UPDATE_SESSION_CONFIG_MUTATION = gql`
   mutation UpdateSessionConfig($sessionId: ID!, $tool: CodingTool, $model: String, $hosting: HostingMode, $runtimeInstanceId: ID) {
@@ -128,7 +137,7 @@ export function SessionInputOptions({
     <div className="mt-2 flex items-center gap-1">
       <Select value={currentTool} onValueChange={handleToolChange} disabled={isActive}>
         <SelectTrigger className="h-7 w-auto gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
-          <SelectValue />
+          <SelectValue>{getToolLabel(currentTool)}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="claude_code">Claude Code</SelectItem>
@@ -138,7 +147,7 @@ export function SessionInputOptions({
       {modelOptions.length > 0 && (
         <Select value={currentModel ?? ""} onValueChange={handleModelChange} disabled={isActive}>
           <SelectTrigger className="h-7 w-auto gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
-            <SelectValue />
+            <SelectValue>{currentModel ? getModelLabel(currentModel) : ""}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             {modelOptions.map((m) => (
