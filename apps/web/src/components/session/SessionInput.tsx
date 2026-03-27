@@ -97,9 +97,9 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
           <Tooltip>
             <TooltipTrigger className="flex items-center text-muted-foreground">
               {hosting === "cloud" ? (
-                <Cloud size={14} className="text-blue-400" />
+                <Cloud size={14} className={cn("transition-colors", MODE_CONFIG[mode].iconColor)} />
               ) : (
-                <Monitor size={14} className="text-green-400" />
+                <Monitor size={14} className={cn("transition-colors", MODE_CONFIG[mode].iconColor)} />
               )}
             </TooltipTrigger>
             <TooltipContent>
