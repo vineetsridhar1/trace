@@ -37,6 +37,7 @@ export async function createWorktree({
   repoPath,
   repoId,
   sessionId,
+  sessionGroupId,
   defaultBranch,
   startBranch,
   checkpointSha,
@@ -45,6 +46,8 @@ export async function createWorktree({
   repoPath: string;
   repoId: string;
   sessionId: string;
+  /** When set, the worktree and branch are keyed by this ID so all sessions in the group share the same workspace. */
+  sessionGroupId?: string;
   defaultBranch: string;
   /** Branch to base the new worktree on (e.g. from the parent session). Falls back to defaultBranch. */
   startBranch?: string;
@@ -53,8 +56,9 @@ export async function createWorktree({
   /** When enabled for the linked repo, install or repair Trace-managed hooks. */
   gitHooksEnabled?: boolean;
 }): Promise<{ workdir: string; branch: string }> {
-  const branch = `trace/${sessionId}`;
-  const targetPath = path.join(os.homedir(), "trace", "sessions", repoId, sessionId);
+  const worktreeKey = sessionGroupId ?? sessionId;
+  const branch = `trace/${worktreeKey}`;
+  const targetPath = path.join(os.homedir(), "trace", "sessions", repoId, worktreeKey);
 
   // If the worktree directory already exists, reuse it
   if (fs.existsSync(targetPath)) {

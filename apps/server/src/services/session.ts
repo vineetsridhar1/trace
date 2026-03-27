@@ -487,6 +487,7 @@ export class SessionService {
    */
   private provisionRuntime(params: {
     sessionId: string;
+    sessionGroupId?: string | null;
     hosting: string;
     tool: string;
     model?: string | null;
@@ -499,6 +500,7 @@ export class SessionService {
   }): void {
     sessionRouter.createRuntime({
       sessionId: params.sessionId,
+      sessionGroupId: params.sessionGroupId ?? undefined,
       hosting: params.hosting as "cloud" | "local",
       tool: params.tool,
       model: params.model ?? undefined,
@@ -1014,6 +1016,7 @@ export class SessionService {
     if (needsRuntimeProvisioning && input.prompt) {
       this.provisionRuntime({
         sessionId: session.id,
+        sessionGroupId: session.sessionGroupId,
         hosting: session.hosting,
         tool: session.tool,
         model: session.model,
@@ -1091,6 +1094,7 @@ export class SessionService {
       if (needsProvisioning && !alreadyProvisioning) {
         this.provisionRuntime({
           sessionId: id,
+          sessionGroupId: session.sessionGroupId,
           hosting: session.hosting,
           tool: session.tool,
           model: session.model,
@@ -1491,6 +1495,7 @@ export class SessionService {
       if (needsProvisioning) {
         this.provisionRuntime({
           sessionId,
+          sessionGroupId: prev.sessionGroupId,
           hosting: newHosting,
           tool: nextTool,
           model: nextModel !== undefined ? nextModel : prev.model,
@@ -1837,6 +1842,7 @@ export class SessionService {
 
         this.provisionRuntime({
           sessionId,
+          sessionGroupId: session.sessionGroupId,
           hosting: session.hosting,
           tool: session.tool,
           model: session.model,
@@ -2491,6 +2497,7 @@ export class SessionService {
       const prepResult = sessionRouter.send(sessionId, {
         type: "prepare",
         sessionId,
+        sessionGroupId: session.sessionGroupId ?? undefined,
         repoId: session.repo.id,
         repoName: session.repo.name,
         repoRemoteUrl: session.repo.remoteUrl,
@@ -2790,6 +2797,7 @@ export class SessionService {
     if (childSession.repo || targetRuntime.hostingMode === "cloud") {
       sessionRouter.createRuntime({
         sessionId: childSession.id,
+        sessionGroupId: childSession.sessionGroupId ?? undefined,
         hosting: targetRuntime.hostingMode,
         tool: childSession.tool,
         model: childSession.model ?? undefined,
@@ -2951,6 +2959,7 @@ export class SessionService {
     // waiting for bridge connection, and workspace setup.
     sessionRouter.createRuntime({
       sessionId: childSession.id,
+      sessionGroupId: childSession.sessionGroupId ?? undefined,
       hosting: "cloud",
       tool: childSession.tool,
       model: childSession.model ?? undefined,
@@ -3434,7 +3443,7 @@ export class SessionService {
    */
   private async triggerWorkspaceUpgrade(
     sessionId: string,
-    session: { organizationId: string; repo: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null; branch: string | null },
+    session: { organizationId: string; sessionGroupId: string | null; repo: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null; branch: string | null },
     pendingCommand: PendingSessionCommand,
   ) {
     await this.storePendingCommand(sessionId, pendingCommand);
@@ -3445,6 +3454,7 @@ export class SessionService {
     const deliveryResult = sessionRouter.send(sessionId, {
       type: "upgrade_workspace",
       sessionId,
+      sessionGroupId: session.sessionGroupId ?? undefined,
       repoId: repo.id,
       repoName: repo.name,
       repoRemoteUrl: repo.remoteUrl,

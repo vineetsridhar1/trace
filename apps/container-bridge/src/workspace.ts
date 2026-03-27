@@ -43,17 +43,29 @@ export async function ensureRepo(repoId: string, remoteUrl: string): Promise<str
 }
 
 /**
- * Create a worktree at /workspaces/{sessionId} from the repo at /repos/{repoId}.
+ * Create a worktree from the repo at /repos/{repoId}.
+ * The worktree is keyed by `sessionGroupId` when provided so that all sessions
+ * in the same group share a single worktree and branch. Falls back to `sessionId`.
  */
-export async function createWorktree(
-  repoId: string,
-  sessionId: string,
-  defaultBranch: string,
-  branch?: string,
-  checkpointSha?: string,
-): Promise<{ workdir: string }> {
+export async function createWorktree({
+  repoId,
+  sessionId,
+  defaultBranch,
+  branch,
+  checkpointSha,
+  sessionGroupId,
+}: {
+  repoId: string;
+  sessionId: string;
+  defaultBranch: string;
+  branch?: string;
+  checkpointSha?: string;
+  /** When set, the worktree and branch are keyed by this ID so all sessions in the group share the same workspace. */
+  sessionGroupId?: string;
+}): Promise<{ workdir: string }> {
+  const worktreeKey = sessionGroupId ?? sessionId;
   const repoPath = `${REPOS_DIR}/${repoId}`;
-  const worktreePath = `${WORKSPACES_DIR}/${sessionId}`;
+  const worktreePath = `${WORKSPACES_DIR}/${worktreeKey}`;
 
   // If worktree already exists, reuse it
   if (fs.existsSync(worktreePath)) {
@@ -64,7 +76,7 @@ export async function createWorktree(
 
   if (checkpointSha) assertValidCommitSha(checkpointSha);
 
-  const branchName = `trace/${sessionId}`;
+  const branchName = `trace/${worktreeKey}`;
   const baseRef = checkpointSha ?? `origin/${branch ?? defaultBranch}`;
 
   // When restoring a checkpoint, verify the SHA is locally reachable; fetch if not
