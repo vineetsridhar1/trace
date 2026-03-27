@@ -137,6 +137,29 @@ export function SessionInputOptions({
 
   return (
     <div className="mt-2 flex items-center gap-1 overflow-hidden whitespace-nowrap">
+      <button
+        type="button"
+        onClick={() => onModeChange(mode)}
+        disabled={isActive}
+        className={cn(
+          "relative flex h-7 cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border px-2 text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+          modeConfig.style,
+        )}
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.span
+            key={mode}
+            initial={{ y: 12, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -12, opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="flex items-center gap-1.5"
+          >
+            <ModeIcon size={14} className="shrink-0" />
+            {modeConfig.label}
+          </motion.span>
+        </AnimatePresence>
+      </button>
       <Select value={currentTool} onValueChange={handleToolChange} disabled={isActive}>
         <SelectTrigger className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
           <SelectValue>
@@ -194,29 +217,6 @@ export function SessionInputOptions({
           </SelectContent>
         </Select>
       ) : null}
-      <button
-        type="button"
-        onClick={() => onModeChange(mode)}
-        disabled={isActive}
-        className={cn(
-          "relative flex h-7 cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border px-2 text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
-          modeConfig.style,
-        )}
-      >
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.span
-            key={mode}
-            initial={{ y: 12, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -12, opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="flex items-center gap-1.5"
-          >
-            <ModeIcon size={14} className="shrink-0" />
-            {modeConfig.label}
-          </motion.span>
-        </AnimatePresence>
-      </button>
     </div>
   );
 }
