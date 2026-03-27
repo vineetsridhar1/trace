@@ -27,12 +27,14 @@ interface CheckpointPanelProps {
   sessionGroupId: string;
   activeSessionId: string | null;
   highlightCheckpointId?: string | null;
+  onCheckpointClick?: (sessionId: string, promptEventId: string) => void;
 }
 
 export function CheckpointPanel({
   sessionGroupId,
   activeSessionId,
   highlightCheckpointId,
+  onCheckpointClick,
 }: CheckpointPanelProps) {
   const gitCheckpoints = useEntityField("sessionGroups", sessionGroupId, "gitCheckpoints") as
     | GitCheckpoint[]
@@ -155,9 +157,10 @@ export function CheckpointPanel({
             key={checkpoint.id}
             ref={isHighlighted ? highlightRef : undefined}
             className={cn(
-              "flex items-start gap-2 border-b border-border/40 px-3 py-2.5 transition-colors hover:bg-surface-elevated",
+              "flex items-start gap-2 border-b border-border/40 px-3 py-2.5 transition-colors hover:bg-surface-elevated cursor-pointer",
               isHighlighted && "bg-surface-elevated/60",
             )}
+            onClick={() => onCheckpointClick?.(checkpoint.sessionId, checkpoint.promptEventId)}
           >
             <GitCommitHorizontal
               size={12}
@@ -202,7 +205,7 @@ export function CheckpointPanel({
             {!isCurrent && (
               <button
                 type="button"
-                onClick={() => requestRestore(checkpoint)}
+                onClick={(e) => { e.stopPropagation(); requestRestore(checkpoint); }}
                 disabled={restoringId !== null}
                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-deep hover:text-foreground disabled:opacity-50"
                 title="Restore as new session"

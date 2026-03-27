@@ -112,10 +112,14 @@ export function SessionDetailView({
   sessionId,
   panelMode,
   hideHeader,
+  scrollToEventId,
+  onScrollComplete,
 }: {
   sessionId: string;
   panelMode?: boolean;
   hideHeader?: boolean;
+  scrollToEventId?: string | null;
+  onScrollComplete?: () => void;
 }) {
   const { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents } =
     useSessionEvents(sessionId);
@@ -260,6 +264,8 @@ export function SessionDetailView({
                 loadingOlder={loadingOlder}
                 onLoadOlder={fetchOlderEvents}
                 completedAgentTools={completedAgentTools}
+                scrollToEventId={scrollToEventId}
+                onScrollComplete={onScrollComplete}
               />
             )}
           </div>

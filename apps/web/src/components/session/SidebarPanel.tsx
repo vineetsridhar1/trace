@@ -14,6 +14,7 @@ interface SidebarPanelProps {
   onFileClick: (filePath: string) => void;
   onDiffFileClick?: (filePath: string, status: string) => void;
   highlightCheckpointId?: string | null;
+  onCheckpointClick?: (sessionId: string, promptEventId: string) => void;
 }
 
 const tabClass =
@@ -30,6 +31,7 @@ export function SidebarPanel({
   onFileClick,
   onDiffFileClick,
   highlightCheckpointId,
+  onCheckpointClick,
 }: SidebarPanelProps) {
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -76,6 +78,7 @@ export function SidebarPanel({
             sessionGroupId={sessionGroupId}
             activeSessionId={activeSessionId}
             highlightCheckpointId={highlightCheckpointId}
+            onCheckpointClick={onCheckpointClick}
           />
         )}
       </div>

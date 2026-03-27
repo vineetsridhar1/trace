@@ -38,22 +38,23 @@ export function setAgentLLMAdapterForTest(adapter: LLMAdapter | null): void {
 // Retry wrapper with exponential backoff
 // ---------------------------------------------------------------------------
 
+/** HTTP status codes that are safe to retry (transient). */
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 529]);
+
 /** Errors that are safe to retry (transient). */
 function isRetryableError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
+
+  // Prefer structured status code if available (Anthropic SDK errors expose .status)
+  const status = (err as unknown as Record<string, unknown>).status;
+  if (typeof status === "number" && RETRYABLE_STATUS_CODES.has(status)) return true;
+
+  // Fallback to message matching for network-level errors
   const msg = err.message.toLowerCase();
-
-  // HTTP status codes in error messages
-  if (msg.includes("429") || msg.includes("rate limit")) return true;
-  if (msg.includes("500") || msg.includes("internal server error")) return true;
-  if (msg.includes("502") || msg.includes("bad gateway")) return true;
-  if (msg.includes("503") || msg.includes("service unavailable")) return true;
-  if (msg.includes("529") || msg.includes("overloaded")) return true;
-
-  // Network errors
+  if (msg.includes("rate limit") || msg.includes("overloaded")) return true;
   if (msg.includes("econnreset") || msg.includes("econnrefused")) return true;
   if (msg.includes("etimedout") || msg.includes("socket hang up")) return true;
-  if (msg.includes("fetch failed") || msg.includes("network")) return true;
+  if (msg.includes("fetch failed")) return true;
 
   return false;
 }
