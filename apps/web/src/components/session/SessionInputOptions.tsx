@@ -20,6 +20,7 @@ import {
 import { getModelsForTool, getDefaultModel, getModelLabel } from "./modelOptions";
 import { CLOUD_RUNTIME_ID } from "./RuntimeSelector";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
+import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
 import { cn } from "../../lib/utils";
 
 const TOOL_LABELS: Record<string, string> = {
@@ -139,11 +140,20 @@ export function SessionInputOptions({
     <div className="mt-2 flex items-center gap-1 overflow-hidden whitespace-nowrap">
       <Select value={currentTool} onValueChange={handleToolChange} disabled={isActive}>
         <SelectTrigger className="h-7 w-auto gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
-          <SelectValue>{getToolLabel(currentTool)}</SelectValue>
+          <SelectValue>
+            <span className="flex items-center gap-1.5">
+              {currentTool === "claude_code" ? <ClaudeIcon className="size-3.5" /> : <CodexIcon className="size-3.5" />}
+              {getToolLabel(currentTool)}
+            </span>
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="claude_code">Claude Code</SelectItem>
-          <SelectItem value="codex">Codex</SelectItem>
+          <SelectItem value="claude_code">
+            <span className="flex items-center gap-1.5"><ClaudeIcon className="size-3.5" /> Claude Code</span>
+          </SelectItem>
+          <SelectItem value="codex">
+            <span className="flex items-center gap-1.5"><CodexIcon className="size-3.5" /> Codex</span>
+          </SelectItem>
         </SelectContent>
       </Select>
       {modelOptions.length > 0 && (
