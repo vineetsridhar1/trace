@@ -89,7 +89,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
         : "Send a message...";
 
   return (
-    <div className="shrink-0 border-t border-border px-4 py-3">
+    <div className={cn("shrink-0 border-t px-4 py-3 transition-colors", mode === "plan" ? "border-dashed border-accent/50" : mode === "ask" ? "border-amber-500/50" : "border-border")}>
       <div className="flex items-end gap-2">
         <textarea
           ref={inputRef}
