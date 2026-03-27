@@ -14,7 +14,6 @@ import type { LLMAdapter } from "@trace/shared";
 import type { AgentContextPacket } from "./context-builder.js";
 import type { ProposedAction } from "./planner.js";
 import { pubsub, topics } from "../lib/pubsub.js";
-import { createLLMAdapter } from "../lib/llm/index.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,31 +28,17 @@ export interface StreamReplyOptions {
   agentId: string;
   /** Model to use (same tier as the planner). */
   model: string;
-  /** Optional adapter override (for testing). */
-  adapter?: LLMAdapter;
+  /** The LLM adapter instance (passed from the pipeline). */
+  adapter: LLMAdapter;
 }
 
 export interface StreamReplyResult {
   /** The complete streamed text, ready to replace action.args.text. */
   text: string;
-}
-
-// ---------------------------------------------------------------------------
-// Adapter (reuses the planner's cached adapter)
-// ---------------------------------------------------------------------------
-
-let cachedAdapter: LLMAdapter | null = null;
-
-function getAdapter(): LLMAdapter {
-  if (cachedAdapter) return cachedAdapter;
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY env var is required for stream-reply");
-  }
-
-  cachedAdapter = createLLMAdapter({ provider: "anthropic", apiKey });
-  return cachedAdapter;
+  /** Token usage from the streaming call (for cost tracking). */
+  usage: { inputTokens: number; outputTokens: number };
+  /** Model ID returned by the adapter. */
+  model: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,7 +58,7 @@ function buildStreamPrompt(packet: AgentContextPacket, action: ProposedAction): 
   }
 
   // Include the planner's rationale as guidance
-  const plannerText = action.args.text as string | undefined;
+  const plannerText = typeof action.args.text === "string" ? action.args.text : undefined;
   if (plannerText) {
     parts.push(
       `<planner_draft>\nA planner decided you should reply with approximately this message:\n${plannerText}\n</planner_draft>\n\n` +
@@ -85,7 +70,7 @@ function buildStreamPrompt(packet: AgentContextPacket, action: ProposedAction): 
   // Conversation context — recent events give the LLM enough context to reply coherently
   if (packet.recentEvents.length > 0) {
     parts.push(
-      `<recent_messages>\n${JSON.stringify(packet.recentEvents, null, 2)}\n</recent_messages>`,
+      `<recent_messages>\n${JSON.stringify(packet.recentEvents)}\n</recent_messages>`,
     );
   }
 
@@ -126,13 +111,14 @@ function buildStreamPrompt(packet: AgentContextPacket, action: ProposedAction): 
  * a streaming ghost message.
  */
 export async function streamAgentReply(options: StreamReplyOptions): Promise<StreamReplyResult> {
-  const { packet, action, agentId, model, adapter: adapterOverride } = options;
-  const adapter = adapterOverride ?? getAdapter();
+  const { packet, action, agentId, model, adapter } = options;
 
   const chatId = (action.args.chatId ?? packet.scopeId) as string;
   const systemPrompt = buildStreamPrompt(packet, action);
 
   let fullText = "";
+  let usage = { inputTokens: 0, outputTokens: 0 };
+  let responseModel = model;
 
   try {
     for await (const event of adapter.stream({
@@ -154,6 +140,14 @@ export async function streamAgentReply(options: StreamReplyOptions): Promise<Str
         });
       }
 
+      if (event.type === "complete") {
+        usage = {
+          inputTokens: event.response.usage.inputTokens,
+          outputTokens: event.response.usage.outputTokens,
+        };
+        responseModel = event.response.model;
+      }
+
       if (event.type === "error") {
         throw event.error;
       }
@@ -165,5 +159,6 @@ export async function streamAgentReply(options: StreamReplyOptions): Promise<Str
     console.error("[stream-reply] stream error after partial output:", err);
   }
 
-  return { text: fullText || ((action.args.text as string) ?? "") };
+  const fallbackText = typeof action.args.text === "string" ? action.args.text : "";
+  return { text: fullText || fallbackText, usage, model: responseModel };
 }

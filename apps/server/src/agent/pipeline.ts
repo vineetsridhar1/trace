@@ -34,6 +34,7 @@ import {
   DEFAULT_OPUS_MODEL,
   buildSystemPrompt,
   runPlannerTurn,
+  getAdapter,
 } from "./planner.js";
 import type { PolicyDecision, PolicyActionResult } from "./policy-engine.js";
 import type { ExecutionResult } from "./executor.js";
@@ -425,15 +426,25 @@ async function executeTurn(input: ExecuteTurnInput): Promise<TurnResult> {
             action: actionResult.action,
             agentId: agentSettings.agentId,
             model: plannerModel,
+            adapter: getAdapter(),
           });
           // Replace the planner's text with the streamed output
           actionResult.action.args.text = streamResult.text;
           // Clear html since we regenerated the text
           actionResult.action.args.html = undefined;
+          // Track streaming cost
+          state.totalInputTokens += streamResult.usage.inputTokens;
+          state.totalOutputTokens += streamResult.usage.outputTokens;
+          state.totalCostCents += estimateCostCents(
+            streamResult.model,
+            streamResult.usage.inputTokens,
+            streamResult.usage.outputTokens,
+          );
           log("streamed reply", {
             scopeKey: state.packet.scopeKey,
             turn,
             textLength: streamResult.text.length,
+            streamTokens: streamResult.usage.inputTokens + streamResult.usage.outputTokens,
           });
         } catch (streamErr) {
           // Fall back to planner's original text if streaming fails

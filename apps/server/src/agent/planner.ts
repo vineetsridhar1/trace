@@ -76,7 +76,7 @@ export const DEFAULT_OPUS_MODEL = "claude-opus-4-20250514";
 
 let cachedAdapter: LLMAdapter | null = null;
 
-function getAdapter(): LLMAdapter {
+export function getAdapter(): LLMAdapter {
   if (cachedAdapter) return cachedAdapter;
 
   const apiKey = process.env.ANTHROPIC_API_KEY;

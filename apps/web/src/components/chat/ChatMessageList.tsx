@@ -131,9 +131,11 @@ export function ChatMessageList({
         </div>
       )}
       {isAgentTyping && agentId && (
-        streamingText
-          ? <StreamingMessage agentId={agentId} text={streamingText} />
-          : <TypingIndicator agentId={agentId} />
+        <div key="agent-streaming-indicator">
+          {streamingText
+            ? <StreamingMessage agentId={agentId} text={streamingText} />
+            : <TypingIndicator agentId={agentId} />}
+        </div>
       )}
       <div ref={bottomRef} />
     </div>
