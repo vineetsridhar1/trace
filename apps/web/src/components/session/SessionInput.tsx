@@ -127,7 +127,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
           <button
             onClick={handleSend}
             disabled={!message.trim() || sending || !canSend}
-            className="shrink-0 rounded-lg bg-accent px-3 py-2 text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
+            className={cn("shrink-0 rounded-lg px-3 py-2 transition-colors disabled:opacity-50", MODE_CONFIG[mode].sendButton)}
           >
             <Send size={16} />
           </button>

@@ -10,6 +10,8 @@ export interface ModeConfig {
   style: string;
   /** Border/ring class applied to the input textarea */
   inputBorder: string;
+  /** Classes for the send button */
+  sendButton: string;
 }
 
 export const MODE_CONFIG: Record<InteractionMode, ModeConfig> = {
@@ -18,18 +20,21 @@ export const MODE_CONFIG: Record<InteractionMode, ModeConfig> = {
     icon: Pencil,
     style: "border-border bg-secondary text-foreground",
     inputBorder: "border-border focus:ring-accent",
+    sendButton: "bg-accent hover:bg-accent/90 text-accent-foreground",
   },
   plan: {
     label: "Plan",
     icon: Map,
     style: "border-violet-500 bg-violet-500/20 text-violet-300",
     inputBorder: "border-violet-500/50 focus:ring-violet-500",
+    sendButton: "bg-violet-500 hover:bg-violet-500/90 text-white",
   },
   ask: {
     label: "Ask",
     icon: HelpCircle,
     style: "border-amber-500 bg-amber-500/20 text-amber-300",
     inputBorder: "border-amber-500/50 focus:ring-amber-500",
+    sendButton: "bg-amber-500 hover:bg-amber-500/90 text-white",
   },
 };
 
