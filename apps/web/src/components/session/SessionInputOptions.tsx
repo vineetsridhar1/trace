@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { gql } from "@urql/core";
+import { AnimatePresence, motion } from "framer-motion";
 import { Cloud, Monitor } from "lucide-react";
 import type { CodingTool, SessionRuntimeInstance } from "@trace/gql";
 import { useEntityStore, useEntityField } from "../../stores/entity";
@@ -200,12 +201,23 @@ export function SessionInputOptions({
         onClick={() => onModeChange(mode)}
         disabled={isActive}
         className={cn(
-          "flex h-7 items-center gap-1.5 rounded-lg border px-2 text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+          "relative flex h-7 items-center gap-1.5 overflow-hidden rounded-lg border px-2 text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
           modeConfig.style,
         )}
       >
-        <ModeIcon size={14} className="shrink-0" />
-        {modeConfig.label}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.span
+            key={mode}
+            initial={{ y: 12, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -12, opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="flex items-center gap-1.5"
+          >
+            <ModeIcon size={14} className="shrink-0" />
+            {modeConfig.label}
+          </motion.span>
+        </AnimatePresence>
       </button>
     </div>
   );

@@ -8,6 +8,8 @@ export interface ModeConfig {
   label: string;
   icon: LucideIcon;
   style: string;
+  /** Border/ring class applied to the input textarea */
+  inputBorder: string;
 }
 
 export const MODE_CONFIG: Record<InteractionMode, ModeConfig> = {
@@ -15,16 +17,19 @@ export const MODE_CONFIG: Record<InteractionMode, ModeConfig> = {
     label: "Code",
     icon: Pencil,
     style: "border-border bg-secondary text-foreground",
+    inputBorder: "border-border focus:ring-accent",
   },
   plan: {
     label: "Plan",
     icon: Map,
     style: "border-accent bg-accent/20 text-accent",
+    inputBorder: "border-accent/50 focus:ring-accent",
   },
   ask: {
     label: "Ask",
     icon: HelpCircle,
     style: "border-amber-500 bg-amber-500/20 text-amber-300",
+    inputBorder: "border-amber-500/50 focus:ring-amber-500",
   },
 };
 

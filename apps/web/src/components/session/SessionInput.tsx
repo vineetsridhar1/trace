@@ -3,12 +3,13 @@ import { Send, Square } from "lucide-react";
 import { useEntityField, useEntityStore, eventScopeKey } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
-import { type InteractionMode, MODE_CYCLE, wrapPrompt } from "./interactionModes";
+import { type InteractionMode, MODE_CYCLE, MODE_CONFIG, wrapPrompt } from "./interactionModes";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
 import { isDisconnected, canSendMessage } from "./sessionStatus";
 import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
 import { getModelLabel } from "./modelOptions";
+import { cn } from "../../lib/utils";
 
 export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop: () => void }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
@@ -95,6 +96,11 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => {
+            if (e.key === "Tab" && e.shiftKey) {
+              e.preventDefault();
+              cycleMode();
+              return;
+            }
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               handleSend();
@@ -104,7 +110,10 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
           placeholder={placeholder}
           rows={1}
           style={{ fieldSizing: "content" } as React.CSSProperties}
-          className="flex-1 resize-none rounded-lg border border-border bg-surface-deep px-3 py-2 text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+          className={cn(
+            "flex-1 resize-none rounded-lg border bg-surface-deep px-3 py-2 text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 disabled:opacity-50 transition-colors",
+            MODE_CONFIG[mode].inputBorder,
+          )}
         />
         {isActive ? (
           <button
