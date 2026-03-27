@@ -380,7 +380,11 @@ export type EventType =
   | 'member_left'
   | 'message_deleted'
   | 'message_edited'
+  | 'message_queued'
   | 'message_sent'
+  | 'queued_message_removed'
+  | 'queued_message_sent'
+  | 'queued_message_updated'
   | 'repo_created'
   | 'repo_updated'
   | 'session_deleted'
@@ -546,11 +550,14 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  queueSessionMessage: QueuedMessage;
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars['Boolean']['output'];
+  removeQueuedMessage: Scalars['Boolean']['output'];
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
+  reorderQueuedMessages: Array<QueuedMessage>;
   retrySessionConnection: Session;
   runSession: Session;
   sendChannelMessage: Message;
@@ -572,6 +579,7 @@ export type Mutation = {
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
+  updateQueuedMessage: QueuedMessage;
   updateRepo: Repo;
   updateScopeAiMode: Scalars['Boolean']['output'];
   updateSessionConfig: Session;
@@ -765,6 +773,13 @@ export type MutationMuteScopeArgs = {
 };
 
 
+export type MutationQueueSessionMessageArgs = {
+  interactionMode?: InputMaybe<Scalars['String']['input']>;
+  sessionId: Scalars['ID']['input'];
+  text: Scalars['String']['input'];
+};
+
+
 export type MutationRegisterRepoWebhookArgs = {
   repoId: Scalars['ID']['input'];
 };
@@ -773,6 +788,11 @@ export type MutationRegisterRepoWebhookArgs = {
 export type MutationRemoveOrgMemberArgs = {
   organizationId: Scalars['ID']['input'];
   userId: Scalars['ID']['input'];
+};
+
+
+export type MutationRemoveQueuedMessageArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -789,6 +809,12 @@ export type MutationReorderChannelGroupsArgs = {
 
 export type MutationReorderChannelsArgs = {
   input: ReorderChannelsInput;
+};
+
+
+export type MutationReorderQueuedMessagesArgs = {
+  orderedIds: Array<Scalars['ID']['input']>;
+  sessionId: Scalars['ID']['input'];
 };
 
 
@@ -919,6 +945,13 @@ export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars['ID']['input'];
   role: UserRole;
   userId: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateQueuedMessageArgs = {
+  id: Scalars['ID']['input'];
+  interactionMode?: InputMaybe<Scalars['String']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -1300,6 +1333,19 @@ export type QueryTicketsArgs = {
   organizationId: Scalars['ID']['input'];
 };
 
+export type QueuedMessage = {
+  __typename?: 'QueuedMessage';
+  createdAt: Scalars['DateTime']['output'];
+  createdById: Scalars['ID']['output'];
+  id: Scalars['ID']['output'];
+  interactionMode?: Maybe<Scalars['String']['output']>;
+  organizationId: Scalars['ID']['output'];
+  position: Scalars['Int']['output'];
+  sessionId: Scalars['ID']['output'];
+  text: Scalars['String']['output'];
+  updatedAt: Scalars['DateTime']['output'];
+};
+
 export type ReorderChannelGroupsInput = {
   groupIds: Array<Scalars['ID']['input']>;
   organizationId: Scalars['ID']['input'];
@@ -1349,6 +1395,7 @@ export type Session = {
   name: Scalars['String']['output'];
   prUrl?: Maybe<Scalars['String']['output']>;
   projects: Array<Project>;
+  queuedMessages: Array<QueuedMessage>;
   repo?: Maybe<Repo>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupId?: Maybe<Scalars['ID']['output']>;

@@ -207,6 +207,10 @@ enum EventType {
   chat_member_added
   chat_member_removed
   chat_renamed
+  message_queued
+  queued_message_updated
+  queued_message_removed
+  queued_message_sent
 }
 
 model Organization {
@@ -528,12 +532,28 @@ model Session {
   worktreeDeleted Boolean      @default(false)
   readOnlyWorkspace Boolean    @default(false)
 
-  projects SessionProject[]
+  projects       SessionProject[]
+  queuedMessages QueuedMessage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([sessionGroupId, updatedAt])
+}
+
+model QueuedMessage {
+  id              String   @id @default(uuid())
+  sessionId       String
+  session         Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  organizationId  String
+  text            String
+  interactionMode String?
+  position        Int
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([sessionId, position])
 }
 
 model SessionProject {

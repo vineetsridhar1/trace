@@ -14,6 +14,7 @@ import type {
   Event,
   InboxItem,
   Message,
+  QueuedMessage,
 } from "@trace/gql";
 
 /** Client-side session entity with extra fields not in the GQL schema */
@@ -41,6 +42,7 @@ export type EntityTableMap = {
   tickets: Ticket;
   inboxItems: InboxItem;
   messages: Message;
+  queuedMessages: QueuedMessage;
 };
 
 export type EntityType = keyof EntityTableMap;
@@ -82,6 +84,7 @@ export const useEntityStore = create<EntityState>((set) => ({
   tickets: {},
   inboxItems: {},
   messages: {},
+  queuedMessages: {},
   eventsByScope: {},
 
   upsert: (entityType, id, data) =>

@@ -1251,6 +1251,8 @@ export class SessionService {
       orgId: session.organizationId,
       resolution,
     });
+    // Clear queued messages on terminate/dismiss
+    await this.clearQueuedMessages(id);
     return this.transition(
       id,
       "terminate",
@@ -1703,6 +1705,231 @@ export class SessionService {
     return null;
   }
 
+  // ─── Queued Messages ───
+
+  async queueMessage({
+    sessionId,
+    text,
+    interactionMode,
+    actorType,
+    actorId,
+  }: {
+    sessionId: string;
+    text: string;
+    interactionMode?: string;
+    actorType: ActorType;
+    actorId: string;
+  }) {
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { organizationId: true, agentStatus: true },
+    });
+
+    // If the agent is NOT active, send directly instead of queuing
+    if (session.agentStatus !== "active") {
+      return this.sendMessage(sessionId, text, actorType, actorId, interactionMode);
+    }
+
+    const maxPos = await prisma.queuedMessage.aggregate({
+      where: { sessionId },
+      _max: { position: true },
+    });
+    const position = (maxPos._max.position ?? -1) + 1;
+
+    const queued = await prisma.queuedMessage.create({
+      data: {
+        sessionId,
+        organizationId: session.organizationId,
+        text,
+        interactionMode: interactionMode ?? null,
+        position,
+        createdById: actorId,
+      },
+    });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "message_queued",
+      payload: { queuedMessage: queued },
+      actorType,
+      actorId,
+    });
+
+    return queued;
+  }
+
+  async updateQueuedMessage({
+    id,
+    text,
+    interactionMode,
+    actorType,
+    actorId,
+  }: {
+    id: string;
+    text?: string;
+    interactionMode?: string;
+    actorType: ActorType;
+    actorId: string;
+  }) {
+    const existing = await prisma.queuedMessage.findUniqueOrThrow({ where: { id } });
+
+    const queued = await prisma.queuedMessage.update({
+      where: { id },
+      data: {
+        ...(text !== undefined && { text }),
+        ...(interactionMode !== undefined && { interactionMode }),
+      },
+    });
+
+    await eventService.create({
+      organizationId: existing.organizationId,
+      scopeType: "session",
+      scopeId: existing.sessionId,
+      eventType: "queued_message_updated",
+      payload: { queuedMessage: queued },
+      actorType,
+      actorId,
+    });
+
+    return queued;
+  }
+
+  async removeQueuedMessage({
+    id,
+    actorType,
+    actorId,
+  }: {
+    id: string;
+    actorType: ActorType;
+    actorId: string;
+  }) {
+    const existing = await prisma.queuedMessage.findUniqueOrThrow({ where: { id } });
+
+    await prisma.queuedMessage.delete({ where: { id } });
+
+    // Recompact positions
+    const remaining = await prisma.queuedMessage.findMany({
+      where: { sessionId: existing.sessionId },
+      orderBy: { position: "asc" },
+    });
+    for (let i = 0; i < remaining.length; i++) {
+      if (remaining[i].position !== i) {
+        await prisma.queuedMessage.update({
+          where: { id: remaining[i].id },
+          data: { position: i },
+        });
+      }
+    }
+
+    await eventService.create({
+      organizationId: existing.organizationId,
+      scopeType: "session",
+      scopeId: existing.sessionId,
+      eventType: "queued_message_removed",
+      payload: { queuedMessageId: id, sessionId: existing.sessionId },
+      actorType,
+      actorId,
+    });
+
+    return true;
+  }
+
+  async reorderQueuedMessages({
+    sessionId,
+    orderedIds,
+    actorType,
+    actorId,
+  }: {
+    sessionId: string;
+    orderedIds: string[];
+    actorType: ActorType;
+    actorId: string;
+  }) {
+    const current = await prisma.queuedMessage.findMany({
+      where: { sessionId },
+      orderBy: { position: "asc" },
+    });
+
+    const currentIds = new Set(current.map((q) => q.id));
+    if (
+      orderedIds.length !== currentIds.size ||
+      !orderedIds.every((id) => currentIds.has(id))
+    ) {
+      throw new Error("orderedIds must contain exactly the current queued message IDs");
+    }
+
+    const updated = await prisma.$transaction(
+      orderedIds.map((id, i) =>
+        prisma.queuedMessage.update({ where: { id }, data: { position: i } }),
+      ),
+    );
+
+    const orgId = current[0]?.organizationId;
+    if (orgId) {
+      await eventService.create({
+        organizationId: orgId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "queued_message_updated",
+        payload: { queuedMessages: updated, sessionId },
+        actorType,
+        actorId,
+      });
+    }
+
+    return updated;
+  }
+
+  private async dispatchNextQueuedMessage(sessionId: string) {
+    const next = await prisma.queuedMessage.findFirst({
+      where: { sessionId },
+      orderBy: { position: "asc" },
+    });
+    if (!next) return;
+
+    // Delete from queue
+    await prisma.queuedMessage.delete({ where: { id: next.id } });
+
+    // Recompact positions
+    const remaining = await prisma.queuedMessage.findMany({
+      where: { sessionId },
+      orderBy: { position: "asc" },
+    });
+    for (let i = 0; i < remaining.length; i++) {
+      if (remaining[i].position !== i) {
+        await prisma.queuedMessage.update({
+          where: { id: remaining[i].id },
+          data: { position: i },
+        });
+      }
+    }
+
+    await eventService.create({
+      organizationId: next.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "queued_message_sent",
+      payload: { queuedMessageId: next.id, sessionId },
+      actorType: "system",
+      actorId: "system",
+    });
+
+    // Send the message as the original creator
+    await this.sendMessage(
+      sessionId,
+      next.text,
+      "user",
+      next.createdById,
+      next.interactionMode ?? undefined,
+    );
+  }
+
+  private async clearQueuedMessages(sessionId: string) {
+    await prisma.queuedMessage.deleteMany({ where: { sessionId } });
+  }
+
   async complete(id: string) {
     // Only transition from active — don't overwrite explicit user actions
     const current = await prisma.session.findUnique({
@@ -1794,6 +2021,11 @@ export class SessionService {
           data: triggerPayload,
         });
       }
+    }
+
+    // Auto-dispatch next queued message if not blocked by needs_input
+    if (newSessionStatus !== "needs_input") {
+      await this.dispatchNextQueuedMessage(id);
     }
   }
 

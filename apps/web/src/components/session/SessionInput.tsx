@@ -1,15 +1,17 @@
 import { useCallback, useRef, useState } from "react";
 import { Send, Square, Cloud, Monitor } from "lucide-react";
-import { useEntityField, useEntityStore, eventScopeKey } from "../../stores/entity";
+import { useEntityField, useEntityStore, useEntityIds, eventScopeKey } from "../../stores/entity";
 import { client } from "../../lib/urql";
-import { SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
+import { SEND_SESSION_MESSAGE_MUTATION, QUEUE_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
 import { type InteractionMode, MODE_CYCLE, MODE_CONFIG, wrapPrompt } from "./interactionModes";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
+import { QueuedMessagesList } from "./QueuedMessagesList";
 import { isDisconnected, canSendMessage } from "./sessionStatus";
 import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
 import { getModelLabel } from "./modelOptions";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
+import type { QueuedMessage } from "@trace/gql";
 import { cn } from "../../lib/utils";
 
 export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop: () => void }) {
@@ -57,6 +59,12 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     });
   }, []);
 
+  const queuedMessageIds = useEntityIds(
+    "queuedMessages",
+    (qm: QueuedMessage) => qm.sessionId === sessionId,
+    (a: QueuedMessage, b: QueuedMessage) => a.position - b.position,
+  );
+
   const handleSend = useCallback(async () => {
     const text = message.trim();
     if (!text || sending || !canSend) return;
@@ -64,8 +72,10 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     setMessage("");
     try {
       const wrappedText = wrapPrompt(mode, text);
+      // When active, queue instead of sending directly
+      const mutation = isActive ? QUEUE_SESSION_MESSAGE_MUTATION : SEND_SESSION_MESSAGE_MUTATION;
       await client
-        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+        .mutation(mutation, {
           sessionId,
           text: wrappedText,
           interactionMode: mode === "code" ? undefined : mode,
@@ -75,7 +85,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
       setSending(false);
       inputRef.current?.focus();
     }
-  }, [sessionId, message, sending, mode, canSend]);
+  }, [sessionId, message, sending, mode, canSend, isActive]);
 
   // Show recovery panel when disconnected — but not for not_started sessions
   // where the user still needs to pick a runtime and type their first message
@@ -85,7 +95,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   const placeholder = worktreeDeleted
     ? "Worktree deleted. This session is read-only."
     : isActive
-      ? "Waiting for response..."
+      ? "Queue a message..."
       : isNotStarted
         ? "What should the agent work on?"
         : "Send a message...";
@@ -135,7 +145,15 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
             MODE_CONFIG[mode].inputBorder,
           )}
         />
-        {isActive ? (
+        <button
+          onClick={handleSend}
+          disabled={!message.trim() || sending || !canSend}
+          className={cn("my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed", MODE_CONFIG[mode].sendButton)}
+          title={isActive ? "Queue message" : "Send"}
+        >
+          <Send size={16} />
+        </button>
+        {isActive && (
           <button
             onClick={onStop}
             className="my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg border border-border px-3 text-muted-foreground transition-colors hover:text-foreground hover:bg-surface-elevated"
@@ -143,19 +161,16 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
           >
             <Square size={16} />
           </button>
-        ) : (
-          <button
-            onClick={handleSend}
-            disabled={!message.trim() || sending || !canSend}
-            className={cn("my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed", MODE_CONFIG[mode].sendButton)}
-          >
-            <Send size={16} />
-          </button>
         )}
       </div>
 
       {isActive ? (
-        <AiLoadingIndicator model={displayModel} startedAt={lastUserMessageAt} />
+        <>
+          <AiLoadingIndicator model={displayModel} startedAt={lastUserMessageAt} />
+          {queuedMessageIds.length > 0 && (
+            <QueuedMessagesList sessionId={sessionId} queuedMessageIds={queuedMessageIds} />
+          )}
+        </>
       ) : (
         <SessionInputOptions
           sessionId={sessionId}

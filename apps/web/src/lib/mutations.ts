@@ -231,6 +231,51 @@ export const EDIT_CHANNEL_MESSAGE_MUTATION = gql`
   }
 `;
 
+export const QUEUE_SESSION_MESSAGE_MUTATION = gql`
+  mutation QueueSessionMessage($sessionId: ID!, $text: String!, $interactionMode: String) {
+    queueSessionMessage(sessionId: $sessionId, text: $text, interactionMode: $interactionMode) {
+      id
+      sessionId
+      text
+      interactionMode
+      position
+      createdAt
+    }
+  }
+`;
+
+export const UPDATE_QUEUED_MESSAGE_MUTATION = gql`
+  mutation UpdateQueuedMessage($id: ID!, $text: String, $interactionMode: String) {
+    updateQueuedMessage(id: $id, text: $text, interactionMode: $interactionMode) {
+      id
+      sessionId
+      text
+      interactionMode
+      position
+      createdAt
+    }
+  }
+`;
+
+export const REMOVE_QUEUED_MESSAGE_MUTATION = gql`
+  mutation RemoveQueuedMessage($id: ID!) {
+    removeQueuedMessage(id: $id)
+  }
+`;
+
+export const REORDER_QUEUED_MESSAGES_MUTATION = gql`
+  mutation ReorderQueuedMessages($sessionId: ID!, $orderedIds: [ID!]!) {
+    reorderQueuedMessages(sessionId: $sessionId, orderedIds: $orderedIds) {
+      id
+      sessionId
+      text
+      interactionMode
+      position
+      createdAt
+    }
+  }
+`;
+
 export const DELETE_CHANNEL_MESSAGE_MUTATION = gql`
   mutation DeleteChannelMessage($messageId: ID!) {
     deleteChannelMessage(messageId: $messageId) {
