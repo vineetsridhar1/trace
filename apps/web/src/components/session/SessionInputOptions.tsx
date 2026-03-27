@@ -18,6 +18,7 @@ import {
 } from "./interactionModes";
 import { getModelsForTool, getDefaultModel, getModelLabel } from "./modelOptions";
 import { CLOUD_RUNTIME_ID } from "./RuntimeSelector";
+import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { cn } from "../../lib/utils";
 
 const TOOL_LABELS: Record<string, string> = {
@@ -134,7 +135,7 @@ export function SessionInputOptions({
   const ModeIcon = modeConfig.icon;
 
   return (
-    <div className="mt-2 flex items-center gap-1">
+    <div className="mt-2 flex items-center gap-1 overflow-hidden whitespace-nowrap">
       <Select value={currentTool} onValueChange={handleToolChange} disabled={isActive}>
         <SelectTrigger className="h-7 w-auto gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
           <SelectValue>{getToolLabel(currentTool)}</SelectValue>
@@ -158,20 +159,20 @@ export function SessionInputOptions({
       )}
       {isNotStarted ? (
         <Select value={currentRuntimeValue} onValueChange={handleRuntimeChange}>
-          <SelectTrigger className="group/rt h-7 w-auto gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
-            <SelectValue>
-              <span className="flex items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger render={
+              <SelectTrigger className="h-7 w-auto gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0" />
+            }>
+              <SelectValue>
                 {isCloud ? (
-                  <Cloud size={12} className="shrink-0 text-blue-400" />
+                  <Cloud size={12} className="text-blue-400" />
                 ) : (
-                  <Monitor size={12} className="shrink-0 text-green-400" />
+                  <Monitor size={12} className="text-green-400" />
                 )}
-                <span className="max-w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover/rt:max-w-[120px] group-hover/rt:opacity-100">
-                  {isCloud ? "Cloud" : (runtimeLabel ?? "Local")}
-                </span>
-              </span>
-            </SelectValue>
-          </SelectTrigger>
+              </SelectValue>
+            </TooltipTrigger>
+            <TooltipContent>{isCloud ? "Cloud" : (runtimeLabel ?? "Local")}</TooltipContent>
+          </Tooltip>
           <SelectContent>
             <SelectItem value={CLOUD_RUNTIME_ID}>
               <span className="flex items-center gap-1.5"><Cloud size={12} className="text-blue-400" /> Cloud</span>
@@ -186,16 +187,16 @@ export function SessionInputOptions({
           </SelectContent>
         </Select>
       ) : (
-        <span className="group/rt flex items-center gap-1 px-2 text-[11px] text-muted-foreground">
-          {isCloud ? (
-            <Cloud size={12} className="shrink-0 text-blue-400" />
-          ) : (
-            <Monitor size={12} className="shrink-0 text-green-400" />
-          )}
-          <span className="max-w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover/rt:max-w-[120px] group-hover/rt:opacity-100">
-            {isCloud ? "Cloud" : (runtimeLabel ?? "Local")}
-          </span>
-        </span>
+        <Tooltip>
+          <TooltipTrigger className="flex items-center px-2 text-muted-foreground">
+            {isCloud ? (
+              <Cloud size={12} className="text-blue-400" />
+            ) : (
+              <Monitor size={12} className="text-green-400" />
+            )}
+          </TooltipTrigger>
+          <TooltipContent>{isCloud ? "Cloud" : (runtimeLabel ?? "Local")}</TooltipContent>
+        </Tooltip>
       )}
       <button
         type="button"
