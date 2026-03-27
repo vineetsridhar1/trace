@@ -969,7 +969,10 @@ export class SessionService {
       sessionRouter.bindSession(session.id, runtimeToBind);
     }
 
-    if (needsRuntimeProvisioning) {
+    // Only provision the runtime immediately when a prompt is provided.
+    // Sessions created without a prompt (e.g. Cmd+N) defer provisioning
+    // until the user sends their first message.
+    if (needsRuntimeProvisioning && input.prompt) {
       sessionRouter.createRuntime({
         sessionId: session.id,
         hosting: session.hosting as "cloud" | "local",
@@ -1049,6 +1052,33 @@ export class SessionService {
         },
         include: SESSION_INCLUDE,
       });
+
+      // If no runtime has been provisioned yet (deferred from startSession),
+      // kick it off now that the user has sent their first message.
+      const needsProvisioning = !!session.repoId || session.hosting === "cloud";
+      if (needsProvisioning) {
+        sessionRouter.createRuntime({
+          sessionId: id,
+          hosting: session.hosting as "cloud" | "local",
+          tool: session.tool,
+          model: session.model ?? undefined,
+          repo: session.repo
+            ? {
+                id: session.repo.id,
+                name: session.repo.name,
+                remoteUrl: session.repo.remoteUrl,
+                defaultBranch: session.repo.defaultBranch,
+              }
+            : null,
+          branch: session.branch ?? undefined,
+          createdById: session.createdById,
+          organizationId: session.organizationId,
+          readOnly: session.readOnlyWorkspace,
+          onFailed: (error) => this.workspaceFailed(id, error),
+          onWorkspaceReady: (workdir) => this.workspaceReady(id, workdir),
+        });
+      }
+
       return updated;
     }
 
@@ -1757,6 +1787,8 @@ export class SessionService {
         organizationId: true,
         agentStatus: true,
         sessionStatus: true,
+        hosting: true,
+        createdById: true,
         tool: true,
         model: true,
         toolChangedAt: true,
@@ -1774,6 +1806,57 @@ export class SessionService {
 
     if (session.worktreeDeleted) {
       throw new Error("Cannot send messages: session worktree has been deleted");
+    }
+
+    // If runtime was deferred (session created without a prompt), provision it
+    // now and queue the message for delivery once the workspace is ready.
+    if (session.agentStatus === "not_started" && !session.workdir && !session.toolSessionId) {
+      const needsProvisioning = !!session.repoId || session.hosting === "cloud";
+      if (needsProvisioning) {
+        await prisma.session.update({
+          where: { id: sessionId },
+          data: {
+            pendingRun: {
+              type: "send",
+              prompt: text,
+              interactionMode: interactionMode ?? null,
+              checkpointContext: null,
+            } as unknown as Prisma.InputJsonValue,
+          },
+        });
+
+        sessionRouter.createRuntime({
+          sessionId,
+          hosting: session.hosting as "cloud" | "local",
+          tool: session.tool,
+          model: session.model ?? undefined,
+          repo: session.repo
+            ? {
+                id: session.repo.id,
+                name: session.repo.name,
+                remoteUrl: session.repo.remoteUrl,
+                defaultBranch: session.repo.defaultBranch,
+              }
+            : null,
+          branch: session.branch ?? undefined,
+          createdById: session.createdById,
+          organizationId: session.organizationId,
+          readOnly: session.readOnlyWorkspace,
+          onFailed: (error) => this.workspaceFailed(sessionId, error),
+          onWorkspaceReady: (workdir) => this.workspaceReady(sessionId, workdir),
+        });
+
+        const event = await eventService.create({
+          organizationId: session.organizationId,
+          scopeType: "session",
+          scopeId: sessionId,
+          eventType: "message_sent",
+          payload: { text },
+          actorType,
+          actorId,
+        });
+        return event;
+      }
     }
 
     // If session has a read-only workspace and user explicitly switched away from ask mode,
