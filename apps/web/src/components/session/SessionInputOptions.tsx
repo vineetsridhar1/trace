@@ -19,7 +19,6 @@ import {
 } from "./interactionModes";
 import { getModelsForTool, getDefaultModel, getModelLabel } from "./modelOptions";
 import { CLOUD_RUNTIME_ID } from "./RuntimeSelector";
-import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
 import { cn } from "../../lib/utils";
 
@@ -194,18 +193,7 @@ export function SessionInputOptions({
               ))}
           </SelectContent>
         </Select>
-      ) : (
-        <Tooltip>
-          <TooltipTrigger className="flex h-7 items-center px-2 text-muted-foreground">
-            {isCloud ? (
-              <Cloud size={12} className="text-blue-400" />
-            ) : (
-              <Monitor size={12} className="text-green-400" />
-            )}
-          </TooltipTrigger>
-          <TooltipContent>{isCloud ? "Cloud" : (runtimeLabel ?? "Local")}</TooltipContent>
-        </Tooltip>
-      )}
+      ) : null}
       <button
         type="button"
         onClick={() => onModeChange(mode)}

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Send, Square } from "lucide-react";
+import { Send, Square, Cloud, Monitor } from "lucide-react";
 import { useEntityField, useEntityStore, eventScopeKey } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
@@ -9,6 +9,7 @@ import { SessionInputOptions } from "./SessionInputOptions";
 import { isDisconnected, canSendMessage } from "./sessionStatus";
 import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
 import { getModelLabel } from "./modelOptions";
+import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { cn } from "../../lib/utils";
 
 export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop: () => void }) {
@@ -18,6 +19,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     | Record<string, unknown>
     | null
     | undefined;
+  const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as
     | boolean
     | undefined;
@@ -91,6 +93,24 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   return (
     <div className={cn("shrink-0 border-t px-4 py-3 transition-colors", mode === "plan" ? "border-violet-500/50" : mode === "ask" ? "border-orange-600/50" : "border-border")}>
       <div className="flex items-end gap-2">
+        {!isNotStarted && (
+          <Tooltip>
+            <TooltipTrigger className="mb-2 flex items-center text-muted-foreground">
+              {hosting === "cloud" ? (
+                <Cloud size={14} className="text-blue-400" />
+              ) : (
+                <Monitor size={14} className="text-green-400" />
+              )}
+            </TooltipTrigger>
+            <TooltipContent>
+              {hosting === "cloud" ? "Cloud" : (
+                connection && typeof connection === "object" && "runtimeLabel" in connection
+                  ? (connection.runtimeLabel as string) ?? "Local"
+                  : "Local"
+              )}
+            </TooltipContent>
+          </Tooltip>
+        )}
         <textarea
           ref={inputRef}
           value={message}
