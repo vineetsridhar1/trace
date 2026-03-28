@@ -43,6 +43,9 @@ async function resolveDefaultRuntime(tool: string, channelRepoId: string | undef
  * Used by both Cmd+N and the + session button.
  */
 export async function createQuickSession(channelId: string): Promise<void> {
+  // Open the panel immediately so the user sees instant feedback
+  useUIStore.getState().setPendingSessionCreate({ channelId });
+
   try {
     const prefTool = usePreferencesStore.getState().defaultTool ?? "claude_code";
     const prefModel = usePreferencesStore.getState().defaultModel ?? getDefaultModel(prefTool);
@@ -71,12 +74,16 @@ export async function createQuickSession(channelId: string): Promise<void> {
       .toPromise();
 
     if (result.error) {
+      useUIStore.getState().setPendingSessionCreate(null);
       toast.error("Failed to create session", { description: result.error.message });
       return;
     }
 
     const session = result.data?.startSession;
-    if (!session?.id) return;
+    if (!session?.id) {
+      useUIStore.getState().setPendingSessionCreate(null);
+      return;
+    }
 
     const sessionGroupId = session.sessionGroupId;
     if (sessionGroupId) {
@@ -89,10 +96,15 @@ export async function createQuickSession(channelId: string): Promise<void> {
         channel: { id: channelId },
         repo: channelRepoId ? { id: channelRepoId } : null,
       });
+      // Clear pending state and transition to the real session
+      useUIStore.getState().setPendingSessionCreate(null);
       useUIStore.getState().openSessionTab(sessionGroupId, session.id);
       useUIStore.getState().setActiveSessionGroupId(sessionGroupId, session.id);
+    } else {
+      useUIStore.getState().setPendingSessionCreate(null);
     }
   } catch (err) {
+    useUIStore.getState().setPendingSessionCreate(null);
     const message = err instanceof Error ? err.message : "Unknown error";
     toast.error("Failed to create session", { description: message });
   }

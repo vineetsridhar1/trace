@@ -10,6 +10,7 @@ import { InboxView } from "./components/inbox/InboxView";
 import { TicketsView } from "./components/tickets/TicketsView";
 import { AgentDebugPage } from "./components/agent-debug/AgentDebugPage";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
+import { PendingSessionView } from "./components/session/PendingSessionView";
 import { DetailPanel } from "./components/ui/detail-panel";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -59,6 +60,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   const activePage = useUIStore((s) => s.activePage);
   const activeChatId = useUIStore((s) => s.activeChatId);
   const activeSessionGroupId = useUIStore((s) => s.activeSessionGroupId);
+  const pendingSessionCreate = useUIStore((s) => s.pendingSessionCreate);
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
   const isFullscreen = useDetailPanelStore((s) => s.isFullscreen);
   const isMobile = useIsMobile();
@@ -79,7 +81,10 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const closePanel = useCallback(() => setActiveSessionId(null), [setActiveSessionId]);
+  const closePanel = useCallback(() => {
+    setActiveSessionId(null);
+    useUIStore.getState().setPendingSessionCreate(null);
+  }, [setActiveSessionId]);
 
   const [displayedSessionGroupId, setDisplayedSessionGroupId] = useState<string | null>(activeSessionGroupId);
   useEffect(() => {
@@ -88,7 +93,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
     }
   }, [activeSessionGroupId]);
 
-  const hasSession = !!activeSessionGroupId;
+  const hasSession = !!activeSessionGroupId || !!pendingSessionCreate;
   const isMainContentCollapsed = hasSession && isFullscreen && !isMobile;
 
   return (
@@ -153,9 +158,11 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
               containerRef={containerRef}
               onClosed={() => setDisplayedSessionGroupId(null)}
             >
-              {displayedSessionGroupId && (
+              {displayedSessionGroupId ? (
                 <SessionGroupDetailView sessionGroupId={displayedSessionGroupId} panelMode />
-              )}
+              ) : pendingSessionCreate ? (
+                <PendingSessionView />
+              ) : null}
             </DetailPanel>
           </div>
         </SidebarProvider>

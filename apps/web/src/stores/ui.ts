@@ -27,6 +27,8 @@ interface UIState {
   closeSessionTab: (groupId: string, sessionId: string) => void;
   initSessionTabs: (groupId: string, sessionIds: string[]) => void;
   restoreLastVisited: (tab: "dm" | "main") => void;
+  pendingSessionCreate: { channelId: string } | null;
+  setPendingSessionCreate: (pending: { channelId: string } | null) => void;
   unreadChatIds: Record<string, boolean>;
   markChatUnread: (chatId: string) => void;
   markChatRead: (chatId: string) => void;
@@ -152,8 +154,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   refreshTick: 0,
   lastSelectedSessionIdsByGroup: {},
   openSessionTabsByGroup: {},
+  pendingSessionCreate: null,
   unreadChatIds: {},
   triggerRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
+  setPendingSessionCreate: (pending) => set({ pendingSessionCreate: pending }),
 
   openSessionTab: (groupId, sessionId) => {
     set((s) => {
