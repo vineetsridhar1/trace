@@ -186,7 +186,7 @@ export function SessionMessageList({
             <div
               key={node.id}
               data-event-id={node.id}
-              className={highlightEventId === node.id ? "rounded-lg ring-2 ring-primary/50 transition-all duration-500" : undefined}
+              className={highlightEventId === node.id ? "empty:hidden rounded-lg ring-2 ring-primary/50 transition-all duration-500" : "empty:hidden"}
             >
               <SessionMessage
                 id={node.id}
