@@ -1427,6 +1427,7 @@ export type SessionGroup = {
   prUrl?: Maybe<Scalars['String']['output']>;
   repo?: Maybe<Repo>;
   sessions: Array<Session>;
+  slug?: Maybe<Scalars['String']['output']>;
   status: SessionGroupStatus;
   updatedAt: Scalars['DateTime']['output'];
   workdir?: Maybe<Scalars['String']['output']>;

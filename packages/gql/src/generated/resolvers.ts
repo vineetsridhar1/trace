@@ -1430,6 +1430,7 @@ export type SessionGroup = {
   prUrl?: Maybe<Scalars['String']['output']>;
   repo?: Maybe<Repo>;
   sessions: Array<Session>;
+  slug?: Maybe<Scalars['String']['output']>;
   status: SessionGroupStatus;
   updatedAt: Scalars['DateTime']['output'];
   workdir?: Maybe<Scalars['String']['output']>;
@@ -2476,6 +2477,7 @@ export type SessionGroupResolvers<ContextType = Context, ParentType extends Reso
   prUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes['Repo']>, ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType>;
+  slug?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   status?: Resolver<ResolversTypes['SessionGroupStatus'], ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   workdir?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;

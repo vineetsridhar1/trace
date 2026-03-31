@@ -274,6 +274,7 @@ type ChannelGroup {
 type SessionGroup {
   id: ID!
   name: String!
+  slug: String
   status: SessionGroupStatus!
   channel: Channel
   repo: Repo
