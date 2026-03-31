@@ -32,7 +32,7 @@ interface DetectedRepo {
   defaultBranch: string;
 }
 
-export function CreateRepoDialog() {
+export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
   const [open, setOpen] = useState(false);
   const [detected, setDetected] = useState<DetectedRepo | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -92,6 +92,7 @@ export function CreateRepoDialog() {
           await window.trace.saveRepoPath(result.data.createRepo.id, selectedPath);
         }
         resetAndClose();
+        onCreated?.();
       }
     } finally {
       setCreating(false);

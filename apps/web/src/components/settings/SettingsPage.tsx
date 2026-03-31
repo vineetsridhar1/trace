@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import type { Repo } from "@trace/gql";
 import { ArrowLeft } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
@@ -31,6 +31,7 @@ export function SettingsPage() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const setActivePage = useUIStore((s) => s.setActivePage);
+  const [desktopRefreshKey, setDesktopRefreshKey] = useState(0);
 
   const fetchRepos = useCallback(async () => {
     if (!activeOrgId) return;
@@ -76,7 +77,7 @@ export function SettingsPage() {
                 Codebases linked to your organization.
               </p>
             </div>
-            <CreateRepoDialog />
+            <CreateRepoDialog onCreated={() => setDesktopRefreshKey((k) => k + 1)} />
           </div>
 
           {sortedRepoIds.length === 0 ? (
@@ -88,7 +89,7 @@ export function SettingsPage() {
           ) : (
             <div className="space-y-3">
               {sortedRepoIds.map((id) => (
-                <RepoCard key={id} id={id} />
+                <RepoCard key={id} id={id} desktopRefreshKey={desktopRefreshKey} />
               ))}
             </div>
           )}

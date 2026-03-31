@@ -98,7 +98,7 @@ function getHookStatusDetail(
   return null;
 }
 
-export function RepoCard({ id }: { id: string }) {
+export function RepoCard({ id, desktopRefreshKey }: { id: string; desktopRefreshKey?: number }) {
   const name = useEntityField("repos", id, "name");
   const remoteUrl = useEntityField("repos", id, "remoteUrl");
   const defaultBranch = useEntityField("repos", id, "defaultBranch");
@@ -136,7 +136,7 @@ export function RepoCard({ id }: { id: string }) {
       const message = error instanceof Error ? error.message : String(error);
       setGitHookError(message);
     });
-  }, [id]);
+  }, [id, desktopRefreshKey]);
 
   const startEditing = () => {
     setEditBranch(defaultBranch ?? "main");
