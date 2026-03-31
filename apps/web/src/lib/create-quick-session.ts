@@ -2,10 +2,21 @@ import type { SessionRuntimeInstance } from "@trace/gql";
 import { toast } from "sonner";
 import { client } from "./urql";
 import { START_SESSION_MUTATION, AVAILABLE_RUNTIMES_QUERY } from "./mutations";
-import { optimisticallyInsertSession } from "./optimistic-session";
+import {
+  optimisticallyInsertSession,
+  optimisticallyInsertSessionGroup,
+  reconcileOptimisticSession,
+  rollbackOptimisticSession,
+} from "./optimistic-session";
 import { usePreferencesStore } from "../stores/preferences";
 import { useEntityStore } from "../stores/entity";
-import { useUIStore } from "../stores/ui";
+import {
+  useUIStore,
+  navigateToSession,
+  getCurrentNavigationState,
+  replaceNavigationState,
+  registerOptimisticSessionRedirect,
+} from "../stores/ui";
 import { getDefaultModel } from "../components/session/modelOptions";
 
 /**
@@ -13,7 +24,10 @@ import { getDefaultModel } from "../components/session/modelOptions";
  * Prefers a connected local bridge when defaultHosting is "bridge",
  * falls back to cloud if none available.
  */
-async function resolveDefaultRuntime(tool: string, channelRepoId: string | undefined): Promise<{
+async function resolveDefaultRuntime(
+  tool: string,
+  channelRepoId: string | undefined,
+): Promise<{
   runtimeInstanceId: string | undefined;
   hosting: "cloud" | "local";
 }> {
@@ -41,19 +55,60 @@ async function resolveDefaultRuntime(tool: string, channelRepoId: string | undef
 /**
  * Create a new not_started session with smart defaults.
  * Used by both Cmd+N and the + session button.
+ *
+ * Navigates instantly with optimistic entities, then fires the mutation
+ * in the background and reconciles when it resolves.
  */
 export async function createQuickSession(channelId: string): Promise<void> {
+  const previousNav = getCurrentNavigationState();
+  const prefTool = usePreferencesStore.getState().defaultTool ?? "claude_code";
+  const prefModel = usePreferencesStore.getState().defaultModel ?? getDefaultModel(prefTool);
+  const prefHosting = usePreferencesStore.getState().defaultHosting;
+
+  const channel = useEntityStore.getState().channels[channelId];
+  const channelRepoId =
+    channel &&
+    typeof channel === "object" &&
+    "repo" in channel &&
+    channel.repo &&
+    typeof channel.repo === "object" &&
+    "id" in (channel.repo as Record<string, unknown>)
+      ? (channel.repo as { id: string }).id
+      : undefined;
+
+  // Generate temp IDs and navigate immediately
+  const tempSessionId = crypto.randomUUID();
+  const tempGroupId = crypto.randomUUID();
+  const assumedHosting = prefHosting === "cloud" ? "cloud" : "local";
+
+  optimisticallyInsertSessionGroup({
+    id: tempGroupId,
+    channel: { id: channelId },
+    repo: channelRepoId ? { id: channelRepoId } : null,
+    optimistic: true,
+  });
+
+  optimisticallyInsertSession({
+    id: tempSessionId,
+    sessionGroupId: tempGroupId,
+    tool: prefTool,
+    model: prefModel,
+    hosting: assumedHosting,
+    channel: { id: channelId },
+    repo: channelRepoId ? { id: channelRepoId } : null,
+    optimistic: true,
+  });
+
+  useUIStore.getState().openSessionTab(tempGroupId, tempSessionId);
+  useUIStore.getState().setActiveSessionGroupId(tempGroupId, tempSessionId);
+
+  const isStillOnTempRoute = () => {
+    const ui = useUIStore.getState();
+    return ui.activeSessionGroupId === tempGroupId && ui.activeSessionId === tempSessionId;
+  };
+
+  // Fire mutation in background, reconcile when done
   try {
-    const prefTool = usePreferencesStore.getState().defaultTool ?? "claude_code";
-    const prefModel = usePreferencesStore.getState().defaultModel ?? getDefaultModel(prefTool);
-
-    const channel = useEntityStore.getState().channels[channelId];
-    const channelRepoId =
-      channel && typeof channel === "object" && "repo" in channel && channel.repo &&
-      typeof channel.repo === "object" && "id" in (channel.repo as Record<string, unknown>)
-        ? (channel.repo as { id: string }).id
-        : undefined;
-
     const { runtimeInstanceId, hosting } = await resolveDefaultRuntime(prefTool, channelRepoId);
     const isCloud = !runtimeInstanceId || hosting === "cloud";
 
@@ -71,28 +126,77 @@ export async function createQuickSession(channelId: string): Promise<void> {
       .toPromise();
 
     if (result.error) {
+      rollbackOptimisticSession(tempSessionId, tempGroupId);
+      if (isStillOnTempRoute()) {
+        replaceNavigationState(previousNav);
+      } else {
+        registerOptimisticSessionRedirect(tempGroupId, tempSessionId, previousNav);
+      }
       toast.error("Failed to create session", { description: result.error.message });
       return;
     }
 
     const session = result.data?.startSession;
-    if (!session?.id) return;
-
-    const sessionGroupId = session.sessionGroupId;
-    if (sessionGroupId) {
-      optimisticallyInsertSession({
-        id: session.id,
-        sessionGroupId,
-        tool: prefTool,
-        model: prefModel,
-        hosting,
-        channel: { id: channelId },
-        repo: channelRepoId ? { id: channelRepoId } : null,
+    if (!session?.id) {
+      rollbackOptimisticSession(tempSessionId, tempGroupId);
+      if (isStillOnTempRoute()) {
+        replaceNavigationState(previousNav);
+      } else {
+        registerOptimisticSessionRedirect(tempGroupId, tempSessionId, previousNav);
+      }
+      toast.error("Failed to create session", {
+        description: "Server did not return a session ID",
       });
-      useUIStore.getState().openSessionTab(sessionGroupId, session.id);
-      useUIStore.getState().setActiveSessionGroupId(sessionGroupId, session.id);
+      return;
+    }
+
+    const realGroupId = session.sessionGroupId;
+    if (!realGroupId) {
+      rollbackOptimisticSession(tempSessionId, tempGroupId);
+      if (isStillOnTempRoute()) {
+        replaceNavigationState(previousNav);
+      } else {
+        registerOptimisticSessionRedirect(tempGroupId, tempSessionId, previousNav);
+      }
+      toast.error("Failed to create session", {
+        description: "Server did not return a session group ID",
+      });
+      return;
+    }
+
+    // Reconcile: atomically swap temp entities for real ones
+    reconcileOptimisticSession({
+      tempSessionId,
+      tempGroupId,
+      realSessionId: session.id,
+      realGroupId,
+      tool: prefTool,
+      model: prefModel,
+      hosting,
+      channelId,
+      repoId: channelRepoId,
+    });
+
+    // Navigate to real session (replaces temp URL)
+    useUIStore.getState().openSessionTab(realGroupId, session.id);
+    if (isStillOnTempRoute()) {
+      navigateToSession(channelId, realGroupId, session.id, { replace: true });
+    } else {
+      registerOptimisticSessionRedirect(tempGroupId, tempSessionId, {
+        channelId,
+        sessionGroupId: realGroupId,
+        sessionId: session.id,
+        page: "main",
+        chatId: null,
+      });
     }
   } catch (err) {
+    rollbackOptimisticSession(tempSessionId, tempGroupId);
+    if (isStillOnTempRoute()) {
+      replaceNavigationState(previousNav);
+    } else {
+      registerOptimisticSessionRedirect(tempGroupId, tempSessionId, previousNav);
+    }
     const message = err instanceof Error ? err.message : "Unknown error";
     toast.error("Failed to create session", { description: message });
   }

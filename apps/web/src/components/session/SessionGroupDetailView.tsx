@@ -24,12 +24,13 @@ import { CheckpointOpenContext } from "./CheckpointOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
 import { SidebarPanel } from "./SidebarPanel";
 import type { SidebarTab } from "./SidebarPanel";
-const MonacoFileViewer = lazy(() => import("./MonacoFileViewer").then(m => ({ default: m.MonacoFileViewer })));
-const MonacoDiffViewer = lazy(() => import("./MonacoDiffViewer").then(m => ({ default: m.MonacoDiffViewer })));
-import {
-  getDisplaySessionStatus,
-  isTerminalStatus,
-} from "./sessionStatus";
+const MonacoFileViewer = lazy(() =>
+  import("./MonacoFileViewer").then((m) => ({ default: m.MonacoFileViewer })),
+);
+const MonacoDiffViewer = lazy(() =>
+  import("./MonacoDiffViewer").then((m) => ({ default: m.MonacoDiffViewer })),
+);
+import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
 import type { Terminal } from "@trace/gql";
 
 const SESSION_GROUP_DETAIL_QUERY = gql`
@@ -168,10 +169,7 @@ export function SessionGroupDetailView({
   const groupSessionIds = useSessionIdsByGroup(sessionGroupId);
 
   const groupSessions = useMemo(
-    () =>
-      groupSessionIds
-        .map((id) => sessionsMap[id])
-        .filter(Boolean),
+    () => groupSessionIds.map((id) => sessionsMap[id]).filter(Boolean),
     [groupSessionIds, sessionsMap],
   );
 
@@ -186,9 +184,7 @@ export function SessionGroupDetailView({
   const sessionTabs = useMemo(() => {
     if (!openTabIds) return [];
     const sessionMap = new Map(groupSessions.map((s) => [s.id, s]));
-    return openTabIds
-      .map((id) => sessionMap.get(id))
-      .filter((s): s is SessionEntity => s != null);
+    return openTabIds.map((id) => sessionMap.get(id)).filter((s): s is SessionEntity => s != null);
   }, [groupSessions, openTabIds]);
 
   // Fetch full group detail and merge into store
@@ -249,14 +245,21 @@ export function SessionGroupDetailView({
 
   const selectedSession =
     sessionTabs.find((session) => session.id === activeSessionId) ?? sessionTabs[0] ?? null;
+  const selectedSessionIsOptimistic = selectedSession?._optimistic === true;
   const activeTerminal = terminals.find((terminal) => terminal.id === activeTerminalId) ?? null;
+
+  useEffect(() => {
+    if (selectedSessionIsOptimistic && showSidebar) {
+      setShowSidebar(false);
+    }
+  }, [selectedSessionIsOptimistic, showSidebar]);
 
   const selectedSessionStatus = selectedSession
     ? getDisplaySessionStatus(
-      selectedSession.sessionStatus,
-      groupPrUrl ?? null,
-      selectedSession.agentStatus,
-    )
+        selectedSession.sessionStatus,
+        groupPrUrl ?? null,
+        selectedSession.agentStatus,
+      )
     : "in_progress";
 
   const terminalAllowed = (() => {
@@ -274,14 +277,11 @@ export function SessionGroupDetailView({
     );
   })();
 
-  const handleOpenCheckpointPanel = useCallback(
-    (checkpointId?: string) => {
-      setShowSidebar(true);
-      setSidebarTab("git");
-      setHighlightCheckpointId(checkpointId ?? null);
-    },
-    [],
-  );
+  const handleOpenCheckpointPanel = useCallback((checkpointId?: string) => {
+    setShowSidebar(true);
+    setSidebarTab("git");
+    setHighlightCheckpointId(checkpointId ?? null);
+  }, []);
 
   const handleCheckpointClick = useCallback(
     (sessionId: string, promptEventId: string) => {
@@ -333,7 +333,7 @@ export function SessionGroupDetailView({
   );
 
   const handleOpenTerminal = useCallback(async () => {
-    if (!selectedSession || !terminalAllowed) return;
+    if (!selectedSession || selectedSession._optimistic || !terminalAllowed) return;
     const existing = await ensureSessionTerminals(selectedSession.id);
     if (existing.length > 0) {
       setActiveSessionId(selectedSession.id);
@@ -372,7 +372,7 @@ export function SessionGroupDetailView({
   );
 
   const handleNewChat = useCallback(async () => {
-    if (!selectedSession) return;
+    if (!selectedSession || selectedSession._optimistic) return;
     const resolvedChannelId =
       getSessionGroupChannelId(
         useEntityStore.getState().sessionGroups[sessionGroupId] ?? null,
@@ -407,7 +407,15 @@ export function SessionGroupDetailView({
       openSessionTab(sessionGroupId, newSessionId);
       setActiveSessionId(newSessionId);
     }
-  }, [groupSessions, groupBranch, groupRepo, openSessionTab, selectedSession, sessionGroupId, setActiveSessionId]);
+  }, [
+    groupSessions,
+    groupBranch,
+    groupRepo,
+    openSessionTab,
+    selectedSession,
+    sessionGroupId,
+    setActiveSessionId,
+  ]);
 
   const handleSelectTerminal = useCallback(
     (sessionId: string | null, terminalId: string) => {
@@ -476,100 +484,120 @@ export function SessionGroupDetailView({
 
   return (
     <CheckpointOpenContext.Provider value={handleOpenCheckpointPanel}>
-    <FileOpenContext.Provider value={handleFileClick}>
-      <div className="flex h-full flex-col overflow-hidden">
-        <GroupHeader
-          groupName={groupName as string | undefined}
-          selectedSessionStatus={selectedSessionStatus}
-          selectedSessionId={selectedSession?.id ?? null}
-          groupPrUrl={groupPrUrl}
-          panelMode={panelMode}
-          isFullscreen={isFullscreen}
-          showSidebar={showSidebar}
-          onClose={() => setActiveSessionId(null)}
-          onToggleFullscreen={toggleFullscreen}
-          onToggleSidebar={handleToggleSidebar}
-        />
+      <FileOpenContext.Provider value={handleFileClick}>
+        <div className="flex h-full flex-col overflow-hidden">
+          <GroupHeader
+            groupName={groupName as string | undefined}
+            selectedSessionStatus={selectedSessionStatus}
+            selectedSessionId={selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)}
+            groupPrUrl={groupPrUrl}
+            panelMode={panelMode}
+            isFullscreen={isFullscreen}
+            showSidebar={showSidebar}
+            onClose={() => setActiveSessionId(null)}
+            onToggleFullscreen={toggleFullscreen}
+            onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
+          />
 
-        <GroupTabStrip
-          sessionTabs={sessionTabs}
-          terminals={terminals}
-          groupSessions={groupSessions}
-          selectedSessionId={selectedSession?.id ?? null}
-          activeTerminalId={activeTerminalId}
-          openFiles={openFiles}
-          activeFilePath={activeFilePath}
-          onSelectSession={handleSelectSession}
-          onCloseSession={handleCloseSession}
-          canCloseSessions={sessionTabs.length > 1}
-          onSelectTerminal={handleSelectTerminal}
-          onCloseTerminal={handleCloseTerminal}
-          onSelectFile={handleSelectFile}
-          onCloseFile={handleCloseFile}
-          onNewChat={handleNewChat}
-          onOpenTerminal={handleOpenTerminal}
-          canNewChat={!!selectedSession}
-          canOpenTerminal={terminalAllowed}
-        />
+          <GroupTabStrip
+            sessionTabs={sessionTabs}
+            terminals={terminals}
+            groupSessions={groupSessions}
+            selectedSessionId={selectedSession?.id ?? null}
+            activeTerminalId={activeTerminalId}
+            openFiles={openFiles}
+            activeFilePath={activeFilePath}
+            onSelectSession={handleSelectSession}
+            onCloseSession={handleCloseSession}
+            canCloseSessions={sessionTabs.length > 1}
+            onSelectTerminal={handleSelectTerminal}
+            onCloseTerminal={handleCloseTerminal}
+            onSelectFile={handleSelectFile}
+            onCloseFile={handleCloseFile}
+            onNewChat={handleNewChat}
+            onOpenTerminal={handleOpenTerminal}
+            canNewChat={!!selectedSession && !selectedSessionIsOptimistic}
+            canOpenTerminal={!selectedSessionIsOptimistic && terminalAllowed}
+          />
 
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-            {activeFilePath?.startsWith("diff:") ? (
-              <div className="h-full">
-                <Suspense fallback={<div className="flex h-full items-center justify-center bg-[#1e1e1e]" />}>
-                  <MonacoDiffViewer
-                    key={activeFilePath}
-                    sessionGroupId={sessionGroupId}
-                    filePath={activeFilePath.slice(5)}
-                    status={openFiles.find((f) => f.filePath === activeFilePath)?.diffStatus ?? "M"}
-                    defaultBranch={groupRepo?.defaultBranch ?? "main"}
-                  />
-                </Suspense>
-              </div>
-            ) : activeFilePath ? (
-              <div className="h-full">
-                <Suspense fallback={<div className="flex h-full items-center justify-center bg-[#1e1e1e]" />}>
-                  <MonacoFileViewer
-                    key={activeFilePath}
-                    sessionGroupId={sessionGroupId}
-                    filePath={activeFilePath}
-                  />
-                </Suspense>
-              </div>
-            ) : activeTerminal ? (
-              <div className="h-full bg-[#0a0a0a]">
-                <TerminalInstance terminalId={activeTerminal.id} visible />
-              </div>
-            ) : selectedSession ? (
-              <SessionDetailView
-                sessionId={selectedSession.id}
-                hideHeader
-                scrollToEventId={scrollToEventId}
-                onScrollComplete={handleScrollComplete}
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Select a chat tab to continue.
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+              {activeFilePath?.startsWith("diff:") ? (
+                <div className="h-full">
+                  <Suspense
+                    fallback={
+                      <div className="flex h-full items-center justify-center bg-[#1e1e1e]" />
+                    }
+                  >
+                    <MonacoDiffViewer
+                      key={activeFilePath}
+                      sessionGroupId={sessionGroupId}
+                      filePath={activeFilePath.slice(5)}
+                      status={
+                        openFiles.find((f) => f.filePath === activeFilePath)?.diffStatus ?? "M"
+                      }
+                      defaultBranch={groupRepo?.defaultBranch ?? "main"}
+                    />
+                  </Suspense>
+                </div>
+              ) : activeFilePath ? (
+                <div className="h-full">
+                  <Suspense
+                    fallback={
+                      <div className="flex h-full items-center justify-center bg-[#1e1e1e]" />
+                    }
+                  >
+                    <MonacoFileViewer
+                      key={activeFilePath}
+                      sessionGroupId={sessionGroupId}
+                      filePath={activeFilePath}
+                    />
+                  </Suspense>
+                </div>
+              ) : activeTerminal ? (
+                <div className="h-full bg-[#0a0a0a]">
+                  <TerminalInstance terminalId={activeTerminal.id} visible />
+                </div>
+              ) : selectedSessionIsOptimistic ? (
+                <div className="flex h-full items-center justify-center px-6 text-center">
+                  <div className="max-w-sm space-y-2">
+                    <p className="text-sm font-medium text-foreground">Creating session...</p>
+                    <p className="text-sm text-muted-foreground">
+                      The session is being created in the background. Input and runtime controls
+                      will unlock once the real session ID is ready.
+                    </p>
+                  </div>
+                </div>
+              ) : selectedSession ? (
+                <SessionDetailView
+                  sessionId={selectedSession.id}
+                  hideHeader
+                  scrollToEventId={scrollToEventId}
+                  onScrollComplete={handleScrollComplete}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  Select a chat tab to continue.
+                </div>
+              )}
+            </div>
+            {showSidebar && !selectedSessionIsOptimistic && (
+              <div className="h-full w-[260px] shrink-0 border-l border-[#2d2d2d]">
+                <SidebarPanel
+                  sessionGroupId={sessionGroupId}
+                  activeSessionId={selectedSession?.id ?? null}
+                  activeTab={sidebarTab}
+                  onTabChange={handleSidebarTabChange}
+                  onFileClick={handleFileClick}
+                  onDiffFileClick={handleDiffFileClick}
+                  highlightCheckpointId={highlightCheckpointId}
+                  onCheckpointClick={handleCheckpointClick}
+                />
               </div>
             )}
           </div>
-          {showSidebar && (
-            <div className="h-full w-[260px] shrink-0 border-l border-[#2d2d2d]">
-              <SidebarPanel
-                sessionGroupId={sessionGroupId}
-                activeSessionId={selectedSession?.id ?? null}
-                activeTab={sidebarTab}
-                onTabChange={handleSidebarTabChange}
-                onFileClick={handleFileClick}
-                onDiffFileClick={handleDiffFileClick}
-                highlightCheckpointId={highlightCheckpointId}
-                onCheckpointClick={handleCheckpointClick}
-              />
-            </div>
-          )}
         </div>
-      </div>
-    </FileOpenContext.Provider>
+      </FileOpenContext.Provider>
     </CheckpointOpenContext.Provider>
   );
 }

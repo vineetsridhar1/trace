@@ -21,10 +21,12 @@ export type SessionEntity = Session & {
   _lastEventPreview?: string;
   _lastMessageAt?: string;
   _sortTimestamp?: string;
+  _optimistic?: boolean;
 };
 
 export type SessionGroupEntity = SessionGroup & {
   _sortTimestamp?: string;
+  _optimistic?: boolean;
 };
 
 /** Entity types that the store manages, keyed by ID */
@@ -57,7 +59,11 @@ interface EntityActions {
     items: Array<EntityTableMap[T] & { id: string }>,
   ) => void;
   /** Shallow-merge a partial update into an existing entity */
-  patch: <T extends EntityType>(entityType: T, id: string, data: Partial<EntityTableMap[T]>) => void;
+  patch: <T extends EntityType>(
+    entityType: T,
+    id: string,
+    data: Partial<EntityTableMap[T]>,
+  ) => void;
   remove: (entityType: EntityType, id: string) => void;
   /** Upsert a single event into its scoped bucket */
   upsertScopedEvent: (scopeKey: string, id: string, event: Event) => void;
@@ -158,7 +164,9 @@ export const useEntityStore = create<EntityState>((set) => ({
       const update: Record<string, unknown> = { [entityType]: table };
 
       if (entityType === "sessions") {
-        const newGroupId = (table[id] as unknown as SessionEntity).sessionGroupId as string | undefined;
+        const newGroupId = (table[id] as unknown as SessionEntity).sessionGroupId as
+          | string
+          | undefined;
         if (oldGroupId !== newGroupId) {
           const idx = { ...state._sessionIdsByGroup };
           if (oldGroupId && idx[oldGroupId]) {
@@ -372,9 +380,18 @@ export class StoreBatchWriter {
 }
 
 const ENTITY_KEYS: EntityType[] = [
-  "organizations", "users", "repos", "projects", "channels",
-  "channelGroups", "sessionGroups", "chats", "sessions",
-  "tickets", "inboxItems", "messages",
+  "organizations",
+  "users",
+  "repos",
+  "projects",
+  "channels",
+  "channelGroups",
+  "sessionGroups",
+  "chats",
+  "sessions",
+  "tickets",
+  "inboxItems",
+  "messages",
 ];
 
 /** Fine-grained selector: subscribe to a single field of a single entity */

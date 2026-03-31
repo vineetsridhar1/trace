@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useUIStore } from "../stores/ui";
+import { buildPath, resolveOptimisticSessionRedirect, useUIStore } from "../stores/ui";
 import type { ActivePage } from "../stores/ui";
 
 function parseNavFromPath(path: string): {
@@ -10,13 +10,25 @@ function parseNavFromPath(path: string): {
   page: ActivePage;
 } {
   if (path.startsWith("/settings")) {
-    return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, page: "settings" };
+    return {
+      channelId: null,
+      sessionGroupId: null,
+      sessionId: null,
+      chatId: null,
+      page: "settings",
+    };
   }
   if (path.startsWith("/inbox")) {
     return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, page: "inbox" };
   }
   if (path.startsWith("/tickets")) {
-    return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, page: "tickets" };
+    return {
+      channelId: null,
+      sessionGroupId: null,
+      sessionId: null,
+      chatId: null,
+      page: "tickets",
+    };
   }
 
   const chatMatch = path.match(/^\/dm\/([^/]+)/);
@@ -92,51 +104,45 @@ export function useHistorySync() {
   const restoreNav = useUIStore((s) => s._restoreNav);
 
   useEffect(() => {
-    const { channelId, sessionGroupId, sessionId, chatId, page } = parseNavFromPath(
-      window.location.pathname,
+    const parsedNav = parseNavFromPath(window.location.pathname);
+    const initialRedirect = resolveOptimisticSessionRedirect(
+      parsedNav.sessionGroupId,
+      parsedNav.sessionId,
     );
+    const { channelId, sessionGroupId, sessionId, chatId, page } = initialRedirect ?? parsedNav;
     const initialChat =
-      (page === "settings" || page === "inbox" || page === "tickets" || channelId)
+      page === "settings" || page === "inbox" || page === "tickets" || channelId
         ? null
         : (chatId ?? localStorage.getItem("trace:activeChatId"));
     const initialChannel =
-      (page === "settings" || page === "inbox" || page === "tickets" || initialChat)
+      page === "settings" || page === "inbox" || page === "tickets" || initialChat
         ? null
         : (channelId ?? localStorage.getItem("trace:activeChannelId"));
     const initialSessionGroupId =
-      (page === "settings" || page === "inbox" || page === "tickets" || initialChat)
+      page === "settings" || page === "inbox" || page === "tickets" || initialChat
         ? null
         : (sessionGroupId ?? localStorage.getItem("trace:activeSessionGroupId"));
     const initialSessionId =
-      (page === "settings" || page === "inbox" || page === "tickets" || initialChat)
+      page === "settings" || page === "inbox" || page === "tickets" || initialChat
         ? null
         : (sessionId ?? localStorage.getItem("trace:activeSessionId"));
 
-    let path: string;
-    if (page === "settings") {
-      path = "/settings";
-    } else if (page === "inbox") {
-      path = "/inbox";
-    } else if (page === "tickets") {
-      path = "/tickets";
-    } else if (initialChat) {
-      path = `/dm/${initialChat}`;
-    } else if (initialChannel && initialSessionGroupId && initialSessionId) {
-      path = `/c/${initialChannel}/g/${initialSessionGroupId}/s/${initialSessionId}`;
-    } else if (initialChannel && initialSessionGroupId) {
-      path = `/c/${initialChannel}/g/${initialSessionGroupId}`;
-    } else if (initialSessionGroupId && initialSessionId) {
-      path = `/g/${initialSessionGroupId}/s/${initialSessionId}`;
-    } else if (initialSessionGroupId) {
-      path = `/g/${initialSessionGroupId}`;
-    } else if (initialChannel) {
-      path = `/c/${initialChannel}`;
-    } else {
-      path = "/";
-    }
+    const path = buildPath(
+      initialChannel,
+      initialSessionGroupId,
+      initialSessionId,
+      page,
+      initialChat,
+    );
 
     history.replaceState(
-      { channelId: initialChannel, sessionGroupId: initialSessionGroupId, sessionId: initialSessionId, page, chatId: initialChat },
+      {
+        channelId: initialChannel,
+        sessionGroupId: initialSessionGroupId,
+        sessionId: initialSessionId,
+        page,
+        chatId: initialChat,
+      },
       "",
       path,
     );
@@ -153,6 +159,29 @@ export function useHistorySync() {
       } | null;
 
       if (state) {
+        const redirect = resolveOptimisticSessionRedirect(state.sessionGroupId, state.sessionId);
+        if (redirect) {
+          history.replaceState(
+            redirect,
+            "",
+            buildPath(
+              redirect.channelId,
+              redirect.sessionGroupId,
+              redirect.sessionId,
+              redirect.page,
+              redirect.chatId,
+            ),
+          );
+          restoreNav(
+            redirect.channelId,
+            redirect.sessionGroupId,
+            redirect.sessionId,
+            redirect.page,
+            redirect.chatId,
+          );
+          return;
+        }
+
         restoreNav(
           state.channelId,
           state.sessionGroupId,
@@ -164,6 +193,28 @@ export function useHistorySync() {
       }
 
       const nav = parseNavFromPath(window.location.pathname);
+      const redirect = resolveOptimisticSessionRedirect(nav.sessionGroupId, nav.sessionId);
+      if (redirect) {
+        history.replaceState(
+          redirect,
+          "",
+          buildPath(
+            redirect.channelId,
+            redirect.sessionGroupId,
+            redirect.sessionId,
+            redirect.page,
+            redirect.chatId,
+          ),
+        );
+        restoreNav(
+          redirect.channelId,
+          redirect.sessionGroupId,
+          redirect.sessionId,
+          redirect.page,
+          redirect.chatId,
+        );
+        return;
+      }
       restoreNav(nav.channelId, nav.sessionGroupId, nav.sessionId, nav.page, nav.chatId);
     }
 
