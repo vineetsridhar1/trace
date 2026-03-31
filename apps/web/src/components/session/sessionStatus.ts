@@ -12,7 +12,7 @@ export const agentStatusLabel: Record<string, string> = {
   active: "Active",
   done: "Done",
   failed: "Failed",
-  not_started: "Not Started",
+  not_started: "Creating...",
   stopped: "Stopped",
 };
 
@@ -21,6 +21,7 @@ export const agentStatusLabel: Record<string, string> = {
 // Includes "failed" and "stopped" because getDisplaySessionStatus() maps terminal
 // agent states into these display keys for group headers and table row groups.
 export const sessionStatusColor: Record<string, string> = {
+  not_started: "text-muted-foreground",
   in_progress: "text-blue-400",
   needs_input: "text-amber-400",
   in_review: "text-violet-400",
@@ -31,6 +32,7 @@ export const sessionStatusColor: Record<string, string> = {
 };
 
 export const sessionStatusLabel: Record<string, string> = {
+  not_started: "Creating...",
   in_progress: "In Progress",
   needs_input: "Needs Input",
   in_review: "In Review",
