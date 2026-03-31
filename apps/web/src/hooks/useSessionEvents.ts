@@ -29,7 +29,7 @@ const SESSION_EVENTS_QUERY = gql`
 `;
 
 const SESSION_EVENTS_SUBSCRIPTION = gql`
-  subscription SessionEvents($sessionId: ID!, $organizationId: ID!) {
+  subscription SessionEventsLive($sessionId: ID!, $organizationId: ID!) {
     sessionEvents(sessionId: $sessionId, organizationId: $organizationId) {
       id
       scopeType
