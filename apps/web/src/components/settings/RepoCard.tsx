@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { GitBranch, Pencil, Check, X } from "lucide-react";
+import { GitBranch, FolderOpen, Pencil, Check, X } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import {
@@ -98,7 +98,7 @@ function getHookStatusDetail(
   return null;
 }
 
-export function RepoCard({ id }: { id: string }) {
+export function RepoCard({ id, desktopRefreshKey }: { id: string; desktopRefreshKey?: number }) {
   const name = useEntityField("repos", id, "name");
   const remoteUrl = useEntityField("repos", id, "remoteUrl");
   const defaultBranch = useEntityField("repos", id, "defaultBranch");
@@ -112,6 +112,7 @@ export function RepoCard({ id }: { id: string }) {
   const [gitHookStatus, setGitHookStatus] = useState<DesktopRepoGitHookStatus | null>(null);
   const [gitHookPending, setGitHookPending] = useState(false);
   const [gitHookError, setGitHookError] = useState<string | null>(null);
+  const [linking, setLinking] = useState(false);
 
   const refreshDesktopState = async () => {
     if (!window.trace?.getRepoConfig) return;
@@ -135,7 +136,7 @@ export function RepoCard({ id }: { id: string }) {
       const message = error instanceof Error ? error.message : String(error);
       setGitHookError(message);
     });
-  }, [id]);
+  }, [id, desktopRefreshKey]);
 
   const startEditing = () => {
     setEditBranch(defaultBranch ?? "main");
@@ -184,6 +185,26 @@ export function RepoCard({ id }: { id: string }) {
       }
     } finally {
       setWebhookPending(false);
+    }
+  };
+
+  const linkToLocalPath = async () => {
+    if (!window.trace?.pickFolder || !window.trace?.saveRepoPath || linking) return;
+
+    setLinking(true);
+    setGitHookError(null);
+
+    try {
+      const folderPath = await window.trace.pickFolder();
+      if (!folderPath) return;
+
+      await window.trace.saveRepoPath(id, folderPath);
+      await refreshDesktopState();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setGitHookError(message);
+    } finally {
+      setLinking(false);
     }
   };
 
@@ -313,42 +334,64 @@ export function RepoCard({ id }: { id: string }) {
             <div className="mt-3 rounded-md border border-border/70 bg-surface-elevated/40 p-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-foreground">Desktop Git Hooks</p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {linkedPath ?? "This repository is not linked on this desktop."}
-                  </p>
+                  <p className="text-xs font-medium text-foreground">Desktop Linking</p>
+                  {linkedPath ? (
+                    <p className="mt-0.5 truncate text-xs text-emerald-500">{linkedPath}</p>
+                  ) : (
+                    <p className="mt-0.5 text-xs text-amber-500">Not linked on this computer</p>
+                  )}
                 </div>
-                {linkedPath && (
+                {!linkedPath && (
                   <Button
-                    variant={gitHooksEnabled ? "secondary" : "outline"}
+                    variant="outline"
                     size="sm"
-                    onClick={toggleGitHooks}
-                    disabled={gitHookPending}
+                    className="gap-1.5"
+                    onClick={linkToLocalPath}
+                    disabled={linking}
                   >
-                    {gitHookPending
-                      ? (gitHooksEnabled ? "Disabling..." : "Enabling...")
-                      : (gitHooksEnabled ? "Disable Hooks" : "Enable Hooks")}
+                    <FolderOpen size={12} />
+                    {linking ? "Linking..." : "Link Local Path"}
                   </Button>
                 )}
               </div>
 
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <p className={`text-xs ${hookStatusTone}`}>{hookStatusLabel}</p>
-                {showRepairButton && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-xs"
-                    onClick={repairGitHooks}
-                    disabled={gitHookPending}
-                  >
-                    Repair Hooks
-                  </Button>
-                )}
-              </div>
+              {linkedPath && (
+                <>
+                  <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-foreground">Git Hooks</p>
+                    </div>
+                    <Button
+                      variant={gitHooksEnabled ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={toggleGitHooks}
+                      disabled={gitHookPending}
+                    >
+                      {gitHookPending
+                        ? (gitHooksEnabled ? "Disabling..." : "Enabling...")
+                        : (gitHooksEnabled ? "Disable Hooks" : "Enable Hooks")}
+                    </Button>
+                  </div>
 
-              {hookStatusDetail && (
-                <p className="mt-2 text-xs text-muted-foreground">{hookStatusDetail}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <p className={`text-xs ${hookStatusTone}`}>{hookStatusLabel}</p>
+                    {showRepairButton && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={repairGitHooks}
+                        disabled={gitHookPending}
+                      >
+                        Repair Hooks
+                      </Button>
+                    )}
+                  </div>
+
+                  {hookStatusDetail && (
+                    <p className="mt-2 text-xs text-muted-foreground">{hookStatusDetail}</p>
+                  )}
+                </>
               )}
 
               {gitHookError && (
