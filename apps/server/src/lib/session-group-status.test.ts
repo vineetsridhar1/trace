@@ -2,6 +2,16 @@ import { describe, expect, it } from "vitest";
 import { deriveSessionGroupStatus } from "./session-group-status.js";
 
 describe("deriveSessionGroupStatus", () => {
+  it("returns archived when the group has an archived timestamp", () => {
+    expect(
+      deriveSessionGroupStatus(
+        [{ agentStatus: "active", sessionStatus: "in_progress" }],
+        "https://github.com/trace/trace/pull/123",
+        "2024-01-03T00:00:00.000Z",
+      ),
+    ).toBe("archived");
+  });
+
   it("prioritizes needs_input over review and in_progress", () => {
     expect(
       deriveSessionGroupStatus(

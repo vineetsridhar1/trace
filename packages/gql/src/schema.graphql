@@ -23,6 +23,7 @@ enum SessionGroupStatus {
   failed
   stopped
   merged
+  archived
 }
 
 enum TicketStatus {

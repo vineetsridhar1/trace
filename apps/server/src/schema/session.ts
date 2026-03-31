@@ -195,6 +195,7 @@ export const sessionTypeResolvers = {
       group: {
         id: string;
         prUrl?: string | null;
+        archivedAt?: string | Date | null;
         sessions?: SessionGroupStatusSource[];
       },
     ) => {
@@ -204,7 +205,7 @@ export const sessionTypeResolvers = {
             where: { sessionGroupId: group.id },
             select: { agentStatus: true, sessionStatus: true },
           });
-      return deriveSessionGroupStatus(sessions, group.prUrl ?? null);
+      return deriveSessionGroupStatus(sessions, group.prUrl ?? null, group.archivedAt ?? null);
     },
     sessions: async (group: { id: string; sessions?: unknown[] }) => {
       if (Array.isArray(group.sessions)) return group.sessions;

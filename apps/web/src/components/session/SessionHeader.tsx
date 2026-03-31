@@ -49,6 +49,10 @@ export function SessionHeader({
     | string
     | null
     | undefined;
+  const groupArchivedAt = useEntityField("sessionGroups", sessionGroupId ?? "", "archivedAt") as
+    | string
+    | null
+    | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | Record<string, unknown>
     | null
@@ -65,8 +69,18 @@ export function SessionHeader({
   const runtimeLabel = connection?.runtimeLabel as string | undefined;
   const isCloud = hosting === "cloud";
   const runtimeDisplayLabel = isCloud ? "Cloud" : (runtimeLabel ?? null);
-  const displaySessionStatus = getDisplaySessionStatus(sessionStatus, prUrl, agentStatus);
-  const displayAgentStatus = getDisplayAgentStatus(agentStatus, sessionStatus, prUrl);
+  const displaySessionStatus = getDisplaySessionStatus(
+    sessionStatus,
+    prUrl,
+    agentStatus,
+    groupArchivedAt,
+  );
+  const displayAgentStatus = getDisplayAgentStatus(
+    agentStatus,
+    sessionStatus,
+    prUrl,
+    groupArchivedAt,
+  );
 
   const closeHistory = useCallback(() => setShowHistory(false), []);
 

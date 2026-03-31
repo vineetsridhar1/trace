@@ -40,6 +40,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       name
       slug
       status
+      archivedAt
       branch
       prUrl
       workdir
@@ -130,6 +131,10 @@ export function SessionGroupDetailView({
     | null
     | undefined;
   const groupPrUrl = useEntityField("sessionGroups", sessionGroupId, "prUrl") as
+    | string
+    | null
+    | undefined;
+  const groupArchivedAt = useEntityField("sessionGroups", sessionGroupId, "archivedAt") as
     | string
     | null
     | undefined;
@@ -260,6 +265,7 @@ export function SessionGroupDetailView({
         selectedSession.sessionStatus,
         groupPrUrl ?? null,
         selectedSession.agentStatus,
+        groupArchivedAt ?? null,
       )
     : "in_progress";
 

@@ -1445,6 +1445,7 @@ export type SessionGroup = {
 };
 
 export type SessionGroupStatus =
+  | 'archived'
   | 'failed'
   | 'in_progress'
   | 'in_review'

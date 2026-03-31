@@ -1448,6 +1448,7 @@ export type SessionGroup = {
 };
 
 export type SessionGroupStatus =
+  | 'archived'
   | 'failed'
   | 'in_progress'
   | 'in_review'
@@ -2642,4 +2643,3 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Turn?: TurnResolvers<ContextType>;
   User?: UserResolvers<ContextType>;
 }>;
-

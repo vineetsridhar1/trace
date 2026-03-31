@@ -29,4 +29,6 @@ export const sessionStatusGroupOrder: Record<string, number> = {
   in_progress: 2,
   failed: 3,
   stopped: 4,
+  merged: 5,
+  archived: 6,
 };

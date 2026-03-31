@@ -227,7 +227,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   setActivePage: (page) => {
-    set({ activePage: page });
+    set({ activePage: page, channelSubPage: null });
     if (page === "settings") {
       pushNav(null, null, null, "settings");
       return;
@@ -260,6 +260,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       activeSessionId: null,
       activeTerminalId: null,
       activeThreadId: null,
+      channelSubPage: null,
     });
     pushNav(id, null, null);
   },
@@ -295,6 +296,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         activeSessionId: null,
         activeTerminalId: null,
         activeThreadId: null,
+        channelSubPage: null,
         unreadChatIds,
       };
     });
@@ -308,6 +310,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         activeSessionGroupId: null,
         activeSessionId: null,
         activeTerminalId: null,
+        channelSubPage: null,
       });
       pushNav(currentChannelId, null, null);
       return;
@@ -329,6 +332,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       activeSessionGroupId: groupId,
       activeSessionId: nextSessionId,
       activeTerminalId: null,
+      channelSubPage: null,
       lastSelectedSessionIdsByGroup: nextSessionId
         ? { ...state.lastSelectedSessionIdsByGroup, [groupId]: nextSessionId }
         : state.lastSelectedSessionIdsByGroup,
@@ -345,6 +349,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         activeSessionGroupId: null,
         activeSessionId: null,
         activeTerminalId: null,
+        channelSubPage: null,
       });
       pushNav(currentChannelId, null, null);
       return;
@@ -366,6 +371,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       activeSessionGroupId: sessionGroupId,
       activeSessionId: id,
       activeTerminalId: null,
+      channelSubPage: null,
       lastSelectedSessionIdsByGroup: sessionGroupId
         ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: id }
         : state.lastSelectedSessionIdsByGroup,
@@ -409,6 +415,7 @@ export const useUIStore = create<UIState>((set, get) => ({
           activeTerminalId: null,
           activeChatId: null,
           activeThreadId: null,
+          channelSubPage: null,
           lastSelectedSessionIdsByGroup:
             sessionGroupId && sessionId
               ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: sessionId }
@@ -431,6 +438,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       activeTerminalId: null,
       activeChatId: chatId ?? null,
       activeThreadId: null,
+      channelSubPage: null,
       lastSelectedSessionIdsByGroup:
         sessionGroupId && sessionId
           ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: sessionId }

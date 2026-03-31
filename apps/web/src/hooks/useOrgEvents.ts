@@ -460,21 +460,26 @@ export function useOrgEvents() {
 
         // Session group archived — update group and stop all agents
         if (event.eventType === "session_group_archived" && payload) {
-          upsertSessionGroupFromPayload();
+          upsertSessionGroupFromPayload(true);
           const sessionGroupId =
             typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;
           if (sessionGroupId) {
-            patch("sessionGroups", sessionGroupId, {
-              archivedAt: event.timestamp,
+            const sessionGroup = asJsonObject(payload.sessionGroup);
+            batch.patch("sessionGroups", sessionGroupId, {
+              archivedAt:
+                typeof sessionGroup?.archivedAt === "string"
+                  ? sessionGroup.archivedAt
+                  : event.timestamp,
+              status: "archived",
               worktreeDeleted: true,
               updatedAt: event.timestamp,
               _sortTimestamp: event.timestamp,
             });
             // Stop all sibling sessions
-            const allSessions = useEntityStore.getState().sessions;
+            const allSessions = batch.getAll("sessions");
             for (const [siblingId, sibling] of Object.entries(allSessions)) {
               if (sibling.sessionGroupId === sessionGroupId) {
-                patch("sessions", siblingId, {
+                batch.patch("sessions", siblingId, {
                   agentStatus: "stopped" as AgentStatus,
                   worktreeDeleted: true,
                   updatedAt: event.timestamp,

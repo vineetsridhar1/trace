@@ -188,6 +188,7 @@ const SESSION_GROUP_SUMMARY_SELECT = {
   connection: true,
   prUrl: true,
   worktreeDeleted: true,
+  archivedAt: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -324,7 +325,7 @@ function buildSessionGroupSnapshot(
 ): SessionGroupSnapshot {
   return {
     ...group,
-    status: deriveSessionGroupStatus(sessions, group.prUrl ?? null),
+    status: deriveSessionGroupStatus(sessions, group.prUrl ?? null, group.archivedAt ?? null),
   };
 }
 
@@ -600,7 +601,8 @@ export class SessionService {
   ) {
     const where: Record<string, unknown> = { channelId, organizationId };
 
-    if (options?.archived === true) {
+    const shouldIncludeArchived = options?.archived === true || options?.status === "archived";
+    if (shouldIncludeArchived) {
       where.archivedAt = { not: null };
     } else {
       // Default: only non-archived groups (covers false, undefined, omitted)
@@ -622,9 +624,9 @@ export class SessionService {
 
     // Post-query filter for derived status (computed from child sessions)
     let filtered = mapped;
-    if (options?.status === "merged") {
-      filtered = mapped.filter((g) => g.status === "merged");
-    } else if (!options?.archived && !options?.status) {
+    if (options?.status) {
+      filtered = mapped.filter((g) => g.status === options.status);
+    } else if (!shouldIncludeArchived) {
       // Default main table: exclude merged groups (server-side)
       filtered = mapped.filter((g) => g.status !== "merged");
     }

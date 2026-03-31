@@ -63,7 +63,9 @@ export function getDisplaySessionStatus(
   sessionStatus: string | undefined,
   prUrl: string | null | undefined,
   agentStatus?: string | undefined,
+  archivedAt?: string | null | undefined,
 ): string {
+  if (archivedAt) return "archived";
   if (sessionStatus === "merged") return "merged";
   if (agentStatus === "failed") return "failed";
   if (agentStatus === "stopped") return "stopped";
@@ -79,9 +81,16 @@ export function getDisplayAgentStatus(
   agentStatus: string | undefined,
   sessionStatus?: string | undefined,
   prUrl?: string | null | undefined,
+  archivedAt?: string | null | undefined,
 ): string {
-  const displaySessionStatus = getDisplaySessionStatus(sessionStatus, prUrl, agentStatus);
+  const displaySessionStatus = getDisplaySessionStatus(
+    sessionStatus,
+    prUrl,
+    agentStatus,
+    archivedAt,
+  );
 
+  if (displaySessionStatus === "archived") return "stopped";
   if (displaySessionStatus === "failed") return "failed";
   if (displaySessionStatus === "stopped") return "stopped";
   if (agentStatus === "not_started") return "not_started";
@@ -97,7 +106,9 @@ export function getSessionGroupDisplayStatus(
   sessionStatuses: Array<string | null | undefined>,
   agentStatuses: Array<string | null | undefined>,
   prUrl: string | null | undefined,
+  archivedAt?: string | null | undefined,
 ): string {
+  if (archivedAt) return "archived";
   // Merged is terminal and takes priority over all other states,
   // including needs_input and in_review (which depends on prUrl).
   if (sessionStatuses.some((s) => s === "merged")) return "merged";

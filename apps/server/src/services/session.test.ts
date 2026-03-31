@@ -73,6 +73,7 @@ function makeSessionGroup(overrides: Record<string, unknown> = {}) {
     name: "Implement dashboard filters",
     agentStatus: "not_started",
     status: "in_progress",
+    archivedAt: null,
     organizationId: "org-1",
     channelId: "channel-1",
     repoId: "repo-1",
@@ -214,13 +215,52 @@ describe("SessionService", () => {
       const result = await service.listGroups("channel-1", "org-1");
 
       expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith({
-        where: { channelId: "channel-1", organizationId: "org-1" },
+        where: { channelId: "channel-1", organizationId: "org-1", archivedAt: null },
         include: expect.any(Object),
       });
       expect(result[0].sessions.map((session) => session.id)).toEqual([
         "session-newer",
         "session-older",
       ]);
+    });
+
+    it("excludes merged groups by default", async () => {
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        makeSessionGroup({
+          id: "group-merged",
+          sessions: [makeSession({ id: "session-merged", sessionStatus: "merged" })],
+        }),
+        makeSessionGroup({
+          id: "group-active",
+          sessions: [makeSession({ id: "session-active", sessionStatus: "in_progress" })],
+        }),
+      ]);
+
+      const result = await service.listGroups("channel-1", "org-1");
+
+      expect(result.map((group) => group.id)).toEqual(["group-active"]);
+    });
+
+    it("returns archived groups when requested", async () => {
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        makeSessionGroup({
+          id: "group-archived",
+          archivedAt: new Date("2024-01-03T00:00:00.000Z"),
+          sessions: [makeSession({ id: "session-archived", agentStatus: "stopped" })],
+        }),
+      ]);
+
+      const result = await service.listGroups("channel-1", "org-1", { archived: true });
+
+      expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith({
+        where: {
+          channelId: "channel-1",
+          organizationId: "org-1",
+          archivedAt: { not: null },
+        },
+        include: expect.any(Object),
+      });
+      expect(result[0]?.status).toBe("archived");
     });
   });
 
