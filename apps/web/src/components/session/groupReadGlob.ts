@@ -14,8 +14,13 @@ export interface BuildSessionNodesResult {
   completedAgentTools: Map<string, AgentToolResult>;
 }
 
-/** Payload types that render as nothing in SessionMessage — these should not break a Read/Glob bucket */
-const INVISIBLE_PAYLOAD_TYPES = new Set(["result", "git_checkpoint"]);
+/** Payload types that render as nothing in SessionMessage — skip these entirely */
+const INVISIBLE_PAYLOAD_TYPES = new Set([
+  "result",
+  "git_checkpoint",
+  "connection_lost",
+  "connection_restored",
+]);
 
 export type SessionNode =
   | { kind: "event"; id: string }
@@ -225,10 +230,9 @@ export function buildSessionNodes(
         continue;
       }
 
-      // Events that render as nothing should not break a Read/Glob bucket
+      // Events that render as nothing — skip entirely (don't create nodes)
       const payloadType = payload?.type;
       if (typeof payloadType === "string" && INVISIBLE_PAYLOAD_TYPES.has(payloadType)) {
-        result.push({ kind: "event", id });
         continue;
       }
     }
