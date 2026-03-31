@@ -588,6 +588,22 @@ export class BridgeClient implements IBridgeClient {
         void handleFileAtRef(cmd, this.sessionWorkdirs, (msg) => this.send(msg), this.gitExec);
         break;
       }
+      case "checkout_commit": {
+        const { requestId, sessionId, commitSha } = cmd;
+        const workdir = this.sessionWorkdirs.get(sessionId);
+        if (!workdir) {
+          this.send({ type: "checkout_commit_result", requestId, error: `No workdir known for session ${sessionId}` });
+          break;
+        }
+        execFileAsync("git", ["checkout", commitSha], { cwd: workdir })
+          .then(() => {
+            this.send({ type: "checkout_commit_result", requestId });
+          })
+          .catch((err: Error) => {
+            this.send({ type: "checkout_commit_result", requestId, error: err.message });
+          });
+        break;
+      }
       case "terminal_create": {
         const { terminalId, sessionId, cols, rows, cwd } = cmd;
         const workdir = cwd || this.sessionWorkdirs.get(sessionId) || os.homedir();

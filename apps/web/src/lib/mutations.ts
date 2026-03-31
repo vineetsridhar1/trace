@@ -9,6 +9,12 @@ export const START_SESSION_MUTATION = gql`
   }
 `;
 
+export const RESTORE_CHECKPOINT_MUTATION = gql`
+  mutation RestoreCheckpoint($sessionId: ID!, $checkpointId: ID!) {
+    restoreCheckpoint(sessionId: $sessionId, checkpointId: $checkpointId)
+  }
+`;
+
 export const RUN_SESSION_MUTATION = gql`
   mutation RunSession($id: ID!, $prompt: String, $interactionMode: String) {
     runSession(id: $id, prompt: $prompt, interactionMode: $interactionMode) {

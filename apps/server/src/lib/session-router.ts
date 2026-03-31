@@ -2,7 +2,7 @@ import type WebSocket from "ws";
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import type { CloudMachineService } from "./cloud-machine-service.js";
-import type { BridgeTerminalCreateCommand, BridgeTerminalInputCommand, BridgeTerminalResizeCommand, BridgeTerminalDestroyCommand, BridgeListFilesCommand, BridgeReadFileCommand, BridgeBranchDiffCommand, BridgeFileAtRefCommand, BridgeBranchDiffFile } from "@trace/shared";
+import type { BridgeTerminalCreateCommand, BridgeTerminalInputCommand, BridgeTerminalResizeCommand, BridgeTerminalDestroyCommand, BridgeListFilesCommand, BridgeReadFileCommand, BridgeBranchDiffCommand, BridgeFileAtRefCommand, BridgeBranchDiffFile, BridgeCheckoutCommitCommand } from "@trace/shared";
 import { prisma } from "./db.js";
 import { apiTokenService } from "../services/api-token.js";
 import { runtimeDebug } from "./runtime-debug.js";
@@ -20,6 +20,7 @@ export type SessionCommand =
   | BridgeReadFileCommand
   | BridgeBranchDiffCommand
   | BridgeFileAtRefCommand
+  | BridgeCheckoutCommitCommand
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
   | BridgeTerminalResizeCommand
@@ -257,6 +258,8 @@ export class SessionRouter {
   private pendingBranchDiffRequests = new Map<string, { resolve: (files: BridgeBranchDiffFile[]) => void; reject: (err: Error) => void }>();
   /** Pending file-at-ref requests: requestId → resolve/reject */
   private pendingFileAtRefRequests = new Map<string, { resolve: (content: string) => void; reject: (err: Error) => void }>();
+  /** Pending checkout commit requests: requestId → resolve/reject */
+  private pendingCheckoutCommitRequests = new Map<string, { resolve: () => void; reject: (err: Error) => void }>();
 
   /** Cloud adapter instance, initialized once CloudMachineService is available */
   private cloudAdapter: SessionAdapter | null = null;
@@ -747,6 +750,41 @@ export class SessionRouter {
       pending.reject(new Error(error));
     } else {
       pending.resolve(content);
+    }
+  }
+
+  /**
+   * Ask a runtime to checkout a specific commit SHA in the session's worktree.
+   */
+  checkoutCommit(sessionId: string, commitSha: string, timeoutMs = 30_000): Promise<void> {
+    const requestId = randomUUID();
+    const result = this.send(sessionId, { type: "checkout_commit", requestId, sessionId, commitSha });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingCheckoutCommitRequests.delete(requestId);
+        reject(new Error("Checkout commit request timed out"));
+      }, timeoutMs);
+
+      this.pendingCheckoutCommitRequests.set(requestId, {
+        resolve: () => { clearTimeout(timer); resolve(); },
+        reject: (err) => { clearTimeout(timer); reject(err); },
+      });
+    });
+  }
+
+  /** Resolve a pending checkout commit request (called from bridge handler). */
+  resolveCheckoutCommitRequest(requestId: string, error?: string): void {
+    const pending = this.pendingCheckoutCommitRequests.get(requestId);
+    if (!pending) return;
+    this.pendingCheckoutCommitRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else {
+      pending.resolve();
     }
   }
 

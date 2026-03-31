@@ -573,6 +573,7 @@ export type Mutation = {
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
+  restoreCheckpoint: Scalars['Boolean']['output'];
   retrySessionConnection: Session;
   runSession: Session;
   sendChannelMessage: Message;
@@ -811,6 +812,12 @@ export type MutationReorderChannelGroupsArgs = {
 
 export type MutationReorderChannelsArgs = {
   input: ReorderChannelsInput;
+};
+
+
+export type MutationRestoreCheckpointArgs = {
+  checkpointId: Scalars['ID']['input'];
+  sessionId: Scalars['ID']['input'];
 };
 
 
@@ -1187,6 +1194,7 @@ export type QueryChatMessagesArgs = {
 export type QueryEventsArgs = {
   after?: InputMaybe<Scalars['DateTime']['input']>;
   before?: InputMaybe<Scalars['DateTime']['input']>;
+  excludePayloadTypes?: InputMaybe<Array<Scalars['String']['input']>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   organizationId: Scalars['ID']['input'];
   scope?: InputMaybe<ScopeInput>;

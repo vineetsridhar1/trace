@@ -665,6 +665,16 @@ export class SessionService {
     });
   }
 
+  async restoreCheckpoint(sessionId: string, checkpointId: string) {
+    const checkpoint = await prisma.gitCheckpoint.findUnique({
+      where: { id: checkpointId },
+      select: { commitSha: true },
+    });
+    if (!checkpoint) throw new Error("Git checkpoint not found");
+
+    await sessionRouter.checkoutCommit(sessionId, checkpoint.commitSha);
+  }
+
   async start(input: StartSessionServiceInput) {
     if (input.restoreCheckpointId && input.sessionGroupId) {
       throw new Error("restoreCheckpointId cannot reuse an existing session group");

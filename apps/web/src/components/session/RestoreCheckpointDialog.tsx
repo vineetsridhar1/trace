@@ -57,14 +57,14 @@ export function RestoreCheckpointDialog({
             Restore Checkpoint
           </DialogTitle>
           <DialogDescription>
-            This will create a <strong>new session</strong> starting from commit{" "}
+            This will revert the worktree to commit{" "}
             <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-foreground">
               {commitSha}
             </code>
             {subject && (
               <span className="text-muted-foreground"> — {subject}</span>
             )}
-            . Your current work will not be lost.
+            . You can still return to any other checkpoint — no code is lost until the worktree is deleted.
           </DialogDescription>
         </DialogHeader>
 

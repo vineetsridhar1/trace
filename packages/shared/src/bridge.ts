@@ -121,6 +121,13 @@ export interface BridgeFileAtRefCommand {
   workdirHint?: string;
 }
 
+export interface BridgeCheckoutCommitCommand {
+  type: "checkout_commit";
+  requestId: string;
+  sessionId: string;
+  commitSha: string;
+}
+
 // --- Terminal commands (Server → Bridge) ---
 
 export interface BridgeTerminalCreateCommand {
@@ -164,6 +171,7 @@ export type BridgeCommand =
   | BridgeReadFileCommand
   | BridgeBranchDiffCommand
   | BridgeFileAtRefCommand
+  | BridgeCheckoutCommitCommand
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
   | BridgeTerminalResizeCommand
@@ -277,6 +285,12 @@ export interface BridgeFileAtRefResult {
   error?: string;
 }
 
+export interface BridgeCheckoutCommitResult {
+  type: "checkout_commit_result";
+  requestId: string;
+  error?: string;
+}
+
 // --- Terminal messages (Bridge → Server) ---
 
 export interface BridgeTerminalReady {
@@ -318,6 +332,7 @@ export type BridgeMessage =
   | BridgeFileContentResult
   | BridgeBranchDiffResult
   | BridgeFileAtRefResult
+  | BridgeCheckoutCommitResult
   | BridgeTerminalReady
   | BridgeTerminalOutput
   | BridgeTerminalExit

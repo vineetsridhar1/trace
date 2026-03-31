@@ -110,6 +110,10 @@ export const sessionMutations = {
   deleteSession: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.delete(args.id, ctx.actorType, ctx.userId);
   },
+  restoreCheckpoint: async (_: unknown, args: { sessionId: string; checkpointId: string }) => {
+    await sessionService.restoreCheckpoint(args.sessionId, args.checkpointId);
+    return true;
+  },
   deleteSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.deleteGroup(args.id, requireOrgContext(ctx), ctx.actorType, ctx.userId);
   },

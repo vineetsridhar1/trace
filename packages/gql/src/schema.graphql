@@ -943,6 +943,7 @@ type Mutation {
   deleteApiToken(provider: ApiTokenProvider!): Boolean!
   createTerminal(sessionId: ID!, cols: Int!, rows: Int!): Terminal!
   destroyTerminal(terminalId: ID!): Boolean!
+  restoreCheckpoint(sessionId: ID!, checkpointId: ID!): Boolean!
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!
   createChat(input: CreateChatInput!): Chat!

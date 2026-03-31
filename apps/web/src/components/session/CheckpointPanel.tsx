@@ -4,11 +4,9 @@ import type { GitCheckpoint } from "@trace/gql";
 import { shortSha } from "@trace/shared";
 import { GitCommitHorizontal, RotateCcw } from "lucide-react";
 import { client } from "../../lib/urql";
-import { START_SESSION_MUTATION } from "../../lib/mutations";
+import { RESTORE_CHECKPOINT_MUTATION } from "../../lib/mutations";
 import { useEntityField, useEntityStore } from "../../stores/entity";
-import { navigateToSession } from "../../stores/ui";
 import { cn } from "../../lib/utils";
-import { getSessionGroupChannelId } from "../../lib/session-group";
 import {
   RestoreCheckpointDialog,
   shouldShowRestoreDialog,
@@ -39,9 +37,6 @@ export function CheckpointPanel({
   const gitCheckpoints = useEntityField("sessionGroups", sessionGroupId, "gitCheckpoints") as
     | GitCheckpoint[]
     | undefined;
-  const sessionGroup = useEntityStore(
-    (s) => s.sessionGroups[sessionGroupId],
-  );
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [pendingCheckpoint, setPendingCheckpoint] = useState<GitCheckpoint | null>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
@@ -63,28 +58,6 @@ export function CheckpointPanel({
     }),
   );
 
-  const groupSessions = useMemo(
-    () =>
-      Object.values(useEntityStore.getState().sessions).filter(
-        (s) => s.sessionGroupId === sessionGroupId,
-      ),
-    [sessionGroupId, sessionNameById], // eslint-disable-line react-hooks/exhaustive-deps -- sessionNameById changes when sessions change
-  );
-
-  const channelId = getSessionGroupChannelId(sessionGroup ?? null, groupSessions);
-
-  // Use the active session (or fall back to most recently updated) for restore config
-  const restoreSession = useMemo(() => {
-    if (!groupSessions.length) return null;
-    if (activeSessionId) {
-      const active = groupSessions.find((s) => s.id === activeSessionId);
-      if (active) return active;
-    }
-    return [...groupSessions].sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    )[0];
-  }, [activeSessionId, groupSessions]);
-
   useEffect(() => {
     if (highlightCheckpointId && highlightRef.current) {
       highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -93,37 +66,25 @@ export function CheckpointPanel({
 
   const handleRestore = useCallback(
     async (checkpoint: GitCheckpoint) => {
-      if (!restoreSession) return;
+      if (!activeSessionId) return;
 
       setRestoringId(checkpoint.id);
       try {
         const result = await client
-          .mutation(START_SESSION_MUTATION, {
-            input: {
-              tool: restoreSession.tool,
-              model: restoreSession.model ?? undefined,
-              hosting: restoreSession.hosting,
-              channelId: channelId ?? undefined,
-              restoreCheckpointId: checkpoint.id,
-            },
+          .mutation(RESTORE_CHECKPOINT_MUTATION, {
+            sessionId: activeSessionId,
+            checkpointId: checkpoint.id,
           })
           .toPromise();
 
         if (result.error) {
           console.error("[CheckpointPanel] restore failed:", result.error);
-          return;
-        }
-
-        const newSessionId = result.data?.startSession?.id;
-        const newGroupId = result.data?.startSession?.sessionGroupId;
-        if (newSessionId && newGroupId) {
-          navigateToSession(channelId, newGroupId, newSessionId);
         }
       } finally {
         setRestoringId(null);
       }
     },
-    [channelId, restoreSession],
+    [activeSessionId],
   );
 
   const requestRestore = useCallback(
@@ -208,7 +169,7 @@ export function CheckpointPanel({
                 onClick={(e) => { e.stopPropagation(); requestRestore(checkpoint); }}
                 disabled={restoringId !== null}
                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-deep hover:text-foreground disabled:opacity-50"
-                title="Restore as new session"
+                title="Revert to this checkpoint"
               >
                 <RotateCcw
                   size={11}

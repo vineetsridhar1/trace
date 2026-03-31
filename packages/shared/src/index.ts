@@ -48,6 +48,8 @@ export type {
   BridgeBranchDiffResult,
   BridgeBranchDiffFile,
   BridgeFileAtRefResult,
+  BridgeCheckoutCommitCommand,
+  BridgeCheckoutCommitResult,
   BridgeTerminalCreateCommand,
   BridgeTerminalInputCommand,
   BridgeTerminalResizeCommand,
