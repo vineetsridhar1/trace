@@ -329,9 +329,6 @@ function buildSessionGroupSnapshot(
 /** Maximum length for session names (prompt-derived or title-tag-extracted). */
 const MAX_SESSION_NAME_LENGTH = 80;
 
-/** Maximum length for branch names extracted via <trace-branch> tags. */
-const MAX_BRANCH_NAME_LENGTH = 100;
-
 /** Instruction appended to every session prompt so the AI can set or update the title at any time. */
 const TITLE_INSTRUCTION = `\n\n<system-instruction>
 You may set or update the session title by outputting a short title (5-8 words) wrapped in XML tags: <trace-title>Your title here</trace-title>.
@@ -892,8 +889,7 @@ export class SessionService {
 
     // Ask-mode sessions skip worktree creation (read-only against repo root).
     // Checkpoint restores always need a worktree to reset to a specific SHA.
-    const readOnlyWorkspace =
-      input.interactionMode === "ask" && !input.restoreCheckpointId;
+    const readOnlyWorkspace = input.interactionMode === "ask" && !input.restoreCheckpointId;
 
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
@@ -1461,7 +1457,19 @@ export class SessionService {
   ) {
     const prev = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
-      select: { id: true, tool: true, model: true, agentStatus: true, hosting: true, repoId: true, sessionGroupId: true, connection: true, readOnlyWorkspace: true, branch: true, repo: { select: { id: true, name: true, remoteUrl: true, defaultBranch: true } } },
+      select: {
+        id: true,
+        tool: true,
+        model: true,
+        agentStatus: true,
+        hosting: true,
+        repoId: true,
+        sessionGroupId: true,
+        connection: true,
+        readOnlyWorkspace: true,
+        branch: true,
+        repo: { select: { id: true, name: true, remoteUrl: true, defaultBranch: true } },
+      },
     });
 
     const toolChanged = config.tool != null && config.tool !== prev.tool;
@@ -1482,7 +1490,9 @@ export class SessionService {
     }
 
     // Allow runtime switching for not_started sessions
-    const runtimeChanged = prev.agentStatus === "not_started" && (config.hosting != null || config.runtimeInstanceId != null);
+    const runtimeChanged =
+      prev.agentStatus === "not_started" &&
+      (config.hosting != null || config.runtimeInstanceId != null);
     if (runtimeChanged) {
       let newHosting = config.hosting ?? prev.hosting;
       let runtimeLabel: string | undefined;
@@ -1732,7 +1742,7 @@ export class SessionService {
 
       const match = BRANCH_TAG_RE.exec(b.text);
       if (match) {
-        const branch = match[1].trim().slice(0, MAX_BRANCH_NAME_LENGTH);
+        const branch = match[1].trim();
         // Strip all branch tags from the text so none leak to the UI
         b.text = b.text.replace(/<trace-branch>[\s\S]*?<\/trace-branch>/g, "").trimStart();
         return branch || null;
@@ -3513,7 +3523,12 @@ export class SessionService {
    */
   private async triggerWorkspaceUpgrade(
     sessionId: string,
-    session: { organizationId: string; sessionGroupId: string | null; repo: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null; branch: string | null },
+    session: {
+      organizationId: string;
+      sessionGroupId: string | null;
+      repo: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
+      branch: string | null;
+    },
     pendingCommand: PendingSessionCommand,
   ) {
     await this.storePendingCommand(sessionId, pendingCommand);
