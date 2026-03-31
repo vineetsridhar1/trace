@@ -8,6 +8,9 @@ import { terminalRelay } from "./terminal-relay.js";
 /** Grace period before marking sessions disconnected — allows fast reconnects */
 const DISCONNECT_GRACE_MS = 10_000;
 
+/** Interval between server→client pings to keep the WebSocket alive through proxies (e.g. Render). */
+const PING_INTERVAL_MS = 20_000;
+
 export function handleBridgeConnection(ws: WebSocket) {
   // Default runtime ID; replaced if the bridge sends runtime_hello
   let runtimeId: string = randomUUID();
@@ -18,6 +21,23 @@ export function handleBridgeConnection(ws: WebSocket) {
   // Register with defaults until runtime_hello arrives
   sessionRouter.registerBridge(runtimeId, ws);
   registered = true;
+
+  // Keep-alive: periodically ping the client to prevent idle timeout
+  // from reverse proxies (Render closes idle WebSockets after ~55-60s).
+  let pongReceived = true;
+  const pingInterval = setInterval(() => {
+    if (!pongReceived) {
+      clearInterval(pingInterval);
+      ws.terminate();
+      return;
+    }
+    pongReceived = false;
+    ws.ping();
+  }, PING_INTERVAL_MS);
+
+  ws.on("pong", () => {
+    pongReceived = true;
+  });
 
   // Serialize event creation per session to preserve ordering
   const queues = new Map<string, Promise<void>>();
@@ -208,6 +228,7 @@ export function handleBridgeConnection(ws: WebSocket) {
   });
 
   ws.on("close", () => {
+    clearInterval(pingInterval);
     runtimeDebug("bridge websocket closed, grace period starting", { runtimeId, graceMs: DISCONNECT_GRACE_MS });
     const closedRuntimeId = runtimeId;
     const affectedSessions = sessionRouter.unregisterRuntime(closedRuntimeId, ws);
