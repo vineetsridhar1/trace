@@ -665,12 +665,24 @@ export class SessionService {
     });
   }
 
-  async restoreCheckpoint(sessionId: string, checkpointId: string) {
+  async restoreCheckpoint(sessionId: string, checkpointId: string, organizationId: string) {
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { organizationId: true, sessionGroupId: true },
+    });
+    if (!session || session.organizationId !== organizationId) {
+      throw new Error("Session not found");
+    }
+
     const checkpoint = await prisma.gitCheckpoint.findUnique({
       where: { id: checkpointId },
-      select: { commitSha: true },
+      select: { commitSha: true, sessionGroupId: true },
     });
     if (!checkpoint) throw new Error("Git checkpoint not found");
+
+    if (checkpoint.sessionGroupId !== session.sessionGroupId) {
+      throw new Error("Checkpoint does not belong to this session's group");
+    }
 
     await sessionRouter.checkoutCommit(sessionId, checkpoint.commitSha);
   }

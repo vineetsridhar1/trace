@@ -5,7 +5,7 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter, GitCheckpointBridgePayload, GitCheckpointTrigger } from "@trace/shared";
-import { extractGitToolUsePending, extractGitToolResultTrigger, parseBranchOutput, handleListFiles, handleReadFile, handleBranchDiff, handleFileAtRef, GIT_SHOW_ARGS, GIT_DIFF_TREE_ARGS, parseGitShowOutput } from "@trace/shared";
+import { extractGitToolUsePending, extractGitToolResultTrigger, parseBranchOutput, handleListFiles, handleReadFile, handleBranchDiff, handleFileAtRef, GIT_SHOW_ARGS, GIT_DIFF_TREE_ARGS, parseGitShowOutput, assertValidCommitSha } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { ensureRepo, createWorktree, removeWorktree, getRepoPath } from "./workspace.js";
@@ -392,12 +392,18 @@ export class ContainerBridge implements IBridgeClient {
 
       case "checkout_commit": {
         const { requestId, sessionId, commitSha } = cmd;
+        try {
+          assertValidCommitSha(commitSha);
+        } catch (err) {
+          this.send({ type: "checkout_commit_result", requestId, error: (err as Error).message });
+          break;
+        }
         const workdir = this.sessionWorkdirs.get(sessionId);
         if (!workdir) {
           this.send({ type: "checkout_commit_result", requestId, error: `No workdir known for session ${sessionId}` });
           break;
         }
-        execFileAsync("git", ["checkout", commitSha], { cwd: workdir })
+        execFileAsync("git", ["reset", "--hard", commitSha], { cwd: workdir })
           .then(() => {
             this.send({ type: "checkout_commit_result", requestId });
           })
