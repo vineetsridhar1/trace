@@ -15,9 +15,24 @@ export interface BuildSessionNodesResult {
 }
 
 /** Payload types that render content but should not break a Read/Glob bucket */
-const BUCKET_TRANSPARENT_TYPES = new Set(["result", "git_checkpoint"]);
-/** Payload types that render as nothing — skip entirely (don't create nodes) */
-const SKIP_ENTIRELY_TYPES = new Set(["connection_lost", "connection_restored"]);
+const BUCKET_TRANSPARENT_TYPES = new Set(["result"]);
+/** Payload types that render as nothing in SessionMessage — skip entirely (don't create nodes) */
+const SKIP_ENTIRELY_TYPES = new Set([
+  "connection_lost",
+  "connection_restored",
+  "git_checkpoint",
+  "git_checkpoint_rewrite",
+  "title_generated",
+  "config_changed",
+  "prepare",
+  "run",
+  "send",
+  "session_rehomed",
+  "recovery_requested",
+  "recovery_failed",
+  "upgrade_workspace",
+  "workspace_ready",
+]);
 
 export type SessionNode =
   | { kind: "event"; id: string }
