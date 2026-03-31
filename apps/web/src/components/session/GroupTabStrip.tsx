@@ -145,10 +145,10 @@ export function GroupTabStrip({
                   onClick={() => onSelectSession(session.id)}
                   className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
                 >
-                  <span className="relative shrink-0 flex h-2.5 w-2.5 items-center justify-center">
-                    <Circle size={6} className={cn("fill-current", hasDoneBadge ? "text-red-500" : color)} />
+                  <span className={cn("relative shrink-0 flex h-2.5 w-2.5 items-center justify-center", color)}>
+                    <Circle size={6} className="fill-current" />
                     {hasDoneBadge && (
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75" />
                     )}
                   </span>
                   <span className={cn("truncate", hasDoneBadge ? "font-semibold" : undefined)}>

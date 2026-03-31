@@ -34,6 +34,8 @@ interface UIState {
   markChannelDone: (channelId: string) => void;
   sessionDoneBadges: Record<string, boolean>;
   markSessionDone: (sessionId: string) => void;
+  sessionGroupDoneBadges: Record<string, boolean>;
+  markSessionGroupDone: (sessionGroupId: string) => void;
   _restoreNav: (
     channelId: string | null,
     sessionGroupId: string | null,
@@ -159,6 +161,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   unreadChatIds: {},
   channelDoneBadges: {},
   sessionDoneBadges: {},
+  sessionGroupDoneBadges: {},
   triggerRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
 
   openSessionTab: (groupId, sessionId) => {
@@ -289,6 +292,13 @@ export const useUIStore = create<UIState>((set, get) => ({
     });
   },
 
+  markSessionGroupDone: (sessionGroupId) => {
+    set((s) => {
+      if (s.sessionGroupDoneBadges[sessionGroupId]) return s;
+      return { sessionGroupDoneBadges: { ...s.sessionGroupDoneBadges, [sessionGroupId]: true } };
+    });
+  },
+
   setActiveChatId: (id) => {
     persistActiveChatId(id);
     set((s) => {
@@ -338,6 +348,16 @@ export const useUIStore = create<UIState>((set, get) => ({
         const { [channelId]: _, ...rest } = channelDoneBadges;
         channelDoneBadges = rest;
       }
+      let sessionGroupDoneBadges = state.sessionGroupDoneBadges;
+      if (sessionGroupDoneBadges[groupId]) {
+        const { [groupId]: _, ...rest } = sessionGroupDoneBadges;
+        sessionGroupDoneBadges = rest;
+      }
+      let sessionDoneBadges = state.sessionDoneBadges;
+      if (nextSessionId && sessionDoneBadges[nextSessionId]) {
+        const { [nextSessionId]: _, ...rest } = sessionDoneBadges;
+        sessionDoneBadges = rest;
+      }
       return {
         activePage: "main" as ActivePage,
         activeChatId: null,
@@ -346,6 +366,8 @@ export const useUIStore = create<UIState>((set, get) => ({
         activeSessionId: nextSessionId,
         activeTerminalId: null,
         channelDoneBadges,
+        sessionDoneBadges,
+        sessionGroupDoneBadges,
         lastSelectedSessionIdsByGroup:
           nextSessionId
             ? { ...state.lastSelectedSessionIdsByGroup, [groupId]: nextSessionId }
@@ -461,6 +483,11 @@ export const useUIStore = create<UIState>((set, get) => ({
         const { [sessionId]: _, ...rest } = sessionDoneBadges;
         sessionDoneBadges = rest;
       }
+      let sessionGroupDoneBadges = state.sessionGroupDoneBadges;
+      if (sessionGroupId && sessionGroupDoneBadges[sessionGroupId]) {
+        const { [sessionGroupId]: _, ...rest } = sessionGroupDoneBadges;
+        sessionGroupDoneBadges = rest;
+      }
       return {
         activePage: page ?? "main",
         activeChannelId: channelId,
@@ -471,6 +498,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         activeThreadId: null,
         channelDoneBadges,
         sessionDoneBadges,
+        sessionGroupDoneBadges,
         lastSelectedSessionIdsByGroup:
           sessionGroupId && sessionId
             ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: sessionId }

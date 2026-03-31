@@ -479,6 +479,10 @@ export function useOrgEvents() {
               if (event.scopeId !== ui.activeSessionId) {
                 ui.markSessionDone(event.scopeId);
               }
+              const sessionGroupId = session?.sessionGroupId;
+              if (sessionGroupId && sessionGroupId !== ui.activeSessionGroupId) {
+                ui.markSessionGroupDone(sessionGroupId);
+              }
             }
 
             // PR merge transitions ALL sessions in the group, not just the event session.

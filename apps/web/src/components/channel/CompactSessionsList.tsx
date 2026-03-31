@@ -3,9 +3,52 @@ import { Circle } from "lucide-react";
 import { navigateToSessionGroup, useUIStore } from "../../stores/ui";
 import { sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus";
 import { AgentStatusIcon } from "../session/AgentStatusIcon";
-import { timeAgo } from "../../lib/utils";
+import { timeAgo, cn } from "../../lib/utils";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { collapsedByDefault, sessionStatusGroupOrder } from "./sessions-table-types";
+
+function CompactSessionRow({
+  row,
+  channelId,
+  status,
+}: {
+  row: SessionGroupRow;
+  channelId: string;
+  status: string;
+}) {
+  const isActive = useUIStore((s) => s.activeSessionGroupId === row.id);
+  const hasDoneBadge = useUIStore((s) => !!s.sessionGroupDoneBadges[row.id]);
+  const rowColor = sessionStatusColor[status] ?? "text-muted-foreground";
+
+  return (
+    <button
+      type="button"
+      className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-muted/50 active:bg-muted ${isActive ? "bg-muted" : ""}`}
+      onClick={() => {
+        const latestSessionId = row.latestSession?.id ?? null;
+        navigateToSessionGroup(channelId, row.id, latestSessionId);
+      }}
+    >
+      <span className={cn("relative shrink-0 inline-flex items-center justify-center", rowColor)} style={{ width: 8, height: 8 }}>
+        <AgentStatusIcon
+          agentStatus={row.displayAgentStatus}
+          size={8}
+        />
+        {hasDoneBadge && (
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75" />
+        )}
+      </span>
+      <span className={cn("min-w-0 flex-1 truncate text-sm text-foreground", hasDoneBadge && "font-semibold")}>
+        {row.name}
+      </span>
+      <span className="shrink-0 text-xs text-muted-foreground">
+        {timeAgo(
+          row._lastMessageAt ?? row.updatedAt ?? row.createdAt,
+        )}
+      </span>
+    </button>
+  );
+}
 
 export function CompactSessionsList({
   channelId,
@@ -14,8 +57,6 @@ export function CompactSessionsList({
   channelId: string;
   rows: SessionGroupRow[];
 }) {
-  const activeSessionGroupId = useUIStore((s) => s.activeSessionGroupId);
-
   const grouped = useMemo(() => {
     const groups: Record<string, SessionGroupRow[]> = {};
     for (const row of rows) {
@@ -43,35 +84,14 @@ export function CompactSessionsList({
               </span>
             </div>
             {!collapsedByDefault.has(status) &&
-              items.map((row) => {
-                const rowColor = sessionStatusColor[status] ?? "text-muted-foreground";
-                const isActive = row.id === activeSessionGroupId;
-                return (
-                  <button
-                    key={row.id}
-                    type="button"
-                    className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-muted/50 active:bg-muted ${isActive ? "bg-muted" : ""}`}
-                    onClick={() => {
-                      const latestSessionId = row.latestSession?.id ?? null;
-                      navigateToSessionGroup(channelId, row.id, latestSessionId);
-                    }}
-                  >
-                    <AgentStatusIcon
-                      agentStatus={row.displayAgentStatus}
-                      size={8}
-                      className={`shrink-0 ${rowColor}`}
-                    />
-                    <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                      {row.name}
-                    </span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {timeAgo(
-                        row._lastMessageAt ?? row.updatedAt ?? row.createdAt,
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
+              items.map((row) => (
+                <CompactSessionRow
+                  key={row.id}
+                  row={row}
+                  channelId={channelId}
+                  status={status}
+                />
+              ))}
           </div>
         );
       })}
