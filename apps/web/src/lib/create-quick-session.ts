@@ -10,7 +10,13 @@ import {
 } from "./optimistic-session";
 import { usePreferencesStore } from "../stores/preferences";
 import { useEntityStore } from "../stores/entity";
-import { useUIStore, navigateToSession } from "../stores/ui";
+import {
+  useUIStore,
+  navigateToSession,
+  getCurrentNavigationState,
+  replaceNavigationState,
+  registerOptimisticSessionRedirect,
+} from "../stores/ui";
 import { getDefaultModel } from "../components/session/modelOptions";
 
 /**
@@ -18,7 +24,10 @@ import { getDefaultModel } from "../components/session/modelOptions";
  * Prefers a connected local bridge when defaultHosting is "bridge",
  * falls back to cloud if none available.
  */
-async function resolveDefaultRuntime(tool: string, channelRepoId: string | undefined): Promise<{
+async function resolveDefaultRuntime(
+  tool: string,
+  channelRepoId: string | undefined,
+): Promise<{
   runtimeInstanceId: string | undefined;
   hosting: "cloud" | "local";
 }> {
@@ -51,14 +60,19 @@ async function resolveDefaultRuntime(tool: string, channelRepoId: string | undef
  * in the background and reconciles when it resolves.
  */
 export async function createQuickSession(channelId: string): Promise<void> {
+  const previousNav = getCurrentNavigationState();
   const prefTool = usePreferencesStore.getState().defaultTool ?? "claude_code";
   const prefModel = usePreferencesStore.getState().defaultModel ?? getDefaultModel(prefTool);
   const prefHosting = usePreferencesStore.getState().defaultHosting;
 
   const channel = useEntityStore.getState().channels[channelId];
   const channelRepoId =
-    channel && typeof channel === "object" && "repo" in channel && channel.repo &&
-    typeof channel.repo === "object" && "id" in (channel.repo as Record<string, unknown>)
+    channel &&
+    typeof channel === "object" &&
+    "repo" in channel &&
+    channel.repo &&
+    typeof channel.repo === "object" &&
+    "id" in (channel.repo as Record<string, unknown>)
       ? (channel.repo as { id: string }).id
       : undefined;
 
@@ -71,6 +85,7 @@ export async function createQuickSession(channelId: string): Promise<void> {
     id: tempGroupId,
     channel: { id: channelId },
     repo: channelRepoId ? { id: channelRepoId } : null,
+    optimistic: true,
   });
 
   optimisticallyInsertSession({
@@ -81,10 +96,16 @@ export async function createQuickSession(channelId: string): Promise<void> {
     hosting: assumedHosting,
     channel: { id: channelId },
     repo: channelRepoId ? { id: channelRepoId } : null,
+    optimistic: true,
   });
 
   useUIStore.getState().openSessionTab(tempGroupId, tempSessionId);
   useUIStore.getState().setActiveSessionGroupId(tempGroupId, tempSessionId);
+
+  const isStillOnTempRoute = () => {
+    const ui = useUIStore.getState();
+    return ui.activeSessionGroupId === tempGroupId && ui.activeSessionId === tempSessionId;
+  };
 
   // Fire mutation in background, reconcile when done
   try {
@@ -106,6 +127,11 @@ export async function createQuickSession(channelId: string): Promise<void> {
 
     if (result.error) {
       rollbackOptimisticSession(tempSessionId, tempGroupId);
+      if (isStillOnTempRoute()) {
+        replaceNavigationState(previousNav);
+      } else {
+        registerOptimisticSessionRedirect(tempGroupId, tempSessionId, previousNav);
+      }
       toast.error("Failed to create session", { description: result.error.message });
       return;
     }
@@ -113,12 +139,28 @@ export async function createQuickSession(channelId: string): Promise<void> {
     const session = result.data?.startSession;
     if (!session?.id) {
       rollbackOptimisticSession(tempSessionId, tempGroupId);
+      if (isStillOnTempRoute()) {
+        replaceNavigationState(previousNav);
+      } else {
+        registerOptimisticSessionRedirect(tempGroupId, tempSessionId, previousNav);
+      }
+      toast.error("Failed to create session", {
+        description: "Server did not return a session ID",
+      });
       return;
     }
 
     const realGroupId = session.sessionGroupId;
     if (!realGroupId) {
       rollbackOptimisticSession(tempSessionId, tempGroupId);
+      if (isStillOnTempRoute()) {
+        replaceNavigationState(previousNav);
+      } else {
+        registerOptimisticSessionRedirect(tempGroupId, tempSessionId, previousNav);
+      }
+      toast.error("Failed to create session", {
+        description: "Server did not return a session group ID",
+      });
       return;
     }
 
@@ -137,9 +179,24 @@ export async function createQuickSession(channelId: string): Promise<void> {
 
     // Navigate to real session (replaces temp URL)
     useUIStore.getState().openSessionTab(realGroupId, session.id);
-    navigateToSession(channelId, realGroupId, session.id);
+    if (isStillOnTempRoute()) {
+      navigateToSession(channelId, realGroupId, session.id, { replace: true });
+    } else {
+      registerOptimisticSessionRedirect(tempGroupId, tempSessionId, {
+        channelId,
+        sessionGroupId: realGroupId,
+        sessionId: session.id,
+        page: "main",
+        chatId: null,
+      });
+    }
   } catch (err) {
     rollbackOptimisticSession(tempSessionId, tempGroupId);
+    if (isStillOnTempRoute()) {
+      replaceNavigationState(previousNav);
+    } else {
+      registerOptimisticSessionRedirect(tempGroupId, tempSessionId, previousNav);
+    }
     const message = err instanceof Error ? err.message : "Unknown error";
     toast.error("Failed to create session", { description: message });
   }

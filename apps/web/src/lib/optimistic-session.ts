@@ -20,6 +20,7 @@ export function optimisticallyInsertSession(params: {
   channel?: { id: string } | null;
   repo?: { id: string } | null;
   branch?: string | null;
+  optimistic?: boolean;
 }): void {
   const now = new Date().toISOString();
   useEntityStore.getState().upsert("sessions", params.id, {
@@ -36,6 +37,7 @@ export function optimisticallyInsertSession(params: {
     branch: params.branch ?? null,
     createdAt: now,
     updatedAt: now,
+    _optimistic: params.optimistic ? true : undefined,
   } as Partial<SessionEntity> as SessionEntity);
 }
 
@@ -48,6 +50,7 @@ export function optimisticallyInsertSessionGroup(params: {
   name?: string;
   channel?: { id: string } | null;
   repo?: { id: string } | null;
+  optimistic?: boolean;
 }): void {
   const now = new Date().toISOString();
   useEntityStore.getState().upsert("sessionGroups", params.id, {
@@ -61,6 +64,7 @@ export function optimisticallyInsertSessionGroup(params: {
     createdAt: now,
     updatedAt: now,
     _sortTimestamp: now,
+    _optimistic: params.optimistic ? true : undefined,
   } as Partial<SessionGroupEntity> as SessionGroupEntity);
 }
 
@@ -175,7 +179,11 @@ export function reconcileOptimisticSession(params: {
   // for single-tab groups, so we remove it directly)
   useUIStore.setState((s) => {
     const { [params.tempGroupId]: _, ...rest } = s.openSessionTabsByGroup;
-    return { openSessionTabsByGroup: rest };
+    const { [params.tempGroupId]: __, ...lastSelected } = s.lastSelectedSessionIdsByGroup;
+    return {
+      openSessionTabsByGroup: rest,
+      lastSelectedSessionIdsByGroup: lastSelected,
+    };
   });
 }
 
@@ -202,6 +210,10 @@ export function rollbackOptimisticSession(tempSessionId: string, tempGroupId: st
   // Clean up temp group's tab entry
   useUIStore.setState((s) => {
     const { [tempGroupId]: _, ...rest } = s.openSessionTabsByGroup;
-    return { openSessionTabsByGroup: rest };
+    const { [tempGroupId]: __, ...lastSelected } = s.lastSelectedSessionIdsByGroup;
+    return {
+      openSessionTabsByGroup: rest,
+      lastSelectedSessionIdsByGroup: lastSelected,
+    };
   });
 }

@@ -3,6 +3,19 @@ import { useEntityStore } from "./entity";
 import { getSessionChannelId, getSessionGroupChannelId } from "../lib/session-group";
 
 export type ActivePage = "main" | "settings" | "inbox" | "tickets" | "agent-debug";
+export interface NavigationState {
+  channelId: string | null;
+  sessionGroupId: string | null;
+  sessionId: string | null;
+  page: ActivePage;
+  chatId: string | null;
+}
+
+const optimisticSessionRedirects = new Map<string, NavigationState>();
+
+function optimisticSessionRedirectKey(sessionGroupId: string, sessionId: string): string {
+  return `${sessionGroupId}:${sessionId}`;
+}
 
 interface UIState {
   activePage: ActivePage;
@@ -50,7 +63,8 @@ export function buildPath(
   if (page === "inbox") return "/inbox";
   if (page === "tickets") return "/tickets";
   if (chatId) return `/dm/${chatId}`;
-  if (channelId && sessionGroupId && sessionId) return `/c/${channelId}/g/${sessionGroupId}/s/${sessionId}`;
+  if (channelId && sessionGroupId && sessionId)
+    return `/c/${channelId}/g/${sessionGroupId}/s/${sessionId}`;
   if (channelId && sessionGroupId) return `/c/${channelId}/g/${sessionGroupId}`;
   if (sessionGroupId && sessionId) return `/g/${sessionGroupId}/s/${sessionId}`;
   if (sessionGroupId) return `/g/${sessionGroupId}`;
@@ -296,8 +310,8 @@ export const useUIStore = create<UIState>((set, get) => ({
     }
 
     const nextSessionId =
-      sessionId
-      ?? getPreferredSessionIdForGroup(
+      sessionId ??
+      getPreferredSessionIdForGroup(
         groupId,
         get().activeSessionGroupId === groupId ? get().activeSessionId : null,
       );
@@ -311,10 +325,9 @@ export const useUIStore = create<UIState>((set, get) => ({
       activeSessionGroupId: groupId,
       activeSessionId: nextSessionId,
       activeTerminalId: null,
-      lastSelectedSessionIdsByGroup:
-        nextSessionId
-          ? { ...state.lastSelectedSessionIdsByGroup, [groupId]: nextSessionId }
-          : state.lastSelectedSessionIdsByGroup,
+      lastSelectedSessionIdsByGroup: nextSessionId
+        ? { ...state.lastSelectedSessionIdsByGroup, [groupId]: nextSessionId }
+        : state.lastSelectedSessionIdsByGroup,
     }));
     pushNav(channelId, groupId, nextSessionId);
   },
@@ -342,16 +355,16 @@ export const useUIStore = create<UIState>((set, get) => ({
     persistActiveSessionNav(sessionGroupId, id);
     // If staying within the same session group (tab switching), replace history
     // so browser back goes to the sessions table instead of the previous tab
-    const stayingInGroup = sessionGroupId === currentSessionGroupId && currentSessionGroupId !== null;
+    const stayingInGroup =
+      sessionGroupId === currentSessionGroupId && currentSessionGroupId !== null;
     set((state) => ({
       activeChannelId: channelId,
       activeSessionGroupId: sessionGroupId,
       activeSessionId: id,
       activeTerminalId: null,
-      lastSelectedSessionIdsByGroup:
-        sessionGroupId
-          ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: id }
-          : state.lastSelectedSessionIdsByGroup,
+      lastSelectedSessionIdsByGroup: sessionGroupId
+        ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: id }
+        : state.lastSelectedSessionIdsByGroup,
     }));
     if (stayingInGroup) {
       replaceNav(channelId, sessionGroupId, id);
@@ -426,7 +439,8 @@ export function getPreferredSessionIdForGroup(
   sessionGroupId: string,
   fallbackSessionId: string | null = null,
 ): string | null {
-  const rememberedSessionId = useUIStore.getState().lastSelectedSessionIdsByGroup[sessionGroupId] ?? null;
+  const rememberedSessionId =
+    useUIStore.getState().lastSelectedSessionIdsByGroup[sessionGroupId] ?? null;
   if (rememberedSessionId) {
     const rememberedSession = useEntityStore.getState().sessions[rememberedSessionId];
     if (rememberedSession?.sessionGroupId === sessionGroupId) {
@@ -470,18 +484,57 @@ export function navigateToSession(
   channelId: string | null,
   sessionGroupId: string,
   sessionId: string,
+  options?: { replace?: boolean },
 ): void {
   const fallbackChannelId = useUIStore.getState().activeChannelId;
-  const resolvedChannelId =
-    resolveChannelIdForSessionGroup(
-      sessionGroupId,
-      resolveChannelIdForSession(sessionId, channelId ?? fallbackChannelId),
-    );
+  const resolvedChannelId = resolveChannelIdForSessionGroup(
+    sessionGroupId,
+    resolveChannelIdForSession(sessionId, channelId ?? fallbackChannelId),
+  );
   useUIStore.getState()._restoreNav(resolvedChannelId, sessionGroupId, sessionId, "main", null);
   const path = buildPath(resolvedChannelId, sessionGroupId, sessionId, "main");
-  history.pushState(
+  const navigate = options?.replace
+    ? history.replaceState.bind(history)
+    : history.pushState.bind(history);
+  navigate(
     { channelId: resolvedChannelId, sessionGroupId, sessionId, page: "main", chatId: null },
     "",
     path,
+  );
+}
+
+export function getCurrentNavigationState(): NavigationState {
+  const state = useUIStore.getState();
+  return {
+    channelId: state.activeChannelId,
+    sessionGroupId: state.activeSessionGroupId,
+    sessionId: state.activeSessionId,
+    page: state.activePage,
+    chatId: state.activeChatId,
+  };
+}
+
+export function replaceNavigationState(state: NavigationState): void {
+  useUIStore
+    .getState()
+    ._restoreNav(state.channelId, state.sessionGroupId, state.sessionId, state.page, state.chatId);
+  replaceNav(state.channelId, state.sessionGroupId, state.sessionId, state.page, state.chatId);
+}
+
+export function registerOptimisticSessionRedirect(
+  sessionGroupId: string,
+  sessionId: string,
+  state: NavigationState,
+): void {
+  optimisticSessionRedirects.set(optimisticSessionRedirectKey(sessionGroupId, sessionId), state);
+}
+
+export function resolveOptimisticSessionRedirect(
+  sessionGroupId: string | null,
+  sessionId: string | null,
+): NavigationState | null {
+  if (!sessionGroupId || !sessionId) return null;
+  return (
+    optimisticSessionRedirects.get(optimisticSessionRedirectKey(sessionGroupId, sessionId)) ?? null
   );
 }
