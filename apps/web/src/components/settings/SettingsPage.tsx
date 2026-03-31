@@ -1,5 +1,5 @@
-import { useEffect, useCallback, useState } from "react";
-import type { Repo, SessionRuntimeInstance } from "@trace/gql";
+import { useEffect, useCallback } from "react";
+import type { Repo } from "@trace/gql";
 import { ArrowLeft } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
 import { useEntityStore, useEntityIds } from "../../stores/entity";
@@ -7,7 +7,6 @@ import type { EntityTableMap } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
-import { AVAILABLE_RUNTIMES_QUERY } from "../../lib/mutations";
 import { Button } from "../ui/button";
 import { RepoCard } from "./RepoCard";
 import { CreateRepoDialog } from "./CreateRepoDialog";
@@ -32,7 +31,6 @@ export function SettingsPage() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const setActivePage = useUIStore((s) => s.setActivePage);
-  const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
 
   const fetchRepos = useCallback(async () => {
     if (!activeOrgId) return;
@@ -42,17 +40,9 @@ export function SettingsPage() {
     }
   }, [activeOrgId, upsertMany]);
 
-  const fetchRuntimes = useCallback(async () => {
-    const result = await client
-      .query(AVAILABLE_RUNTIMES_QUERY, { tool: "claude_code" })
-      .toPromise();
-    setRuntimes((result.data?.availableRuntimes ?? []) as SessionRuntimeInstance[]);
-  }, []);
-
   useEffect(() => {
     fetchRepos();
-    fetchRuntimes();
-  }, [fetchRepos, fetchRuntimes]);
+  }, [fetchRepos]);
 
   const sortedRepoIds = useEntityIds(
     "repos",
@@ -98,7 +88,7 @@ export function SettingsPage() {
           ) : (
             <div className="space-y-3">
               {sortedRepoIds.map((id) => (
-                <RepoCard key={id} id={id} runtimes={runtimes} />
+                <RepoCard key={id} id={id} />
               ))}
             </div>
           )}

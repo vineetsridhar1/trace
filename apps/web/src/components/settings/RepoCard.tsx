@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { GitBranch, Monitor, Pencil, Check, X } from "lucide-react";
-import type { SessionRuntimeInstance } from "@trace/gql";
+import { GitBranch, FolderOpen, Pencil, Check, X } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import {
@@ -99,7 +98,7 @@ function getHookStatusDetail(
   return null;
 }
 
-export function RepoCard({ id, runtimes }: { id: string; runtimes: SessionRuntimeInstance[] }) {
+export function RepoCard({ id }: { id: string }) {
   const name = useEntityField("repos", id, "name");
   const remoteUrl = useEntityField("repos", id, "remoteUrl");
   const defaultBranch = useEntityField("repos", id, "defaultBranch");
@@ -113,6 +112,7 @@ export function RepoCard({ id, runtimes }: { id: string; runtimes: SessionRuntim
   const [gitHookStatus, setGitHookStatus] = useState<DesktopRepoGitHookStatus | null>(null);
   const [gitHookPending, setGitHookPending] = useState(false);
   const [gitHookError, setGitHookError] = useState<string | null>(null);
+  const [linking, setLinking] = useState(false);
 
   const refreshDesktopState = async () => {
     if (!window.trace?.getRepoConfig) return;
@@ -188,6 +188,29 @@ export function RepoCard({ id, runtimes }: { id: string; runtimes: SessionRuntim
     }
   };
 
+  const linkToLocalPath = async () => {
+    if (!window.trace?.pickFolder || !window.trace?.saveRepoPath || linking) return;
+
+    setLinking(true);
+    setGitHookError(null);
+
+    try {
+      const folderPath = await window.trace.pickFolder();
+      if (!folderPath) {
+        setLinking(false);
+        return;
+      }
+
+      await window.trace.saveRepoPath(id, folderPath);
+      await refreshDesktopState();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setGitHookError(message);
+    } finally {
+      setLinking(false);
+    }
+  };
+
   const toggleGitHooks = async () => {
     if (!window.trace?.setRepoGitHooksEnabled || !desktopRepoConfig || gitHookPending) return;
 
@@ -226,16 +249,6 @@ export function RepoCard({ id, runtimes }: { id: string; runtimes: SessionRuntim
       setGitHookPending(false);
     }
   };
-
-  const connectedLocalRuntimes = runtimes.filter(
-    (r) => r.connected && r.hostingMode === "local",
-  );
-  const linkedRuntimes = connectedLocalRuntimes.filter((r) =>
-    r.registeredRepoIds.includes(id),
-  );
-  const unlinkedRuntimes = connectedLocalRuntimes.filter(
-    (r) => !r.registeredRepoIds.includes(id),
-  );
 
   const linkedPath = desktopRepoConfig?.path ?? null;
   const gitHooksEnabled = desktopRepoConfig?.gitHooksEnabled ?? false;
@@ -320,78 +333,68 @@ export function RepoCard({ id, runtimes }: { id: string; runtimes: SessionRuntim
             <p className="mt-2 text-xs text-destructive">{webhookError}</p>
           )}
 
-          {connectedLocalRuntimes.length > 0 && (
-            <div className="mt-3 rounded-md border border-border/70 bg-surface-elevated/40 p-3">
-              <p className="text-xs font-medium text-foreground">Desktop Linking</p>
-              {linkedRuntimes.length > 0 ? (
-                <div className="mt-1.5 space-y-1">
-                  {linkedRuntimes.map((rt) => (
-                    <div key={rt.id} className="flex items-center gap-1.5">
-                      <Monitor size={12} className="shrink-0 text-emerald-500" />
-                      <span className="text-xs text-foreground">{rt.label}</span>
-                      <span className="text-xs text-emerald-500">linked</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Not linked on any connected desktop.
-                </p>
-              )}
-              {unlinkedRuntimes.length > 0 && linkedRuntimes.length > 0 && (
-                <div className="mt-1.5 space-y-1">
-                  {unlinkedRuntimes.map((rt) => (
-                    <div key={rt.id} className="flex items-center gap-1.5">
-                      <Monitor size={12} className="shrink-0 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">{rt.label}</span>
-                      <span className="text-xs text-amber-500">not linked</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
           {isElectron && (
             <div className="mt-3 rounded-md border border-border/70 bg-surface-elevated/40 p-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-foreground">Desktop Git Hooks</p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {linkedPath ?? "This repository is not linked on this desktop."}
-                  </p>
+                  <p className="text-xs font-medium text-foreground">Desktop Linking</p>
+                  {linkedPath ? (
+                    <p className="mt-0.5 truncate text-xs text-emerald-500">{linkedPath}</p>
+                  ) : (
+                    <p className="mt-0.5 text-xs text-amber-500">Not linked on this computer</p>
+                  )}
                 </div>
-                {linkedPath && (
+                {!linkedPath && (
                   <Button
-                    variant={gitHooksEnabled ? "secondary" : "outline"}
+                    variant="outline"
                     size="sm"
-                    onClick={toggleGitHooks}
-                    disabled={gitHookPending}
+                    className="gap-1.5"
+                    onClick={linkToLocalPath}
+                    disabled={linking}
                   >
-                    {gitHookPending
-                      ? (gitHooksEnabled ? "Disabling..." : "Enabling...")
-                      : (gitHooksEnabled ? "Disable Hooks" : "Enable Hooks")}
+                    <FolderOpen size={12} />
+                    {linking ? "Linking..." : "Link Local Path"}
                   </Button>
                 )}
               </div>
 
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <p className={`text-xs ${hookStatusTone}`}>{hookStatusLabel}</p>
-                {showRepairButton && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-xs"
-                    onClick={repairGitHooks}
-                    disabled={gitHookPending}
-                  >
-                    Repair Hooks
-                  </Button>
-                )}
-              </div>
+              {linkedPath && (
+                <>
+                  <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-foreground">Git Hooks</p>
+                    </div>
+                    <Button
+                      variant={gitHooksEnabled ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={toggleGitHooks}
+                      disabled={gitHookPending}
+                    >
+                      {gitHookPending
+                        ? (gitHooksEnabled ? "Disabling..." : "Enabling...")
+                        : (gitHooksEnabled ? "Disable Hooks" : "Enable Hooks")}
+                    </Button>
+                  </div>
 
-              {hookStatusDetail && (
-                <p className="mt-2 text-xs text-muted-foreground">{hookStatusDetail}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <p className={`text-xs ${hookStatusTone}`}>{hookStatusLabel}</p>
+                    {showRepairButton && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={repairGitHooks}
+                        disabled={gitHookPending}
+                      >
+                        Repair Hooks
+                      </Button>
+                    )}
+                  </div>
+
+                  {hookStatusDetail && (
+                    <p className="mt-2 text-xs text-muted-foreground">{hookStatusDetail}</p>
+                  )}
+                </>
               )}
 
               {gitHookError && (
