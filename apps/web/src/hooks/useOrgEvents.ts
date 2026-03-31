@@ -139,9 +139,7 @@ function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEntity> | u
 function shouldBumpSortTimestampForOutput(payload: JsonObject): boolean {
   return (
     payload.type === "question_pending" ||
-    payload.type === "plan_pending" ||
-    payload.type === "assistant" ||
-    payload.type === "user"
+    payload.type === "plan_pending"
   );
 }
 
@@ -501,7 +499,7 @@ export function useOrgEvents() {
           event.scopeType === ("session" satisfies ScopeType) &&
           payload
         ) {
-          upsertSessionGroupFromPayload();
+          upsertSessionGroupFromPayload(true);
         }
 
         // Handle session_output subtypes that update session fields
