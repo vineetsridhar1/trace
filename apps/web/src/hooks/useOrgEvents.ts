@@ -8,7 +8,7 @@ import { useAuthStore } from "../stores/auth";
 import { useUIStore, navigateToSession } from "../stores/ui";
 import { getSessionChannelId } from "../lib/session-group";
 import { notifyForEvent } from "../notifications/handlers";
-import { drainPendingOptimisticSession } from "../lib/optimistic-message";
+import { takePendingOptimisticSession } from "../lib/optimistic-message";
 import type {
   AgentStatus,
   Event,
@@ -143,10 +143,7 @@ function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEntity> | u
 }
 
 function shouldBumpSortTimestampForOutput(payload: JsonObject): boolean {
-  return (
-    payload.type === "question_pending" ||
-    payload.type === "plan_pending"
-  );
+  return payload.type === "question_pending" || payload.type === "plan_pending";
 }
 
 function patchGroupSessionsBranch(batch: StoreBatchWriter, sessionGroupId: string, branch: string) {
@@ -277,9 +274,9 @@ export function useOrgEvents() {
           event.eventType === "message_sent" &&
           event.scopeType === ("session" satisfies ScopeType)
         ) {
-          const pendingTempId = drainPendingOptimisticSession(event.scopeId);
-          if (pendingTempId) {
-            batch.removeScopedEvent(scopeKey, pendingTempId);
+          const pending = takePendingOptimisticSession(event.scopeId, event);
+          if (pending) {
+            batch.removeScopedEvent(scopeKey, pending.tempEventId);
           }
         }
 
@@ -685,7 +682,8 @@ export function useOrgEvents() {
             _lastMessageAt: event.timestamp,
           };
           // Bump sort for user messages and assistant text messages (not tool calls)
-          const bumpActivitySort = event.eventType === "message_sent" || payload.type === "assistant";
+          const bumpActivitySort =
+            event.eventType === "message_sent" || payload.type === "assistant";
           if (bumpActivitySort) {
             updates._sortTimestamp = event.timestamp;
           }

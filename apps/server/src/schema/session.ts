@@ -36,7 +36,11 @@ export const sessionQueries = {
     args: { organizationId: string; agentStatus?: AgentStatus },
     ctx: Context,
   ) => {
-    return sessionService.listByUser(args.organizationId, ctx.userId, args.agentStatus ?? undefined);
+    return sessionService.listByUser(
+      args.organizationId,
+      ctx.userId,
+      args.agentStatus ?? undefined,
+    );
   },
   availableSessionRuntimes: (_: unknown, args: { sessionId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
@@ -52,17 +56,9 @@ export const sessionQueries = {
     ctx: Context,
   ) => {
     const orgId = requireOrgContext(ctx);
-    return sessionService.listBranches(
-      args.repoId,
-      orgId,
-      args.runtimeInstanceId ?? undefined,
-    );
+    return sessionService.listBranches(args.repoId, orgId, args.runtimeInstanceId ?? undefined);
   },
-  sessionGroupFiles: (
-    _: unknown,
-    args: { sessionGroupId: string },
-    ctx: Context,
-  ) => {
+  sessionGroupFiles: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     return sessionService.listFiles(args.sessionGroupId, orgId, ctx.userId);
   },
@@ -74,11 +70,7 @@ export const sessionQueries = {
     const orgId = requireOrgContext(ctx);
     return sessionService.readFile(args.sessionGroupId, args.filePath, orgId, ctx.userId);
   },
-  sessionGroupBranchDiff: (
-    _: unknown,
-    args: { sessionGroupId: string },
-    ctx: Context,
-  ) => {
+  sessionGroupBranchDiff: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     return sessionService.branchDiff(args.sessionGroupId, orgId, ctx.userId);
   },
@@ -88,7 +80,13 @@ export const sessionQueries = {
     ctx: Context,
   ) => {
     const orgId = requireOrgContext(ctx);
-    return sessionService.readFileAtRef(args.sessionGroupId, args.filePath, args.ref, orgId, ctx.userId);
+    return sessionService.readFileAtRef(
+      args.sessionGroupId,
+      args.filePath,
+      args.ref,
+      orgId,
+      ctx.userId,
+    );
   },
 };
 
@@ -125,7 +123,13 @@ export const sessionMutations = {
   },
   updateSessionConfig: (
     _: unknown,
-    args: { sessionId: string; tool?: CodingTool | null; model?: string | null; hosting?: string | null; runtimeInstanceId?: string | null },
+    args: {
+      sessionId: string;
+      tool?: CodingTool | null;
+      model?: string | null;
+      hosting?: string | null;
+      runtimeInstanceId?: string | null;
+    },
     ctx: Context,
   ) => {
     return sessionService.updateConfig(
@@ -143,7 +147,12 @@ export const sessionMutations = {
   },
   sendSessionMessage: (
     _: unknown,
-    args: { sessionId: string; text: string; interactionMode?: string | null },
+    args: {
+      sessionId: string;
+      text: string;
+      interactionMode?: string | null;
+      clientMutationId?: string | null;
+    },
     ctx: Context,
   ) => {
     return sessionService.sendMessage(
@@ -152,6 +161,7 @@ export const sessionMutations = {
       ctx.actorType,
       ctx.userId,
       args.interactionMode ?? undefined,
+      args.clientMutationId ?? undefined,
     );
   },
   retrySessionConnection: (_: unknown, args: { sessionId: string }, ctx: Context) => {
@@ -175,11 +185,7 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
-  moveSessionToCloud: (
-    _: unknown,
-    args: { sessionId: string },
-    ctx: Context,
-  ) => {
+  moveSessionToCloud: (_: unknown, args: { sessionId: string }, ctx: Context) => {
     return sessionService.moveToCloud(
       args.sessionId,
       requireOrgContext(ctx),
@@ -191,14 +197,12 @@ export const sessionMutations = {
 
 export const sessionTypeResolvers = {
   SessionGroup: {
-    status: async (
-      group: {
-        id: string;
-        prUrl?: string | null;
-        archivedAt?: string | Date | null;
-        sessions?: SessionGroupStatusSource[];
-      },
-    ) => {
+    status: async (group: {
+      id: string;
+      prUrl?: string | null;
+      archivedAt?: string | Date | null;
+      sessions?: SessionGroupStatusSource[];
+    }) => {
       const sessions = Array.isArray(group.sessions)
         ? group.sessions
         : await prisma.session.findMany({

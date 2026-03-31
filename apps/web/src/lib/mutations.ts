@@ -18,8 +18,18 @@ export const RUN_SESSION_MUTATION = gql`
 `;
 
 export const SEND_SESSION_MESSAGE_MUTATION = gql`
-  mutation SendSessionMessage($sessionId: ID!, $text: String!, $interactionMode: String) {
-    sendSessionMessage(sessionId: $sessionId, text: $text, interactionMode: $interactionMode) {
+  mutation SendSessionMessage(
+    $sessionId: ID!
+    $text: String!
+    $interactionMode: String
+    $clientMutationId: String
+  ) {
+    sendSessionMessage(
+      sessionId: $sessionId
+      text: $text
+      interactionMode: $interactionMode
+      clientMutationId: $clientMutationId
+    ) {
       id
     }
   }

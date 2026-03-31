@@ -1,7 +1,7 @@
 import type { Actor, Event, Message } from "@trace/gql";
 import { asJsonObject, isJsonObject } from "@trace/shared";
 import { useEntityStore, eventScopeKey } from "../stores/entity";
-import { drainPendingOptimisticChat } from "../lib/optimistic-message";
+import { takePendingOptimisticChat } from "../lib/optimistic-message";
 
 type MessageScope =
   | { scopeType: "chat"; scopeId: string }
@@ -18,7 +18,10 @@ function normalizeMentions(
   return fallback ?? null;
 }
 
-function normalizeThreadRepliers(existing: Message["threadRepliers"] | null | undefined, actor: Actor) {
+function normalizeThreadRepliers(
+  existing: Message["threadRepliers"] | null | undefined,
+  actor: Actor,
+) {
   const nextActor = {
     type: actor.type,
     id: actor.id,
@@ -28,19 +31,27 @@ function normalizeThreadRepliers(existing: Message["threadRepliers"] | null | un
 
   return [
     nextActor,
-    ...(existing ?? []).filter((replier) => `${replier.type}:${replier.id}` !== `${nextActor.type}:${nextActor.id}`),
+    ...(existing ?? []).filter(
+      (replier) => `${replier.type}:${replier.id}` !== `${nextActor.type}:${nextActor.id}`,
+    ),
   ].slice(0, 3);
 }
 
-function buildScopedMessage(scope: MessageScope, event: Event, payload: Record<string, unknown>, existing?: Message): Message {
-  const parentMessageId = typeof payload.parentMessageId === "string" ? payload.parentMessageId : null;
+function buildScopedMessage(
+  scope: MessageScope,
+  event: Event,
+  payload: Record<string, unknown>,
+  existing?: Message,
+): Message {
+  const parentMessageId =
+    typeof payload.parentMessageId === "string" ? payload.parentMessageId : null;
 
   return {
     id: typeof payload.messageId === "string" ? payload.messageId : "",
     chatId: scope.scopeType === "chat" ? scope.scopeId : null,
     channelId: scope.scopeType === "channel" ? scope.scopeId : null,
-    text: typeof payload.text === "string" ? payload.text : existing?.text ?? "",
-    html: typeof payload.html === "string" ? payload.html : existing?.html ?? null,
+    text: typeof payload.text === "string" ? payload.text : (existing?.text ?? ""),
+    html: typeof payload.html === "string" ? payload.html : (existing?.html ?? null),
     mentions: normalizeMentions(payload.mentions, existing?.mentions),
     parentMessageId,
     replyCount: existing?.replyCount ?? 0,
@@ -78,7 +89,7 @@ export function upsertScopedMessageFromEvent(event: Event, scope: MessageScope) 
     // Atomically upsert the real message AND remove any pending optimistic
     // duplicate to prevent a brief flash where both appear in the list.
     if (scope.scopeType === "chat") {
-      const pending = drainPendingOptimisticChat(scope.scopeId);
+      const pending = takePendingOptimisticChat(scope.scopeId, event);
       if (pending) {
         const scopeKey = eventScopeKey("chat", scope.scopeId);
         useEntityStore.setState((state) => {

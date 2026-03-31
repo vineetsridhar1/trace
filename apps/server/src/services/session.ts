@@ -1907,6 +1907,7 @@ export class SessionService {
     actorType: ActorType,
     actorId: string,
     interactionMode?: string,
+    clientMutationId?: string,
   ) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
@@ -1972,7 +1973,7 @@ export class SessionService {
           scopeType: "session",
           scopeId: sessionId,
           eventType: "message_sent",
-          payload: { text },
+          payload: { text, ...(clientMutationId ? { clientMutationId } : {}) },
           actorType,
           actorId,
         });
@@ -1996,7 +1997,7 @@ export class SessionService {
         scopeType: "session",
         scopeId: sessionId,
         eventType: "message_sent",
-        payload: { text },
+        payload: { text, ...(clientMutationId ? { clientMutationId } : {}) },
         actorType,
         actorId,
       });
@@ -2076,7 +2077,11 @@ export class SessionService {
         scopeType: "session",
         scopeId: sessionId,
         eventType: "message_sent",
-        payload: { text, deliveryFailed: true },
+        payload: {
+          text,
+          deliveryFailed: true,
+          ...(clientMutationId ? { clientMutationId } : {}),
+        },
         metadata: checkpointMetadata,
         actorType,
         actorId,
@@ -2138,7 +2143,7 @@ export class SessionService {
       scopeType: "session",
       scopeId: sessionId,
       eventType: "message_sent",
-      payload: { text },
+      payload: { text, ...(clientMutationId ? { clientMutationId } : {}) },
       metadata: checkpointMetadata,
       actorType,
       actorId,

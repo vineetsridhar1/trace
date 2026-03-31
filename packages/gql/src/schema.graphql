@@ -889,7 +889,10 @@ type Query {
   sessionTerminals(sessionId: ID!): [Terminal!]!
   agentIdentity(organizationId: ID!): AgentIdentity
   resolvedAiMode(organizationId: ID!, scopeType: String!, scopeId: ID!): AutonomyMode!
-  agentExecutionLogs(organizationId: ID!, filters: ExecutionLogFilters): AgentExecutionLogConnection!
+  agentExecutionLogs(
+    organizationId: ID!
+    filters: ExecutionLogFilters
+  ): AgentExecutionLogConnection!
   agentExecutionLog(organizationId: ID!, id: ID!): AgentExecutionLog
   agentCostSummary(organizationId: ID!, startDate: String!, endDate: String!): AgentCostSummary!
   agentWorkerStatus(organizationId: ID!): AgentWorkerStatus!
@@ -925,8 +928,19 @@ type Mutation {
   deleteSession(id: ID!): Session!
   archiveSessionGroup(id: ID!): SessionGroup!
   deleteSessionGroup(id: ID!): Boolean!
-  updateSessionConfig(sessionId: ID!, tool: CodingTool, model: String, hosting: HostingMode, runtimeInstanceId: ID): Session!
-  sendSessionMessage(sessionId: ID!, text: String!, interactionMode: String): Event!
+  updateSessionConfig(
+    sessionId: ID!
+    tool: CodingTool
+    model: String
+    hosting: HostingMode
+    runtimeInstanceId: ID
+  ): Session!
+  sendSessionMessage(
+    sessionId: ID!
+    text: String!
+    interactionMode: String
+    clientMutationId: String
+  ): Event!
   retrySessionConnection(sessionId: ID!): Session!
   moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!
   moveSessionToCloud(sessionId: ID!): Session!
@@ -951,7 +965,13 @@ type Mutation {
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!
   createChat(input: CreateChatInput!): Chat!
-  sendChatMessage(chatId: ID!, text: String, html: String, parentId: ID): Message!
+  sendChatMessage(
+    chatId: ID!
+    text: String
+    html: String
+    parentId: ID
+    clientMutationId: String
+  ): Message!
   editChatMessage(messageId: ID!, html: String!): Message!
   deleteChatMessage(messageId: ID!): Message!
   sendChannelMessage(channelId: ID!, text: String, html: String, parentId: ID): Message!
@@ -964,7 +984,12 @@ type Mutation {
   unsubscribe(scopeType: String!, scopeId: ID!): Boolean!
   muteScope(scopeType: String!, scopeId: ID!): Participant!
   unmuteScope(scopeType: String!, scopeId: ID!): Participant!
-  updateScopeAiMode(organizationId: ID!, scopeType: String!, scopeId: ID!, aiMode: AutonomyMode): Boolean!
+  updateScopeAiMode(
+    organizationId: ID!
+    scopeType: String!
+    scopeId: ID!
+    aiMode: AutonomyMode
+  ): Boolean!
   updateAgentSettings(organizationId: ID!, input: UpdateAgentSettingsInput!): AgentIdentity!
   addOrgMember(organizationId: ID!, userId: ID!, role: UserRole): OrgMember!
   removeOrgMember(organizationId: ID!, userId: ID!): Boolean!

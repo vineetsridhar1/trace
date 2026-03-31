@@ -1,7 +1,8 @@
 import { useCallback, useMemo } from "react";
 import { gql } from "@urql/core";
-import type { Event } from "@trace/gql";
+import type { Event, Message } from "@trace/gql";
 import { useAuthStore } from "../stores/auth";
+import { upsertFetchedChatMessagesWithOptimisticResolution } from "../lib/optimistic-message";
 import { upsertScopedMessageFromEvent } from "./message-event-utils";
 import { useScopedMessages } from "./useScopedMessages";
 
@@ -57,7 +58,6 @@ const CHAT_EVENTS_SUBSCRIPTION = gql`
   }
 `;
 
-
 export function useChatMessages(chatId: string) {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const getQueryVariables = useCallback(
@@ -81,6 +81,12 @@ export function useChatMessages(chatId: string) {
     },
     [chatId],
   );
+  const handleMessagesLoaded = useCallback(
+    (messages: Array<Message & { id: string }>) => {
+      upsertFetchedChatMessagesWithOptimisticResolution(chatId, messages);
+    },
+    [chatId],
+  );
   const subscription = useMemo(
     () => ({
       enabled: true,
@@ -100,5 +106,6 @@ export function useChatMessages(chatId: string) {
     getQueryVariables,
     resetKeys: [chatId, activeOrgId],
     subscription,
+    onMessagesLoaded: handleMessagesLoaded,
   });
 }

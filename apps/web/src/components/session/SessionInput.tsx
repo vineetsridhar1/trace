@@ -72,7 +72,10 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     const wrappedText = wrapPrompt(mode, text);
 
     // Insert optimistic event so the message appears instantly
-    const tempEventId = optimisticallyInsertSessionMessage(sessionId, wrappedText);
+    const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
+      sessionId,
+      wrappedText,
+    );
 
     try {
       const result = await client
@@ -80,6 +83,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
           sessionId,
           text: wrappedText,
           interactionMode: mode === "code" ? undefined : mode,
+          clientMutationId,
         })
         .toPromise();
 

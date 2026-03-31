@@ -41,7 +41,7 @@ export function normalizeMessageInput(text?: string, html?: string) {
   };
 }
 
-export function buildMessageEventPayload(message: DbMessage) {
+export function buildMessageEventPayload(message: DbMessage, clientMutationId?: string) {
   return {
     messageId: message.id,
     chatId: message.chatId,
@@ -50,6 +50,7 @@ export function buildMessageEventPayload(message: DbMessage) {
     text: message.text,
     html: message.html,
     mentions: message.mentions,
+    ...(clientMutationId ? { clientMutationId } : {}),
   };
 }
 
@@ -85,14 +86,19 @@ export async function hydrateMessages(messages: DbMessage[]): Promise<MessageWit
       })
     : [];
 
-  const actorMap = await resolveActors(replies.map((r) => ({ actorType: r.actorType, actorId: r.actorId })));
+  const actorMap = await resolveActors(
+    replies.map((r) => ({ actorType: r.actorType, actorId: r.actorId })),
+  );
 
-  const summaries = new Map<string, {
-    replyCount: number;
-    latestReplyAt: Date | null;
-    threadRepliers: ActorSummary[];
-    seenActors: Set<string>;
-  }>();
+  const summaries = new Map<
+    string,
+    {
+      replyCount: number;
+      latestReplyAt: Date | null;
+      threadRepliers: ActorSummary[];
+      seenActors: Set<string>;
+    }
+  >();
 
   for (const reply of replies) {
     if (!reply.parentMessageId) continue;
@@ -108,7 +114,12 @@ export async function hydrateMessages(messages: DbMessage[]): Promise<MessageWit
     if (!summary.seenActors.has(actorKey) && summary.threadRepliers.length < 3) {
       summary.seenActors.add(actorKey);
       summary.threadRepliers.push(
-        actorMap.get(actorKey) ?? { type: reply.actorType, id: reply.actorId, name: null, avatarUrl: null },
+        actorMap.get(actorKey) ?? {
+          type: reply.actorType,
+          id: reply.actorId,
+          name: null,
+          avatarUrl: null,
+        },
       );
     }
   }

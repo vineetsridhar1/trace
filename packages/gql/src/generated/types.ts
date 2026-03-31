@@ -843,6 +843,7 @@ export type MutationSendChannelMessageArgs = {
 
 export type MutationSendChatMessageArgs = {
   chatId: Scalars['ID']['input'];
+  clientMutationId?: InputMaybe<Scalars['String']['input']>;
   html?: InputMaybe<Scalars['String']['input']>;
   parentId?: InputMaybe<Scalars['ID']['input']>;
   text?: InputMaybe<Scalars['String']['input']>;
@@ -857,6 +858,7 @@ export type MutationSendMessageArgs = {
 
 
 export type MutationSendSessionMessageArgs = {
+  clientMutationId?: InputMaybe<Scalars['String']['input']>;
   interactionMode?: InputMaybe<Scalars['String']['input']>;
   sessionId: Scalars['ID']['input'];
   text: Scalars['String']['input'];
