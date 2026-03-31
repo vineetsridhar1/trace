@@ -1190,6 +1190,7 @@ export type QueryChatMessagesArgs = {
 export type QueryEventsArgs = {
   after?: InputMaybe<Scalars['DateTime']['input']>;
   before?: InputMaybe<Scalars['DateTime']['input']>;
+  excludePayloadTypes?: InputMaybe<Array<Scalars['String']['input']>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   organizationId: Scalars['ID']['input'];
   scope?: InputMaybe<ScopeInput>;

@@ -3,7 +3,7 @@ import os from "os";
 import fs from "fs";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { assertValidCommitSha } from "@trace/shared";
+import { assertValidCommitSha, generateAnimalSlug } from "@trace/shared";
 import { installOrRepairRepoHooks } from "./repo-hooks.js";
 
 const execFileAsync = promisify(execFile);
@@ -33,11 +33,40 @@ async function resolveBaseBranch(
   return `origin/${defaultBranch}`;
 }
 
+/** Collect slugs already in use for a given repo (from directories and git branches). */
+async function getUsedSlugs(repoPath: string, repoId: string): Promise<Set<string>> {
+  const used = new Set<string>();
+
+  // 1. Existing directory names in ~/trace/sessions/{repoId}/
+  const sessionsDir = path.join(os.homedir(), "trace", "sessions", repoId);
+  if (fs.existsSync(sessionsDir)) {
+    for (const entry of fs.readdirSync(sessionsDir)) {
+      used.add(entry);
+    }
+  }
+
+  // 2. Existing trace/* branch names
+  try {
+    const { stdout } = await execFileAsync("git", ["branch", "--list", "trace/*", "--format=%(refname:short)"], { cwd: repoPath });
+    for (const line of stdout.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("trace/")) {
+        used.add(trimmed.slice("trace/".length));
+      }
+    }
+  } catch {
+    // If git command fails, proceed with just directory-based slugs
+  }
+
+  return used;
+}
+
 export async function createWorktree({
   repoPath,
   repoId,
   sessionId,
   sessionGroupId,
+  slug,
   defaultBranch,
   startBranch,
   checkpointSha,
@@ -48,6 +77,8 @@ export async function createWorktree({
   sessionId: string;
   /** When set, the worktree and branch are keyed by this ID so all sessions in the group share the same workspace. */
   sessionGroupId?: string;
+  /** Pre-assigned animal slug. If absent, one is generated. */
+  slug?: string;
   defaultBranch: string;
   /** Branch to base the new worktree on (e.g. from the parent session). Falls back to defaultBranch. */
   startBranch?: string;
@@ -55,14 +86,14 @@ export async function createWorktree({
   checkpointSha?: string;
   /** When enabled for the linked repo, install or repair Trace-managed hooks. */
   gitHooksEnabled?: boolean;
-}): Promise<{ workdir: string; branch: string }> {
-  const worktreeKey = sessionGroupId ?? sessionId;
-  const branch = `trace/${worktreeKey}`;
-  const targetPath = path.join(os.homedir(), "trace", "sessions", repoId, worktreeKey);
+}): Promise<{ workdir: string; branch: string; slug: string }> {
+  const worktreeSlug = slug ?? generateAnimalSlug(await getUsedSlugs(repoPath, repoId));
+  const branch = `trace/${worktreeSlug}`;
+  const targetPath = path.join(os.homedir(), "trace", "sessions", repoId, worktreeSlug);
 
   // If the worktree directory already exists, reuse it
   if (fs.existsSync(targetPath)) {
-    return { workdir: targetPath, branch };
+    return { workdir: targetPath, branch, slug: worktreeSlug };
   }
 
   // Ensure parent directory exists
@@ -109,7 +140,7 @@ export async function createWorktree({
     await installOrRepairRepoHooks(targetPath);
   }
 
-  return { workdir: targetPath, branch };
+  return { workdir: targetPath, branch, slug: worktreeSlug };
 }
 
 export async function removeWorktree({
