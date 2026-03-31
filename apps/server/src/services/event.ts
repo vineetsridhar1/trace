@@ -195,12 +195,16 @@ export class EventService {
       // Using a bare NOT with JSON path filtering would exclude ALL events
       // where payload.type is missing (NULL = 'x' → NULL, NOT NULL → NULL → excluded),
       // silently dropping message_sent, session_started, etc.
-      where.NOT = opts.excludePayloadTypes.map((t) => ({
+      where.NOT = {
         AND: [
           { eventType: "session_output" },
-          { payload: { path: ["type"], equals: t } },
+          {
+            OR: opts.excludePayloadTypes.map((t) => ({
+              payload: { path: ["type"], equals: t },
+            })),
+          },
         ],
-      }));
+      };
     }
     const timestampFilter: Record<string, Date> = {};
     if (opts.after) timestampFilter.gt = opts.after;
