@@ -22,6 +22,7 @@ export const eventQueries = {
       after?: Date;
       before?: Date;
       limit?: number;
+      excludePayloadTypes?: string[];
     },
     ctx: Context,
   ) => {
@@ -44,6 +45,7 @@ export const eventQueries = {
       after: args.after,
       before: args.before,
       limit: args.limit,
+      excludePayloadTypes: args.excludePayloadTypes,
     });
 
     if (args.scope?.type === "chat") {

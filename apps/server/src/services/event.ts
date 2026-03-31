@@ -25,6 +25,8 @@ export interface EventQueryOpts {
   limit?: number;
   /** When true, exclude events that are thread replies (parentId IS NOT NULL) */
   excludeReplies?: boolean;
+  /** Exclude session_output events whose payload.type matches any of these values */
+  excludePayloadTypes?: string[];
 }
 
 /**
@@ -186,6 +188,11 @@ export class EventService {
     if (opts.scopeId) where.scopeId = opts.scopeId;
     if (opts.types?.length) where.eventType = { in: opts.types };
     if (opts.excludeReplies) where.parentId = null;
+    if (opts.excludePayloadTypes?.length) {
+      where.NOT = opts.excludePayloadTypes.map((t) => ({
+        payload: { path: ["type"], equals: t },
+      }));
+    }
     const timestampFilter: Record<string, Date> = {};
     if (opts.after) timestampFilter.gt = opts.after;
     if (opts.before) timestampFilter.lt = opts.before;
