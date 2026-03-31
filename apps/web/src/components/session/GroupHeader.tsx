@@ -11,6 +11,7 @@ import {
 import { cn } from "../../lib/utils";
 import { sessionStatusColor, sessionStatusLabel } from "./sessionStatus";
 import { SessionHistory } from "./SessionHistory";
+import { ScrambleText } from "../ui/ScrambleText";
 
 interface GroupHeaderProps {
   groupName: string | undefined;
@@ -84,7 +85,7 @@ export function GroupHeader({
 
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-sm font-semibold text-foreground">
-          {groupName ?? "Session Group"}
+          <ScrambleText text={groupName ?? "Session Group"} />
         </h2>
       </div>
 
