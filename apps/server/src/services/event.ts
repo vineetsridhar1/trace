@@ -188,6 +188,9 @@ export class EventService {
     if (opts.scopeId) where.scopeId = opts.scopeId;
     if (opts.types?.length) where.eventType = { in: opts.types };
     if (opts.excludeReplies) where.parentId = null;
+    // Each excluded type becomes a separate NOT clause filtering on the JSON payload.type path.
+    // This works for a small list but doesn't use indexes — if the list grows significantly,
+    // consider adding an indexed payloadType column or switching to an inclusion list.
     if (opts.excludePayloadTypes?.length) {
       where.NOT = opts.excludePayloadTypes.map((t) => ({
         payload: { path: ["type"], equals: t },

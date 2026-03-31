@@ -1,6 +1,7 @@
 import type { Event } from "@trace/gql";
 import { asJsonObject, parseQuestion, type JsonObject, type Question } from "@trace/shared";
 import type { ReadGlobItem } from "./messages/ReadGlobGroup";
+import { SESSION_INVISIBLE_PAYLOAD_TYPES_SET } from "../../lib/session-constants";
 
 const READ_GLOB_NAMES = new Set(["read", "glob", "grep"]);
 const AGENT_NAMES = new Set(["agent", "task"]);
@@ -16,23 +17,6 @@ export interface BuildSessionNodesResult {
 
 /** Payload types that render content but should not break a Read/Glob bucket */
 const BUCKET_TRANSPARENT_TYPES = new Set(["result"]);
-/** Payload types that render as nothing in SessionMessage — skip entirely (don't create nodes) */
-const SKIP_ENTIRELY_TYPES = new Set([
-  "connection_lost",
-  "connection_restored",
-  "git_checkpoint",
-  "git_checkpoint_rewrite",
-  "title_generated",
-  "config_changed",
-  "prepare",
-  "run",
-  "send",
-  "session_rehomed",
-  "recovery_requested",
-  "recovery_failed",
-  "upgrade_workspace",
-  "workspace_ready",
-]);
 
 export type SessionNode =
   | { kind: "event"; id: string }
@@ -244,7 +228,7 @@ export function buildSessionNodes(
 
       const payloadType = payload?.type;
       // Connection events render as nothing — skip entirely
-      if (typeof payloadType === "string" && SKIP_ENTIRELY_TYPES.has(payloadType)) {
+      if (typeof payloadType === "string" && SESSION_INVISIBLE_PAYLOAD_TYPES_SET.has(payloadType)) {
         continue;
       }
       // Result/checkpoint events render content but should not break a Read/Glob bucket
