@@ -228,6 +228,9 @@ export function useOrgEvents() {
         organizationId: activeOrgId,
       })
       .subscribe((result) => {
+        if (result.error) {
+          console.error("[orgEvents] subscription error:", result.error);
+        }
         if (!result.data?.orgEvents) return;
 
         const event = result.data.orgEvents as Event;

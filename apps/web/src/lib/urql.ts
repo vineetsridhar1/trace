@@ -26,8 +26,17 @@ const wsClient = createWSClient({
     await new Promise((resolve) => setTimeout(resolve, delay));
   },
   on: {
-    connected: () => useConnectionStore.getState().setConnected(true),
-    closed: () => useConnectionStore.getState().setConnected(false),
+    connected: () => {
+      console.debug("[ws] connected");
+      useConnectionStore.getState().setConnected(true);
+    },
+    closed: (event) => {
+      console.debug("[ws] closed", event);
+      useConnectionStore.getState().setConnected(false);
+    },
+    error: (error) => {
+      console.debug("[ws] error", error);
+    },
   },
 });
 

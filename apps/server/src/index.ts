@@ -74,9 +74,8 @@ async function main() {
           );
           (ctx.extra as Record<string, unknown>).__context = context;
           return true;
-        } catch {
-          // Reject unauthenticated connections silently — avoids log spam
-          // from bots, crawlers, or stale clients retrying with expired tokens.
+        } catch (err) {
+          console.warn("[ws] connection rejected:", (err as Error).message);
           return false;
         }
       },
