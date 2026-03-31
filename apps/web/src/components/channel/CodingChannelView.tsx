@@ -83,6 +83,9 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
         "sessionGroups",
         groups.map((group) => ({
           ...group,
+          // Cold-start approximation: server sorts by updatedAt, so use that
+          // as the initial _sortTimestamp. Real-time events will refine this
+          // to only reflect meaningful activity (status changes, messages).
           _sortTimestamp:
             group.sessions?.[0]?.updatedAt
             ?? group.updatedAt,
