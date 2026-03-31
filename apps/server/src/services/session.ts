@@ -329,10 +329,19 @@ function buildSessionGroupSnapshot(
 /** Maximum length for session names (prompt-derived or title-tag-extracted). */
 const MAX_SESSION_NAME_LENGTH = 80;
 
+/** Maximum length for branch names extracted via <trace-branch> tags. */
+const MAX_BRANCH_NAME_LENGTH = 100;
+
 /** Instruction appended to every session prompt so the AI can set or update the title at any time. */
 const TITLE_INSTRUCTION = `\n\n<system-instruction>
 You may set or update the session title by outputting a short title (5-8 words) wrapped in XML tags: <trace-title>Your title here</trace-title>.
 Do this ONCE at the start of your very first response to capture the overall goal of the session. After that, do NOT update the title unless the user explicitly asks you to rename/retitle it. Debugging, iterating, or continuing work on the same goal is not a reason to change the title. The tag will be stripped and not shown to the user.
+</system-instruction>`;
+
+/** Instruction appended to repo-based sessions so the AI reports branch name changes. */
+const BRANCH_INSTRUCTION = `\n\n<system-instruction>
+When you create or rename a git branch, output the branch name wrapped in XML tags: <trace-branch>branch-name</trace-branch>.
+This lets the system track which branch this session is working on. The tag will be stripped and not shown to the user.
 </system-instruction>`;
 
 /** Instruction appended to every prompt for repo-based sessions so the AI auto-saves work. */
@@ -349,9 +358,10 @@ function appendAutoSave(prompt: string, hasRepo: boolean): string {
   return hasRepo ? prompt + AUTO_SAVE_INSTRUCTION : prompt;
 }
 
-/** Append all system instructions (title, auto-save) to a prompt in the correct order. */
+/** Append all system instructions (title, branch, auto-save) to a prompt in the correct order. */
 function appendPromptInstructions(prompt: string, { hasRepo }: { hasRepo: boolean }): string {
   let result = prompt + TITLE_INSTRUCTION;
+  if (hasRepo) result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
   return result;
 }
@@ -364,6 +374,9 @@ This session is working off the base branch "${baseBranch}". All work should be 
 
 /** Regex to extract <trace-title>…</trace-title> from assistant output. */
 const TITLE_TAG_RE = /<trace-title>([\s\S]*?)<\/trace-title>/;
+
+/** Regex to extract <trace-branch>…</trace-branch> from assistant output. */
+const BRANCH_TAG_RE = /<trace-branch>([\s\S]*?)<\/trace-branch>/;
 
 /**
  * Build a conversation transcript from session events.
@@ -1542,8 +1555,9 @@ export class SessionService {
   }
 
   async recordOutput(sessionId: string, data: Record<string, unknown>) {
-    // Extract and strip <trace-title> tags from assistant text before persisting
+    // Extract and strip <trace-title> and <trace-branch> tags from assistant text before persisting
     const extractedTitle = this.extractAndStripTitle(data);
+    const extractedBranch = this.extractAndStripBranch(data);
 
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
@@ -1569,6 +1583,11 @@ export class SessionService {
     // If we found a title tag, update the session name
     if (extractedTitle) {
       await this.updateName(sessionId, extractedTitle);
+    }
+
+    // If we found a branch tag, update the branch on session + session group
+    if (extractedBranch) {
+      await this.updateBranch(sessionId, extractedBranch);
     }
 
     // If this output contains a QuestionBlock or PlanBlock, transition to needs_input immediately.
@@ -1693,6 +1712,57 @@ export class SessionService {
     }
 
     return null;
+  }
+
+  /**
+   * Look for <trace-branch>…</trace-branch> in assistant text blocks.
+   * If found, strip the tag from the text content (mutates data in place)
+   * and return the extracted branch name. Returns null if no tag found.
+   */
+  private extractAndStripBranch(data: Record<string, unknown>): string | null {
+    if (data.type !== "assistant") return null;
+
+    const message = data.message as Record<string, unknown> | undefined;
+    const content = message?.content;
+    if (!Array.isArray(content)) return null;
+
+    for (const block of content) {
+      const b = block as Record<string, unknown>;
+      if (b.type !== "text" || typeof b.text !== "string") continue;
+
+      const match = BRANCH_TAG_RE.exec(b.text);
+      if (match) {
+        const branch = match[1].trim().slice(0, MAX_BRANCH_NAME_LENGTH);
+        // Strip all branch tags from the text so none leak to the UI
+        b.text = b.text.replace(/<trace-branch>[\s\S]*?<\/trace-branch>/g, "").trimStart();
+        return branch || null;
+      }
+    }
+
+    return null;
+  }
+
+  private async updateBranch(sessionId: string, branch: string) {
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { organizationId: true, sessionGroupId: true },
+    });
+
+    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, { branch });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: {
+        type: "branch_renamed",
+        branch,
+        ...(sessionGroup ? { sessionGroup } : {}),
+      },
+      actorType: "system",
+      actorId: "system",
+    });
   }
 
   async complete(id: string) {

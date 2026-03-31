@@ -24,6 +24,7 @@ const SKIP_ENTIRELY_TYPES = new Set([
   "git_checkpoint_rewrite",
   "title_generated",
   "config_changed",
+  "branch_renamed",
   "prepare",
   "run",
   "send",

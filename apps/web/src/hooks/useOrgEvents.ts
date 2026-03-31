@@ -116,6 +116,10 @@ function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEntity> | u
   if (payload.type === "title_generated" && typeof payload.name === "string") {
     return { name: payload.name };
   }
+  // LLM-generated branch rename
+  if (payload.type === "branch_renamed" && typeof payload.branch === "string") {
+    return { branch: payload.branch };
+  }
   if (payload.type === "question_pending" || payload.type === "plan_pending") {
     return { sessionStatus: "needs_input" as SessionStatus };
   }
