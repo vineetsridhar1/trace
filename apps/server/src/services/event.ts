@@ -27,6 +27,28 @@ export interface EventQueryOpts {
   excludeReplies?: boolean;
 }
 
+/**
+ * session_output subtypes that carry metadata relevant to all clients
+ * (sidebar status, session names, connection state, checkpoints).
+ * Only these are broadcast on the org-wide topic. Pure content events
+ * (assistant, result, error) are only sent via the session-scoped topic.
+ */
+const ORG_RELEVANT_OUTPUT_SUBTYPES = new Set([
+  "workspace_ready",
+  "workspace_failed",
+  "title_generated",
+  "question_pending",
+  "plan_pending",
+  "connection_lost",
+  "connection_restored",
+  "recovery_failed",
+  "recovery_requested",
+  "session_rehomed",
+  "git_checkpoint",
+  "git_checkpoint_rewrite",
+  "config_changed",
+]);
+
 // Maps scope types to their pubsub topic builders.
 // Keys must match the GraphQL subscription field names (e.g. "channel" → "channelEvents").
 const scopeTopicMap: Record<string, (id: string) => string> = {
@@ -76,25 +98,32 @@ export class EventService {
       return event;
     }
 
-    // Phase 3A: For session_output events, broadcast a metadata-only envelope
-    // to the org topic to avoid sending 100KB+ payloads to every subscriber.
-    // Full payloads are available via the session-scoped subscription.
+    // For session_output events, only broadcast to the org topic when the
+    // subtype carries metadata that the sidebar/session list needs (status
+    // changes, titles, connection state, checkpoints). Pure content events
+    // (assistant messages, tool output, results) are noise at the org level —
+    // viewers of a specific session get full payloads via sessionEvents.
     if (input.eventType === "session_output") {
-      const thinEnvelope = {
-        id: event.id,
-        scopeType: event.scopeType,
-        scopeId: event.scopeId,
-        eventType: event.eventType,
-        actorType: event.actorType,
-        actorId: event.actorId,
-        parentId: event.parentId,
-        timestamp: event.timestamp,
-        metadata: event.metadata,
-        organizationId: event.organizationId,
-        // Include minimal payload fields needed by useOrgEvents handlers
-        payload: this.trimSessionOutputPayload(input.payload),
-      };
-      pubsub.publish(topics.orgEvents(input.organizationId), { orgEvents: thinEnvelope });
+      const p = (input.payload && typeof input.payload === "object" && !Array.isArray(input.payload))
+        ? input.payload as Record<string, unknown>
+        : {} as Record<string, unknown>;
+      const subtype = p.type as string | undefined;
+      if (subtype && ORG_RELEVANT_OUTPUT_SUBTYPES.has(subtype)) {
+        const thinEnvelope = {
+          id: event.id,
+          scopeType: event.scopeType,
+          scopeId: event.scopeId,
+          eventType: event.eventType,
+          actorType: event.actorType,
+          actorId: event.actorId,
+          parentId: event.parentId,
+          timestamp: event.timestamp,
+          metadata: event.metadata,
+          organizationId: event.organizationId,
+          payload: this.trimSessionOutputPayload(input.payload),
+        };
+        pubsub.publish(topics.orgEvents(input.organizationId), { orgEvents: thinEnvelope });
+      }
     } else {
       // All other events: broadcast full event to org topic
       pubsub.publish(topics.orgEvents(input.organizationId), { orgEvents: event });
