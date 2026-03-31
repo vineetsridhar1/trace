@@ -25,7 +25,7 @@ export interface EventQueryOpts {
   limit?: number;
   /** When true, exclude events that are thread replies (parentId IS NOT NULL) */
   excludeReplies?: boolean;
-  /** Exclude session_output events whose payload.type matches any of these values */
+  /** Exclude events whose JSON payload.type field matches any of these values */
   excludePayloadTypes?: string[];
 }
 
