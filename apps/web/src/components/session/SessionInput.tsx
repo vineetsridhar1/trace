@@ -11,6 +11,7 @@ import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
 import { getModelLabel } from "./modelOptions";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { cn } from "../../lib/utils";
+import { optimisticallyInsertSessionMessage, removeOptimisticSessionMessage } from "../../lib/optimistic-message";
 
 export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop: () => void }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
@@ -62,8 +63,12 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     if (!text || sending || !canSend) return;
     setSending(true);
     setMessage("");
+    const wrappedText = wrapPrompt(mode, text);
+
+    // Insert optimistic event so the message appears instantly
+    const tempEventId = optimisticallyInsertSessionMessage(sessionId, wrappedText);
+
     try {
-      const wrappedText = wrapPrompt(mode, text);
       await client
         .mutation(SEND_SESSION_MESSAGE_MUTATION, {
           sessionId,
@@ -71,6 +76,12 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
           interactionMode: mode === "code" ? undefined : mode,
         })
         .toPromise();
+      // Real event will arrive via subscription and naturally appear.
+      // Remove the optimistic placeholder to avoid duplicates.
+      removeOptimisticSessionMessage(sessionId, tempEventId);
+    } catch {
+      // On failure, remove the optimistic event
+      removeOptimisticSessionMessage(sessionId, tempEventId);
     } finally {
       setSending(false);
       inputRef.current?.focus();
