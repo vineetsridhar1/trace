@@ -138,10 +138,10 @@ function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEntity> | u
 
 function shouldBumpSortTimestampForOutput(payload: JsonObject): boolean {
   return (
-    payload.type === "workspace_ready" ||
     payload.type === "question_pending" ||
     payload.type === "plan_pending" ||
-    (typeof payload.type === "string" && CONNECTION_EVENT_TYPES.has(payload.type))
+    payload.type === "assistant" ||
+    payload.type === "user"
   );
 }
 
@@ -237,7 +237,7 @@ export function useOrgEvents() {
         const batch = new StoreBatchWriter();
         const payload = asJsonObject(event.payload);
 
-        const upsertSessionGroupFromPayload = () => {
+        const upsertSessionGroupFromPayload = (bumpSort = false) => {
           const sessionFromPayload = asJsonObject(payload?.session);
           const sessionGroup =
             asJsonObject(payload?.sessionGroup) ?? asJsonObject(sessionFromPayload?.sessionGroup);
@@ -245,7 +245,7 @@ export function useOrgEvents() {
             const existing = batch.get("sessionGroups", sessionGroup.id);
             batch.upsert("sessionGroups", sessionGroup.id, {
               ...(existing ? { ...existing, ...sessionGroup } : sessionGroup),
-              _sortTimestamp: event.timestamp,
+              ...(bumpSort ? { _sortTimestamp: event.timestamp } : {}),
             } as SessionGroupEntity);
           }
         };
@@ -386,7 +386,7 @@ export function useOrgEvents() {
         if (event.eventType === "session_started" && payload) {
           const session = asJsonObject(payload.session);
           if (session && typeof session.id === "string") {
-            upsertSessionGroupFromPayload();
+            upsertSessionGroupFromPayload(true);
             const existingSession = batch.get("sessions", session.id);
             batch.upsert("sessions", session.id, {
               ...(existingSession ? { ...existingSession, ...session } : session),
@@ -454,7 +454,7 @@ export function useOrgEvents() {
           event.scopeType === ("session" satisfies ScopeType) &&
           payload
         ) {
-          upsertSessionGroupFromPayload();
+          upsertSessionGroupFromPayload(true);
           const agentStatus = agentStatusFromEvent(event.eventType, payload);
           const sessionStatus = sessionStatusFromEvent(event.eventType, payload);
           if (agentStatus || sessionStatus) {
@@ -510,15 +510,14 @@ export function useOrgEvents() {
           event.scopeType === ("session" satisfies ScopeType) &&
           payload
         ) {
-          upsertSessionGroupFromPayload();
+          const bumpSort = shouldBumpSortTimestampForOutput(payload);
+          upsertSessionGroupFromPayload(bumpSort);
           const sessionPatch = sessionPatchFromOutput(payload);
           if (sessionPatch) {
             batch.patch("sessions", event.scopeId, {
               ...sessionPatch,
               updatedAt: event.timestamp,
-              ...(shouldBumpSortTimestampForOutput(payload)
-                ? { _sortTimestamp: event.timestamp }
-                : {}),
+              ...(bumpSort ? { _sortTimestamp: event.timestamp } : {}),
             });
           }
 
@@ -597,13 +596,25 @@ export function useOrgEvents() {
             updatedAt: event.timestamp,
             _lastMessageAt: event.timestamp,
           };
-          if (event.eventType === "message_sent") {
+          // Bump sort for user messages and assistant text messages (not tool calls)
+          const bumpActivitySort = event.eventType === "message_sent" || payload.type === "assistant";
+          if (bumpActivitySort) {
             updates._sortTimestamp = event.timestamp;
           }
           if (preview) {
             updates._lastEventPreview = preview;
           }
           batch.patch("sessions", event.scopeId, updates);
+          // Also bump the session group sort timestamp for meaningful messages
+          if (bumpActivitySort) {
+            const session = batch.get("sessions", event.scopeId);
+            const groupId = session?.sessionGroupId;
+            if (groupId) {
+              batch.patch("sessionGroups", groupId, {
+                _sortTimestamp: event.timestamp,
+              } as Partial<SessionGroupEntity>);
+            }
+          }
         }
 
         // Inbox item events
