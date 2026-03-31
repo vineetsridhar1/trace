@@ -196,10 +196,7 @@ export function RepoCard({ id, desktopRefreshKey }: { id: string; desktopRefresh
 
     try {
       const folderPath = await window.trace.pickFolder();
-      if (!folderPath) {
-        setLinking(false);
-        return;
-      }
+      if (!folderPath) return;
 
       await window.trace.saveRepoPath(id, folderPath);
       await refreshDesktopState();
