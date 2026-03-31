@@ -215,6 +215,8 @@ export interface BridgeWorkspaceFailed {
   type: "workspace_failed";
   sessionId: string;
   error: string;
+  /** When false, the error is a configuration issue that won't resolve by retrying. */
+  retryable?: boolean;
 }
 
 export interface BridgeToolSessionId {

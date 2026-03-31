@@ -423,14 +423,20 @@ export class BridgeClient implements IBridgeClient {
       }
       case "prepare": {
         const { sessionId, sessionGroupId, repoId, repoName, defaultBranch, branch, checkpointSha, readOnly } = cmd;
-        const repoConfig = getRepoConfig(repoId);
+        const config = readConfig();
+        const repoConfig = config.repos[repoId] ?? null;
         const repoPath = repoConfig?.path;
 
         if (!repoPath) {
+          const configuredIds = Object.keys(config.repos);
+          const hint = configuredIds.length > 0
+            ? ` Configured repo IDs: ${configuredIds.join(", ")}`
+            : " No repos configured locally.";
           this.send({
             type: "workspace_failed",
             sessionId,
-            error: `No local path configured for repo "${repoName}" (${repoId}). Configure it in Settings.`,
+            error: `No local path configured for repo "${repoName}" (${repoId}). Configure it in Settings.${hint}`,
+            retryable: false,
           });
           break;
         }
@@ -472,14 +478,20 @@ export class BridgeClient implements IBridgeClient {
       }
       case "upgrade_workspace": {
         const { sessionId, sessionGroupId, repoId, repoName, defaultBranch, branch } = cmd;
-        const repoConfig = getRepoConfig(repoId);
+        const config = readConfig();
+        const repoConfig = config.repos[repoId] ?? null;
         const repoPath = repoConfig?.path;
 
         if (!repoPath) {
+          const configuredIds = Object.keys(config.repos);
+          const hint = configuredIds.length > 0
+            ? ` Configured repo IDs: ${configuredIds.join(", ")}`
+            : " No repos configured locally.";
           this.send({
             type: "workspace_failed",
             sessionId,
-            error: `No local path configured for repo "${repoName}" (${repoId}). Configure it in Settings.`,
+            error: `No local path configured for repo "${repoName}" (${repoId}). Configure it in Settings.${hint}`,
+            retryable: false,
           });
           break;
         }

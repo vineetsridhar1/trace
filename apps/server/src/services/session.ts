@@ -2174,7 +2174,8 @@ export class SessionService {
     }
   }
 
-  async workspaceFailed(sessionId: string, error: string) {
+  async workspaceFailed(sessionId: string, error: string, options?: { retryable?: boolean }) {
+    const retryable = options?.retryable ?? true;
     const session = await prisma.session.update({
       where: { id: sessionId },
       data: {
@@ -2182,7 +2183,7 @@ export class SessionService {
         workdir: null,
         worktreeDeleted: true,
         pendingRun: Prisma.DbNull,
-        connection: connJson(defaultConnection({ state: "disconnected", lastError: error })),
+        connection: connJson(defaultConnection({ state: "disconnected", lastError: error, canRetry: retryable })),
       },
       include: SESSION_INCLUDE,
     });
@@ -2524,10 +2525,11 @@ export class SessionService {
       actorId,
     });
 
-    // Try to find a runtime to bind to
-    const runtime = conn.runtimeInstanceId
-      ? (sessionRouter.getRuntimeForSession(sessionId) ?? sessionRouter.getDefaultRuntime())
-      : sessionRouter.getDefaultRuntime();
+    // Try to find a runtime to bind to — prefer one that has the repo registered
+    const repoId = session.repo?.id;
+    const runtime = sessionRouter.getRuntimeForSession(sessionId)
+      ?? (repoId ? sessionRouter.getRuntimeForRepo(repoId) : undefined)
+      ?? sessionRouter.getDefaultRuntime();
 
     if (!runtime) {
       const failedConn: SessionConnectionData = {
