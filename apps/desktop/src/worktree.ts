@@ -3,7 +3,7 @@ import os from "os";
 import fs from "fs";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { assertValidCommitSha, generateAnimalSlug } from "@trace/shared";
+import { assertValidCommitSha, generateAnimalSlug, getUsedSlugs } from "@trace/shared";
 import { installOrRepairRepoHooks } from "./repo-hooks.js";
 
 const execFileAsync = promisify(execFile);
@@ -33,34 +33,6 @@ async function resolveBaseBranch(
   return `origin/${defaultBranch}`;
 }
 
-/** Collect slugs already in use for a given repo (from directories and git branches). */
-async function getUsedSlugs(repoPath: string, repoId: string): Promise<Set<string>> {
-  const used = new Set<string>();
-
-  // 1. Existing directory names in ~/trace/sessions/{repoId}/
-  const sessionsDir = path.join(os.homedir(), "trace", "sessions", repoId);
-  if (fs.existsSync(sessionsDir)) {
-    for (const entry of fs.readdirSync(sessionsDir)) {
-      used.add(entry);
-    }
-  }
-
-  // 2. Existing trace/* branch names
-  try {
-    const { stdout } = await execFileAsync("git", ["branch", "--list", "trace/*", "--format=%(refname:short)"], { cwd: repoPath });
-    for (const line of stdout.split("\n")) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith("trace/")) {
-        used.add(trimmed.slice("trace/".length));
-      }
-    }
-  } catch {
-    // If git command fails, proceed with just directory-based slugs
-  }
-
-  return used;
-}
-
 export async function createWorktree({
   repoPath,
   repoId,
@@ -87,9 +59,10 @@ export async function createWorktree({
   /** When enabled for the linked repo, install or repair Trace-managed hooks. */
   gitHooksEnabled?: boolean;
 }): Promise<{ workdir: string; branch: string; slug: string }> {
-  const worktreeSlug = slug ?? generateAnimalSlug(await getUsedSlugs(repoPath, repoId));
+  const sessionsDir = path.join(os.homedir(), "trace", "sessions", repoId);
+  const worktreeSlug = slug ?? generateAnimalSlug(await getUsedSlugs(sessionsDir, repoPath));
   const branch = `trace/${worktreeSlug}`;
-  const targetPath = path.join(os.homedir(), "trace", "sessions", repoId, worktreeSlug);
+  const targetPath = path.join(sessionsDir, worktreeSlug);
 
   // If the worktree directory already exists, reuse it
   if (fs.existsSync(targetPath)) {

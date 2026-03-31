@@ -1,7 +1,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
-import { assertValidCommitSha, generateAnimalSlug } from "@trace/shared";
+import { assertValidCommitSha, generateAnimalSlug, getUsedSlugs } from "@trace/shared";
 
 const execFileAsync = promisify(execFile);
 
@@ -42,33 +42,6 @@ export async function ensureRepo(repoId: string, remoteUrl: string): Promise<str
   return repoPath;
 }
 
-/** Collect slugs already in use (from workspace directories and git branches). */
-async function getUsedSlugs(repoPath: string): Promise<Set<string>> {
-  const used = new Set<string>();
-
-  // 1. Existing directory names in /workspaces/
-  if (fs.existsSync(WORKSPACES_DIR)) {
-    for (const entry of fs.readdirSync(WORKSPACES_DIR)) {
-      used.add(entry);
-    }
-  }
-
-  // 2. Existing trace/* branch names
-  try {
-    const { stdout } = await execFileAsync("git", ["branch", "--list", "trace/*", "--format=%(refname:short)"], { cwd: repoPath });
-    for (const line of stdout.split("\n")) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith("trace/")) {
-        used.add(trimmed.slice("trace/".length));
-      }
-    }
-  } catch {
-    // If git command fails, proceed with just directory-based slugs
-  }
-
-  return used;
-}
-
 /**
  * Create a worktree from the repo at /repos/{repoId}.
  * The worktree is keyed by `slug` (an animal name) when provided.
@@ -94,7 +67,7 @@ export async function createWorktree({
   slug?: string;
 }): Promise<{ workdir: string; slug: string }> {
   const repoPath = `${REPOS_DIR}/${repoId}`;
-  const worktreeSlug = slug ?? generateAnimalSlug(await getUsedSlugs(repoPath));
+  const worktreeSlug = slug ?? generateAnimalSlug(await getUsedSlugs(WORKSPACES_DIR, repoPath));
   const worktreePath = `${WORKSPACES_DIR}/${worktreeSlug}`;
 
   // If worktree already exists, reuse it
