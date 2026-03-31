@@ -82,9 +82,13 @@ export function upsertScopedMessageFromEvent(event: Event, scope: MessageScope) 
       if (pending) {
         const scopeKey = eventScopeKey("chat", scope.scopeId);
         useEntityStore.setState((state) => {
+          // Build the message inside the updater so we read the latest state
+          const freshExisting = state.messages[messageId] as Message | undefined;
+          const msg = buildScopedMessage(scope, event, payload, freshExisting);
+
           const nextMessages = { ...state.messages };
           delete nextMessages[pending.tempMessageId];
-          nextMessages[messageId] = nextMessage;
+          nextMessages[messageId] = msg;
 
           const bucket = state.eventsByScope[scopeKey];
           if (bucket && bucket[pending.tempEventId]) {
