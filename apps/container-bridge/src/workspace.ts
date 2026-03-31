@@ -1,7 +1,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
-import { assertValidCommitSha } from "@trace/shared";
+import { assertValidCommitSha, generateAnimalSlug, getUsedSlugs } from "@trace/shared";
 
 const execFileAsync = promisify(execFile);
 
@@ -44,8 +44,8 @@ export async function ensureRepo(repoId: string, remoteUrl: string): Promise<str
 
 /**
  * Create a worktree from the repo at /repos/{repoId}.
- * The worktree is keyed by `sessionGroupId` when provided so that all sessions
- * in the same group share a single worktree and branch. Falls back to `sessionId`.
+ * The worktree is keyed by `slug` (an animal name) when provided.
+ * Falls back to generating a new animal slug.
  */
 export async function createWorktree({
   repoId,
@@ -54,6 +54,7 @@ export async function createWorktree({
   branch,
   checkpointSha,
   sessionGroupId,
+  slug,
 }: {
   repoId: string;
   sessionId: string;
@@ -62,21 +63,23 @@ export async function createWorktree({
   checkpointSha?: string;
   /** When set, the worktree and branch are keyed by this ID so all sessions in the group share the same workspace. */
   sessionGroupId?: string;
-}): Promise<{ workdir: string }> {
-  const worktreeKey = sessionGroupId ?? sessionId;
+  /** Pre-assigned animal slug. If absent, one is generated. */
+  slug?: string;
+}): Promise<{ workdir: string; slug: string }> {
   const repoPath = `${REPOS_DIR}/${repoId}`;
-  const worktreePath = `${WORKSPACES_DIR}/${worktreeKey}`;
+  const worktreeSlug = slug ?? generateAnimalSlug(await getUsedSlugs(WORKSPACES_DIR, repoPath));
+  const worktreePath = `${WORKSPACES_DIR}/${worktreeSlug}`;
 
   // If worktree already exists, reuse it
   if (fs.existsSync(worktreePath)) {
-    return { workdir: worktreePath };
+    return { workdir: worktreePath, slug: worktreeSlug };
   }
 
   fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
 
   if (checkpointSha) assertValidCommitSha(checkpointSha);
 
-  const branchName = `trace/${worktreeKey}`;
+  const branchName = `trace/${worktreeSlug}`;
   const baseRef = checkpointSha ?? `origin/${branch ?? defaultBranch}`;
 
   // When restoring a checkpoint, verify the SHA is locally reachable; fetch if not
@@ -101,7 +104,7 @@ export async function createWorktree({
     await execFileAsync("git", ["worktree", "add", "-b", branchName, worktreePath, baseRef], { cwd: repoPath });
   }
 
-  return { workdir: worktreePath };
+  return { workdir: worktreePath, slug: worktreeSlug };
 }
 
 /**

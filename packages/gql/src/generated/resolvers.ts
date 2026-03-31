@@ -1190,6 +1190,7 @@ export type QueryChatMessagesArgs = {
 export type QueryEventsArgs = {
   after?: InputMaybe<Scalars['DateTime']['input']>;
   before?: InputMaybe<Scalars['DateTime']['input']>;
+  excludePayloadTypes?: InputMaybe<Array<Scalars['String']['input']>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   organizationId: Scalars['ID']['input'];
   scope?: InputMaybe<ScopeInput>;
@@ -1429,6 +1430,7 @@ export type SessionGroup = {
   prUrl?: Maybe<Scalars['String']['output']>;
   repo?: Maybe<Repo>;
   sessions: Array<Session>;
+  slug?: Maybe<Scalars['String']['output']>;
   status: SessionGroupStatus;
   updatedAt: Scalars['DateTime']['output'];
   workdir?: Maybe<Scalars['String']['output']>;
@@ -2475,6 +2477,7 @@ export type SessionGroupResolvers<ContextType = Context, ParentType extends Reso
   prUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes['Repo']>, ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType>;
+  slug?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   status?: Resolver<ResolversTypes['SessionGroupStatus'], ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   workdir?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;

@@ -60,7 +60,7 @@ export class BridgeClient implements IBridgeClient {
   /** Maps sessionId → workdir so terminals can spawn in the correct directory */
   private sessionWorkdirs = new Map<string, string>();
   /** Coalesces concurrent createWorktree calls for the same worktree key (sessionGroupId or sessionId) */
-  private pendingWorktrees = new Map<string, Promise<{ workdir: string; branch: string }>>();
+  private pendingWorktrees = new Map<string, Promise<{ workdir: string; branch: string; slug: string }>>();
   /** Sessions running in read-only mode (no worktree, using user's repo checkout) */
   private readOnlySessions = new Set<string>();
   /** Phase-1 git detection: sessionId → Map<toolUseId → {trigger, command}> */
@@ -422,7 +422,7 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "prepare": {
-        const { sessionId, sessionGroupId, repoId, repoName, defaultBranch, branch, checkpointSha, readOnly } = cmd;
+        const { sessionId, sessionGroupId, slug, repoId, repoName, defaultBranch, branch, checkpointSha, readOnly } = cmd;
         const repoConfig = getRepoConfig(repoId);
         const repoPath = repoConfig?.path;
 
@@ -444,7 +444,7 @@ export class BridgeClient implements IBridgeClient {
         }
 
         // Coalesce concurrent createWorktree calls for the same group
-        const worktreeKey = sessionGroupId ?? sessionId;
+        const worktreeKey = slug ?? sessionGroupId ?? sessionId;
         let worktreePromise = this.pendingWorktrees.get(worktreeKey);
         if (!worktreePromise) {
           worktreePromise = createWorktree({
@@ -452,6 +452,7 @@ export class BridgeClient implements IBridgeClient {
             repoId,
             sessionId,
             sessionGroupId,
+            slug,
             defaultBranch,
             startBranch: branch,
             checkpointSha,
@@ -461,9 +462,9 @@ export class BridgeClient implements IBridgeClient {
           worktreePromise.finally(() => this.pendingWorktrees.delete(worktreeKey));
         }
         worktreePromise
-          .then(({ workdir, branch: worktreeBranch }) => {
+          .then(({ workdir, branch: worktreeBranch, slug: worktreeSlug }) => {
             this.sessionWorkdirs.set(sessionId, workdir);
-            this.send({ type: "workspace_ready", sessionId, workdir, branch: worktreeBranch });
+            this.send({ type: "workspace_ready", sessionId, workdir, branch: worktreeBranch, slug: worktreeSlug });
           })
           .catch((err: Error) => {
             this.send({ type: "workspace_failed", sessionId, error: err.message });
@@ -471,7 +472,7 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "upgrade_workspace": {
-        const { sessionId, sessionGroupId, repoId, repoName, defaultBranch, branch } = cmd;
+        const { sessionId, sessionGroupId, slug, repoId, repoName, defaultBranch, branch } = cmd;
         const repoConfig = getRepoConfig(repoId);
         const repoPath = repoConfig?.path;
 
@@ -489,14 +490,15 @@ export class BridgeClient implements IBridgeClient {
           repoId,
           sessionId,
           sessionGroupId,
+          slug,
           defaultBranch,
           startBranch: branch,
           gitHooksEnabled: repoConfig.gitHooksEnabled,
         })
-          .then(({ workdir, branch: worktreeBranch }) => {
+          .then(({ workdir, branch: worktreeBranch, slug: worktreeSlug }) => {
             this.sessionWorkdirs.set(sessionId, workdir);
             this.readOnlySessions.delete(sessionId);
-            this.send({ type: "workspace_ready", sessionId, workdir, branch: worktreeBranch });
+            this.send({ type: "workspace_ready", sessionId, workdir, branch: worktreeBranch, slug: worktreeSlug });
           })
           .catch((err: Error) => {
             this.send({ type: "workspace_failed", sessionId, error: err.message });

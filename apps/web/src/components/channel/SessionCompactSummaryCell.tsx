@@ -8,6 +8,13 @@ export function SessionCompactSummaryCell({ row }: { row?: SessionGroupRow }) {
 
   const repo = getSessionRepo(row);
   const lastActivityAt = getSessionLastActivityAt(row);
+  const slug = row.slug;
+
+  const subtext = repo && slug
+    ? `${repo.name} / ${slug}`
+    : repo
+      ? repo.name
+      : slug ?? null;
 
   return (
     <div className="flex h-full w-full min-w-0 flex-1 flex-col justify-center py-2">
@@ -17,9 +24,9 @@ export function SessionCompactSummaryCell({ row }: { row?: SessionGroupRow }) {
       </div>
       <div className="mt-2.5 flex w-full min-w-0 items-center gap-3 text-[11px] text-muted-foreground">
         <div className="min-w-0 flex-1">
-          {repo && (
+          {subtext && (
             <span className="block truncate text-[11px] font-medium text-muted-foreground/90">
-              {repo.name}
+              {subtext}
             </span>
           )}
         </div>

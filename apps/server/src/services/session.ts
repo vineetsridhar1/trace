@@ -74,6 +74,7 @@ type GroupWorkspaceStatePatch = {
   worktreeDeleted?: boolean;
   repoId?: string | null;
   branch?: string | null;
+  slug?: string | null;
 };
 
 function defaultConnection(overrides?: Partial<SessionConnectionData>): SessionConnectionData {
@@ -177,6 +178,7 @@ function buildCheckpointContextFromStartMeta({
 const SESSION_GROUP_SUMMARY_SELECT = {
   id: true,
   name: true,
+  slug: true,
   channelId: true,
   channel: true,
   repoId: true,
@@ -498,6 +500,7 @@ export class SessionService {
   private provisionRuntime(params: {
     sessionId: string;
     sessionGroupId?: string | null;
+    slug?: string | null;
     hosting: string;
     tool: string;
     model?: string | null;
@@ -511,6 +514,7 @@ export class SessionService {
     sessionRouter.createRuntime({
       sessionId: params.sessionId,
       sessionGroupId: params.sessionGroupId ?? undefined,
+      slug: params.slug ?? undefined,
       hosting: params.hosting as "cloud" | "local",
       tool: params.tool,
       model: params.model ?? undefined,
@@ -1026,6 +1030,7 @@ export class SessionService {
       this.provisionRuntime({
         sessionId: session.id,
         sessionGroupId: session.sessionGroupId,
+        slug: session.sessionGroup?.slug,
         hosting: session.hosting,
         tool: session.tool,
         model: session.model,
@@ -1104,6 +1109,7 @@ export class SessionService {
         this.provisionRuntime({
           sessionId: id,
           sessionGroupId: session.sessionGroupId,
+          slug: session.sessionGroup?.slug,
           hosting: session.hosting,
           tool: session.tool,
           model: session.model,
@@ -1465,6 +1471,7 @@ export class SessionService {
         hosting: true,
         repoId: true,
         sessionGroupId: true,
+        sessionGroup: { select: { slug: true } },
         connection: true,
         readOnlyWorkspace: true,
         branch: true,
@@ -1519,6 +1526,7 @@ export class SessionService {
         this.provisionRuntime({
           sessionId,
           sessionGroupId: prev.sessionGroupId,
+          slug: prev.sessionGroup?.slug,
           hosting: newHosting,
           tool: nextTool,
           model: nextModel !== undefined ? nextModel : prev.model,
@@ -1891,6 +1899,7 @@ export class SessionService {
         toolSessionId: true,
         repoId: true,
         sessionGroupId: true,
+        sessionGroup: { select: { slug: true } },
         connection: true,
         worktreeDeleted: true,
         readOnlyWorkspace: true,
@@ -1923,6 +1932,7 @@ export class SessionService {
         this.provisionRuntime({
           sessionId,
           sessionGroupId: session.sessionGroupId,
+          slug: session.sessionGroup?.slug,
           hosting: session.hosting,
           tool: session.tool,
           model: session.model,
@@ -2113,7 +2123,7 @@ export class SessionService {
     return event;
   }
 
-  async workspaceReady(sessionId: string, workdir: string, branch?: string) {
+  async workspaceReady(sessionId: string, workdir: string, branch?: string, slug?: string) {
     // Read and clear pendingRun atomically in a transaction to prevent double-delivery
     const [session, pendingRun] = await prisma.$transaction(async (tx) => {
       const prev = await tx.session.findUniqueOrThrow({
@@ -2142,6 +2152,7 @@ export class SessionService {
       worktreeDeleted: false,
       repoId: session.repoId ?? null,
       ...(branch !== undefined ? { branch } : {}),
+      ...(slug !== undefined ? { slug } : {}),
     });
 
     await eventService.create({
@@ -2578,6 +2589,7 @@ export class SessionService {
         type: "prepare",
         sessionId,
         sessionGroupId: session.sessionGroupId ?? undefined,
+        slug: session.sessionGroup?.slug ?? undefined,
         repoId: session.repo.id,
         repoName: session.repo.name,
         repoRemoteUrl: session.repo.remoteUrl,
@@ -2878,6 +2890,7 @@ export class SessionService {
       sessionRouter.createRuntime({
         sessionId: childSession.id,
         sessionGroupId: childSession.sessionGroupId ?? undefined,
+        slug: childSession.sessionGroup?.slug ?? undefined,
         hosting: targetRuntime.hostingMode,
         tool: childSession.tool,
         model: childSession.model ?? undefined,
@@ -3040,6 +3053,7 @@ export class SessionService {
     sessionRouter.createRuntime({
       sessionId: childSession.id,
       sessionGroupId: childSession.sessionGroupId ?? undefined,
+      slug: childSession.sessionGroup?.slug ?? undefined,
       hosting: "cloud",
       tool: childSession.tool,
       model: childSession.model ?? undefined,
@@ -3437,6 +3451,10 @@ export class SessionService {
       sessionData.branch = patch.branch ?? null;
     }
 
+    if (Object.prototype.hasOwnProperty.call(patch, "slug")) {
+      groupData.slug = patch.slug ?? null;
+    }
+
     if (Object.prototype.hasOwnProperty.call(patch, "worktreeDeleted")) {
       groupData.worktreeDeleted = patch.worktreeDeleted ?? false;
       sessionData.worktreeDeleted = patch.worktreeDeleted ?? false;
@@ -3526,6 +3544,7 @@ export class SessionService {
     session: {
       organizationId: string;
       sessionGroupId: string | null;
+      sessionGroup?: { slug: string | null } | null;
       repo: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
       branch: string | null;
     },
@@ -3540,6 +3559,7 @@ export class SessionService {
       type: "upgrade_workspace",
       sessionId,
       sessionGroupId: session.sessionGroupId ?? undefined,
+      slug: session.sessionGroup?.slug ?? undefined,
       repoId: repo.id,
       repoName: repo.name,
       repoRemoteUrl: repo.remoteUrl,

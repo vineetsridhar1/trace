@@ -174,7 +174,7 @@ export function handleBridgeConnection(ws: WebSocket) {
         });
       } else if (msg.type === "workspace_ready" && msg.sessionId) {
         enqueueEvent(msg.sessionId, async () => {
-          await sessionService.workspaceReady(msg.sessionId, msg.workdir as string, msg.branch as string | undefined);
+          await sessionService.workspaceReady(msg.sessionId, msg.workdir as string, msg.branch as string | undefined, msg.slug as string | undefined);
         });
       } else if (msg.type === "workspace_failed" && msg.sessionId) {
         enqueueEvent(msg.sessionId, async () => {
