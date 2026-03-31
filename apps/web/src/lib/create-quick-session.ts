@@ -106,7 +106,6 @@ export async function createQuickSession(channelId: string): Promise<void> {
 
     if (result.error) {
       rollbackOptimisticSession(tempSessionId, tempGroupId);
-      useUIStore.getState().closeSessionTab(tempGroupId, tempSessionId);
       toast.error("Failed to create session", { description: result.error.message });
       return;
     }
@@ -114,19 +113,16 @@ export async function createQuickSession(channelId: string): Promise<void> {
     const session = result.data?.startSession;
     if (!session?.id) {
       rollbackOptimisticSession(tempSessionId, tempGroupId);
-      useUIStore.getState().closeSessionTab(tempGroupId, tempSessionId);
       return;
     }
 
     const realGroupId = session.sessionGroupId;
     if (!realGroupId) {
       rollbackOptimisticSession(tempSessionId, tempGroupId);
-      useUIStore.getState().closeSessionTab(tempGroupId, tempSessionId);
       return;
     }
 
-    // Reconcile: swap temp entities for real ones
-    useUIStore.getState().closeSessionTab(tempGroupId, tempSessionId);
+    // Reconcile: atomically swap temp entities for real ones
     reconcileOptimisticSession({
       tempSessionId,
       tempGroupId,
@@ -144,7 +140,6 @@ export async function createQuickSession(channelId: string): Promise<void> {
     navigateToSession(channelId, realGroupId, session.id);
   } catch (err) {
     rollbackOptimisticSession(tempSessionId, tempGroupId);
-    useUIStore.getState().closeSessionTab(tempGroupId, tempSessionId);
     const message = err instanceof Error ? err.message : "Unknown error";
     toast.error("Failed to create session", { description: message });
   }

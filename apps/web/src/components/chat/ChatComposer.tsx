@@ -30,7 +30,8 @@ export function ChatComposer({ chatId, parentId }: { chatId: string; parentId?: 
       setSending(true);
 
       // Insert optimistic message so it appears instantly
-      const tempMessageId = optimisticallyInsertChatMessage(chatId, html, parentId);
+      const { messageId: tempMessageId, eventId: tempEventId } =
+        optimisticallyInsertChatMessage(chatId, html, parentId);
 
       try {
         const result = await client
@@ -42,14 +43,14 @@ export function ChatComposer({ chatId, parentId }: { chatId: string; parentId?: 
           .toPromise();
 
         if (result.error) {
-          removeOptimisticChatMessage(chatId, tempMessageId);
+          removeOptimisticChatMessage(chatId, tempMessageId, tempEventId);
           throw result.error;
         }
 
         // Real message arrives via subscription; remove optimistic placeholder
-        removeOptimisticChatMessage(chatId, tempMessageId);
+        removeOptimisticChatMessage(chatId, tempMessageId, tempEventId);
       } catch (error) {
-        removeOptimisticChatMessage(chatId, tempMessageId);
+        removeOptimisticChatMessage(chatId, tempMessageId, tempEventId);
         console.error("Failed to send chat message", error);
         toast.error(error instanceof Error ? error.message : "Failed to send message");
         throw error;
