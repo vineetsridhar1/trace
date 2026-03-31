@@ -14,8 +14,25 @@ export interface BuildSessionNodesResult {
   completedAgentTools: Map<string, AgentToolResult>;
 }
 
-/** Payload types that render as nothing in SessionMessage — these should not break a Read/Glob bucket */
-const INVISIBLE_PAYLOAD_TYPES = new Set(["result", "git_checkpoint"]);
+/** Payload types that render content but should not break a Read/Glob bucket */
+const BUCKET_TRANSPARENT_TYPES = new Set(["result"]);
+/** Payload types that render as nothing in SessionMessage — skip entirely (don't create nodes) */
+const SKIP_ENTIRELY_TYPES = new Set([
+  "connection_lost",
+  "connection_restored",
+  "git_checkpoint",
+  "git_checkpoint_rewrite",
+  "title_generated",
+  "config_changed",
+  "prepare",
+  "run",
+  "send",
+  "session_rehomed",
+  "recovery_requested",
+  "recovery_failed",
+  "upgrade_workspace",
+  "workspace_ready",
+]);
 
 export type SessionNode =
   | { kind: "event"; id: string }
@@ -225,9 +242,13 @@ export function buildSessionNodes(
         continue;
       }
 
-      // Events that render as nothing should not break a Read/Glob bucket
       const payloadType = payload?.type;
-      if (typeof payloadType === "string" && INVISIBLE_PAYLOAD_TYPES.has(payloadType)) {
+      // Connection events render as nothing — skip entirely
+      if (typeof payloadType === "string" && SKIP_ENTIRELY_TYPES.has(payloadType)) {
+        continue;
+      }
+      // Result/checkpoint events render content but should not break a Read/Glob bucket
+      if (typeof payloadType === "string" && BUCKET_TRANSPARENT_TYPES.has(payloadType)) {
         result.push({ kind: "event", id });
         continue;
       }

@@ -864,6 +864,7 @@ type Query {
     after: DateTime
     before: DateTime
     limit: Int
+    excludePayloadTypes: [String!]
   ): [Event!]!
   availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!
   availableRuntimes(tool: CodingTool!): [SessionRuntimeInstance!]!

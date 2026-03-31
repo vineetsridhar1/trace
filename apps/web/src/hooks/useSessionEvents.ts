@@ -7,9 +7,27 @@ import { useAuthStore } from "../stores/auth";
 
 const PAGE_SIZE = 100;
 
+/** Payload types to exclude from session event queries (not rendered in session log) */
+const EXCLUDED_PAYLOAD_TYPES = [
+  "connection_lost",
+  "connection_restored",
+  "git_checkpoint",
+  "git_checkpoint_rewrite",
+  "title_generated",
+  "config_changed",
+  "prepare",
+  "run",
+  "send",
+  "session_rehomed",
+  "recovery_requested",
+  "recovery_failed",
+  "upgrade_workspace",
+  "workspace_ready",
+] as const;
+
 const SESSION_EVENTS_QUERY = gql`
-  query SessionEvents($organizationId: ID!, $scope: ScopeInput, $limit: Int, $before: DateTime) {
-    events(organizationId: $organizationId, scope: $scope, limit: $limit, before: $before) {
+  query SessionEvents($organizationId: ID!, $scope: ScopeInput, $limit: Int, $before: DateTime, $excludePayloadTypes: [String!]) {
+    events(organizationId: $organizationId, scope: $scope, limit: $limit, before: $before, excludePayloadTypes: $excludePayloadTypes) {
       id
       scopeType
       scopeId
@@ -71,6 +89,7 @@ export function useSessionEvents(sessionId: string) {
         scope: { type: "session", id: sessionId },
         limit: PAGE_SIZE,
         before: new Date().toISOString(),
+        excludePayloadTypes: EXCLUDED_PAYLOAD_TYPES,
       })
       .toPromise();
 
@@ -134,6 +153,7 @@ export function useSessionEvents(sessionId: string) {
         scope: { type: "session", id: sessionId },
         limit: PAGE_SIZE,
         before: oldestTimestampRef.current,
+        excludePayloadTypes: EXCLUDED_PAYLOAD_TYPES,
       })
       .toPromise();
 
