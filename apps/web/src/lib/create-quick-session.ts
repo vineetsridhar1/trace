@@ -188,6 +188,7 @@ export async function createQuickSession(channelId: string): Promise<void> {
         sessionId: session.id,
         page: "main",
         chatId: null,
+        channelSubPage: previousNav.channelSubPage,
       });
     }
   } catch (err) {

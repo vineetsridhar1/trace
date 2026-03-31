@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { buildPath, resolveOptimisticSessionRedirect, useUIStore } from "../stores/ui";
 import type { ActivePage } from "../stores/ui";
+import type { ChannelSubPage } from "../stores/ui";
 
 function parseNavFromPath(path: string): {
   channelId: string | null;
@@ -8,6 +9,7 @@ function parseNavFromPath(path: string): {
   sessionId: string | null;
   chatId: string | null;
   page: ActivePage;
+  channelSubPage: ChannelSubPage;
 } {
   if (path.startsWith("/settings")) {
     return {
@@ -16,10 +18,18 @@ function parseNavFromPath(path: string): {
       sessionId: null,
       chatId: null,
       page: "settings",
+      channelSubPage: null,
     };
   }
   if (path.startsWith("/inbox")) {
-    return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, page: "inbox" };
+    return {
+      channelId: null,
+      sessionGroupId: null,
+      sessionId: null,
+      chatId: null,
+      page: "inbox",
+      channelSubPage: null,
+    };
   }
   if (path.startsWith("/tickets")) {
     return {
@@ -28,6 +38,7 @@ function parseNavFromPath(path: string): {
       sessionId: null,
       chatId: null,
       page: "tickets",
+      channelSubPage: null,
     };
   }
 
@@ -39,6 +50,7 @@ function parseNavFromPath(path: string): {
       sessionId: null,
       chatId: chatMatch[1],
       page: "main",
+      channelSubPage: null,
     };
   }
 
@@ -50,6 +62,7 @@ function parseNavFromPath(path: string): {
       sessionId: channelGroupSessionMatch[3],
       chatId: null,
       page: "main",
+      channelSubPage: null,
     };
   }
 
@@ -61,6 +74,7 @@ function parseNavFromPath(path: string): {
       sessionId: null,
       chatId: null,
       page: "main",
+      channelSubPage: null,
     };
   }
 
@@ -72,6 +86,7 @@ function parseNavFromPath(path: string): {
       sessionId: groupSessionMatch[2],
       chatId: null,
       page: "main",
+      channelSubPage: null,
     };
   }
 
@@ -83,6 +98,7 @@ function parseNavFromPath(path: string): {
       sessionId: null,
       chatId: null,
       page: "main",
+      channelSubPage: null,
     };
   }
 
@@ -94,10 +110,18 @@ function parseNavFromPath(path: string): {
       sessionId: null,
       chatId: null,
       page: "main",
+      channelSubPage: null,
     };
   }
 
-  return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, page: "main" };
+  return {
+    channelId: null,
+    sessionGroupId: null,
+    sessionId: null,
+    chatId: null,
+    page: "main",
+    channelSubPage: null,
+  };
 }
 
 export function useHistorySync() {
@@ -142,12 +166,13 @@ export function useHistorySync() {
         sessionId: initialSessionId,
         page,
         chatId: initialChat,
+        channelSubPage: null,
       },
       "",
       path,
     );
 
-    restoreNav(initialChannel, initialSessionGroupId, initialSessionId, page, initialChat);
+    restoreNav(initialChannel, initialSessionGroupId, initialSessionId, page, initialChat, null);
 
     function onPopState(e: PopStateEvent) {
       const state = e.state as {
@@ -156,6 +181,7 @@ export function useHistorySync() {
         sessionId: string | null;
         chatId?: string | null;
         page?: ActivePage;
+        channelSubPage?: ChannelSubPage;
       } | null;
 
       if (state) {
@@ -178,6 +204,7 @@ export function useHistorySync() {
             redirect.sessionId,
             redirect.page,
             redirect.chatId,
+            redirect.channelSubPage,
           );
           return;
         }
@@ -188,6 +215,7 @@ export function useHistorySync() {
           state.sessionId,
           state.page,
           state.chatId,
+          state.channelSubPage,
         );
         return;
       }
@@ -212,10 +240,18 @@ export function useHistorySync() {
           redirect.sessionId,
           redirect.page,
           redirect.chatId,
+          redirect.channelSubPage,
         );
         return;
       }
-      restoreNav(nav.channelId, nav.sessionGroupId, nav.sessionId, nav.page, nav.chatId);
+      restoreNav(
+        nav.channelId,
+        nav.sessionGroupId,
+        nav.sessionId,
+        nav.page,
+        nav.chatId,
+        nav.channelSubPage,
+      );
     }
 
     function onMouseUp(e: MouseEvent) {

@@ -3,12 +3,14 @@ import { useEntityStore } from "./entity";
 import { getSessionChannelId, getSessionGroupChannelId } from "../lib/session-group";
 
 export type ActivePage = "main" | "settings" | "inbox" | "tickets" | "agent-debug";
+export type ChannelSubPage = "sessions" | "merged-archived" | null;
 export interface NavigationState {
   channelId: string | null;
   sessionGroupId: string | null;
   sessionId: string | null;
   page: ActivePage;
   chatId: string | null;
+  channelSubPage: ChannelSubPage;
 }
 
 const optimisticSessionRedirects = new Map<string, NavigationState>();
@@ -40,8 +42,8 @@ interface UIState {
   closeSessionTab: (groupId: string, sessionId: string) => void;
   initSessionTabs: (groupId: string, sessionIds: string[]) => void;
   restoreLastVisited: (tab: "dm" | "main") => void;
-  channelSubPage: "sessions" | "merged-archived" | null;
-  setChannelSubPage: (subPage: "sessions" | "merged-archived" | null) => void;
+  channelSubPage: ChannelSubPage;
+  setChannelSubPage: (subPage: ChannelSubPage) => void;
   unreadChatIds: Record<string, boolean>;
   markChatUnread: (chatId: string) => void;
   markChatRead: (chatId: string) => void;
@@ -51,6 +53,7 @@ interface UIState {
     sessionId: string | null,
     page?: ActivePage,
     chatId?: string | null,
+    channelSubPage?: ChannelSubPage,
   ) => void;
 }
 
@@ -80,9 +83,14 @@ function pushNav(
   sessionId: string | null,
   page: ActivePage = "main",
   chatId: string | null = null,
+  channelSubPage: ChannelSubPage = null,
 ) {
   const path = buildPath(channelId, sessionGroupId, sessionId, page, chatId);
-  history.pushState({ channelId, sessionGroupId, sessionId, page, chatId }, "", path);
+  history.pushState(
+    { channelId, sessionGroupId, sessionId, page, chatId, channelSubPage },
+    "",
+    path,
+  );
 }
 
 function replaceNav(
@@ -91,9 +99,14 @@ function replaceNav(
   sessionId: string | null,
   page: ActivePage = "main",
   chatId: string | null = null,
+  channelSubPage: ChannelSubPage = null,
 ) {
   const path = buildPath(channelId, sessionGroupId, sessionId, page, chatId);
-  history.replaceState({ channelId, sessionGroupId, sessionId, page, chatId }, "", path);
+  history.replaceState(
+    { channelId, sessionGroupId, sessionId, page, chatId, channelSubPage },
+    "",
+    path,
+  );
 }
 
 function persistActiveChannelId(channelId: string | null) {
@@ -169,7 +182,18 @@ export const useUIStore = create<UIState>((set, get) => ({
   lastSelectedSessionIdsByGroup: {},
   openSessionTabsByGroup: {},
   channelSubPage: null,
-  setChannelSubPage: (subPage) => set({ channelSubPage: subPage }),
+  setChannelSubPage: (subPage) => {
+    set({ channelSubPage: subPage });
+    const state = get();
+    replaceNav(
+      state.activeChannelId,
+      state.activeSessionGroupId,
+      state.activeSessionId,
+      state.activePage,
+      state.activeChatId,
+      subPage,
+    );
+  },
   unreadChatIds: {},
   triggerRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
 
@@ -209,7 +233,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       };
       const channelId = resolveChannelIdForSessionGroup(groupId, state.activeChannelId);
       persistActiveSessionNav(groupId, adjacentId);
-      replaceNav(channelId, groupId, adjacentId);
+      replaceNav(channelId, groupId, adjacentId, "main", null, state.channelSubPage);
     }
     set(updates);
   },
@@ -247,6 +271,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       get().activeSessionId,
       "main",
       get().activeChatId,
+      null,
     );
   },
 
@@ -305,14 +330,14 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   setActiveSessionGroupId: (groupId, sessionId) => {
     const currentChannelId = get().activeChannelId;
+    const currentSubPage = get().channelSubPage;
     if (groupId === null) {
       set({
         activeSessionGroupId: null,
         activeSessionId: null,
         activeTerminalId: null,
-        channelSubPage: null,
       });
-      pushNav(currentChannelId, null, null);
+      pushNav(currentChannelId, null, null, "main", null, currentSubPage);
       return;
     }
 
@@ -323,6 +348,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         get().activeSessionGroupId === groupId ? get().activeSessionId : null,
       );
     const channelId = resolveChannelIdForSessionGroup(groupId, currentChannelId);
+    const nextSubPage = channelId === currentChannelId ? currentSubPage : null;
     persistActiveChannelId(channelId);
     persistActiveSessionNav(groupId, nextSessionId);
     set((state) => ({
@@ -332,26 +358,26 @@ export const useUIStore = create<UIState>((set, get) => ({
       activeSessionGroupId: groupId,
       activeSessionId: nextSessionId,
       activeTerminalId: null,
-      channelSubPage: null,
+      channelSubPage: nextSubPage,
       lastSelectedSessionIdsByGroup: nextSessionId
         ? { ...state.lastSelectedSessionIdsByGroup, [groupId]: nextSessionId }
         : state.lastSelectedSessionIdsByGroup,
     }));
-    pushNav(channelId, groupId, nextSessionId);
+    pushNav(channelId, groupId, nextSessionId, "main", null, nextSubPage);
   },
 
   setActiveSessionId: (id) => {
     const currentChannelId = get().activeChannelId;
     const currentSessionGroupId = get().activeSessionGroupId;
+    const currentSubPage = get().channelSubPage;
     if (id === null) {
       persistActiveSessionNav(null, null);
       set({
         activeSessionGroupId: null,
         activeSessionId: null,
         activeTerminalId: null,
-        channelSubPage: null,
       });
-      pushNav(currentChannelId, null, null);
+      pushNav(currentChannelId, null, null, "main", null, currentSubPage);
       return;
     }
 
@@ -360,6 +386,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       sessionGroupId,
       resolveChannelIdForSession(id, currentChannelId),
     );
+    const nextSubPage = channelId === currentChannelId ? currentSubPage : null;
     persistActiveChannelId(channelId);
     persistActiveSessionNav(sessionGroupId, id);
     // If staying within the same session group (tab switching), replace history
@@ -371,15 +398,15 @@ export const useUIStore = create<UIState>((set, get) => ({
       activeSessionGroupId: sessionGroupId,
       activeSessionId: id,
       activeTerminalId: null,
-      channelSubPage: null,
+      channelSubPage: nextSubPage,
       lastSelectedSessionIdsByGroup: sessionGroupId
         ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: id }
         : state.lastSelectedSessionIdsByGroup,
     }));
     if (stayingInGroup) {
-      replaceNav(channelId, sessionGroupId, id);
+      replaceNav(channelId, sessionGroupId, id, "main", null, nextSubPage);
     } else {
-      pushNav(channelId, sessionGroupId, id);
+      pushNav(channelId, sessionGroupId, id, "main", null, nextSubPage);
     }
   },
 
@@ -426,7 +453,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     }
   },
 
-  _restoreNav: (channelId, sessionGroupId, sessionId, page, chatId) => {
+  _restoreNav: (channelId, sessionGroupId, sessionId, page, chatId, channelSubPage) => {
     persistActiveChannelId(channelId);
     if (chatId) persistActiveChatId(chatId);
     if (page === "main" && !chatId) persistActiveSessionNav(sessionGroupId, sessionId);
@@ -438,7 +465,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       activeTerminalId: null,
       activeChatId: chatId ?? null,
       activeThreadId: null,
-      channelSubPage: null,
+      channelSubPage: channelSubPage ?? null,
       lastSelectedSessionIdsByGroup:
         sessionGroupId && sessionId
           ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: sessionId }
@@ -477,16 +504,27 @@ export function navigateToSessionGroup(
   sessionGroupId: string,
   fallbackSessionId: string | null = null,
 ): void {
-  const fallbackChannelId = useUIStore.getState().activeChannelId;
+  const ui = useUIStore.getState();
+  const fallbackChannelId = ui.activeChannelId;
   const sessionId = getPreferredSessionIdForGroup(sessionGroupId, fallbackSessionId);
   const resolvedChannelId = resolveChannelIdForSessionGroup(
     sessionGroupId,
     channelId ?? fallbackChannelId,
   );
-  useUIStore.getState()._restoreNav(resolvedChannelId, sessionGroupId, sessionId, "main", null);
+  const channelSubPage = resolvedChannelId === ui.activeChannelId ? ui.channelSubPage : null;
+  useUIStore
+    .getState()
+    ._restoreNav(resolvedChannelId, sessionGroupId, sessionId, "main", null, channelSubPage);
   const path = buildPath(resolvedChannelId, sessionGroupId, sessionId, "main");
   history.pushState(
-    { channelId: resolvedChannelId, sessionGroupId, sessionId, page: "main", chatId: null },
+    {
+      channelId: resolvedChannelId,
+      sessionGroupId,
+      sessionId,
+      page: "main",
+      chatId: null,
+      channelSubPage,
+    },
     "",
     path,
   );
@@ -498,18 +536,29 @@ export function navigateToSession(
   sessionId: string,
   options?: { replace?: boolean },
 ): void {
-  const fallbackChannelId = useUIStore.getState().activeChannelId;
+  const ui = useUIStore.getState();
+  const fallbackChannelId = ui.activeChannelId;
   const resolvedChannelId = resolveChannelIdForSessionGroup(
     sessionGroupId,
     resolveChannelIdForSession(sessionId, channelId ?? fallbackChannelId),
   );
-  useUIStore.getState()._restoreNav(resolvedChannelId, sessionGroupId, sessionId, "main", null);
+  const channelSubPage = resolvedChannelId === ui.activeChannelId ? ui.channelSubPage : null;
+  useUIStore
+    .getState()
+    ._restoreNav(resolvedChannelId, sessionGroupId, sessionId, "main", null, channelSubPage);
   const path = buildPath(resolvedChannelId, sessionGroupId, sessionId, "main");
   const navigate = options?.replace
     ? history.replaceState.bind(history)
     : history.pushState.bind(history);
   navigate(
-    { channelId: resolvedChannelId, sessionGroupId, sessionId, page: "main", chatId: null },
+    {
+      channelId: resolvedChannelId,
+      sessionGroupId,
+      sessionId,
+      page: "main",
+      chatId: null,
+      channelSubPage,
+    },
     "",
     path,
   );
@@ -523,14 +572,29 @@ export function getCurrentNavigationState(): NavigationState {
     sessionId: state.activeSessionId,
     page: state.activePage,
     chatId: state.activeChatId,
+    channelSubPage: state.channelSubPage,
   };
 }
 
 export function replaceNavigationState(state: NavigationState): void {
   useUIStore
     .getState()
-    ._restoreNav(state.channelId, state.sessionGroupId, state.sessionId, state.page, state.chatId);
-  replaceNav(state.channelId, state.sessionGroupId, state.sessionId, state.page, state.chatId);
+    ._restoreNav(
+      state.channelId,
+      state.sessionGroupId,
+      state.sessionId,
+      state.page,
+      state.chatId,
+      state.channelSubPage,
+    );
+  replaceNav(
+    state.channelId,
+    state.sessionGroupId,
+    state.sessionId,
+    state.page,
+    state.chatId,
+    state.channelSubPage,
+  );
 }
 
 export function registerOptimisticSessionRedirect(
