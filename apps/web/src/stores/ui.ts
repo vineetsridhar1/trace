@@ -47,6 +47,12 @@ interface UIState {
   unreadChatIds: Record<string, boolean>;
   markChatUnread: (chatId: string) => void;
   markChatRead: (chatId: string) => void;
+  channelDoneBadges: Record<string, boolean>;
+  markChannelDone: (channelId: string) => void;
+  sessionDoneBadges: Record<string, boolean>;
+  markSessionDone: (sessionId: string) => void;
+  sessionGroupDoneBadges: Record<string, boolean>;
+  markSessionGroupDone: (sessionGroupId: string) => void;
   _restoreNav: (
     channelId: string | null,
     sessionGroupId: string | null,
@@ -195,6 +201,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     );
   },
   unreadChatIds: {},
+  channelDoneBadges: {},
+  sessionDoneBadges: {},
+  sessionGroupDoneBadges: {},
   triggerRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
 
   openSessionTab: (groupId, sessionId) => {
@@ -277,15 +286,23 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   setActiveChannelId: (id) => {
     persistActiveChannelId(id);
-    set({
-      activePage: "main",
-      activeChannelId: id,
-      activeChatId: null,
-      activeSessionGroupId: null,
-      activeSessionId: null,
-      activeTerminalId: null,
-      activeThreadId: null,
-      channelSubPage: null,
+    set((s) => {
+      let channelDoneBadges = s.channelDoneBadges;
+      if (id && channelDoneBadges[id]) {
+        const { [id]: _, ...rest } = channelDoneBadges;
+        channelDoneBadges = rest;
+      }
+      return {
+        activePage: "main" as ActivePage,
+        activeChannelId: id,
+        activeChatId: null,
+        activeSessionGroupId: null,
+        activeSessionId: null,
+        activeTerminalId: null,
+        activeThreadId: null,
+        channelSubPage: null,
+        channelDoneBadges,
+      };
     });
     pushNav(id, null, null);
   },
@@ -302,6 +319,27 @@ export const useUIStore = create<UIState>((set, get) => ({
       if (!s.unreadChatIds[chatId]) return s;
       const { [chatId]: _, ...rest } = s.unreadChatIds;
       return { unreadChatIds: rest };
+    });
+  },
+
+  markChannelDone: (channelId) => {
+    set((s) => {
+      if (s.channelDoneBadges[channelId]) return s;
+      return { channelDoneBadges: { ...s.channelDoneBadges, [channelId]: true } };
+    });
+  },
+
+  markSessionDone: (sessionId) => {
+    set((s) => {
+      if (s.sessionDoneBadges[sessionId]) return s;
+      return { sessionDoneBadges: { ...s.sessionDoneBadges, [sessionId]: true } };
+    });
+  },
+
+  markSessionGroupDone: (sessionGroupId) => {
+    set((s) => {
+      if (s.sessionGroupDoneBadges[sessionGroupId]) return s;
+      return { sessionGroupDoneBadges: { ...s.sessionGroupDoneBadges, [sessionGroupId]: true } };
     });
   },
 
@@ -351,18 +389,38 @@ export const useUIStore = create<UIState>((set, get) => ({
     const nextSubPage = channelId === currentChannelId ? currentSubPage : null;
     persistActiveChannelId(channelId);
     persistActiveSessionNav(groupId, nextSessionId);
-    set((state) => ({
-      activePage: "main",
-      activeChatId: null,
-      activeChannelId: channelId,
-      activeSessionGroupId: groupId,
-      activeSessionId: nextSessionId,
-      activeTerminalId: null,
-      channelSubPage: nextSubPage,
-      lastSelectedSessionIdsByGroup: nextSessionId
-        ? { ...state.lastSelectedSessionIdsByGroup, [groupId]: nextSessionId }
-        : state.lastSelectedSessionIdsByGroup,
-    }));
+    set((state) => {
+      let channelDoneBadges = state.channelDoneBadges;
+      if (channelId && channelDoneBadges[channelId]) {
+        const { [channelId]: _, ...rest } = channelDoneBadges;
+        channelDoneBadges = rest;
+      }
+      let sessionGroupDoneBadges = state.sessionGroupDoneBadges;
+      if (sessionGroupDoneBadges[groupId]) {
+        const { [groupId]: _, ...rest } = sessionGroupDoneBadges;
+        sessionGroupDoneBadges = rest;
+      }
+      let sessionDoneBadges = state.sessionDoneBadges;
+      if (nextSessionId && sessionDoneBadges[nextSessionId]) {
+        const { [nextSessionId]: _, ...rest } = sessionDoneBadges;
+        sessionDoneBadges = rest;
+      }
+      return {
+        activePage: "main" as ActivePage,
+        activeChatId: null,
+        activeChannelId: channelId,
+        activeSessionGroupId: groupId,
+        activeSessionId: nextSessionId,
+        activeTerminalId: null,
+        channelSubPage: nextSubPage,
+        channelDoneBadges,
+        sessionDoneBadges,
+        sessionGroupDoneBadges,
+        lastSelectedSessionIdsByGroup: nextSessionId
+          ? { ...state.lastSelectedSessionIdsByGroup, [groupId]: nextSessionId }
+          : state.lastSelectedSessionIdsByGroup,
+      };
+    });
     pushNav(channelId, groupId, nextSessionId, "main", null, nextSubPage);
   },
 
@@ -393,16 +451,24 @@ export const useUIStore = create<UIState>((set, get) => ({
     // so browser back goes to the sessions table instead of the previous tab
     const stayingInGroup =
       sessionGroupId === currentSessionGroupId && currentSessionGroupId !== null;
-    set((state) => ({
-      activeChannelId: channelId,
-      activeSessionGroupId: sessionGroupId,
-      activeSessionId: id,
-      activeTerminalId: null,
-      channelSubPage: nextSubPage,
-      lastSelectedSessionIdsByGroup: sessionGroupId
-        ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: id }
-        : state.lastSelectedSessionIdsByGroup,
-    }));
+    set((state) => {
+      let sessionDoneBadges = state.sessionDoneBadges;
+      if (sessionDoneBadges[id]) {
+        const { [id]: _, ...rest } = sessionDoneBadges;
+        sessionDoneBadges = rest;
+      }
+      return {
+        activeChannelId: channelId,
+        activeSessionGroupId: sessionGroupId,
+        activeSessionId: id,
+        activeTerminalId: null,
+        channelSubPage: nextSubPage,
+        sessionDoneBadges,
+        lastSelectedSessionIdsByGroup: sessionGroupId
+          ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: id }
+          : state.lastSelectedSessionIdsByGroup,
+      };
+    });
     if (stayingInGroup) {
       replaceNav(channelId, sessionGroupId, id, "main", null, nextSubPage);
     } else {
@@ -457,20 +523,40 @@ export const useUIStore = create<UIState>((set, get) => ({
     persistActiveChannelId(channelId);
     if (chatId) persistActiveChatId(chatId);
     if (page === "main" && !chatId) persistActiveSessionNav(sessionGroupId, sessionId);
-    set((state) => ({
-      activePage: page ?? "main",
-      activeChannelId: channelId,
-      activeSessionGroupId: sessionGroupId,
-      activeSessionId: sessionId,
-      activeTerminalId: null,
-      activeChatId: chatId ?? null,
-      activeThreadId: null,
-      channelSubPage: channelSubPage ?? null,
-      lastSelectedSessionIdsByGroup:
-        sessionGroupId && sessionId
-          ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: sessionId }
-          : state.lastSelectedSessionIdsByGroup,
-    }));
+    set((state) => {
+      let channelDoneBadges = state.channelDoneBadges;
+      if (channelId && channelDoneBadges[channelId]) {
+        const { [channelId]: _, ...rest } = channelDoneBadges;
+        channelDoneBadges = rest;
+      }
+      let sessionDoneBadges = state.sessionDoneBadges;
+      if (sessionId && sessionDoneBadges[sessionId]) {
+        const { [sessionId]: _, ...rest } = sessionDoneBadges;
+        sessionDoneBadges = rest;
+      }
+      let sessionGroupDoneBadges = state.sessionGroupDoneBadges;
+      if (sessionGroupId && sessionGroupDoneBadges[sessionGroupId]) {
+        const { [sessionGroupId]: _, ...rest } = sessionGroupDoneBadges;
+        sessionGroupDoneBadges = rest;
+      }
+      return {
+        activePage: page ?? "main",
+        activeChannelId: channelId,
+        activeSessionGroupId: sessionGroupId,
+        activeSessionId: sessionId,
+        activeTerminalId: null,
+        activeChatId: chatId ?? null,
+        activeThreadId: null,
+        channelSubPage: channelSubPage ?? null,
+        channelDoneBadges,
+        sessionDoneBadges,
+        sessionGroupDoneBadges,
+        lastSelectedSessionIdsByGroup:
+          sessionGroupId && sessionId
+            ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: sessionId }
+            : state.lastSelectedSessionIdsByGroup,
+      };
+    });
   },
 }));
 

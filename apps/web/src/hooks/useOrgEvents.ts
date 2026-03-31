@@ -6,6 +6,7 @@ import { useEntityStore, eventScopeKey, StoreBatchWriter } from "../stores/entit
 import type { SessionEntity, SessionGroupEntity } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore, navigateToSession } from "../stores/ui";
+import { getSessionChannelId } from "../lib/session-group";
 import { notifyForEvent } from "../notifications/handlers";
 import type {
   AgentStatus,
@@ -515,6 +516,23 @@ export function useOrgEvents() {
               sessionPatch.worktreeDeleted = true;
             }
             batch.patch("sessions", event.scopeId, sessionPatch);
+
+            // Mark badges when agent reaches a terminal state
+            if (agentStatus === "done" || agentStatus === "failed" || agentStatus === "stopped") {
+              const session = useEntityStore.getState().sessions[event.scopeId];
+              const channelId = getSessionChannelId(session);
+              const ui = useUIStore.getState();
+              if (channelId && channelId !== ui.activeChannelId) {
+                ui.markChannelDone(channelId);
+              }
+              if (event.scopeId !== ui.activeSessionId) {
+                ui.markSessionDone(event.scopeId);
+              }
+              const sessionGroupId = session?.sessionGroupId;
+              if (sessionGroupId && sessionGroupId !== ui.activeSessionGroupId) {
+                ui.markSessionGroupDone(sessionGroupId);
+              }
+            }
 
             // PR merge transitions ALL sessions in the group
             if (event.eventType === "session_pr_merged") {
