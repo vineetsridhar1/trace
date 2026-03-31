@@ -32,6 +32,8 @@ interface UIState {
   markChatRead: (chatId: string) => void;
   channelDoneBadges: Record<string, boolean>;
   markChannelDone: (channelId: string) => void;
+  sessionDoneBadges: Record<string, boolean>;
+  markSessionDone: (sessionId: string) => void;
   _restoreNav: (
     channelId: string | null,
     sessionGroupId: string | null,
@@ -156,6 +158,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   openSessionTabsByGroup: {},
   unreadChatIds: {},
   channelDoneBadges: {},
+  sessionDoneBadges: {},
   triggerRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
 
   openSessionTab: (groupId, sessionId) => {
@@ -279,6 +282,13 @@ export const useUIStore = create<UIState>((set, get) => ({
     });
   },
 
+  markSessionDone: (sessionId) => {
+    set((s) => {
+      if (s.sessionDoneBadges[sessionId]) return s;
+      return { sessionDoneBadges: { ...s.sessionDoneBadges, [sessionId]: true } };
+    });
+  },
+
   setActiveChatId: (id) => {
     persistActiveChatId(id);
     set((s) => {
@@ -369,16 +379,24 @@ export const useUIStore = create<UIState>((set, get) => ({
     // If staying within the same session group (tab switching), replace history
     // so browser back goes to the sessions table instead of the previous tab
     const stayingInGroup = sessionGroupId === currentSessionGroupId && currentSessionGroupId !== null;
-    set((state) => ({
-      activeChannelId: channelId,
-      activeSessionGroupId: sessionGroupId,
-      activeSessionId: id,
-      activeTerminalId: null,
-      lastSelectedSessionIdsByGroup:
-        sessionGroupId
-          ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: id }
-          : state.lastSelectedSessionIdsByGroup,
-    }));
+    set((state) => {
+      let sessionDoneBadges = state.sessionDoneBadges;
+      if (sessionDoneBadges[id]) {
+        const { [id]: _, ...rest } = sessionDoneBadges;
+        sessionDoneBadges = rest;
+      }
+      return {
+        activeChannelId: channelId,
+        activeSessionGroupId: sessionGroupId,
+        activeSessionId: id,
+        activeTerminalId: null,
+        sessionDoneBadges,
+        lastSelectedSessionIdsByGroup:
+          sessionGroupId
+            ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: id }
+            : state.lastSelectedSessionIdsByGroup,
+      };
+    });
     if (stayingInGroup) {
       replaceNav(channelId, sessionGroupId, id);
     } else {
@@ -438,6 +456,11 @@ export const useUIStore = create<UIState>((set, get) => ({
         const { [channelId]: _, ...rest } = channelDoneBadges;
         channelDoneBadges = rest;
       }
+      let sessionDoneBadges = state.sessionDoneBadges;
+      if (sessionId && sessionDoneBadges[sessionId]) {
+        const { [sessionId]: _, ...rest } = sessionDoneBadges;
+        sessionDoneBadges = rest;
+      }
       return {
         activePage: page ?? "main",
         activeChannelId: channelId,
@@ -447,6 +470,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         activeChatId: chatId ?? null,
         activeThreadId: null,
         channelDoneBadges,
+        sessionDoneBadges,
         lastSelectedSessionIdsByGroup:
           sessionGroupId && sessionId
             ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: sessionId }

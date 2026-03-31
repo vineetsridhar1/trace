@@ -3,6 +3,7 @@ import { Circle, FileCode, GitCompareArrows, MessageSquarePlus, Plus, TerminalSq
 import type { SessionEntity } from "../../stores/entity";
 import type { TerminalEntry } from "../../stores/terminal";
 import { cn } from "../../lib/utils";
+import { useUIStore } from "../../stores/ui";
 import { ScrambleText } from "../ui/ScrambleText";
 import { agentStatusColor, getDisplayAgentStatus } from "./sessionStatus";
 import {
@@ -69,6 +70,7 @@ export function GroupTabStrip({
   canNewChat,
   canOpenTerminal,
 }: GroupTabStripProps) {
+  const sessionDoneBadges = useUIStore((s) => s.sessionDoneBadges);
   const sessionById = new Map(groupSessions.map((s) => [s.id, s]));
   const tabRefs = useRef<Map<string, HTMLElement>>(new Map());
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -127,6 +129,7 @@ export function GroupTabStrip({
             );
             const color = agentStatusColor[displayAgentStatus] ?? "text-muted-foreground";
             const isActive = !activeTerminalId && !activeFilePath && selectedSessionId === session.id;
+            const hasDoneBadge = !!sessionDoneBadges[session.id];
             return (
               <div
                 key={session.id}
@@ -142,8 +145,15 @@ export function GroupTabStrip({
                   onClick={() => onSelectSession(session.id)}
                   className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
                 >
-                  <Circle size={6} className={cn("shrink-0 fill-current", color)} />
-                  <span className="truncate"><ScrambleText text={session.name} /></span>
+                  <span className="relative shrink-0 flex h-2.5 w-2.5 items-center justify-center">
+                    <Circle size={6} className={cn("fill-current", hasDoneBadge ? "text-red-500" : color)} />
+                    {hasDoneBadge && (
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                    )}
+                  </span>
+                  <span className={cn("truncate", hasDoneBadge ? "font-semibold" : undefined)}>
+                    <ScrambleText text={session.name} />
+                  </span>
                 </button>
                 {canCloseSessions && onCloseSession && (
                   <button

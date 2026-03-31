@@ -468,13 +468,16 @@ export function useOrgEvents() {
             }
             patch("sessions", event.scopeId, sessionPatch);
 
-            // Mark channel badge when agent reaches a terminal state
+            // Mark badges when agent reaches a terminal state
             if (agentStatus === "done" || agentStatus === "failed" || agentStatus === "stopped") {
               const session = useEntityStore.getState().sessions[event.scopeId];
               const channelId = getSessionChannelId(session);
               const ui = useUIStore.getState();
               if (channelId && channelId !== ui.activeChannelId) {
                 ui.markChannelDone(channelId);
+              }
+              if (event.scopeId !== ui.activeSessionId) {
+                ui.markSessionDone(event.scopeId);
               }
             }
 
