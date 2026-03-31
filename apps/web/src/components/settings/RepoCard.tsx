@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { GitBranch, Pencil, Check, X } from "lucide-react";
+import { GitBranch, Monitor, Pencil, Check, X } from "lucide-react";
+import type { SessionRuntimeInstance } from "@trace/gql";
 import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import {
@@ -98,7 +99,7 @@ function getHookStatusDetail(
   return null;
 }
 
-export function RepoCard({ id }: { id: string }) {
+export function RepoCard({ id, runtimes }: { id: string; runtimes: SessionRuntimeInstance[] }) {
   const name = useEntityField("repos", id, "name");
   const remoteUrl = useEntityField("repos", id, "remoteUrl");
   const defaultBranch = useEntityField("repos", id, "defaultBranch");
@@ -226,6 +227,16 @@ export function RepoCard({ id }: { id: string }) {
     }
   };
 
+  const connectedLocalRuntimes = runtimes.filter(
+    (r) => r.connected && r.hostingMode === "local",
+  );
+  const linkedRuntimes = connectedLocalRuntimes.filter((r) =>
+    r.registeredRepoIds.includes(id),
+  );
+  const unlinkedRuntimes = connectedLocalRuntimes.filter(
+    (r) => !r.registeredRepoIds.includes(id),
+  );
+
   const linkedPath = desktopRepoConfig?.path ?? null;
   const gitHooksEnabled = desktopRepoConfig?.gitHooksEnabled ?? false;
   const hookStatusLabel = getHookStatusLabel(linkedPath, gitHooksEnabled, gitHookStatus);
@@ -307,6 +318,38 @@ export function RepoCard({ id }: { id: string }) {
           </div>
           {webhookError && (
             <p className="mt-2 text-xs text-destructive">{webhookError}</p>
+          )}
+
+          {connectedLocalRuntimes.length > 0 && (
+            <div className="mt-3 rounded-md border border-border/70 bg-surface-elevated/40 p-3">
+              <p className="text-xs font-medium text-foreground">Desktop Linking</p>
+              {linkedRuntimes.length > 0 ? (
+                <div className="mt-1.5 space-y-1">
+                  {linkedRuntimes.map((rt) => (
+                    <div key={rt.id} className="flex items-center gap-1.5">
+                      <Monitor size={12} className="shrink-0 text-emerald-500" />
+                      <span className="text-xs text-foreground">{rt.label}</span>
+                      <span className="text-xs text-emerald-500">linked</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Not linked on any connected desktop.
+                </p>
+              )}
+              {unlinkedRuntimes.length > 0 && linkedRuntimes.length > 0 && (
+                <div className="mt-1.5 space-y-1">
+                  {unlinkedRuntimes.map((rt) => (
+                    <div key={rt.id} className="flex items-center gap-1.5">
+                      <Monitor size={12} className="shrink-0 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">{rt.label}</span>
+                      <span className="text-xs text-amber-500">not linked</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           {isElectron && (
