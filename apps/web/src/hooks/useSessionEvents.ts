@@ -28,6 +28,27 @@ const SESSION_EVENTS_QUERY = gql`
   }
 `;
 
+const SESSION_EVENTS_SUBSCRIPTION = gql`
+  subscription SessionEvents($sessionId: ID!, $organizationId: ID!) {
+    sessionEvents(sessionId: $sessionId, organizationId: $organizationId) {
+      id
+      scopeType
+      scopeId
+      eventType
+      payload
+      actor {
+        type
+        id
+        name
+        avatarUrl
+      }
+      parentId
+      timestamp
+      metadata
+    }
+  }
+`;
+
 export function useSessionEvents(sessionId: string) {
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -77,6 +98,26 @@ export function useSessionEvents(sessionId: string) {
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents]);
+
+  // Subscribe to session-scoped events for full payloads.
+  // The org-wide subscription trims session_output payloads to metadata only;
+  // this subscription delivers full content for the session being viewed.
+  useEffect(() => {
+    if (!activeOrgId) return;
+
+    const subscription = client
+      .subscription(SESSION_EVENTS_SUBSCRIPTION, {
+        sessionId,
+        organizationId: activeOrgId,
+      })
+      .subscribe((result) => {
+        if (!result.data?.sessionEvents) return;
+        const event = result.data.sessionEvents as Event & { id: string };
+        useEntityStore.getState().upsertScopedEvent(scopeKey, event.id, event);
+      });
+
+    return () => subscription.unsubscribe();
+  }, [activeOrgId, sessionId, scopeKey]);
 
   // Load an older page of events (called when user scrolls to top)
   const fetchOlderEvents = useCallback(async () => {
