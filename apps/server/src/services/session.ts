@@ -2445,10 +2445,11 @@ export class SessionService {
       actorId,
     });
 
-    // Try to find a runtime to bind to
-    const runtime = conn.runtimeInstanceId
-      ? (sessionRouter.getRuntimeForSession(sessionId) ?? sessionRouter.getDefaultRuntime())
-      : sessionRouter.getDefaultRuntime();
+    // Try to find a runtime to bind to — prefer one that has the repo registered
+    const repoId = session.repo?.id;
+    const runtime = sessionRouter.getRuntimeForSession(sessionId)
+      ?? (repoId ? sessionRouter.getRuntimeForRepo(repoId) : undefined)
+      ?? sessionRouter.getDefaultRuntime();
 
     if (!runtime) {
       const failedConn: SessionConnectionData = {
