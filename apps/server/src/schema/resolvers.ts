@@ -13,7 +13,7 @@ import { chatQueries, chatMutations, chatSubscriptions, chatTypeResolvers } from
 import { participantQueries, participantMutations, participantTypeResolvers } from "./participant.js";
 import { threadQueries } from "./thread.js";
 import { agentIdentityQueries, agentIdentityMutations, agentIdentityTypeResolvers } from "./agent-identity.js";
-import { agentDebugQueries } from "./agent-debug.js";
+import { agentDebugQueries, agentDebugTypeResolvers } from "./agent-debug.js";
 import { scopeAutonomyQueries, scopeAutonomyMutations } from "./scope-autonomy.js";
 import { aiConversationQueries, aiConversationMutations, aiConversationSubscriptions, aiConversationTypeResolvers } from "./ai-conversation.js";
 import type { Context } from "../context.js";
@@ -31,6 +31,7 @@ export const resolvers = {
   ...ticketTypeResolvers,
   ...sessionTypeResolvers,
   ...agentIdentityTypeResolvers,
+  ...agentDebugTypeResolvers,
   ...aiConversationTypeResolvers,
 
   User: {

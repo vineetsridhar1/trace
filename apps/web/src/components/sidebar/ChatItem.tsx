@@ -1,10 +1,11 @@
+import { memo } from "react";
 import { MessageCircle } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
 import { SidebarMenuItem, SidebarMenuButton } from "../ui/sidebar";
 
-export function ChatItem({
+export const ChatItem = memo(function ChatItem({
   id,
   isActive,
   onClick,
@@ -40,4 +41,4 @@ export function ChatItem({
       </SidebarMenuButton>
     </SidebarMenuItem>
   );
-}
+});

@@ -202,6 +202,8 @@ function makeTurnResult(
     },
     response: makeLLMResponse(overrides?.model),
     latencyMs: 500,
+    provider: "anthropic",
+    maxTokens: 1024,
   };
 }
 

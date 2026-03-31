@@ -6,7 +6,8 @@ export type SessionGroupStatus =
   | "in_review"
   | "failed"
   | "stopped"
-  | "merged";
+  | "merged"
+  | "archived";
 
 export type SessionGroupStatusSource = {
   agentStatus: AgentStatus;
@@ -16,7 +17,9 @@ export type SessionGroupStatusSource = {
 export function deriveSessionGroupStatus(
   sessions: Array<SessionGroupStatusSource | null | undefined>,
   prUrl: string | null | undefined,
+  archivedAt?: Date | string | null,
 ): SessionGroupStatus {
+  if (archivedAt) return "archived";
   // Merged is terminal and takes priority over all other states,
   // including needs_input and in_review (which depends on prUrl).
   if (sessions.some((session) => session?.sessionStatus === "merged")) return "merged";

@@ -11,6 +11,12 @@ import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
 import { getModelLabel } from "./modelOptions";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { cn } from "../../lib/utils";
+import { toast } from "sonner";
+import {
+  optimisticallyInsertSessionMessage,
+  reconcileOptimisticSessionMessage,
+  removeOptimisticSessionMessage,
+} from "../../lib/optimistic-message";
 
 export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop: () => void }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
@@ -23,6 +29,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as
     | boolean
     | undefined;
+  const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<InteractionMode>("code");
@@ -30,8 +37,8 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
   const disconnected = isDisconnected(connection);
-  // not_started sessions can always send — the user picks runtime before first message
-  const canSend = isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted);
+  const canSend =
+    !isOptimistic && (isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted));
   const displayModel = model ? getModelLabel(model) : "Claude Code";
 
   // Find the timestamp of the last user message for accurate working time
@@ -62,15 +69,34 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     if (!text || sending || !canSend) return;
     setSending(true);
     setMessage("");
+    const wrappedText = wrapPrompt(mode, text);
+
+    // Insert optimistic event so the message appears instantly
+    const tempEventId = optimisticallyInsertSessionMessage(sessionId, wrappedText);
+
     try {
-      const wrappedText = wrapPrompt(mode, text);
-      await client
+      const result = await client
         .mutation(SEND_SESSION_MESSAGE_MUTATION, {
           sessionId,
           text: wrappedText,
           interactionMode: mode === "code" ? undefined : mode,
         })
         .toPromise();
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      const realEventId = result.data?.sendSessionMessage?.id;
+      if (!realEventId) {
+        throw new Error("Failed to send message");
+      }
+
+      reconcileOptimisticSessionMessage(sessionId, tempEventId, realEventId);
+    } catch (error) {
+      removeOptimisticSessionMessage(sessionId, tempEventId);
+      setMessage(text);
+      toast.error(error instanceof Error ? error.message : "Failed to send message");
     } finally {
       setSending(false);
       inputRef.current?.focus();
@@ -84,14 +110,21 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   }
   const placeholder = worktreeDeleted
     ? "Worktree deleted. This session is read-only."
-    : isActive
-      ? "Waiting for response..."
-      : isNotStarted
-        ? "What should the agent work on?"
-        : "Send a message...";
+    : isOptimistic
+      ? "Creating session..."
+      : isActive
+        ? "Waiting for response..."
+        : isNotStarted
+          ? "What should the agent work on?"
+          : "Send a message...";
 
   return (
-    <div className={cn("shrink-0 border-t px-4 py-3 transition-colors", MODE_CONFIG[mode].containerBorder)}>
+    <div
+      className={cn(
+        "shrink-0 border-t px-4 py-3 transition-colors",
+        MODE_CONFIG[mode].containerBorder,
+      )}
+    >
       <div className="flex items-center gap-2">
         {!isNotStarted && (
           <Tooltip>
@@ -99,15 +132,18 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
               {hosting === "cloud" ? (
                 <Cloud size={14} className={cn("transition-colors", MODE_CONFIG[mode].iconColor)} />
               ) : (
-                <Monitor size={14} className={cn("transition-colors", MODE_CONFIG[mode].iconColor)} />
+                <Monitor
+                  size={14}
+                  className={cn("transition-colors", MODE_CONFIG[mode].iconColor)}
+                />
               )}
             </TooltipTrigger>
             <TooltipContent>
-              {hosting === "cloud" ? "Cloud" : (
-                connection && typeof connection === "object" && "runtimeLabel" in connection
-                  ? (connection.runtimeLabel as string) ?? "Local"
-                  : "Local"
-              )}
+              {hosting === "cloud"
+                ? "Cloud"
+                : connection && typeof connection === "object" && "runtimeLabel" in connection
+                  ? ((connection.runtimeLabel as string) ?? "Local")
+                  : "Local"}
             </TooltipContent>
           </Tooltip>
         )}
@@ -147,7 +183,10 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
           <button
             onClick={handleSend}
             disabled={!message.trim() || sending || !canSend}
-            className={cn("my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed", MODE_CONFIG[mode].sendButton)}
+            className={cn(
+              "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+              MODE_CONFIG[mode].sendButton,
+            )}
           >
             <Send size={16} />
           </button>

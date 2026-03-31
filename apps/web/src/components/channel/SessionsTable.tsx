@@ -6,7 +6,7 @@ import type {
   MenuItemDef,
 } from "ag-grid-community";
 import { useUIStore } from "../../stores/ui";
-import { DeleteSessionGroupDialog } from "../session/DeleteSessionGroupDialog";
+import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog";
 import { motion } from "framer-motion";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { FILTER_STORAGE_KEY_PREFIX } from "./sessions-table-types";
@@ -22,7 +22,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   const gridApiRef = useRef<GridApi<SessionGroupRow> | null>(null);
   const { fadeControls, isCompact } = useCompactTableMode(containerRef);
   const activeSessionGroupId = useUIStore((s) => s.activeSessionGroupId);
-  const [deleteTarget, setDeleteTarget] = useState<{
+  const [archiveTarget, setArchiveTarget] = useState<{
     id: string;
     name: string;
     sessionCount: number;
@@ -61,10 +61,9 @@ export function SessionsTable({ channelId }: { channelId: string }) {
         },
         "separator",
         {
-          name: "Delete Workspace",
-          cssClasses: ["text-destructive"],
+          name: "Archive Workspace",
           action: () => {
-            setDeleteTarget({
+            setArchiveTarget({
               id: group.id,
               name: group.name,
               sessionCount: group._sessionCount,
@@ -105,14 +104,13 @@ export function SessionsTable({ channelId }: { channelId: string }) {
           selectedRowIds={selectedRowIds}
         />
       </motion.div>
-      {deleteTarget && (
-        <DeleteSessionGroupDialog
-          groupId={deleteTarget.id}
-          groupName={deleteTarget.name}
-          sessionCount={deleteTarget.sessionCount}
+      {archiveTarget && (
+        <ArchiveSessionGroupDialog
+          groupId={archiveTarget.id}
+          groupName={archiveTarget.name}
           open={true}
           onOpenChange={(open) => {
-            if (!open) setDeleteTarget(null);
+            if (!open) setArchiveTarget(null);
           }}
         />
       )}

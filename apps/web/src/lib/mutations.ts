@@ -79,6 +79,16 @@ export const DELETE_SESSION_GROUP_MUTATION = gql`
   }
 `;
 
+export const ARCHIVE_SESSION_GROUP_MUTATION = gql`
+  mutation ArchiveSessionGroup($id: ID!) {
+    archiveSessionGroup(id: $id) {
+      id
+      archivedAt
+      worktreeDeleted
+    }
+  }
+`;
+
 export const AVAILABLE_SESSION_RUNTIMES_QUERY = gql`
   query AvailableSessionRuntimes($sessionId: ID!) {
     availableSessionRuntimes(sessionId: $sessionId) {

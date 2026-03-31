@@ -3,6 +3,7 @@ import os from "os";
 import fs from "fs";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { generateAnimalSlug, getUsedSlugs } from "@trace/shared/animal-names";
 import { assertValidCommitSha } from "@trace/shared";
 import { installOrRepairRepoHooks } from "./repo-hooks.js";
 
@@ -37,6 +38,8 @@ export async function createWorktree({
   repoPath,
   repoId,
   sessionId,
+  sessionGroupId,
+  slug,
   defaultBranch,
   startBranch,
   checkpointSha,
@@ -45,6 +48,10 @@ export async function createWorktree({
   repoPath: string;
   repoId: string;
   sessionId: string;
+  /** When set, the worktree and branch are keyed by this ID so all sessions in the group share the same workspace. */
+  sessionGroupId?: string;
+  /** Pre-assigned animal slug. If absent, one is generated. */
+  slug?: string;
   defaultBranch: string;
   /** Branch to base the new worktree on (e.g. from the parent session). Falls back to defaultBranch. */
   startBranch?: string;
@@ -52,13 +59,15 @@ export async function createWorktree({
   checkpointSha?: string;
   /** When enabled for the linked repo, install or repair Trace-managed hooks. */
   gitHooksEnabled?: boolean;
-}): Promise<{ workdir: string; branch: string }> {
-  const branch = `trace/${sessionId}`;
-  const targetPath = path.join(os.homedir(), "trace", "sessions", repoId, sessionId);
+}): Promise<{ workdir: string; branch: string; slug: string }> {
+  const sessionsDir = path.join(os.homedir(), "trace", "sessions", repoId);
+  const worktreeSlug = slug ?? generateAnimalSlug(await getUsedSlugs(sessionsDir, repoPath));
+  const branch = `trace/${worktreeSlug}`;
+  const targetPath = path.join(sessionsDir, worktreeSlug);
 
   // If the worktree directory already exists, reuse it
   if (fs.existsSync(targetPath)) {
-    return { workdir: targetPath, branch };
+    return { workdir: targetPath, branch, slug: worktreeSlug };
   }
 
   // Ensure parent directory exists
@@ -105,7 +114,7 @@ export async function createWorktree({
     await installOrRepairRepoHooks(targetPath);
   }
 
-  return { workdir: targetPath, branch };
+  return { workdir: targetPath, branch, slug: worktreeSlug };
 }
 
 export async function removeWorktree({

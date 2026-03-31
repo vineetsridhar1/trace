@@ -25,7 +25,32 @@ export interface EventQueryOpts {
   limit?: number;
   /** When true, exclude events that are thread replies (parentId IS NOT NULL) */
   excludeReplies?: boolean;
+  /** Exclude events whose JSON payload.type field matches any of these values */
+  excludePayloadTypes?: string[];
 }
+
+/**
+ * session_output subtypes that carry metadata relevant to all clients
+ * (sidebar status, session names, connection state, checkpoints).
+ * Only these are broadcast on the org-wide topic. Pure content events
+ * (assistant, result, error) are only sent via the session-scoped topic.
+ */
+const ORG_RELEVANT_OUTPUT_SUBTYPES = new Set([
+  "workspace_ready",
+  "workspace_failed",
+  "title_generated",
+  "question_pending",
+  "plan_pending",
+  "connection_lost",
+  "connection_restored",
+  "recovery_failed",
+  "recovery_requested",
+  "session_rehomed",
+  "git_checkpoint",
+  "git_checkpoint_rewrite",
+  "config_changed",
+  "branch_renamed",
+]);
 
 // Maps scope types to their pubsub topic builders.
 // Keys must match the GraphQL subscription field names (e.g. "channel" → "channelEvents").
@@ -62,18 +87,100 @@ export class EventService {
       pubsub.publish(topicBuilder(input.scopeId), { [`${input.scopeType}Events`]: event });
     }
 
-    // Always broadcast to org-level topic for discovery (e.g. new channels)
-    pubsub.publish(topics.orgEvents(input.organizationId), { orgEvents: event });
+    // For session-scoped events, also publish to the session-specific topic
+    // so session detail views get full payloads via their own subscription.
+    if (input.scopeType === "session") {
+      pubsub.publish(topics.sessionEvents(input.scopeId), { sessionEvents: event });
+    }
+
+    // Phase 3B: Skip org broadcast for chat events — they already go to chat:<id>:events
+    // and broadcasting to org topic only triggers per-event membership checks for non-members.
+    if (input.scopeType === "chat") {
+      // Still append to Redis stream for agent worker
+      this.appendToStream(input.organizationId, event);
+      return event;
+    }
+
+    // For session_output events, only broadcast to the org topic when the
+    // subtype carries metadata that the sidebar/session list needs (status
+    // changes, titles, connection state, checkpoints). Pure content events
+    // (assistant messages, tool output, results) are noise at the org level —
+    // viewers of a specific session get full payloads via sessionEvents.
+    if (input.eventType === "session_output") {
+      const p = (input.payload && typeof input.payload === "object" && !Array.isArray(input.payload))
+        ? input.payload as Record<string, unknown>
+        : {} as Record<string, unknown>;
+      const subtype = p.type as string | undefined;
+      if (subtype && ORG_RELEVANT_OUTPUT_SUBTYPES.has(subtype)) {
+        const thinEnvelope = {
+          id: event.id,
+          scopeType: event.scopeType,
+          scopeId: event.scopeId,
+          eventType: event.eventType,
+          actorType: event.actorType,
+          actorId: event.actorId,
+          parentId: event.parentId,
+          timestamp: event.timestamp,
+          metadata: event.metadata,
+          organizationId: event.organizationId,
+          payload: this.trimSessionOutputPayload(input.payload),
+        };
+        pubsub.publish(topics.orgEvents(input.organizationId), { orgEvents: thinEnvelope });
+      }
+    } else {
+      // All other events: broadcast full event to org topic
+      pubsub.publish(topics.orgEvents(input.organizationId), { orgEvents: event });
+    }
 
     // Append to org-scoped Redis Stream for durable consumption by the agent worker
-    const streamKey = `stream:org:${input.organizationId}:events`;
+    this.appendToStream(input.organizationId, event);
+
+    return event;
+  }
+
+  /**
+   * Extract only the metadata fields from a session_output payload
+   * that useOrgEvents needs for routing and patching (type, agentStatus,
+   * sessionStatus, name, workdir, connection, newSessionId, checkpoint id/sessionGroupId,
+   * replacedCommitSha). Omit the bulk content (message blocks, tool output).
+   */
+  private trimSessionOutputPayload(payload: Prisma.InputJsonValue): Prisma.InputJsonValue {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return {};
+    const p = payload as Record<string, unknown>;
+    const trimmed: Record<string, unknown> = {};
+
+    // Always keep the subtype discriminator
+    if (p.type !== undefined) trimmed.type = p.type;
+
+    // Session state fields
+    if (p.agentStatus !== undefined) trimmed.agentStatus = p.agentStatus;
+    if (p.sessionStatus !== undefined) trimmed.sessionStatus = p.sessionStatus;
+    if (p.name !== undefined) trimmed.name = p.name;
+    if (p.branch !== undefined) trimmed.branch = p.branch;
+    if (p.workdir !== undefined) trimmed.workdir = p.workdir;
+    if (p.connection !== undefined) trimmed.connection = p.connection;
+    if (p.newSessionId !== undefined) trimmed.newSessionId = p.newSessionId;
+
+    // Git checkpoint metadata (keep id + sessionGroupId, drop file diffs)
+    if (p.checkpoint && typeof p.checkpoint === "object") {
+      trimmed.checkpoint = p.checkpoint;
+    }
+    if (p.replacedCommitSha !== undefined) trimmed.replacedCommitSha = p.replacedCommitSha;
+
+    // Session group data for upsertSessionGroupFromPayload
+    if (p.session !== undefined) trimmed.session = p.session;
+    if (p.sessionGroup !== undefined) trimmed.sessionGroup = p.sessionGroup;
+
+    return trimmed as Prisma.InputJsonValue;
+  }
+
+  private appendToStream(organizationId: string, event: { id: string } & Record<string, unknown>) {
+    const streamKey = `stream:org:${organizationId}:events`;
     redis
       .xadd(streamKey, "*", "event", JSON.stringify(event))
       .catch((err) => {
         console.error(`[event-service] XADD to ${streamKey} failed:`, err.message);
       });
-
-    return event;
   }
 
   async query(organizationId: string, opts: EventQueryOpts) {
@@ -83,6 +190,11 @@ export class EventService {
     if (opts.scopeId) where.scopeId = opts.scopeId;
     if (opts.types?.length) where.eventType = { in: opts.types };
     if (opts.excludeReplies) where.parentId = null;
+    if (opts.excludePayloadTypes?.length) {
+      where.NOT = opts.excludePayloadTypes.map((t) => ({
+        payload: { path: ["type"], equals: t },
+      }));
+    }
     const timestampFilter: Record<string, Date> = {};
     if (opts.after) timestampFilter.gt = opts.after;
     if (opts.before) timestampFilter.lt = opts.before;

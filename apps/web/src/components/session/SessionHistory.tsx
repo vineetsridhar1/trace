@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Circle, Plus } from "lucide-react";
 import { client } from "../../lib/urql";
 import { START_SESSION_MUTATION } from "../../lib/mutations";
-import { useEntityStore } from "../../stores/entity";
+import { useEntityStore, useEntityField, useSessionIdsByGroup } from "../../stores/entity";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { getSessionChannelId, getSessionGroupChannelId } from "../../lib/session-group";
@@ -13,25 +13,27 @@ interface SessionHistoryProps {
 }
 
 export function SessionHistory({ sessionId }: SessionHistoryProps) {
-  const sessions = useEntityStore((s) => s.sessions);
   const openSessionTab = useUIStore((s) => s.openSessionTab);
-  const sessionGroups = useEntityStore((s) => s.sessionGroups);
   const [creatingFromId, setCreatingFromId] = useState<string | null>(null);
 
-  const currentSession = sessions[sessionId];
-  const sessionGroupId = currentSession?.sessionGroupId as string | undefined;
+  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
+  const sessionGroups = useEntityStore((s) => s.sessionGroups);
+  const sessions = useEntityStore((s) => s.sessions);
   const sessionGroup = sessionGroupId ? sessionGroups[sessionGroupId] : null;
+
+  const groupSessionIds = useSessionIdsByGroup(sessionGroupId);
 
   const groupSessions = useMemo(() => {
     if (!sessionGroupId) return [];
-    return Object.values(sessions)
-      .filter((session) => session.sessionGroupId === sessionGroupId)
+    return groupSessionIds
+      .map((id) => sessions[id])
+      .filter(Boolean)
       .sort((a, b) => {
         const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
         if (diff !== 0) return diff;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-  }, [sessionGroupId, sessions]);
+  }, [sessionGroupId, groupSessionIds, sessions]);
 
   const channelId = getSessionGroupChannelId(sessionGroup ?? null, groupSessions);
 
@@ -96,7 +98,6 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
       {groupSessions.map((entry) => {
         const displayAgentStatus = getDisplayAgentStatus(entry.agentStatus, entry.sessionStatus);
         const color = agentStatusColor[displayAgentStatus] ?? "text-muted-foreground";
-        const entryChannelId = getSessionChannelId(entry);
 
         return (
           <div

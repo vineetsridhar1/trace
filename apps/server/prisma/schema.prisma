@@ -199,6 +199,7 @@ enum EventType {
   session_pr_opened
   session_pr_merged
   session_pr_closed
+  session_group_archived
   ticket_assigned
   ticket_unassigned
   ticket_linked
@@ -286,11 +287,37 @@ model AgentExecutionLog {
   inboxItemId           String?
   latencyMs             Int
 
+  llmCalls  AgentLlmCall[]
+
   createdAt DateTime @default(now())
 
   @@index([organizationId, createdAt])
   @@index([triggerEventId])
   @@index([organizationId, agentId, status])
+}
+
+model AgentLlmCall {
+  id                 String             @id @default(uuid())
+  executionLogId     String
+  executionLog       AgentExecutionLog  @relation(fields: [executionLogId], references: [id], onDelete: Cascade)
+  turnNumber         Int
+  model              String
+  provider           String
+  systemPrompt       String?            @db.Text
+  messages           Json
+  tools              Json               @default("[]")
+  maxTokens          Int?
+  temperature        Float?
+  responseContent    Json
+  stopReason         String
+  inputTokens        Int
+  outputTokens       Int
+  estimatedCostCents Float
+  latencyMs          Int
+  createdAt          DateTime           @default(now())
+
+  @@index([executionLogId, turnNumber])
+  @@index([createdAt])
 }
 
 model ProcessedAgentEvent {
@@ -471,6 +498,7 @@ model ChannelMember {
 
   @@id([channelId, userId])
   @@index([userId])
+  @@index([channelId, leftAt])
 }
 
 model SessionGroup {
@@ -482,11 +510,13 @@ model SessionGroup {
   channel        Channel?     @relation(fields: [channelId], references: [id])
   repoId         String?
   repo           Repo?        @relation(fields: [repoId], references: [id])
+  slug           String?
   branch         String?
   workdir        String?
   connection     Json?
   prUrl          String?
   worktreeDeleted Boolean     @default(false)
+  archivedAt      DateTime?
 
   sessions Session[]
   gitCheckpoints GitCheckpoint[]
@@ -534,6 +564,8 @@ model Session {
   updatedAt DateTime @updatedAt
 
   @@index([sessionGroupId, updatedAt])
+  @@index([organizationId, agentStatus])
+  @@index([channelId, updatedAt])
 }
 
 model SessionProject {
@@ -567,6 +599,8 @@ model Ticket {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status, priority])
 }
 
 model TicketProject {
@@ -632,6 +666,7 @@ model Event {
 
   @@index([organizationId, scopeType, scopeId])
   @@index([organizationId, eventType])
+  @@index([organizationId, timestamp])
   @@index([parentId])
 }
 
@@ -738,6 +773,7 @@ model Message {
 
   @@index([chatId, createdAt])
   @@index([channelId, createdAt])
+  @@index([channelId, deletedAt])
   @@index([parentMessageId, createdAt])
 }
 
@@ -802,6 +838,7 @@ model AiBranch {
   createdAt DateTime @default(now())
 
   @@index([conversationId])
+  @@index([conversationId, createdAt])
   @@index([parentBranchId])
 }
 

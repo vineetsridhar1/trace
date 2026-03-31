@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import { MessageSquare, Code } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -10,7 +11,7 @@ function ChannelIcon({ type, className }: { type: string | undefined; className?
   return <Code size={16} className={className} />;
 }
 
-export function ChannelItem({
+export const ChannelItem = memo(function ChannelItem({
   id,
   isActive,
   onClick,
@@ -25,6 +26,11 @@ export function ChannelItem({
   const type = useEntityField("channels", id, "type");
   const hasDoneBadge = useUIStore((s) => !!s.channelDoneBadges[id]);
 
+  const sortableData = useMemo(
+    () => ({ type: "channel" as const, id, groupId: groupId ?? null }),
+    [id, groupId],
+  );
+
   const {
     attributes,
     listeners,
@@ -34,7 +40,7 @@ export function ChannelItem({
     isDragging,
   } = useSortable({
     id: `channel:${id}`,
-    data: { type: "channel", id, groupId: groupId ?? null },
+    data: sortableData,
   });
 
   const style = {
@@ -66,4 +72,4 @@ export function ChannelItem({
       </SidebarMenuItem>
     </div>
   );
-}
+});

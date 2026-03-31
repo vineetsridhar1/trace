@@ -11,8 +11,15 @@ import {
 } from "../lib/session-group-status.js";
 
 export const sessionQueries = {
-  sessionGroups: (_: unknown, args: { channelId: string }, ctx: Context) => {
-    return sessionService.listGroups(args.channelId, requireOrgContext(ctx));
+  sessionGroups: (
+    _: unknown,
+    args: { channelId: string; archived?: boolean | null; status?: string | null },
+    ctx: Context,
+  ) => {
+    return sessionService.listGroups(args.channelId, requireOrgContext(ctx), {
+      archived: args.archived ?? undefined,
+      status: args.status ?? undefined,
+    });
   },
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.getGroup(args.id, requireOrgContext(ctx));
@@ -110,6 +117,9 @@ export const sessionMutations = {
   deleteSession: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.delete(args.id, ctx.actorType, ctx.userId);
   },
+  archiveSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
+    return sessionService.archiveGroup(args.id, requireOrgContext(ctx), ctx.actorType, ctx.userId);
+  },
   deleteSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.deleteGroup(args.id, requireOrgContext(ctx), ctx.actorType, ctx.userId);
   },
@@ -185,6 +195,7 @@ export const sessionTypeResolvers = {
       group: {
         id: string;
         prUrl?: string | null;
+        archivedAt?: string | Date | null;
         sessions?: SessionGroupStatusSource[];
       },
     ) => {
@@ -194,7 +205,7 @@ export const sessionTypeResolvers = {
             where: { sessionGroupId: group.id },
             select: { agentStatus: true, sessionStatus: true },
           });
-      return deriveSessionGroupStatus(sessions, group.prUrl ?? null);
+      return deriveSessionGroupStatus(sessions, group.prUrl ?? null, group.archivedAt ?? null);
     },
     sessions: async (group: { id: string; sessions?: unknown[] }) => {
       if (Array.isArray(group.sessions)) return group.sessions;
@@ -215,13 +226,8 @@ export const sessionTypeResolvers = {
   },
   Session: {
     tickets: async (session: { id: string }) => {
-      const links = await prisma.ticketLink.findMany({
-        where: { entityType: "session", entityId: session.id },
-        select: { ticketId: true },
-      });
-      if (links.length === 0) return [];
       return prisma.ticket.findMany({
-        where: { id: { in: links.map((l: { ticketId: string }) => l.ticketId) } },
+        where: { links: { some: { entityType: "session", entityId: session.id } } },
       });
     },
     gitCheckpoints: async (session: { id: string }) => {
@@ -229,40 +235,17 @@ export const sessionTypeResolvers = {
     },
   },
   GitCheckpoint: {
-    session: async (checkpoint: { sessionId: string }) => {
-      return prisma.session.findUnique({
-        where: { id: checkpoint.sessionId },
-        include: {
-          createdBy: true,
-          repo: true,
-          channel: true,
-          sessionGroup: true,
-        },
-      });
+    session: async (checkpoint: { sessionId: string }, _args: unknown, ctx: Context) => {
+      return ctx.sessionLoader.load(checkpoint.sessionId);
     },
-    sessionGroup: async (checkpoint: { sessionGroupId: string }) => {
-      return prisma.sessionGroup.findUnique({
-        where: { id: checkpoint.sessionGroupId },
-        include: {
-          channel: true,
-          repo: true,
-          sessions: {
-            orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-            include: {
-              createdBy: true,
-              repo: true,
-              channel: true,
-              sessionGroup: true,
-            },
-          },
-        },
-      });
+    sessionGroup: async (checkpoint: { sessionGroupId: string }, _args: unknown, ctx: Context) => {
+      return ctx.sessionGroupLoader.load(checkpoint.sessionGroupId);
     },
-    repo: async (checkpoint: { repoId: string }) => {
-      return prisma.repo.findUnique({ where: { id: checkpoint.repoId } });
+    repo: async (checkpoint: { repoId: string }, _args: unknown, ctx: Context) => {
+      return ctx.repoLoader.load(checkpoint.repoId);
     },
-    promptEvent: async (checkpoint: { promptEventId: string }) => {
-      return prisma.event.findUnique({ where: { id: checkpoint.promptEventId } });
+    promptEvent: async (checkpoint: { promptEventId: string }, _args: unknown, ctx: Context) => {
+      return ctx.eventLoader.load(checkpoint.promptEventId);
     },
   },
 };

@@ -23,6 +23,7 @@ enum SessionGroupStatus {
   failed
   stopped
   merged
+  archived
 }
 
 enum TicketStatus {
@@ -192,6 +193,7 @@ enum EventType {
   session_pr_opened
   session_pr_merged
   session_pr_closed
+  session_group_archived
   chat_created
   chat_member_added
   chat_member_removed
@@ -274,6 +276,7 @@ type ChannelGroup {
 type SessionGroup {
   id: ID!
   name: String!
+  slug: String
   status: SessionGroupStatus!
   channel: Channel
   repo: Repo
@@ -284,6 +287,7 @@ type SessionGroup {
   connection: SessionConnection
   prUrl: String
   worktreeDeleted: Boolean!
+  archivedAt: DateTime
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -491,6 +495,27 @@ type AgentExecutionLog {
   finalActions: JSON
   status: ExecutionStatus!
   inboxItemId: String
+  latencyMs: Int!
+  createdAt: DateTime!
+  llmCalls: [AgentLlmCall!]!
+}
+
+type AgentLlmCall {
+  id: ID!
+  executionLogId: ID!
+  turnNumber: Int!
+  model: String!
+  provider: String!
+  systemPrompt: String
+  messages: JSON!
+  tools: JSON!
+  maxTokens: Int
+  temperature: Float
+  responseContent: JSON!
+  stopReason: String!
+  inputTokens: Int!
+  outputTokens: Int!
+  estimatedCostCents: Float!
   latencyMs: Int!
   createdAt: DateTime!
 }
@@ -829,7 +854,7 @@ type Query {
   channels(organizationId: ID!, projectId: ID, memberOnly: Boolean): [Channel!]!
   channelGroups(organizationId: ID!): [ChannelGroup!]!
   channel(id: ID!): Channel
-  sessionGroups(channelId: ID!): [SessionGroup!]!
+  sessionGroups(channelId: ID!, archived: Boolean, status: SessionGroupStatus): [SessionGroup!]!
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
@@ -843,6 +868,7 @@ type Query {
     after: DateTime
     before: DateTime
     limit: Int
+    excludePayloadTypes: [String!]
   ): [Event!]!
   availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!
   availableRuntimes(tool: CodingTool!): [SessionRuntimeInstance!]!
@@ -897,6 +923,7 @@ type Mutation {
   terminateSession(id: ID!): Session!
   dismissSession(id: ID!): Session!
   deleteSession(id: ID!): Session!
+  archiveSessionGroup(id: ID!): SessionGroup!
   deleteSessionGroup(id: ID!): Boolean!
   updateSessionConfig(sessionId: ID!, tool: CodingTool, model: String, hosting: HostingMode, runtimeInstanceId: ID): Session!
   sendSessionMessage(sessionId: ID!, text: String!, interactionMode: String): Event!
@@ -958,5 +985,6 @@ type Subscription {
   sessionStatusChanged(sessionId: ID!, organizationId: ID!): Session!
   chatEvents(chatId: ID!, types: [String!]): Event!
   branchTurns(branchId: ID!): Turn!
+  sessionEvents(sessionId: ID!, organizationId: ID!): Event!
   conversationEvents(conversationId: ID!): AiConversationEvent!
 }

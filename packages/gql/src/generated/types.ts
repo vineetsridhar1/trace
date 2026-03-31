@@ -77,6 +77,7 @@ export type AgentExecutionLog = {
   inboxItemId?: Maybe<Scalars['String']['output']>;
   inputTokens: Scalars['Int']['output'];
   latencyMs: Scalars['Int']['output'];
+  llmCalls: Array<AgentLlmCall>;
   model: Scalars['String']['output'];
   modelTier: ModelTier;
   organizationId: Scalars['ID']['output'];
@@ -106,6 +107,27 @@ export type AgentIdentity = {
   soulFile: Scalars['String']['output'];
   status: OrgAgentStatus;
   updatedAt: Scalars['DateTime']['output'];
+};
+
+export type AgentLlmCall = {
+  __typename?: 'AgentLlmCall';
+  createdAt: Scalars['DateTime']['output'];
+  estimatedCostCents: Scalars['Float']['output'];
+  executionLogId: Scalars['ID']['output'];
+  id: Scalars['ID']['output'];
+  inputTokens: Scalars['Int']['output'];
+  latencyMs: Scalars['Int']['output'];
+  maxTokens?: Maybe<Scalars['Int']['output']>;
+  messages: Scalars['JSON']['output'];
+  model: Scalars['String']['output'];
+  outputTokens: Scalars['Int']['output'];
+  provider: Scalars['String']['output'];
+  responseContent: Scalars['JSON']['output'];
+  stopReason: Scalars['String']['output'];
+  systemPrompt?: Maybe<Scalars['String']['output']>;
+  temperature?: Maybe<Scalars['Float']['output']>;
+  tools: Scalars['JSON']['output'];
+  turnNumber: Scalars['Int']['output'];
 };
 
 export type AgentStatus =
@@ -384,6 +406,7 @@ export type EventType =
   | 'repo_created'
   | 'repo_updated'
   | 'session_deleted'
+  | 'session_group_archived'
   | 'session_output'
   | 'session_paused'
   | 'session_pr_closed'
@@ -515,6 +538,7 @@ export type Mutation = {
   acceptAgentSuggestion: InboxItem;
   addChatMember: Chat;
   addOrgMember: OrgMember;
+  archiveSessionGroup: SessionGroup;
   assignTicket: Ticket;
   commentOnTicket: Event;
   createAiConversation: AiConversation;
@@ -594,6 +618,11 @@ export type MutationAddOrgMemberArgs = {
   organizationId: Scalars['ID']['input'];
   role?: InputMaybe<UserRole>;
   userId: Scalars['ID']['input'];
+};
+
+
+export type MutationArchiveSessionGroupArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -1165,6 +1194,7 @@ export type QueryChatMessagesArgs = {
 export type QueryEventsArgs = {
   after?: InputMaybe<Scalars['DateTime']['input']>;
   before?: InputMaybe<Scalars['DateTime']['input']>;
+  excludePayloadTypes?: InputMaybe<Array<Scalars['String']['input']>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   organizationId: Scalars['ID']['input'];
   scope?: InputMaybe<ScopeInput>;
@@ -1263,7 +1293,9 @@ export type QuerySessionGroupFilesArgs = {
 
 
 export type QuerySessionGroupsArgs = {
+  archived?: InputMaybe<Scalars['Boolean']['input']>;
   channelId: Scalars['ID']['input'];
+  status?: InputMaybe<SessionGroupStatus>;
 };
 
 
@@ -1394,6 +1426,7 @@ export type SessionFilters = {
 
 export type SessionGroup = {
   __typename?: 'SessionGroup';
+  archivedAt?: Maybe<Scalars['DateTime']['output']>;
   branch?: Maybe<Scalars['String']['output']>;
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
@@ -1404,6 +1437,7 @@ export type SessionGroup = {
   prUrl?: Maybe<Scalars['String']['output']>;
   repo?: Maybe<Repo>;
   sessions: Array<Session>;
+  slug?: Maybe<Scalars['String']['output']>;
   status: SessionGroupStatus;
   updatedAt: Scalars['DateTime']['output'];
   workdir?: Maybe<Scalars['String']['output']>;
@@ -1411,6 +1445,7 @@ export type SessionGroup = {
 };
 
 export type SessionGroupStatus =
+  | 'archived'
   | 'failed'
   | 'in_progress'
   | 'in_review'
@@ -1464,6 +1499,7 @@ export type Subscription = {
   chatEvents: Event;
   conversationEvents: AiConversationEvent;
   orgEvents: Event;
+  sessionEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
   ticketEvents: Event;
@@ -1497,6 +1533,12 @@ export type SubscriptionConversationEventsArgs = {
 export type SubscriptionOrgEventsArgs = {
   organizationId: Scalars['ID']['input'];
   types?: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+
+export type SubscriptionSessionEventsArgs = {
+  organizationId: Scalars['ID']['input'];
+  sessionId: Scalars['ID']['input'];
 };
 
 

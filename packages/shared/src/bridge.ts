@@ -34,6 +34,10 @@ export interface BridgeSendCommand {
 export interface BridgePrepareCommand {
   type: "prepare";
   sessionId: string;
+  /** When set, the worktree and branch are keyed by this ID so all sessions in the group share the same workspace. */
+  sessionGroupId?: string;
+  /** Pre-assigned animal slug for the worktree. If absent, the bridge generates one. */
+  slug?: string;
   repoId: string;
   repoName: string;
   repoRemoteUrl: string;
@@ -46,6 +50,10 @@ export interface BridgePrepareCommand {
 export interface BridgeUpgradeWorkspaceCommand {
   type: "upgrade_workspace";
   sessionId: string;
+  /** When set, the worktree and branch are keyed by this ID so all sessions in the group share the same workspace. */
+  sessionGroupId?: string;
+  /** Pre-assigned animal slug for the worktree. If absent, the bridge generates one. */
+  slug?: string;
   repoId: string;
   repoName: string;
   repoRemoteUrl: string;
@@ -205,6 +213,8 @@ export interface BridgeWorkspaceReady {
   sessionId: string;
   workdir: string;
   branch?: string;
+  /** Animal slug used for this worktree (reported back so the server can store it). */
+  slug?: string;
 }
 
 export interface BridgeWorkspaceFailed {

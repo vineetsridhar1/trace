@@ -1,6 +1,7 @@
 import type { Event } from "@trace/gql";
 import { asJsonObject, parseQuestion, type JsonObject, type Question } from "@trace/shared";
 import type { ReadGlobItem } from "./messages/ReadGlobGroup";
+import { HIDDEN_SESSION_PAYLOAD_TYPE_SET } from "../../lib/session-event-filters";
 
 const READ_GLOB_NAMES = new Set(["read", "glob", "grep"]);
 const AGENT_NAMES = new Set(["agent", "task"]);
@@ -14,21 +15,27 @@ export interface BuildSessionNodesResult {
   completedAgentTools: Map<string, AgentToolResult>;
 }
 
-/** Payload types that render as nothing in SessionMessage — these should not break a Read/Glob bucket */
-const INVISIBLE_PAYLOAD_TYPES = new Set(["result", "git_checkpoint"]);
+/** Payload types that render content but should not break a Read/Glob bucket */
+const BUCKET_TRANSPARENT_TYPES = new Set(["result"]);
 
 export type SessionNode =
   | { kind: "event"; id: string }
   | {
-    kind: "command-execution";
-    id: string;
-    command: string;
-    output?: string | Record<string, unknown>;
-    timestamp: string;
-    exitCode?: number;
-  }
+      kind: "command-execution";
+      id: string;
+      command: string;
+      output?: string | Record<string, unknown>;
+      timestamp: string;
+      exitCode?: number;
+    }
   | { kind: "readglob-group"; items: ReadGlobItem[] }
-  | { kind: "plan-review"; id: string; planContent: string; planFilePath: string; timestamp: string }
+  | {
+      kind: "plan-review";
+      id: string;
+      planContent: string;
+      planFilePath: string;
+      timestamp: string;
+    }
   | { kind: "ask-user-question"; id: string; questions: Question[]; timestamp: string };
 
 /** Extract tool name + file path from a session_output event payload, if it's a Read/Glob/Grep tool call */
@@ -103,7 +110,13 @@ function extractCommandResult(
   payload: JsonObject | undefined,
   timestamp: string,
   id: string,
-): { id: string; command?: string; output?: string | Record<string, unknown>; timestamp: string; exitCode?: number } | null {
+): {
+  id: string;
+  command?: string;
+  output?: string | Record<string, unknown>;
+  timestamp: string;
+  exitCode?: number;
+} | null {
   if (!payload || payload.type !== "assistant") return null;
 
   const message = asJsonObject(payload.message);
@@ -200,11 +213,17 @@ export function buildSessionNodes(
       if (commandStart) {
         const nextId = eventIds[index + 1];
         const nextEvent = nextId ? events[nextId] : undefined;
-        const nextPayload = nextEvent?.eventType === "session_output"
-          ? asJsonObject(nextEvent.payload)
-          : undefined;
-        const commandResult = extractCommandResult(nextPayload, nextEvent?.timestamp ?? "", nextId ?? "");
-        if (commandResult && (!commandResult.command || commandResult.command === commandStart.command)) {
+        const nextPayload =
+          nextEvent?.eventType === "session_output" ? asJsonObject(nextEvent.payload) : undefined;
+        const commandResult = extractCommandResult(
+          nextPayload,
+          nextEvent?.timestamp ?? "",
+          nextId ?? "",
+        );
+        if (
+          commandResult &&
+          (!commandResult.command || commandResult.command === commandStart.command)
+        ) {
           flushBucket();
           result.push({
             kind: "command-execution",
@@ -225,9 +244,13 @@ export function buildSessionNodes(
         continue;
       }
 
-      // Events that render as nothing should not break a Read/Glob bucket
       const payloadType = payload?.type;
-      if (typeof payloadType === "string" && INVISIBLE_PAYLOAD_TYPES.has(payloadType)) {
+      // Connection events render as nothing — skip entirely
+      if (typeof payloadType === "string" && HIDDEN_SESSION_PAYLOAD_TYPE_SET.has(payloadType)) {
+        continue;
+      }
+      // Result/checkpoint events render content but should not break a Read/Glob bucket
+      if (typeof payloadType === "string" && BUCKET_TRANSPARENT_TYPES.has(payloadType)) {
         result.push({ kind: "event", id });
         continue;
       }
@@ -260,9 +283,8 @@ function deduplicateResultEvents(
   for (const node of nodes) {
     if (node.kind === "event") {
       const event = events[node.id];
-      const payload = event?.eventType === "session_output"
-        ? asJsonObject(event.payload)
-        : undefined;
+      const payload =
+        event?.eventType === "session_output" ? asJsonObject(event.payload) : undefined;
       const isResult = payload?.type === "result";
 
       if (isResult && lastWasResult) continue; // skip duplicate
@@ -277,10 +299,7 @@ function deduplicateResultEvents(
 }
 
 /** Detect PlanBlock in assistant events and replace with plan-review nodes */
-function detectPlanReviewNodes(
-  nodes: SessionNode[],
-  events: Record<string, Event>,
-): SessionNode[] {
+function detectPlanReviewNodes(nodes: SessionNode[], events: Record<string, Event>): SessionNode[] {
   return nodes.map((node) => {
     if (node.kind !== "event") return node;
     const event = events[node.id];

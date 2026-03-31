@@ -4,12 +4,45 @@ import type { Event } from "@trace/gql";
 import { client } from "../lib/urql";
 import { useEntityStore, useScopedEventIds, eventScopeKey } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
+import { HIDDEN_SESSION_PAYLOAD_TYPES } from "../lib/session-event-filters";
 
 const PAGE_SIZE = 100;
-
 const SESSION_EVENTS_QUERY = gql`
-  query SessionEvents($organizationId: ID!, $scope: ScopeInput, $limit: Int, $before: DateTime) {
-    events(organizationId: $organizationId, scope: $scope, limit: $limit, before: $before) {
+  query SessionEvents(
+    $organizationId: ID!
+    $scope: ScopeInput
+    $limit: Int
+    $before: DateTime
+    $excludePayloadTypes: [String!]
+  ) {
+    events(
+      organizationId: $organizationId
+      scope: $scope
+      limit: $limit
+      before: $before
+      excludePayloadTypes: $excludePayloadTypes
+    ) {
+      id
+      scopeType
+      scopeId
+      eventType
+      payload
+      actor {
+        type
+        id
+        name
+        avatarUrl
+      }
+      parentId
+      timestamp
+      metadata
+    }
+  }
+`;
+
+const SESSION_EVENTS_SUBSCRIPTION = gql`
+  subscription SessionEventsLive($sessionId: ID!, $organizationId: ID!) {
+    sessionEvents(sessionId: $sessionId, organizationId: $organizationId) {
       id
       scopeType
       scopeId
@@ -50,6 +83,7 @@ export function useSessionEvents(sessionId: string) {
         scope: { type: "session", id: sessionId },
         limit: PAGE_SIZE,
         before: new Date().toISOString(),
+        excludePayloadTypes: HIDDEN_SESSION_PAYLOAD_TYPES,
       })
       .toPromise();
 
@@ -78,9 +112,34 @@ export function useSessionEvents(sessionId: string) {
     fetchEvents();
   }, [fetchEvents]);
 
+  // Subscribe to session-scoped events for full payloads.
+  // The org-wide subscription trims session_output payloads to metadata only;
+  // this subscription delivers full content for the session being viewed.
+  useEffect(() => {
+    if (!activeOrgId) return;
+
+    const subscription = client
+      .subscription(SESSION_EVENTS_SUBSCRIPTION, {
+        sessionId,
+        organizationId: activeOrgId,
+      })
+      .subscribe((result) => {
+        if (!result.data?.sessionEvents) return;
+        const event = result.data.sessionEvents as Event & { id: string };
+        useEntityStore.getState().upsertScopedEvent(scopeKey, event.id, event);
+      });
+
+    return () => subscription.unsubscribe();
+  }, [activeOrgId, sessionId, scopeKey]);
+
   // Load an older page of events (called when user scrolls to top)
   const fetchOlderEvents = useCallback(async () => {
-    if (!activeOrgId || !oldestTimestampRef.current || loadingOlderRef.current || !hasOlderRef.current) {
+    if (
+      !activeOrgId ||
+      !oldestTimestampRef.current ||
+      loadingOlderRef.current ||
+      !hasOlderRef.current
+    ) {
       return;
     }
 
@@ -93,6 +152,7 @@ export function useSessionEvents(sessionId: string) {
         scope: { type: "session", id: sessionId },
         limit: PAGE_SIZE,
         before: oldestTimestampRef.current,
+        excludePayloadTypes: HIDDEN_SESSION_PAYLOAD_TYPES,
       })
       .toPromise();
 
@@ -119,10 +179,7 @@ export function useSessionEvents(sessionId: string) {
   }, [activeOrgId, sessionId, scopeKey]);
 
   // Derive eventIds from the scoped bucket — O(session events) not O(all events)
-  const eventIds = useScopedEventIds(
-    scopeKey,
-    (a, b) => a.timestamp.localeCompare(b.timestamp),
-  );
+  const eventIds = useScopedEventIds(scopeKey, (a, b) => a.timestamp.localeCompare(b.timestamp));
 
   return { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents };
 }

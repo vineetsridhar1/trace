@@ -3,7 +3,15 @@ import { getSessionRepo } from "./session-cell-data";
 
 export function SessionRepoCell({ row }: { row?: SessionGroupRow }) {
   const repo = getSessionRepo(row);
-  if (!repo) return null;
+  const slug = row?.slug;
 
-  return <span className="truncate text-xs text-muted-foreground">{repo.name}</span>;
+  if (!repo && !slug) return null;
+
+  const text = repo && slug
+    ? `${repo.name} / ${slug}`
+    : repo
+      ? repo.name
+      : slug;
+
+  return <span className="truncate text-xs text-muted-foreground">{text}</span>;
 }

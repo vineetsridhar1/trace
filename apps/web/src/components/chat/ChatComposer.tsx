@@ -7,6 +7,11 @@ import { useAuthStore } from "../../stores/auth";
 import { useOrgMembers } from "../../hooks/useOrgMembers";
 import { Button } from "../ui/button";
 import { ChatEditor, type ChatEditorHandle } from "./ChatEditor";
+import {
+  optimisticallyInsertChatMessage,
+  reconcileOptimisticChatMessage,
+  removeOptimisticChatMessage,
+} from "../../lib/optimistic-message";
 
 const SEND_CHAT_MESSAGE = gql`
   mutation SendChatMessage($chatId: ID!, $html: String, $parentId: ID) {
@@ -27,6 +32,14 @@ export function ChatComposer({ chatId, parentId }: { chatId: string; parentId?: 
       if (sending) return;
 
       setSending(true);
+
+      // Insert optimistic message so it appears instantly
+      const { messageId: tempMessageId, eventId: tempEventId } = optimisticallyInsertChatMessage(
+        chatId,
+        html,
+        parentId,
+      );
+
       try {
         const result = await client
           .mutation(SEND_CHAT_MESSAGE, {
@@ -39,7 +52,15 @@ export function ChatComposer({ chatId, parentId }: { chatId: string; parentId?: 
         if (result.error) {
           throw result.error;
         }
+
+        const realMessageId = result.data?.sendChatMessage?.id;
+        if (!realMessageId) {
+          throw new Error("Failed to send message");
+        }
+
+        reconcileOptimisticChatMessage(chatId, tempMessageId, tempEventId, realMessageId);
       } catch (error) {
+        removeOptimisticChatMessage(chatId, tempMessageId, tempEventId);
         console.error("Failed to send chat message", error);
         toast.error(error instanceof Error ? error.message : "Failed to send message");
         throw error;

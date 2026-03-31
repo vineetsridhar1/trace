@@ -74,6 +74,7 @@ type GroupWorkspaceStatePatch = {
   worktreeDeleted?: boolean;
   repoId?: string | null;
   branch?: string | null;
+  slug?: string | null;
 };
 
 function defaultConnection(overrides?: Partial<SessionConnectionData>): SessionConnectionData {
@@ -177,6 +178,7 @@ function buildCheckpointContextFromStartMeta({
 const SESSION_GROUP_SUMMARY_SELECT = {
   id: true,
   name: true,
+  slug: true,
   channelId: true,
   channel: true,
   repoId: true,
@@ -186,6 +188,7 @@ const SESSION_GROUP_SUMMARY_SELECT = {
   connection: true,
   prUrl: true,
   worktreeDeleted: true,
+  archivedAt: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -322,7 +325,7 @@ function buildSessionGroupSnapshot(
 ): SessionGroupSnapshot {
   return {
     ...group,
-    status: deriveSessionGroupStatus(sessions, group.prUrl ?? null),
+    status: deriveSessionGroupStatus(sessions, group.prUrl ?? null, group.archivedAt ?? null),
   };
 }
 
@@ -333,6 +336,12 @@ const MAX_SESSION_NAME_LENGTH = 80;
 const TITLE_INSTRUCTION = `\n\n<system-instruction>
 You may set or update the session title by outputting a short title (5-8 words) wrapped in XML tags: <trace-title>Your title here</trace-title>.
 Do this ONCE at the start of your very first response to capture the overall goal of the session. After that, do NOT update the title unless the user explicitly asks you to rename/retitle it. Debugging, iterating, or continuing work on the same goal is not a reason to change the title. The tag will be stripped and not shown to the user.
+</system-instruction>`;
+
+/** Instruction appended to repo-based sessions so the AI reports branch name changes. */
+const BRANCH_INSTRUCTION = `\n\n<system-instruction>
+When you create or rename a git branch, output the branch name wrapped in XML tags: <trace-branch>branch-name</trace-branch>.
+This lets the system track which branch this session is working on. The tag will be stripped and not shown to the user.
 </system-instruction>`;
 
 /** Instruction appended to every prompt for repo-based sessions so the AI auto-saves work. */
@@ -349,9 +358,10 @@ function appendAutoSave(prompt: string, hasRepo: boolean): string {
   return hasRepo ? prompt + AUTO_SAVE_INSTRUCTION : prompt;
 }
 
-/** Append all system instructions (title, auto-save) to a prompt in the correct order. */
+/** Append all system instructions (title, branch, auto-save) to a prompt in the correct order. */
 function appendPromptInstructions(prompt: string, { hasRepo }: { hasRepo: boolean }): string {
   let result = prompt + TITLE_INSTRUCTION;
+  if (hasRepo) result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
   return result;
 }
@@ -364,6 +374,9 @@ This session is working off the base branch "${baseBranch}". All work should be 
 
 /** Regex to extract <trace-title>…</trace-title> from assistant output. */
 const TITLE_TAG_RE = /<trace-title>([\s\S]*?)<\/trace-title>/;
+
+/** Regex to extract <trace-branch>…</trace-branch> from assistant output. */
+const BRANCH_TAG_RE = /<trace-branch>([\s\S]*?)<\/trace-branch>/;
 
 /**
  * Build a conversation transcript from session events.
@@ -487,6 +500,8 @@ export class SessionService {
    */
   private provisionRuntime(params: {
     sessionId: string;
+    sessionGroupId?: string | null;
+    slug?: string | null;
     hosting: string;
     tool: string;
     model?: string | null;
@@ -499,6 +514,8 @@ export class SessionService {
   }): void {
     sessionRouter.createRuntime({
       sessionId: params.sessionId,
+      sessionGroupId: params.sessionGroupId ?? undefined,
+      slug: params.slug ?? undefined,
       hosting: params.hosting as "cloud" | "local",
       tool: params.tool,
       model: params.model ?? undefined,
@@ -577,27 +594,50 @@ export class SessionService {
     throw new Error("No connected runtime available for this session group");
   }
 
-  async listGroups(channelId: string, organizationId: string) {
+  async listGroups(
+    channelId: string,
+    organizationId: string,
+    options?: { archived?: boolean; status?: string },
+  ) {
+    const where: Record<string, unknown> = { channelId, organizationId };
+
+    const shouldIncludeArchived = options?.archived === true || options?.status === "archived";
+    if (shouldIncludeArchived) {
+      where.archivedAt = { not: null };
+    } else {
+      // Default: only non-archived groups (covers false, undefined, omitted)
+      where.archivedAt = null;
+    }
+
     const groups = await prisma.sessionGroup.findMany({
-      where: { channelId, organizationId },
+      where,
       include: SESSION_GROUP_INCLUDE,
     });
 
-    return groups
-      .map((group) => {
-        const sessions = sortSessionsByRecency(group.sessions);
-        return {
-          ...buildSessionGroupSnapshot(group, sessions),
-          sessions,
-        };
-      })
-      .sort((a, b) => {
-        const aLatest = a.sessions[0];
-        const bLatest = b.sessions[0];
-        const aTs = aLatest?.updatedAt ?? a.updatedAt;
-        const bTs = bLatest?.updatedAt ?? b.updatedAt;
-        return bTs.getTime() - aTs.getTime();
-      });
+    const mapped = groups.map((group) => {
+      const sessions = sortSessionsByRecency(group.sessions);
+      return {
+        ...buildSessionGroupSnapshot(group, sessions),
+        sessions,
+      };
+    });
+
+    // Post-query filter for derived status (computed from child sessions)
+    let filtered = mapped;
+    if (options?.status) {
+      filtered = mapped.filter((g) => g.status === options.status);
+    } else if (!shouldIncludeArchived) {
+      // Default main table: exclude merged groups (server-side)
+      filtered = mapped.filter((g) => g.status !== "merged");
+    }
+
+    return filtered.sort((a, b) => {
+      const aLatest = a.sessions[0];
+      const bLatest = b.sessions[0];
+      const aTs = aLatest?.updatedAt ?? a.updatedAt;
+      const bTs = bLatest?.updatedAt ?? b.updatedAt;
+      return bTs.getTime() - aTs.getTime();
+    });
   }
 
   async getGroup(id: string, organizationId: string) {
@@ -877,8 +917,7 @@ export class SessionService {
 
     // Ask-mode sessions skip worktree creation (read-only against repo root).
     // Checkpoint restores always need a worktree to reset to a specific SHA.
-    const readOnlyWorkspace =
-      input.interactionMode === "ask" && !input.restoreCheckpointId;
+    const readOnlyWorkspace = input.interactionMode === "ask" && !input.restoreCheckpointId;
 
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
@@ -1014,6 +1053,8 @@ export class SessionService {
     if (needsRuntimeProvisioning && input.prompt) {
       this.provisionRuntime({
         sessionId: session.id,
+        sessionGroupId: session.sessionGroupId,
+        slug: session.sessionGroup?.slug,
         hosting: session.hosting,
         tool: session.tool,
         model: session.model,
@@ -1091,6 +1132,8 @@ export class SessionService {
       if (needsProvisioning && !alreadyProvisioning) {
         this.provisionRuntime({
           sessionId: id,
+          sessionGroupId: session.sessionGroupId,
+          slug: session.sessionGroup?.slug,
           hosting: session.hosting,
           tool: session.tool,
           model: session.model,
@@ -1444,7 +1487,20 @@ export class SessionService {
   ) {
     const prev = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
-      select: { id: true, tool: true, model: true, agentStatus: true, hosting: true, repoId: true, sessionGroupId: true, connection: true, readOnlyWorkspace: true, branch: true, repo: { select: { id: true, name: true, remoteUrl: true, defaultBranch: true } } },
+      select: {
+        id: true,
+        tool: true,
+        model: true,
+        agentStatus: true,
+        hosting: true,
+        repoId: true,
+        sessionGroupId: true,
+        sessionGroup: { select: { slug: true } },
+        connection: true,
+        readOnlyWorkspace: true,
+        branch: true,
+        repo: { select: { id: true, name: true, remoteUrl: true, defaultBranch: true } },
+      },
     });
 
     const toolChanged = config.tool != null && config.tool !== prev.tool;
@@ -1465,7 +1521,9 @@ export class SessionService {
     }
 
     // Allow runtime switching for not_started sessions
-    const runtimeChanged = prev.agentStatus === "not_started" && (config.hosting != null || config.runtimeInstanceId != null);
+    const runtimeChanged =
+      prev.agentStatus === "not_started" &&
+      (config.hosting != null || config.runtimeInstanceId != null);
     if (runtimeChanged) {
       let newHosting = config.hosting ?? prev.hosting;
       let runtimeLabel: string | undefined;
@@ -1491,6 +1549,8 @@ export class SessionService {
       if (needsProvisioning) {
         this.provisionRuntime({
           sessionId,
+          sessionGroupId: prev.sessionGroupId,
+          slug: prev.sessionGroup?.slug,
           hosting: newHosting,
           tool: nextTool,
           model: nextModel !== undefined ? nextModel : prev.model,
@@ -1537,8 +1597,9 @@ export class SessionService {
   }
 
   async recordOutput(sessionId: string, data: Record<string, unknown>) {
-    // Extract and strip <trace-title> tags from assistant text before persisting
+    // Extract and strip <trace-title> and <trace-branch> tags from assistant text before persisting
     const extractedTitle = this.extractAndStripTitle(data);
+    const extractedBranch = this.extractAndStripBranch(data);
 
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
@@ -1564,6 +1625,11 @@ export class SessionService {
     // If we found a title tag, update the session name
     if (extractedTitle) {
       await this.updateName(sessionId, extractedTitle);
+    }
+
+    // If we found a branch tag, update the branch on session + session group
+    if (extractedBranch) {
+      await this.updateBranch(sessionId, extractedBranch);
     }
 
     // If this output contains a QuestionBlock or PlanBlock, transition to needs_input immediately.
@@ -1690,6 +1756,57 @@ export class SessionService {
     return null;
   }
 
+  /**
+   * Look for <trace-branch>…</trace-branch> in assistant text blocks.
+   * If found, strip the tag from the text content (mutates data in place)
+   * and return the extracted branch name. Returns null if no tag found.
+   */
+  private extractAndStripBranch(data: Record<string, unknown>): string | null {
+    if (data.type !== "assistant") return null;
+
+    const message = data.message as Record<string, unknown> | undefined;
+    const content = message?.content;
+    if (!Array.isArray(content)) return null;
+
+    for (const block of content) {
+      const b = block as Record<string, unknown>;
+      if (b.type !== "text" || typeof b.text !== "string") continue;
+
+      const match = BRANCH_TAG_RE.exec(b.text);
+      if (match) {
+        const branch = match[1].trim();
+        // Strip all branch tags from the text so none leak to the UI
+        b.text = b.text.replace(/<trace-branch>[\s\S]*?<\/trace-branch>/g, "").trimStart();
+        return branch || null;
+      }
+    }
+
+    return null;
+  }
+
+  private async updateBranch(sessionId: string, branch: string) {
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { organizationId: true, sessionGroupId: true },
+    });
+
+    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, { branch });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: {
+        type: "branch_renamed",
+        branch,
+        ...(sessionGroup ? { sessionGroup } : {}),
+      },
+      actorType: "system",
+      actorId: "system",
+    });
+  }
+
   async complete(id: string) {
     // Only transition from active — don't overwrite explicit user actions
     const current = await prisma.session.findUnique({
@@ -1806,6 +1923,7 @@ export class SessionService {
         toolSessionId: true,
         repoId: true,
         sessionGroupId: true,
+        sessionGroup: { select: { slug: true } },
         connection: true,
         worktreeDeleted: true,
         readOnlyWorkspace: true,
@@ -1837,6 +1955,8 @@ export class SessionService {
 
         this.provisionRuntime({
           sessionId,
+          sessionGroupId: session.sessionGroupId,
+          slug: session.sessionGroup?.slug,
           hosting: session.hosting,
           tool: session.tool,
           model: session.model,
@@ -2027,7 +2147,7 @@ export class SessionService {
     return event;
   }
 
-  async workspaceReady(sessionId: string, workdir: string, branch?: string) {
+  async workspaceReady(sessionId: string, workdir: string, branch?: string, slug?: string) {
     // Read and clear pendingRun atomically in a transaction to prevent double-delivery
     const [session, pendingRun] = await prisma.$transaction(async (tx) => {
       const prev = await tx.session.findUniqueOrThrow({
@@ -2056,6 +2176,7 @@ export class SessionService {
       worktreeDeleted: false,
       repoId: session.repoId ?? null,
       ...(branch !== undefined ? { branch } : {}),
+      ...(slug !== undefined ? { slug } : {}),
     });
 
     await eventService.create({
@@ -2491,6 +2612,8 @@ export class SessionService {
       const prepResult = sessionRouter.send(sessionId, {
         type: "prepare",
         sessionId,
+        sessionGroupId: session.sessionGroupId ?? undefined,
+        slug: session.sessionGroup?.slug ?? undefined,
         repoId: session.repo.id,
         repoName: session.repo.name,
         repoRemoteUrl: session.repo.remoteUrl,
@@ -2520,7 +2643,7 @@ export class SessionService {
         runtimeLabel: runtime.label,
         lastSeen: new Date().toISOString(),
         lastError: undefined,
-        retryCount: conn.retryCount + 1,
+        retryCount: 0,
       };
 
       // Preserve agent/session status — only update connection state.
@@ -2564,7 +2687,7 @@ export class SessionService {
       runtimeLabel: runtime.label,
       lastSeen: new Date().toISOString(),
       lastError: undefined,
-      retryCount: conn.retryCount + 1,
+      retryCount: 0,
     };
 
     // Preserve agent/session status — only update connection state.
@@ -2790,6 +2913,8 @@ export class SessionService {
     if (childSession.repo || targetRuntime.hostingMode === "cloud") {
       sessionRouter.createRuntime({
         sessionId: childSession.id,
+        sessionGroupId: childSession.sessionGroupId ?? undefined,
+        slug: childSession.sessionGroup?.slug ?? undefined,
         hosting: targetRuntime.hostingMode,
         tool: childSession.tool,
         model: childSession.model ?? undefined,
@@ -2951,6 +3076,8 @@ export class SessionService {
     // waiting for bridge connection, and workspace setup.
     sessionRouter.createRuntime({
       sessionId: childSession.id,
+      sessionGroupId: childSession.sessionGroupId ?? undefined,
+      slug: childSession.sessionGroup?.slug ?? undefined,
       hosting: "cloud",
       tool: childSession.tool,
       model: childSession.model ?? undefined,
@@ -3348,6 +3475,10 @@ export class SessionService {
       sessionData.branch = patch.branch ?? null;
     }
 
+    if (Object.prototype.hasOwnProperty.call(patch, "slug")) {
+      groupData.slug = patch.slug ?? null;
+    }
+
     if (Object.prototype.hasOwnProperty.call(patch, "worktreeDeleted")) {
       groupData.worktreeDeleted = patch.worktreeDeleted ?? false;
       sessionData.worktreeDeleted = patch.worktreeDeleted ?? false;
@@ -3434,7 +3565,13 @@ export class SessionService {
    */
   private async triggerWorkspaceUpgrade(
     sessionId: string,
-    session: { organizationId: string; repo: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null; branch: string | null },
+    session: {
+      organizationId: string;
+      sessionGroupId: string | null;
+      sessionGroup?: { slug: string | null } | null;
+      repo: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
+      branch: string | null;
+    },
     pendingCommand: PendingSessionCommand,
   ) {
     await this.storePendingCommand(sessionId, pendingCommand);
@@ -3445,6 +3582,8 @@ export class SessionService {
     const deliveryResult = sessionRouter.send(sessionId, {
       type: "upgrade_workspace",
       sessionId,
+      sessionGroupId: session.sessionGroupId ?? undefined,
+      slug: session.sessionGroup?.slug ?? undefined,
       repoId: repo.id,
       repoName: repo.name,
       repoRemoteUrl: repo.remoteUrl,
@@ -3765,6 +3904,59 @@ export class SessionService {
       actorType: "system",
       actorId: "github-webhook",
     });
+  }
+
+  /** Archive a session group: stop agents, unload worktree, mark as archived. */
+  async archiveGroup(
+    groupId: string,
+    organizationId: string,
+    actorType: ActorType = "system",
+    actorId: string = "system",
+  ) {
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: groupId },
+      include: { sessions: { select: { id: true }, orderBy: { updatedAt: "desc" } } },
+    });
+    if (!group) throw new Error("Session group not found");
+    if (group.organizationId !== organizationId) throw new Error("Session group not found");
+
+    // Stop all active agents
+    await prisma.session.updateMany({
+      where: { sessionGroupId: groupId, agentStatus: "active" },
+      data: { agentStatus: "stopped" },
+    });
+
+    // Mark as archived
+    await prisma.sessionGroup.update({
+      where: { id: groupId },
+      data: { archivedAt: new Date() },
+    });
+
+    // Unload worktree and terminals
+    const sessionGroup = await this.syncGroupWorkspaceState(groupId, {
+      workdir: null,
+      worktreeDeleted: true,
+    });
+
+    const latestSessionId = group.sessions[0]?.id;
+    if (latestSessionId) {
+      await this.fullyUnloadSession(latestSessionId, true);
+    }
+
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: latestSessionId ?? groupId,
+      eventType: "session_group_archived",
+      payload: {
+        sessionGroupId: groupId,
+        ...(sessionGroup ? { sessionGroup } : {}),
+      },
+      actorType,
+      actorId,
+    });
+
+    return sessionGroup;
   }
 
   /** Transition all sessions in the group to merged when the group's PR is merged. */

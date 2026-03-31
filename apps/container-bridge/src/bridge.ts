@@ -42,6 +42,8 @@ export class ContainerBridge implements IBridgeClient {
   /** Max consecutive connection failures before the process exits, allowing the machine to stop. */
   private static MAX_RECONNECT_FAILURES = 20;
   private sessionWorkdirs = new Map<string, string>();
+  /** Coalesces concurrent createWorktree calls for the same worktree key (sessionGroupId or sessionId) */
+  private pendingWorktrees = new Map<string, Promise<{ workdir: string; slug: string }>>();
   /** Sessions running in read-only mode (no worktree, using bare repo path) */
   private readOnlySessions = new Set<string>();
   /** Phase-1 git detection: sessionId → Map<toolUseId → {trigger, command}> */
@@ -234,7 +236,7 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "prepare": {
-        const { sessionId, repoId, repoRemoteUrl, defaultBranch, branch, checkpointSha, readOnly } = cmd;
+        const { sessionId, sessionGroupId, slug, repoId, repoRemoteUrl, defaultBranch, branch, checkpointSha, readOnly } = cmd;
 
         (async () => {
           try {
@@ -249,16 +251,26 @@ export class ContainerBridge implements IBridgeClient {
               this.send({ type: "register_session", sessionId });
               this.send({ type: "workspace_ready", sessionId, workdir });
             } else {
-              const { workdir } = await createWorktree(
-                repoId,
-                sessionId,
-                defaultBranch,
-                branch,
-                checkpointSha,
-              );
+              // Coalesce concurrent createWorktree calls for the same group
+              const worktreeKey = slug ?? sessionGroupId ?? sessionId;
+              let worktreePromise = this.pendingWorktrees.get(worktreeKey);
+              if (!worktreePromise) {
+                worktreePromise = createWorktree({
+                  repoId,
+                  sessionId,
+                  defaultBranch,
+                  branch,
+                  checkpointSha,
+                  sessionGroupId,
+                  slug,
+                });
+                this.pendingWorktrees.set(worktreeKey, worktreePromise);
+                worktreePromise.finally(() => this.pendingWorktrees.delete(worktreeKey));
+              }
+              const { workdir, slug: worktreeSlug } = await worktreePromise;
               this.sessionWorkdirs.set(sessionId, workdir);
               this.send({ type: "register_session", sessionId });
-              this.send({ type: "workspace_ready", sessionId, workdir });
+              this.send({ type: "workspace_ready", sessionId, workdir, slug: worktreeSlug });
             }
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
@@ -270,20 +282,22 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "upgrade_workspace": {
-        const { sessionId, repoId, repoRemoteUrl, defaultBranch, branch } = cmd;
+        const { sessionId, sessionGroupId, slug, repoId, repoRemoteUrl, defaultBranch, branch } = cmd;
 
         (async () => {
           try {
             await ensureRepo(repoId, repoRemoteUrl);
-            const { workdir } = await createWorktree(
+            const { workdir, slug: worktreeSlug } = await createWorktree({
               repoId,
               sessionId,
               defaultBranch,
               branch,
-            );
+              sessionGroupId,
+              slug,
+            });
             this.sessionWorkdirs.set(sessionId, workdir);
             this.readOnlySessions.delete(sessionId);
-            this.send({ type: "workspace_ready", sessionId, workdir });
+            this.send({ type: "workspace_ready", sessionId, workdir, slug: worktreeSlug });
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             console.error(`[container-bridge] workspace upgrade failed for ${sessionId}:`, message);

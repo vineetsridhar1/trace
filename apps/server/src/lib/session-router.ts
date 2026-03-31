@@ -49,6 +49,10 @@ export interface RuntimeInstance {
 
 export interface SessionAdapterCreateOptions {
   sessionId: string;
+  /** Session group ID — used to key worktrees so all sessions in a group share the same workspace. */
+  sessionGroupId?: string;
+  /** Animal slug for the worktree. If set, reuses the existing slug. */
+  slug?: string;
   tool: string;
   model?: string;
   repo?: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
@@ -128,6 +132,8 @@ function createCloudAdapter(cloudMachineService: CloudMachineService): SessionAd
             ctx.send({
               type: "prepare",
               sessionId: options.sessionId,
+              sessionGroupId: options.sessionGroupId,
+              slug: options.slug,
               repoId: options.repo.id,
               repoName: options.repo.name,
               repoRemoteUrl: options.repo.remoteUrl,
@@ -208,6 +214,8 @@ const localAdapter: SessionAdapter = {
     const result = ctx.send({
       type: "prepare",
       sessionId: options.sessionId,
+      sessionGroupId: options.sessionGroupId,
+      slug: options.slug,
       repoId: options.repo.id,
       repoName: options.repo.name,
       repoRemoteUrl: options.repo.remoteUrl,
