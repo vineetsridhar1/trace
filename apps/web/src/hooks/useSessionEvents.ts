@@ -4,26 +4,9 @@ import type { Event } from "@trace/gql";
 import { client } from "../lib/urql";
 import { useEntityStore, useScopedEventIds, eventScopeKey } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
+import { SESSION_INVISIBLE_PAYLOAD_TYPES } from "../lib/session-constants";
 
 const PAGE_SIZE = 100;
-
-/** Payload types to exclude from session event queries (not rendered in session log) */
-const EXCLUDED_PAYLOAD_TYPES = [
-  "connection_lost",
-  "connection_restored",
-  "git_checkpoint",
-  "git_checkpoint_rewrite",
-  "title_generated",
-  "config_changed",
-  "prepare",
-  "run",
-  "send",
-  "session_rehomed",
-  "recovery_requested",
-  "recovery_failed",
-  "upgrade_workspace",
-  "workspace_ready",
-] as const;
 
 const SESSION_EVENTS_QUERY = gql`
   query SessionEvents($organizationId: ID!, $scope: ScopeInput, $limit: Int, $before: DateTime, $excludePayloadTypes: [String!]) {
@@ -89,7 +72,7 @@ export function useSessionEvents(sessionId: string) {
         scope: { type: "session", id: sessionId },
         limit: PAGE_SIZE,
         before: new Date().toISOString(),
-        excludePayloadTypes: EXCLUDED_PAYLOAD_TYPES,
+        excludePayloadTypes: SESSION_INVISIBLE_PAYLOAD_TYPES,
       })
       .toPromise();
 
@@ -121,6 +104,10 @@ export function useSessionEvents(sessionId: string) {
   // Subscribe to session-scoped events for full payloads.
   // The org-wide subscription trims session_output payloads to metadata only;
   // this subscription delivers full content for the session being viewed.
+  // Note: this subscription does NOT filter by payload type — invisible events
+  // are upserted into the store and filtered out client-side in buildSessionNodes().
+  // This keeps the subscription simple and ensures we don't miss events if the
+  // invisible list changes without a subscription reconnect.
   useEffect(() => {
     if (!activeOrgId) return;
 
@@ -153,7 +140,7 @@ export function useSessionEvents(sessionId: string) {
         scope: { type: "session", id: sessionId },
         limit: PAGE_SIZE,
         before: oldestTimestampRef.current,
-        excludePayloadTypes: EXCLUDED_PAYLOAD_TYPES,
+        excludePayloadTypes: SESSION_INVISIBLE_PAYLOAD_TYPES,
       })
       .toPromise();
 
