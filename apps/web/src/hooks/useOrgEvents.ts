@@ -116,6 +116,10 @@ function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEntity> | u
   if (payload.type === "title_generated" && typeof payload.name === "string") {
     return { name: payload.name };
   }
+  // LLM-generated branch rename
+  if (payload.type === "branch_renamed" && typeof payload.branch === "string") {
+    return { branch: payload.branch };
+  }
   if (payload.type === "question_pending" || payload.type === "plan_pending") {
     return { sessionStatus: "needs_input" as SessionStatus };
   }
@@ -143,6 +147,15 @@ function shouldBumpSortTimestampForOutput(payload: JsonObject): boolean {
   );
 }
 
+function patchGroupSessionsBranch(batch: StoreBatchWriter, sessionGroupId: string, branch: string) {
+  const allSessions = batch.getAll("sessions");
+  for (const [sessionId, session] of Object.entries(allSessions)) {
+    if (session.sessionGroupId === sessionGroupId) {
+      batch.patch("sessions", sessionId, { branch } as Partial<SessionEntity>);
+    }
+  }
+}
+
 function mergeGitCheckpoints(
   existing: GitCheckpoint[] | null | undefined,
   incoming: GitCheckpoint | GitCheckpoint[],
@@ -165,7 +178,9 @@ function rewriteGitCheckpoints(
   replacedCommitSha: string,
   incoming: GitCheckpoint,
 ): GitCheckpoint[] {
-  const filtered = (existing ?? []).filter((checkpoint) => checkpoint.commitSha !== replacedCommitSha);
+  const filtered = (existing ?? []).filter(
+    (checkpoint) => checkpoint.commitSha !== replacedCommitSha,
+  );
   return mergeGitCheckpoints(filtered, incoming);
 }
 
@@ -394,10 +409,7 @@ export function useOrgEvents() {
             // Auto-navigate to continuation sessions
             const sourceSessionId = payload.sourceSessionId;
             const ui = useUIStore.getState();
-            if (
-              typeof sourceSessionId === "string" &&
-              sourceSessionId === ui.activeSessionId
-            ) {
+            if (typeof sourceSessionId === "string" && sourceSessionId === ui.activeSessionId) {
               const sessionGroupId = session.sessionGroupId as string | undefined;
               const channel = asJsonObject(session.channel);
               const channelId = typeof channel?.id === "string" ? channel.id : null;
@@ -517,6 +529,16 @@ export function useOrgEvents() {
               updatedAt: event.timestamp,
               ...(bumpSort ? { _sortTimestamp: event.timestamp } : {}),
             });
+          }
+          if (payload.type === "branch_renamed" && typeof payload.branch === "string") {
+            const sessionGroup = asJsonObject(payload.sessionGroup);
+            const sessionGroupId =
+              typeof sessionGroup?.id === "string"
+                ? sessionGroup.id
+                : (batch.get("sessions", event.scopeId)?.sessionGroupId ?? null);
+            if (sessionGroupId) {
+              patchGroupSessionsBranch(batch, sessionGroupId, payload.branch);
+            }
           }
 
           if (payload.type === "session_rehomed" && typeof payload.newSessionId === "string") {

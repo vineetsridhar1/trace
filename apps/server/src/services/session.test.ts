@@ -554,11 +554,12 @@ describe("SessionService", () => {
         repoId: "repo-1",
       });
       prismaMock.gitCheckpoint.findUnique.mockResolvedValueOnce(null);
-      prismaMock.event.findFirst
-        .mockResolvedValueOnce({ id: "prompt-1" });
-      prismaMock.gitCheckpoint.create.mockResolvedValueOnce(makeGitCheckpoint({
-        promptEventId: "prompt-1",
-      }));
+      prismaMock.event.findFirst.mockResolvedValueOnce({ id: "prompt-1" });
+      prismaMock.gitCheckpoint.create.mockResolvedValueOnce(
+        makeGitCheckpoint({
+          promptEventId: "prompt-1",
+        }),
+      );
 
       const result = await service.recordGitCheckpoint("session-1", {
         trigger: "commit",
@@ -640,9 +641,11 @@ describe("SessionService", () => {
       });
       prismaMock.gitCheckpoint.findUnique.mockResolvedValueOnce(null);
       prismaMock.event.findFirst.mockResolvedValueOnce({ id: "prompt-explicit" });
-      prismaMock.gitCheckpoint.create.mockResolvedValueOnce(makeGitCheckpoint({
-        promptEventId: "prompt-explicit",
-      }));
+      prismaMock.gitCheckpoint.create.mockResolvedValueOnce(
+        makeGitCheckpoint({
+          promptEventId: "prompt-explicit",
+        }),
+      );
 
       await service.recordGitCheckpoint("session-1", {
         trigger: "commit",
@@ -683,19 +686,21 @@ describe("SessionService", () => {
         sessionGroupId: "group-1",
         repoId: "repo-1",
       });
-      prismaMock.gitCheckpoint.findUnique
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(makeGitCheckpoint({
+      prismaMock.gitCheckpoint.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(
+        makeGitCheckpoint({
           id: "checkpoint-old",
           commitSha: "oldsha1234567890",
           promptEventId: "prompt-old",
-        }));
+        }),
+      );
       prismaMock.event.findFirst.mockResolvedValueOnce({ id: "prompt-new" });
-      prismaMock.gitCheckpoint.update.mockResolvedValueOnce(makeGitCheckpoint({
-        id: "checkpoint-old",
-        commitSha: "newsha1234567890",
-        promptEventId: "prompt-new",
-      }));
+      prismaMock.gitCheckpoint.update.mockResolvedValueOnce(
+        makeGitCheckpoint({
+          id: "checkpoint-old",
+          commitSha: "newsha1234567890",
+          promptEventId: "prompt-new",
+        }),
+      );
 
       const result = await service.recordGitCheckpoint("session-1", {
         trigger: "rewrite",
@@ -713,11 +718,13 @@ describe("SessionService", () => {
         rewrittenFromCommitSha: "oldsha1234567890",
       });
 
-      expect(result).toEqual(makeGitCheckpoint({
-        id: "checkpoint-old",
-        commitSha: "newsha1234567890",
-        promptEventId: "prompt-new",
-      }));
+      expect(result).toEqual(
+        makeGitCheckpoint({
+          id: "checkpoint-old",
+          commitSha: "newsha1234567890",
+          promptEventId: "prompt-new",
+        }),
+      );
       expect(prismaMock.gitCheckpoint.update).toHaveBeenCalledWith({
         where: { id: "checkpoint-old" },
         data: expect.objectContaining({
@@ -748,16 +755,20 @@ describe("SessionService", () => {
         repoId: "repo-1",
       });
       prismaMock.gitCheckpoint.findUnique
-        .mockResolvedValueOnce(makeGitCheckpoint({
-          id: "checkpoint-new",
-          commitSha: "newsha1234567890",
-          promptEventId: "prompt-new",
-        }))
-        .mockResolvedValueOnce(makeGitCheckpoint({
-          id: "checkpoint-old",
-          commitSha: "oldsha1234567890",
-          promptEventId: "prompt-old",
-        }));
+        .mockResolvedValueOnce(
+          makeGitCheckpoint({
+            id: "checkpoint-new",
+            commitSha: "newsha1234567890",
+            promptEventId: "prompt-new",
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeGitCheckpoint({
+            id: "checkpoint-old",
+            commitSha: "oldsha1234567890",
+            promptEventId: "prompt-old",
+          }),
+        );
 
       const result = await service.recordGitCheckpoint("session-1", {
         trigger: "rewrite",
@@ -774,11 +785,13 @@ describe("SessionService", () => {
         rewrittenFromCommitSha: "oldsha1234567890",
       });
 
-      expect(result).toEqual(makeGitCheckpoint({
-        id: "checkpoint-new",
-        commitSha: "newsha1234567890",
-        promptEventId: "prompt-new",
-      }));
+      expect(result).toEqual(
+        makeGitCheckpoint({
+          id: "checkpoint-new",
+          commitSha: "newsha1234567890",
+          promptEventId: "prompt-new",
+        }),
+      );
       expect(prismaMock.gitCheckpoint.delete).toHaveBeenCalledWith({
         where: { id: "checkpoint-old" },
       });
@@ -837,9 +850,9 @@ describe("SessionService", () => {
       sessionRouterMock.getRuntimeForSession.mockReturnValueOnce({ id: "runtime-1" });
       sessionRouterMock.listFiles.mockResolvedValueOnce(["src/app.ts"]);
 
-      await expect(
-        service.readFile("group-1", "secrets.txt", "org-1", "user-1"),
-      ).rejects.toThrow("Invalid file path");
+      await expect(service.readFile("group-1", "secrets.txt", "org-1", "user-1")).rejects.toThrow(
+        "Invalid file path",
+      );
       expect(sessionRouterMock.readFile).not.toHaveBeenCalled();
     });
   });
@@ -864,6 +877,60 @@ describe("SessionService", () => {
         data: { name: "Dashboard filters" },
         select: expect.any(Object),
       });
+    });
+  });
+
+  describe("recordOutput", () => {
+    it("preserves the full branch name when syncing a trace-branch tag", async () => {
+      const branch = `feature/${"x".repeat(140)}`;
+      const data = {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "text",
+              text: `<trace-branch>${branch}</trace-branch>\nCreated the branch.`,
+            },
+          ],
+        },
+      };
+
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        organizationId: "org-1",
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        sessionGroupId: "group-1",
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+      });
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(makeSessionGroup({ branch }));
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup({ branch }),
+        sessions: [{ agentStatus: "done", sessionStatus: "in_progress" }],
+      });
+
+      await service.recordOutput("session-1", data as Record<string, unknown>);
+
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: { sessionGroupId: "group-1" },
+        data: { branch },
+      });
+      expect(eventServiceMock.create).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "branch_renamed",
+            branch,
+          }),
+        }),
+      );
+      expect(
+        (data.message as { content: Array<{ text?: string }> }).content[0].text ?? "",
+      ).not.toContain("<trace-branch>");
     });
   });
 
@@ -1289,12 +1356,7 @@ describe("SessionService", () => {
       );
       prismaMock.session.update.mockResolvedValueOnce(makeSession());
 
-      const result = await service.moveToCloud(
-        "session-1",
-        "org-1",
-        "user",
-        "user-1",
-      );
+      const result = await service.moveToCloud("session-1", "org-1", "user", "user-1");
 
       expect(result.id).toBe("session-3");
       expect(prismaMock.session.create).toHaveBeenCalledWith(
@@ -1326,9 +1388,9 @@ describe("SessionService", () => {
       );
       prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
 
-      await expect(
-        service.moveToCloud("session-1", "org-1", "user", "user-1"),
-      ).rejects.toThrow("Cannot move a merged session");
+      await expect(service.moveToCloud("session-1", "org-1", "user", "user-1")).rejects.toThrow(
+        "Cannot move a merged session",
+      );
     });
 
     it("allows moving a stopped session to cloud", async () => {
@@ -1351,12 +1413,7 @@ describe("SessionService", () => {
       );
       prismaMock.session.update.mockResolvedValueOnce(makeSession());
 
-      const result = await service.moveToCloud(
-        "session-1",
-        "org-1",
-        "user",
-        "user-1",
-      );
+      const result = await service.moveToCloud("session-1", "org-1", "user", "user-1");
 
       expect(result.id).toBe("session-3");
     });

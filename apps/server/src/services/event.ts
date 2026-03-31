@@ -49,6 +49,7 @@ const ORG_RELEVANT_OUTPUT_SUBTYPES = new Set([
   "git_checkpoint",
   "git_checkpoint_rewrite",
   "config_changed",
+  "branch_renamed",
 ]);
 
 // Maps scope types to their pubsub topic builders.
@@ -155,6 +156,7 @@ export class EventService {
     if (p.agentStatus !== undefined) trimmed.agentStatus = p.agentStatus;
     if (p.sessionStatus !== undefined) trimmed.sessionStatus = p.sessionStatus;
     if (p.name !== undefined) trimmed.name = p.name;
+    if (p.branch !== undefined) trimmed.branch = p.branch;
     if (p.workdir !== undefined) trimmed.workdir = p.workdir;
     if (p.connection !== undefined) trimmed.connection = p.connection;
     if (p.newSessionId !== undefined) trimmed.newSessionId = p.newSessionId;
