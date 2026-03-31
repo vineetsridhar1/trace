@@ -431,6 +431,7 @@ export class BridgeClient implements IBridgeClient {
             type: "workspace_failed",
             sessionId,
             error: `No local path configured for repo "${repoName}" (${repoId}). Configure it in Settings.`,
+            retryable: false,
           });
           break;
         }
@@ -480,6 +481,7 @@ export class BridgeClient implements IBridgeClient {
             type: "workspace_failed",
             sessionId,
             error: `No local path configured for repo "${repoName}" (${repoId}). Configure it in Settings.`,
+            retryable: false,
           });
           break;
         }

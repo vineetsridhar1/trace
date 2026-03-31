@@ -2094,7 +2094,8 @@ export class SessionService {
     }
   }
 
-  async workspaceFailed(sessionId: string, error: string) {
+  async workspaceFailed(sessionId: string, error: string, options?: { retryable?: boolean }) {
+    const retryable = options?.retryable ?? true;
     const session = await prisma.session.update({
       where: { id: sessionId },
       data: {
@@ -2102,7 +2103,7 @@ export class SessionService {
         workdir: null,
         worktreeDeleted: true,
         pendingRun: Prisma.DbNull,
-        connection: connJson(defaultConnection({ state: "disconnected", lastError: error })),
+        connection: connJson(defaultConnection({ state: "disconnected", lastError: error, canRetry: retryable })),
       },
       include: SESSION_INCLUDE,
     });

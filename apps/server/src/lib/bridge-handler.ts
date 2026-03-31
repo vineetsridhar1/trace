@@ -178,7 +178,11 @@ export function handleBridgeConnection(ws: WebSocket) {
         });
       } else if (msg.type === "workspace_failed" && msg.sessionId) {
         enqueueEvent(msg.sessionId, async () => {
-          await sessionService.workspaceFailed(msg.sessionId, (msg.error as string) ?? "Unknown error");
+          await sessionService.workspaceFailed(
+            msg.sessionId,
+            (msg.error as string) ?? "Unknown error",
+            { retryable: (msg.retryable as boolean | undefined) ?? true },
+          );
         });
       } else if (msg.type === "register_session" && msg.sessionId) {
         runtimeDebug("received register_session", { runtimeId, sessionId: msg.sessionId });
