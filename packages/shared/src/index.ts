@@ -110,4 +110,3 @@ export type { ModelOption } from "./models.js";
 export { getModelsForTool, getDefaultModel, getModelLabel, isSupportedModel } from "./models.js";
 export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from "./json.js";
 export { asJsonObject, isJsonObject } from "./json.js";
-export { ANIMAL_NAMES, generateAnimalSlug, getUsedSlugs } from "./animal-names.js";

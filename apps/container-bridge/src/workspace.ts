@@ -1,7 +1,8 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
-import { assertValidCommitSha, generateAnimalSlug, getUsedSlugs } from "@trace/shared";
+import { generateAnimalSlug, getUsedSlugs } from "@trace/shared/animal-names";
+import { assertValidCommitSha } from "@trace/shared";
 
 const execFileAsync = promisify(execFile);
 

@@ -9,6 +9,10 @@
       "import": "./dist/index.js",
       "require": "./dist/cjs/index.js"
     },
+    "./animal-names": {
+      "import": "./dist/animal-names.js",
+      "require": "./dist/cjs/animal-names.js"
+    },
     "./git-hooks": {
       "import": "./dist/git-hooks.js",
       "require": "./dist/cjs/git-hooks.js"
@@ -20,6 +24,7 @@
   },
   "typesVersions": {
     "*": {
+      "animal-names": ["dist/animal-names.d.ts"],
       "git-hooks": ["dist/git-hooks.d.ts"],
       "adapters": ["dist/adapters.d.ts"]
     }

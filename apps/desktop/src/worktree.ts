@@ -3,7 +3,8 @@ import os from "os";
 import fs from "fs";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { assertValidCommitSha, generateAnimalSlug, getUsedSlugs } from "@trace/shared";
+import { generateAnimalSlug, getUsedSlugs } from "@trace/shared/animal-names";
+import { assertValidCommitSha } from "@trace/shared";
 import { installOrRepairRepoHooks } from "./repo-hooks.js";
 
 const execFileAsync = promisify(execFile);

@@ -56,7 +56,7 @@ export function optimisticallyInsertSessionGroup(params: {
   useEntityStore.getState().upsert("sessionGroups", params.id, {
     id: params.id,
     name: params.name ?? "New session",
-    status: "not_started",
+    status: "in_progress",
     channel: params.channel ?? null,
     repo: params.repo ?? null,
     branch: null,
@@ -104,7 +104,7 @@ function buildSessionGroupEntity(params: {
   return {
     id: params.id,
     name: "New session",
-    status: "not_started",
+    status: "in_progress",
     channel: params.channel ?? null,
     repo: params.repo ?? null,
     branch: null,
