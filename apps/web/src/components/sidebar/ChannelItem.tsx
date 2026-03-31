@@ -61,7 +61,7 @@ export function ChannelItem({
               </span>
             )}
           </div>
-          <span className={hasDoneBadge ? "font-semibold" : ""}>{name}</span>
+          <span className={hasDoneBadge ? "font-semibold" : undefined}>{name}</span>
         </SidebarMenuButton>
       </SidebarMenuItem>
     </div>

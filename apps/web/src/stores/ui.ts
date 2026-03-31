@@ -32,7 +32,6 @@ interface UIState {
   markChatRead: (chatId: string) => void;
   channelDoneBadges: Record<string, boolean>;
   markChannelDone: (channelId: string) => void;
-  clearChannelDone: (channelId: string) => void;
   _restoreNav: (
     channelId: string | null,
     sessionGroupId: string | null,
@@ -280,14 +279,6 @@ export const useUIStore = create<UIState>((set, get) => ({
     });
   },
 
-  clearChannelDone: (channelId) => {
-    set((s) => {
-      if (!s.channelDoneBadges[channelId]) return s;
-      const { [channelId]: _, ...rest } = s.channelDoneBadges;
-      return { channelDoneBadges: rest };
-    });
-  },
-
   setActiveChatId: (id) => {
     persistActiveChatId(id);
     set((s) => {
@@ -441,19 +432,27 @@ export const useUIStore = create<UIState>((set, get) => ({
     persistActiveChannelId(channelId);
     if (chatId) persistActiveChatId(chatId);
     if (page === "main" && !chatId) persistActiveSessionNav(sessionGroupId, sessionId);
-    set((state) => ({
-      activePage: page ?? "main",
-      activeChannelId: channelId,
-      activeSessionGroupId: sessionGroupId,
-      activeSessionId: sessionId,
-      activeTerminalId: null,
-      activeChatId: chatId ?? null,
-      activeThreadId: null,
-      lastSelectedSessionIdsByGroup:
-        sessionGroupId && sessionId
-          ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: sessionId }
-          : state.lastSelectedSessionIdsByGroup,
-    }));
+    set((state) => {
+      let channelDoneBadges = state.channelDoneBadges;
+      if (channelId && channelDoneBadges[channelId]) {
+        const { [channelId]: _, ...rest } = channelDoneBadges;
+        channelDoneBadges = rest;
+      }
+      return {
+        activePage: page ?? "main",
+        activeChannelId: channelId,
+        activeSessionGroupId: sessionGroupId,
+        activeSessionId: sessionId,
+        activeTerminalId: null,
+        activeChatId: chatId ?? null,
+        activeThreadId: null,
+        channelDoneBadges,
+        lastSelectedSessionIdsByGroup:
+          sessionGroupId && sessionId
+            ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: sessionId }
+            : state.lastSelectedSessionIdsByGroup,
+      };
+    });
   },
 }));
 
