@@ -250,8 +250,13 @@ export function useOrgEvents() {
           }
         };
 
-        // Always upsert the raw event into its scoped bucket
-        batch.upsertScopedEvent(eventScopeKey(event.scopeType, event.scopeId), event.id, event);
+        // Upsert the event into its scoped bucket — but skip session_output events
+        // because the org subscription broadcasts a trimmed payload (metadata only)
+        // to avoid 100KB+ payloads. The session detail view fetches full payloads
+        // via the events query; upserting the trimmed version here would overwrite them.
+        if (event.eventType !== "session_output") {
+          batch.upsertScopedEvent(eventScopeKey(event.scopeType, event.scopeId), event.id, event);
+        }
 
         // Repo created or updated — upsert directly from payload
         if ((event.eventType === "repo_created" || event.eventType === "repo_updated") && payload) {
