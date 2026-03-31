@@ -1,6 +1,7 @@
 import type { Actor, Event, Message } from "@trace/gql";
 import { asJsonObject, isJsonObject } from "@trace/shared";
-import { useEntityStore } from "../stores/entity";
+import { useEntityStore, eventScopeKey } from "../stores/entity";
+import { drainPendingOptimisticChat } from "../lib/optimistic-message";
 
 type MessageScope =
   | { scopeType: "chat"; scopeId: string }
@@ -73,7 +74,34 @@ export function upsertScopedMessageFromEvent(event: Event, scope: MessageScope) 
 
   if (event.eventType === "message_sent") {
     const nextMessage = buildScopedMessage(scope, event, payload, existing);
-    upsert("messages", messageId, nextMessage);
+
+    // Atomically upsert the real message AND remove any pending optimistic
+    // duplicate to prevent a brief flash where both appear in the list.
+    if (scope.scopeType === "chat") {
+      const pending = drainPendingOptimisticChat(scope.scopeId);
+      if (pending) {
+        const scopeKey = eventScopeKey("chat", scope.scopeId);
+        useEntityStore.setState((state) => {
+          const nextMessages = { ...state.messages };
+          delete nextMessages[pending.tempMessageId];
+          nextMessages[messageId] = nextMessage;
+
+          const bucket = state.eventsByScope[scopeKey];
+          if (bucket && bucket[pending.tempEventId]) {
+            const { [pending.tempEventId]: _, ...restBucket } = bucket;
+            return {
+              messages: nextMessages,
+              eventsByScope: { ...state.eventsByScope, [scopeKey]: restBucket },
+            };
+          }
+          return { messages: nextMessages };
+        });
+      } else {
+        upsert("messages", messageId, nextMessage);
+      }
+    } else {
+      upsert("messages", messageId, nextMessage);
+    }
 
     if (!existing && nextMessage.parentMessageId) {
       const root = messages[nextMessage.parentMessageId] as Message | undefined;

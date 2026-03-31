@@ -5,6 +5,7 @@ import { client } from "../lib/urql";
 import { useEntityStore, useScopedEventIds, eventScopeKey } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { HIDDEN_SESSION_PAYLOAD_TYPES } from "../lib/session-event-filters";
+import { drainPendingOptimisticSession } from "../lib/optimistic-message";
 
 const PAGE_SIZE = 100;
 const SESSION_EVENTS_QUERY = gql`
@@ -126,6 +127,19 @@ export function useSessionEvents(sessionId: string) {
       .subscribe((result) => {
         if (!result.data?.sessionEvents) return;
         const event = result.data.sessionEvents as Event & { id: string };
+        // Clean up optimistic duplicate atomically when upserting the real event
+        if (event.eventType === "message_sent") {
+          const pendingTempId = drainPendingOptimisticSession(sessionId);
+          if (pendingTempId) {
+            useEntityStore.setState((state) => {
+              const bucket = { ...(state.eventsByScope[scopeKey] ?? {}) };
+              delete bucket[pendingTempId];
+              bucket[event.id] = event;
+              return { eventsByScope: { ...state.eventsByScope, [scopeKey]: bucket } };
+            });
+            return;
+          }
+        }
         useEntityStore.getState().upsertScopedEvent(scopeKey, event.id, event);
       });
 

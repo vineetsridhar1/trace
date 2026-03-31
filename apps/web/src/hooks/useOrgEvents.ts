@@ -8,6 +8,7 @@ import { useAuthStore } from "../stores/auth";
 import { useUIStore, navigateToSession } from "../stores/ui";
 import { getSessionChannelId } from "../lib/session-group";
 import { notifyForEvent } from "../notifications/handlers";
+import { drainPendingOptimisticSession } from "../lib/optimistic-message";
 import type {
   AgentStatus,
   Event,
@@ -268,7 +269,19 @@ export function useOrgEvents() {
         // Note: session_output events arrive with trimmed payloads from the org
         // subscription. The session detail view subscribes to sessionEvents for
         // full payloads, which will overwrite these trimmed versions.
-        batch.upsertScopedEvent(eventScopeKey(event.scopeType, event.scopeId), event.id, event);
+        const scopeKey = eventScopeKey(event.scopeType, event.scopeId);
+        batch.upsertScopedEvent(scopeKey, event.id, event);
+
+        // Clean up optimistic session events to prevent brief duplicates
+        if (
+          event.eventType === "message_sent" &&
+          event.scopeType === ("session" satisfies ScopeType)
+        ) {
+          const pendingTempId = drainPendingOptimisticSession(event.scopeId);
+          if (pendingTempId) {
+            batch.removeScopedEvent(scopeKey, pendingTempId);
+          }
+        }
 
         // Repo created or updated — upsert directly from payload
         if ((event.eventType === "repo_created" || event.eventType === "repo_updated") && payload) {
