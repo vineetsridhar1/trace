@@ -8,7 +8,7 @@ export function SessionNameCell({ row }: { row?: SessionGroupRow }) {
   return (
     <div className="flex h-full items-center gap-2">
       <SessionStatusIndicator row={row} />
-      <span className="truncate text-sm text-foreground"><ScrambleText text={row.name} /></span>
+      <span className="truncate text-sm text-foreground"><ScrambleText text={row.name} animateOnMount /></span>
     </div>
   );
 }

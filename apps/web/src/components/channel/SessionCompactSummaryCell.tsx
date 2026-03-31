@@ -14,7 +14,7 @@ export function SessionCompactSummaryCell({ row }: { row?: SessionGroupRow }) {
     <div className="flex h-full w-full min-w-0 flex-1 flex-col justify-center py-2">
       <div className="flex w-full min-w-0 items-center gap-2">
         <SessionStatusIndicator row={row} />
-        <span className="truncate text-sm font-medium text-foreground"><ScrambleText text={row.name} /></span>
+        <span className="truncate text-sm font-medium text-foreground"><ScrambleText text={row.name} animateOnMount /></span>
       </div>
       <div className="mt-2.5 flex w-full min-w-0 items-center gap-3 text-[11px] text-muted-foreground">
         <div className="min-w-0 flex-1">

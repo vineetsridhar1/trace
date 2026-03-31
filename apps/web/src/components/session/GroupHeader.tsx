@@ -85,7 +85,7 @@ export function GroupHeader({
 
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-sm font-semibold text-foreground">
-          <ScrambleText text={groupName ?? "Session Group"} />
+          <ScrambleText text={groupName ?? "Session Group"} animateOnMount />
         </h2>
       </div>
 
