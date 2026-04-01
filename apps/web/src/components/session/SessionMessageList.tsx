@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Loader2 } from "lucide-react";
 import type { GitCheckpoint } from "@trace/gql";
 import { SessionMessage } from "./SessionMessage";
@@ -29,14 +30,13 @@ export function SessionMessageList({
   scrollToEventId,
   onScrollComplete,
 }: SessionMessageListProps) {
-  const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const prevNodeCountRef = useRef(0);
   const isInitialLoadRef = useRef(true);
   const wasLoadingOlderRef = useRef(false);
-  const scrollSnapshotRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const isNearBottomRef = useRef(true);
+
   const gitCheckpointsByPromptEventId = useMemo(() => {
     const byPromptEventId = new Map<string, GitCheckpoint[]>();
     for (const checkpoint of gitCheckpoints) {
@@ -49,6 +49,21 @@ export function SessionMessageList({
     }
     return byPromptEventId;
   }, [gitCheckpoints]);
+
+  const virtualizer = useVirtualizer({
+    count: nodes.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => 80,
+    overscan: 10,
+    getItemKey: (index) => {
+      const node = nodes[index];
+      return node.kind === "readglob-group" ? `rg:${node.items[0].id}` : node.id;
+    },
+    measureElement: (element) => {
+      // Measure the actual rendered height for accurate positioning
+      return element.getBoundingClientRect().height;
+    },
+  });
 
   // Track whether the user is near the bottom via scroll events
   const handleScroll = useCallback(() => {
@@ -66,40 +81,20 @@ export function SessionMessageList({
     return () => container.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
 
-  // Capture scroll position when older messages start loading
+  // Handle scroll position when loading older messages
   useEffect(() => {
     if (loadingOlder && !wasLoadingOlderRef.current) {
-      const container = scrollContainerRef.current;
-      if (container) {
-        scrollSnapshotRef.current = {
-          scrollHeight: container.scrollHeight,
-          scrollTop: container.scrollTop,
-        };
-      }
+      // Older messages are about to be prepended — nothing to do here,
+      // react-virtual handles position via keys
     }
     wasLoadingOlderRef.current = !!loadingOlder;
   }, [loadingOlder]);
 
-  // Restore scroll position after older messages are prepended
-  useEffect(() => {
-    const snapshot = scrollSnapshotRef.current;
-    const container = scrollContainerRef.current;
-    if (!snapshot || !container || loadingOlder) return;
-
-    requestAnimationFrame(() => {
-      const newScrollHeight = container.scrollHeight;
-      container.scrollTop = snapshot.scrollTop + (newScrollHeight - snapshot.scrollHeight);
-      scrollSnapshotRef.current = null;
-    });
-  }, [loadingOlder, nodes.length]);
-
   // Scroll to bottom on initial load and when new messages arrive at the end
   useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    if (isInitialLoadRef.current) {
-      bottomRef.current?.scrollIntoView();
+    if (isInitialLoadRef.current && nodes.length > 0) {
+      // Scroll to the last item on initial load
+      virtualizer.scrollToIndex(nodes.length - 1, { align: "end" });
       isInitialLoadRef.current = false;
       prevNodeCountRef.current = nodes.length;
       return;
@@ -108,28 +103,21 @@ export function SessionMessageList({
     const prevCount = prevNodeCountRef.current;
     prevNodeCountRef.current = nodes.length;
 
-    // Don't auto-scroll when older messages were prepended
-    if (scrollSnapshotRef.current) return;
     if (nodes.length <= prevCount) return;
 
     // Only auto-scroll if the user was near the bottom (within 100px)
     if (isNearBottomRef.current) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      virtualizer.scrollToIndex(nodes.length - 1, { align: "end", behavior: "smooth" });
     }
-  }, [nodes.length]);
+  }, [nodes.length, virtualizer]);
 
   // Scroll to a specific event when requested (e.g. from checkpoint panel)
   const [highlightEventId, setHighlightEventId] = useState<string | null>(null);
   useEffect(() => {
     if (!scrollToEventId) return;
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    const target = container.querySelector(`[data-event-id="${CSS.escape(scrollToEventId)}"]`);
-    if (target) {
-      // Small delay to let the DOM settle after session switch
-      requestAnimationFrame(() => {
-        target.scrollIntoView({ behavior: "smooth", block: "center" });
-      });
+    const targetIndex = nodes.findIndex((n) => n.kind !== "readglob-group" && n.id === scrollToEventId);
+    if (targetIndex >= 0) {
+      virtualizer.scrollToIndex(targetIndex, { align: "center", behavior: "smooth" });
       setHighlightEventId(scrollToEventId);
       const timer = setTimeout(() => setHighlightEventId(null), 2000);
       onScrollComplete?.();
@@ -139,10 +127,9 @@ export function SessionMessageList({
     if (hasOlder && onLoadOlder && !loadingOlder) {
       onLoadOlder();
     } else if (!hasOlder) {
-      // No more events to load, give up
       onScrollComplete?.();
     }
-  }, [scrollToEventId, onScrollComplete, nodes.length, hasOlder, loadingOlder, onLoadOlder]);
+  }, [scrollToEventId, onScrollComplete, nodes, hasOlder, loadingOlder, onLoadOlder, virtualizer]);
 
   // IntersectionObserver on the sentinel to trigger loading older messages
   useEffect(() => {
@@ -164,62 +151,82 @@ export function SessionMessageList({
     return () => observer.disconnect();
   }, [onLoadOlder]);
 
+  const virtualItems = virtualizer.getVirtualItems();
+
   return (
     <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-4 max-h-full">
-      <div className="flex flex-col gap-3">
-        {/* Sentinel for infinite scroll - triggers loading older messages */}
-        <div ref={sentinelRef} className="h-px" />
+      {/* Sentinel for infinite scroll - triggers loading older messages */}
+      <div ref={sentinelRef} className="h-px" />
 
-        {loadingOlder && (
-          <div className="flex items-center justify-center py-3">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-sm text-muted-foreground">Loading older messages…</span>
-          </div>
-        )}
+      {loadingOlder && (
+        <div className="flex items-center justify-center py-3">
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          <span className="ml-2 text-sm text-muted-foreground">Loading older messages…</span>
+        </div>
+      )}
 
-        {!hasOlder && nodes.length > 0 && (
-          <div className="text-center text-xs text-muted-foreground py-2">Beginning of session</div>
-        )}
+      {!hasOlder && nodes.length > 0 && (
+        <div className="text-center text-xs text-muted-foreground py-2">Beginning of session</div>
+      )}
 
-        {nodes.map((node) =>
-          node.kind === "event" ? (
+      <div
+        style={{
+          height: virtualizer.getTotalSize(),
+          width: "100%",
+          position: "relative",
+        }}
+      >
+        {virtualItems.map((virtualRow) => {
+          const node = nodes[virtualRow.index];
+          return (
             <div
-              key={node.id}
-              data-event-id={node.id}
-              className={highlightEventId === node.id ? "rounded-lg ring-2 ring-primary/50 transition-all duration-500" : undefined}
+              key={virtualRow.key}
+              ref={virtualizer.measureElement}
+              data-index={virtualRow.index}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+              className="pb-3"
             >
-              <SessionMessage
-                id={node.id}
-                gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
-                completedAgentTools={completedAgentTools}
-              />
+              {node.kind === "event" ? (
+                <div
+                  data-event-id={node.id}
+                  className={highlightEventId === node.id ? "rounded-lg ring-2 ring-primary/50 transition-all duration-500" : undefined}
+                >
+                  <SessionMessage
+                    id={node.id}
+                    gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
+                    completedAgentTools={completedAgentTools}
+                  />
+                </div>
+              ) : node.kind === "command-execution" ? (
+                <CommandExecutionRow
+                  command={node.command}
+                  output={node.output}
+                  timestamp={node.timestamp}
+                  exitCode={node.exitCode}
+                />
+              ) : node.kind === "plan-review" ? (
+                <PlanReviewCard
+                  planContent={node.planContent}
+                  planFilePath={node.planFilePath}
+                  timestamp={node.timestamp}
+                />
+              ) : node.kind === "ask-user-question" ? (
+                <AskUserQuestionInline
+                  questions={node.questions}
+                  timestamp={node.timestamp}
+                />
+              ) : (
+                <ReadGlobGroup items={node.items} />
+              )}
             </div>
-          ) : node.kind === "command-execution" ? (
-            <CommandExecutionRow
-              key={node.id}
-              command={node.command}
-              output={node.output}
-              timestamp={node.timestamp}
-              exitCode={node.exitCode}
-            />
-          ) : node.kind === "plan-review" ? (
-            <PlanReviewCard
-              key={node.id}
-              planContent={node.planContent}
-              planFilePath={node.planFilePath}
-              timestamp={node.timestamp}
-            />
-          ) : node.kind === "ask-user-question" ? (
-            <AskUserQuestionInline
-              key={node.id}
-              questions={node.questions}
-              timestamp={node.timestamp}
-            />
-          ) : (
-            <ReadGlobGroup key={node.items[0].id} items={node.items} />
-          ),
-        )}
-        <div ref={bottomRef} />
+          );
+        })}
       </div>
     </div>
   );

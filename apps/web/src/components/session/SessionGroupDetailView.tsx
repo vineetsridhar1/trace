@@ -1,17 +1,10 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
-import {
-  CREATE_TERMINAL_MUTATION,
-  DESTROY_TERMINAL_MUTATION,
-  SESSION_TERMINALS_QUERY,
-  START_SESSION_MUTATION,
-} from "../../lib/mutations";
+import { SESSION_TERMINALS_QUERY, START_SESSION_MUTATION } from "../../lib/mutations";
+import type { Terminal } from "@trace/gql";
 import { useDetailPanelStore } from "../../stores/detail-panel";
-import {
-  useEntityField,
-  useEntityStore,
-} from "../../stores/entity";
+import { useEntityField, useEntityStore } from "../../stores/entity";
 import type { SessionEntity } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
 import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
@@ -20,22 +13,15 @@ import { getSessionChannelId, getSessionGroupChannelId } from "../../lib/session
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { GroupHeader } from "./GroupHeader";
 import { GroupTabStrip } from "./GroupTabStrip";
-import type { OpenFileTab } from "./GroupTabStrip";
-import { SessionDetailView } from "./SessionDetailView";
-import { TerminalInstance } from "./TerminalInstance";
+import { SessionGroupContentArea } from "./SessionGroupContentArea";
 import { CheckpointOpenContext } from "./CheckpointOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
 import { SidebarPanel } from "./SidebarPanel";
 import type { SidebarTab } from "./SidebarPanel";
 import { useSessionGroupSessions } from "./useSessionGroupSessions";
-const MonacoFileViewer = lazy(() =>
-  import("./MonacoFileViewer").then((m) => ({ default: m.MonacoFileViewer })),
-);
-const MonacoDiffViewer = lazy(() =>
-  import("./MonacoDiffViewer").then((m) => ({ default: m.MonacoDiffViewer })),
-);
+import { useTerminalActions } from "./useTerminalActions";
+import { useFileActions } from "./useFileActions";
 import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
-import type { Terminal } from "@trace/gql";
 
 const SESSION_GROUP_DETAIL_QUERY = gql`
   query SessionGroupDetail($id: ID!) {
@@ -151,6 +137,7 @@ export function SessionGroupDetailView({
     sessionGroupId,
     "worktreeDeleted",
   ) as boolean | undefined;
+
   const activeSessionGroupId = useUIStore((s) => s.activeSessionGroupId);
   const activeSessionId = useUIStore((s) => s.activeSessionId);
   const activeTerminalId = useUIStore((s) => s.activeTerminalId);
@@ -166,17 +153,31 @@ export function SessionGroupDetailView({
   const upsert = useEntityStore((s) => s.upsert);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const terminals = useSessionGroupTerminals(sessionGroupId);
+
   const [showSidebar, setShowSidebar] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
-  const [openFiles, setOpenFiles] = useState<OpenFileTab[]>([]);
-  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const [highlightCheckpointId, setHighlightCheckpointId] = useState<string | null>(null);
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
-  const removeTerminal = useTerminalStore((s) => s.removeTerminal);
   const renameTerminal = useTerminalStore((s) => s.renameTerminal);
+
   const { groupSessions, selectedSession, sessionTabs, sessionsByRecency } =
     useSessionGroupSessions(sessionGroupId, openTabIds, activeSessionId);
+
+  const { handleOpenTerminal, handleCloseTerminal, handleSelectTerminal } = useTerminalActions({
+    sessionGroupId,
+    terminals,
+  });
+
+  const {
+    openFiles,
+    activeFilePath,
+    setActiveFilePath,
+    handleFileClick,
+    handleDiffFileClick,
+    handleSelectFile,
+    handleCloseFile,
+  } = useFileActions();
 
   // Fetch full group detail and merge into store
   useEffect(() => {
@@ -210,16 +211,9 @@ export function SessionGroupDetailView({
   useEffect(() => {
     if (activeSessionGroupId !== sessionGroupId) return;
     if (sessionsByRecency.length === 0) return;
-    if (activeSessionId && sessionsByRecency.some((session) => session.id === activeSessionId))
-      return;
+    if (activeSessionId && sessionsByRecency.some((s) => s.id === activeSessionId)) return;
     setActiveSessionId(sessionsByRecency[0].id);
-  }, [
-    activeSessionGroupId,
-    activeSessionId,
-    sessionGroupId,
-    sessionsByRecency,
-    setActiveSessionId,
-  ]);
+  }, [activeSessionGroupId, activeSessionId, sessionGroupId, sessionsByRecency, setActiveSessionId]);
 
   // Initialize open tabs with the most recent session
   useEffect(() => {
@@ -230,7 +224,7 @@ export function SessionGroupDetailView({
   // Clear terminal selection if the terminal was removed
   useEffect(() => {
     if (!activeTerminalId) return;
-    if (terminals.some((terminal) => terminal.id === activeTerminalId)) return;
+    if (terminals.some((t) => t.id === activeTerminalId)) return;
     setActiveTerminalId(null);
   }, [activeTerminalId, terminals, setActiveTerminalId]);
 
@@ -262,7 +256,7 @@ export function SessionGroupDetailView({
     };
   }, [groupSessions, sessionGroupId, addTerminal]);
   const selectedSessionIsOptimistic = selectedSession?._optimistic === true;
-  const activeTerminal = terminals.find((terminal) => terminal.id === activeTerminalId) ?? null;
+  const activeTerminal = terminals.find((t) => t.id === activeTerminalId) ?? null;
 
   useEffect(() => {
     if (selectedSessionIsOptimistic && showSidebar) {
@@ -308,12 +302,10 @@ export function SessionGroupDetailView({
       setActiveFilePath(null);
       setScrollToEventId(promptEventId);
     },
-    [sessionGroupId, openSessionTab, setActiveSessionId, setActiveTerminalId],
+    [sessionGroupId, openSessionTab, setActiveSessionId, setActiveTerminalId, setActiveFilePath],
   );
 
-  const handleScrollComplete = useCallback(() => {
-    setScrollToEventId(null);
-  }, []);
+  const handleScrollComplete = useCallback(() => setScrollToEventId(null), []);
 
   const handleSidebarTabChange = useCallback((tab: SidebarTab) => {
     setSidebarTab(tab);
@@ -326,67 +318,6 @@ export function SessionGroupDetailView({
       return !prev;
     });
   }, []);
-
-  const ensureSessionTerminals = useCallback(
-    async (sessionId: string) => {
-      const existing = terminals.filter((terminal) => terminal.sessionId === sessionId);
-      if (existing.length > 0) return existing;
-
-      const result = await client.query(SESSION_TERMINALS_QUERY, { sessionId }).toPromise();
-      const restored = (result.data?.sessionTerminals as Terminal[] | undefined) ?? [];
-      for (const terminal of restored) {
-        if (!useTerminalStore.getState().terminals[terminal.id]) {
-          addTerminal(terminal.id, terminal.sessionId, sessionGroupId, "active");
-        }
-      }
-      return restored.map((terminal) => ({
-        id: terminal.id,
-        sessionId: terminal.sessionId,
-        sessionGroupId,
-        status: "active" as const,
-      }));
-    },
-    [addTerminal, sessionGroupId, terminals],
-  );
-
-  const handleOpenTerminal = useCallback(async () => {
-    if (!selectedSession || selectedSession._optimistic || !terminalAllowed) return;
-    const existing = await ensureSessionTerminals(selectedSession.id);
-    if (existing.length > 0) {
-      setActiveSessionId(selectedSession.id);
-      setActiveTerminalId(existing[0].id);
-      return;
-    }
-
-    const result = await client
-      .mutation(CREATE_TERMINAL_MUTATION, { sessionId: selectedSession.id, cols: 80, rows: 24 })
-      .toPromise();
-    if (result.data?.createTerminal) {
-      const { id } = result.data.createTerminal as { id: string };
-      addTerminal(id, selectedSession.id, sessionGroupId);
-      setActiveSessionId(selectedSession.id);
-      setActiveTerminalId(id);
-    }
-  }, [
-    addTerminal,
-    ensureSessionTerminals,
-    selectedSession,
-    sessionGroupId,
-    setActiveSessionId,
-    setActiveTerminalId,
-    terminalAllowed,
-  ]);
-
-  const handleCloseTerminal = useCallback(
-    async (terminalId: string) => {
-      removeTerminal(terminalId);
-      if (activeTerminalId === terminalId) {
-        setActiveTerminalId(null);
-      }
-      await client.mutation(DESTROY_TERMINAL_MUTATION, { terminalId }).toPromise();
-    },
-    [activeTerminalId, removeTerminal, setActiveTerminalId],
-  );
 
   const handleNewChat = useCallback(async () => {
     if (!selectedSession || selectedSession._optimistic) return;
@@ -424,64 +355,7 @@ export function SessionGroupDetailView({
       openSessionTab(sessionGroupId, newSessionId);
       setActiveSessionId(newSessionId);
     }
-  }, [
-    groupSessions,
-    groupBranch,
-    groupRepo,
-    openSessionTab,
-    selectedSession,
-    sessionGroupId,
-    setActiveSessionId,
-  ]);
-
-  const handleSelectTerminal = useCallback(
-    (sessionId: string | null, terminalId: string) => {
-      if (sessionId) setActiveSessionId(sessionId);
-      setActiveTerminalId(terminalId);
-      setActiveFilePath(null);
-    },
-    [setActiveSessionId, setActiveTerminalId],
-  );
-
-  const handleFileClick = useCallback(
-    (filePath: string) => {
-      setOpenFiles((prev) => {
-        if (prev.some((f) => f.filePath === filePath)) return prev;
-        const fileName = filePath.split("/").pop() ?? filePath;
-        return [...prev, { filePath, fileName }];
-      });
-      setActiveFilePath(filePath);
-      setActiveTerminalId(null);
-    },
-    [setActiveTerminalId],
-  );
-
-  const handleDiffFileClick = useCallback(
-    (filePath: string, status: string) => {
-      const diffKey = `diff:${filePath}`;
-      setOpenFiles((prev) => {
-        if (prev.some((f) => f.filePath === diffKey)) return prev;
-        const fileName = filePath.split("/").pop() ?? filePath;
-        return [...prev, { filePath: diffKey, fileName, isDiff: true, diffStatus: status }];
-      });
-      setActiveFilePath(diffKey);
-      setActiveTerminalId(null);
-    },
-    [setActiveTerminalId],
-  );
-
-  const handleSelectFile = useCallback(
-    (filePath: string) => {
-      setActiveFilePath(filePath);
-      setActiveTerminalId(null);
-    },
-    [setActiveTerminalId],
-  );
-
-  const handleCloseFile = useCallback((filePath: string) => {
-    setOpenFiles((prev) => prev.filter((f) => f.filePath !== filePath));
-    setActiveFilePath((prev) => (prev === filePath ? null : prev));
-  }, []);
+  }, [groupSessions, groupBranch, groupRepo, openSessionTab, selectedSession, sessionGroupId, setActiveSessionId]);
 
   const handleSelectSession = useCallback(
     (sessionId: string) => {
@@ -489,13 +363,11 @@ export function SessionGroupDetailView({
       setActiveTerminalId(null);
       setActiveFilePath(null);
     },
-    [setActiveSessionId, setActiveTerminalId],
+    [setActiveSessionId, setActiveTerminalId, setActiveFilePath],
   );
 
   const handleCloseSession = useCallback(
-    (sessionId: string) => {
-      closeSessionTab(sessionGroupId, sessionId);
-    },
+    (sessionId: string) => closeSessionTab(sessionGroupId, sessionId),
     [closeSessionTab, sessionGroupId],
   );
 
@@ -533,71 +405,23 @@ export function SessionGroupDetailView({
             onSelectFile={handleSelectFile}
             onCloseFile={handleCloseFile}
             onNewChat={handleNewChat}
-            onOpenTerminal={handleOpenTerminal}
+            onOpenTerminal={() => handleOpenTerminal(selectedSession ?? null, terminalAllowed)}
             canNewChat={!!selectedSession && !selectedSessionIsOptimistic}
             canOpenTerminal={!selectedSessionIsOptimistic && terminalAllowed}
           />
 
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-              {activeFilePath?.startsWith("diff:") ? (
-                <div className="h-full">
-                  <Suspense
-                    fallback={
-                      <div className="flex h-full items-center justify-center bg-[#1e1e1e]" />
-                    }
-                  >
-                    <MonacoDiffViewer
-                      key={activeFilePath}
-                      sessionGroupId={sessionGroupId}
-                      filePath={activeFilePath.slice(5)}
-                      status={
-                        openFiles.find((f) => f.filePath === activeFilePath)?.diffStatus ?? "M"
-                      }
-                      defaultBranch={groupRepo?.defaultBranch ?? "main"}
-                    />
-                  </Suspense>
-                </div>
-              ) : activeFilePath ? (
-                <div className="h-full">
-                  <Suspense
-                    fallback={
-                      <div className="flex h-full items-center justify-center bg-[#1e1e1e]" />
-                    }
-                  >
-                    <MonacoFileViewer
-                      key={activeFilePath}
-                      sessionGroupId={sessionGroupId}
-                      filePath={activeFilePath}
-                    />
-                  </Suspense>
-                </div>
-              ) : activeTerminal ? (
-                <div className="h-full bg-[#0a0a0a]">
-                  <TerminalInstance terminalId={activeTerminal.id} visible />
-                </div>
-              ) : selectedSessionIsOptimistic ? (
-                <div className="flex h-full items-center justify-center px-6 text-center">
-                  <div className="max-w-sm space-y-2">
-                    <p className="text-sm font-medium text-foreground">Creating session...</p>
-                    <p className="text-sm text-muted-foreground">
-                      The session is being created in the background. Input and runtime controls
-                      will unlock once the real session ID is ready.
-                    </p>
-                  </div>
-                </div>
-              ) : selectedSession ? (
-                <SessionDetailView
-                  sessionId={selectedSession.id}
-                  hideHeader
-                  scrollToEventId={scrollToEventId}
-                  onScrollComplete={handleScrollComplete}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                  Select a chat tab to continue.
-                </div>
-              )}
+              <SessionGroupContentArea
+                sessionGroupId={sessionGroupId}
+                activeFilePath={activeFilePath}
+                openFiles={openFiles}
+                activeTerminalId={activeTerminal?.id ?? null}
+                selectedSession={selectedSession}
+                defaultBranch={groupRepo?.defaultBranch ?? "main"}
+                scrollToEventId={scrollToEventId}
+                onScrollComplete={handleScrollComplete}
+              />
             </div>
             {showSidebar && !selectedSessionIsOptimistic && (
               <div className="h-full w-[260px] shrink-0 border-l border-[#2d2d2d]">

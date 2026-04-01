@@ -7,11 +7,17 @@ import type {
 } from "@trace/gql";
 import { ticketService } from "../services/ticket.js";
 import { pubsub, topics } from "../lib/pubsub.js";
+import { requireOrgContext } from "../lib/require-org.js";
 
 export const ticketQueries = {
-  tickets: (_: unknown, args: { organizationId: string; filters?: TicketFilters }, _ctx: Context) =>
-    ticketService.list(args.organizationId, args.filters),
-  ticket: (_: unknown, args: { id: string }, _ctx: Context) => ticketService.get(args.id),
+  tickets: (_: unknown, args: { organizationId: string; filters?: TicketFilters }, ctx: Context) => {
+    requireOrgContext(ctx);
+    return ticketService.list(args.organizationId, args.filters);
+  },
+  ticket: (_: unknown, args: { id: string }, ctx: Context) => {
+    requireOrgContext(ctx);
+    return ticketService.get(args.id);
+  },
 };
 
 export const ticketMutations = {

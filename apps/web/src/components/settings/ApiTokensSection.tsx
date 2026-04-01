@@ -85,26 +85,21 @@ export function ApiTokensSection() {
   async function handleSave(provider: string) {
     if (!inputValue.trim()) return;
     setSaving(true);
-    const result = await client
+    await client
       .mutation(SET_API_TOKEN, { input: { provider, token: provider === "ssh_key" ? inputValue : inputValue.trim() } })
       .toPromise();
     setSaving(false);
-
-    if (result.data?.setApiToken) {
-      setTokens((prev) =>
-        prev.map((t) => (t.provider === provider ? (result.data.setApiToken as TokenStatus) : t)),
-      );
-      setEditing(null);
-      setInputValue("");
-      setShowInput(false);
-    }
+    setEditing(null);
+    setInputValue("");
+    setShowInput(false);
+    // Refetch to get the updated state from the server
+    fetchTokens();
   }
 
   async function handleDelete(provider: string) {
     await client.mutation(DELETE_API_TOKEN, { provider }).toPromise();
-    setTokens((prev) =>
-      prev.map((t) => (t.provider === provider ? { ...t, isSet: false, updatedAt: null } : t)),
-    );
+    // Refetch to get the updated state from the server
+    fetchTokens();
   }
 
   return (

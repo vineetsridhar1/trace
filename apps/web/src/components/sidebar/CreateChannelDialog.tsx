@@ -109,13 +109,14 @@ export function CreateChannelDialog({
         })
         .toPromise();
 
-      if (result.data?.createChannel) {
-        const newChannelId = result.data.createChannel.id as string;
-        setName("");
-        setChannelType("coding");
-        setRepoId(undefined);
-        setBaseBranch("");
-        setOpen(false);
+      // Read only the new ID for navigation — entity store is updated by the event stream
+      const newChannelId = result.data?.createChannel?.id as string | undefined;
+      setName("");
+      setChannelType("coding");
+      setRepoId(undefined);
+      setBaseBranch("");
+      setOpen(false);
+      if (newChannelId) {
         useUIStore.getState().setActiveChannelId(newChannelId);
       }
     } finally {

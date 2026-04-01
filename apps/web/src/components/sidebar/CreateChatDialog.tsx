@@ -81,11 +81,10 @@ export function CreateChatDialog() {
         })
         .toPromise();
 
+      // Read only the new ID for navigation — entity store is updated by the event stream
       const chatId = result.data?.createChat?.id as string | undefined;
+      setOpen(false);
       if (chatId) {
-        setOpen(false);
-        // Navigate immediately — the chat_created event via useOrgEvents
-        // will populate the entity store for all clients.
         setActiveChatId(chatId);
       }
     } finally {

@@ -321,6 +321,9 @@ importers:
 
   packages/gql:
     dependencies:
+      '@trace/shared':
+        specifier: workspace:*
+        version: link:../shared
       dataloader:
         specifier: ^2.2.3
         version: 2.2.3

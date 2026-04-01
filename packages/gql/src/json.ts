@@ -1,9 +1,4 @@
-export type JsonPrimitive = string | number | boolean | null;
-
-export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
-
-export type JsonObject = {
-  [key: string]: JsonValue;
-};
-
-export type JsonArray = JsonValue[];
+// Re-export JSON types from the canonical source in @trace/shared.
+// This file exists so codegen-generated relative imports (e.g. ../json#JsonValue)
+// continue to resolve correctly.
+export type { JsonPrimitive, JsonValue, JsonObject, JsonArray } from "@trace/shared";
