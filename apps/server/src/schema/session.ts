@@ -8,7 +8,6 @@ import {
   deriveSessionGroupStatus,
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
-import { ticketService } from "../services/ticket.js";
 
 export const sessionQueries = {
   sessionGroups: (
@@ -202,22 +201,23 @@ export const sessionTypeResolvers = {
       prUrl?: string | null;
       archivedAt?: string | Date | null;
       sessions?: SessionGroupStatusSource[];
-    }) => {
+    }, _args: unknown, ctx: Context) => {
       const sessions = Array.isArray(group.sessions)
         ? group.sessions
-        : await sessionService.getGroupStatusSources(group.id);
+        : ((await ctx.sessionGroupLoader.load(group.id)) as { sessions?: SessionGroupStatusSource[] } | null)?.sessions ?? [];
       return deriveSessionGroupStatus(sessions, group.prUrl ?? null, group.archivedAt ?? null);
     },
-    sessions: async (group: { id: string; sessions?: unknown[] }) => {
+    sessions: async (group: { id: string; sessions?: unknown[] }, _args: unknown, ctx: Context) => {
       if (Array.isArray(group.sessions)) return group.sessions;
-      return sessionService.getGroupSessions(group.id);
+      return ((await ctx.sessionGroupLoader.load(group.id)) as { sessions?: unknown[] } | null)?.sessions ?? [];
     },
     gitCheckpoints: async (group: { id: string }) => {
       return sessionService.listGitCheckpointsForGroup(group.id);
     },
   },
   Session: {
-    tickets: (session: { id: string }) => ticketService.listForSession(session.id),
+    tickets: (session: { id: string }, _args: unknown, ctx: Context) =>
+      ctx.sessionTicketsLoader.load(session.id),
     gitCheckpoints: async (session: { id: string }) => {
       return sessionService.listGitCheckpointsForSession(session.id);
     },

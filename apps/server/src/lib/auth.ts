@@ -12,6 +12,8 @@ import {
   createConversationLoader,
   createBranchLoader,
   createTurnLoader,
+  createChatMembersLoader,
+  createSessionTicketsLoader,
   createChannelMembershipLoader,
   createChatMembershipLoader,
 } from "./dataloader.js";
@@ -126,6 +128,8 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
     conversationLoader: createConversationLoader(),
     branchLoader: createBranchLoader(),
     turnLoader: createTurnLoader(),
+    chatMembersLoader: createChatMembersLoader(),
+    sessionTicketsLoader: createSessionTicketsLoader(),
     channelMembershipLoader: createChannelMembershipLoader(user.id),
     chatMembershipLoader: createChatMembershipLoader(user.id),
   };
@@ -184,6 +188,8 @@ export async function buildWsContext(connectionParams?: Record<string, unknown>,
     conversationLoader: createConversationLoader(),
     branchLoader: createBranchLoader(),
     turnLoader: createTurnLoader(),
+    chatMembersLoader: createChatMembersLoader(),
+    sessionTicketsLoader: createSessionTicketsLoader(),
     channelMembershipLoader: createChannelMembershipLoader(user.id),
     chatMembershipLoader: createChatMembershipLoader(user.id),
   };

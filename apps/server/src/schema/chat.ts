@@ -97,8 +97,8 @@ export const chatSubscriptions = {
 
 export const chatTypeResolvers = {
   Chat: {
-    members: (chat: { id: string; members?: unknown[] }) =>
-      Array.isArray(chat.members) ? chat.members : chatService.getMembers(chat.id),
+    members: (chat: { id: string; members?: unknown[] }, _args: unknown, ctx: Context) =>
+      Array.isArray(chat.members) ? chat.members : ctx.chatMembersLoader.load(chat.id),
     messages: async (
       chat: { id: string },
       args: { after?: string; before?: string; limit?: number },
