@@ -1,6 +1,7 @@
 import type { CreateChatInput, ActorType } from "@trace/gql";
 import { Prisma, type Prisma as PrismaTypes } from "@prisma/client";
 import { prisma } from "../lib/db.js";
+import { NotFoundError, AuthorizationError, ValidationError } from "../lib/errors.js";
 import { eventService } from "./event.js";
 import { participantService } from "./participant.js";
 import {
@@ -10,37 +11,17 @@ import {
   hydrateMessages,
   type MessageWithSummary,
 } from "./message-utils.js";
+import { normalizeMembers } from "./member-utils.js";
 
 function buildMemberKey(...userIds: string[]) {
   return userIds.sort().join(":");
 }
 
 export class ChatService {
-  private async normalizeMembers(
-    tx: Prisma.TransactionClient,
-    chatId: string,
-  ): Promise<
-    Array<{ user: { id: string; name: string | null; avatarUrl: string | null }; joinedAt: string }>
-  > {
-    const members = await tx.chatMember.findMany({
-      where: { chatId, leftAt: null },
-    });
-    const userIds = members.map((m) => m.userId);
-    const users = await tx.user.findMany({
-      where: { id: { in: userIds } },
-      select: { id: true, name: true, avatarUrl: true },
-    });
-    const userMap = new Map(users.map((u) => [u.id, u]));
-    return members.map((m) => ({
-      user: userMap.get(m.userId) ?? { id: m.userId, name: "Unknown", avatarUrl: null },
-      joinedAt: m.joinedAt.toISOString(),
-    }));
-  }
-
   async create(input: CreateChatInput, actorType: ActorType, actorId: string) {
     const memberIds = [...new Set(input.memberIds)];
     if (memberIds.length === 0) {
-      throw new Error("Chats must include at least one other member");
+      throw new ValidationError("Chats must include at least one other member");
     }
 
     const isDM = memberIds.length === 1;
@@ -54,7 +35,7 @@ export class ChatService {
       select: { id: true, name: true },
     });
     if (validMembers.length !== allMemberIds.length) {
-      throw new Error("One or more users not found");
+      throw new ValidationError("One or more users not found");
     }
 
     // Deduplication: check for existing chat with the same members
@@ -63,7 +44,7 @@ export class ChatService {
     if (isDM) {
       const targetId = memberIds[0];
       if (actorId === targetId) {
-        throw new Error("Cannot create a DM with yourself");
+        throw new ValidationError("Cannot create a DM with yourself");
       }
     }
 
@@ -116,7 +97,7 @@ export class ChatService {
       }
 
       // Fetch members with user data for the event payload
-      const normalizedMembers = await this.normalizeMembers(tx, chat.id);
+      const normalizedMembers = await normalizeMembers(tx, { type: "chat", id: chat.id });
 
       const event = await eventService.create(
         {
@@ -210,11 +191,11 @@ export class ChatService {
         });
 
         if (parentMessage.chatId !== chat.id) {
-          throw new Error("Thread parent must belong to this chat");
+          throw new ValidationError("Thread parent must belong to this chat");
         }
 
         if (parentMessage.parentMessageId) {
-          throw new Error("Thread replies must target the root message");
+          throw new ValidationError("Thread replies must target the root message");
         }
 
         validatedParentId = parentMessage.id;
@@ -298,11 +279,11 @@ export class ChatService {
     });
 
     if (existing.actorType !== actorType || existing.actorId !== actorId) {
-      throw new Error("Only the original author can edit this message");
+      throw new AuthorizationError("Only the original author can edit this message");
     }
 
     if (existing.deletedAt) {
-      throw new Error("Deleted messages cannot be edited");
+      throw new ValidationError("Deleted messages cannot be edited");
     }
 
     if (
@@ -314,7 +295,10 @@ export class ChatService {
       return hydratedExisting;
     }
 
-    const chatId = existing.chatId!;
+    const chatId = existing.chatId;
+    if (!chatId) {
+      throw new ValidationError("Message is not a chat message");
+    }
 
     const eventOrgId = await resolveEventOrgId(actorId);
     const editedAt = new Date();
@@ -377,7 +361,7 @@ export class ChatService {
     });
 
     if (existing.actorType !== actorType || existing.actorId !== actorId) {
-      throw new Error("Only the original author can delete this message");
+      throw new AuthorizationError("Only the original author can delete this message");
     }
 
     if (existing.deletedAt) {
@@ -385,7 +369,10 @@ export class ChatService {
       return hydratedExisting;
     }
 
-    const chatId = existing.chatId!;
+    const chatId = existing.chatId;
+    if (!chatId) {
+      throw new ValidationError("Message is not a chat message");
+    }
 
     const eventOrgId = await resolveEventOrgId(actorId);
     const deletedAt = new Date();
@@ -477,7 +464,7 @@ export class ChatService {
     });
 
     if (rootMessage.parentMessageId) {
-      throw new Error("Thread root must be a top-level message");
+      throw new ValidationError("Thread root must be a top-level message");
     }
 
     const replies = await prisma.message.findMany({
@@ -505,7 +492,7 @@ export class ChatService {
       });
 
       if (chat.type !== "group") {
-        throw new Error("Cannot add members to a DM");
+        throw new ValidationError("Cannot add members to a DM");
       }
 
       // Validate target user exists
@@ -514,7 +501,7 @@ export class ChatService {
         select: { id: true },
       });
       if (!targetUser) {
-        throw new Error("User not found");
+        throw new NotFoundError("User", userId);
       }
 
       const existingMembership = await tx.chatMember.findUnique({
@@ -549,7 +536,7 @@ export class ChatService {
       });
 
       // Fetch updated members with user data for the event payload
-      const normalizedMembers = await this.normalizeMembers(tx, chatId);
+      const normalizedMembers = await normalizeMembers(tx, { type: "chat", id: chatId });
 
       await eventService.create(
         {
@@ -584,7 +571,7 @@ export class ChatService {
       });
 
       if (chat.type !== "group") {
-        throw new Error("Cannot leave a DM");
+        throw new ValidationError("Cannot leave a DM");
       }
 
       await tx.chatMember.update({
@@ -611,7 +598,7 @@ export class ChatService {
       `;
 
       // Fetch remaining members with user data for the event payload
-      const normalizedMembers = await this.normalizeMembers(tx, chatId);
+      const normalizedMembers = await normalizeMembers(tx, { type: "chat", id: chatId });
 
       await eventService.create(
         {
@@ -646,7 +633,7 @@ export class ChatService {
       });
 
       if (chat.type !== "group") {
-        throw new Error("Cannot rename a DM");
+        throw new ValidationError("Cannot rename a DM");
       }
 
       const updated = await tx.chat.update({
@@ -697,6 +684,12 @@ export class ChatService {
           where: { leftAt: null },
         },
       },
+    });
+  }
+
+  async getMembers(chatId: string) {
+    return prisma.chatMember.findMany({
+      where: { chatId, leftAt: null },
     });
   }
 }

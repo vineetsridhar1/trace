@@ -1,6 +1,7 @@
 import type { CreateChannelInput, UpdateChannelInput, ActorType } from "@trace/gql";
 import { Prisma, type Prisma as PrismaTypes } from "@prisma/client";
 import { prisma } from "../lib/db.js";
+import { NotFoundError, AuthorizationError, ValidationError } from "../lib/errors.js";
 import { eventService } from "./event.js";
 import { participantService } from "./participant.js";
 import {
@@ -9,25 +10,42 @@ import {
   hydrateMessages,
   type MessageWithSummary,
 } from "./message-utils.js";
+import { normalizeMembers } from "./member-utils.js";
 
 export class ChannelService {
-  private async normalizeMembers(
-    tx: Prisma.TransactionClient,
-    channelId: string,
-  ): Promise<Array<{ user: { id: string; name: string | null; avatarUrl: string | null }; joinedAt: string }>> {
-    const members = await tx.channelMember.findMany({
+  async listChannels(
+    organizationId: string,
+    userId: string,
+    options?: { projectId?: string; memberOnly?: boolean },
+  ) {
+    const where: Record<string, unknown> = { organizationId };
+
+    if (options?.projectId) {
+      where.projects = { some: { projectId: options.projectId } };
+    }
+
+    if (options?.memberOnly) {
+      where.members = { some: { userId, leftAt: null } };
+    }
+
+    return prisma.channel.findMany({ where, include: { repo: true } });
+  }
+
+  async getChannel(channelId: string, userId: string) {
+    await prisma.channel.findFirstOrThrow({
+      where: { id: channelId, members: { some: { userId, leftAt: null } } },
+      select: { id: true },
+    });
+
+    return prisma.channel.findUnique({ where: { id: channelId }, include: { repo: true } });
+  }
+
+  async getMembers(channelId: string) {
+    const members = await prisma.channelMember.findMany({
       where: { channelId, leftAt: null },
+      include: { user: { select: { id: true, email: true, name: true, avatarUrl: true } } },
     });
-    const userIds = members.map((m) => m.userId);
-    const users = await tx.user.findMany({
-      where: { id: { in: userIds } },
-      select: { id: true, name: true, avatarUrl: true },
-    });
-    const userMap = new Map(users.map((u) => [u.id, u]));
-    return members.map((m) => ({
-      user: userMap.get(m.userId) ?? { id: m.userId, name: "Unknown", avatarUrl: null },
-      joinedAt: m.joinedAt.toISOString(),
-    }));
+    return members.map((member) => ({ user: member.user, joinedAt: member.joinedAt }));
   }
 
   async create(input: CreateChannelInput, actorType: ActorType, actorId: string) {
@@ -38,7 +56,7 @@ export class ChannelService {
 
       const channelType = input.type ?? "coding";
       if (channelType === "coding" && !input.repoId) {
-        throw new Error("repoId is required for coding channels");
+        throw new ValidationError("repoId is required for coding channels");
       }
       let repoName: string | null = null;
       if (input.repoId) {
@@ -46,7 +64,7 @@ export class ChannelService {
           where: { id: input.repoId, organizationId: input.organizationId },
           select: { name: true },
         });
-        if (!repo) throw new Error("Repo not found in this organization");
+        if (!repo) throw new NotFoundError("Repo", input.repoId!);
         repoName = repo.name;
       }
 
@@ -91,7 +109,7 @@ export class ChannelService {
       });
 
       await tx.channelMember.create({ data: { channelId: channel.id, userId: actorId } });
-      const normalizedMembers = await this.normalizeMembers(tx, channel.id);
+      const normalizedMembers = await normalizeMembers(tx, { type: "channel", id: channel.id });
 
       const event = await eventService.create({
         organizationId: input.organizationId,
@@ -195,7 +213,7 @@ export class ChannelService {
         await tx.channelMember.create({ data: { channelId, userId: actorId } });
       }
 
-      const normalizedMembers = await this.normalizeMembers(tx, channelId);
+      const normalizedMembers = await normalizeMembers(tx, { type: "channel", id: channelId });
 
       await eventService.create({
         organizationId: channel.organizationId,
@@ -249,7 +267,7 @@ export class ChannelService {
       });
 
       if (!membership || membership.leftAt !== null) {
-        throw new Error("You are not a member of this channel");
+        throw new AuthorizationError("You are not a member of this channel");
       }
 
       await tx.channelMember.update({
@@ -257,7 +275,7 @@ export class ChannelService {
         data: { leftAt: new Date() },
       });
 
-      const normalizedMembers = await this.normalizeMembers(tx, channelId);
+      const normalizedMembers = await normalizeMembers(tx, { type: "channel", id: channelId });
 
       await eventService.create({
         organizationId: channel.organizationId,
@@ -319,7 +337,7 @@ export class ChannelService {
     });
 
     if (channel.type !== "text") {
-      throw new Error("Channel messages are only supported for text channels");
+      throw new ValidationError("Channel messages are only supported for text channels");
     }
 
     const message = await prisma.$transaction(async (tx) => {
@@ -330,10 +348,10 @@ export class ChannelService {
           select: { id: true, channelId: true, parentMessageId: true },
         });
         if (parentMessage.channelId !== channel.id) {
-          throw new Error("Thread parent must belong to this channel");
+          throw new ValidationError("Thread parent must belong to this channel");
         }
         if (parentMessage.parentMessageId) {
-          throw new Error("Thread replies must target the root message");
+          throw new ValidationError("Thread replies must target the root message");
         }
         validatedParentId = parentMessage.id;
       }
@@ -408,10 +426,10 @@ export class ChannelService {
     });
 
     if (existing.actorType !== actorType || existing.actorId !== actorId) {
-      throw new Error("Only the original author can edit this message");
+      throw new AuthorizationError("Only the original author can edit this message");
     }
     if (existing.deletedAt) {
-      throw new Error("Deleted messages cannot be edited");
+      throw new ValidationError("Deleted messages cannot be edited");
     }
 
     if (
@@ -425,7 +443,7 @@ export class ChannelService {
 
     const channelId = existing.channelId;
     if (!channelId) {
-      throw new Error("Message is not a channel message");
+      throw new ValidationError("Message is not a channel message");
     }
 
     const channel = await prisma.channel.findUniqueOrThrow({
@@ -487,7 +505,7 @@ export class ChannelService {
     });
 
     if (existing.actorType !== actorType || existing.actorId !== actorId) {
-      throw new Error("Only the original author can delete this message");
+      throw new AuthorizationError("Only the original author can delete this message");
     }
     if (existing.deletedAt) {
       const [hydrated] = await hydrateMessages([existing]);
@@ -496,7 +514,7 @@ export class ChannelService {
 
     const channelId = existing.channelId;
     if (!channelId) {
-      throw new Error("Message is not a channel message");
+      throw new ValidationError("Message is not a channel message");
     }
 
     const channel = await prisma.channel.findUniqueOrThrow({

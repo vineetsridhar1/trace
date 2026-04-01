@@ -1,5 +1,6 @@
 import type { Event, Message } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
+import type { JsonObject } from "@trace/shared";
 import { useEntityStore, eventScopeKey } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 
@@ -199,7 +200,7 @@ export function optimisticallyInsertSessionMessage(
     scopeType: "session",
     scopeId: sessionId,
     eventType: "message_sent",
-    payload: { text, clientMutationId } as unknown as Record<string, unknown>,
+    payload: { text, clientMutationId } as JsonObject,
     actor: {
       type: "user",
       id: user?.id ?? "",
@@ -355,7 +356,7 @@ export function optimisticallyInsertChatMessage(
       html,
       parentMessageId: parentId ?? null,
       clientMutationId,
-    } as unknown as Record<string, unknown>,
+    } as JsonObject,
     actor,
     parentId: null,
     timestamp: now,

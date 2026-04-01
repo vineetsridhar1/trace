@@ -17,6 +17,7 @@ import { useEntityStore } from "../stores/entity";
 import { client } from "../lib/urql";
 import { gql } from "@urql/core";
 import type { TopLevelItem } from "./useSidebarData";
+import { applyOptimisticPatches } from "../lib/optimistic-entity";
 
 const MOVE_CHANNEL_MUTATION = gql`
   mutation MoveChannel($input: MoveChannelInput!) {
@@ -235,14 +236,22 @@ export function useChannelDnd({
   }, [activeTopLevel, activeGroupChannels]);
 
   async function persistTopLevelOrder(items: TopLevelItem[]) {
-    const { patch } = useEntityStore.getState();
+    const optimisticPatches: Array<{
+      type: "channels" | "channelGroups";
+      id: string;
+      data: Partial<Channel> | Partial<ChannelGroup>;
+    }> = [];
     const updates: Array<Promise<unknown>> = [];
 
     for (const [index, item] of items.entries()) {
       if (item.kind === "channel") {
         const channel = channelsById[item.id];
         if (channel?.groupId === null && (channel?.position ?? -1) === index) continue;
-        patch("channels", item.id, { groupId: null, position: index } as Partial<Channel>);
+        optimisticPatches.push({
+          type: "channels",
+          id: item.id,
+          data: { groupId: null, position: index } as Partial<Channel>,
+        });
         updates.push(
           client.mutation(MOVE_CHANNEL_MUTATION, {
             input: { channelId: item.id, groupId: null, position: index },
@@ -251,7 +260,11 @@ export function useChannelDnd({
       } else {
         const group = channelGroupsById[item.id];
         if (!group || (group.position ?? -1) === index) continue;
-        patch("channelGroups", item.id, { position: index } as Partial<ChannelGroup>);
+        optimisticPatches.push({
+          type: "channelGroups",
+          id: item.id,
+          data: { position: index } as Partial<ChannelGroup>,
+        });
         updates.push(
           client.mutation(UPDATE_CHANNEL_GROUP_POSITION_MUTATION, {
             id: item.id, input: { position: index },
@@ -260,17 +273,36 @@ export function useChannelDnd({
       }
     }
 
-    await Promise.all(updates);
+    const rollback = applyOptimisticPatches(optimisticPatches);
+    try {
+      const results = await Promise.all(updates);
+      for (const result of results as Array<{ error?: unknown }>) {
+        if (result?.error) throw result.error;
+      }
+    } catch (error) {
+      rollback();
+      throw error;
+    }
   }
 
   async function persistGroupOrder(groupId: string, nextChannelIds: string[]) {
-    const { patch } = useEntityStore.getState();
-    nextChannelIds.forEach((id, index) => {
-      patch("channels", id, { groupId, position: index } as Partial<Channel>);
-    });
-    await client.mutation(REORDER_CHANNELS_MUTATION, {
-      input: { groupId, channelIds: nextChannelIds },
-    }).toPromise();
+    const rollback = applyOptimisticPatches(
+      nextChannelIds.map((id, index) => ({
+        type: "channels" as const,
+        id,
+        data: { groupId, position: index } as Partial<Channel>,
+      })),
+    );
+
+    try {
+      const result = await client.mutation(REORDER_CHANNELS_MUTATION, {
+        input: { groupId, channelIds: nextChannelIds },
+      }).toPromise();
+      if (result.error) throw result.error;
+    } catch (error) {
+      rollback();
+      throw error;
+    }
   }
 
   const clearDragState = useCallback(() => {
@@ -317,9 +349,13 @@ export function useChannelDnd({
           : -1;
         if (oldIndex !== -1 && newIndex !== -1) {
           const reordered = arrayMove(activeTopLevel, oldIndex, newIndex);
-          // persistTopLevelOrder applies optimistic patches before awaiting mutations
-          await persistTopLevelOrder(reordered);
-          clearDragState();
+          try {
+            await persistTopLevelOrder(reordered);
+          } catch (error) {
+            console.error("Failed to persist top-level channel order:", error);
+          } finally {
+            clearDragState();
+          }
           return;
         }
       } else {
@@ -332,8 +368,13 @@ export function useChannelDnd({
             const newIndex = list.indexOf(overParsed.id);
             if (oldIndex !== -1 && newIndex !== -1) {
               const reordered = arrayMove(list, oldIndex, newIndex);
-              await persistGroupOrder(groupId, reordered);
-              clearDragState();
+              try {
+                await persistGroupOrder(groupId, reordered);
+              } catch (error) {
+                console.error("Failed to persist grouped channel order:", error);
+              } finally {
+                clearDragState();
+              }
               return;
             }
           }
@@ -374,8 +415,13 @@ export function useChannelDnd({
       }
     }
 
-    await Promise.all(promises);
-    clearDragState();
+    try {
+      await Promise.all(promises);
+    } catch (error) {
+      console.error("Failed to persist channel drag operation:", error);
+    } finally {
+      clearDragState();
+    }
   }, [activeOrgId, activeTopLevel, activeGroupChannels, channelsById, channelGroupsById, clearDragState]);
 
   const handleDragCancel = clearDragState;

@@ -96,7 +96,7 @@ export function AgentSettingsSection() {
   async function handleSave() {
     if (!activeOrgId) return;
     setSaving(true);
-    const result = await client
+    await client
       .mutation(UPDATE_AGENT_SETTINGS, {
         organizationId: activeOrgId,
         input: { soulFile, autonomyMode, status },
@@ -104,11 +104,9 @@ export function AgentSettingsSection() {
       .toPromise();
     setSaving(false);
 
-    const data = result.data?.updateAgentSettings as AgentIdentityData | undefined;
-    if (data) {
-      setIdentity(data);
-      setDirty(false);
-    }
+    setDirty(false);
+    // Refetch to get the updated state from the server
+    fetchIdentity();
   }
 
   function handleSoulFileChange(value: string) {
@@ -116,12 +114,14 @@ export function AgentSettingsSection() {
     setDirty(true);
   }
 
-  function handleAutonomyChange(value: string) {
+  function handleAutonomyChange(value: string | null) {
+    if (!value) return;
     setAutonomyMode(value);
     setDirty(true);
   }
 
-  function handleStatusChange(value: string) {
+  function handleStatusChange(value: string | null) {
+    if (!value) return;
     setStatus(value);
     setDirty(true);
   }

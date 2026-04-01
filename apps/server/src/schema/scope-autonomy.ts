@@ -6,6 +6,7 @@
 import type { AutonomyMode } from "@prisma/client";
 import type { Context } from "../context.js";
 import {
+  getChatAutonomyContext,
   resolveAutonomyMode,
   updateScopeAiMode,
   type AutonomyScopeType,
@@ -13,7 +14,6 @@ import {
 } from "../services/scope-autonomy.js";
 import { agentIdentityService } from "../services/agent-identity.js";
 import { orgMemberService } from "../services/org-member.js";
-import { prisma } from "../lib/db.js";
 
 const VALID_RESOLVE_SCOPES = new Set<string>(["chat", "ticket", "channel", "session", "project"]);
 const VALID_WRITE_SCOPES = new Set<string>(["chat", "ticket", "channel", "project"]);
@@ -36,12 +36,9 @@ export const scopeAutonomyQueries = {
     let isDm = false;
     let prefetchedAiMode: AutonomyMode | null | undefined;
     if (scopeType === "chat") {
-      const chat = await prisma.chat.findUnique({
-        where: { id: args.scopeId },
-        select: { type: true, aiMode: true },
-      });
-      isDm = chat?.type === "dm";
-      prefetchedAiMode = chat?.aiMode ?? null;
+      const chat = await getChatAutonomyContext(args.scopeId);
+      isDm = chat.isDm;
+      prefetchedAiMode = chat.aiMode;
     }
 
     return resolveAutonomyMode({

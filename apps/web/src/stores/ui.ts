@@ -1,6 +1,16 @@
 import { create } from "zustand";
 import { useEntityStore } from "./entity";
-import { getSessionChannelId, getSessionGroupChannelId } from "../lib/session-group";
+import {
+  buildPath as buildPathInternal,
+  persistActiveChannelId,
+  persistActiveChatId,
+  persistActiveSessionNav,
+  pushNav,
+  replaceNav,
+  resolveChannelIdForSession,
+  resolveChannelIdForSessionGroup,
+  resolveSessionGroupIdForSession,
+} from "./ui-navigation";
 
 export type ActivePage = "main" | "settings" | "inbox" | "tickets" | "agent-debug";
 export type ChannelSubPage = "sessions" | "merged-archived" | null;
@@ -70,110 +80,7 @@ export function buildPath(
   page: ActivePage = "main",
   chatId: string | null = null,
 ): string {
-  if (page === "settings") return "/settings";
-  if (page === "inbox") return "/inbox";
-  if (page === "tickets") return "/tickets";
-  if (chatId) return `/dm/${chatId}`;
-  if (channelId && sessionGroupId && sessionId)
-    return `/c/${channelId}/g/${sessionGroupId}/s/${sessionId}`;
-  if (channelId && sessionGroupId) return `/c/${channelId}/g/${sessionGroupId}`;
-  if (sessionGroupId && sessionId) return `/g/${sessionGroupId}/s/${sessionId}`;
-  if (sessionGroupId) return `/g/${sessionGroupId}`;
-  if (channelId) return `/c/${channelId}`;
-  return "/";
-}
-
-function pushNav(
-  channelId: string | null,
-  sessionGroupId: string | null,
-  sessionId: string | null,
-  page: ActivePage = "main",
-  chatId: string | null = null,
-  channelSubPage: ChannelSubPage = null,
-) {
-  const path = buildPath(channelId, sessionGroupId, sessionId, page, chatId);
-  history.pushState(
-    { channelId, sessionGroupId, sessionId, page, chatId, channelSubPage },
-    "",
-    path,
-  );
-}
-
-function replaceNav(
-  channelId: string | null,
-  sessionGroupId: string | null,
-  sessionId: string | null,
-  page: ActivePage = "main",
-  chatId: string | null = null,
-  channelSubPage: ChannelSubPage = null,
-) {
-  const path = buildPath(channelId, sessionGroupId, sessionId, page, chatId);
-  history.replaceState(
-    { channelId, sessionGroupId, sessionId, page, chatId, channelSubPage },
-    "",
-    path,
-  );
-}
-
-function persistActiveChannelId(channelId: string | null) {
-  if (channelId) {
-    localStorage.setItem("trace:activeChannelId", channelId);
-  } else {
-    localStorage.removeItem("trace:activeChannelId");
-  }
-}
-
-function persistActiveChatId(chatId: string | null) {
-  if (chatId) {
-    localStorage.setItem("trace:activeChatId", chatId);
-  } else {
-    localStorage.removeItem("trace:activeChatId");
-  }
-}
-
-function persistActiveSessionNav(sessionGroupId: string | null, sessionId: string | null) {
-  if (sessionGroupId) {
-    localStorage.setItem("trace:activeSessionGroupId", sessionGroupId);
-  } else {
-    localStorage.removeItem("trace:activeSessionGroupId");
-  }
-  if (sessionId) {
-    localStorage.setItem("trace:activeSessionId", sessionId);
-  } else {
-    localStorage.removeItem("trace:activeSessionId");
-  }
-}
-
-function resolveChannelIdForSessionGroup(
-  sessionGroupId: string | null,
-  fallback: string | null,
-): string | null {
-  if (!sessionGroupId) return fallback;
-  const sessions = Object.values(useEntityStore.getState().sessions).filter(
-    (session) => session.sessionGroupId === sessionGroupId,
-  );
-  const sessionGroup = useEntityStore.getState().sessionGroups[sessionGroupId];
-  return getSessionGroupChannelId(sessionGroup, sessions) ?? fallback;
-}
-
-function resolveChannelIdForSession(
-  sessionId: string | null,
-  fallback: string | null,
-): string | null {
-  if (!sessionId) return fallback;
-  const session = useEntityStore.getState().sessions[sessionId];
-  const channelId = getSessionChannelId(session);
-  if (channelId) return channelId;
-  return resolveChannelIdForSessionGroup(session?.sessionGroupId ?? null, fallback);
-}
-
-function resolveSessionGroupIdForSession(
-  sessionId: string | null,
-  fallback: string | null,
-): string | null {
-  if (!sessionId) return fallback;
-  const session = useEntityStore.getState().sessions[sessionId];
-  return session?.sessionGroupId ?? fallback;
+  return buildPathInternal(channelId, sessionGroupId, sessionId, page, chatId);
 }
 
 export const useUIStore = create<UIState>((set, get) => ({

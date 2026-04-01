@@ -1,4 +1,3 @@
-import type { Prisma } from "@prisma/client";
 import type { Context } from "../context.js";
 import type {
   CreateTicketInput,
@@ -6,28 +5,18 @@ import type {
   TicketFilters,
   UpdateTicketInput,
 } from "@trace/gql";
-import { prisma } from "../lib/db.js";
 import { ticketService } from "../services/ticket.js";
 import { pubsub, topics } from "../lib/pubsub.js";
-
-const TICKET_QUERY_INCLUDE = {
-  channel: true,
-  createdBy: true,
-  projects: { include: { project: true } },
-  assignees: { include: { user: true } },
-  links: true,
-} as const;
+import { requireOrgContext } from "../lib/require-org.js";
 
 export const ticketQueries = {
-  tickets: (_: unknown, args: { organizationId: string; filters?: TicketFilters }, _ctx: Context) => {
-    const where: Prisma.TicketWhereInput = { organizationId: args.organizationId };
-    if (args.filters?.status) where.status = args.filters.status;
-    if (args.filters?.priority) where.priority = args.filters.priority;
-    if (args.filters?.channelId) where.channelId = args.filters.channelId;
-    return prisma.ticket.findMany({ where, include: TICKET_QUERY_INCLUDE });
+  tickets: (_: unknown, args: { organizationId: string; filters?: TicketFilters }, ctx: Context) => {
+    requireOrgContext(ctx);
+    return ticketService.list(args.organizationId, args.filters);
   },
-  ticket: (_: unknown, args: { id: string }, _ctx: Context) => {
-    return prisma.ticket.findUnique({ where: { id: args.id }, include: TICKET_QUERY_INCLUDE });
+  ticket: (_: unknown, args: { id: string }, ctx: Context) => {
+    requireOrgContext(ctx);
+    return ticketService.get(args.id);
   },
 };
 
@@ -98,18 +87,26 @@ type TicketLinkRow = {
   entityId: string;
 };
 
+type LoadedSession = Awaited<ReturnType<Context["sessionLoader"]["load"]>>;
+
 export const ticketTypeResolvers = {
   Ticket: {
     createdBy: (ticket: { createdById: string }, _args: unknown, ctx: Context) =>
       ctx.userLoader.load(ticket.createdById),
     assignees: (ticket: { assignees?: TicketAssigneeWithUser[] }) =>
       (ticket.assignees ?? []).map((a) => a.user),
-    sessions: async (ticket: { links?: TicketLinkRow[] }) => {
+    sessions: async (ticket: { links?: TicketLinkRow[] }, _args: unknown, ctx: Context) => {
       const sessionLinks = (ticket.links ?? []).filter((l) => l.entityType === "session");
       if (sessionLinks.length === 0) return [];
-      return prisma.session.findMany({
-        where: { id: { in: sessionLinks.map((l) => l.entityId) } },
-      });
+      const sessions = await Promise.all(
+        sessionLinks.map(async (link) => {
+          const session = await ctx.sessionLoader.load(link.entityId);
+          return session instanceof Error ? null : session;
+        }),
+      );
+      return sessions.filter(
+        (session): session is Exclude<LoadedSession, Error | null> => session != null,
+      );
     },
   },
 };

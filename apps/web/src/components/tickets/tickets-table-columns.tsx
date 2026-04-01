@@ -1,4 +1,5 @@
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import type { Priority, TicketStatus } from "@trace/gql";
 import { timeAgo } from "../../lib/utils";
 import { TicketTitleCell } from "./TicketTitleCell";
 import { TicketStatusCell } from "./TicketStatusCell";
@@ -25,12 +26,12 @@ export const ticketColumns: ColDef<TicketRow>[] = [
     field: "status",
     width: 120,
     filter: true,
-    valueFormatter: (params) => ticketStatusLabel[params.value as string] ?? params.value,
+    valueFormatter: (params) => ticketStatusLabel[params.value as TicketStatus] ?? params.value,
     cellRenderer: (params: ICellRendererParams<TicketRow>) => (
       <TicketStatusCell row={params.data} />
     ),
     comparator: (a: string, b: string) =>
-      (ticketStatusOrder[a] ?? 99) - (ticketStatusOrder[b] ?? 99),
+      (ticketStatusOrder[a as TicketStatus] ?? 99) - (ticketStatusOrder[b as TicketStatus] ?? 99),
   },
   {
     colId: "priority",
@@ -38,7 +39,7 @@ export const ticketColumns: ColDef<TicketRow>[] = [
     field: "priority",
     width: 110,
     filter: true,
-    valueFormatter: (params) => ticketPriorityLabel[params.value as string] ?? params.value,
+    valueFormatter: (params) => ticketPriorityLabel[params.value as Priority] ?? params.value,
     cellRenderer: (params: ICellRendererParams<TicketRow>) => (
       <TicketPriorityCell row={params.data} />
     ),

@@ -269,6 +269,46 @@ export class AiConversationService {
     });
   }
 
+  async getRootBranch(conversationId: string, rootBranchId: string | null) {
+    if (rootBranchId) {
+      return prisma.aiBranch.findUniqueOrThrow({ where: { id: rootBranchId } });
+    }
+
+    return prisma.aiBranch.findFirst({
+      where: { conversationId, parentBranchId: null },
+    });
+  }
+
+  async countConversationBranches(conversationId: string) {
+    return prisma.aiBranch.count({
+      where: { conversationId },
+    });
+  }
+
+  async getChildBranches(branchId: string) {
+    return prisma.aiBranch.findMany({
+      where: { parentBranchId: branchId },
+    });
+  }
+
+  async countBranchTurns(branchId: string) {
+    return prisma.aiTurn.count({
+      where: { branchId },
+    });
+  }
+
+  async countTurnBranches(turnId: string) {
+    return prisma.aiBranch.count({
+      where: { forkTurnId: turnId },
+    });
+  }
+
+  async getTurnChildBranches(turnId: string) {
+    return prisma.aiBranch.findMany({
+      where: { forkTurnId: turnId },
+    });
+  }
+
   /**
    * Returns all branches for a conversation with metadata.
    */

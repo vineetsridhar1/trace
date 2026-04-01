@@ -96,6 +96,55 @@ export function createTurnLoader() {
   );
 }
 
+/** Batch-load chat members by chatId */
+export function createChatMembersLoader() {
+  return new DataLoader<string, Array<{ userId: string; joinedAt: Date }>>(async (chatIds) => {
+    const members = await prisma.chatMember.findMany({
+      where: { chatId: { in: [...chatIds] }, leftAt: null },
+    });
+    const byChat = new Map<string, Array<{ userId: string; joinedAt: Date }>>();
+    for (const m of members) {
+      const list = byChat.get(m.chatId) ?? [];
+      list.push(m);
+      byChat.set(m.chatId, list);
+    }
+    return chatIds.map((id) => byChat.get(id) ?? []);
+  });
+}
+
+/** Batch-load tickets linked to sessions by sessionId */
+export function createSessionTicketsLoader() {
+  return new DataLoader<string, unknown[]>(async (sessionIds) => {
+    const links = await prisma.ticketLink.findMany({
+      where: {
+        entityType: "session",
+        entityId: { in: [...sessionIds] },
+      },
+      select: { entityId: true, ticketId: true },
+    });
+    const ticketIds = [...new Set(links.map((l) => l.ticketId))];
+    const tickets = ticketIds.length > 0
+      ? await prisma.ticket.findMany({
+          where: { id: { in: ticketIds } },
+          include: {
+            assignees: { include: { user: { select: { id: true, name: true, avatarUrl: true } } } },
+            links: true,
+          },
+        })
+      : [];
+    const ticketMap = new Map(tickets.map((t) => [t.id, t]));
+    const bySession = new Map<string, unknown[]>();
+    for (const link of links) {
+      const ticket = ticketMap.get(link.ticketId);
+      if (!ticket) continue;
+      const list = bySession.get(link.entityId) ?? [];
+      list.push(ticket);
+      bySession.set(link.entityId, list);
+    }
+    return sessionIds.map((id) => bySession.get(id) ?? []);
+  });
+}
+
 /** Batch-check channel membership for a specific user */
 export function createChannelMembershipLoader(userId: string) {
   return new DataLoader<string, boolean>(

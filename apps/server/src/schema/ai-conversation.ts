@@ -3,7 +3,6 @@ import type { AiConversationVisibility, CreateAiConversationInput } from "@trace
 import { aiConversationService } from "../services/aiConversation.js";
 import { aiTurnService } from "../services/aiTurn.js";
 import { pubsub, topics } from "../lib/pubsub.js";
-import { prisma } from "../lib/db.js";
 
 export const aiConversationQueries = {
   aiConversations: (
@@ -106,27 +105,13 @@ export const aiConversationTypeResolvers = {
     },
 
     rootBranch: (conversation: { rootBranchId: string | null; id: string }) => {
-      if (!conversation.rootBranchId) {
-        return prisma.aiBranch.findFirst({
-          where: { conversationId: conversation.id, parentBranchId: null },
-        });
-      }
-      return prisma.aiBranch.findUniqueOrThrow({
-        where: { id: conversation.rootBranchId },
-      });
+      return aiConversationService.getRootBranch(conversation.id, conversation.rootBranchId);
     },
 
-    branches: (conversation: { id: string }) => {
-      return prisma.aiBranch.findMany({
-        where: { conversationId: conversation.id },
-      });
-    },
+    branches: (conversation: { id: string }) => aiConversationService.getBranches(conversation.id),
 
-    branchCount: (conversation: { id: string }) => {
-      return prisma.aiBranch.count({
-        where: { conversationId: conversation.id },
-      });
-    },
+    branchCount: (conversation: { id: string }) =>
+      aiConversationService.countConversationBranches(conversation.id),
   },
 
   Branch: {
@@ -144,28 +129,15 @@ export const aiConversationTypeResolvers = {
       return ctx.turnLoader.load(branch.forkTurnId);
     },
 
-    turns: (branch: { id: string }) => {
-      return prisma.aiTurn.findMany({
-        where: { branchId: branch.id },
-        orderBy: { createdAt: "asc" },
-      });
-    },
+    turns: (branch: { id: string }) => aiTurnService.getTurns(branch.id),
 
-    childBranches: (branch: { id: string }) => {
-      return prisma.aiBranch.findMany({
-        where: { parentBranchId: branch.id },
-      });
-    },
+    childBranches: (branch: { id: string }) => aiConversationService.getChildBranches(branch.id),
 
     depth: (branch: { id: string }) => {
       return aiConversationService.getBranchDepth(branch.id);
     },
 
-    turnCount: (branch: { id: string }) => {
-      return prisma.aiTurn.count({
-        where: { branchId: branch.id },
-      });
-    },
+    turnCount: (branch: { id: string }) => aiConversationService.countBranchTurns(branch.id),
 
     createdBy: async (
       branch: { createdById: string },
@@ -188,16 +160,8 @@ export const aiConversationTypeResolvers = {
       return ctx.turnLoader.load(turn.parentTurnId);
     },
 
-    branchCount: (turn: { id: string }) => {
-      return prisma.aiBranch.count({
-        where: { forkTurnId: turn.id },
-      });
-    },
+    branchCount: (turn: { id: string }) => aiConversationService.countTurnBranches(turn.id),
 
-    childBranches: (turn: { id: string }) => {
-      return prisma.aiBranch.findMany({
-        where: { forkTurnId: turn.id },
-      });
-    },
+    childBranches: (turn: { id: string }) => aiConversationService.getTurnChildBranches(turn.id),
   },
 };

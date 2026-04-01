@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useEntityStore } from "../../stores/entity";
 import type { SessionGroupEntity } from "../../stores/entity";
 import { getSessionGroupChannelId } from "../../lib/session-group";
@@ -8,22 +8,76 @@ import {
 } from "../session/sessionStatus";
 import type { SessionGroupRow } from "./sessions-table-types";
 
+type SessionGroupRowSelection = {
+  row: SessionGroupRow;
+  signature: string;
+};
+
+function buildRowSignature(row: SessionGroupRow): string {
+  const latestSession = row.latestSession;
+  const latestRepo = (latestSession?.repo as { id?: string; name?: string } | null | undefined) ?? null;
+  const groupRepo = (row.repo as { id?: string; name?: string } | null | undefined) ?? null;
+  const createdBy = (row.createdBySession?.createdBy as
+    | { id?: string; name?: string; avatarUrl?: string | null }
+    | undefined) ?? null;
+
+  return [
+    row.id,
+    row.name,
+    row.slug ?? "",
+    row.status ?? "",
+    row.branch ?? "",
+    row.prUrl ?? "",
+    row.archivedAt ?? "",
+    row.worktreeDeleted ? "1" : "0",
+    row.displaySessionStatus,
+    row.displayAgentStatus,
+    row._sessionCount,
+    row._lastMessageAt ?? "",
+    row._sortTimestamp ?? "",
+    groupRepo?.id ?? "",
+    groupRepo?.name ?? "",
+    latestSession?.id ?? "",
+    latestSession?.name ?? "",
+    latestSession?.updatedAt ?? "",
+    latestSession?._sortTimestamp ?? "",
+    latestSession?._lastMessageAt ?? "",
+    latestSession?.agentStatus ?? "",
+    latestSession?.sessionStatus ?? "",
+    latestRepo?.id ?? "",
+    latestRepo?.name ?? "",
+    row.createdBySession?.id ?? "",
+    createdBy?.id ?? "",
+    createdBy?.name ?? "",
+    createdBy?.avatarUrl ?? "",
+  ].join("|");
+}
+
+function areRowSelectionsEqual(
+  previous: SessionGroupRowSelection[],
+  next: SessionGroupRowSelection[],
+): boolean {
+  if (previous.length !== next.length) return false;
+  for (let i = 0; i < previous.length; i++) {
+    if (previous[i]?.signature !== next[i]?.signature) return false;
+  }
+  return true;
+}
+
 export function useSessionGroupRows(
   channelId: string,
   options?: { archived?: boolean; status?: string },
 ): SessionGroupRow[] {
-  const sessionGroups = useEntityStore((s) => s.sessionGroups);
-  const sessions = useEntityStore((s) => s.sessions);
-  const sessionIdsByGroup = useEntityStore((s) => s._sessionIdsByGroup);
+  const selectedRows = useStoreWithEqualityFn(
+    useEntityStore,
+    (state): SessionGroupRowSelection[] => {
+      const shouldIncludeArchived = options?.archived === true || options?.status === "archived";
+      const rows: SessionGroupRowSelection[] = [];
 
-  return useMemo(() => {
-    const shouldIncludeArchived = options?.archived === true || options?.status === "archived";
-
-    return (Object.values(sessionGroups) as SessionGroupEntity[])
-      .map((group) => {
-        const groupSessionIds = sessionIdsByGroup[group.id] ?? [];
+      for (const group of Object.values(state.sessionGroups) as SessionGroupEntity[]) {
+        const groupSessionIds = state._sessionIdsByGroup[group.id] ?? [];
         const groupSessions = groupSessionIds
-          .map((id) => sessions[id])
+          .map((id) => state.sessions[id])
           .filter(Boolean)
           .sort((a, b) => {
             const aSort = a._sortTimestamp ?? a.updatedAt ?? a.createdAt;
@@ -32,6 +86,10 @@ export function useSessionGroupRows(
             if (diff !== 0) return diff;
             return a.id.localeCompare(b.id);
           });
+
+        if (getSessionGroupChannelId(group, groupSessions) !== channelId) {
+          continue;
+        }
 
         const latestSession = groupSessions[0];
         const createdBySession = [...groupSessions].sort(
@@ -49,54 +107,53 @@ export function useSessionGroupRows(
           ? "stopped"
           : getSessionGroupAgentStatus(agentStatuses);
 
-        return {
-          group,
-          groupSessions,
-          row: {
-            ...group,
-            latestSession,
-            createdBySession,
-            displaySessionStatus,
-            displayAgentStatus,
-            _sessionCount: groupSessions.length,
-            _lastMessageAt:
-              latestSession?._lastMessageAt
-              ?? latestSession?._sortTimestamp
-              ?? latestSession?.updatedAt
-              ?? group.updatedAt,
-            _sortTimestamp:
-              latestSession?._sortTimestamp
-              ?? latestSession?._lastMessageAt
-              ?? latestSession?.updatedAt
-              ?? group._sortTimestamp
-              ?? group.updatedAt,
-          } as SessionGroupRow,
-        };
-      })
-      .filter(({ group, groupSessions, row }) => {
-        if (getSessionGroupChannelId(group, groupSessions) !== channelId) {
-          return false;
-        }
+        const row = {
+          ...group,
+          latestSession,
+          createdBySession,
+          displaySessionStatus,
+          displayAgentStatus,
+          _sessionCount: groupSessions.length,
+          _lastMessageAt:
+            latestSession?._lastMessageAt
+            ?? latestSession?._sortTimestamp
+            ?? latestSession?.updatedAt
+            ?? group.updatedAt,
+          _sortTimestamp:
+            latestSession?._sortTimestamp
+            ?? latestSession?._lastMessageAt
+            ?? latestSession?.updatedAt
+            ?? group._sortTimestamp
+            ?? group.updatedAt,
+        } as SessionGroupRow;
 
         if (shouldIncludeArchived) {
-          if (!group.archivedAt) return false;
+          if (!group.archivedAt) continue;
         } else if (group.archivedAt) {
-          return false;
+          continue;
         }
 
         if (options?.status) {
-          return row.displaySessionStatus === options.status;
+          if (row.displaySessionStatus !== options.status) continue;
+        } else if (row.displaySessionStatus === "merged") {
+          continue;
         }
 
-        return row.displaySessionStatus !== "merged";
-      })
-      .map(({ row }) => row)
-      .sort((a, b) => {
-        const aSort = a._sortTimestamp ?? a.updatedAt ?? a.createdAt;
-        const bSort = b._sortTimestamp ?? b.updatedAt ?? b.createdAt;
+        rows.push({ row, signature: buildRowSignature(row) });
+      }
+
+      rows.sort((a, b) => {
+        const aSort = a.row._sortTimestamp ?? a.row.updatedAt ?? a.row.createdAt;
+        const bSort = b.row._sortTimestamp ?? b.row.updatedAt ?? b.row.createdAt;
         const diff = new Date(bSort).getTime() - new Date(aSort).getTime();
         if (diff !== 0) return diff;
-        return a.id.localeCompare(b.id);
+        return a.row.id.localeCompare(b.row.id);
       });
-  }, [channelId, options?.archived, options?.status, sessionGroups, sessions, sessionIdsByGroup]);
+
+      return rows;
+    },
+    areRowSelectionsEqual,
+  );
+
+  return selectedRows.map(({ row }) => row);
 }

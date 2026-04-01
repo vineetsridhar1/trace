@@ -6,17 +6,21 @@ import { useEntityField } from "../../stores/entity";
  * Resolves the entity name from the store by ID.
  */
 export function ScopeRef({ scopeType, scopeId }: { scopeType: string; scopeId: string }) {
-  // Tickets use "title", everything else uses "name"
-  const isTicket = scopeType === "ticket";
+  const channelName = useEntityField("channels", scopeType === "channel" ? scopeId : "", "name");
+  const chatName = useEntityField("chats", scopeType === "chat" ? scopeId : "", "name");
+  const ticketTitle = useEntityField("tickets", scopeType === "ticket" ? scopeId : "", "title");
+  const sessionName = useEntityField("sessions", scopeType === "session" ? scopeId : "", "name");
 
-  const entityType = scopeType === "channel" ? "channels" as const
-    : scopeType === "chat" ? "chats" as const
-    : scopeType === "ticket" ? "tickets" as const
-    : scopeType === "session" ? "sessions" as const
-    : null;
-
-  const field = isTicket ? "title" : "name";
-  const value = useEntityField(entityType ?? "channels", entityType ? scopeId : "", field) as string | undefined;
+  const value =
+    scopeType === "channel"
+      ? channelName
+      : scopeType === "chat"
+        ? chatName
+        : scopeType === "ticket"
+          ? ticketTitle
+          : scopeType === "session"
+            ? sessionName
+            : undefined;
 
   const display = value ?? scopeId.slice(0, 8);
   const icon = scopeType === "channel" ? <Hash size={11} className="text-muted-foreground" /> : null;

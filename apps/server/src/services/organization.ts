@@ -10,6 +10,76 @@ const PROJECT_INCLUDE = {
 } as const;
 
 export class OrganizationService {
+  async getOrganization(id: string, userId: string) {
+    await prisma.orgMember.findUniqueOrThrow({
+      where: { userId_organizationId: { userId, organizationId: id } },
+    });
+
+    return prisma.organization.findUnique({
+      where: { id },
+      include: {
+        orgMembers: {
+          include: {
+            user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+            organization: { select: { id: true, name: true } },
+          },
+        },
+        repos: true,
+        projects: true,
+        channels: true,
+      },
+    });
+  }
+
+  async listRepos(organizationId: string) {
+    return prisma.repo.findMany({
+      where: { organizationId },
+      include: { projects: true, sessions: true },
+    });
+  }
+
+  async getRepo(id: string, organizationId: string) {
+    return prisma.repo.findFirst({
+      where: { id, organizationId },
+      include: { projects: true, sessions: true },
+    });
+  }
+
+  async getRepoById(id: string) {
+    return prisma.repo.findUnique({
+      where: { id },
+      include: { projects: true, sessions: true },
+    });
+  }
+
+  async listProjects(organizationId: string, repoId?: string) {
+    return prisma.project.findMany({
+      where: { organizationId, ...(repoId ? { repoId } : {}) },
+      include: PROJECT_INCLUDE,
+    });
+  }
+
+  async getProject(id: string, organizationId: string) {
+    return prisma.project.findFirst({
+      where: { id, organizationId },
+      include: PROJECT_INCLUDE,
+    });
+  }
+
+  async getUserProfile(userId: string) {
+    return prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, avatarUrl: true },
+    });
+  }
+
+  async getOrganizationSummary(organizationId: string) {
+    return prisma.organization.findUniqueOrThrow({
+      where: { id: organizationId },
+      select: { id: true, name: true },
+    });
+  }
+
   async createRepo(input: CreateRepoInput, actorType: ActorType, actorId: string) {
     // Deduplicate by remote URL within the org — if it already exists, return it
     const existing = await prisma.repo.findUnique({

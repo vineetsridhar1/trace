@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Cloud, Monitor } from "lucide-react";
-import type { CodingTool, SessionRuntimeInstance } from "@trace/gql";
+import type { CodingTool, SessionConnection, SessionRuntimeInstance } from "@trace/gql";
 import { useEntityStore, useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
+import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "../../lib/mutations";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
@@ -40,7 +41,7 @@ export function SessionInputOptions({
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
-    | Record<string, unknown>
+    | SessionConnection
     | null
     | undefined;
 
@@ -52,14 +53,8 @@ export function SessionInputOptions({
   const currentModel = model ?? getDefaultModel(currentTool);
   const isNotStarted = agentStatus === "not_started";
 
-  const runtimeLabel =
-    connection && typeof connection === "object" && "runtimeLabel" in connection
-      ? (connection.runtimeLabel as string)
-      : null;
-  const runtimeInstanceId =
-    connection && typeof connection === "object" && "runtimeInstanceId" in connection
-      ? (connection.runtimeInstanceId as string | null)
-      : null;
+  const runtimeLabel = connection?.runtimeLabel ?? null;
+  const runtimeInstanceId = connection?.runtimeInstanceId ?? null;
   const isCloud = hosting === "cloud";
   const currentRuntimeValue = isCloud ? CLOUD_RUNTIME_ID : (runtimeInstanceId ?? CLOUD_RUNTIME_ID);
 
@@ -83,12 +78,19 @@ export function SessionInputOptions({
     async (newTool: string | null) => {
       if (!newTool || isOptimistic) return;
       const newDefault = getDefaultModel(newTool);
-      useEntityStore
-        .getState()
-        .patch("sessions", sessionId, { tool: newTool as CodingTool, model: newDefault ?? null });
-      await client
-        .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, tool: newTool, model: newDefault })
-        .toPromise();
+      const rollback = applyOptimisticPatch("sessions", sessionId, {
+        tool: newTool as CodingTool,
+        model: newDefault ?? null,
+      });
+      try {
+        const result = await client
+          .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, tool: newTool, model: newDefault })
+          .toPromise();
+        if (result.error) throw result.error;
+      } catch (error) {
+        rollback();
+        console.error("Failed to update session tool:", error);
+      }
     },
     [isOptimistic, sessionId],
   );
@@ -96,38 +98,57 @@ export function SessionInputOptions({
   const handleModelChange = useCallback(
     async (newModel: string | null) => {
       if (!newModel || isOptimistic) return;
-      useEntityStore.getState().patch("sessions", sessionId, { model: newModel });
-      await client
-        .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, model: newModel })
-        .toPromise();
+      const rollback = applyOptimisticPatch("sessions", sessionId, { model: newModel });
+      try {
+        const result = await client
+          .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, model: newModel })
+          .toPromise();
+        if (result.error) throw result.error;
+      } catch (error) {
+        rollback();
+        console.error("Failed to update session model:", error);
+      }
     },
     [isOptimistic, sessionId],
   );
 
   const handleRuntimeChange = useCallback(
-    async (value: string) => {
+    async (value: string | null) => {
       if (isOptimistic || value === currentRuntimeValue) return;
+      if (!value) return;
       const newIsCloud = value === CLOUD_RUNTIME_ID;
       const rt = runtimes.find((r) => r.id === value);
+      const nextConnection: SessionConnection = {
+        __typename: connection?.__typename ?? "SessionConnection",
+        canMove: connection?.canMove ?? true,
+        canRetry: connection?.canRetry ?? true,
+        lastDeliveryFailureAt: connection?.lastDeliveryFailureAt ?? null,
+        lastError: connection?.lastError ?? null,
+        lastSeen: connection?.lastSeen ?? null,
+        retryCount: connection?.retryCount ?? 0,
+        runtimeInstanceId: newIsCloud ? null : value,
+        runtimeLabel: newIsCloud ? null : (rt?.label ?? null),
+        state: connection?.state ?? "disconnected",
+      };
 
-      // Optimistically update the entity store
-      useEntityStore.getState().patch("sessions", sessionId, {
+      const rollback = applyOptimisticPatch("sessions", sessionId, {
         hosting: newIsCloud ? "cloud" : (rt?.hostingMode ?? "local"),
-        connection: {
-          ...(connection ?? {}),
-          runtimeInstanceId: newIsCloud ? null : value,
-          runtimeLabel: newIsCloud ? null : (rt?.label ?? null),
-          state: "connecting",
-        },
+        connection: nextConnection,
       });
 
-      await client
-        .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
-          sessionId,
-          hosting: newIsCloud ? "cloud" : undefined,
-          runtimeInstanceId: newIsCloud ? undefined : value,
-        })
-        .toPromise();
+      try {
+        const result = await client
+          .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
+            sessionId,
+            hosting: newIsCloud ? "cloud" : undefined,
+            runtimeInstanceId: newIsCloud ? undefined : value,
+          })
+          .toPromise();
+        if (result.error) throw result.error;
+      } catch (error) {
+        rollback();
+        console.error("Failed to update session runtime:", error);
+      }
     },
     [isOptimistic, sessionId, currentRuntimeValue, runtimes, connection],
   );

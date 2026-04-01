@@ -3,8 +3,12 @@ import { X } from "lucide-react";
 import { gql } from "@urql/core";
 import type { Message } from "@trace/gql";
 import { client } from "../../lib/urql";
-import { useEntityStore, useEntityIds } from "../../stores/entity";
-import { useEntityField } from "../../stores/entity";
+import {
+  messageScopeKey,
+  useEntityField,
+  useEntityStore,
+  useMessageIdsForScope,
+} from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
 import { ThreadMessage } from "./ThreadMessage";
 import { ChatComposer } from "./ChatComposer";
@@ -93,11 +97,14 @@ export function ThreadPanel({ chatId, channelId, rootMessageId }: { chatId?: str
     fetchReplies();
   }, [fetchReplies]);
 
-  const scopeId = chatId ?? channelId;
-  const replyIds = useEntityIds(
-    "messages",
+  const scopeKey = chatId
+    ? messageScopeKey("chat", chatId)
+    : channelId
+      ? messageScopeKey("channel", channelId)
+      : null;
+  const replyIds = useMessageIdsForScope(
+    scopeKey ?? "__missing__",
     (message) =>
-      (chatId ? message.chatId === chatId : message.channelId === channelId) &&
       message.parentMessageId === rootMessageId &&
       !message.deletedAt,
     (a, b) => a.createdAt.localeCompare(b.createdAt),

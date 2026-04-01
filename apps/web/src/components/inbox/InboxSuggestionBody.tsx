@@ -46,6 +46,7 @@ export function InboxSuggestionBody({
   const confidence = payload.confidence;
   const expiresAt = payload.expiresAt;
   const expiry = expiresAt ? timeUntil(expiresAt) : null;
+  const priority = typeof args.priority === "string" ? args.priority : null;
 
   const actionTitle = meta.titleFn(args);
 
@@ -107,12 +108,12 @@ export function InboxSuggestionBody({
               {expiry.text}
             </span>
           )}
-          {actionType === "ticket.create" && args.priority && (
+          {actionType === "ticket.create" && priority && (
             <span className={cn(
               "rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize",
-              PRIORITY_STYLES[args.priority as string] ?? "bg-zinc-500/10 text-zinc-400",
+              PRIORITY_STYLES[priority] ?? "bg-zinc-500/10 text-zinc-400",
             )}>
-              {args.priority as string}
+              {priority}
             </span>
           )}
         </div>

@@ -33,6 +33,21 @@ export interface ResolveAutonomyInput {
   prefetchedAiMode?: AutonomyMode | null;
 }
 
+export async function getChatAutonomyContext(chatId: string): Promise<{
+  isDm: boolean;
+  aiMode: AutonomyMode | null;
+}> {
+  const chat = await prisma.chat.findUnique({
+    where: { id: chatId },
+    select: { type: true, aiMode: true },
+  });
+
+  return {
+    isDm: chat?.type === "dm",
+    aiMode: chat?.aiMode ?? null,
+  };
+}
+
 /**
  * Resolve the effective autonomy mode for a scope by walking the override
  * hierarchy. Returns the most specific non-null override, or falls back to

@@ -124,7 +124,7 @@ export function GroupTabStrip({
   }, [dropdownOpen, canNewChat, canOpenTerminal, onNewChat, onOpenTerminal]);
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider delay={300}>
       <div className="shrink-0 bg-surface-deep">
         <div className="native-scrollbar overflow-x-auto">
           <div className="flex min-w-max">
@@ -203,10 +203,11 @@ export function GroupTabStrip({
                   className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
                 >
                   <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className={cn("shrink-0 flex h-2.5 w-2.5 items-center justify-center", statusColor)}>
-                        <Circle size={6} className="fill-current" />
-                      </span>
+                    <TooltipTrigger
+                      className={cn("shrink-0 flex h-2.5 w-2.5 items-center justify-center", statusColor)}
+                      render={<span />}
+                    >
+                      <Circle size={6} className="fill-current" />
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="text-xs">
                       {statusLabel}

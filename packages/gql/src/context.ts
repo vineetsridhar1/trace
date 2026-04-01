@@ -16,6 +16,8 @@ export interface Context {
   conversationLoader: DataLoader<string, unknown | null>;
   branchLoader: DataLoader<string, unknown | null>;
   turnLoader: DataLoader<string, unknown | null>;
+  chatMembersLoader: DataLoader<string, Array<{ userId: string; joinedAt: Date }>>;
+  sessionTicketsLoader: DataLoader<string, unknown[]>;
   channelMembershipLoader: DataLoader<string, boolean>;
   chatMembershipLoader: DataLoader<string, boolean>;
 }
