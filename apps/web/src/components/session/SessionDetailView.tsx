@@ -246,6 +246,7 @@ export function SessionDetailView({
               </div>
             ) : (
               <SessionMessageList
+                key={sessionId}
                 nodes={nodes}
                 gitCheckpoints={gitCheckpoints ?? []}
                 hasOlder={hasOlder}

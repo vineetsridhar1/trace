@@ -52,6 +52,7 @@ export function useScopedMessages({
   onMessagesLoaded,
 }: UseScopedMessagesOptions) {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlder, setHasOlder] = useState(true);
   const oldestCreatedAtRef = useRef<string | null>(null);
@@ -60,6 +61,7 @@ export function useScopedMessages({
 
   useEffect(() => {
     setLoading(true);
+    setError(null);
     setLoadingOlder(false);
     setHasOlder(true);
     oldestCreatedAtRef.current = null;
@@ -71,6 +73,12 @@ export function useScopedMessages({
     const result = await client
       .query(query, getQueryVariables(new Date().toISOString()))
       .toPromise();
+
+    if (result.error) {
+      setError(result.error.message);
+      setLoading(false);
+      return;
+    }
 
     const messages = getMessagesFromResult(
       result.data as Record<string, unknown> | undefined,
@@ -131,6 +139,13 @@ export function useScopedMessages({
       .query(query, getQueryVariables(oldestCreatedAtRef.current))
       .toPromise();
 
+    if (result.error) {
+      setError(result.error.message);
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+      return;
+    }
+
     const messages = getMessagesFromResult(
       result.data as Record<string, unknown> | undefined,
       queryResultField,
@@ -167,6 +182,7 @@ export function useScopedMessages({
   return {
     messageIds,
     loading,
+    error,
     loadingOlder,
     hasOlder,
     fetchOlderMessages,
