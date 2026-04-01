@@ -89,7 +89,12 @@ export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
       if (result.data?.createRepo) {
         // Persist local path mapping so the bridge can find the repo on disk
         if (selectedPath && window.trace?.saveRepoPath) {
-          await window.trace.saveRepoPath(result.data.createRepo.id, selectedPath);
+          try {
+            await window.trace.saveRepoPath(result.data.createRepo.id, selectedPath);
+          } catch (saveErr) {
+            setError(saveErr instanceof Error ? saveErr.message : "Failed to save local path");
+            return;
+          }
         }
         resetAndClose();
         onCreated?.();

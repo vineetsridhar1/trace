@@ -26,6 +26,9 @@ import { AgentStatusIcon } from "./AgentStatusIcon";
 import { SessionHistory } from "./SessionHistory";
 import { ScrambleText } from "../ui/ScrambleText";
 
+/** How long to show "Reconnecting…" before switching to "Connection Lost" */
+const CONNECTION_LOST_BANNER_DELAY_MS = 60_000;
+
 export function SessionHeader({
   sessionId,
   onToggleTerminal,
@@ -74,7 +77,7 @@ export function SessionHeader({
       setPastGracePeriod(false);
       return;
     }
-    const timer = setTimeout(() => setPastGracePeriod(true), 60_000);
+    const timer = setTimeout(() => setPastGracePeriod(true), CONNECTION_LOST_BANNER_DELAY_MS);
     return () => clearTimeout(timer);
   }, [disconnected]);
 

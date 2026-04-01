@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { Send, Square, Cloud, Monitor } from "lucide-react";
-import { useEntityField, useEntityStore, eventScopeKey } from "../../stores/entity";
+import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
 import { type InteractionMode, MODE_CYCLE, MODE_CONFIG, wrapPrompt } from "./interactionModes";
@@ -41,21 +41,8 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     !isOptimistic && (isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted));
   const displayModel = model ? getModelLabel(model) : "Claude Code";
 
-  // Find the timestamp of the last user message for accurate working time
-  const scopeKey = eventScopeKey("session", sessionId);
-  const lastUserMessageAt = useEntityStore((s) => {
-    if (!isActive) return undefined;
-    let latest: string | undefined;
-    const bucket = s.eventsByScope[scopeKey];
-    if (!bucket) return undefined;
-    for (const id of Object.keys(bucket)) {
-      const event = bucket[id];
-      if (event.eventType === "message_sent" || event.eventType === "session_started") {
-        if (!latest || event.timestamp > latest) latest = event.timestamp;
-      }
-    }
-    return latest;
-  });
+  const _lastUserMessageAt = useEntityField("sessions", sessionId, "_lastUserMessageAt") as string | undefined;
+  const lastUserMessageAt = isActive ? _lastUserMessageAt : undefined;
 
   const cycleMode = useCallback(() => {
     setMode((prev) => {

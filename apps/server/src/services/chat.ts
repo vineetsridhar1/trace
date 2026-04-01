@@ -314,10 +314,7 @@ export class ChatService {
       return hydratedExisting;
     }
 
-    const chatId = existing.chatId;
-    if (!chatId) {
-      throw new Error("Message is not a chat message");
-    }
+    const chatId = existing.chatId!;
 
     const eventOrgId = await resolveEventOrgId(actorId);
     const editedAt = new Date();
@@ -388,10 +385,7 @@ export class ChatService {
       return hydratedExisting;
     }
 
-    const chatId = existing.chatId;
-    if (!chatId) {
-      throw new Error("Message is not a chat message");
-    }
+    const chatId = existing.chatId!;
 
     const eventOrgId = await resolveEventOrgId(actorId);
     const deletedAt = new Date();

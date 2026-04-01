@@ -79,7 +79,6 @@ export function handleBridgeConnection(ws: WebSocket) {
           supportedTools: (msg.supportedTools as string[]) ?? ["claude_code", "codex", "custom"],
           registeredRepoIds: (msg.registeredRepoIds as string[]) ?? [],
         });
-        registered = true;
 
         if (existingRuntime && existingRuntime.ws !== ws) {
           runtimeDebug("closing superseded websocket for runtime", {
