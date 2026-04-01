@@ -253,9 +253,13 @@ export function SessionGroupDetailView({
   // Auto-restore terminal tabs from server when returning to this session group
   useEffect(() => {
     let aborted = false;
-    async function restoreTerminals() {
-      for (const sessionId of groupSessionIds) {
+    Promise.all(
+      groupSessionIds.map(async (sessionId) => {
         if (aborted) return;
+        const existing = Object.values(useTerminalStore.getState().terminals).filter(
+          (t) => t.sessionId === sessionId,
+        );
+        if (existing.length > 0) return;
         const result = await client.query(SESSION_TERMINALS_QUERY, { sessionId }).toPromise();
         const serverTerminals = (result.data?.sessionTerminals as Terminal[] | undefined) ?? [];
         for (const terminal of serverTerminals) {
@@ -264,9 +268,8 @@ export function SessionGroupDetailView({
             addTerminal(terminal.id, terminal.sessionId, sessionGroupId, "active");
           }
         }
-      }
-    }
-    restoreTerminals();
+      }),
+    );
     return () => {
       aborted = true;
     };

@@ -125,9 +125,9 @@ export function GroupTabStrip({
 
   return (
     <TooltipProvider delayDuration={300}>
-    <div className="shrink-0 bg-surface-deep">
-      <div className="native-scrollbar overflow-x-auto">
-        <div className="flex min-w-max">
+      <div className="shrink-0 bg-surface-deep">
+        <div className="native-scrollbar overflow-x-auto">
+          <div className="flex min-w-max">
           {sessionTabs.map((session) => {
             const displayAgentStatus = getDisplayAgentStatus(
               session.agentStatus,
@@ -215,7 +215,7 @@ export function GroupTabStrip({
                   {isEditing ? (
                     <input
                       autoFocus
-                      className="w-24 bg-transparent text-xs outline-none border-b border-foreground/30"
+                      className="min-w-24 max-w-[180px] bg-transparent text-xs outline-none border-b border-foreground/30"
                       value={editValue}
                       onChange={(e) => setEditValue(e.target.value)}
                       onKeyDown={(e) => {
@@ -227,8 +227,10 @@ export function GroupTabStrip({
                         }
                       }}
                       onBlur={() => {
-                        onRenameTerminal(terminal.id, editValue);
-                        setEditingTerminalId(null);
+                        if (editingTerminalId === terminal.id) {
+                          onRenameTerminal(terminal.id, editValue);
+                          setEditingTerminalId(null);
+                        }
                       }}
                       onClick={(e) => e.stopPropagation()}
                     />
@@ -310,9 +312,9 @@ export function GroupTabStrip({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </div>
       </div>
-    </div>
     </TooltipProvider>
   );
 }
