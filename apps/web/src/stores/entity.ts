@@ -305,6 +305,18 @@ export class StoreBatchWriter {
     this.dirty.add("eventsByScope");
   }
 
+  /** Remove a single event from a scoped bucket (used for optimistic cleanup) */
+  removeScopedEvent(scopeKey: string, id: string): void {
+    const bucket = this.eventsByScope[scopeKey];
+    if (!bucket || !bucket[id]) return;
+    if (this.eventsByScope === useEntityStore.getState().eventsByScope) {
+      this.eventsByScope = { ...this.eventsByScope };
+    }
+    const { [id]: _, ...rest } = bucket;
+    this.eventsByScope[scopeKey] = rest;
+    this.dirty.add("eventsByScope");
+  }
+
   flush(): void {
     if (this.dirty.size === 0) return;
     const update: Record<string, unknown> = {};

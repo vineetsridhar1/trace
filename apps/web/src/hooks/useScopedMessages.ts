@@ -25,9 +25,13 @@ type UseScopedMessagesOptions = {
   getQueryVariables: (before: string) => Record<string, unknown>;
   resetKeys: readonly unknown[];
   subscription?: SubscriptionConfig;
+  onMessagesLoaded?: (messages: Array<Message & { id: string }>) => void;
 };
 
-function getMessagesFromResult(data: Record<string, unknown> | undefined, field: MessageResultField) {
+function getMessagesFromResult(
+  data: Record<string, unknown> | undefined,
+  field: MessageResultField,
+) {
   const value = data?.[field];
   return Array.isArray(value) ? (value as Array<Message & { id: string }>) : undefined;
 }
@@ -45,6 +49,7 @@ export function useScopedMessages({
   getQueryVariables,
   resetKeys,
   subscription,
+  onMessagesLoaded,
 }: UseScopedMessagesOptions) {
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -67,9 +72,16 @@ export function useScopedMessages({
       .query(query, getQueryVariables(new Date().toISOString()))
       .toPromise();
 
-    const messages = getMessagesFromResult(result.data as Record<string, unknown> | undefined, queryResultField);
+    const messages = getMessagesFromResult(
+      result.data as Record<string, unknown> | undefined,
+      queryResultField,
+    );
     if (messages) {
-      useEntityStore.getState().upsertMany("messages", messages);
+      if (onMessagesLoaded) {
+        onMessagesLoaded(messages);
+      } else {
+        useEntityStore.getState().upsertMany("messages", messages);
+      }
 
       if (messages.length < PAGE_SIZE) {
         setHasOlder(false);
@@ -81,7 +93,7 @@ export function useScopedMessages({
     }
 
     setLoading(false);
-  }, [getQueryVariables, query, queryResultField]);
+  }, [getQueryVariables, onMessagesLoaded, query, queryResultField]);
 
   useEffect(() => {
     fetchMessages();
@@ -95,7 +107,10 @@ export function useScopedMessages({
     const activeSubscription = client
       .subscription(subscription.query, subscription.variables)
       .subscribe((result) => {
-        const event = getEventFromResult(result.data as Record<string, unknown> | undefined, subscription.resultField);
+        const event = getEventFromResult(
+          result.data as Record<string, unknown> | undefined,
+          subscription.resultField,
+        );
         if (event) {
           subscription.onEvent(event);
         }
@@ -116,9 +131,16 @@ export function useScopedMessages({
       .query(query, getQueryVariables(oldestCreatedAtRef.current))
       .toPromise();
 
-    const messages = getMessagesFromResult(result.data as Record<string, unknown> | undefined, queryResultField);
+    const messages = getMessagesFromResult(
+      result.data as Record<string, unknown> | undefined,
+      queryResultField,
+    );
     if (messages) {
-      useEntityStore.getState().upsertMany("messages", messages);
+      if (onMessagesLoaded) {
+        onMessagesLoaded(messages);
+      } else {
+        useEntityStore.getState().upsertMany("messages", messages);
+      }
 
       if (messages.length < PAGE_SIZE) {
         setHasOlder(false);
@@ -131,7 +153,7 @@ export function useScopedMessages({
 
     loadingOlderRef.current = false;
     setLoadingOlder(false);
-  }, [getQueryVariables, query, queryResultField]);
+  }, [getQueryVariables, onMessagesLoaded, query, queryResultField]);
 
   const messageIds = useEntityIds(
     "messages",

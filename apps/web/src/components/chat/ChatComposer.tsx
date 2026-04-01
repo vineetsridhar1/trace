@@ -14,8 +14,13 @@ import {
 } from "../../lib/optimistic-message";
 
 const SEND_CHAT_MESSAGE = gql`
-  mutation SendChatMessage($chatId: ID!, $html: String, $parentId: ID) {
-    sendChatMessage(chatId: $chatId, html: $html, parentId: $parentId) {
+  mutation SendChatMessage($chatId: ID!, $html: String, $parentId: ID, $clientMutationId: String) {
+    sendChatMessage(
+      chatId: $chatId
+      html: $html
+      parentId: $parentId
+      clientMutationId: $clientMutationId
+    ) {
       id
     }
   }
@@ -34,11 +39,11 @@ export function ChatComposer({ chatId, parentId }: { chatId: string; parentId?: 
       setSending(true);
 
       // Insert optimistic message so it appears instantly
-      const { messageId: tempMessageId, eventId: tempEventId } = optimisticallyInsertChatMessage(
-        chatId,
-        html,
-        parentId,
-      );
+      const {
+        messageId: tempMessageId,
+        eventId: tempEventId,
+        clientMutationId,
+      } = optimisticallyInsertChatMessage(chatId, html, parentId);
 
       try {
         const result = await client
@@ -46,6 +51,7 @@ export function ChatComposer({ chatId, parentId }: { chatId: string; parentId?: 
             chatId,
             html,
             parentId: parentId ?? null,
+            clientMutationId,
           })
           .toPromise();
 

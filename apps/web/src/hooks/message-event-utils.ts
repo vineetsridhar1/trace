@@ -1,6 +1,7 @@
 import type { Actor, Event, Message } from "@trace/gql";
 import { asJsonObject, isJsonObject } from "@trace/shared";
-import { useEntityStore } from "../stores/entity";
+import { useEntityStore, eventScopeKey } from "../stores/entity";
+import { takePendingOptimisticChat } from "../lib/optimistic-message";
 
 type MessageScope =
   | { scopeType: "chat"; scopeId: string }
@@ -17,7 +18,10 @@ function normalizeMentions(
   return fallback ?? null;
 }
 
-function normalizeThreadRepliers(existing: Message["threadRepliers"] | null | undefined, actor: Actor) {
+function normalizeThreadRepliers(
+  existing: Message["threadRepliers"] | null | undefined,
+  actor: Actor,
+) {
   const nextActor = {
     type: actor.type,
     id: actor.id,
@@ -27,19 +31,27 @@ function normalizeThreadRepliers(existing: Message["threadRepliers"] | null | un
 
   return [
     nextActor,
-    ...(existing ?? []).filter((replier) => `${replier.type}:${replier.id}` !== `${nextActor.type}:${nextActor.id}`),
+    ...(existing ?? []).filter(
+      (replier) => `${replier.type}:${replier.id}` !== `${nextActor.type}:${nextActor.id}`,
+    ),
   ].slice(0, 3);
 }
 
-function buildScopedMessage(scope: MessageScope, event: Event, payload: Record<string, unknown>, existing?: Message): Message {
-  const parentMessageId = typeof payload.parentMessageId === "string" ? payload.parentMessageId : null;
+function buildScopedMessage(
+  scope: MessageScope,
+  event: Event,
+  payload: Record<string, unknown>,
+  existing?: Message,
+): Message {
+  const parentMessageId =
+    typeof payload.parentMessageId === "string" ? payload.parentMessageId : null;
 
   return {
     id: typeof payload.messageId === "string" ? payload.messageId : "",
     chatId: scope.scopeType === "chat" ? scope.scopeId : null,
     channelId: scope.scopeType === "channel" ? scope.scopeId : null,
-    text: typeof payload.text === "string" ? payload.text : existing?.text ?? "",
-    html: typeof payload.html === "string" ? payload.html : existing?.html ?? null,
+    text: typeof payload.text === "string" ? payload.text : (existing?.text ?? ""),
+    html: typeof payload.html === "string" ? payload.html : (existing?.html ?? null),
     mentions: normalizeMentions(payload.mentions, existing?.mentions),
     parentMessageId,
     replyCount: existing?.replyCount ?? 0,
@@ -73,7 +85,38 @@ export function upsertScopedMessageFromEvent(event: Event, scope: MessageScope) 
 
   if (event.eventType === "message_sent") {
     const nextMessage = buildScopedMessage(scope, event, payload, existing);
-    upsert("messages", messageId, nextMessage);
+
+    // Atomically upsert the real message AND remove any pending optimistic
+    // duplicate to prevent a brief flash where both appear in the list.
+    if (scope.scopeType === "chat") {
+      const pending = takePendingOptimisticChat(scope.scopeId, event);
+      if (pending) {
+        const scopeKey = eventScopeKey("chat", scope.scopeId);
+        useEntityStore.setState((state) => {
+          // Build the message inside the updater so we read the latest state
+          const freshExisting = state.messages[messageId] as Message | undefined;
+          const msg = buildScopedMessage(scope, event, payload, freshExisting);
+
+          const nextMessages = { ...state.messages };
+          delete nextMessages[pending.tempMessageId];
+          nextMessages[messageId] = msg;
+
+          const bucket = state.eventsByScope[scopeKey];
+          if (bucket && bucket[pending.tempEventId]) {
+            const { [pending.tempEventId]: _, ...restBucket } = bucket;
+            return {
+              messages: nextMessages,
+              eventsByScope: { ...state.eventsByScope, [scopeKey]: restBucket },
+            };
+          }
+          return { messages: nextMessages };
+        });
+      } else {
+        upsert("messages", messageId, nextMessage);
+      }
+    } else {
+      upsert("messages", messageId, nextMessage);
+    }
 
     if (!existing && nextMessage.parentMessageId) {
       const root = messages[nextMessage.parentMessageId] as Message | undefined;

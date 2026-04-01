@@ -33,7 +33,13 @@ export const chatMutations = {
   },
   sendChatMessage: (
     _: unknown,
-    args: { chatId: string; text?: string; html?: string; parentId?: string },
+    args: {
+      chatId: string;
+      text?: string;
+      html?: string;
+      parentId?: string;
+      clientMutationId?: string | null;
+    },
     ctx: Context,
   ) => {
     return chatService.sendMessage({
@@ -41,6 +47,7 @@ export const chatMutations = {
       text: args.text,
       html: args.html,
       parentId: args.parentId,
+      clientMutationId: args.clientMutationId ?? undefined,
       actorType: ctx.actorType,
       actorId: ctx.userId,
     });
@@ -61,33 +68,19 @@ export const chatMutations = {
     });
   },
   addChatMember: (_: unknown, args: { input: AddChatMemberInput }, ctx: Context) => {
-    return chatService.addMember(
-      args.input.chatId,
-      args.input.userId,
-      ctx.actorType,
-      ctx.userId,
-    );
+    return chatService.addMember(args.input.chatId, args.input.userId, ctx.actorType, ctx.userId);
   },
   leaveChat: (_: unknown, args: { chatId: string }, ctx: Context) => {
     return chatService.leave(args.chatId, ctx.actorType, ctx.userId);
   },
   renameChat: (_: unknown, args: { chatId: string; name: string }, ctx: Context) => {
-    return chatService.rename(
-      args.chatId,
-      args.name,
-      ctx.actorType,
-      ctx.userId,
-    );
+    return chatService.rename(args.chatId, args.name, ctx.actorType, ctx.userId);
   },
 };
 
 export const chatSubscriptions = {
   chatEvents: {
-    subscribe: async (
-      _: unknown,
-      args: { chatId: string; types?: string[] },
-      ctx: Context,
-    ) => {
+    subscribe: async (_: unknown, args: { chatId: string; types?: string[] }, ctx: Context) => {
       await assertChatAccess(args.chatId, ctx.userId);
 
       return filterAsyncIterator(

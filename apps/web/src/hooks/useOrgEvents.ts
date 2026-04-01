@@ -8,6 +8,7 @@ import { useAuthStore } from "../stores/auth";
 import { useUIStore, navigateToSession } from "../stores/ui";
 import { getSessionChannelId } from "../lib/session-group";
 import { notifyForEvent } from "../notifications/handlers";
+import { takePendingOptimisticSession } from "../lib/optimistic-message";
 import type {
   AgentStatus,
   Event,
@@ -142,10 +143,7 @@ function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEntity> | u
 }
 
 function shouldBumpSortTimestampForOutput(payload: JsonObject): boolean {
-  return (
-    payload.type === "question_pending" ||
-    payload.type === "plan_pending"
-  );
+  return payload.type === "question_pending" || payload.type === "plan_pending";
 }
 
 function patchGroupSessionsBranch(batch: StoreBatchWriter, sessionGroupId: string, branch: string) {
@@ -268,7 +266,19 @@ export function useOrgEvents() {
         // Note: session_output events arrive with trimmed payloads from the org
         // subscription. The session detail view subscribes to sessionEvents for
         // full payloads, which will overwrite these trimmed versions.
-        batch.upsertScopedEvent(eventScopeKey(event.scopeType, event.scopeId), event.id, event);
+        const scopeKey = eventScopeKey(event.scopeType, event.scopeId);
+        batch.upsertScopedEvent(scopeKey, event.id, event);
+
+        // Clean up optimistic session events to prevent brief duplicates
+        if (
+          event.eventType === "message_sent" &&
+          event.scopeType === ("session" satisfies ScopeType)
+        ) {
+          const pending = takePendingOptimisticSession(event.scopeId, event);
+          if (pending) {
+            batch.removeScopedEvent(scopeKey, pending.tempEventId);
+          }
+        }
 
         // Repo created or updated — upsert directly from payload
         if ((event.eventType === "repo_created" || event.eventType === "repo_updated") && payload) {
@@ -672,7 +682,8 @@ export function useOrgEvents() {
             _lastMessageAt: event.timestamp,
           };
           // Bump sort for user messages and assistant text messages (not tool calls)
-          const bumpActivitySort = event.eventType === "message_sent" || payload.type === "assistant";
+          const bumpActivitySort =
+            event.eventType === "message_sent" || payload.type === "assistant";
           if (bumpActivitySort) {
             updates._sortTimestamp = event.timestamp;
           }

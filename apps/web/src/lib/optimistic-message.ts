@@ -1,4 +1,5 @@
-import type { Event } from "@trace/gql";
+import type { Event, Message } from "@trace/gql";
+import { asJsonObject } from "@trace/shared";
 import { useEntityStore, eventScopeKey } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 
@@ -9,15 +10,164 @@ export function isOptimisticEvent(id: string): boolean {
   return id.startsWith(OPTIMISTIC_PREFIX);
 }
 
+export interface PendingSessionEntry {
+  tempEventId: string;
+  clientMutationId: string;
+  expectedRealEventId?: string;
+}
+
+export interface PendingChatEntry {
+  tempMessageId: string;
+  tempEventId: string;
+  clientMutationId: string;
+  expectedRealMessageId?: string;
+}
+
+const pendingSessionOptimistic = new Map<string, PendingSessionEntry[]>();
+const pendingChatOptimistic = new Map<string, PendingChatEntry[]>();
+
+function enqueue<T>(map: Map<string, T[]>, key: string, item: T): void {
+  const queue = map.get(key);
+  if (queue) {
+    queue.push(item);
+    return;
+  }
+  map.set(key, [item]);
+}
+
+function dequeue<T>(map: Map<string, T[]>, key: string, predicate: (item: T) => boolean): void {
+  const queue = map.get(key);
+  if (!queue) return;
+  const idx = queue.findIndex(predicate);
+  if (idx === -1) return;
+  queue.splice(idx, 1);
+  if (queue.length === 0) map.delete(key);
+}
+
+function takeMatching<T>(
+  map: Map<string, T[]>,
+  key: string,
+  predicate: (item: T) => boolean,
+): T | undefined {
+  const queue = map.get(key);
+  if (!queue) return undefined;
+  const idx = queue.findIndex(predicate);
+  if (idx === -1) return undefined;
+  const [entry] = queue.splice(idx, 1);
+  if (queue.length === 0) map.delete(key);
+  return entry;
+}
+
+function takeAllMatching<T>(
+  map: Map<string, T[]>,
+  key: string,
+  predicate: (item: T) => boolean,
+): T[] {
+  const queue = map.get(key);
+  if (!queue) return [];
+
+  const matched: T[] = [];
+  const remaining: T[] = [];
+  for (const item of queue) {
+    if (predicate(item)) {
+      matched.push(item);
+    } else {
+      remaining.push(item);
+    }
+  }
+
+  if (matched.length === 0) return [];
+  if (remaining.length === 0) {
+    map.delete(key);
+  } else {
+    map.set(key, remaining);
+  }
+  return matched;
+}
+
+function patchPending<T>(
+  map: Map<string, T[]>,
+  key: string,
+  predicate: (item: T) => boolean,
+  patch: (item: T) => void,
+): void {
+  const queue = map.get(key);
+  if (!queue) return;
+  const entry = queue.find(predicate);
+  if (!entry) return;
+  patch(entry);
+}
+
+function createClientMutationId(): string {
+  return `${OPTIMISTIC_PREFIX}${crypto.randomUUID()}`;
+}
+
+function getClientMutationId(event: Event): string | null {
+  const payload = asJsonObject(event.payload);
+  return typeof payload?.clientMutationId === "string" ? payload.clientMutationId : null;
+}
+
+function takePendingSessionEntry(sessionId: string, event: Event): PendingSessionEntry | undefined {
+  const clientMutationId = getClientMutationId(event);
+  return takeMatching(
+    pendingSessionOptimistic,
+    sessionId,
+    (entry) =>
+      (clientMutationId !== null && entry.clientMutationId === clientMutationId) ||
+      entry.expectedRealEventId === event.id,
+  );
+}
+
+export function takePendingOptimisticSession(
+  sessionId: string,
+  event: Event,
+): PendingSessionEntry | undefined {
+  return takePendingSessionEntry(sessionId, event);
+}
+
+export function takePendingOptimisticChat(
+  chatId: string,
+  event: Event,
+): PendingChatEntry | undefined {
+  const clientMutationId = getClientMutationId(event);
+  const payload = asJsonObject(event.payload);
+  const realMessageId = typeof payload?.messageId === "string" ? payload.messageId : null;
+
+  return takeMatching(
+    pendingChatOptimistic,
+    chatId,
+    (entry) =>
+      (clientMutationId !== null && entry.clientMutationId === clientMutationId) ||
+      entry.expectedRealMessageId === realMessageId,
+  );
+}
+
+function upsertSessionEvents(scopeKey: string, events: Array<Event & { id: string }>): void {
+  useEntityStore.setState((state) => {
+    const bucket = { ...(state.eventsByScope[scopeKey] ?? {}) };
+    for (const event of events) {
+      bucket[event.id] = event;
+    }
+    return { eventsByScope: { ...state.eventsByScope, [scopeKey]: bucket } };
+  });
+}
+
+export interface OptimisticSessionIds {
+  eventId: string;
+  clientMutationId: string;
+}
+
 /**
  * Insert an optimistic `message_sent` event into the session's scoped
  * event bucket so it appears instantly in the session log.
- *
- * Returns the temp event ID for later cleanup.
  */
-export function optimisticallyInsertSessionMessage(sessionId: string, text: string): string {
+export function optimisticallyInsertSessionMessage(
+  sessionId: string,
+  text: string,
+): OptimisticSessionIds {
   const user = useAuthStore.getState().user;
   const now = new Date().toISOString();
+  const clientMutationId = createClientMutationId();
   const tempId = `${OPTIMISTIC_PREFIX}${crypto.randomUUID()}`;
   const scopeKey = eventScopeKey("session", sessionId);
 
@@ -26,7 +176,7 @@ export function optimisticallyInsertSessionMessage(sessionId: string, text: stri
     scopeType: "session",
     scopeId: sessionId,
     eventType: "message_sent",
-    payload: { text } as unknown as Record<string, unknown>,
+    payload: { text, clientMutationId } as unknown as Record<string, unknown>,
     actor: {
       type: "user",
       id: user?.id ?? "",
@@ -39,13 +189,15 @@ export function optimisticallyInsertSessionMessage(sessionId: string, text: stri
   };
 
   useEntityStore.getState().upsertScopedEvent(scopeKey, tempId, event);
-  return tempId;
+
+  enqueue(pendingSessionOptimistic, sessionId, { tempEventId: tempId, clientMutationId });
+
+  return { eventId: tempId, clientMutationId };
 }
 
-/**
- * Remove an optimistic event from the session's scoped event bucket.
- */
 export function removeOptimisticSessionMessage(sessionId: string, tempEventId: string): void {
+  dequeue(pendingSessionOptimistic, sessionId, (entry) => entry.tempEventId === tempEventId);
+
   const scopeKey = eventScopeKey("session", sessionId);
   useEntityStore.setState((state) => {
     const bucket = state.eventsByScope[scopeKey];
@@ -60,41 +212,75 @@ export function reconcileOptimisticSessionMessage(
   tempEventId: string,
   realEventId: string,
 ): void {
+  patchPending(
+    pendingSessionOptimistic,
+    sessionId,
+    (entry) => entry.tempEventId === tempEventId,
+    (entry) => {
+      entry.expectedRealEventId = realEventId;
+    },
+  );
+}
+
+export function upsertSessionEventWithOptimisticResolution(
+  sessionId: string,
+  event: Event & { id: string },
+): void {
   const scopeKey = eventScopeKey("session", sessionId);
+  const pending = takePendingSessionEntry(sessionId, event);
+  if (!pending) {
+    useEntityStore.getState().upsertScopedEvent(scopeKey, event.id, event);
+    return;
+  }
+
   useEntityStore.setState((state) => {
-    const bucket = state.eventsByScope[scopeKey];
-    const optimisticEvent = bucket?.[tempEventId];
-    if (!bucket || !optimisticEvent) return state;
-
-    const { [tempEventId]: _, ...rest } = bucket;
-    if (rest[realEventId]) {
-      return { eventsByScope: { ...state.eventsByScope, [scopeKey]: rest } };
-    }
-
+    const bucket = { ...(state.eventsByScope[scopeKey] ?? {}) };
+    delete bucket[pending.tempEventId];
+    bucket[event.id] = event;
     return {
-      eventsByScope: {
-        ...state.eventsByScope,
-        [scopeKey]: {
-          ...rest,
-          [realEventId]: { ...optimisticEvent, id: realEventId },
-        },
-      },
+      eventsByScope: { ...state.eventsByScope, [scopeKey]: bucket },
     };
   });
 }
 
-/** Result of inserting an optimistic chat message — both IDs needed for cleanup */
+export function upsertFetchedSessionEventsWithOptimisticResolution(
+  sessionId: string,
+  events: Array<Event & { id: string }>,
+): void {
+  const scopeKey = eventScopeKey("session", sessionId);
+  const eventIds = new Set(events.map((event) => event.id));
+  const matched = takeAllMatching(
+    pendingSessionOptimistic,
+    sessionId,
+    (entry) => !!entry.expectedRealEventId && eventIds.has(entry.expectedRealEventId),
+  );
+
+  if (matched.length === 0) {
+    upsertSessionEvents(scopeKey, events);
+    return;
+  }
+
+  useEntityStore.setState((state) => {
+    const bucket = { ...(state.eventsByScope[scopeKey] ?? {}) };
+    for (const event of events) {
+      bucket[event.id] = event;
+    }
+    for (const entry of matched) {
+      delete bucket[entry.tempEventId];
+    }
+    return { eventsByScope: { ...state.eventsByScope, [scopeKey]: bucket } };
+  });
+}
+
 export interface OptimisticChatIds {
   messageId: string;
   eventId: string;
+  clientMutationId: string;
 }
 
 /**
  * Insert an optimistic chat message into the messages table and
  * a corresponding event into the chat's scoped event bucket.
- *
- * Returns both temp IDs so the caller can pass them directly to removal
- * (avoids an O(n) scan of the event bucket).
  */
 export function optimisticallyInsertChatMessage(
   chatId: string,
@@ -103,6 +289,7 @@ export function optimisticallyInsertChatMessage(
 ): OptimisticChatIds {
   const user = useAuthStore.getState().user;
   const now = new Date().toISOString();
+  const clientMutationId = createClientMutationId();
   const tempEventId = `${OPTIMISTIC_PREFIX}${crypto.randomUUID()}`;
   const tempMessageId = `${OPTIMISTIC_PREFIX}${crypto.randomUUID()}`;
   const scopeKey = eventScopeKey("chat", chatId);
@@ -139,7 +326,13 @@ export function optimisticallyInsertChatMessage(
     scopeType: "chat",
     scopeId: chatId,
     eventType: "message_sent",
-    payload: { messageId: tempMessageId, text: html, html } as unknown as Record<string, unknown>,
+    payload: {
+      messageId: tempMessageId,
+      text: html,
+      html,
+      parentMessageId: parentId ?? null,
+      clientMutationId,
+    } as unknown as Record<string, unknown>,
     actor,
     parentId: null,
     timestamp: now,
@@ -147,17 +340,27 @@ export function optimisticallyInsertChatMessage(
   };
 
   useEntityStore.getState().upsertScopedEvent(scopeKey, tempEventId, event);
-  return { messageId: tempMessageId, eventId: tempEventId };
+
+  enqueue(pendingChatOptimistic, chatId, {
+    tempMessageId,
+    tempEventId,
+    clientMutationId,
+  });
+
+  return { messageId: tempMessageId, eventId: tempEventId, clientMutationId };
 }
 
-/**
- * Remove an optimistic chat message when the real one arrives.
- */
 export function removeOptimisticChatMessage(
   chatId: string,
   tempMessageId: string,
   tempEventId: string,
 ): void {
+  dequeue(
+    pendingChatOptimistic,
+    chatId,
+    (entry) => entry.tempMessageId === tempMessageId && entry.tempEventId === tempEventId,
+  );
+
   const scopeKey = eventScopeKey("chat", chatId);
 
   // Remove message entity + scoped event atomically
@@ -183,23 +386,62 @@ export function reconcileOptimisticChatMessage(
   tempEventId: string,
   realMessageId: string,
 ): void {
+  patchPending(
+    pendingChatOptimistic,
+    chatId,
+    (entry) => entry.tempMessageId === tempMessageId && entry.tempEventId === tempEventId,
+    (entry) => {
+      entry.expectedRealMessageId = realMessageId;
+    },
+  );
+}
+
+export function upsertFetchedChatMessagesWithOptimisticResolution(
+  chatId: string,
+  messages: Array<Message & { id: string }>,
+): void {
   const scopeKey = eventScopeKey("chat", chatId);
+  const realMessageIds = new Set(messages.map((message) => message.id));
+  const matched = takeAllMatching(
+    pendingChatOptimistic,
+    chatId,
+    (entry) => !!entry.expectedRealMessageId && realMessageIds.has(entry.expectedRealMessageId),
+  );
+
   useEntityStore.setState((state) => {
-    const messages = { ...state.messages };
-    const optimisticMessage = messages[tempMessageId];
-    delete messages[tempMessageId];
-    if (optimisticMessage && !messages[realMessageId]) {
-      messages[realMessageId] = { ...optimisticMessage, id: realMessageId };
+    const nextMessages = { ...state.messages };
+    for (const message of messages) {
+      nextMessages[message.id] = message;
     }
 
-    const bucket = state.eventsByScope[scopeKey];
-    if (!bucket || !bucket[tempEventId]) {
-      return { messages };
+    if (matched.length === 0) {
+      return { messages: nextMessages };
     }
-    const { [tempEventId]: _, ...rest } = bucket;
+
+    let nextEventsByScope = state.eventsByScope;
+    let bucket = state.eventsByScope[scopeKey];
+    let bucketChanged = false;
+
+    for (const entry of matched) {
+      delete nextMessages[entry.tempMessageId];
+      if (bucket?.[entry.tempEventId]) {
+        if (!bucketChanged) {
+          nextEventsByScope = { ...state.eventsByScope };
+          bucket = { ...(bucket ?? {}) };
+          nextEventsByScope[scopeKey] = bucket;
+          bucketChanged = true;
+        }
+        delete bucket[entry.tempEventId];
+      }
+    }
+
+    if (!bucketChanged) {
+      return { messages: nextMessages };
+    }
+
     return {
-      messages,
-      eventsByScope: { ...state.eventsByScope, [scopeKey]: rest },
+      messages: nextMessages,
+      eventsByScope: nextEventsByScope,
     };
   });
 }

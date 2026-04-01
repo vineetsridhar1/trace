@@ -2,9 +2,13 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { gql } from "@urql/core";
 import type { Event } from "@trace/gql";
 import { client } from "../lib/urql";
-import { useEntityStore, useScopedEventIds, eventScopeKey } from "../stores/entity";
+import { useScopedEventIds, eventScopeKey } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { HIDDEN_SESSION_PAYLOAD_TYPES } from "../lib/session-event-filters";
+import {
+  upsertFetchedSessionEventsWithOptimisticResolution,
+  upsertSessionEventWithOptimisticResolution,
+} from "../lib/optimistic-message";
 
 const PAGE_SIZE = 100;
 const SESSION_EVENTS_QUERY = gql`
@@ -95,7 +99,7 @@ export function useSessionEvents(sessionId: string) {
 
     if (result.data?.events) {
       const events = result.data.events as Array<Event & { id: string }>;
-      useEntityStore.getState().upsertManyScopedEvents(scopeKey, events);
+      upsertFetchedSessionEventsWithOptimisticResolution(sessionId, events);
 
       if (events.length < PAGE_SIZE) {
         setHasOlder(false);
@@ -126,7 +130,7 @@ export function useSessionEvents(sessionId: string) {
       .subscribe((result) => {
         if (!result.data?.sessionEvents) return;
         const event = result.data.sessionEvents as Event & { id: string };
-        useEntityStore.getState().upsertScopedEvent(scopeKey, event.id, event);
+        upsertSessionEventWithOptimisticResolution(sessionId, event);
       });
 
     return () => subscription.unsubscribe();
@@ -164,7 +168,7 @@ export function useSessionEvents(sessionId: string) {
 
     if (result.data?.events) {
       const events = result.data.events as Array<Event & { id: string }>;
-      useEntityStore.getState().upsertManyScopedEvents(scopeKey, events);
+      upsertFetchedSessionEventsWithOptimisticResolution(sessionId, events);
 
       if (events.length < PAGE_SIZE) {
         setHasOlder(false);

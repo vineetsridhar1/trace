@@ -19,7 +19,9 @@ export class ChatService {
   private async normalizeMembers(
     tx: Prisma.TransactionClient,
     chatId: string,
-  ): Promise<Array<{ user: { id: string; name: string | null; avatarUrl: string | null }; joinedAt: string }>> {
+  ): Promise<
+    Array<{ user: { id: string; name: string | null; avatarUrl: string | null }; joinedAt: string }>
+  > {
     const members = await tx.chatMember.findMany({
       where: { chatId, leftAt: null },
     });
@@ -82,10 +84,7 @@ export class ChatService {
     // Default group name: comma-separated member names
     const groupName = isDM
       ? null
-      : (input.name ??
-          validMembers
-            .map((m) => m.name ?? "Unknown")
-            .join(", "));
+      : (input.name ?? validMembers.map((m) => m.name ?? "Unknown").join(", "));
 
     const eventOrgId = await resolveEventOrgId(actorId);
 
@@ -174,6 +173,7 @@ export class ChatService {
     text,
     html,
     parentId,
+    clientMutationId,
     actorType,
     actorId,
   }: {
@@ -181,6 +181,7 @@ export class ChatService {
     text?: string;
     html?: string;
     parentId?: string;
+    clientMutationId?: string;
     actorType: ActorType;
     actorId: string;
   }) {
@@ -244,7 +245,10 @@ export class ChatService {
           scopeType: "chat",
           scopeId: chat.id,
           eventType: "message_sent",
-          payload: buildMessageEventPayload(createdMessage) as unknown as PrismaTypes.InputJsonValue,
+          payload: buildMessageEventPayload(
+            createdMessage,
+            clientMutationId,
+          ) as unknown as PrismaTypes.InputJsonValue,
           actorType,
           actorId,
         },
@@ -341,7 +345,9 @@ export class ChatService {
           scopeType: "chat",
           scopeId: chatId,
           eventType: "message_edited",
-          payload: buildMessageEventPayload(updatedMessage) as unknown as PrismaTypes.InputJsonValue,
+          payload: buildMessageEventPayload(
+            updatedMessage,
+          ) as unknown as PrismaTypes.InputJsonValue,
           actorType,
           actorId,
         },
@@ -462,11 +468,7 @@ export class ChatService {
     return hydrateMessages(orderedMessages);
   }
 
-  async getReplies(
-    rootMessageId: string,
-    userId: string,
-    opts?: { after?: Date; limit?: number },
-  ) {
+  async getReplies(rootMessageId: string, userId: string, opts?: { after?: Date; limit?: number }) {
     const rootMessage = await prisma.message.findFirstOrThrow({
       where: {
         id: rootMessageId,
@@ -496,12 +498,7 @@ export class ChatService {
     return hydrateMessages(replies);
   }
 
-  async addMember(
-    chatId: string,
-    userId: string,
-    actorType: ActorType,
-    actorId: string,
-  ) {
+  async addMember(chatId: string, userId: string, actorType: ActorType, actorId: string) {
     const eventOrgId = await resolveEventOrgId(actorId);
 
     await prisma.$transaction(async (tx) => {
@@ -642,12 +639,7 @@ export class ChatService {
     });
   }
 
-  async rename(
-    chatId: string,
-    name: string,
-    actorType: ActorType,
-    actorId: string,
-  ) {
+  async rename(chatId: string, name: string, actorType: ActorType, actorId: string) {
     const eventOrgId = await resolveEventOrgId(actorId);
 
     return prisma.$transaction(async (tx) => {
