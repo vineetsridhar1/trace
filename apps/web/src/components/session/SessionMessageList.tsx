@@ -35,6 +35,7 @@ export function SessionMessageList({
   const prevNodeCountRef = useRef(0);
   const isInitialLoadRef = useRef(true);
   const wasLoadingOlderRef = useRef(false);
+  const scrollSnapshotRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const isNearBottomRef = useRef(true);
   const hasScrolledInitiallyRef = useRef(false);
 
@@ -79,14 +80,33 @@ export function SessionMessageList({
     return () => container.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
 
-  // Handle scroll position when loading older messages
+  // Capture scroll position when older messages start loading
   useEffect(() => {
     if (loadingOlder && !wasLoadingOlderRef.current) {
-      // Older messages are about to be prepended — nothing to do here,
-      // react-virtual handles position via keys
+      const container = scrollContainerRef.current;
+      if (container) {
+        scrollSnapshotRef.current = {
+          scrollHeight: container.scrollHeight,
+          scrollTop: container.scrollTop,
+        };
+      }
     }
     wasLoadingOlderRef.current = !!loadingOlder;
   }, [loadingOlder]);
+
+  // Restore scroll position after older messages are prepended
+  useLayoutEffect(() => {
+    const snapshot = scrollSnapshotRef.current;
+    const container = scrollContainerRef.current;
+    if (!snapshot || !container || loadingOlder) return;
+
+    const newScrollHeight = container.scrollHeight;
+    const delta = newScrollHeight - snapshot.scrollHeight;
+    if (delta > 0) {
+      container.scrollTop = snapshot.scrollTop + delta;
+    }
+    scrollSnapshotRef.current = null;
+  }, [loadingOlder, nodes.length]);
 
   // Scroll to bottom on initial load — use useLayoutEffect + rAF to ensure
   // the virtualizer has rendered and measured before scrolling
