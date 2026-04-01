@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Loader2 } from "lucide-react";
 import type { GitCheckpoint } from "@trace/gql";
@@ -36,6 +36,7 @@ export function SessionMessageList({
   const isInitialLoadRef = useRef(true);
   const wasLoadingOlderRef = useRef(false);
   const isNearBottomRef = useRef(true);
+  const hasScrolledInitiallyRef = useRef(false);
 
   const gitCheckpointsByPromptEventId = useMemo(() => {
     const byPromptEventId = new Map<string, GitCheckpoint[]>();
@@ -59,10 +60,7 @@ export function SessionMessageList({
       const node = nodes[index];
       return node.kind === "readglob-group" ? `rg:${node.items[0].id}` : node.id;
     },
-    measureElement: (element) => {
-      // Measure the actual rendered height for accurate positioning
-      return element.getBoundingClientRect().height;
-    },
+    measureElement: (element) => element.getBoundingClientRect().height,
   });
 
   // Track whether the user is near the bottom via scroll events
@@ -90,15 +88,33 @@ export function SessionMessageList({
     wasLoadingOlderRef.current = !!loadingOlder;
   }, [loadingOlder]);
 
-  // Scroll to bottom on initial load and when new messages arrive at the end
-  useEffect(() => {
-    if (isInitialLoadRef.current && nodes.length > 0) {
-      // Scroll to the last item on initial load
-      virtualizer.scrollToIndex(nodes.length - 1, { align: "end" });
-      isInitialLoadRef.current = false;
-      prevNodeCountRef.current = nodes.length;
-      return;
+  // Scroll to bottom on initial load — use useLayoutEffect + rAF to ensure
+  // the virtualizer has rendered and measured before scrolling
+  useLayoutEffect(() => {
+    if (!isInitialLoadRef.current || nodes.length === 0) return;
+
+    isInitialLoadRef.current = false;
+    prevNodeCountRef.current = nodes.length;
+
+    // First pass: jump immediately (before paint) to avoid flash at top
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
     }
+
+    // Second pass: after the virtualizer measures, scroll precisely to the last item
+    requestAnimationFrame(() => {
+      virtualizer.scrollToIndex(nodes.length - 1, { align: "end" });
+      // Mark that initial scroll is complete — sentinel observer can now activate
+      requestAnimationFrame(() => {
+        hasScrolledInitiallyRef.current = true;
+      });
+    });
+  }, [nodes.length, virtualizer]);
+
+  // Auto-scroll when new messages arrive at the end
+  useEffect(() => {
+    if (isInitialLoadRef.current) return;
 
     const prevCount = prevNodeCountRef.current;
     prevNodeCountRef.current = nodes.length;
@@ -131,13 +147,16 @@ export function SessionMessageList({
     }
   }, [scrollToEventId, onScrollComplete, nodes, hasOlder, loadingOlder, onLoadOlder, virtualizer]);
 
-  // IntersectionObserver on the sentinel to trigger loading older messages
+  // IntersectionObserver on the sentinel to trigger loading older messages.
+  // Only activates after the initial scroll-to-bottom completes to avoid
+  // eagerly loading all events on open.
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
+        if (!hasScrolledInitiallyRef.current) return;
         if (entries[0].isIntersecting && onLoadOlder) {
           onLoadOlder();
         }
