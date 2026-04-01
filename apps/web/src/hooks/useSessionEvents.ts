@@ -110,7 +110,7 @@ export function useSessionEvents(sessionId: string) {
       }
     }
     setLoading(false);
-  }, [activeOrgId, sessionId, scopeKey]);
+  }, [activeOrgId, sessionId]);
 
   useEffect(() => {
     fetchEvents();
@@ -134,7 +134,7 @@ export function useSessionEvents(sessionId: string) {
       });
 
     return () => subscription.unsubscribe();
-  }, [activeOrgId, sessionId, scopeKey]);
+  }, [activeOrgId, sessionId]);
 
   // Load an older page of events (called when user scrolls to top)
   const fetchOlderEvents = useCallback(async () => {
@@ -180,7 +180,7 @@ export function useSessionEvents(sessionId: string) {
     }
     loadingOlderRef.current = false;
     setLoadingOlder(false);
-  }, [activeOrgId, sessionId, scopeKey]);
+  }, [activeOrgId, sessionId]);
 
   // Derive eventIds from the scoped bucket — O(session events) not O(all events)
   const eventIds = useScopedEventIds(scopeKey, (a, b) => a.timestamp.localeCompare(b.timestamp));

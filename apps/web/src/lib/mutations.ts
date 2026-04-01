@@ -155,6 +155,34 @@ export const AVAILABLE_RUNTIMES_QUERY = gql`
   }
 `;
 
+export const UPDATE_SESSION_CONFIG_MUTATION = gql`
+  mutation UpdateSessionConfig(
+    $sessionId: ID!
+    $tool: CodingTool
+    $model: String
+    $hosting: HostingMode
+    $runtimeInstanceId: ID
+  ) {
+    updateSessionConfig(
+      sessionId: $sessionId
+      tool: $tool
+      model: $model
+      hosting: $hosting
+      runtimeInstanceId: $runtimeInstanceId
+    ) {
+      id
+      tool
+      model
+      hosting
+      connection {
+        state
+        runtimeInstanceId
+        runtimeLabel
+      }
+    }
+  }
+`;
+
 export const UPDATE_REPO_MUTATION = gql`
   mutation UpdateRepo($id: ID!, $input: UpdateRepoInput!) {
     updateRepo(id: $id, input: $input) {

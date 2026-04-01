@@ -1901,14 +1901,21 @@ export class SessionService {
     }
   }
 
-  async sendMessage(
-    sessionId: string,
-    text: string,
-    actorType: ActorType,
-    actorId: string,
-    interactionMode?: string,
-    clientMutationId?: string,
-  ) {
+  async sendMessage({
+    sessionId,
+    text,
+    actorType,
+    actorId,
+    interactionMode,
+    clientMutationId,
+  }: {
+    sessionId: string;
+    text: string;
+    actorType: ActorType;
+    actorId: string;
+    interactionMode?: string;
+    clientMutationId?: string;
+  }) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
       select: {

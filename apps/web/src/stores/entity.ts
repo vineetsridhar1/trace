@@ -20,6 +20,8 @@ import type {
 export type SessionEntity = Session & {
   _lastEventPreview?: string;
   _lastMessageAt?: string;
+  /** Timestamp of the last user-sent message or session start — used for agent working-time display */
+  _lastUserMessageAt?: string;
   _sortTimestamp?: string;
   _optimistic?: boolean;
 };

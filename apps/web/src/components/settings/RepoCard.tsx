@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { GitBranch, FolderOpen, Pencil, Check, X } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
@@ -114,7 +114,7 @@ export function RepoCard({ id, desktopRefreshKey }: { id: string; desktopRefresh
   const [gitHookError, setGitHookError] = useState<string | null>(null);
   const [linking, setLinking] = useState(false);
 
-  const refreshDesktopState = async () => {
+  const refreshDesktopState = useCallback(async () => {
     if (!window.trace?.getRepoConfig) return;
 
     const repoConfig = await window.trace.getRepoConfig(id);
@@ -127,7 +127,7 @@ export function RepoCard({ id, desktopRefreshKey }: { id: string; desktopRefresh
 
     const status = await window.trace.getRepoGitHookStatus(id);
     setGitHookStatus(status);
-  };
+  }, [id]);
 
   useEffect(() => {
     if (!isElectron) return;
@@ -136,7 +136,7 @@ export function RepoCard({ id, desktopRefreshKey }: { id: string; desktopRefresh
       const message = error instanceof Error ? error.message : String(error);
       setGitHookError(message);
     });
-  }, [id, desktopRefreshKey]);
+  }, [id, desktopRefreshKey, refreshDesktopState]);
 
   const startEditing = () => {
     setEditBranch(defaultBranch ?? "main");

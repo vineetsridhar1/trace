@@ -155,14 +155,14 @@ export const sessionMutations = {
     },
     ctx: Context,
   ) => {
-    return sessionService.sendMessage(
-      args.sessionId,
-      args.text,
-      ctx.actorType,
-      ctx.userId,
-      args.interactionMode ?? undefined,
-      args.clientMutationId ?? undefined,
-    );
+    return sessionService.sendMessage({
+      sessionId: args.sessionId,
+      text: args.text,
+      actorType: ctx.actorType,
+      actorId: ctx.userId,
+      interactionMode: args.interactionMode ?? undefined,
+      clientMutationId: args.clientMutationId ?? undefined,
+    });
   },
   retrySessionConnection: (_: unknown, args: { sessionId: string }, ctx: Context) => {
     return sessionService.retryConnection(

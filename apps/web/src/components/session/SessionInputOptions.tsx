@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { gql } from "@urql/core";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Cloud, Monitor } from "lucide-react";
 import type { CodingTool, SessionRuntimeInstance } from "@trace/gql";
 import { useEntityStore, useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
-import { AVAILABLE_RUNTIMES_QUERY } from "../../lib/mutations";
+import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "../../lib/mutations";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
 import { getModelsForTool, getDefaultModel, getModelLabel } from "./modelOptions";
@@ -21,34 +20,6 @@ const TOOL_LABELS: Record<string, string> = {
 function getToolLabel(tool: string): string {
   return TOOL_LABELS[tool] ?? tool;
 }
-
-const UPDATE_SESSION_CONFIG_MUTATION = gql`
-  mutation UpdateSessionConfig(
-    $sessionId: ID!
-    $tool: CodingTool
-    $model: String
-    $hosting: HostingMode
-    $runtimeInstanceId: ID
-  ) {
-    updateSessionConfig(
-      sessionId: $sessionId
-      tool: $tool
-      model: $model
-      hosting: $hosting
-      runtimeInstanceId: $runtimeInstanceId
-    ) {
-      id
-      tool
-      model
-      hosting
-      connection {
-        state
-        runtimeInstanceId
-        runtimeLabel
-      }
-    }
-  }
-`;
 
 interface SessionInputOptionsProps {
   sessionId: string;

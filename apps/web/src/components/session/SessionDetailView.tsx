@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { gql } from "@urql/core";
 import type { GitCheckpoint } from "@trace/gql";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
@@ -238,26 +239,14 @@ export function SessionDetailView({
         )}
 
         <div className="flex flex-1 flex-col overflow-hidden">
-          <div className="flex-1 overflow-hidden">
-            {loading ? (
-              <div className="flex flex-col gap-4 p-4">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="flex gap-3">
-                    <Skeleton className="h-8 w-8 rounded-full shrink-0" />
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-3.5 w-24" />
-                      <Skeleton className="h-3.5 w-[80%]" />
-                      <Skeleton className="h-3.5 w-[60%]" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : error ? (
+          <div className="relative flex-1 overflow-hidden">
+            {error ? (
               <div className="flex h-full items-center justify-center">
                 <p className="text-sm text-destructive">Failed to load events</p>
               </div>
             ) : (
               <SessionMessageList
+                key={sessionId}
                 nodes={nodes}
                 gitCheckpoints={gitCheckpoints ?? []}
                 hasOlder={hasOlder}
@@ -268,6 +257,29 @@ export function SessionDetailView({
                 onScrollComplete={onScrollComplete}
               />
             )}
+            <AnimatePresence>
+              {loading && (
+                <motion.div
+                  initial={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                  className="absolute inset-0 bg-background/70 backdrop-blur-[1px] pointer-events-none"
+                >
+                  <div className="flex flex-col gap-4 p-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="flex gap-3">
+                        <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-3.5 w-24" />
+                          <Skeleton className="h-3.5 w-[80%]" />
+                          <Skeleton className="h-3.5 w-[60%]" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {!hideHeader && showTerminal && canAccessTerminal && (
