@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   History,
   WifiOff,
+  Loader2,
   Monitor,
   Cloud,
   TerminalSquare,
@@ -66,6 +67,17 @@ export function SessionHeader({
 
   const disconnected = isDisconnected(connection);
 
+  // Show "Reconnecting" for a grace period before showing "Connection Lost"
+  const [pastGracePeriod, setPastGracePeriod] = useState(false);
+  useEffect(() => {
+    if (!disconnected) {
+      setPastGracePeriod(false);
+      return;
+    }
+    const timer = setTimeout(() => setPastGracePeriod(true), 15_000);
+    return () => clearTimeout(timer);
+  }, [disconnected]);
+
   const runtimeLabel = connection?.runtimeLabel as string | undefined;
   const isCloud = hosting === "cloud";
   const runtimeDisplayLabel = isCloud ? "Cloud" : (runtimeLabel ?? null);
@@ -123,10 +135,17 @@ export function SessionHeader({
       )}
 
       {disconnected ? (
-        <span className="flex shrink-0 items-center gap-1.5 text-xs text-destructive">
-          <WifiOff size={12} />
-          Connection Lost
-        </span>
+        pastGracePeriod ? (
+          <span className="flex shrink-0 items-center gap-1.5 text-xs text-destructive">
+            <WifiOff size={12} />
+            Connection Lost
+          </span>
+        ) : (
+          <span className="flex shrink-0 items-center gap-1.5 text-xs text-yellow-500">
+            <Loader2 size={12} className="animate-spin" />
+            Reconnecting…
+          </span>
+        )
       ) : (
         <span
           className={`flex shrink-0 items-center gap-1.5 text-xs ${agentStatusColor[displayAgentStatus]}`}

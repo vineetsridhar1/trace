@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RefreshCw, ArrowRightLeft, WifiOff } from "lucide-react";
+import { RefreshCw, ArrowRightLeft, WifiOff, Loader2 } from "lucide-react";
 import { client } from "../../lib/urql";
 import {
   RETRY_SESSION_CONNECTION_MUTATION,
@@ -87,16 +87,26 @@ export function SessionRecoveryPanel({
 
   return (
     <div className="shrink-0 border-t border-border px-4 py-3">
-      <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5">
-        <WifiOff size={16} className="shrink-0 text-destructive" />
+      <div className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 ${
+        autoRetrying
+          ? "border-yellow-500/30 bg-yellow-500/5"
+          : "border-destructive/30 bg-destructive/5"
+      }`}>
+        {autoRetrying ? (
+          <Loader2 size={16} className="shrink-0 text-yellow-500 animate-spin" />
+        ) : (
+          <WifiOff size={16} className="shrink-0 text-destructive" />
+        )}
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-foreground">Connection lost</p>
-          {lastError && (
+          <p className="text-sm font-medium text-foreground">
+            {autoRetrying ? "Reconnecting…" : "Connection lost"}
+          </p>
+          {lastError && !autoRetrying && (
             <p className="text-xs text-muted-foreground truncate">{lastError}</p>
           )}
           {autoRetrying && (
             <p className="text-xs text-muted-foreground">
-              Auto-retrying… (attempt {autoRetryCount + 1} of {MAX_AUTO_RETRIES})
+              Attempt {autoRetryCount + 1} of {MAX_AUTO_RETRIES}
             </p>
           )}
           {autoRetriesExhausted && (
