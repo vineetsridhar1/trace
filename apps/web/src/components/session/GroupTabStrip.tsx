@@ -5,7 +5,7 @@ import type { TerminalEntry } from "../../stores/terminal";
 import { cn } from "../../lib/utils";
 import { useUIStore } from "../../stores/ui";
 import { ScrambleText } from "../ui/ScrambleText";
-import { agentStatusColor, getDisplayAgentStatus } from "./sessionStatus";
+import { agentStatusColor, getDisplayAgentStatus, terminalStatusColor, terminalStatusLabel } from "./sessionStatus";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +13,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 
 export interface OpenFileTab {
   filePath: string;
@@ -34,6 +35,7 @@ interface GroupTabStripProps {
   canCloseSessions?: boolean;
   onSelectTerminal: (sessionId: string | null, terminalId: string) => void;
   onCloseTerminal: (terminalId: string) => void;
+  onRenameTerminal: (terminalId: string, name: string) => void;
   onSelectFile: (filePath: string) => void;
   onCloseFile: (filePath: string) => void;
   onNewChat: () => void;
@@ -63,6 +65,7 @@ export function GroupTabStrip({
   canCloseSessions,
   onSelectTerminal,
   onCloseTerminal,
+  onRenameTerminal,
   onSelectFile,
   onCloseFile,
   onNewChat,
@@ -74,6 +77,8 @@ export function GroupTabStrip({
   const sessionById = new Map(groupSessions.map((s) => [s.id, s]));
   const tabRefs = useRef<Map<string, HTMLElement>>(new Map());
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [editingTerminalId, setEditingTerminalId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   const setTabRef = useCallback((key: string, el: HTMLElement | null) => {
     if (el) tabRefs.current.set(key, el);
@@ -119,6 +124,7 @@ export function GroupTabStrip({
   }, [dropdownOpen, canNewChat, canOpenTerminal, onNewChat, onOpenTerminal]);
 
   return (
+    <TooltipProvider delayDuration={300}>
     <div className="shrink-0 bg-surface-deep">
       <div className="native-scrollbar overflow-x-auto">
         <div className="flex min-w-max">
@@ -171,8 +177,12 @@ export function GroupTabStrip({
 
           {terminals.map((terminal, index) => {
             const session = sessionById.get(terminal.sessionId);
-            const label = session ? `Terminal ${index + 1} · ${session.name}` : `Terminal ${index + 1}`;
+            const defaultLabel = session ? `Terminal ${index + 1} · ${session.name}` : `Terminal ${index + 1}`;
+            const label = terminal.customName || defaultLabel;
             const isActive = activeTerminalId === terminal.id;
+            const isEditing = editingTerminalId === terminal.id;
+            const statusColor = terminalStatusColor[terminal.status] ?? "text-muted-foreground";
+            const statusLabel = terminalStatusLabel[terminal.status] ?? terminal.status;
             return (
               <div
                 key={terminal.id}
@@ -186,10 +196,45 @@ export function GroupTabStrip({
                 <button
                   type="button"
                   onClick={() => onSelectTerminal(session?.id ?? null, terminal.id)}
+                  onDoubleClick={() => {
+                    setEditingTerminalId(terminal.id);
+                    setEditValue(terminal.customName || "");
+                  }}
                   className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
                 >
-                  <TerminalSquare size={12} className="shrink-0" />
-                  <span className="truncate">{label}</span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className={cn("shrink-0 flex h-2.5 w-2.5 items-center justify-center", statusColor)}>
+                        <Circle size={6} className="fill-current" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-xs">
+                      {statusLabel}
+                    </TooltipContent>
+                  </Tooltip>
+                  {isEditing ? (
+                    <input
+                      autoFocus
+                      className="w-24 bg-transparent text-xs outline-none border-b border-foreground/30"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          onRenameTerminal(terminal.id, editValue);
+                          setEditingTerminalId(null);
+                        } else if (e.key === "Escape") {
+                          setEditingTerminalId(null);
+                        }
+                      }}
+                      onBlur={() => {
+                        onRenameTerminal(terminal.id, editValue);
+                        setEditingTerminalId(null);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <span className="truncate">{label}</span>
+                  )}
                 </button>
                 <button
                   type="button"
@@ -268,5 +313,6 @@ export function GroupTabStrip({
         </div>
       </div>
     </div>
+    </TooltipProvider>
   );
 }

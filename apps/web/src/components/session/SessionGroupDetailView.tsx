@@ -171,6 +171,7 @@ export function SessionGroupDetailView({
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
+  const renameTerminal = useTerminalStore((s) => s.renameTerminal);
 
   const groupSessionIds = useSessionIdsByGroup(sessionGroupId);
 
@@ -248,6 +249,28 @@ export function SessionGroupDetailView({
     if (terminals.some((terminal) => terminal.id === activeTerminalId)) return;
     setActiveTerminalId(null);
   }, [activeTerminalId, terminals, setActiveTerminalId]);
+
+  // Auto-restore terminal tabs from server when returning to this session group
+  useEffect(() => {
+    let aborted = false;
+    async function restoreTerminals() {
+      for (const sessionId of groupSessionIds) {
+        if (aborted) return;
+        const result = await client.query(SESSION_TERMINALS_QUERY, { sessionId }).toPromise();
+        const serverTerminals = (result.data?.sessionTerminals as Terminal[] | undefined) ?? [];
+        for (const terminal of serverTerminals) {
+          if (aborted) return;
+          if (!useTerminalStore.getState().terminals[terminal.id]) {
+            addTerminal(terminal.id, terminal.sessionId, sessionGroupId, "active");
+          }
+        }
+      }
+    }
+    restoreTerminals();
+    return () => {
+      aborted = true;
+    };
+  }, [groupSessionIds, sessionGroupId, addTerminal]);
 
   const selectedSession =
     sessionTabs.find((session) => session.id === activeSessionId) ?? sessionTabs[0] ?? null;
@@ -519,6 +542,7 @@ export function SessionGroupDetailView({
             canCloseSessions={sessionTabs.length > 1}
             onSelectTerminal={handleSelectTerminal}
             onCloseTerminal={handleCloseTerminal}
+            onRenameTerminal={renameTerminal}
             onSelectFile={handleSelectFile}
             onCloseFile={handleCloseFile}
             onNewChat={handleNewChat}
