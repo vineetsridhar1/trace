@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { gql } from "@urql/core";
 import { AnimatePresence, motion } from "framer-motion";
-import { Cloud, Monitor } from "lucide-react";
+import { AlertTriangle, Cloud, Monitor } from "lucide-react";
 import type { CodingTool, SessionRuntimeInstance } from "@trace/gql";
 import { useEntityStore, useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
@@ -72,6 +72,9 @@ export function SessionInputOptions({
     | Record<string, unknown>
     | null
     | undefined;
+
+  const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
+  const channelRepoId = repo?.id;
 
   const currentTool = tool ?? "claude_code";
   const modelOptions = getModelsForTool(currentTool);
@@ -263,13 +266,22 @@ export function SessionInputOptions({
             </SelectItem>
             {runtimes
               .filter((r) => r.hostingMode === "local" && r.connected)
-              .map((r) => (
-                <SelectItem key={r.id} value={r.id}>
-                  <span className="flex items-center gap-1.5">
-                    <Monitor size={12} className="text-green-400" /> {r.label}
-                  </span>
-                </SelectItem>
-              ))}
+              .map((r) => {
+                const lacksRepo = !!channelRepoId && !r.registeredRepoIds.includes(channelRepoId);
+                return (
+                  <SelectItem key={r.id} value={r.id} disabled={lacksRepo}>
+                    <span className="flex items-center gap-1.5">
+                      <Monitor size={12} className="text-green-400" /> {r.label}
+                      {lacksRepo && (
+                        <span className="flex items-center gap-0.5 text-xs text-amber-500">
+                          <AlertTriangle size={10} />
+                          repo not linked
+                        </span>
+                      )}
+                    </span>
+                  </SelectItem>
+                );
+              })}
           </SelectContent>
         </Select>
       ) : null}
