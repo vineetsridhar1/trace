@@ -307,6 +307,77 @@
   overflow-y: auto;
 }
 
+/* Inline diff view */
+.inline-diff-view {
+  border-top: 1px solid rgba(var(--th-hover-rgb), 0.5);
+  overflow: hidden;
+}
+
+.inline-diff-filepath {
+  padding: 6px 10px;
+  font-family: Menlo, Monaco, monospace;
+  font-size: 11px;
+  color: var(--th-muted);
+  background: rgba(var(--th-hover-rgb), 0.3);
+  border-bottom: 1px solid rgba(var(--th-hover-rgb), 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inline-diff-lines {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.inline-diff-line {
+  display: flex;
+  font-family: Menlo, Monaco, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.inline-diff-marker {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  user-select: none;
+  color: var(--th-faint);
+}
+
+.inline-diff-text {
+  flex: 1;
+  min-width: 0;
+  padding-right: 10px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.inline-diff-context {
+  background: transparent;
+  color: var(--th-faint);
+}
+
+.inline-diff-removed {
+  background: rgba(248, 81, 73, 0.15);
+}
+.inline-diff-removed .inline-diff-text {
+  color: #f85149;
+}
+.inline-diff-removed .inline-diff-marker {
+  color: #f85149;
+}
+
+.inline-diff-added {
+  background: rgba(63, 185, 80, 0.15);
+}
+.inline-diff-added .inline-diff-text {
+  color: #3fb950;
+}
+.inline-diff-added .inline-diff-marker {
+  color: #3fb950;
+}
+
 /* Read/Glob group */
 .read-group-chevron {
   display: flex;

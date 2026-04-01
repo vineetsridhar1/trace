@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronRight } from "lucide-react";
 import { formatCommandLabel, formatTime, serializeUnknown } from "./utils";
+import { InlineDiffView } from "./InlineDiffView";
 
 interface ToolCallRowProps {
   name: string;
@@ -21,9 +22,19 @@ export function ToolCallRow({ name, input, timestamp }: ToolCallRowProps) {
 
   const normalizedName = name.toLowerCase();
   const isCommand = normalizedName === "bash" || normalizedName === "command";
+  const isEdit = normalizedName === "edit";
   const command = isCommand && typeof input?.command === "string"
     ? formatCommandLabel(input.command)
     : null;
+
+  const hasEditDiff = isEdit
+    && typeof input?.old_string === "string"
+    && typeof input?.new_string === "string";
+
+  const editFilePath = isEdit && typeof input?.file_path === "string"
+    ? input.file_path as string
+    : undefined;
+
   const label = command ?? `${name} executed`;
 
   return (
@@ -47,8 +58,16 @@ export function ToolCallRow({ name, input, timestamp }: ToolCallRowProps) {
         style={{ maxHeight: open ? `${bodyHeight}px` : "0px" }}
       >
         <div ref={bodyRef}>
-          {input && !command && (
-            <pre className="tool-cmd-output">{serializeUnknown(input)}</pre>
+          {hasEditDiff ? (
+            <InlineDiffView
+              oldString={input.old_string as string}
+              newString={input.new_string as string}
+              filePath={editFilePath}
+            />
+          ) : (
+            input && !command && (
+              <pre className="tool-cmd-output">{serializeUnknown(input)}</pre>
+            )
           )}
         </div>
       </div>
