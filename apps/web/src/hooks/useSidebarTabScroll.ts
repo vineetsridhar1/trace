@@ -21,7 +21,7 @@ export function useSidebarTabScroll({
   const progressRef = useRef(getTabIndex(currentTab));
   const [tabProgress, setTabProgressState] = useState(getTabIndex(currentTab));
   const hasInitRef = useRef(false);
-  const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const setProgress = useCallback((p: number) => {
     const clamped = clamp(p, 0, 1);

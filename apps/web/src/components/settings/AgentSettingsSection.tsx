@@ -116,12 +116,14 @@ export function AgentSettingsSection() {
     setDirty(true);
   }
 
-  function handleAutonomyChange(value: string) {
+  function handleAutonomyChange(value: string | null) {
+    if (!value) return;
     setAutonomyMode(value);
     setDirty(true);
   }
 
-  function handleStatusChange(value: string) {
+  function handleStatusChange(value: string | null) {
+    if (!value) return;
     setStatus(value);
     setDirty(true);
   }

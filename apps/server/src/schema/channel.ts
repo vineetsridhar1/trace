@@ -1,10 +1,10 @@
 import type { Context } from "../context.js";
 import type { CreateChannelInput, UpdateChannelInput } from "@trace/gql";
-import { prisma } from "../lib/db.js";
 import { channelService } from "../services/channel.js";
 import { assertChannelAccess } from "../services/access.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { requireOrgContext } from "../lib/require-org.js";
+import { organizationService } from "../services/organization.js";
 
 export const channelQueries = {
   channels: (_: unknown, args: { organizationId: string; projectId?: string; memberOnly?: boolean }, ctx: Context) => {
@@ -12,22 +12,13 @@ export const channelQueries = {
     if (orgId !== args.organizationId) {
       throw new Error("Not authorized for this organization");
     }
-
-    const where: Record<string, unknown> = { organizationId: args.organizationId };
-
-    if (args.projectId) {
-      where.projects = { some: { projectId: args.projectId } };
-    }
-
-    if (args.memberOnly) {
-      where.members = { some: { userId: ctx.userId, leftAt: null } };
-    }
-
-    return prisma.channel.findMany({ where, include: { repo: true } });
+    return channelService.listChannels(args.organizationId, ctx.userId, {
+      projectId: args.projectId,
+      memberOnly: args.memberOnly,
+    });
   },
   channel: async (_: unknown, args: { id: string }, ctx: Context) => {
-    await assertChannelAccess(args.id, ctx.userId);
-    return prisma.channel.findUnique({ where: { id: args.id }, include: { repo: true } });
+    return channelService.getChannel(args.id, ctx.userId);
   },
   channelMessages: (
     _: unknown,
@@ -109,19 +100,13 @@ export const channelSubscriptions = {
 
 export const channelTypeResolvers = {
   Channel: {
-    members: async (channel: { id: string }) => {
-      const members = await prisma.channelMember.findMany({
-        where: { channelId: channel.id, leftAt: null },
-        include: { user: { select: { id: true, email: true, name: true, avatarUrl: true } } },
-      });
-      return members.map((m) => ({ user: m.user, joinedAt: m.joinedAt }));
-    },
+    members: (channel: { id: string }) => channelService.getMembers(channel.id),
     repo: (channel: { repo?: unknown; repoId?: string | null }) => {
       if ("repo" in channel) {
         return channel.repo ?? null;
       }
       if (!channel.repoId) return null;
-      return prisma.repo.findUnique({ where: { id: channel.repoId } });
+      return organizationService.getRepoById(channel.repoId);
     },
   },
 };

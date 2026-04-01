@@ -53,6 +53,7 @@ type Tables = { [K in EntityType]: Record<string, EntityTableMap[K]> };
 
 /** Events are partitioned by scope key (`${scopeType}:${scopeId}`) for O(1) scoped lookups */
 type EventsByScope = Record<string, Record<string, Event>>;
+type MessageIdsByScope = Record<string, string[]>;
 
 interface EntityActions {
   upsert: <T extends EntityType>(entityType: T, id: string, data: EntityTableMap[T]) => void;
@@ -79,6 +80,8 @@ type EntityState = Tables & {
   eventsByScope: EventsByScope;
   /** Reverse index: sessionGroupId → session IDs belonging to that group */
   _sessionIdsByGroup: Record<string, string[]>;
+  /** Reverse index: scope key → message IDs belonging to that scope */
+  _messageIdsByScope: MessageIdsByScope;
 } & EntityActions;
 
 export const useEntityStore = create<EntityState>((set) => ({
@@ -96,10 +99,12 @@ export const useEntityStore = create<EntityState>((set) => ({
   messages: {},
   eventsByScope: {},
   _sessionIdsByGroup: {},
+  _messageIdsByScope: {},
 
   upsert: (entityType, id, data) =>
     set((state) => {
       const table = { ...(state[entityType] as Record<string, unknown>) };
+      const previous = table[id];
       table[id] = data;
       const update: Record<string, unknown> = { [entityType]: table };
 
@@ -119,6 +124,18 @@ export const useEntityStore = create<EntityState>((set) => ({
           idx[groupId] = [...(idx[groupId] ?? []).filter((x) => x !== id), id];
         }
         update._sessionIdsByGroup = idx;
+      }
+
+      if (entityType === "messages") {
+        const nextIndex = updateMessageIdsByScope(
+          state._messageIdsByScope,
+          id,
+          getMessageEntityScopeKey(previous as Message | undefined),
+          getMessageEntityScopeKey(data as unknown as Message),
+        );
+        if (nextIndex !== state._messageIdsByScope) {
+          update._messageIdsByScope = nextIndex;
+        }
       }
       return update;
     }),
@@ -150,6 +167,23 @@ export const useEntityStore = create<EntityState>((set) => ({
         }
         update._sessionIdsByGroup = idx;
       }
+
+      if (entityType === "messages") {
+        let nextIndex = state._messageIdsByScope;
+        for (const item of items) {
+          nextIndex = updateMessageIdsByScope(
+            nextIndex,
+            item.id,
+            getMessageEntityScopeKey(
+              (state.messages[item.id] as Message | undefined) ?? undefined,
+            ),
+            getMessageEntityScopeKey(item as unknown as Message),
+          );
+        }
+        if (nextIndex !== state._messageIdsByScope) {
+          update._messageIdsByScope = nextIndex;
+        }
+      }
       return update;
     }),
 
@@ -180,6 +214,18 @@ export const useEntityStore = create<EntityState>((set) => ({
           update._sessionIdsByGroup = idx;
         }
       }
+
+      if (entityType === "messages") {
+        const nextIndex = updateMessageIdsByScope(
+          state._messageIdsByScope,
+          id,
+          getMessageEntityScopeKey(existing as Message | undefined),
+          getMessageEntityScopeKey(table[id] as Message),
+        );
+        if (nextIndex !== state._messageIdsByScope) {
+          update._messageIdsByScope = nextIndex;
+        }
+      }
       return update;
     }),
 
@@ -196,6 +242,18 @@ export const useEntityStore = create<EntityState>((set) => ({
             idx[groupId] = idx[groupId].filter((x) => x !== id);
           }
           update._sessionIdsByGroup = idx;
+        }
+      }
+
+      if (entityType === "messages" && removed) {
+        const nextIndex = updateMessageIdsByScope(
+          state._messageIdsByScope,
+          id,
+          getMessageEntityScopeKey(removed as Message),
+          null,
+        );
+        if (nextIndex !== state._messageIdsByScope) {
+          update._messageIdsByScope = nextIndex;
         }
       }
       return update;
@@ -233,6 +291,7 @@ export class StoreBatchWriter {
   private tables: { [K in EntityType]: Record<string, EntityTableMap[K]> };
   private eventsByScope: EventsByScope;
   private _sessionIdsByGroup: Record<string, string[]>;
+  private _messageIdsByScope: MessageIdsByScope;
   private dirty = new Set<string>();
 
   constructor() {
@@ -245,6 +304,7 @@ export class StoreBatchWriter {
     }
     this.eventsByScope = s.eventsByScope;
     this._sessionIdsByGroup = s._sessionIdsByGroup;
+    this._messageIdsByScope = s._messageIdsByScope;
   }
 
   /** Read the current (possibly batched) value of an entity */
@@ -259,11 +319,19 @@ export class StoreBatchWriter {
 
   upsert<T extends EntityType>(type: T, id: string, data: EntityTableMap[T]): void {
     const table = this.ensureTable(type);
+    const previous = table[id];
     table[id] = data;
     this.dirty.add(type);
 
     if (type === "sessions") {
       this.updateSessionIndex(id, data as unknown as SessionEntity);
+    }
+    if (type === "messages") {
+      this.updateMessageScopeIndex(
+        id,
+        getMessageEntityScopeKey(previous as Message | undefined),
+        getMessageEntityScopeKey(data as unknown as Message),
+      );
     }
   }
 
@@ -284,6 +352,13 @@ export class StoreBatchWriter {
         this.addToGroupIndex(id, newGroupId as string | undefined);
       }
     }
+    if (type === "messages") {
+      this.updateMessageScopeIndex(
+        id,
+        getMessageEntityScopeKey(existing as Message | undefined),
+        getMessageEntityScopeKey(table[id] as unknown as Message),
+      );
+    }
   }
 
   remove(type: EntityType, id: string): void {
@@ -293,6 +368,10 @@ export class StoreBatchWriter {
       if (existing) {
         this.removeFromGroupIndex(id, existing.sessionGroupId as string | undefined);
       }
+    }
+    if (type === "messages") {
+      const existing = table[id] as unknown as Message | undefined;
+      this.updateMessageScopeIndex(id, getMessageEntityScopeKey(existing), null);
     }
     delete table[id];
     this.dirty.add(type);
@@ -327,6 +406,8 @@ export class StoreBatchWriter {
         update.eventsByScope = this.eventsByScope;
       } else if (key === "_sessionIdsByGroup") {
         update._sessionIdsByGroup = this._sessionIdsByGroup;
+      } else if (key === "_messageIdsByScope") {
+        update._messageIdsByScope = this._messageIdsByScope;
       } else {
         update[key] = (this.tables as Record<string, unknown>)[key];
       }
@@ -391,6 +472,23 @@ export class StoreBatchWriter {
       this._sessionIdsByGroup = { ...this._sessionIdsByGroup };
     }
   }
+
+  private updateMessageScopeIndex(
+    id: string,
+    previousScopeKey: string | null,
+    nextScopeKey: string | null,
+  ): void {
+    const nextIndex = updateMessageIdsByScope(
+      this._messageIdsByScope,
+      id,
+      previousScopeKey,
+      nextScopeKey,
+    );
+    if (nextIndex !== this._messageIdsByScope) {
+      this._messageIdsByScope = nextIndex;
+      this.dirty.add("_messageIdsByScope");
+    }
+  }
 }
 
 const ENTITY_KEYS: EntityType[] = [
@@ -407,6 +505,55 @@ const ENTITY_KEYS: EntityType[] = [
   "inboxItems",
   "messages",
 ];
+
+function getMessageEntityScopeKey(
+  message: Pick<Message, "chatId" | "channelId"> | null | undefined,
+): string | null {
+  if (!message) return null;
+  if (message.chatId) return messageScopeKey("chat", message.chatId);
+  if (message.channelId) return messageScopeKey("channel", message.channelId);
+  return null;
+}
+
+function updateMessageIdsByScope(
+  index: MessageIdsByScope,
+  messageId: string,
+  previousScopeKey: string | null,
+  nextScopeKey: string | null,
+): MessageIdsByScope {
+  if (previousScopeKey === nextScopeKey) {
+    return index;
+  }
+
+  let nextIndex = index;
+
+  if (previousScopeKey) {
+    const previousIds = nextIndex[previousScopeKey];
+    if (previousIds?.includes(messageId)) {
+      if (nextIndex === index) {
+        nextIndex = { ...nextIndex };
+      }
+      const filtered = previousIds.filter((id) => id !== messageId);
+      if (filtered.length > 0) {
+        nextIndex[previousScopeKey] = filtered;
+      } else {
+        delete nextIndex[previousScopeKey];
+      }
+    }
+  }
+
+  if (nextScopeKey) {
+    const nextIds = nextIndex[nextScopeKey];
+    if (!nextIds?.includes(messageId)) {
+      if (nextIndex === index) {
+        nextIndex = { ...nextIndex };
+      }
+      nextIndex[nextScopeKey] = [...(nextIds ?? []), messageId];
+    }
+  }
+
+  return nextIndex;
+}
 
 /** Fine-grained selector: subscribe to a single field of a single entity */
 export function useEntityField<T extends EntityType, F extends keyof EntityTableMap[T]>(
@@ -446,8 +593,23 @@ export function useEntityIds<T extends EntityType>(
   );
 }
 
+export function useEntitiesByIds<T extends EntityType>(
+  type: T,
+  ids: string[],
+): Array<EntityTableMap[T] | null> {
+  return useEntityStore(
+    useShallow(
+      (state) => ids.map((id) => state[type][id] ?? null) as Array<EntityTableMap[T] | null>,
+    ),
+  );
+}
+
 /** Build a scope key for event partitioning */
 export function eventScopeKey(scopeType: string, scopeId: string): string {
+  return `${scopeType}:${scopeId}`;
+}
+
+export function messageScopeKey(scopeType: "chat" | "channel", scopeId: string): string {
   return `${scopeType}:${scopeId}`;
 }
 
@@ -464,6 +626,36 @@ export function useScopedEventIds(
       const entries = Object.entries(bucket);
       if (sort) entries.sort(([, a], [, b]) => sort(a, b));
       return entries.map(([id]) => id);
+    }),
+  );
+}
+
+export function useMessageIdsForScope(
+  scopeKey: string,
+  filter?: (message: Message) => boolean,
+  sort?: (a: Message, b: Message) => number,
+): string[] {
+  return useEntityStore(
+    useShallow((state) => {
+      const scopeIds = state._messageIdsByScope[scopeKey];
+      if (!scopeIds) return EMPTY_IDS;
+
+      const messages = scopeIds
+        .map((id) => {
+          const message = state.messages[id];
+          return message ? ([id, message] as const) : null;
+        })
+        .filter((entry): entry is readonly [string, Message] => entry !== null);
+
+      let filtered = messages;
+      if (filter) {
+        filtered = filtered.filter(([, message]) => filter(message));
+      }
+      if (sort) {
+        filtered = [...filtered].sort(([, a], [, b]) => sort(a, b));
+      }
+
+      return filtered.map(([id]) => id);
     }),
   );
 }

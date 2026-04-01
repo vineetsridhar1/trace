@@ -3,13 +3,13 @@ import { ChevronRight, Plus, Trash2 } from "lucide-react";
 import { useSortable, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { useEntityField, useEntityStore } from "../../stores/entity";
+import { useEntityField } from "../../stores/entity";
 import { ChannelItem } from "./ChannelItem";
 import { SidebarMenu } from "../ui/sidebar";
 import { cn } from "../../lib/utils";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
-import type { ChannelGroup } from "@trace/gql";
+import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { groupContainerId, groupSortableIds } from "../../hooks/useChannelDnd";
 
 const UPDATE_GROUP_MUTATION = gql`
@@ -42,8 +42,17 @@ export function ChannelGroupSection({
 
   const toggleCollapse = useCallback(() => {
     const next = !collapsed;
-    useEntityStore.getState().patch("channelGroups", id, { isCollapsed: next } as Partial<ChannelGroup>);
-    client.mutation(UPDATE_GROUP_MUTATION, { id, input: { isCollapsed: next } }).toPromise();
+    const rollback = applyOptimisticPatch("channelGroups", id, { isCollapsed: next });
+    client
+      .mutation(UPDATE_GROUP_MUTATION, { id, input: { isCollapsed: next } })
+      .toPromise()
+      .then((result) => {
+        if (result.error) throw result.error;
+      })
+      .catch((error: unknown) => {
+        rollback();
+        console.error("Failed to update channel group collapse:", error);
+      });
   }, [collapsed, id]);
 
   const {

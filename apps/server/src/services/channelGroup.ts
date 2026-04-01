@@ -3,6 +3,14 @@ import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 
 export class ChannelGroupService {
+  async list(organizationId: string) {
+    return prisma.channelGroup.findMany({
+      where: { organizationId },
+      orderBy: { position: "asc" },
+      include: { channels: { orderBy: { position: "asc" } } },
+    });
+  }
+
   async create(input: { organizationId: string; name: string; position?: number | null }, actorType: ActorType, actorId: string) {
     const [group] = await prisma.$transaction(async (tx) => {
       // If no position specified, append after all top-level items (ungrouped channels + groups)

@@ -16,6 +16,33 @@ const TICKET_INCLUDE = {
 } as const;
 
 export class TicketService {
+  async list(
+    organizationId: string,
+    filters?: {
+      status?: string | null;
+      priority?: string | null;
+      channelId?: string | null;
+    },
+  ) {
+    const where: Record<string, unknown> = { organizationId };
+    if (filters?.status) where.status = filters.status;
+    if (filters?.priority) where.priority = filters.priority;
+    if (filters?.channelId) where.channelId = filters.channelId;
+
+    return prisma.ticket.findMany({ where, include: TICKET_INCLUDE });
+  }
+
+  async get(id: string) {
+    return prisma.ticket.findUnique({ where: { id }, include: TICKET_INCLUDE });
+  }
+
+  async listForSession(sessionId: string) {
+    return prisma.ticket.findMany({
+      where: { links: { some: { entityType: "session", entityId: sessionId } } },
+      include: TICKET_INCLUDE,
+    });
+  }
+
   async create(input: CreateTicketServiceInput) {
     const [ticket] = await prisma.$transaction(async (tx) => {
       const ticket = await tx.ticket.create({

@@ -2,9 +2,9 @@ import { useState, useRef, useEffect } from "react";
 import { Hash, Pencil } from "lucide-react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
-import { useEntityField, useEntityStore } from "../../stores/entity";
+import { useEntityField } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
-import type { Chat } from "@trace/gql";
+import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { SidebarTrigger } from "../ui/sidebar";
 import { AddMemberDialog } from "./AddMemberDialog";
 
@@ -49,9 +49,15 @@ export function ChatHeader({ chatId }: { chatId: string }) {
     const trimmed = draft.trim();
     setEditing(false);
     if (!trimmed || trimmed === displayName) return;
-    // Optimistic update — write to store before server round-trip
-    useEntityStore.getState().patch("chats", chatId, { name: trimmed } as Partial<Chat>);
-    await client.mutation(RENAME_CHAT_MUTATION, { chatId, name: trimmed }).toPromise();
+
+    const rollback = applyOptimisticPatch("chats", chatId, { name: trimmed });
+    try {
+      const result = await client.mutation(RENAME_CHAT_MUTATION, { chatId, name: trimmed }).toPromise();
+      if (result.error) throw result.error;
+    } catch (error) {
+      rollback();
+      console.error("Failed to rename chat:", error);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

@@ -654,6 +654,21 @@ export class SessionService {
     };
   }
 
+  async getGroupStatusSources(sessionGroupId: string) {
+    return prisma.session.findMany({
+      where: { sessionGroupId },
+      select: { agentStatus: true, sessionStatus: true },
+    });
+  }
+
+  async getGroupSessions(sessionGroupId: string) {
+    return prisma.session.findMany({
+      where: { sessionGroupId },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      include: SESSION_INCLUDE,
+    });
+  }
+
   async list(
     organizationId: string,
     filters?: {

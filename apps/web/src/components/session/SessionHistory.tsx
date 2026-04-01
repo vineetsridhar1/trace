@@ -2,7 +2,11 @@ import { useCallback, useMemo, useState } from "react";
 import { Circle, Plus } from "lucide-react";
 import { client } from "../../lib/urql";
 import { START_SESSION_MUTATION } from "../../lib/mutations";
-import { useEntityStore, useEntityField, useSessionIdsByGroup } from "../../stores/entity";
+import {
+  useEntitiesByIds,
+  useEntityField,
+  useSessionIdsByGroup,
+} from "../../stores/entity";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { getSessionChannelId, getSessionGroupChannelId } from "../../lib/session-group";
@@ -17,30 +21,36 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
   const [creatingFromId, setCreatingFromId] = useState<string | null>(null);
 
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
-  const sessionGroups = useEntityStore((s) => s.sessionGroups);
-  const sessions = useEntityStore((s) => s.sessions);
-  const sessionGroup = sessionGroupId ? sessionGroups[sessionGroupId] : null;
+  const sessionGroupChannel = useEntityField("sessionGroups", sessionGroupId ?? "", "channel") as
+    | { id: string }
+    | null
+    | undefined;
 
   const groupSessionIds = useSessionIdsByGroup(sessionGroupId);
+  const groupSessionEntities = useEntitiesByIds("sessions", groupSessionIds);
 
   const groupSessions = useMemo(() => {
     if (!sessionGroupId) return [];
-    return groupSessionIds
-      .map((id) => sessions[id])
-      .filter(Boolean)
+    return groupSessionEntities
+      .filter((session): session is NonNullable<(typeof groupSessionEntities)[number]> => session != null)
       .sort((a, b) => {
         const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
         if (diff !== 0) return diff;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-  }, [sessionGroupId, groupSessionIds, sessions]);
+  }, [sessionGroupId, groupSessionEntities]);
 
-  const channelId = getSessionGroupChannelId(sessionGroup ?? null, groupSessions);
+  const sessionsById = useMemo(
+    () => new Map(groupSessions.map((entry) => [entry.id, entry])),
+    [groupSessions],
+  );
+
+  const channelId = sessionGroupChannel?.id ?? getSessionGroupChannelId(null, groupSessions);
 
   const handleSeedNewChat = useCallback(
     async (sourceId: string) => {
       if (!sessionGroupId) return;
-      const source = sessions[sourceId];
+      const source = sessionsById.get(sourceId);
       if (!source) return;
 
       setCreatingFromId(sourceId);
@@ -79,7 +89,7 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
         setCreatingFromId(null);
       }
     },
-    [openSessionTab, sessionGroupId, sessions],
+    [openSessionTab, sessionGroupId, sessionsById],
   );
 
   if (!sessionGroupId || groupSessions.length === 0) {

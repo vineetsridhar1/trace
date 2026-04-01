@@ -1,37 +1,13 @@
 import type { Context } from "../context.js";
 import type { CreateRepoInput, UpdateRepoInput, CreateProjectInput, EntityType, UserRole } from "@trace/gql";
-import { prisma } from "../lib/db.js";
 import { organizationService } from "../services/organization.js";
 import { webhookService } from "../services/webhook.js";
 import { orgMemberService } from "../services/org-member.js";
 import { requireOrgContext } from "../lib/require-org.js";
 
-const projectInclude = {
-  repo: true,
-  channels: { include: { channel: true } },
-  sessions: { include: { session: true } },
-  tickets: { include: { ticket: true } },
-} as const;
-
 export const organizationQueries = {
-  organization: async (_: unknown, args: { id: string }, ctx: Context) => {
-    // Verify the user is a member of this org
-    await orgMemberService.assertMembership(ctx.userId, args.id);
-    return prisma.organization.findUnique({
-      where: { id: args.id },
-      include: {
-        orgMembers: {
-          include: {
-            user: { select: { id: true, name: true, email: true, avatarUrl: true } },
-            organization: { select: { id: true, name: true } },
-          },
-        },
-        repos: true,
-        projects: true,
-        channels: true,
-      },
-    });
-  },
+  organization: (_: unknown, args: { id: string }, ctx: Context) =>
+    organizationService.getOrganization(args.id, ctx.userId),
   myOrganizations: async (_: unknown, _args: Record<string, never>, ctx: Context) => {
     return orgMemberService.getUserOrgs(ctx.userId);
   },
@@ -40,34 +16,22 @@ export const organizationQueries = {
     if (args.organizationId !== orgId) {
       throw new Error("Not authorized for this organization");
     }
-    return prisma.repo.findMany({
-      where: { organizationId: args.organizationId },
-      include: { projects: true, sessions: true },
-    });
+    return organizationService.listRepos(args.organizationId);
   },
   repo: (_: unknown, args: { id: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
-    return prisma.repo.findFirst({
-      where: { id: args.id, organizationId: orgId },
-      include: { projects: true, sessions: true },
-    });
+    return organizationService.getRepo(args.id, orgId);
   },
   projects: (_: unknown, args: { organizationId: string; repoId?: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     if (args.organizationId !== orgId) {
       throw new Error("Not authorized for this organization");
     }
-    return prisma.project.findMany({
-      where: { organizationId: args.organizationId, ...(args.repoId && { repoId: args.repoId }) },
-      include: projectInclude,
-    });
+    return organizationService.listProjects(args.organizationId, args.repoId);
   },
   project: (_: unknown, args: { id: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
-    return prisma.project.findFirst({
-      where: { id: args.id, organizationId: orgId },
-      include: projectInclude,
-    });
+    return organizationService.getProject(args.id, orgId);
   },
 };
 
@@ -160,17 +124,11 @@ export const organizationTypeResolvers = {
   OrgMember: {
     user: async (member: { userId: string; user?: { id: string; name: string; email: string; avatarUrl: string | null } }) => {
       if (member.user) return member.user;
-      return prisma.user.findUniqueOrThrow({
-        where: { id: member.userId },
-        select: { id: true, name: true, email: true, avatarUrl: true },
-      });
+      return organizationService.getUserProfile(member.userId);
     },
     organization: async (member: { organizationId: string; organization?: { id: string; name: string } }) => {
       if (member.organization) return member.organization;
-      return prisma.organization.findUniqueOrThrow({
-        where: { id: member.organizationId },
-        select: { id: true, name: true },
-      });
+      return organizationService.getOrganizationSummary(member.organizationId);
     },
   },
 };

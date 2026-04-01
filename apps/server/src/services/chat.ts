@@ -699,6 +699,12 @@ export class ChatService {
       },
     });
   }
+
+  async getMembers(chatId: string) {
+    return prisma.chatMember.findMany({
+      where: { chatId, leftAt: null },
+    });
+  }
 }
 
 export const chatService = new ChatService();

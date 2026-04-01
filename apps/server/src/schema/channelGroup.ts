@@ -1,16 +1,10 @@
 import type { Context } from "../context.js";
 import type { CreateChannelGroupInput, UpdateChannelGroupInput, MoveChannelInput, ReorderChannelGroupsInput, ReorderChannelsInput } from "@trace/gql";
-import { prisma } from "../lib/db.js";
 import { channelGroupService } from "../services/channelGroup.js";
 
 export const channelGroupQueries = {
-  channelGroups: (_: unknown, args: { organizationId: string }) => {
-    return prisma.channelGroup.findMany({
-      where: { organizationId: args.organizationId },
-      orderBy: { position: "asc" },
-      include: { channels: { orderBy: { position: "asc" } } },
-    });
-  },
+  channelGroups: (_: unknown, args: { organizationId: string }) =>
+    channelGroupService.list(args.organizationId),
 };
 
 export const channelGroupMutations = {

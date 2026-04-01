@@ -1,6 +1,5 @@
 import type { Context } from "../context.js";
 import type { CreateChatInput, AddChatMemberInput } from "@trace/gql";
-import { prisma } from "../lib/db.js";
 import { chatService } from "../services/chat.js";
 import { resolveActor } from "../services/actor.js";
 import { pubsub, topics } from "../lib/pubsub.js";
@@ -98,11 +97,8 @@ export const chatSubscriptions = {
 
 export const chatTypeResolvers = {
   Chat: {
-    members: (chat: { id: string }) => {
-      return prisma.chatMember.findMany({
-        where: { chatId: chat.id, leftAt: null },
-      });
-    },
+    members: (chat: { id: string; members?: unknown[] }) =>
+      Array.isArray(chat.members) ? chat.members : chatService.getMembers(chat.id),
     messages: async (
       chat: { id: string },
       args: { after?: string; before?: string; limit?: number },

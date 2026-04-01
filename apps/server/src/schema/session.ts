@@ -2,13 +2,13 @@ import type { Context } from "../context.js";
 import type { AgentStatus, CodingTool, SessionFilters, StartSessionInput } from "@trace/gql";
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
-import { prisma } from "../lib/db.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { requireOrgContext } from "../lib/require-org.js";
 import {
   deriveSessionGroupStatus,
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
+import { ticketService } from "../services/ticket.js";
 
 export const sessionQueries = {
   sessionGroups: (
@@ -205,35 +205,19 @@ export const sessionTypeResolvers = {
     }) => {
       const sessions = Array.isArray(group.sessions)
         ? group.sessions
-        : await prisma.session.findMany({
-            where: { sessionGroupId: group.id },
-            select: { agentStatus: true, sessionStatus: true },
-          });
+        : await sessionService.getGroupStatusSources(group.id);
       return deriveSessionGroupStatus(sessions, group.prUrl ?? null, group.archivedAt ?? null);
     },
     sessions: async (group: { id: string; sessions?: unknown[] }) => {
       if (Array.isArray(group.sessions)) return group.sessions;
-      return prisma.session.findMany({
-        where: { sessionGroupId: group.id },
-        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-        include: {
-          createdBy: true,
-          repo: true,
-          channel: true,
-          sessionGroup: true,
-        },
-      });
+      return sessionService.getGroupSessions(group.id);
     },
     gitCheckpoints: async (group: { id: string }) => {
       return sessionService.listGitCheckpointsForGroup(group.id);
     },
   },
   Session: {
-    tickets: async (session: { id: string }) => {
-      return prisma.ticket.findMany({
-        where: { links: { some: { entityType: "session", entityId: session.id } } },
-      });
-    },
+    tickets: (session: { id: string }) => ticketService.listForSession(session.id),
     gitCheckpoints: async (session: { id: string }) => {
       return sessionService.listGitCheckpointsForSession(session.id);
     },

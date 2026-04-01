@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { DocumentNode } from "graphql";
 import type { Event, Message } from "@trace/gql";
 import { client } from "../lib/urql";
-import { useEntityIds, useEntityStore } from "../stores/entity";
+import { messageScopeKey, useEntityStore, useMessageIdsForScope } from "../stores/entity";
 
 const PAGE_SIZE = 100;
 
@@ -58,6 +58,7 @@ export function useScopedMessages({
   const oldestCreatedAtRef = useRef<string | null>(null);
   const loadingOlderRef = useRef(false);
   const hasOlderRef = useRef(true);
+  const scopeKey = messageScopeKey(scopeField === "chatId" ? "chat" : "channel", scopeId);
 
   useEffect(() => {
     setLoading(true);
@@ -170,10 +171,9 @@ export function useScopedMessages({
     setLoadingOlder(false);
   }, [getQueryVariables, onMessagesLoaded, query, queryResultField]);
 
-  const messageIds = useEntityIds(
-    "messages",
+  const messageIds = useMessageIdsForScope(
+    scopeKey,
     (message) =>
-      message[scopeField] === scopeId &&
       !message.parentMessageId &&
       (!message.deletedAt || (message.replyCount ?? 0) > 0),
     (a, b) => a.createdAt.localeCompare(b.createdAt),

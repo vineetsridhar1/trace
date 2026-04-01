@@ -30,6 +30,41 @@ export class ChannelService {
     }));
   }
 
+  async listChannels(
+    organizationId: string,
+    userId: string,
+    options?: { projectId?: string; memberOnly?: boolean },
+  ) {
+    const where: Record<string, unknown> = { organizationId };
+
+    if (options?.projectId) {
+      where.projects = { some: { projectId: options.projectId } };
+    }
+
+    if (options?.memberOnly) {
+      where.members = { some: { userId, leftAt: null } };
+    }
+
+    return prisma.channel.findMany({ where, include: { repo: true } });
+  }
+
+  async getChannel(channelId: string, userId: string) {
+    await prisma.channel.findFirstOrThrow({
+      where: { id: channelId, members: { some: { userId, leftAt: null } } },
+      select: { id: true },
+    });
+
+    return prisma.channel.findUnique({ where: { id: channelId }, include: { repo: true } });
+  }
+
+  async getMembers(channelId: string) {
+    const members = await prisma.channelMember.findMany({
+      where: { channelId, leftAt: null },
+      include: { user: { select: { id: true, email: true, name: true, avatarUrl: true } } },
+    });
+    return members.map((member) => ({ user: member.user, joinedAt: member.joinedAt }));
+  }
+
   async create(input: CreateChannelInput, actorType: ActorType, actorId: string) {
     const [channel, _event] = await prisma.$transaction(async (tx) => {
       await tx.orgMember.findUniqueOrThrow({

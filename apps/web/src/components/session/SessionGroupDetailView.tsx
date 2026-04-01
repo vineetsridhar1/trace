@@ -8,7 +8,10 @@ import {
   START_SESSION_MUTATION,
 } from "../../lib/mutations";
 import { useDetailPanelStore } from "../../stores/detail-panel";
-import { useEntityField, useEntityStore, useSessionIdsByGroup } from "../../stores/entity";
+import {
+  useEntityField,
+  useEntityStore,
+} from "../../stores/entity";
 import type { SessionEntity } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
 import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
@@ -24,6 +27,7 @@ import { CheckpointOpenContext } from "./CheckpointOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
 import { SidebarPanel } from "./SidebarPanel";
 import type { SidebarTab } from "./SidebarPanel";
+import { useSessionGroupSessions } from "./useSessionGroupSessions";
 const MonacoFileViewer = lazy(() =>
   import("./MonacoFileViewer").then((m) => ({ default: m.MonacoFileViewer })),
 );
@@ -159,7 +163,6 @@ export function SessionGroupDetailView({
   const toggleFullscreen = useDetailPanelStore((s) => s.toggleFullscreen);
   const isFullscreen = useDetailPanelStore((s) => s.isFullscreen);
   const currentUserId = useAuthStore((s) => s.user?.id);
-  const sessionsMap = useEntityStore((s) => s.sessions);
   const upsert = useEntityStore((s) => s.upsert);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const terminals = useSessionGroupTerminals(sessionGroupId);
@@ -172,27 +175,8 @@ export function SessionGroupDetailView({
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
   const renameTerminal = useTerminalStore((s) => s.renameTerminal);
-
-  const groupSessionIds = useSessionIdsByGroup(sessionGroupId);
-
-  const groupSessions = useMemo(
-    () => groupSessionIds.map((id) => sessionsMap[id]).filter(Boolean),
-    [groupSessionIds, sessionsMap],
-  );
-
-  const sessionsByRecency = useMemo(() => {
-    return [...groupSessions].sort((a, b) => {
-      const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-      if (diff !== 0) return diff;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-  }, [groupSessions]);
-
-  const sessionTabs = useMemo(() => {
-    if (!openTabIds) return [];
-    const sessionMap = new Map(groupSessions.map((s) => [s.id, s]));
-    return openTabIds.map((id) => sessionMap.get(id)).filter((s): s is SessionEntity => s != null);
-  }, [groupSessions, openTabIds]);
+  const { groupSessions, selectedSession, sessionTabs, sessionsByRecency } =
+    useSessionGroupSessions(sessionGroupId, openTabIds, activeSessionId);
 
   // Fetch full group detail and merge into store
   useEffect(() => {
@@ -251,11 +235,9 @@ export function SessionGroupDetailView({
   }, [activeTerminalId, terminals, setActiveTerminalId]);
 
   // Auto-restore terminal tabs from server when returning to this session group.
-  // The server returns all group terminals from any single session query,
-  // so we only need to query one session.
   useEffect(() => {
     let aborted = false;
-    const firstSessionId = groupSessionIds[0];
+    const firstSessionId = groupSessions[0]?.id;
     if (!firstSessionId) return;
 
     const existingGroupTerminals = Object.values(useTerminalStore.getState().terminals).filter(
@@ -278,10 +260,7 @@ export function SessionGroupDetailView({
     return () => {
       aborted = true;
     };
-  }, [groupSessionIds, sessionGroupId, addTerminal]);
-
-  const selectedSession =
-    sessionTabs.find((session) => session.id === activeSessionId) ?? sessionTabs[0] ?? null;
+  }, [groupSessions, sessionGroupId, addTerminal]);
   const selectedSessionIsOptimistic = selectedSession?._optimistic === true;
   const activeTerminal = terminals.find((terminal) => terminal.id === activeTerminalId) ?? null;
 
