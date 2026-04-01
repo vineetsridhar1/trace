@@ -10,10 +10,14 @@ export function isOptimisticEvent(id: string): boolean {
   return id.startsWith(OPTIMISTIC_PREFIX);
 }
 
+/** Max age (ms) before a pending entry is considered stale and swept. */
+const PENDING_TTL_MS = 30_000;
+
 export interface PendingSessionEntry {
   tempEventId: string;
   clientMutationId: string;
   expectedRealEventId?: string;
+  createdAt: number;
 }
 
 export interface PendingChatEntry {
@@ -21,10 +25,29 @@ export interface PendingChatEntry {
   tempEventId: string;
   clientMutationId: string;
   expectedRealMessageId?: string;
+  createdAt: number;
 }
 
 const pendingSessionOptimistic = new Map<string, PendingSessionEntry[]>();
 const pendingChatOptimistic = new Map<string, PendingChatEntry[]>();
+
+/** Remove entries older than PENDING_TTL_MS from all pending Maps. */
+function sweepStalePending(): void {
+  const now = Date.now();
+  for (const [key, queue] of pendingSessionOptimistic) {
+    const fresh = queue.filter((e) => now - e.createdAt < PENDING_TTL_MS);
+    if (fresh.length === 0) pendingSessionOptimistic.delete(key);
+    else pendingSessionOptimistic.set(key, fresh);
+  }
+  for (const [key, queue] of pendingChatOptimistic) {
+    const fresh = queue.filter((e) => now - e.createdAt < PENDING_TTL_MS);
+    if (fresh.length === 0) pendingChatOptimistic.delete(key);
+    else pendingChatOptimistic.set(key, fresh);
+  }
+}
+
+// Periodic sweep to prevent unbounded growth under degraded network conditions
+setInterval(sweepStalePending, PENDING_TTL_MS);
 
 function enqueue<T>(map: Map<string, T[]>, key: string, item: T): void {
   const queue = map.get(key);
@@ -190,7 +213,7 @@ export function optimisticallyInsertSessionMessage(
 
   useEntityStore.getState().upsertScopedEvent(scopeKey, tempId, event);
 
-  enqueue(pendingSessionOptimistic, sessionId, { tempEventId: tempId, clientMutationId });
+  enqueue(pendingSessionOptimistic, sessionId, { tempEventId: tempId, clientMutationId, createdAt: Date.now() });
 
   return { eventId: tempId, clientMutationId };
 }
@@ -345,6 +368,7 @@ export function optimisticallyInsertChatMessage(
     tempMessageId,
     tempEventId,
     clientMutationId,
+    createdAt: Date.now(),
   });
 
   return { messageId: tempMessageId, eventId: tempEventId, clientMutationId };
