@@ -250,26 +250,31 @@ export function SessionGroupDetailView({
     setActiveTerminalId(null);
   }, [activeTerminalId, terminals, setActiveTerminalId]);
 
-  // Auto-restore terminal tabs from server when returning to this session group
+  // Auto-restore terminal tabs from server when returning to this session group.
+  // The server returns all group terminals from any single session query,
+  // so we only need to query one session.
   useEffect(() => {
     let aborted = false;
-    Promise.all(
-      groupSessionIds.map(async (sessionId) => {
+    const firstSessionId = groupSessionIds[0];
+    if (!firstSessionId) return;
+
+    const existingGroupTerminals = Object.values(useTerminalStore.getState().terminals).filter(
+      (t) => t.sessionGroupId === sessionGroupId,
+    );
+    if (existingGroupTerminals.length > 0) return;
+
+    client
+      .query(SESSION_TERMINALS_QUERY, { sessionId: firstSessionId })
+      .toPromise()
+      .then((result) => {
         if (aborted) return;
-        const existing = Object.values(useTerminalStore.getState().terminals).filter(
-          (t) => t.sessionId === sessionId,
-        );
-        if (existing.length > 0) return;
-        const result = await client.query(SESSION_TERMINALS_QUERY, { sessionId }).toPromise();
         const serverTerminals = (result.data?.sessionTerminals as Terminal[] | undefined) ?? [];
         for (const terminal of serverTerminals) {
-          if (aborted) return;
           if (!useTerminalStore.getState().terminals[terminal.id]) {
             addTerminal(terminal.id, terminal.sessionId, sessionGroupId, "active");
           }
         }
-      }),
-    );
+      });
     return () => {
       aborted = true;
     };
