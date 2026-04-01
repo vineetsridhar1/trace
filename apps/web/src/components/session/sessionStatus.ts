@@ -42,6 +42,20 @@ export const sessionStatusLabel: Record<string, string> = {
   archived: "Archived",
 };
 
+// ─── Terminal Status ───
+
+export const terminalStatusColor: Record<string, string> = {
+  connecting: "text-amber-400",
+  active: "text-green-400",
+  exited: "text-muted-foreground",
+};
+
+export const terminalStatusLabel: Record<string, string> = {
+  connecting: "Connecting",
+  active: "Running",
+  exited: "Exited",
+};
+
 // ─── Connection ───
 
 export const connectionColor: Record<string, string> = {

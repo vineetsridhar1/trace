@@ -171,6 +171,7 @@ export function SessionGroupDetailView({
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
+  const renameTerminal = useTerminalStore((s) => s.renameTerminal);
 
   const groupSessionIds = useSessionIdsByGroup(sessionGroupId);
 
@@ -248,6 +249,36 @@ export function SessionGroupDetailView({
     if (terminals.some((terminal) => terminal.id === activeTerminalId)) return;
     setActiveTerminalId(null);
   }, [activeTerminalId, terminals, setActiveTerminalId]);
+
+  // Auto-restore terminal tabs from server when returning to this session group.
+  // The server returns all group terminals from any single session query,
+  // so we only need to query one session.
+  useEffect(() => {
+    let aborted = false;
+    const firstSessionId = groupSessionIds[0];
+    if (!firstSessionId) return;
+
+    const existingGroupTerminals = Object.values(useTerminalStore.getState().terminals).filter(
+      (t) => t.sessionGroupId === sessionGroupId,
+    );
+    if (existingGroupTerminals.length > 0) return;
+
+    client
+      .query(SESSION_TERMINALS_QUERY, { sessionId: firstSessionId })
+      .toPromise()
+      .then((result) => {
+        if (aborted) return;
+        const serverTerminals = (result.data?.sessionTerminals as Terminal[] | undefined) ?? [];
+        for (const terminal of serverTerminals) {
+          if (!useTerminalStore.getState().terminals[terminal.id]) {
+            addTerminal(terminal.id, terminal.sessionId, sessionGroupId, "active");
+          }
+        }
+      });
+    return () => {
+      aborted = true;
+    };
+  }, [groupSessionIds, sessionGroupId, addTerminal]);
 
   const selectedSession =
     sessionTabs.find((session) => session.id === activeSessionId) ?? sessionTabs[0] ?? null;
@@ -519,6 +550,7 @@ export function SessionGroupDetailView({
             canCloseSessions={sessionTabs.length > 1}
             onSelectTerminal={handleSelectTerminal}
             onCloseTerminal={handleCloseTerminal}
+            onRenameTerminal={renameTerminal}
             onSelectFile={handleSelectFile}
             onCloseFile={handleCloseFile}
             onNewChat={handleNewChat}
