@@ -74,7 +74,7 @@ export function SessionHeader({
       setPastGracePeriod(false);
       return;
     }
-    const timer = setTimeout(() => setPastGracePeriod(true), 15_000);
+    const timer = setTimeout(() => setPastGracePeriod(true), 60_000);
     return () => clearTimeout(timer);
   }, [disconnected]);
 

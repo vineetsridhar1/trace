@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw, ArrowRightLeft, WifiOff, Loader2 } from "lucide-react";
 import { client } from "../../lib/urql";
+import { cn } from "../../lib/utils";
 import {
   RETRY_SESSION_CONNECTION_MUTATION,
 } from "../../lib/mutations";
@@ -87,11 +88,12 @@ export function SessionRecoveryPanel({
 
   return (
     <div className="shrink-0 border-t border-border px-4 py-3">
-      <div className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 ${
+      <div className={cn(
+        "flex items-center gap-2 rounded-lg border px-3 py-2.5",
         autoRetrying
           ? "border-yellow-500/30 bg-yellow-500/5"
-          : "border-destructive/30 bg-destructive/5"
-      }`}>
+          : "border-destructive/30 bg-destructive/5",
+      )}>
         {autoRetrying ? (
           <Loader2 size={16} className="shrink-0 text-yellow-500 animate-spin" />
         ) : (

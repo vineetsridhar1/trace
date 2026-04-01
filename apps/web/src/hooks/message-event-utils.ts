@@ -86,8 +86,10 @@ export function upsertScopedMessageFromEvent(event: Event, scope: MessageScope) 
   if (event.eventType === "message_sent") {
     const nextMessage = buildScopedMessage(scope, event, payload, existing);
 
-    // Atomically upsert the real message AND remove any pending optimistic
-    // duplicate to prevent a brief flash where both appear in the list.
+    // Chat optimistic reconciliation happens here (inline setState) because
+    // chats have both a message entity and a scoped event to clean up atomically.
+    // Session optimistic reconciliation is handled in useOrgEvents + useSessionEvents
+    // since sessions only have scoped events (no separate message entity).
     if (scope.scopeType === "chat") {
       const pending = takePendingOptimisticChat(scope.scopeId, event);
       if (pending) {
