@@ -52,7 +52,7 @@ export function RepoSection({
         ) : (
           <Select
             value={effectiveRepoId ?? "__none__"}
-            onValueChange={(v: string) => {
+            onValueChange={(v: string | null) => {
               if (v) {
                 onRepoChange(v === "__none__" ? undefined : v);
                 onBranchChange("");

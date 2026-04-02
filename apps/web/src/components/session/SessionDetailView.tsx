@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { gql } from "@urql/core";
 import type { GitCheckpoint } from "@trace/gql";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
-import { useEntityStore, useEntityField, useScopedEvents, eventScopeKey } from "../../stores/entity";
+import { useEntityStore, useEntityField, useScopedEvents, eventScopeKey, type SessionEntity, type SessionGroupEntity } from "../../stores/entity";
 import { EventScopeContext } from "./EventScopeContext";
 import { useAuthStore } from "../../stores/auth";
 import { SessionMessageList } from "./SessionMessageList";
@@ -154,8 +154,8 @@ export function SessionDetailView({
         if (result.data?.session) {
           const { upsert, sessions } = useEntityStore.getState();
           const existing = sessions[sessionId];
-          const fetchedSession = result.data.session as Record<string, unknown>;
-          const sessionGroup = fetchedSession.sessionGroup as Record<string, unknown> & { id: string } | undefined;
+          const fetchedSession = result.data.session as SessionEntity;
+          const sessionGroup = (fetchedSession as Record<string, unknown>).sessionGroup as SessionGroupEntity | undefined;
           if (sessionGroup?.id) {
             const existingGroup = useEntityStore.getState().sessionGroups[sessionGroup.id];
             upsert(

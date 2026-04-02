@@ -5,7 +5,7 @@ import { SESSION_TERMINALS_QUERY, START_SESSION_MUTATION } from "../../lib/mutat
 import type { Terminal } from "@trace/gql";
 import { useDetailPanelStore } from "../../stores/detail-panel";
 import { useEntityField, useEntityStore } from "../../stores/entity";
-import type { SessionEntity } from "../../stores/entity";
+import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
 import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
 import { useUIStore } from "../../stores/ui";
@@ -159,7 +159,7 @@ export function SessionGroupDetailView({
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
   const [highlightCheckpointId, setHighlightCheckpointId] = useState<string | null>(null);
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
-  const addTerminal = useTerminalStore((s: { addTerminal: (id: string, sessionId: string, sessionGroupId: string, status?: string) => void }) => s.addTerminal);
+  const addTerminal = useTerminalStore((s) => s.addTerminal);
   const renameTerminal = useTerminalStore((s: { renameTerminal: (id: string, name: string) => void }) => s.renameTerminal);
 
   const { groupSessions, selectedSession, sessionTabs, sessionsByRecency } =
@@ -187,7 +187,7 @@ export function SessionGroupDetailView({
       .toPromise()
       .then((result: { data?: Record<string, unknown> }) => {
         if (!result.data?.sessionGroup) return;
-        const fetchedGroup = result.data.sessionGroup as Record<string, unknown> & { id: string; sessions?: unknown[] };
+        const fetchedGroup = result.data.sessionGroup as SessionGroupEntity & { sessions?: unknown[] };
         const existingGroup = useEntityStore.getState().sessionGroups[fetchedGroup.id];
         upsert(
           "sessionGroups",

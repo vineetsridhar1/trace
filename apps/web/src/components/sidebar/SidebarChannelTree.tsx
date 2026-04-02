@@ -78,12 +78,12 @@ export function SidebarChannelTree({
       <DndContext
         sensors={sensors}
         collisionDetection={collisionDetection}
-        onDragStart={(event: { active: { id: string | number }; [key: string]: unknown }) => {
+        onDragStart={(event) => {
           handleDragStart(event);
           onDragActiveChange?.(true);
         }}
         onDragOver={handleDragOver}
-        onDragEnd={(event: { active: { id: string | number }; over: { id: string | number } | null; [key: string]: unknown }) => {
+        onDragEnd={(event) => {
           handleDragEnd(event);
           onDragActiveChange?.(false);
         }}

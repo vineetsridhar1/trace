@@ -29,7 +29,7 @@ const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
 ];
 
 export function SettingsPage() {
-  const setActivePage = useUIStore((s: { setActivePage: (page: string) => void }) => s.setActivePage);
+  const setActivePage = useUIStore((s) => s.setActivePage);
   const [activeTab, setActiveTab] = useState<SettingsTab>("repositories");
   const contentWidthClass =
     activeTab === "members" || activeTab === "repositories"

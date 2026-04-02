@@ -3,8 +3,8 @@ import { useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 
 export function TicketsButton() {
-  const activePage = useUIStore((s: { activePage: string }) => s.activePage);
-  const setActivePage = useUIStore((s: { setActivePage: (page: string) => void }) => s.setActivePage);
+  const activePage = useUIStore((s) => s.activePage);
+  const setActivePage = useUIStore((s) => s.setActivePage);
 
   return (
     <button

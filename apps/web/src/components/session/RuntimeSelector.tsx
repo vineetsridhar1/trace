@@ -74,7 +74,7 @@ export function RuntimeSelector({ tool, open, value, onChange, channelRepoId }: 
   return (
     <Select
       value={value ?? ""}
-      onValueChange={(v: string) => {
+      onValueChange={(v: string | null) => {
         if (!v) return;
         if (v === CLOUD_RUNTIME_ID) {
           onChange(v, { hostingMode: "cloud", registeredRepoIds: [] });

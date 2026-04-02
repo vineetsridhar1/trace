@@ -15,11 +15,11 @@ interface TerminalActionsArgs {
 }
 
 export function useTerminalActions({ sessionGroupId, terminals }: TerminalActionsArgs) {
-  const activeTerminalId = useUIStore((s: { activeTerminalId: string | null }) => s.activeTerminalId);
-  const setActiveSessionId = useUIStore((s: { setActiveSessionId: (id: string | null) => void }) => s.setActiveSessionId);
-  const setActiveTerminalId = useUIStore((s: { setActiveTerminalId: (id: string | null) => void }) => s.setActiveTerminalId);
-  const addTerminal = useTerminalStore((s: { addTerminal: (id: string, sessionId: string, sessionGroupId: string, status?: string) => void }) => s.addTerminal);
-  const removeTerminal = useTerminalStore((s: { removeTerminal: (id: string) => void }) => s.removeTerminal);
+  const activeTerminalId = useUIStore((s) => s.activeTerminalId);
+  const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
+  const setActiveTerminalId = useUIStore((s) => s.setActiveTerminalId);
+  const addTerminal = useTerminalStore((s) => s.addTerminal);
+  const removeTerminal = useTerminalStore((s) => s.removeTerminal);
 
   const ensureSessionTerminals = useCallback(
     async (sessionId: string) => {
