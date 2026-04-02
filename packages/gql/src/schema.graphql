@@ -185,6 +185,7 @@ enum EventType {
   channel_member_removed
   channel_group_created
   channel_group_updated
+  channel_deleted
   channel_group_deleted
   member_joined
   member_left
@@ -914,6 +915,7 @@ type Mutation {
   createChannel(input: CreateChannelInput!): Channel!
   updateChannel(id: ID!, input: UpdateChannelInput!): Channel!
   joinChannel(channelId: ID!): Channel!
+  deleteChannel(id: ID!): Boolean!
   leaveChannel(channelId: ID!): Channel!
   createChannelGroup(input: CreateChannelGroupInput!): ChannelGroup!
   updateChannelGroup(id: ID!, input: UpdateChannelGroupInput!): ChannelGroup!

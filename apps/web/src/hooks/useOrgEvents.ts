@@ -406,6 +406,33 @@ export function useOrgEvents() {
           }
         }
 
+        // Channel deleted — remove channel and its sessions/groups from store
+        if (event.eventType === "channel_deleted" && payload) {
+          if (typeof payload.channelId === "string") {
+            const channelId = payload.channelId;
+
+            // Remove sessions and session groups that belonged to this channel
+            const allSessions = batch.getAll("sessions");
+            for (const [sessionId, session] of Object.entries(allSessions)) {
+              if (session.channelId === channelId) {
+                batch.remove("sessions", sessionId);
+              }
+            }
+            const allGroups = batch.getAll("sessionGroups");
+            for (const [groupId, group] of Object.entries(allGroups)) {
+              if (group.channelId === channelId) {
+                batch.remove("sessionGroups", groupId);
+              }
+            }
+
+            batch.remove("channels", channelId);
+            const ui = useUIStore.getState();
+            if (ui.activeChannelId === channelId) {
+              ui.setActiveChannelId(null);
+            }
+          }
+        }
+
         // New session — upsert directly from payload
         if (event.eventType === "session_started" && payload) {
           const session = asJsonObject(payload.session);

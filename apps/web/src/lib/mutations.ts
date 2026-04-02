@@ -83,6 +83,12 @@ export const DELETE_SESSION_MUTATION = gql`
   }
 `;
 
+export const DELETE_CHANNEL_MUTATION = gql`
+  mutation DeleteChannel($id: ID!) {
+    deleteChannel(id: $id)
+  }
+`;
+
 export const DELETE_SESSION_GROUP_MUTATION = gql`
   mutation DeleteSessionGroup($id: ID!) {
     deleteSessionGroup(id: $id)

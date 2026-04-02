@@ -191,6 +191,7 @@ enum EventType {
   channel_member_removed
   channel_group_created
   channel_group_updated
+  channel_deleted
   channel_group_deleted
   member_joined
   member_left
