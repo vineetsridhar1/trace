@@ -6,12 +6,10 @@ import type { SlashCommandItem } from "../chat/ChatEditor";
 
 const BUILTIN_FALLBACK: SlashCommandItem[] = [
   { id: "clear", value: "clear", description: "Start a new session", source: "builtin", category: "special", type: "slash_command" },
-  { id: "compact", value: "compact", description: "Compact conversation context", source: "builtin", category: "passthrough", type: "slash_command" },
-  { id: "help", value: "help", description: "Show help information", source: "builtin", category: "passthrough", type: "slash_command" },
-  { id: "review", value: "review", description: "Review code changes", source: "builtin", category: "passthrough", type: "slash_command" },
-  { id: "memory", value: "memory", description: "Edit CLAUDE.md memory files", source: "builtin", category: "passthrough", type: "slash_command" },
-  { id: "cost", value: "cost", description: "Show token usage and cost", source: "builtin", category: "passthrough", type: "slash_command" },
-  { id: "model", value: "model", description: "Switch model", source: "builtin", category: "passthrough", type: "slash_command" },
+  { id: "compact", value: "compact", description: "Compact conversation context", source: "builtin", category: "terminal", type: "slash_command" },
+  { id: "cost", value: "cost", description: "Show token usage and cost", source: "builtin", category: "terminal", type: "slash_command" },
+  { id: "model", value: "model", description: "Switch model", source: "builtin", category: "terminal", type: "slash_command" },
+  { id: "help", value: "help", description: "Show help information", source: "builtin", category: "terminal", type: "slash_command" },
 ];
 
 export function useSlashCommands(sessionId: string): { commands: SlashCommandItem[]; loading: boolean } {

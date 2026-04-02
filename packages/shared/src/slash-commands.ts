@@ -5,16 +5,15 @@ export interface BuiltinSlashCommand {
 }
 
 export const BUILTIN_SLASH_COMMANDS: BuiltinSlashCommand[] = [
-  // special
+  // special — handled locally by the UI
   { name: "clear", description: "Start a new session", category: "special" },
-  // passthrough — sent as text message to Claude Code
-  { name: "compact", description: "Compact conversation context", category: "passthrough" },
-  { name: "help", description: "Show help information", category: "passthrough" },
-  { name: "review", description: "Review code changes", category: "passthrough" },
-  { name: "memory", description: "Edit CLAUDE.md memory files", category: "passthrough" },
-  { name: "cost", description: "Show token usage and cost", category: "passthrough" },
-  { name: "model", description: "Switch model", category: "passthrough" },
-  // terminal — opens terminal + runs `claude /<cmd>`
+  // terminal — opens terminal + runs `claude /<cmd>` (all built-in CLI commands)
+  { name: "compact", description: "Compact conversation context", category: "terminal" },
+  { name: "cost", description: "Show token usage and cost", category: "terminal" },
+  { name: "model", description: "Switch model", category: "terminal" },
+  { name: "help", description: "Show help information", category: "terminal" },
+  { name: "review", description: "Review code changes", category: "terminal" },
+  { name: "memory", description: "Edit CLAUDE.md memory files", category: "terminal" },
   { name: "usage", description: "Show detailed usage statistics", category: "terminal" },
   { name: "mcp", description: "Manage MCP servers", category: "terminal" },
   { name: "config", description: "Edit configuration", category: "terminal" },

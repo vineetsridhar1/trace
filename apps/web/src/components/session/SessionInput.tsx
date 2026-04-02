@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useEffect } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Send, Square, Cloud, Monitor } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
@@ -51,21 +51,6 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   const lastUserMessageAt = isActive ? _lastUserMessageAt : undefined;
 
   const slashCommands = useSlashCommands(sessionId);
-  const lastSentSlashCommand = useRef<string | null>(null);
-
-  // Compact toast: when agent finishes after /compact was sent
-  const prevAgentStatus = useRef(agentStatus);
-  useEffect(() => {
-    if (
-      prevAgentStatus.current === "active" &&
-      agentStatus !== "active" &&
-      lastSentSlashCommand.current === "compact"
-    ) {
-      toast.success("Chat compacted");
-      lastSentSlashCommand.current = null;
-    }
-    prevAgentStatus.current = agentStatus;
-  }, [agentStatus]);
 
   const cycleMode = useCallback(() => {
     setMode((prev) => {
@@ -144,11 +129,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
         return;
       }
 
-      // passthrough — send as text message
-      if (cmd.id === "compact") {
-        lastSentSlashCommand.current = "compact";
-      }
-
+      // passthrough — send as text message (user/project skills)
       setSending(true);
       const text = `/${cmd.id}`;
       const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
@@ -172,7 +153,6 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
       } catch (error) {
         removeOptimisticSessionMessage(sessionId, tempEventId);
         toast.error(error instanceof Error ? error.message : "Failed to send command");
-        lastSentSlashCommand.current = null;
       } finally {
         setSending(false);
       }
