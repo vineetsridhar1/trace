@@ -1,5 +1,6 @@
 import sanitize from "sanitize-html";
-import { load, type AnyNode } from "cheerio";
+import { load } from "cheerio";
+import type { AnyNode } from "domhandler";
 
 export interface ExtractedMention {
   userId: string;

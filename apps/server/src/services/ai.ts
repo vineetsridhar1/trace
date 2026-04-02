@@ -114,7 +114,7 @@ class AIService {
       messages.push({ role: "assistant", content: response.content });
 
       // Execute tool calls and collect results
-      const toolUseBlocks: LLMToolUseContent[] = (response.content as Array<{ type: string } & Record<string, unknown>>).filter(
+      const toolUseBlocks = response.content.filter(
         (b): b is LLMToolUseContent => b.type === "tool_use",
       );
 
