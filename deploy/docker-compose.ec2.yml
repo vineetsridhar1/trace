@@ -47,7 +47,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          'node -e "fetch(''http://localhost:4000/health'').then(r=>{if(!r.ok)throw new Error(''bad status'');process.exit(0)}).catch(()=>process.exit(1))"',
+          'node -e "fetch(''http://localhost:4000/health'').then(async r=>{if(!r.ok)throw new Error(''bad status'');const body=await r.json();if(body.ready!==true)throw new Error(''not ready'');process.exit(0)}).catch(()=>process.exit(1))"',
         ]
       interval: 15s
       timeout: 10s
