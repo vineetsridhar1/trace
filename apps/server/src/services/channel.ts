@@ -11,6 +11,7 @@ import {
   type MessageWithSummary,
 } from "./message-utils.js";
 import { normalizeMembers } from "./member-utils.js";
+import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 
 export class ChannelService {
   async listChannels(
@@ -49,6 +50,10 @@ export class ChannelService {
   }
 
   async create(input: CreateChannelInput, actorType: ActorType, actorId: string) {
+    if (actorType === "user") {
+      throw new AuthorizationError("Users cannot create channels directly");
+    }
+
     const [channel, _event] = await prisma.$transaction(async (tx) => {
       await tx.orgMember.findUniqueOrThrow({
         where: { userId_organizationId: { userId: actorId, organizationId: input.organizationId } },
@@ -109,6 +114,22 @@ export class ChannelService {
       });
 
       await tx.channelMember.create({ data: { channelId: channel.id, userId: actorId } });
+      if (actorId !== TRACE_AI_USER_ID) {
+        const aiOrgMember = await tx.orgMember.findUnique({
+          where: {
+            userId_organizationId: {
+              userId: TRACE_AI_USER_ID,
+              organizationId: input.organizationId,
+            },
+          },
+          select: { userId: true },
+        });
+        if (aiOrgMember) {
+          await tx.channelMember.create({
+            data: { channelId: channel.id, userId: TRACE_AI_USER_ID },
+          });
+        }
+      }
       const normalizedMembers = await normalizeMembers(tx, { type: "channel", id: channel.id });
 
       const event = await eventService.create({
@@ -615,6 +636,10 @@ export class ChannelService {
   }
 
   async delete(id: string, organizationId: string, actorType: ActorType, actorId: string) {
+    if (actorType === "user") {
+      throw new AuthorizationError("Users cannot delete channels directly");
+    }
+
     const channel = await prisma.channel.findUniqueOrThrow({
       where: { id },
       select: {
