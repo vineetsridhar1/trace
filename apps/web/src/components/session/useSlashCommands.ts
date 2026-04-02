@@ -8,7 +8,6 @@ const BUILTIN_FALLBACK: SlashCommandItem[] = [
   { id: "clear", value: "clear", description: "Start a new session", source: "builtin", category: "special", type: "slash_command" },
   { id: "compact", value: "compact", description: "Compact conversation context", source: "builtin", category: "terminal", type: "slash_command" },
   { id: "cost", value: "cost", description: "Show token usage and cost", source: "builtin", category: "terminal", type: "slash_command" },
-  { id: "model", value: "model", description: "Switch model", source: "builtin", category: "terminal", type: "slash_command" },
   { id: "help", value: "help", description: "Show help information", source: "builtin", category: "terminal", type: "slash_command" },
 ];
 

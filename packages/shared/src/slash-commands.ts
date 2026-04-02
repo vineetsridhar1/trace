@@ -10,7 +10,6 @@ export const BUILTIN_SLASH_COMMANDS: BuiltinSlashCommand[] = [
   // terminal — opens terminal + runs `claude /<cmd>` (all built-in CLI commands)
   { name: "compact", description: "Compact conversation context", category: "terminal" },
   { name: "cost", description: "Show token usage and cost", category: "terminal" },
-  { name: "model", description: "Switch model", category: "terminal" },
   { name: "help", description: "Show help information", category: "terminal" },
   { name: "review", description: "Review code changes", category: "terminal" },
   { name: "memory", description: "Edit CLAUDE.md memory files", category: "terminal" },
