@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Circle } from "lucide-react";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "../../stores/auth";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 
@@ -44,7 +44,7 @@ function formatUptime(seconds: number): string {
 }
 
 export function WorkerStatusBar() {
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const [status, setStatus] = useState<WorkerStatus | null>(null);
   const [windows, setWindows] = useState<AggregationWindow[]>([]);
   const [showWindows, setShowWindows] = useState(false);
@@ -100,7 +100,7 @@ export function WorkerStatusBar() {
             Active Aggregation Windows
           </div>
           <div className="space-y-1">
-            {windows.map((w) => (
+            {windows.map((w: AggregationWindow) => (
               <div key={w.scopeKey} className="flex items-center gap-3 text-xs">
                 <span className="font-mono text-foreground">{w.scopeKey}</span>
                 <span className="text-muted-foreground">{w.eventCount} events</span>

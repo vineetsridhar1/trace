@@ -334,14 +334,14 @@ export function useChannelDnd({
     // Same-container reorder
     if (activeContainer && activeContainer === overContainer && activeId !== overId) {
       if (activeContainer === TOP_LEVEL_CONTAINER) {
-        const oldIndex = activeTopLevel.findIndex((i) =>
+        const oldIndex = activeTopLevel.findIndex((i: TopLevelItem) =>
           activeParsed.type === "channel"
             ? i.kind === "channel" && i.id === activeParsed.id
             : i.kind === "group" && i.id === activeParsed.id
         );
         const overParsed = parseSortableId(overId);
         const newIndex = overParsed
-          ? activeTopLevel.findIndex((i) =>
+          ? activeTopLevel.findIndex((i: TopLevelItem) =>
               overParsed.type === "channel"
                 ? i.kind === "channel" && i.id === overParsed.id
                 : i.kind === "group" && i.id === overParsed.id
@@ -402,14 +402,14 @@ export function useChannelDnd({
     }
 
     // Persist any group that changed
-    for (const [groupId, channelIds] of Object.entries(finalGroups)) {
+    for (const [groupId, channelIds] of Object.entries(finalGroups) as Array<[string, string[]]>) {
       const origIds = orig.groups[groupId] ?? [];
       if (JSON.stringify(channelIds) !== JSON.stringify(origIds)) {
         promises.push(persistGroupOrder(groupId, channelIds));
       }
     }
     // Check for groups that had items removed (now empty or different)
-    for (const [groupId, origIds] of Object.entries(orig.groups)) {
+    for (const [groupId, origIds] of Object.entries(orig.groups) as Array<[string, string[]]>) {
       if (!(groupId in finalGroups) && origIds.length > 0) {
         promises.push(persistGroupOrder(groupId, []));
       }
@@ -434,12 +434,18 @@ export function useChannelDnd({
    *  to find the closest channel item — this makes both cross-container
    *  moves and within-group reordering work correctly.
    */
-  const collisionDetection: CollisionDetection = useCallback((args) => {
-    const pw = pointerWithin(args);
-    if (pw.length === 0) return closestCenter(args);
+  const collisionDetection: CollisionDetection = useCallback((args: {
+    active: { id: string | number };
+    collisionRect: DOMRect;
+    droppableRects: Map<string | number, DOMRect>;
+    droppableContainers: Array<{ id: string | number }>;
+    pointerCoordinates: { x: number; y: number } | null;
+  }) => {
+    const pw = pointerWithin(args as unknown as Parameters<typeof pointerWithin>[0]);
+    if (pw.length === 0) return closestCenter(args as unknown as Parameters<typeof closestCenter>[0]);
 
     const overId = getFirstCollision(pw, "id");
-    if (overId == null) return closestCenter(args);
+    if (overId == null) return closestCenter(args as unknown as Parameters<typeof closestCenter>[0]);
 
     const overIdStr = String(overId);
     const activeParsed = parseSortableId(String(args.active.id));
@@ -455,7 +461,7 @@ export function useChannelDnd({
     // handleDragOver sees a top-level item and can move the channel OUT.
     if (activeParsed?.type === "channel") {
       const pointerOverBody = (groupId: string) =>
-        pw.some((c) => String(c.id) === groupContainerId(groupId));
+        pw.some((c: { id: string | number }) => String(c.id) === groupContainerId(groupId));
 
       let targetGroupId: string | null = null;
 
@@ -475,13 +481,11 @@ export function useChannelDnd({
           (activeGroupChannels ?? channelIdsByGroup)[targetGroupId] ?? [];
 
         if (groupChannels.length > 0) {
-          const channelSortableIds = groupChannels.map((id) => `channel:${id}`);
-          const closest = closestCenter({
-            ...args,
-            droppableContainers: args.droppableContainers.filter((c) =>
-              channelSortableIds.includes(String(c.id))
-            ),
-          });
+          const channelSortableIds = groupChannels.map((id: string) => `channel:${id}`);
+          const filteredContainers = args.droppableContainers.filter((c: { id: string | number }) =>
+            channelSortableIds.includes(String(c.id))
+          );
+          const closest = closestCenter({ ...args, droppableContainers: filteredContainers } as unknown as Parameters<typeof closestCenter>[0]);
           if (closest.length > 0) return closest;
         }
 

@@ -95,7 +95,7 @@ function createCloudAdapter(cloudMachineService: CloudMachineService): SessionAd
             userId: options.createdById,
             orgId: options.organizationId,
             defaultTool: options.tool,
-            userTokens,
+            userTokens: userTokens as Record<string, string>,
           });
 
           // Store cloudMachineId and runtimeInstanceId in session connection
@@ -193,7 +193,7 @@ function createCloudAdapter(cloudMachineService: CloudMachineService): SessionAd
               userId: session.createdById,
               orgId: session.organizationId,
               defaultTool: session.tool,
-              userTokens,
+              userTokens: userTokens as Record<string, string>,
             });
             const runtimeId = conn?.runtimeInstanceId as string | undefined;
             await ctx.waitForBridge(sessionId, 120_000, runtimeId);

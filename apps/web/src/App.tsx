@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAuthStore } from "./stores/auth";
-import { useUIStore } from "./stores/ui";
-import { useDetailPanelStore } from "./stores/detail-panel";
+import { useAuthStore, type AuthState } from "./stores/auth";
+import { useUIStore, type UIState } from "./stores/ui";
+import { useDetailPanelStore, type DetailPanelState } from "./stores/detail-panel";
 import { AppSidebar } from "./components/AppSidebar";
 import { ChannelView } from "./components/channel/ChannelView";
 import { ChatView } from "./components/chat/ChatView";
@@ -24,10 +24,10 @@ import { cn } from "./lib/utils";
 import { createQuickSession } from "./lib/create-quick-session";
 
 export function App() {
-  const user = useAuthStore((s) => s.user);
-  const loading = useAuthStore((s) => s.loading);
-  const fetchMe = useAuthStore((s) => s.fetchMe);
-  const activeChannelId = useUIStore((s) => s.activeChannelId);
+  const user = useAuthStore((s: AuthState) => s.user);
+  const loading = useAuthStore((s: AuthState) => s.loading);
+  const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
+  const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
   useEffect(() => {
     fetchMe();
   }, [fetchMe]);
@@ -56,11 +56,11 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   useOrgEvents();
   useHistorySync();
   useVisibilityRefresh();
-  const activePage = useUIStore((s) => s.activePage);
-  const activeChatId = useUIStore((s) => s.activeChatId);
-  const activeSessionGroupId = useUIStore((s) => s.activeSessionGroupId);
-  const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
-  const isFullscreen = useDetailPanelStore((s) => s.isFullscreen);
+  const activePage = useUIStore((s: UIState) => s.activePage);
+  const activeChatId = useUIStore((s: UIState) => s.activeChatId);
+  const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
+  const setActiveSessionId = useUIStore((s: UIState) => s.setActiveSessionId);
+  const isFullscreen = useDetailPanelStore((s: DetailPanelState) => s.isFullscreen);
   const isMobile = useIsMobile();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -167,8 +167,8 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
 }
 
 function LoginPage() {
-  const fetchMe = useAuthStore((s) => s.fetchMe);
-  const setToken = useAuthStore((s) => s.setToken);
+  const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
+  const setToken = useAuthStore((s: AuthState) => s.setToken);
 
   useEffect(() => {
     function onMessage(e: MessageEvent) {

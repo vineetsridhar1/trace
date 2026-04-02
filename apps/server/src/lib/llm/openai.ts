@@ -63,10 +63,8 @@ function toOpenAIUserContent(content: LLMUserMessage["content"]): string | ChatC
         parts.push({ type: "image_url", image_url: { url } });
         break;
       }
-      default: {
-        const _exhaustive: never = block;
-        throw new Error(`Unsupported OpenAI user content block: ${String(_exhaustive)}`);
-      }
+      default:
+        throw new Error(`Unsupported OpenAI user content block: ${JSON.stringify(block)}`);
     }
   }
   return parts.length === 1 && parts[0].type === "text" ? parts[0].text : parts;
@@ -74,7 +72,7 @@ function toOpenAIUserContent(content: LLMUserMessage["content"]): string | ChatC
 
 function contentToString(content: LLMSystemMessage["content"]): string {
   if (typeof content === "string") return content;
-  return content.map((b) => b.text).join("");
+  return content.map((b: { text: string }) => b.text).join("");
 }
 
 function toOpenAIMessages(messages: LLMMessage[], system?: string): ChatMessage[] {
@@ -111,10 +109,8 @@ function toOpenAIMessages(messages: LLMMessage[], system?: string): ChatMessage[
           case "tool_use":
             toolUseParts.push(block);
             break;
-          default: {
-            const _exhaustive: never = block;
-            throw new Error(`Unsupported OpenAI assistant content block: ${String(_exhaustive)}`);
-          }
+          default:
+            throw new Error(`Unsupported OpenAI assistant content block: ${JSON.stringify(block)}`);
         }
       }
 

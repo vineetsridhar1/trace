@@ -52,7 +52,7 @@ export function RepoSection({
         ) : (
           <Select
             value={effectiveRepoId ?? "__none__"}
-            onValueChange={(v) => {
+            onValueChange={(v: string) => {
               if (v) {
                 onRepoChange(v === "__none__" ? undefined : v);
                 onBranchChange("");
@@ -96,6 +96,7 @@ export function RepoSection({
 
 /** Select option for a single repo — disabled when not linked to the device bridge */
 function RepoOption({ id, isDeviceBridge, registeredRepoIds }: {
+  key?: string | number;
   id: string;
   isDeviceBridge: boolean;
   registeredRepoIds?: string[];

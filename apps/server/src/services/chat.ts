@@ -19,7 +19,7 @@ function buildMemberKey(...userIds: string[]) {
 
 export class ChatService {
   async create(input: CreateChatInput, actorType: ActorType, actorId: string) {
-    const memberIds = [...new Set(input.memberIds)];
+    const memberIds: string[] = [...new Set(input.memberIds as string[])];
     if (memberIds.length === 0) {
       throw new ValidationError("Chats must include at least one other member");
     }
@@ -65,7 +65,7 @@ export class ChatService {
     // Default group name: comma-separated member names
     const groupName = isDM
       ? null
-      : (input.name ?? validMembers.map((m) => m.name ?? "Unknown").join(", "));
+      : (input.name ?? validMembers.map((m: { id: string; name: string | null }) => m.name ?? "Unknown").join(", "));
 
     const eventOrgId = await resolveEventOrgId(actorId);
 
@@ -128,7 +128,7 @@ export class ChatService {
     try {
       result = await prisma.$transaction(createChatInTx);
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && (error as { code: string }).code === "P2002") {
         return prisma.chat.findFirstOrThrow({
           where: {
             type: isDM ? "dm" : "group",
@@ -170,7 +170,7 @@ export class ChatService {
 
     const eventOrgId = await resolveEventOrgId(actorId);
 
-    const message = await prisma.$transaction(async (tx) => {
+    const message = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const chat = await tx.chat.findFirstOrThrow({
         where: {
           id: chatId,
@@ -302,7 +302,7 @@ export class ChatService {
 
     const eventOrgId = await resolveEventOrgId(actorId);
     const editedAt = new Date();
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const updatedMessage = await tx.message.update({
         where: { id: messageId },
         data: {
@@ -376,7 +376,7 @@ export class ChatService {
 
     const eventOrgId = await resolveEventOrgId(actorId);
     const deletedAt = new Date();
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const deletedMessage = await tx.message.update({
         where: { id: messageId },
         data: {
@@ -482,7 +482,7 @@ export class ChatService {
   async addMember(chatId: string, userId: string, actorType: ActorType, actorId: string) {
     const eventOrgId = await resolveEventOrgId(actorId);
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const chat = await tx.chat.findFirstOrThrow({
         where: {
           id: chatId,
@@ -561,7 +561,7 @@ export class ChatService {
   async leave(chatId: string, actorType: ActorType, actorId: string) {
     const eventOrgId = await resolveEventOrgId(actorId);
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const chat = await tx.chat.findFirstOrThrow({
         where: {
           id: chatId,
@@ -623,7 +623,7 @@ export class ChatService {
   async rename(chatId: string, name: string, actorType: ActorType, actorId: string) {
     const eventOrgId = await resolveEventOrgId(actorId);
 
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const chat = await tx.chat.findFirstOrThrow({
         where: {
           id: chatId,

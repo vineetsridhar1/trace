@@ -25,10 +25,10 @@ export function PeekOverlay({
   visible,
 }: PeekOverlayProps) {
   const sidebarData = useSidebarData();
-  const activeChannelId = useUIStore((s) => s.activeChannelId);
-  const setActiveChannelId = useUIStore((s) => s.setActiveChannelId);
-  const activeChatId = useUIStore((s) => s.activeChatId);
-  const setActiveChatId = useUIStore((s) => s.setActiveChatId);
+  const activeChannelId = useUIStore((s: { activeChannelId: string | null }) => s.activeChannelId);
+  const setActiveChannelId = useUIStore((s: { setActiveChannelId: (id: string | null) => void }) => s.setActiveChannelId);
+  const activeChatId = useUIStore((s: { activeChatId: string | null }) => s.activeChatId);
+  const setActiveChatId = useUIStore((s: { setActiveChatId: (id: string | null) => void }) => s.setActiveChatId);
 
   const { handleScroll, jumpToTab, selectTab, tabProgress, viewportRef } = useSidebarTabScroll({
     currentTab,

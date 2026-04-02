@@ -38,13 +38,13 @@ export function RuntimeSelector({ tool, open, value, onChange, channelRepoId }: 
     client
       .query(AVAILABLE_RUNTIMES_QUERY, { tool })
       .toPromise()
-      .then((result) => {
+      .then((result: { data?: Record<string, unknown> }) => {
         const fetched = (result.data?.availableRuntimes ?? []) as SessionRuntimeInstance[];
         setRuntimes(fetched);
-        const connected = fetched.filter((r) => r.connected);
+        const connected = fetched.filter((r: SessionRuntimeInstance) => r.connected);
         // Filter to runtimes that have the channel's repo (if set)
         const eligible = channelRepoId
-          ? connected.filter((r) => r.hostingMode === "cloud" || r.registeredRepoIds.includes(channelRepoId))
+          ? connected.filter((r: SessionRuntimeInstance) => r.hostingMode === "cloud" || r.registeredRepoIds.includes(channelRepoId))
           : connected;
         if (eligible.length === 1 && !value) {
           const rt = eligible[0];
@@ -59,8 +59,8 @@ export function RuntimeSelector({ tool, open, value, onChange, channelRepoId }: 
       .finally(() => setLoading(false));
   }, [open, tool, channelRepoId]); // eslint-disable-line react-hooks/exhaustive-deps -- value is only used for stale-check, not as a trigger
 
-  const connectedRuntimes = runtimes.filter((r) => r.connected);
-  const selectedRuntime = value === CLOUD_RUNTIME_ID ? null : runtimes.find((r) => r.id === value);
+  const connectedRuntimes = runtimes.filter((r: SessionRuntimeInstance) => r.connected);
+  const selectedRuntime = value === CLOUD_RUNTIME_ID ? null : runtimes.find((r: SessionRuntimeInstance) => r.id === value);
 
   if (loading) {
     return (
@@ -74,12 +74,12 @@ export function RuntimeSelector({ tool, open, value, onChange, channelRepoId }: 
   return (
     <Select
       value={value ?? ""}
-      onValueChange={(v) => {
+      onValueChange={(v: string) => {
         if (!v) return;
         if (v === CLOUD_RUNTIME_ID) {
           onChange(v, { hostingMode: "cloud", registeredRepoIds: [] });
         } else {
-          const rt = runtimes.find((r) => r.id === v);
+          const rt = runtimes.find((r: SessionRuntimeInstance) => r.id === v);
           onChange(v, rt ? { hostingMode: rt.hostingMode, registeredRepoIds: rt.registeredRepoIds } : null);
         }
       }}
@@ -104,7 +104,7 @@ export function RuntimeSelector({ tool, open, value, onChange, channelRepoId }: 
             <span className="text-xs text-muted-foreground">(on-demand)</span>
           </span>
         </SelectItem>
-        {connectedRuntimes.map((rt) => {
+        {connectedRuntimes.map((rt: SessionRuntimeInstance) => {
           const lacksRepo = !!channelRepoId && rt.hostingMode === "local" && !rt.registeredRepoIds.includes(channelRepoId);
           return (
             <SelectItem key={rt.id} value={rt.id} disabled={lacksRepo}>

@@ -29,7 +29,7 @@ export interface OrgMembership {
   organization: { id: string; name: string };
 }
 
-interface AuthState {
+export interface AuthState {
   user: User | null;
   activeOrgId: string | null;
   orgMemberships: OrgMembership[];
@@ -40,7 +40,9 @@ interface AuthState {
   setActiveOrg: (orgId: string) => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
+
+export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
   user: null,
   activeOrgId: null,
   orgMemberships: [],
@@ -103,7 +105,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user: null, activeOrgId: null, orgMemberships: [] });
   },
 
-  setActiveOrg: (orgId) => {
+  setActiveOrg: (orgId: string) => {
     localStorage.setItem(ACTIVE_ORG_KEY, orgId);
     set({ activeOrgId: orgId });
   },

@@ -2,6 +2,17 @@ import { useEntityStore } from "../stores/entity";
 import type { SessionEntity, SessionGroupEntity } from "../stores/entity";
 import { useUIStore } from "../stores/ui";
 
+type EntityStoreState = {
+  sessions: Record<string, SessionEntity>;
+  sessionGroups: Record<string, SessionGroupEntity>;
+  _sessionIdsByGroup: Record<string, string[]>;
+};
+
+type UIStoreState = {
+  openSessionTabsByGroup: Record<string, string[]>;
+  lastSelectedSessionIdsByGroup: Record<string, string>;
+};
+
 /**
  * Optimistically insert a new session into the entity store so that
  * tab navigation works immediately — before the `session_started`
@@ -148,7 +159,7 @@ export function reconcileOptimisticSession(params: {
   });
 
   // Atomic: remove temp + insert real in one setState to prevent flicker
-  useEntityStore.setState((state) => {
+  useEntityStore.setState((state: EntityStoreState) => {
     // Remove temp session
     const sessions = { ...state.sessions };
     delete sessions[params.tempSessionId];
@@ -163,12 +174,12 @@ export function reconcileOptimisticSession(params: {
     const idx = { ...state._sessionIdsByGroup };
     // Remove temp session from its group bucket
     if (idx[params.tempGroupId]) {
-      idx[params.tempGroupId] = idx[params.tempGroupId].filter((id) => id !== params.tempSessionId);
+      idx[params.tempGroupId] = idx[params.tempGroupId].filter((id: string) => id !== params.tempSessionId);
       if (idx[params.tempGroupId].length === 0) delete idx[params.tempGroupId];
     }
     // Add real session to real group bucket
     idx[params.realGroupId] = [
-      ...(idx[params.realGroupId] ?? []).filter((id) => id !== params.realSessionId),
+      ...(idx[params.realGroupId] ?? []).filter((id: string) => id !== params.realSessionId),
       params.realSessionId,
     ];
 
@@ -177,7 +188,7 @@ export function reconcileOptimisticSession(params: {
 
   // Clean up temp group's tab entry from UI store (closeSessionTab is a no-op
   // for single-tab groups, so we remove it directly)
-  useUIStore.setState((s) => {
+  useUIStore.setState((s: UIStoreState) => {
     const { [params.tempGroupId]: _, ...rest } = s.openSessionTabsByGroup;
     const { [params.tempGroupId]: __, ...lastSelected } = s.lastSelectedSessionIdsByGroup;
     return {
@@ -191,7 +202,7 @@ export function reconcileOptimisticSession(params: {
  * Remove optimistic temp entities on mutation failure.
  */
 export function rollbackOptimisticSession(tempSessionId: string, tempGroupId: string): void {
-  useEntityStore.setState((state) => {
+  useEntityStore.setState((state: EntityStoreState) => {
     const sessions = { ...state.sessions };
     delete sessions[tempSessionId];
 
@@ -200,7 +211,7 @@ export function rollbackOptimisticSession(tempSessionId: string, tempGroupId: st
 
     const idx = { ...state._sessionIdsByGroup };
     if (idx[tempGroupId]) {
-      idx[tempGroupId] = idx[tempGroupId].filter((id) => id !== tempSessionId);
+      idx[tempGroupId] = idx[tempGroupId].filter((id: string) => id !== tempSessionId);
       if (idx[tempGroupId].length === 0) delete idx[tempGroupId];
     }
 
@@ -208,7 +219,7 @@ export function rollbackOptimisticSession(tempSessionId: string, tempGroupId: st
   });
 
   // Clean up temp group's tab entry
-  useUIStore.setState((s) => {
+  useUIStore.setState((s: UIStoreState) => {
     const { [tempGroupId]: _, ...rest } = s.openSessionTabsByGroup;
     const { [tempGroupId]: __, ...lastSelected } = s.lastSelectedSessionIdsByGroup;
     return {

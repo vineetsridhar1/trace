@@ -50,20 +50,20 @@ export function InboxView() {
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => {
+    estimateSize: (index: number) => {
       const item = items[index];
       if (item.kind === "divider") return 24;
       if (item.kind === "resolved-header") return 32;
       return 64;
     },
     overscan: 5,
-    getItemKey: (index) => {
+    getItemKey: (index: number) => {
       const item = items[index];
       if (item.kind === "divider") return "__divider__";
       if (item.kind === "resolved-header") return "__resolved-header__";
       return item.id;
     },
-    measureElement: (element) => element.getBoundingClientRect().height,
+    measureElement: (element: Element) => element.getBoundingClientRect().height,
   });
 
   return (
@@ -94,7 +94,7 @@ export function InboxView() {
               position: "relative",
             }}
           >
-            {virtualizer.getVirtualItems().map((virtualRow) => {
+            {virtualizer.getVirtualItems().map((virtualRow: { key: React.Key; index: number; start: number }) => {
               const item = items[virtualRow.index];
               return (
                 <div

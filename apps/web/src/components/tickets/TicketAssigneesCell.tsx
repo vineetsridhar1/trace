@@ -10,7 +10,7 @@ export function TicketAssigneesCell({ row }: { row?: TicketRow }) {
 
   return (
     <div className="flex h-full items-center gap-1">
-      {assignees.slice(0, 3).map((user) => (
+      {assignees.slice(0, 3).map((user: { id: string; name: string; avatarUrl?: string | null }) => (
         <div key={user.id} className="flex items-center gap-1">
           {user.avatarUrl && (
             <img

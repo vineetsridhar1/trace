@@ -103,7 +103,7 @@ export function GroupHeader({
 
       <div className="relative" ref={historyRef}>
         <button
-          onClick={() => setShowHistory((value) => !value)}
+          onClick={() => setShowHistory((value: boolean) => !value)}
           className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
           title="Group history"
         >

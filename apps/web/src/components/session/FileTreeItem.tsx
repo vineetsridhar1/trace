@@ -3,7 +3,8 @@ import { cn } from "../../lib/utils";
 import type { FileTreeNode } from "./file-explorer-utils";
 import { getFileIcon, getFileColor } from "./file-explorer-utils";
 
-interface FileTreeItemProps {
+export interface FileTreeItemProps {
+  key?: React.Key;
   node: FileTreeNode;
   depth: number;
   expandedPaths: Set<string>;

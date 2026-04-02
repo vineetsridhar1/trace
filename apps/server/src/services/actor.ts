@@ -61,7 +61,8 @@ export async function resolveActors(
       })
     : [];
 
-  const userMap = new Map(users.map((user) => [user.id, user]));
+  type UserRecord = { id: string; name: string | null; avatarUrl: string | null };
+  const userMap = new Map<string, UserRecord>(users.map((user: UserRecord) => [user.id, user]));
   const actorMap = new Map<string, ActorSummary>();
 
   for (const ref of refs) {

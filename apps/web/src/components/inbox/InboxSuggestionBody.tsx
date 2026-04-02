@@ -59,7 +59,7 @@ export function InboxSuggestionBody({
   };
 
   const handleEditField = (field: string, value: string) => {
-    setEditedArgs((prev) => ({ ...prev, [field]: value }));
+    setEditedArgs((prev: Record<string, string>) => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -135,7 +135,7 @@ export function InboxSuggestionBody({
           <button
             type="button"
             disabled={sending}
-            onClick={(e) => { e.stopPropagation(); handleAccept(); }}
+            onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleAccept(); }}
             className={cn(
               "flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/90",
               sending && "opacity-50",
@@ -149,7 +149,7 @@ export function InboxSuggestionBody({
             <button
               type="button"
               disabled={sending}
-              onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+              onClick={(e: React.MouseEvent) => { e.stopPropagation(); setExpanded(!expanded); }}
               className={cn(
                 "flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors",
                 expanded
@@ -166,7 +166,7 @@ export function InboxSuggestionBody({
           <button
             type="button"
             disabled={sending}
-            onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+            onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDismiss(); }}
             className={cn(
               "ml-auto flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground/60 transition-colors hover:text-red-400",
               sending && "opacity-50",

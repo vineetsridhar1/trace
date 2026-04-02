@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { ChevronRight } from "lucide-react";
 import { formatCommandLabel, formatTime, serializeUnknown } from "./utils";
 
-interface ToolResultRowProps {
+export interface ToolResultRowProps {
+  key?: React.Key;
   name: string;
   output?: string | Record<string, unknown>;
   timestamp: string;

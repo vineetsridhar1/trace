@@ -24,34 +24,36 @@ interface TerminalState {
   removeTerminal: (id: string) => void;
 }
 
-export const useTerminalStore = create<TerminalState>((set) => ({
+type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
+
+export const useTerminalStore = create<TerminalState>((set: SetState<TerminalState>) => ({
   terminals: {},
 
-  addTerminal: (id, sessionId, sessionGroupId, status) =>
-    set((state) => ({
+  addTerminal: (id: string, sessionId: string, sessionGroupId: string, status?: TerminalStatus) =>
+    set((state: TerminalState) => ({
       terminals: {
         ...state.terminals,
         [id]: { id, sessionId, sessionGroupId, status: status ?? "connecting" },
       },
     })),
 
-  setTerminalStatus: (id, status) =>
-    set((state) => {
+  setTerminalStatus: (id: string, status: TerminalStatus) =>
+    set((state: TerminalState) => {
       const entry = state.terminals[id];
-      if (!entry) return state;
+      if (!entry) return {};
       return { terminals: { ...state.terminals, [id]: { ...entry, status } } };
     }),
 
-  renameTerminal: (id, name) =>
-    set((state) => {
+  renameTerminal: (id: string, name: string) =>
+    set((state: TerminalState) => {
       const entry = state.terminals[id];
-      if (!entry) return state;
+      if (!entry) return {};
       const customName = name.trim() || undefined;
       return { terminals: { ...state.terminals, [id]: { ...entry, customName } } };
     }),
 
-  removeTerminal: (id) =>
-    set((state) => {
+  removeTerminal: (id: string) =>
+    set((state: TerminalState) => {
       const { [id]: _, ...rest } = state.terminals;
       return { terminals: rest };
     }),
@@ -59,8 +61,8 @@ export const useTerminalStore = create<TerminalState>((set) => ({
 
 export function useSessionGroupTerminals(sessionGroupId: string): TerminalEntry[] {
   return useTerminalStore(
-    useShallow((state) =>
-      Object.values(state.terminals).filter((terminal) => terminal.sessionGroupId === sessionGroupId),
+    useShallow((state: TerminalState) =>
+      Object.values(state.terminals).filter((terminal: TerminalEntry) => terminal.sessionGroupId === sessionGroupId),
     ),
   );
 }

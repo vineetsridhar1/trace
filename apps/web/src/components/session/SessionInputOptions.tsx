@@ -65,7 +65,7 @@ export function SessionInputOptions({
     client
       .query(AVAILABLE_RUNTIMES_QUERY, { tool: currentTool })
       .toPromise()
-      .then((result) => {
+      .then((result: { data?: Record<string, unknown> }) => {
         const data = result.data?.availableRuntimes as SessionRuntimeInstance[] | undefined;
         if (data) setRuntimes(data);
       })
@@ -117,7 +117,7 @@ export function SessionInputOptions({
       if (isOptimistic || value === currentRuntimeValue) return;
       if (!value) return;
       const newIsCloud = value === CLOUD_RUNTIME_ID;
-      const rt = runtimes.find((r) => r.id === value);
+      const rt = runtimes.find((r: SessionRuntimeInstance) => r.id === value);
       const nextConnection: SessionConnection = {
         __typename: connection?.__typename ?? "SessionConnection",
         canMove: connection?.canMove ?? true,
@@ -221,7 +221,7 @@ export function SessionInputOptions({
             <SelectValue>{currentModel ? getModelLabel(currentModel) : ""}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {modelOptions.map((m) => (
+            {modelOptions.map((m: { value: string; label: string }) => (
               <SelectItem key={m.value} value={m.value}>
                 {m.label}
               </SelectItem>
@@ -257,8 +257,8 @@ export function SessionInputOptions({
               </span>
             </SelectItem>
             {runtimes
-              .filter((r) => r.hostingMode === "local" && r.connected)
-              .map((r) => {
+              .filter((r: SessionRuntimeInstance) => r.hostingMode === "local" && r.connected)
+              .map((r: SessionRuntimeInstance) => {
                 const lacksRepo = !!channelRepoId && !r.registeredRepoIds.includes(channelRepoId);
                 return (
                   <SelectItem key={r.id} value={r.id} disabled={lacksRepo}>

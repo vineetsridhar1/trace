@@ -46,7 +46,7 @@ export class ChannelService {
       where: { channelId, leftAt: null },
       include: { user: { select: { id: true, email: true, name: true, avatarUrl: true } } },
     });
-    return members.map((member) => ({ user: member.user, joinedAt: member.joinedAt }));
+    return members.map((member: typeof members[number]) => ({ user: member.user, joinedAt: member.joinedAt }));
   }
 
   async create(input: CreateChannelInput, actorType: ActorType, actorId: string) {
@@ -54,7 +54,7 @@ export class ChannelService {
       throw new AuthorizationError("Users cannot create channels directly");
     }
 
-    const [channel, _event] = await prisma.$transaction(async (tx) => {
+    const [channel, _event] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.orgMember.findUniqueOrThrow({
         where: { userId_organizationId: { userId: actorId, organizationId: input.organizationId } },
       });
@@ -108,7 +108,7 @@ export class ChannelService {
           repoId: input.repoId ?? null,
           baseBranch: input.baseBranch ?? null,
           ...(input.projectIds?.length && {
-            projects: { create: input.projectIds.map((projectId) => ({ projectId })) },
+            projects: { create: input.projectIds.map((projectId: string) => ({ projectId })) },
           }),
         },
       });
@@ -156,7 +156,7 @@ export class ChannelService {
   }
 
   async update(channelId: string, input: UpdateChannelInput, actorType: ActorType, actorId: string) {
-    const channel = await prisma.$transaction(async (tx) => {
+    const channel = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const existing = await tx.channel.findUniqueOrThrow({
         where: { id: channelId },
         select: { organizationId: true },
@@ -199,7 +199,7 @@ export class ChannelService {
   }
 
   async join(channelId: string, actorType: ActorType, actorId: string) {
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const channel = await tx.channel.findUniqueOrThrow({
         where: { id: channelId },
         select: {
@@ -267,7 +267,7 @@ export class ChannelService {
   }
 
   async leave(channelId: string, actorType: ActorType, actorId: string) {
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const channel = await tx.channel.findUniqueOrThrow({
         where: { id: channelId },
         select: {
@@ -361,7 +361,7 @@ export class ChannelService {
       throw new ValidationError("Channel messages are only supported for text channels");
     }
 
-    const message = await prisma.$transaction(async (tx) => {
+    const message = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       let validatedParentId: string | null = null;
       if (parentId) {
         const parentMessage = await tx.message.findUniqueOrThrow({
@@ -473,7 +473,7 @@ export class ChannelService {
     });
 
     const editedAt = new Date();
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const updatedMessage = await tx.message.update({
         where: { id: messageId },
         data: {
@@ -544,7 +544,7 @@ export class ChannelService {
     });
 
     const deletedAt = new Date();
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const deletedMessage = await tx.message.update({
         where: { id: messageId },
         data: { text: "", html: null, mentions: Prisma.DbNull, deletedAt },
@@ -665,7 +665,7 @@ export class ChannelService {
     }
 
     // Delete remaining session groups, channel associations, and the channel itself
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.sessionGroup.deleteMany({ where: { channelId: id } });
       await tx.channelProject.deleteMany({ where: { channelId: id } });
       await tx.ticketLink.deleteMany({ where: { entityType: "channel", entityId: id } });

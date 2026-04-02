@@ -5,7 +5,7 @@ import { shortSha } from "@trace/shared";
 import { GitCommitHorizontal, RotateCcw } from "lucide-react";
 import { client } from "../../lib/urql";
 import { START_SESSION_MUTATION } from "../../lib/mutations";
-import { useEntityField, useEntityStore } from "../../stores/entity";
+import { useEntityField, useEntityStore, type SessionGroupEntity, type SessionEntity } from "../../stores/entity";
 import { navigateToSession } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { getSessionGroupChannelId } from "../../lib/session-group";
@@ -40,7 +40,7 @@ export function CheckpointPanel({
     | GitCheckpoint[]
     | undefined;
   const sessionGroup = useEntityStore(
-    (s) => s.sessionGroups[sessionGroupId],
+    (s: { sessionGroups: Record<string, SessionGroupEntity> }) => s.sessionGroups[sessionGroupId],
   );
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [pendingCheckpoint, setPendingCheckpoint] = useState<GitCheckpoint | null>(null);
@@ -53,7 +53,7 @@ export function CheckpointPanel({
 
   // Build a minimal map of session id → name for display only
   const sessionNameById = useEntityStore(
-    useShallow((s) => {
+    useShallow((s: { sessions: Record<string, SessionEntity> }) => {
       const names: Record<string, string> = {};
       for (const cp of checkpoints) {
         const session = s.sessions[cp.sessionId];
@@ -66,7 +66,7 @@ export function CheckpointPanel({
   const groupSessions = useMemo(
     () =>
       Object.values(useEntityStore.getState().sessions).filter(
-        (s) => s.sessionGroupId === sessionGroupId,
+        (s: SessionEntity) => s.sessionGroupId === sessionGroupId,
       ),
     [sessionGroupId, sessionNameById], // eslint-disable-line react-hooks/exhaustive-deps -- sessionNameById changes when sessions change
   );
@@ -77,7 +77,7 @@ export function CheckpointPanel({
   const restoreSession = useMemo(() => {
     if (!groupSessions.length) return null;
     if (activeSessionId) {
-      const active = groupSessions.find((s) => s.id === activeSessionId);
+      const active = groupSessions.find((s: SessionEntity) => s.id === activeSessionId);
       if (active) return active;
     }
     return [...groupSessions].sort(
@@ -147,7 +147,7 @@ export function CheckpointPanel({
 
   return (
     <div className="h-full overflow-y-auto">
-      {checkpoints.map((checkpoint, index) => {
+      {checkpoints.map((checkpoint: GitCheckpoint, index: number) => {
         const sessionName = sessionNameById[checkpoint.sessionId] ?? "Session";
         const isHighlighted = checkpoint.id === highlightCheckpointId;
         const isCurrent = index === 0;
@@ -205,7 +205,7 @@ export function CheckpointPanel({
             {!isCurrent && (
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); requestRestore(checkpoint); }}
+                onClick={(e: React.MouseEvent) => { e.stopPropagation(); requestRestore(checkpoint); }}
                 disabled={restoringId !== null}
                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-deep hover:text-foreground disabled:opacity-50"
                 title="Restore as new session"

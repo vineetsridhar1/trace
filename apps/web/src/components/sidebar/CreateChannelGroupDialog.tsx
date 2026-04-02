@@ -35,7 +35,7 @@ export function CreateChannelGroupDialog({
   const [internalOpen, setInternalOpen] = useState(false);
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
 
   const open = controlledOpen ?? internalOpen;
   const setOpen = controlledOnOpenChange ?? setInternalOpen;
@@ -97,7 +97,7 @@ export function CreateChannelGroupDialog({
               <label className="mb-1.5 block text-sm text-muted-foreground">Group name</label>
               <Input
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
                 placeholder="e.g. Core Product"
                 autoFocus
               />

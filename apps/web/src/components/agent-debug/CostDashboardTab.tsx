@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { RefreshCw } from "lucide-react";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "../../stores/auth";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { Button } from "../ui/button";
@@ -99,7 +99,7 @@ function BarChart({ data, maxCents }: { data: CostEntry[]; maxCents: number }) {
 }
 
 export function CostDashboardTab() {
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const [budget, setBudget] = useState<BudgetStatus | null>(null);
   const [dailyCosts, setDailyCosts] = useState<CostEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -123,9 +123,9 @@ export function CostDashboardTab() {
     fetchCosts();
   }, [fetchCosts]);
 
-  const maxCents = dailyCosts.reduce((max, d) => Math.max(max, d.totalCostCents), 0);
-  const totalSpent = dailyCosts.reduce((sum, d) => sum + d.totalCostCents, 0);
-  const totalCalls = dailyCosts.reduce((sum, d) => sum + d.tier2Calls + d.tier3Calls + d.summaryCalls, 0);
+  const maxCents = dailyCosts.reduce((max: number, d: CostEntry) => Math.max(max, d.totalCostCents), 0);
+  const totalSpent = dailyCosts.reduce((sum: number, d: CostEntry) => sum + d.totalCostCents, 0);
+  const totalCalls = dailyCosts.reduce((sum: number, d: CostEntry) => sum + d.tier2Calls + d.tier3Calls + d.summaryCalls, 0);
 
   return (
     <div className="p-4 space-y-6">

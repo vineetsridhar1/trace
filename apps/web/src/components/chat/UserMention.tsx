@@ -1,5 +1,5 @@
 import { useEntityField } from "../../stores/entity";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "../../stores/auth";
 import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 
 interface UserMentionProps {
@@ -9,7 +9,7 @@ interface UserMentionProps {
 
 export function UserMention({ userId, fallbackName }: UserMentionProps) {
   const name = useEntityField("users", userId, "name");
-  const currentUserId = useAuthStore((s) => s.user?.id);
+  const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
   const isMe = userId === currentUserId;
 
   const displayName = (name as string | undefined) ?? fallbackName ?? "Unknown";

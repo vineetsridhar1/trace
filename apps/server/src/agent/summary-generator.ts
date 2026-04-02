@@ -5,7 +5,7 @@
  * Part of ticket #09 (Entity Summaries).
  */
 
-import type { LLMAdapter, LLMAssistantContentBlock } from "@trace/shared";
+import type { LLMAdapter, LLMAssistantContentBlock, LLMResponse } from "@trace/shared";
 import { getAgentLLMAdapter, withRetry } from "./llm-adapter.js";
 
 // ---------------------------------------------------------------------------
@@ -118,7 +118,7 @@ export async function generateSummary(
   const adapter = getAgentLLMAdapter();
   const userPrompt = buildUserPrompt(input);
 
-  const response = await withRetry(() =>
+  const response: LLMResponse = await withRetry(() =>
     adapter.complete({
       model: SUMMARY_MODEL,
       system: SYSTEM_PROMPT,

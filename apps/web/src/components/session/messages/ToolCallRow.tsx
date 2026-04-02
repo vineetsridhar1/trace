@@ -3,7 +3,8 @@ import { ChevronRight } from "lucide-react";
 import { formatCommandLabel, formatTime, serializeUnknown } from "./utils";
 import { InlineDiffView } from "./InlineDiffView";
 
-interface ToolCallRowProps {
+export interface ToolCallRowProps {
+  key?: React.Key;
   name: string;
   input?: Record<string, unknown>;
   timestamp: string;

@@ -29,7 +29,7 @@ export function useQuestionState(node: QuestionNode) {
 
   const toggleOption = useCallback(
     (label: string) => {
-      setSelections((prev) => {
+      setSelections((prev: Record<number, Set<string>>) => {
         const current = prev[page] ?? new Set<string>();
         const next = new Set(current);
         if (q.multiSelect) {
@@ -50,17 +50,17 @@ export function useQuestionState(node: QuestionNode) {
 
   const setCustomText = useCallback(
     (text: string) => {
-      setCustomTexts((prev) => ({ ...prev, [page]: text }));
+      setCustomTexts((prev: Record<number, string>) => ({ ...prev, [page]: text }));
     },
     [page],
   );
 
   const goNext = useCallback(() => {
-    if (!isLastPage) setPage((p) => p + 1);
+    if (!isLastPage) setPage((p: number) => p + 1);
   }, [isLastPage]);
 
   const goPrev = useCallback(() => {
-    if (!isFirstPage) setPage((p) => p - 1);
+    if (!isFirstPage) setPage((p: number) => p - 1);
   }, [isFirstPage]);
 
   const buildResponse = useCallback((): string | null => {

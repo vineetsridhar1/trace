@@ -38,20 +38,23 @@ function persist(prefs: Preferences) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
 }
 
-export const usePreferencesStore = create<PreferencesState>((set, get) => ({
+type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
+type GetState<T> = () => T;
+
+export const usePreferencesStore = create<PreferencesState>((set: SetState<PreferencesState>, get: GetState<PreferencesState>) => ({
   ...load(),
 
-  setDefaultTool: (tool) => {
+  setDefaultTool: (tool: string | null) => {
     set({ defaultTool: tool });
     persist({ ...get(), defaultTool: tool });
   },
 
-  setDefaultModel: (model) => {
+  setDefaultModel: (model: string | null) => {
     set({ defaultModel: model });
     persist({ ...get(), defaultModel: model });
   },
 
-  setDefaultHosting: (hosting) => {
+  setDefaultHosting: (hosting: DefaultHosting) => {
     set({ defaultHosting: hosting });
     persist({ ...get(), defaultHosting: hosting });
   },

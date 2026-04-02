@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Circle } from "lucide-react";
-import { navigateToSessionGroup, useUIStore } from "../../stores/ui";
+import { navigateToSessionGroup, useUIStore, type UIState } from "../../stores/ui";
 import { sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus";
 import { AgentStatusIcon } from "../session/AgentStatusIcon";
 import { timeAgo, cn } from "../../lib/utils";
@@ -12,12 +12,13 @@ function CompactSessionRow({
   channelId,
   status,
 }: {
+  key?: string | number;
   row: SessionGroupRow;
   channelId: string;
   status: string;
 }) {
-  const isActive = useUIStore((s) => s.activeSessionGroupId === row.id);
-  const hasDoneBadge = useUIStore((s) => !!s.sessionGroupDoneBadges[row.id]);
+  const isActive = useUIStore((s: UIState) => s.activeSessionGroupId === row.id);
+  const hasDoneBadge = useUIStore((s: UIState) => !!s.sessionGroupDoneBadges[row.id]);
   const rowColor = sessionStatusColor[status] ?? "text-muted-foreground";
 
   return (
@@ -71,7 +72,7 @@ export function CompactSessionsList({
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
-      {grouped.map(([status, items]) => {
+      {grouped.map(([status, items]: [string, SessionGroupRow[]]) => {
         const color = sessionStatusColor[status] ?? "text-muted-foreground";
         const label = sessionStatusLabel[status] ?? status;
         return (
@@ -84,7 +85,7 @@ export function CompactSessionsList({
               </span>
             </div>
             {!collapsedByDefault.has(status) &&
-              items.map((row) => (
+              items.map((row: SessionGroupRow) => (
                 <CompactSessionRow
                   key={row.id}
                   row={row}

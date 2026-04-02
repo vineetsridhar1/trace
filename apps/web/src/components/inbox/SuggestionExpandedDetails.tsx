@@ -31,7 +31,7 @@ export function SuggestionExpandedDetails({
                   <button
                     key={p}
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); onEdit("priority", p); }}
+                    onClick={(e: React.MouseEvent) => { e.stopPropagation(); onEdit("priority", p); }}
                     className={cn(
                       "rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize transition-colors",
                       (editedArgs.priority ?? args.priority) === p
@@ -56,7 +56,7 @@ export function SuggestionExpandedDetails({
                   <button
                     key={s}
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); onEdit("status", s); }}
+                    onClick={(e: React.MouseEvent) => { e.stopPropagation(); onEdit("status", s); }}
                     className={cn(
                       "rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize transition-colors",
                       (editedArgs.status ?? args.status) === s
@@ -78,8 +78,8 @@ export function SuggestionExpandedDetails({
             {isLong ? (
               <textarea
                 value={value}
-                onChange={(e) => onEdit(field, e.target.value)}
-                onClick={(e) => e.stopPropagation()}
+                onChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onEdit(field, e.target.value)}
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 rows={2}
                 className="w-full rounded-md border border-border bg-surface-deep px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
               />
@@ -87,8 +87,8 @@ export function SuggestionExpandedDetails({
               <input
                 type="text"
                 value={value}
-                onChange={(e) => onEdit(field, e.target.value)}
-                onClick={(e) => e.stopPropagation()}
+                onChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onEdit(field, e.target.value)}
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 className="w-full rounded-md border border-border bg-surface-deep px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
               />
             )}

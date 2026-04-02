@@ -1,12 +1,12 @@
 import { useEntityField } from "../../stores/entity";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "../../stores/auth";
 
 export function DmWelcome({ chatId }: { chatId: string }) {
   const type = useEntityField("chats", chatId, "type");
   const members = useEntityField("chats", chatId, "members") as
     | Array<{ user: { id: string; name: string; avatarUrl?: string } }>
     | undefined;
-  const currentUserId = useAuthStore((s) => s.user?.id);
+  const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
 
   if (type !== "dm" || !members) return null;
 

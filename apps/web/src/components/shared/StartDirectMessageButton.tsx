@@ -16,9 +16,9 @@ const CREATE_CHAT_MUTATION = gql`
 `;
 
 export function StartDirectMessageButton({ userId }: { userId: string }) {
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const currentUserId = useAuthStore((s) => s.user?.id);
-  const setActiveChatId = useUIStore((s) => s.setActiveChatId);
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
+  const currentUserId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
+  const setActiveChatId = useUIStore((s: { setActiveChatId: (id: string | null) => void }) => s.setActiveChatId);
   const isMe = userId === currentUserId;
   const [creating, setCreating] = useState(false);
 

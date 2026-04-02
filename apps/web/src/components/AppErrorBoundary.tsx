@@ -8,6 +8,7 @@ export class AppErrorBoundary extends React.Component<
   React.PropsWithChildren,
   AppErrorBoundaryState
 > {
+  declare props: Readonly<React.PropsWithChildren>;
   state: AppErrorBoundaryState = { error: null };
 
   static getDerivedStateFromError(error: Error): AppErrorBoundaryState {

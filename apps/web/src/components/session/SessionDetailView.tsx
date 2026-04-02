@@ -116,6 +116,7 @@ export function SessionDetailView({
   scrollToEventId,
   onScrollComplete,
 }: {
+  key?: React.Key;
   sessionId: string;
   panelMode?: boolean;
   hideHeader?: boolean;
@@ -133,7 +134,7 @@ export function SessionDetailView({
   const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
     | GitCheckpoint[]
     | undefined;
-  const currentUserId = useAuthStore((s) => s.user?.id);
+  const currentUserId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
   const connection = useEntityField("sessions", sessionId, "connection") as
     | Record<string, unknown>
     | null
@@ -149,11 +150,12 @@ export function SessionDetailView({
     client
       .query(SESSION_DETAIL_QUERY, { id: sessionId })
       .toPromise()
-      .then((result) => {
+      .then((result: { data?: Record<string, unknown> }) => {
         if (result.data?.session) {
           const { upsert, sessions } = useEntityStore.getState();
           const existing = sessions[sessionId];
-          const sessionGroup = result.data.session.sessionGroup;
+          const fetchedSession = result.data.session as Record<string, unknown>;
+          const sessionGroup = fetchedSession.sessionGroup as Record<string, unknown> & { id: string } | undefined;
           if (sessionGroup?.id) {
             const existingGroup = useEntityStore.getState().sessionGroups[sessionGroup.id];
             upsert(
@@ -165,7 +167,7 @@ export function SessionDetailView({
           upsert(
             "sessions",
             sessionId,
-            existing ? { ...existing, ...result.data.session } : result.data.session,
+            existing ? { ...existing, ...fetchedSession } : fetchedSession,
           );
         }
       });
@@ -232,7 +234,7 @@ export function SessionDetailView({
         {!hideHeader && (
           <SessionHeader
             sessionId={sessionId}
-            onToggleTerminal={canAccessTerminal ? () => setShowTerminal((v) => !v) : undefined}
+            onToggleTerminal={canAccessTerminal ? () => setShowTerminal((v: boolean) => !v) : undefined}
             terminalOpen={showTerminal}
             panelMode={panelMode}
           />

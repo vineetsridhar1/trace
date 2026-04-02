@@ -1,4 +1,4 @@
-import { Router, type Router as RouterType } from "express";
+import { Router, type Router as RouterType, type Request, type Response } from "express";
 import jwt from "jsonwebtoken";
 import { prisma } from "../lib/db.js";
 
@@ -10,7 +10,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
 const WEB_URL = process.env.TRACE_WEB_URL || `http://localhost:${3000 + Number(process.env.TRACE_PORT || 0)}`;
 
 // Redirect to GitHub OAuth
-router.get("/auth/github", (req, res) => {
+router.get("/auth/github", (req: Request, res: Response) => {
   const origin = req.query.origin as string | undefined;
   const params = new URLSearchParams({
     client_id: GITHUB_CLIENT_ID,
@@ -23,7 +23,7 @@ router.get("/auth/github", (req, res) => {
 });
 
 // GitHub OAuth callback
-router.get("/auth/github/callback", async (req, res) => {
+router.get("/auth/github/callback", async (req: Request, res: Response) => {
   const { code } = req.query;
   if (!code || typeof code !== "string") {
     return res.status(400).json({ error: "Missing code parameter" });
@@ -150,7 +150,7 @@ router.get("/auth/github/callback", async (req, res) => {
 });
 
 // Get current user with org memberships
-router.get("/auth/me", async (req, res) => {
+router.get("/auth/me", async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith("Bearer ")
     ? authHeader.slice(7)
@@ -190,7 +190,7 @@ router.get("/auth/me", async (req, res) => {
 });
 
 // Logout
-router.post("/auth/logout", (_req, res) => {
+router.post("/auth/logout", (_req: Request, res: Response) => {
   res.clearCookie("trace_token", {
     path: "/",
     secure: process.env.NODE_ENV === "production",

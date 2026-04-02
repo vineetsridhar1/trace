@@ -88,9 +88,9 @@ export type TopLevelItem =
   | { kind: "group"; id: string; position: number };
 
 export function useSidebarData() {
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const upsertMany = useEntityStore((s) => s.upsertMany);
-  const refreshTick = useUIStore((s) => s.refreshTick);
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
+  const upsertMany = useEntityStore((s: { upsertMany: <T extends keyof EntityTableMap>(entityType: T, items: Array<EntityTableMap[T] & { id: string }>) => void }) => s.upsertMany);
+  const refreshTick = useUIStore((s: { refreshTick: number }) => s.refreshTick);
   const [channelsLoading, setChannelsLoading] = useState(true);
   const [chatsLoading, setChatsLoading] = useState(true);
 
@@ -182,7 +182,7 @@ export function useSidebarData() {
   // Narrow selectors: only re-render when groupId or position fields change,
   // not when any channel/group field updates (e.g. name, members, etc.)
   const channelGroupIdAndPosition = useEntityStore(
-    useShallow((s) =>
+    useShallow((s: { channels: Record<string, Channel> }) =>
       allChannelIds.map((id) => {
         const ch = s.channels[id];
         return ch ? `${ch.groupId ?? ""}:${ch.position ?? 0}` : "";
@@ -191,7 +191,7 @@ export function useSidebarData() {
   );
 
   const groupPositions = useEntityStore(
-    useShallow((s) =>
+    useShallow((s: { channelGroups: Record<string, ChannelGroup> }) =>
       groupIds.map((id) => s.channelGroups[id]?.position ?? 0),
     ),
   );
@@ -230,8 +230,8 @@ export function useSidebarData() {
 
   // Full maps returned for DnD consumers — these subscribe broadly but only
   // child components that destructure them will re-render.
-  const channelsById = useEntityStore((s) => s.channels);
-  const channelGroupsById = useEntityStore((s) => s.channelGroups);
+  const channelsById = useEntityStore((s: { channels: Record<string, Channel> }) => s.channels);
+  const channelGroupsById = useEntityStore((s: { channelGroups: Record<string, ChannelGroup> }) => s.channelGroups);
 
   return {
     activeOrgId,

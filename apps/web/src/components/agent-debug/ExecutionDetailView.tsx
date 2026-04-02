@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { ArrowLeft } from "lucide-react";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "../../stores/auth";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { Button } from "../ui/button";
@@ -112,7 +112,7 @@ export function ExecutionDetailView({
   logId: string;
   onBack: () => void;
 }) {
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const [detail, setDetail] = useState<ExecutionLogDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

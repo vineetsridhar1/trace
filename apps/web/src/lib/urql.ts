@@ -21,7 +21,7 @@ const wsClient = createWSClient({
   },
   shouldRetry: () => true,
   retryAttempts: Infinity,
-  retryWait: async (retries) => {
+  retryWait: async (retries: number) => {
     const delay = Math.min(1000 * 2 ** retries, 30_000);
     await new Promise((resolve) => setTimeout(resolve, delay));
   },
@@ -30,11 +30,11 @@ const wsClient = createWSClient({
       console.debug("[ws] connected");
       useConnectionStore.getState().setConnected(true);
     },
-    closed: (event) => {
+    closed: (event: unknown) => {
       console.debug("[ws] closed", event);
       useConnectionStore.getState().setConnected(false);
     },
-    error: (error) => {
+    error: (error: unknown) => {
       console.debug("[ws] error", error);
     },
   },
@@ -57,10 +57,10 @@ export const client = createClient({
   exchanges: [
     fetchExchange,
     subscriptionExchange({
-      forwardSubscription(request) {
+      forwardSubscription(request: { query: string; variables?: Record<string, unknown> }) {
         const input = { ...request, query: request.query || "" };
         return {
-          subscribe(sink) {
+          subscribe(sink: { next: (value: unknown) => void; error: (error: unknown) => void; complete: () => void }) {
             const unsubscribe = wsClient.subscribe(input, sink);
             return { unsubscribe };
           },

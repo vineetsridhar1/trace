@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, X, TerminalSquare } from "lucide-react";
-import { useSessionGroupTerminals, useTerminalStore } from "../../stores/terminal";
+import { useSessionGroupTerminals, useTerminalStore, type TerminalEntry } from "../../stores/terminal";
 import { useEntityField } from "../../stores/entity";
 import { TerminalInstance } from "./TerminalInstance";
 import { client } from "../../lib/urql";
@@ -20,8 +20,8 @@ export function TerminalPanel({
   onClose: () => void;
 }) {
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
-  const addTerminal = useTerminalStore((s) => s.addTerminal);
-  const removeTerminal = useTerminalStore((s) => s.removeTerminal);
+  const addTerminal = useTerminalStore((s: { addTerminal: (id: string, sessionId: string, sessionGroupId: string, status?: string) => void }) => s.addTerminal);
+  const removeTerminal = useTerminalStore((s: { removeTerminal: (id: string) => void }) => s.removeTerminal);
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
   const groupTerminals = useSessionGroupTerminals(sessionGroupId ?? "");
 
@@ -31,7 +31,7 @@ export function TerminalPanel({
   );
 
   useEffect(() => {
-    if (!activeTerminalId || terminals.some((terminal) => terminal.id === activeTerminalId)) return;
+    if (!activeTerminalId || terminals.some((terminal: TerminalEntry) => terminal.id === activeTerminalId)) return;
     setActiveTerminalId(terminals[0]?.id ?? null);
   }, [activeTerminalId, terminals]);
 
@@ -55,7 +55,7 @@ export function TerminalPanel({
     async (terminalId: string) => {
       removeTerminal(terminalId);
       if (activeTerminalId === terminalId) {
-        const nextTerminal = terminals.find((terminal) => terminal.id !== terminalId);
+        const nextTerminal = terminals.find((terminal: TerminalEntry) => terminal.id !== terminalId);
         setActiveTerminalId(nextTerminal?.id ?? null);
       }
       const result = await client.mutation(DESTROY_TERMINAL_MUTATION, { terminalId }).toPromise();
@@ -98,7 +98,7 @@ export function TerminalPanel({
       <div className="flex shrink-0 items-center gap-0.5 border-b border-border bg-surface-deep px-2 py-1">
         <TerminalSquare size={14} className="mr-1.5 text-muted-foreground" />
 
-        {terminals.map((terminal, index) => (
+        {terminals.map((terminal: TerminalEntry, index: number) => (
           <div
             key={terminal.id}
             className={cn(
@@ -149,7 +149,7 @@ export function TerminalPanel({
       </div>
 
       <div className="relative flex-1 overflow-hidden">
-        {terminals.map((terminal) => (
+        {terminals.map((terminal: TerminalEntry) => (
           <div
             key={terminal.id}
             className={cn("absolute inset-0", activeTerminalId === terminal.id ? "visible" : "invisible")}

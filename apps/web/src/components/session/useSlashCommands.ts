@@ -5,7 +5,7 @@ import { client } from "../../lib/urql";
 import { SESSION_SLASH_COMMANDS_QUERY } from "../../lib/mutations";
 import type { SlashCommandItem } from "../chat/ChatEditor";
 
-const BUILTIN_FALLBACK: SlashCommandItem[] = BUILTIN_SLASH_COMMANDS.map((cmd) => ({
+const BUILTIN_FALLBACK: SlashCommandItem[] = BUILTIN_SLASH_COMMANDS.map((cmd: { name: string; description: string; category: string }) => ({
   id: cmd.name,
   value: cmd.name,
   description: cmd.description,
@@ -35,12 +35,12 @@ export function useSlashCommands(sessionId: string): { commands: SlashCommandIte
     client
       .query(SESSION_SLASH_COMMANDS_QUERY, { sessionId })
       .toPromise()
-      .then((result) => {
+      .then((result: { error?: unknown; data?: Record<string, unknown> }) => {
         if (cancelled) return;
         if (result.error || !result.data?.sessionSlashCommands) {
           return;
         }
-        const mapped: SlashCommandItem[] = result.data.sessionSlashCommands.map(
+        const mapped: SlashCommandItem[] = (result.data.sessionSlashCommands as Array<{ name: string; description: string; source: string; category: string }>).map(
           (cmd: { name: string; description: string; source: string; category: string }) => ({
             id: cmd.name,
             value: cmd.name,

@@ -4,7 +4,7 @@ import { UserMention } from "./UserMention";
 import { SessionLinkCard } from "./SessionLinkCard";
 
 // Allow mention data attributes through DOMPurify
-DOMPurify.addHook("uponSanitizeAttribute", (_node, data) => {
+DOMPurify.addHook("uponSanitizeAttribute", (_node: Element, data: { attrName: string; forceKeepAttr?: boolean }) => {
   if (data.attrName.startsWith("data-mention-")) {
     data.forceKeepAttr = true;
   }

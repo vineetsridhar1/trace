@@ -54,7 +54,7 @@ export function useThreadPanelLayout(activeThreadId: string | null, storageKey: 
       setIsDragging(false);
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
-      setThreadWidth((width) => {
+      setThreadWidth((width: number) => {
         localStorage.setItem(storageKey, String(width));
         return width;
       });

@@ -1,5 +1,6 @@
 import type { ActivePage, ChannelSubPage } from "./ui";
 import { useEntityStore } from "./entity";
+import type { SessionEntity } from "./entity";
 import { getSessionChannelId, getSessionGroupChannelId } from "../lib/session-group";
 
 export function buildPath(
@@ -92,8 +93,8 @@ export function resolveChannelIdForSessionGroup(
   fallback: string | null,
 ): string | null {
   if (!sessionGroupId) return fallback;
-  const sessions = Object.values(useEntityStore.getState().sessions).filter(
-    (session) => session.sessionGroupId === sessionGroupId,
+  const sessions = (Object.values(useEntityStore.getState().sessions) as SessionEntity[]).filter(
+    (session: SessionEntity) => session.sessionGroupId === sessionGroupId,
   );
   const sessionGroup = useEntityStore.getState().sessionGroups[sessionGroupId];
   return getSessionGroupChannelId(sessionGroup, sessions) ?? fallback;

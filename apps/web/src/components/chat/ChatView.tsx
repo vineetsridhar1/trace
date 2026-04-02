@@ -1,4 +1,4 @@
-import { useUIStore } from "../../stores/ui";
+import { useUIStore, type UIState } from "../../stores/ui";
 import { useChatMessages } from "../../hooks/useChatMessages";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { useThreadPanelLayout } from "../../hooks/useThreadPanelLayout";
@@ -11,7 +11,7 @@ import { ThreadPanel } from "./ThreadPanel";
 const THREAD_WIDTH_KEY = "trace_thread_width";
 
 export function ChatView({ chatId }: { chatId: string }) {
-  const activeThreadId = useUIStore((s) => s.activeThreadId);
+  const activeThreadId = useUIStore((s: UIState) => s.activeThreadId);
   const { messageIds, loading, hasOlder, fetchOlderMessages } = useChatMessages(chatId);
   const isMobile = useIsMobile();
   const { threadId, rendered, slideIn, threadWidth, isDragging, handleDragStart } =

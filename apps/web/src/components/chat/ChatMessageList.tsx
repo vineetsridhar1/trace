@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { ChatMessage } from "./ChatMessage";
 import { ChatMessageErrorBoundary } from "./ChatMessageErrorBoundary";
-import { useEntityStore } from "../../stores/entity";
+import { useEntityStore, type EntityState } from "../../stores/entity";
 import { useShallow } from "zustand/react/shallow";
 import { Loader2 } from "lucide-react";
 
@@ -29,8 +29,8 @@ export function ChatMessageList({
 
   // Subscribe to only the messages we need for grouping decisions.
   const messages = useEntityStore(
-    useShallow((state) =>
-      messageIds.map((id) => state.messages[id] ?? null),
+    useShallow((state: EntityState) =>
+      messageIds.map((id: string) => state.messages[id] ?? null),
     ),
   );
 

@@ -3,16 +3,16 @@ import { GraphQLScalarType, Kind, type ValueNode } from "graphql";
 export const DateTimeScalar = new GraphQLScalarType({
   name: "DateTime",
   description: "ISO 8601 date-time string",
-  serialize: (value) => (value instanceof Date ? value.toISOString() : value),
-  parseValue: (value) => new Date(value as string),
-  parseLiteral: (ast) => (ast.kind === Kind.STRING ? new Date(ast.value) : null),
+  serialize: (value: unknown) => (value instanceof Date ? value.toISOString() : value),
+  parseValue: (value: unknown) => new Date(value as string),
+  parseLiteral: (ast: ValueNode) => (ast.kind === Kind.STRING ? new Date(ast.value) : null),
 });
 
 export const JSONScalar = new GraphQLScalarType({
   name: "JSON",
   description: "Arbitrary JSON value",
-  serialize: (value) => value,
-  parseValue: (value) => value,
+  serialize: (value: unknown) => value,
+  parseValue: (value: unknown) => value,
   parseLiteral: parseLiteralJSON,
 });
 
@@ -28,7 +28,7 @@ function parseLiteralJSON(ast: ValueNode): unknown {
       return parseFloat(ast.value);
     case Kind.OBJECT:
       return Object.fromEntries(
-        ast.fields.map((f) => [f.name.value, parseLiteralJSON(f.value)]),
+        ast.fields.map((f: { name: { value: string }; value: ValueNode }) => [f.name.value, parseLiteralJSON(f.value)]),
       );
     case Kind.LIST:
       return ast.values.map(parseLiteralJSON);

@@ -230,7 +230,7 @@ function extractMessagePreview(eventType: EventType, payload: JsonObject): strin
 }
 
 export function useOrgEvents() {
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
 
   useEffect(() => {
     if (!activeOrgId) return;
@@ -239,7 +239,7 @@ export function useOrgEvents() {
       .subscription(ORG_EVENTS_SUBSCRIPTION, {
         organizationId: activeOrgId,
       })
-      .subscribe((result) => {
+      .subscribe((result: { error?: unknown; data?: Record<string, unknown> }) => {
         if (result.error) {
           console.error("[orgEvents] subscription error:", result.error);
         }

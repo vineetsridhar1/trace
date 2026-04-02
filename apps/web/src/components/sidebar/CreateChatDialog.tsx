@@ -35,9 +35,9 @@ export function CreateChatDialog() {
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const userId = useAuthStore((s) => s.user?.id);
-  const setActiveChatId = useUIStore((s) => s.setActiveChatId);
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
+  const userId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
+  const setActiveChatId = useUIStore((s: { setActiveChatId: (id: string | null) => void }) => s.setActiveChatId);
 
   const fetchMembers = useCallback(async () => {
     if (!activeOrgId) return;
@@ -56,7 +56,7 @@ export function CreateChatDialog() {
   }, [open, fetchMembers]);
 
   function toggleMember(id: string) {
-    setSelectedIds((prev) => {
+    setSelectedIds((prev: Set<string>) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
@@ -93,7 +93,7 @@ export function CreateChatDialog() {
   }
 
   // Filter out current user
-  const otherMembers = members.filter((m) => m.id !== userId);
+  const otherMembers = members.filter((m: OrgMember) => m.id !== userId);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -113,7 +113,7 @@ export function CreateChatDialog() {
               Select members ({selectedIds.size === 1 ? "DM" : selectedIds.size > 1 ? "Group" : "none selected"})
             </label>
             <div className="max-h-60 space-y-1 overflow-y-auto">
-              {otherMembers.map((member) => (
+              {otherMembers.map((member: OrgMember) => (
                 <button
                   key={member.id}
                   type="button"

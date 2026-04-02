@@ -1,4 +1,5 @@
 import { randomBytes } from "crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { apiTokenService } from "./api-token.js";
 import { eventService } from "./event.js";
@@ -68,7 +69,7 @@ export class WebhookService {
 
     const hook = (await response.json()) as { id: number };
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const repo = await tx.repo.update({
         where: { id: repoId },
         data: {
@@ -140,7 +141,7 @@ export class WebhookService {
       throw new Error(`GitHub API error (${response.status}): ${body}`);
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const repo = await tx.repo.update({
         where: { id: repoId },
         data: {

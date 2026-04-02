@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { X, Send, ChevronLeft, ChevronRight } from "lucide-react";
-import type { Question } from "@trace/shared";
+import type { Question, QuestionOption } from "@trace/shared";
 import { cn } from "../../lib/utils";
 
 export type QuestionData = Question;
@@ -38,7 +38,7 @@ export function InboxQuestionBody({
   }).every(Boolean);
 
   const toggleOption = (label: string) => {
-    setSelections((prev) => {
+    setSelections((prev: Record<number, Set<string>>) => {
       const current = prev[page] ?? new Set<string>();
       const next = new Set(current);
       if (q.multiSelect) {
@@ -53,7 +53,7 @@ export function InboxQuestionBody({
   };
 
   const setCustomText = (text: string) => {
-    setCustomTexts((prev) => ({ ...prev, [page]: text }));
+    setCustomTexts((prev: Record<number, string>) => ({ ...prev, [page]: text }));
   };
 
   const buildResponse = (): string | null => {
@@ -96,11 +96,11 @@ export function InboxQuestionBody({
       {/* Option pills */}
       {q.options.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1.5">
-          {q.options.map((opt) => (
+          {q.options.map((opt: QuestionOption) => (
             <button
               key={opt.label}
               type="button"
-              onClick={(e) => { e.stopPropagation(); toggleOption(opt.label); }}
+              onClick={(e: React.MouseEvent) => { e.stopPropagation(); toggleOption(opt.label); }}
               disabled={sending}
               title={opt.description}
               className={cn(
@@ -141,8 +141,8 @@ export function InboxQuestionBody({
         <input
           type="text"
           value={currentCustom}
-          onChange={(e) => setCustomText(e.target.value)}
-          onKeyDown={(e) => {
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomText(e.target.value)}
+          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               if (hasAllAnswers) handleSubmit();
@@ -151,14 +151,14 @@ export function InboxQuestionBody({
           placeholder="Other..."
           disabled={sending}
           className="min-w-0 flex-1 rounded-lg border border-border bg-surface-deep px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e: React.MouseEvent) => e.stopPropagation()}
         />
 
         {total > 1 && (
           <div className="flex items-center gap-0.5">
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); if (!isFirstPage) setPage((p) => p - 1); }}
+              onClick={(e: React.MouseEvent) => { e.stopPropagation(); if (!isFirstPage) setPage((p: number) => p - 1); }}
               disabled={isFirstPage}
               className="rounded-md border border-border px-1.5 py-1.5 text-foreground disabled:opacity-50"
             >
@@ -166,7 +166,7 @@ export function InboxQuestionBody({
             </button>
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); if (!isLastPage) setPage((p) => p + 1); }}
+              onClick={(e: React.MouseEvent) => { e.stopPropagation(); if (!isLastPage) setPage((p: number) => p + 1); }}
               disabled={isLastPage}
               className="rounded-md border border-border px-1.5 py-1.5 text-foreground disabled:opacity-50"
             >
@@ -178,7 +178,7 @@ export function InboxQuestionBody({
         <button
           type="button"
           disabled={!hasAllAnswers || sending}
-          onClick={(e) => { e.stopPropagation(); handleSubmit(); }}
+          onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleSubmit(); }}
           className="flex shrink-0 items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
         >
           <Send size={12} />
@@ -188,7 +188,7 @@ export function InboxQuestionBody({
         <button
           type="button"
           disabled={sending}
-          onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+          onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDismiss(); }}
           className={cn(
             "flex items-center rounded-md border border-border px-1.5 py-1.5 text-xs transition-colors",
             "text-muted-foreground hover:bg-surface-elevated hover:text-red-400",

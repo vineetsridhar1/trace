@@ -70,7 +70,7 @@ export function useSessionEvents(sessionId: string) {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlder, setHasOlder] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const oldestTimestampRef = useRef<string | null>(null);
   const loadingOlderRef = useRef(false);
   const hasOlderRef = useRef(true);
@@ -127,7 +127,7 @@ export function useSessionEvents(sessionId: string) {
         sessionId,
         organizationId: activeOrgId,
       })
-      .subscribe((result) => {
+      .subscribe((result: { data?: Record<string, unknown> }) => {
         if (!result.data?.sessionEvents) return;
         const event = result.data.sessionEvents as Event & { id: string };
         upsertSessionEventWithOptimisticResolution(sessionId, event);

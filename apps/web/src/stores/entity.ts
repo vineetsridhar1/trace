@@ -76,7 +76,7 @@ interface EntityActions {
   removeScopedEvents: (scopeKey: string) => void;
 }
 
-type EntityState = Tables & {
+export type EntityState = Tables & {
   eventsByScope: EventsByScope;
   /** Reverse index: sessionGroupId → session IDs belonging to that group */
   _sessionIdsByGroup: Record<string, string[]>;
@@ -84,7 +84,9 @@ type EntityState = Tables & {
   _messageIdsByScope: MessageIdsByScope;
 } & EntityActions;
 
-export const useEntityStore = create<EntityState>((set) => ({
+type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
+
+export const useEntityStore = create<EntityState>((set: SetState<EntityState>) => ({
   organizations: {},
   users: {},
   repos: {},
@@ -101,8 +103,8 @@ export const useEntityStore = create<EntityState>((set) => ({
   _sessionIdsByGroup: {},
   _messageIdsByScope: {},
 
-  upsert: (entityType, id, data) =>
-    set((state) => {
+  upsert: <T extends EntityType>(entityType: T, id: string, data: EntityTableMap[T]) =>
+    set((state: EntityState) => {
       const table = { ...(state[entityType] as Record<string, unknown>) };
       const previous = table[id];
       table[id] = data;
@@ -115,13 +117,13 @@ export const useEntityStore = create<EntityState>((set) => ({
         for (const gid of Object.keys(idx)) {
           const arr = idx[gid];
           if (arr.includes(id)) {
-            idx[gid] = arr.filter((x) => x !== id);
+            idx[gid] = arr.filter((x: string) => x !== id);
             break;
           }
         }
         // Add to new bucket
         if (groupId) {
-          idx[groupId] = [...(idx[groupId] ?? []).filter((x) => x !== id), id];
+          idx[groupId] = [...(idx[groupId] ?? []).filter((x: string) => x !== id), id];
         }
         update._sessionIdsByGroup = idx;
       }
@@ -140,8 +142,8 @@ export const useEntityStore = create<EntityState>((set) => ({
       return update;
     }),
 
-  upsertMany: (entityType, items) =>
-    set((state) => {
+  upsertMany: <T extends EntityType>(entityType: T, items: Array<EntityTableMap[T] & { id: string }>) =>
+    set((state: EntityState) => {
       const table = { ...(state[entityType] as Record<string, unknown>) };
       for (const item of items) {
         table[item.id] = item;
@@ -156,13 +158,13 @@ export const useEntityStore = create<EntityState>((set) => ({
           for (const gid of Object.keys(idx)) {
             const arr = idx[gid];
             if (arr.includes(item.id)) {
-              idx[gid] = arr.filter((x) => x !== item.id);
+              idx[gid] = arr.filter((x: string) => x !== item.id);
               break;
             }
           }
           // Add to new bucket
           if (groupId) {
-            idx[groupId] = [...(idx[groupId] ?? []).filter((x) => x !== item.id), item.id];
+            idx[groupId] = [...(idx[groupId] ?? []).filter((x: string) => x !== item.id), item.id];
           }
         }
         update._sessionIdsByGroup = idx;
@@ -187,8 +189,8 @@ export const useEntityStore = create<EntityState>((set) => ({
       return update;
     }),
 
-  patch: (entityType, id, data) =>
-    set((state) => {
+  patch: <T extends EntityType>(entityType: T, id: string, data: Partial<EntityTableMap[T]>) =>
+    set((state: EntityState) => {
       const table = { ...(state[entityType] as Record<string, unknown>) };
       const existing = table[id];
       if (!existing) return {};
@@ -206,10 +208,10 @@ export const useEntityStore = create<EntityState>((set) => ({
         if (oldGroupId !== newGroupId) {
           const idx = { ...state._sessionIdsByGroup };
           if (oldGroupId && idx[oldGroupId]) {
-            idx[oldGroupId] = idx[oldGroupId].filter((x) => x !== id);
+            idx[oldGroupId] = idx[oldGroupId].filter((x: string) => x !== id);
           }
           if (newGroupId) {
-            idx[newGroupId] = [...(idx[newGroupId] ?? []).filter((x) => x !== id), id];
+            idx[newGroupId] = [...(idx[newGroupId] ?? []).filter((x: string) => x !== id), id];
           }
           update._sessionIdsByGroup = idx;
         }
@@ -229,8 +231,8 @@ export const useEntityStore = create<EntityState>((set) => ({
       return update;
     }),
 
-  remove: (entityType, id) =>
-    set((state) => {
+  remove: (entityType: EntityType, id: string) =>
+    set((state: EntityState) => {
       const { [id]: removed, ...rest } = state[entityType] as Record<string, unknown>;
       const update: Record<string, unknown> = { [entityType]: rest };
 
@@ -239,7 +241,7 @@ export const useEntityStore = create<EntityState>((set) => ({
         if (groupId) {
           const idx = { ...state._sessionIdsByGroup };
           if (idx[groupId]) {
-            idx[groupId] = idx[groupId].filter((x) => x !== id);
+            idx[groupId] = idx[groupId].filter((x: string) => x !== id);
           }
           update._sessionIdsByGroup = idx;
         }
@@ -259,15 +261,15 @@ export const useEntityStore = create<EntityState>((set) => ({
       return update;
     }),
 
-  upsertScopedEvent: (scopeKey, id, event) =>
-    set((state) => {
+  upsertScopedEvent: (scopeKey: string, id: string, event: Event) =>
+    set((state: EntityState) => {
       const bucket = state.eventsByScope[scopeKey];
       const updated = bucket ? { ...bucket, [id]: event } : { [id]: event };
       return { eventsByScope: { ...state.eventsByScope, [scopeKey]: updated } };
     }),
 
-  upsertManyScopedEvents: (scopeKey, items) =>
-    set((state) => {
+  upsertManyScopedEvents: (scopeKey: string, items: Array<Event & { id: string }>) =>
+    set((state: EntityState) => {
       const bucket = { ...(state.eventsByScope[scopeKey] ?? {}) };
       for (const item of items) {
         bucket[item.id] = item;
@@ -275,8 +277,8 @@ export const useEntityStore = create<EntityState>((set) => ({
       return { eventsByScope: { ...state.eventsByScope, [scopeKey]: bucket } };
     }),
 
-  removeScopedEvents: (scopeKey) =>
-    set((state) => {
+  removeScopedEvents: (scopeKey: string) =>
+    set((state: EntityState) => {
       const { [scopeKey]: _, ...rest } = state.eventsByScope;
       return { eventsByScope: rest };
     }),
@@ -561,7 +563,7 @@ export function useEntityField<T extends EntityType, F extends keyof EntityTable
   id: string,
   field: F,
 ): EntityTableMap[T][F] | undefined {
-  return useEntityStore((state) => {
+  return useEntityStore((state: EntityState) => {
     const entity = state[type][id] as EntityTableMap[T] | undefined;
     return entity?.[field];
   });
@@ -583,7 +585,7 @@ export function useEntityIds<T extends EntityType>(
   sort?: (a: EntityTableMap[T], b: EntityTableMap[T]) => number,
 ): string[] {
   return useEntityStore(
-    useShallow((state) => {
+    useShallow((state: EntityState) => {
       const table = state[type] as Record<string, EntityTableMap[T]>;
       let entries = Object.entries(table);
       if (filter) entries = entries.filter(([, e]) => filter(e));
@@ -599,7 +601,7 @@ export function useEntitiesByIds<T extends EntityType>(
 ): Array<EntityTableMap[T] | null> {
   return useEntityStore(
     useShallow(
-      (state) => ids.map((id) => state[type][id] ?? null) as Array<EntityTableMap[T] | null>,
+      (state: EntityState) => ids.map((id) => state[type][id] ?? null) as Array<EntityTableMap[T] | null>,
     ),
   );
 }
@@ -620,7 +622,7 @@ export function useScopedEventIds(
   sort?: (a: Event, b: Event) => number,
 ): string[] {
   return useEntityStore(
-    useShallow((state) => {
+    useShallow((state: EntityState) => {
       const bucket = state.eventsByScope[scopeKey];
       if (!bucket) return [];
       const entries = Object.entries(bucket);
@@ -636,26 +638,26 @@ export function useMessageIdsForScope(
   sort?: (a: Message, b: Message) => number,
 ): string[] {
   return useEntityStore(
-    useShallow((state) => {
+    useShallow((state: EntityState) => {
       const scopeIds = state._messageIdsByScope[scopeKey];
       if (!scopeIds) return EMPTY_IDS;
 
       const messages = scopeIds
-        .map((id) => {
+        .map((id: string) => {
           const message = state.messages[id];
           return message ? ([id, message] as const) : null;
         })
-        .filter((entry): entry is readonly [string, Message] => entry !== null);
+        .filter((entry: readonly [string, Message] | null): entry is readonly [string, Message] => entry !== null);
 
       let filtered = messages;
       if (filter) {
-        filtered = filtered.filter(([, message]) => filter(message));
+        filtered = filtered.filter(([, message]: readonly [string, Message]) => filter(message));
       }
       if (sort) {
-        filtered = [...filtered].sort(([, a], [, b]) => sort(a, b));
+        filtered = [...filtered].sort(([, a]: readonly [string, Message], [, b]: readonly [string, Message]) => sort(a, b));
       }
 
-      return filtered.map(([id]) => id);
+      return filtered.map(([id]: readonly [string, Message]) => id);
     }),
   );
 }
@@ -665,7 +667,7 @@ export function useMessageIdsForScope(
  *  (only replaced when this scope's events change) and downstream useMemo deps
  *  rely on referential equality to avoid recomputing buildSessionNodes. */
 export function useScopedEvents(scopeKey: string): Record<string, Event> {
-  return useEntityStore((state) => state.eventsByScope[scopeKey] ?? EMPTY_EVENTS);
+  return useEntityStore((state: EntityState) => state.eventsByScope[scopeKey] ?? EMPTY_EVENTS);
 }
 
 const EMPTY_EVENTS: Record<string, Event> = {};
@@ -676,7 +678,7 @@ export function useScopedEventField<F extends keyof Event>(
   id: string,
   field: F,
 ): Event[F] | undefined {
-  return useEntityStore((state) => {
+  return useEntityStore((state: EntityState) => {
     const bucket = state.eventsByScope[scopeKey];
     return bucket?.[id]?.[field];
   });
@@ -688,7 +690,7 @@ const EMPTY_IDS: string[] = [];
  *  Uses shallow comparison — only re-renders when the list of IDs changes. */
 export function useSessionIdsByGroup(groupId: string | undefined): string[] {
   return useEntityStore(
-    useShallow((state) => {
+    useShallow((state: EntityState) => {
       if (!groupId) return EMPTY_IDS;
       return state._sessionIdsByGroup[groupId] ?? EMPTY_IDS;
     }),

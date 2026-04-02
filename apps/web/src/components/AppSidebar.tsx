@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSidebarData } from "../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../hooks/useSidebarTabScroll";
-import { useUIStore } from "../stores/ui";
+import { useUIStore, type UIState } from "../stores/ui";
 import { SidebarChannelsPane } from "./sidebar/SidebarChannelsPane";
 import { SidebarDirectMessagesPane } from "./sidebar/SidebarDirectMessagesPane";
 import { PeekOverlay } from "./sidebar/PeekOverlay";
@@ -11,15 +11,15 @@ import { getPreferredSidebarTab, getTabIndex, type SidebarTab } from "./sidebar/
 import { Sidebar, SidebarContent, SidebarFooter, useSidebar } from "./ui/sidebar";
 
 export function AppSidebar() {
-  const activePage = useUIStore((s) => s.activePage);
-  const activeChannelId = useUIStore((s) => s.activeChannelId);
-  const setActiveChannelId = useUIStore((s) => s.setActiveChannelId);
-  const activeChatId = useUIStore((s) => s.activeChatId);
-  const setActiveChatId = useUIStore((s) => s.setActiveChatId);
+  const activePage = useUIStore((s: UIState) => s.activePage);
+  const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
+  const setActiveChannelId = useUIStore((s: UIState) => s.setActiveChannelId);
+  const activeChatId = useUIStore((s: UIState) => s.activeChatId);
+  const setActiveChatId = useUIStore((s: UIState) => s.setActiveChatId);
   const { state, isMobile, setOpenMobile } = useSidebar();
   const sidebarData = useSidebarData();
 
-  const restoreLastVisited = useUIStore((s) => s.restoreLastVisited);
+  const restoreLastVisited = useUIStore((s: UIState) => s.restoreLastVisited);
 
   const closeSidebar = useCallback(() => {
     if (isMobile) {
@@ -58,7 +58,7 @@ export function AppSidebar() {
   }, [state]);
 
   useEffect(() => {
-    setCurrentTab((previousTab) => getPreferredSidebarTab(activeChatId, activeChannelId, activePage, previousTab));
+    setCurrentTab((previousTab: SidebarTab) => getPreferredSidebarTab(activeChatId, activeChannelId, activePage, previousTab));
   }, [activeChannelId, activeChatId, activePage]);
 
   const tabProgress = state === "expanded"

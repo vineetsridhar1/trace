@@ -20,7 +20,8 @@ const UPDATE_GROUP_MUTATION = gql`
   }
 `;
 
-interface ChannelGroupSectionProps {
+export interface ChannelGroupSectionProps {
+  key?: React.Key;
   id: string;
   channelIds: string[];
   activeChannelId: string | null;
@@ -44,7 +45,7 @@ export function ChannelGroupSection({
     client
       .mutation(UPDATE_GROUP_MUTATION, { id, input: { isCollapsed: next } })
       .toPromise()
-      .then((result) => {
+      .then((result: { error?: unknown }) => {
         if (result.error) throw result.error;
       })
       .catch((error: unknown) => {
@@ -93,7 +94,7 @@ export function ChannelGroupSection({
         <button
           className="flex flex-1 items-center gap-0.5 px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
           onClick={toggleCollapse}
-          onPointerDown={(e) => e.stopPropagation()}
+          onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
         >
           <ChevronRight
             size={14}
@@ -107,7 +108,7 @@ export function ChannelGroupSection({
         </button>
         <div
           className="flex items-center gap-0.5 opacity-0 group-hover/group-header:opacity-100 transition-opacity"
-          onPointerDown={(e) => e.stopPropagation()}
+          onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
         >
           <button
             className="flex items-center justify-center rounded-md p-0.5 text-muted-foreground transition-colors hover:text-destructive"

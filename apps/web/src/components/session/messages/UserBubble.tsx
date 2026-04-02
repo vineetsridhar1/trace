@@ -17,7 +17,7 @@ export function UserBubble({
   actorName?: string | null;
   footer?: ReactNode;
 }) {
-  const currentUserId = useAuthStore((s) => s.user?.id);
+  const currentUserId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
   const isMe = !actorId || actorId === currentUserId;
   const displayName = isMe ? "You" : (actorName ?? "Someone");
   const displayText = stripPromptWrapping(text);

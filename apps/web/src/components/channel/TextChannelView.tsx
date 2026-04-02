@@ -1,6 +1,6 @@
 import { MessageSquare } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
-import { useUIStore } from "../../stores/ui";
+import { useUIStore, type UIState } from "../../stores/ui";
 import { useChannelMessages } from "../../hooks/useChannelMessages";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { useThreadPanelLayout } from "../../hooks/useThreadPanelLayout";
@@ -15,7 +15,7 @@ const THREAD_WIDTH_KEY = "trace_channel_thread_width";
 
 export function TextChannelView({ channelId }: { channelId: string }) {
   const channelName = useEntityField("channels", channelId, "name");
-  const activeThreadId = useUIStore((s) => s.activeThreadId);
+  const activeThreadId = useUIStore((s: UIState) => s.activeThreadId);
   const { messageIds, loading, hasOlder, fetchOlderMessages } = useChannelMessages(channelId);
   const isMobile = useIsMobile();
   const { threadId, rendered, slideIn, threadWidth, isDragging, handleDragStart } =

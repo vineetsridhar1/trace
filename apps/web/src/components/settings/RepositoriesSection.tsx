@@ -21,8 +21,8 @@ const REPOS_QUERY = gql`
 `;
 
 export function RepositoriesSection() {
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const upsertMany = useEntityStore((s) => s.upsertMany);
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
+  const upsertMany = useEntityStore((s: { upsertMany: ReturnType<typeof useEntityStore.getState>["upsertMany"] }) => s.upsertMany);
   const [desktopRefreshKey, setDesktopRefreshKey] = useState(0);
 
   const fetchRepos = useCallback(async () => {
@@ -55,7 +55,7 @@ export function RepositoriesSection() {
             Codebases linked to your organization.
           </p>
         </div>
-        <CreateRepoDialog onCreated={() => setDesktopRefreshKey((k) => k + 1)} />
+        <CreateRepoDialog onCreated={() => setDesktopRefreshKey((k: number) => k + 1)} />
       </div>
 
       {sortedRepoIds.length === 0 ? (

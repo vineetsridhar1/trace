@@ -119,7 +119,7 @@ export function BranchChangesPanel({
         </button>
       </div>
       <div className="native-scrollbar min-h-0 flex-1 overflow-y-auto">
-        {files.map((file) => {
+        {files.map((file: BranchDiffFile) => {
           const parts = file.path.split("/");
           const fileName = parts.pop() ?? file.path;
           const dirName = parts.length > 0 ? parts.join("/") + "/" : "";

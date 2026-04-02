@@ -25,14 +25,14 @@ export function useSessionGroupSessions(
 
   const sessionTabs = useMemo(() => {
     if (!openTabIds) return [];
-    const sessionMap = new Map(groupSessions.map((session) => [session.id, session]));
+    const sessionMap = new Map(groupSessions.map((session: SessionEntity) => [session.id, session]));
     return openTabIds
       .map((sessionId) => sessionMap.get(sessionId))
       .filter((session): session is SessionEntity => session != null);
   }, [groupSessions, openTabIds]);
 
   const selectedSession = useMemo(
-    () => sessionTabs.find((session) => session.id === activeSessionId) ?? sessionTabs[0] ?? null,
+    () => sessionTabs.find((session: SessionEntity) => session.id === activeSessionId) ?? sessionTabs[0] ?? null,
     [activeSessionId, sessionTabs],
   );
 

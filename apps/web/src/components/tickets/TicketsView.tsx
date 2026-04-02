@@ -46,9 +46,9 @@ const TICKETS_QUERY = gql`
 `;
 
 export function TicketsView() {
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const upsertMany = useEntityStore((s) => s.upsertMany);
-  const refreshTick = useUIStore((s) => s.refreshTick);
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
+  const upsertMany = useEntityStore((s: { upsertMany: ReturnType<typeof useEntityStore.getState>["upsertMany"] }) => s.upsertMany);
+  const refreshTick = useUIStore((s: { refreshTick: number }) => s.refreshTick);
   const [loading, setLoading] = useState(true);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
 
@@ -81,7 +81,7 @@ export function TicketsView() {
   const handleRowClick = useCallback((event: RowClickedEvent<TicketRow>) => {
     const id = event.data?.id;
     if (id) {
-      setSelectedTicketId((prev) => prev === id ? null : id);
+      setSelectedTicketId((prev: string | null) => prev === id ? null : id);
     }
   }, []);
 

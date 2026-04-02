@@ -4,7 +4,7 @@ import { useUIStore } from "../stores/ui";
 const HIDDEN_THRESHOLD_MS = 5_000;
 
 export function useVisibilityRefresh() {
-  const triggerRefresh = useUIStore((s) => s.triggerRefresh);
+  const triggerRefresh = useUIStore((s: { triggerRefresh: () => void }) => s.triggerRefresh);
   const hiddenAt = useRef<number | null>(null);
 
   useEffect(() => {

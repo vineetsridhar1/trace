@@ -9,7 +9,7 @@ import {
   useEntityStore,
   useMessageIdsForScope,
 } from "../../stores/entity";
-import { useUIStore } from "../../stores/ui";
+import { useUIStore, type UIState } from "../../stores/ui";
 import { ThreadMessage } from "./ThreadMessage";
 import { ChatComposer } from "./ChatComposer";
 import { ChannelComposer } from "../channel/ChannelComposer";
@@ -49,7 +49,7 @@ const THREAD_REPLIES_QUERY = gql`
 `;
 
 export function ThreadPanel({ chatId, channelId, rootMessageId }: { chatId?: string; channelId?: string; rootMessageId: string }) {
-  const setActiveThreadId = useUIStore((s) => s.setActiveThreadId);
+  const setActiveThreadId = useUIStore((s: UIState) => s.setActiveThreadId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);

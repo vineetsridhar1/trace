@@ -78,12 +78,12 @@ export function SidebarChannelTree({
       <DndContext
         sensors={sensors}
         collisionDetection={collisionDetection}
-        onDragStart={(event) => {
+        onDragStart={(event: { active: { id: string | number }; [key: string]: unknown }) => {
           handleDragStart(event);
           onDragActiveChange?.(true);
         }}
         onDragOver={handleDragOver}
-        onDragEnd={(event) => {
+        onDragEnd={(event: { active: { id: string | number }; over: { id: string | number } | null; [key: string]: unknown }) => {
           handleDragEnd(event);
           onDragActiveChange?.(false);
         }}
@@ -94,7 +94,7 @@ export function SidebarChannelTree({
       >
         <SortableContext items={topLevelIds} strategy={verticalListSortingStrategy}>
           <div className="py-2">
-            {currentTopLevel.map((item) =>
+            {currentTopLevel.map((item: TopLevelItem) =>
               item.kind === "channel" ? (
                 <SidebarMenu key={`channel:${item.id}`}>
                   <ChannelItem

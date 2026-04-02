@@ -60,7 +60,7 @@ const CHANNEL_EVENTS_SUBSCRIPTION = gql`
 
 
 export function useChannelMessages(channelId: string) {
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const getQueryVariables = useCallback(
     (before: string) => ({
       channelId,

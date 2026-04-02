@@ -12,7 +12,8 @@ function getTypeStyle(type: string) {
   return TYPE_COLORS[type] ?? { text: "text-foreground", bg: "bg-muted/10" };
 }
 
-interface SubagentRowProps {
+export interface SubagentRowProps {
+  key?: React.Key;
   description: string;
   subagentType: string;
   isLoading: boolean;

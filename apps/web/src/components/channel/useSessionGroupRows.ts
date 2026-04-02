@@ -1,6 +1,6 @@
 import { useStoreWithEqualityFn } from "zustand/traditional";
-import { useEntityStore } from "../../stores/entity";
-import type { SessionGroupEntity } from "../../stores/entity";
+import { useEntityStore, type EntityState } from "../../stores/entity";
+import type { SessionGroupEntity, SessionEntity } from "../../stores/entity";
 import { getSessionGroupChannelId } from "../../lib/session-group";
 import {
   getSessionGroupDisplayStatus,
@@ -70,16 +70,16 @@ export function useSessionGroupRows(
 ): SessionGroupRow[] {
   const selectedRows = useStoreWithEqualityFn(
     useEntityStore,
-    (state): SessionGroupRowSelection[] => {
+    (state: EntityState): SessionGroupRowSelection[] => {
       const shouldIncludeArchived = options?.archived === true || options?.status === "archived";
       const rows: SessionGroupRowSelection[] = [];
 
       for (const group of Object.values(state.sessionGroups) as SessionGroupEntity[]) {
         const groupSessionIds = state._sessionIdsByGroup[group.id] ?? [];
         const groupSessions = groupSessionIds
-          .map((id) => state.sessions[id])
+          .map((id: string) => state.sessions[id])
           .filter(Boolean)
-          .sort((a, b) => {
+          .sort((a: SessionEntity, b: SessionEntity) => {
             const aSort = a._sortTimestamp ?? a.updatedAt ?? a.createdAt;
             const bSort = b._sortTimestamp ?? b.updatedAt ?? b.createdAt;
             const diff = new Date(bSort).getTime() - new Date(aSort).getTime();
@@ -95,8 +95,8 @@ export function useSessionGroupRows(
         const createdBySession = [...groupSessions].sort(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         )[0];
-        const agentStatuses = groupSessions.map((session) => session.agentStatus);
-        const sessionStatuses = groupSessions.map((session) => session.sessionStatus);
+        const agentStatuses = groupSessions.map((session: SessionEntity) => session.agentStatus);
+        const sessionStatuses = groupSessions.map((session: SessionEntity) => session.sessionStatus);
         const prUrl = group.prUrl as string | null | undefined;
         const archivedAt = group.archivedAt as string | null | undefined;
         const displaySessionStatus =
@@ -155,5 +155,5 @@ export function useSessionGroupRows(
     areRowSelectionsEqual,
   );
 
-  return selectedRows.map(({ row }) => row);
+  return selectedRows.map(({ row }: SessionGroupRowSelection) => row);
 }

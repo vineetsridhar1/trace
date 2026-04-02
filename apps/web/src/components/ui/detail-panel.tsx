@@ -58,9 +58,9 @@ export function DetailPanel({
   onClosed,
 }: DetailPanelProps) {
   const isMobile = useIsMobile();
-  const isFullscreen = useDetailPanelStore((s) => s.isFullscreen);
-  const setFullscreen = useDetailPanelStore((s) => s.setFullscreen);
-  const toggleFullscreen = useDetailPanelStore((s) => s.toggleFullscreen);
+  const isFullscreen = useDetailPanelStore((s: { isFullscreen: boolean }) => s.isFullscreen);
+  const setFullscreen = useDetailPanelStore((s: { setFullscreen: (v: boolean) => void }) => s.setFullscreen);
+  const toggleFullscreen = useDetailPanelStore((s: { toggleFullscreen: () => void }) => s.toggleFullscreen);
 
   const maxRatio = fullscreenSnapRatio;
 
@@ -228,7 +228,7 @@ export function DetailPanel({
           isOpen ? "border" : "border-transparent",
         )}
         style={{ flexBasis, flexGrow: isOpen && isFullscreen ? 1 : 0, flexShrink: 0 }}
-        onTransitionEnd={(e) => {
+        onTransitionEnd={(e: React.TransitionEvent) => {
           if (e.propertyName === "flex-basis" && !isOpen && e.target === panelRef.current) {
             runCloseCleanup();
           }

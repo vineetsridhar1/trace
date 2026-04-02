@@ -12,7 +12,7 @@ export function TerminalInstance({ terminalId, visible }: { terminalId: string; 
   const fitRef = useRef<FitAddon | null>(null);
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
-  const setTerminalStatus = useTerminalStore((s) => s.setTerminalStatus);
+  const setTerminalStatus = useTerminalStore((s: { setTerminalStatus: (id: string, status: string) => void }) => s.setTerminalStatus);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -45,7 +45,7 @@ export function TerminalInstance({ terminalId, visible }: { terminalId: string; 
     const socket = new TerminalSocket(terminalId);
     socketRef.current = socket;
 
-    term.onData((data) => {
+    term.onData((data: string) => {
       socket.write(data);
     });
 

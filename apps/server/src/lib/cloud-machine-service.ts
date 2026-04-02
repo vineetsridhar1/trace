@@ -327,7 +327,7 @@ export class CloudMachineService {
     }
 
     // Check for started machines with no active sessions (timers lost on restart)
-    const startedMachines = machines.filter((m) => m.status === "started");
+    const startedMachines = machines.filter((m: { status: string; id: string }) => m.status === "started");
     for (const machine of startedMachines) {
       const activeSessions = await prisma.session.count({
         where: {

@@ -5,6 +5,7 @@ import type {
   EntityType,
   ActorType,
 } from "@trace/gql";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { eventService } from "./event.js";
@@ -121,7 +122,7 @@ export class OrganizationService {
 
     if (existing) return existing;
 
-    const [repo] = await prisma.$transaction(async (tx) => {
+    const [repo] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const repo = await tx.repo.create({
         data: {
           name: input.name,
@@ -166,7 +167,7 @@ export class OrganizationService {
     actorType: ActorType,
     actorId: string,
   ) {
-    const [repo] = await prisma.$transaction(async (tx) => {
+    const [repo] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Verify repo belongs to caller's org before updating
       await tx.repo.findFirstOrThrow({
         where: { id, organizationId },
@@ -210,7 +211,7 @@ export class OrganizationService {
   }
 
   async createProject(input: CreateProjectInput, actorType: ActorType, actorId: string) {
-    const [project] = await prisma.$transaction(async (tx) => {
+    const [project] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const project = await tx.project.create({
         data: {
           name: input.name,
@@ -246,7 +247,7 @@ export class OrganizationService {
     actorType: ActorType,
     actorId: string,
   ) {
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const project = await tx.project.findUniqueOrThrow({
         where: { id: projectId },
         select: { organizationId: true },

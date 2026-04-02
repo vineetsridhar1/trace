@@ -67,10 +67,10 @@ export class CostTrackingService {
         },
         update: updateData,
       });
-    } catch (e: unknown) {
+    } catch (e) {
       if (
         e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === "P2002"
+        (e as { code: string }).code === "P2002"
       ) {
         return prisma.agentCostTracker.update({
           where,

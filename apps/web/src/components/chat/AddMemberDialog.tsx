@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { UserPlus } from "lucide-react";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "../../stores/auth";
 import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
@@ -32,8 +32,8 @@ export function AddMemberDialog({ chatId }: { chatId: string }) {
   const [open, setOpen] = useState(false);
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [adding, setAdding] = useState(false);
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const userId = useAuthStore((s) => s.user?.id);
+  const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
+  const userId = useAuthStore((s: AuthState) => s.user?.id);
   const chatMembers = useEntityField("chats", chatId, "members") as
     | Array<{ user: { id: string } }>
     | undefined;
@@ -51,9 +51,9 @@ export function AddMemberDialog({ chatId }: { chatId: string }) {
     if (open) fetchMembers();
   }, [open, fetchMembers]);
 
-  const existingMemberIds = new Set(chatMembers?.map((member) => member.user.id) ?? []);
+  const existingMemberIds = new Set(chatMembers?.map((member: { user: { id: string } }) => member.user.id) ?? []);
   const availableMembers = members.filter(
-    (member) => member.id !== userId && !existingMemberIds.has(member.id),
+    (member: OrgMember) => member.id !== userId && !existingMemberIds.has(member.id),
   );
 
   async function handleAdd(targetUserId: string) {
@@ -83,7 +83,7 @@ export function AddMemberDialog({ chatId }: { chatId: string }) {
           <DialogTitle>Add Member</DialogTitle>
         </DialogHeader>
         <div className="max-h-60 space-y-1 overflow-y-auto py-4">
-          {availableMembers.map((member) => (
+          {availableMembers.map((member: OrgMember) => (
             <button
               key={member.id}
               type="button"

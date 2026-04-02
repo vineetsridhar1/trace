@@ -105,7 +105,7 @@ export const ticketTypeResolvers = {
         }),
       );
       return sessions.filter(
-        (session): session is Exclude<LoadedSession, Error | null> => session != null,
+        (session: LoadedSession): session is Exclude<LoadedSession, Error | null> => session != null,
       );
     },
   },

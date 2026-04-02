@@ -67,8 +67,8 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     onSlashCommandSelect,
     onShiftTab,
     onChange,
-  },
-  ref,
+  }: ChatEditorProps,
+  ref: React.ForwardedRef<ChatEditorHandle>,
 ) {
   const quillRef = useRef<ReactQuill>(null);
   const [value, setValue] = useState(initialHtml);
@@ -173,14 +173,14 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
         ) => {
           if (mentionChar === "/") {
             const commands = slashCommandsRef.current ?? [];
-            const matches = commands.filter((cmd) =>
+            const matches = commands.filter((cmd: SlashCommandItem) =>
               cmd.value.toLowerCase().startsWith(searchTerm.toLowerCase()),
             );
             renderList(matches as unknown as Array<Record<string, unknown>>, searchTerm);
           } else {
             const matches = membersRef.current
-              .filter((member) => member.name.toLowerCase().includes(searchTerm.toLowerCase()))
-              .map((member) => ({
+              .filter((member: MentionableUser) => member.name.toLowerCase().includes(searchTerm.toLowerCase()))
+              .map((member: MentionableUser) => ({
                 id: member.id,
                 value: member.name,
                 avatarUrl: member.avatarUrl,

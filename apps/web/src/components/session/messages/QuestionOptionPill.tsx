@@ -5,6 +5,7 @@ export function QuestionOptionPill({
   multiSelect,
   onClick,
 }: {
+  key?: React.Key;
   label: string;
   description: string;
   selected: boolean;

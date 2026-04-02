@@ -43,7 +43,7 @@ export class ApiTokenService {
       select: { provider: true, updatedAt: true },
     });
 
-    const setProviders = new Map(tokens.map((t) => [t.provider, t.updatedAt]));
+    const setProviders = new Map(tokens.map((t: { provider: ApiTokenProvider; updatedAt: Date }) => [t.provider, t.updatedAt] as const));
 
     return ALL_PROVIDERS.map((provider) => ({
       provider,
