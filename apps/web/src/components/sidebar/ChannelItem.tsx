@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { MessageSquare, Code, Trash2 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
@@ -8,6 +8,15 @@ import { useUIStore } from "../../stores/ui";
 import { SidebarMenuItem, SidebarMenuButton } from "../ui/sidebar";
 import { client } from "../../lib/urql";
 import { DELETE_CHANNEL_MUTATION } from "../../lib/mutations";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "../ui/dialog";
+import { Button } from "../ui/button";
 
 function ChannelIcon({ type, className }: { type: string | undefined; className?: string }) {
   if (type === "text") return <MessageSquare size={16} className={className} />;
@@ -17,26 +26,14 @@ function ChannelIcon({ type, className }: { type: string | undefined; className?
 function ChannelContextMenu({
   x,
   y,
-  channelId,
   onClose,
+  onDelete,
 }: {
   x: number;
   y: number;
-  channelId: string;
   onClose: () => void;
+  onDelete: () => void;
 }) {
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [confirming, setConfirming] = useState(false);
-
-  const handleDelete = useCallback(() => {
-    if (!confirming) {
-      setConfirming(true);
-      return;
-    }
-    client.mutation(DELETE_CHANNEL_MUTATION, { id: channelId }).toPromise();
-    onClose();
-  }, [confirming, channelId, onClose]);
-
   return createPortal(
     <div
       className="fixed inset-0 z-50"
@@ -47,17 +44,19 @@ function ChannelContextMenu({
       }}
     >
       <div
-        ref={menuRef}
         className="absolute z-50 min-w-36 rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 animate-in fade-in-0 zoom-in-95"
         style={{ top: y, left: x }}
         onClick={(e) => e.stopPropagation()}
       >
         <button
           className="flex w-full cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm outline-none select-none hover:bg-destructive/10 text-destructive"
-          onClick={handleDelete}
+          onClick={() => {
+            onClose();
+            onDelete();
+          }}
         >
           <Trash2 size={14} />
-          {confirming ? "Confirm delete" : "Delete channel"}
+          Delete channel
         </button>
       </div>
     </div>,
@@ -80,11 +79,17 @@ export const ChannelItem = memo(function ChannelItem({
   const type = useEntityField("channels", id, "type");
   const hasDoneBadge = useUIStore((s) => !!s.channelDoneBadges[id]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY });
   }, []);
+
+  const handleConfirmDelete = useCallback(() => {
+    client.mutation(DELETE_CHANNEL_MUTATION, { id }).toPromise();
+    setShowDeleteDialog(false);
+  }, [id]);
 
   const sortableData = useMemo(
     () => ({ type: "channel" as const, id, groupId: groupId ?? null }),
@@ -131,14 +136,35 @@ export const ChannelItem = memo(function ChannelItem({
           <span className={hasDoneBadge ? "font-semibold" : undefined}>{name}</span>
         </SidebarMenuButton>
       </SidebarMenuItem>
+
       {contextMenu && (
         <ChannelContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
-          channelId={id}
           onClose={() => setContextMenu(null)}
+          onDelete={() => setShowDeleteDialog(true)}
         />
       )}
+
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete channel</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <strong>{name}</strong>? This will permanently delete
+              all sessions and session groups in this channel. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDelete}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 });

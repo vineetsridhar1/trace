@@ -46,7 +46,7 @@ export const channelMutations = {
     return channelService.update(args.id, args.input, ctx.actorType, ctx.userId);
   },
   deleteChannel: async (_: unknown, args: { id: string }, ctx: Context) => {
-    await assertChannelAccess(args.id, ctx.userId);
+    requireOrgContext(ctx);
     return channelService.delete(args.id, ctx.actorType, ctx.userId);
   },
   joinChannel: (_: unknown, args: { channelId: string }, ctx: Context) => {
