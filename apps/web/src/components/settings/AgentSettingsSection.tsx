@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Bot, Save } from "lucide-react";
+import { Save } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
@@ -127,12 +127,9 @@ export function AgentSettingsSection() {
   }
 
   return (
-    <section className="mx-auto max-w-2xl mt-8">
+    <div>
       <div className="mb-4">
-        <div className="flex items-center gap-2">
-          <Bot size={18} className="text-muted-foreground" />
-          <h2 className="text-base font-semibold text-foreground">AI Agent</h2>
-        </div>
+        <h2 className="text-base font-semibold text-foreground">AI Agent</h2>
         <p className="text-sm text-muted-foreground mt-1">
           Configure the ambient AI agent for your organization.
         </p>
@@ -208,6 +205,6 @@ export function AgentSettingsSection() {
           </Button>
         </div>
       </div>}
-    </section>
+    </div>
   );
 }

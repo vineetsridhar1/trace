@@ -4,12 +4,27 @@ import { organizationService } from "../services/organization.js";
 import { webhookService } from "../services/webhook.js";
 import { orgMemberService } from "../services/org-member.js";
 import { requireOrgContext } from "../lib/require-org.js";
+import { prisma } from "../lib/db.js";
 
 export const organizationQueries = {
   organization: (_: unknown, args: { id: string }, ctx: Context) =>
     organizationService.getOrganization(args.id, ctx.userId),
   myOrganizations: async (_: unknown, _args: Record<string, never>, ctx: Context) => {
     return orgMemberService.getUserOrgs(ctx.userId);
+  },
+  searchUsers: async (_: unknown, args: { email: string }, _ctx: Context) => {
+    const term = args.email.trim();
+    if (term.length < 2) return [];
+    return prisma.user.findMany({
+      where: {
+        OR: [
+          { email: { contains: term, mode: "insensitive" } },
+          { name: { contains: term, mode: "insensitive" } },
+        ],
+      },
+      select: { id: true, name: true, email: true, avatarUrl: true },
+      take: 10,
+    });
   },
   repos: (_: unknown, args: { organizationId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);

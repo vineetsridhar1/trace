@@ -1082,6 +1082,7 @@ export type Query = {
   repoBranches: Array<Scalars['String']['output']>;
   repos: Array<Repo>;
   resolvedAiMode: AutonomyMode;
+  searchUsers: Array<User>;
   session?: Maybe<Session>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupBranchDiff: Array<BranchDiffFile>;
@@ -1261,6 +1262,11 @@ export type QueryResolvedAiModeArgs = {
   organizationId: Scalars['ID']['input'];
   scopeId: Scalars['ID']['input'];
   scopeType: Scalars['String']['input'];
+};
+
+
+export type QuerySearchUsersArgs = {
+  email: Scalars['String']['input'];
 };
 
 
@@ -2407,6 +2413,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   repoBranches?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType, RequireFields<QueryRepoBranchesArgs, 'repoId'>>;
   repos?: Resolver<Array<ResolversTypes['Repo']>, ParentType, ContextType, RequireFields<QueryReposArgs, 'organizationId'>>;
   resolvedAiMode?: Resolver<ResolversTypes['AutonomyMode'], ParentType, ContextType, RequireFields<QueryResolvedAiModeArgs, 'organizationId' | 'scopeId' | 'scopeType'>>;
+  searchUsers?: Resolver<Array<ResolversTypes['User']>, ParentType, ContextType, RequireFields<QuerySearchUsersArgs, 'email'>>;
   session?: Resolver<Maybe<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerySessionArgs, 'id'>>;
   sessionGroup?: Resolver<Maybe<ResolversTypes['SessionGroup']>, ParentType, ContextType, RequireFields<QuerySessionGroupArgs, 'id'>>;
   sessionGroupBranchDiff?: Resolver<Array<ResolversTypes['BranchDiffFile']>, ParentType, ContextType, RequireFields<QuerySessionGroupBranchDiffArgs, 'sessionGroupId'>>;

@@ -39,7 +39,7 @@ export function NotificationsSection() {
   const status = PERMISSION_LABELS[permission] ?? PERMISSION_LABELS.unsupported;
 
   return (
-    <section className="mx-auto max-w-2xl mt-8">
+    <div>
       <div className="mb-4">
         <h2 className="text-base font-semibold text-foreground">Notifications</h2>
         <p className="text-sm text-muted-foreground">
@@ -114,6 +114,6 @@ export function NotificationsSection() {
           experience on mobile devices.
         </p>
       )}
-    </section>
+    </div>
   );
 }
