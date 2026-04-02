@@ -201,7 +201,7 @@ function LoginPage() {
       <div className="flex flex-col items-center gap-6">
         <h1 className="text-3xl font-bold text-foreground">Trace</h1>
         <p className="text-muted-foreground">
-          AI-native project management & development platform TEST
+          AI-native project management & development platform TEST 2
         </p>
         <Button onClick={openGithubLogin} size="lg" className="gap-2">
           <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
