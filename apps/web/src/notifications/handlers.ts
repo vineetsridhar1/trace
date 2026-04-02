@@ -113,8 +113,30 @@ function handleInboxItemCreated(event: Event): void {
 
   const rawType = item.itemType as string;
   const isSuggestion = rawType?.endsWith("_suggestion");
-  const itemType = rawType === "question" ? "Question" : isSuggestion ? "Suggestion" : "Plan";
+  const isBridgeAccess = rawType === "bridge_access_request";
+  const itemType = rawType === "question"
+    ? "Question"
+    : isSuggestion
+      ? "Suggestion"
+      : isBridgeAccess
+        ? "Bridge Access"
+        : "Plan";
   const title = (item.title as string) || "New item";
+
+  // Bridge access requests show the code prominently in a persistent toast
+  if (isBridgeAccess) {
+    const itemPayload = asJsonObject(item.payload);
+    const code = (itemPayload?.code as string) ?? "??";
+    const requesterName = (itemPayload?.requesterName as string) ?? "Someone";
+    toast(`${requesterName} needs bridge code: ${code}`, {
+      duration: 30000,
+      action: {
+        label: "View",
+        onClick: () => useUIStore.getState().setActivePage("inbox"),
+      },
+    });
+    return;
+  }
 
   notify(`${itemType}: ${title}`, {
     tag: `inbox-${item.id}`,

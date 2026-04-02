@@ -22,6 +22,7 @@ import { Toaster } from "./components/ui/sonner";
 import { InstallBanner } from "./components/InstallBanner";
 import { cn } from "./lib/utils";
 import { createQuickSession } from "./lib/create-quick-session";
+import { BridgeAccessDialog } from "./components/session/BridgeAccessDialog";
 
 export function App() {
   const user = useAuthStore((s) => s.user);
@@ -47,6 +48,7 @@ export function App() {
   return (
     <>
       <AuthenticatedApp activeChannelId={activeChannelId} />
+      <BridgeAccessDialog />
       <Toaster position="top-right" />
     </>
   );

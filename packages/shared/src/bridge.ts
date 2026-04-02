@@ -185,6 +185,8 @@ export interface BridgeRuntimeHello {
   registeredRepoIds: string[];
   /** Active terminal ptys still running on this bridge (reported on reconnect). */
   activeTerminals?: Array<{ terminalId: string; sessionId: string }>;
+  /** The authenticated user who owns this bridge (device bridges only). */
+  userId?: string;
 }
 
 export interface BridgeRuntimeHeartbeat {

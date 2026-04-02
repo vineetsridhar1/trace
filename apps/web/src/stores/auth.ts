@@ -79,6 +79,9 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       set({ user, activeOrgId, orgMemberships, loading: false });
 
+      // Notify Electron bridge of authenticated user (for bridge ownership)
+      window.trace?.setAuthUserId?.(user.id);
+
       // Hydrate entity store
       const { upsert } = useEntityStore.getState();
       upsert("users", user.id, user);

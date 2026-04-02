@@ -90,6 +90,7 @@ enum InboxItemType {
   field_change_suggestion
   comment_suggestion
   message_suggestion
+  bridge_access_request
 }
 
 enum InboxItemStatus {
@@ -232,6 +233,8 @@ model Organization {
   costTrackers     AgentCostTracker[]
   entitySummaries  EntitySummary[]
   aiConversations  AiConversation[]
+  bridgeAccessChallenges BridgeAccessChallenge[]
+  bridgeAccessGrants     BridgeAccessGrant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -390,6 +393,9 @@ model User {
   cloudMachines     CloudMachine[]
   aiConversations   AiConversation[] @relation("AiConversationCreator")
   aiBranches        AiBranch[]       @relation("AiBranchCreator")
+  bridgeChallengesAsOwner    BridgeAccessChallenge[] @relation("bridgeChallengeOwner")
+  bridgeChallengesAsRequester BridgeAccessChallenge[] @relation("bridgeChallengeRequester")
+  bridgeAccessGrants         BridgeAccessGrant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -559,6 +565,7 @@ model Session {
   readOnlyWorkspace Boolean    @default(false)
 
   projects SessionProject[]
+  bridgeAccessGrants BridgeAccessGrant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -858,4 +865,52 @@ model AiTurn {
 
   @@index([branchId, createdAt])
   @@index([parentTurnId])
+}
+
+enum BridgeAccessChallengeStatus {
+  pending
+  verified
+  expired
+}
+
+model BridgeAccessChallenge {
+  id               String   @id @default(cuid())
+  code             String
+  runtimeId        String
+  runtimeLabel     String
+  ownerUserId      String
+  requesterId      String
+  requesterName    String
+  organizationId   String
+  action           String
+  promptPreview    String?
+  sessionId        String?
+  status           BridgeAccessChallengeStatus @default(pending)
+  attempts         Int      @default(0)
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  owner            User         @relation("bridgeChallengeOwner", fields: [ownerUserId], references: [id])
+  requester        User         @relation("bridgeChallengeRequester", fields: [requesterId], references: [id])
+
+  @@index([requesterId, runtimeId, status])
+  @@index([ownerUserId, status])
+}
+
+model BridgeAccessGrant {
+  id               String   @id @default(cuid())
+  runtimeId        String
+  sessionId        String
+  grantedToUserId  String
+  organizationId   String
+  challengeId      String
+  createdAt        DateTime @default(now())
+
+  session          Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  grantedTo        User         @relation(fields: [grantedToUserId], references: [id])
+  organization     Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([runtimeId, sessionId, grantedToUserId])
+  @@index([sessionId])
 }

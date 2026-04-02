@@ -228,6 +228,19 @@ export type BranchDiffFile = {
   status: Scalars['String']['output'];
 };
 
+export type BridgeAccessChallengeResult = {
+  __typename?: 'BridgeAccessChallengeResult';
+  challengeId: Scalars['ID']['output'];
+  runtimeId: Scalars['ID']['output'];
+  runtimeLabel: Scalars['String']['output'];
+};
+
+export type BridgeAccessGrantResult = {
+  __typename?: 'BridgeAccessGrantResult';
+  granted: Scalars['Boolean']['output'];
+  sessionId?: Maybe<Scalars['ID']['output']>;
+};
+
 export type Channel = {
   __typename?: 'Channel';
   aiMode?: Maybe<AutonomyMode>;
@@ -498,6 +511,7 @@ export type InboxItemStatus =
 export type InboxItemType =
   | 'agent_escalation'
   | 'agent_suggestion'
+  | 'bridge_access_request'
   | 'comment_suggestion'
   | 'field_change_suggestion'
   | 'link_suggestion'
@@ -545,6 +559,7 @@ export type Mutation = {
   assignTicket: Ticket;
   commentOnTicket: Event;
   createAiConversation: AiConversation;
+  createBridgeAccessChallenge: BridgeAccessChallengeResult;
   createChannel: Channel;
   createChannelGroup: ChannelGroup;
   createChat: Chat;
@@ -603,6 +618,7 @@ export type Mutation = {
   updateScopeAiMode: Scalars['Boolean']['output'];
   updateSessionConfig: Session;
   updateTicket: Ticket;
+  verifyBridgeAccessCode: BridgeAccessGrantResult;
 };
 
 
@@ -644,6 +660,14 @@ export type MutationCommentOnTicketArgs = {
 export type MutationCreateAiConversationArgs = {
   input: CreateAiConversationInput;
   organizationId: Scalars['ID']['input'];
+};
+
+
+export type MutationCreateBridgeAccessChallengeArgs = {
+  action: Scalars['String']['input'];
+  promptPreview?: InputMaybe<Scalars['String']['input']>;
+  runtimeId: Scalars['ID']['input'];
+  sessionId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 
@@ -982,6 +1006,12 @@ export type MutationUpdateSessionConfigArgs = {
 export type MutationUpdateTicketArgs = {
   id: Scalars['ID']['input'];
   input: UpdateTicketInput;
+};
+
+
+export type MutationVerifyBridgeAccessCodeArgs = {
+  challengeId: Scalars['ID']['input'];
+  code: Scalars['String']['input'];
 };
 
 export type Notification = {
@@ -1464,6 +1494,8 @@ export type SessionRuntimeInstance = {
   hostingMode: HostingMode;
   id: Scalars['ID']['output'];
   label: Scalars['String']['output'];
+  ownerUserId?: Maybe<Scalars['ID']['output']>;
+  ownerUserName?: Maybe<Scalars['String']['output']>;
   registeredRepoIds: Array<Scalars['ID']['output']>;
   sessionCount: Scalars['Int']['output'];
   supportedTools: Array<CodingTool>;
@@ -1482,6 +1514,7 @@ export type SetApiTokenInput = {
 
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars['String']['input']>;
+  bridgeAccessToken?: InputMaybe<Scalars['ID']['input']>;
   channelId?: InputMaybe<Scalars['ID']['input']>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars['String']['input']>;
@@ -1789,6 +1822,8 @@ export type ResolversTypes = ResolversObject<{
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
   Branch: ResolverTypeWrapper<Branch>;
   BranchDiffFile: ResolverTypeWrapper<BranchDiffFile>;
+  BridgeAccessChallengeResult: ResolverTypeWrapper<BridgeAccessChallengeResult>;
+  BridgeAccessGrantResult: ResolverTypeWrapper<BridgeAccessGrantResult>;
   Channel: ResolverTypeWrapper<Channel>;
   ChannelGroup: ResolverTypeWrapper<ChannelGroup>;
   ChannelMember: ResolverTypeWrapper<ChannelMember>;
@@ -1890,6 +1925,8 @@ export type ResolversParentTypes = ResolversObject<{
   Boolean: Scalars['Boolean']['output'];
   Branch: Branch;
   BranchDiffFile: BranchDiffFile;
+  BridgeAccessChallengeResult: BridgeAccessChallengeResult;
+  BridgeAccessGrantResult: BridgeAccessGrantResult;
   Channel: Channel;
   ChannelGroup: ChannelGroup;
   ChannelMember: ChannelMember;
@@ -2122,6 +2159,19 @@ export type BranchDiffFileResolvers<ContextType = Context, ParentType extends Re
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type BridgeAccessChallengeResultResolvers<ContextType = Context, ParentType extends ResolversParentTypes['BridgeAccessChallengeResult'] = ResolversParentTypes['BridgeAccessChallengeResult']> = ResolversObject<{
+  challengeId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  runtimeId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  runtimeLabel?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type BridgeAccessGrantResultResolvers<ContextType = Context, ParentType extends ResolversParentTypes['BridgeAccessGrantResult'] = ResolversParentTypes['BridgeAccessGrantResult']> = ResolversObject<{
+  granted?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  sessionId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type ChannelResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Channel'] = ResolversParentTypes['Channel']> = ResolversObject<{
   aiMode?: Resolver<Maybe<ResolversTypes['AutonomyMode']>, ParentType, ContextType>;
   baseBranch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
@@ -2260,6 +2310,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   assignTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationAssignTicketArgs, 'ticketId' | 'userId'>>;
   commentOnTicket?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationCommentOnTicketArgs, 'text' | 'ticketId'>>;
   createAiConversation?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType, RequireFields<MutationCreateAiConversationArgs, 'input' | 'organizationId'>>;
+  createBridgeAccessChallenge?: Resolver<ResolversTypes['BridgeAccessChallengeResult'], ParentType, ContextType, RequireFields<MutationCreateBridgeAccessChallengeArgs, 'action' | 'runtimeId'>>;
   createChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationCreateChannelArgs, 'input'>>;
   createChannelGroup?: Resolver<ResolversTypes['ChannelGroup'], ParentType, ContextType, RequireFields<MutationCreateChannelGroupArgs, 'input'>>;
   createChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationCreateChatArgs, 'input'>>;
@@ -2318,6 +2369,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   updateScopeAiMode?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationUpdateScopeAiModeArgs, 'organizationId' | 'scopeId' | 'scopeType'>>;
   updateSessionConfig?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationUpdateSessionConfigArgs, 'sessionId'>>;
   updateTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationUpdateTicketArgs, 'id' | 'input'>>;
+  verifyBridgeAccessCode?: Resolver<ResolversTypes['BridgeAccessGrantResult'], ParentType, ContextType, RequireFields<MutationVerifyBridgeAccessCodeArgs, 'challengeId' | 'code'>>;
 }>;
 
 export type NotificationResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Notification'] = ResolversParentTypes['Notification']> = ResolversObject<{
@@ -2505,6 +2557,8 @@ export type SessionRuntimeInstanceResolvers<ContextType = Context, ParentType ex
   hostingMode?: Resolver<ResolversTypes['HostingMode'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   label?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  ownerUserId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
+  ownerUserName?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   registeredRepoIds?: Resolver<Array<ResolversTypes['ID']>, ParentType, ContextType>;
   sessionCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   supportedTools?: Resolver<Array<ResolversTypes['CodingTool']>, ParentType, ContextType>;
@@ -2610,6 +2664,8 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   ApiTokenStatus?: ApiTokenStatusResolvers<ContextType>;
   Branch?: BranchResolvers<ContextType>;
   BranchDiffFile?: BranchDiffFileResolvers<ContextType>;
+  BridgeAccessChallengeResult?: BridgeAccessChallengeResultResolvers<ContextType>;
+  BridgeAccessGrantResult?: BridgeAccessGrantResultResolvers<ContextType>;
   Channel?: ChannelResolvers<ContextType>;
   ChannelGroup?: ChannelGroupResolvers<ContextType>;
   ChannelMember?: ChannelMemberResolvers<ContextType>;

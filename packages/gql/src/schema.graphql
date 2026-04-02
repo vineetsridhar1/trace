@@ -133,6 +133,7 @@ enum InboxItemType {
   field_change_suggestion
   comment_suggestion
   message_suggestion
+  bridge_access_request
 }
 
 enum InboxItemStatus {
@@ -634,6 +635,19 @@ type SessionRuntimeInstance {
   connected: Boolean!
   sessionCount: Int!
   registeredRepoIds: [ID!]!
+  ownerUserId: ID
+  ownerUserName: String
+}
+
+type BridgeAccessChallengeResult {
+  challengeId: ID!
+  runtimeId: ID!
+  runtimeLabel: String!
+}
+
+type BridgeAccessGrantResult {
+  granted: Boolean!
+  sessionId: ID
 }
 
 type BranchDiffFile {
@@ -757,6 +771,7 @@ input StartSessionInput {
   projectId: ID
   prompt: String
   interactionMode: String
+  bridgeAccessToken: ID
 }
 
 input SessionFilters {
@@ -997,6 +1012,16 @@ type Mutation {
   createAiConversation(organizationId: ID!, input: CreateAiConversationInput!): AiConversation!
   sendTurn(branchId: ID!, content: String!): Turn!
   updateAiConversationTitle(conversationId: ID!, title: String!): AiConversation!
+  createBridgeAccessChallenge(
+    runtimeId: ID!
+    sessionId: ID
+    action: String!
+    promptPreview: String
+  ): BridgeAccessChallengeResult!
+  verifyBridgeAccessCode(
+    challengeId: ID!
+    code: String!
+  ): BridgeAccessGrantResult!
 }
 
 # --- Subscriptions ---

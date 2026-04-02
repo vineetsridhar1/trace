@@ -17,6 +17,8 @@ import { sessionRouter, type DeliveryResult } from "../lib/session-router.js";
 import { inboxService } from "./inbox.js";
 import { runtimeDebug } from "../lib/runtime-debug.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
+import { BridgeAccessRequiredError } from "../lib/errors.js";
+import { bridgeAuthService } from "./bridge-auth.js";
 import {
   deriveSessionGroupStatus,
   type SessionGroupStatus as DerivedSessionGroupStatus,
@@ -928,6 +930,27 @@ export class SessionService {
       }
       hosting = runtime.hostingMode;
       runtimeLabel = runtime.label;
+
+      // Bridge access check: require verification for local bridges owned by someone else
+      if (
+        runtime.hostingMode === "local" &&
+        runtime.ownerUserId &&
+        runtime.ownerUserId !== input.createdById
+      ) {
+        // If a bridgeAccessToken is provided, validate it
+        if (input.bridgeAccessToken) {
+          const valid = await bridgeAuthService.validateAccessToken(
+            input.bridgeAccessToken,
+            input.createdById,
+            input.runtimeInstanceId,
+          );
+          if (!valid) {
+            throw new BridgeAccessRequiredError(runtime.id, runtime.label, runtime.ownerUserId);
+          }
+        } else {
+          throw new BridgeAccessRequiredError(runtime.id, runtime.label, runtime.ownerUserId);
+        }
+      }
     }
 
     // Ask-mode sessions skip worktree creation (read-only against repo root).
@@ -1062,6 +1085,11 @@ export class SessionService {
       sessionRouter.bindSession(session.id, runtimeToBind);
     }
 
+    // Create bridge access grant if session was started with a bridgeAccessToken
+    if (input.bridgeAccessToken) {
+      await bridgeAuthService.grantSessionFromChallenge(input.bridgeAccessToken, session.id);
+    }
+
     // Only provision the runtime immediately when a prompt is provided.
     // Sessions created without a prompt (e.g. Cmd+N) defer provisioning
     // until the user sends their first message.
@@ -1085,11 +1113,27 @@ export class SessionService {
     return session;
   }
 
-  async run(id: string, prompt?: string | null, interactionMode?: string) {
+  async run(id: string, prompt?: string | null, interactionMode?: string, userId?: string) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id },
       include: SESSION_INCLUDE,
     });
+
+    // Bridge access check for local bridges owned by someone else.
+    // Use the caller's userId if provided; fall back to the session creator.
+    const effectiveUserId = userId ?? session.createdById;
+    const runtime = sessionRouter.getRuntimeForSession(id);
+    if (
+      runtime &&
+      runtime.hostingMode === "local" &&
+      runtime.ownerUserId &&
+      runtime.ownerUserId !== effectiveUserId
+    ) {
+      const hasGrant = await bridgeAuthService.hasSessionGrant(runtime.id, id, effectiveUserId);
+      if (!hasGrant) {
+        throw new BridgeAccessRequiredError(runtime.id, runtime.label, runtime.ownerUserId);
+      }
+    }
 
     const startMeta =
       !prompt ||
@@ -1957,6 +2001,20 @@ export class SessionService {
 
     if (session.worktreeDeleted) {
       throw new Error("Cannot send messages: session worktree has been deleted");
+    }
+
+    // Bridge access check for local bridges owned by someone else
+    const runtime = sessionRouter.getRuntimeForSession(sessionId);
+    if (
+      runtime &&
+      runtime.hostingMode === "local" &&
+      runtime.ownerUserId &&
+      runtime.ownerUserId !== actorId
+    ) {
+      const hasGrant = await bridgeAuthService.hasSessionGrant(runtime.id, sessionId, actorId);
+      if (!hasGrant) {
+        throw new BridgeAccessRequiredError(runtime.id, runtime.label, runtime.ownerUserId);
+      }
     }
 
     // If runtime was deferred (session created without a prompt), provision it
@@ -3179,6 +3237,17 @@ export class SessionService {
           });
     const orgSessionIds = new Set(sessions.map((session) => session.id));
 
+    // Resolve owner user names for local bridges
+    const ownerUserIds = [...new Set(allRuntimes.map((r) => r.ownerUserId).filter(Boolean))] as string[];
+    const ownerUsers =
+      ownerUserIds.length === 0
+        ? []
+        : await prisma.user.findMany({
+            where: { id: { in: ownerUserIds } },
+            select: { id: true, name: true },
+          });
+    const ownerNameMap = new Map(ownerUsers.map((u) => [u.id, u.name]));
+
     const result = allRuntimes.map((r) => ({
       id: r.id,
       label: r.label,
@@ -3187,6 +3256,8 @@ export class SessionService {
       connected: r.ws.readyState === r.ws.OPEN,
       sessionCount: [...r.boundSessions].filter((sessionId) => orgSessionIds.has(sessionId)).length,
       registeredRepoIds: r.registeredRepoIds,
+      ownerUserId: r.ownerUserId ?? null,
+      ownerUserName: r.ownerUserId ? ownerNameMap.get(r.ownerUserId) ?? null : null,
     }));
 
     runtimeDebug("availableRuntimes query resolved", {

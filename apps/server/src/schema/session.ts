@@ -103,7 +103,7 @@ export const sessionMutations = {
     args: { id: string; prompt?: string | null; interactionMode?: string | null },
     _ctx: Context,
   ) => {
-    return sessionService.run(args.id, args.prompt, args.interactionMode ?? undefined);
+    return sessionService.run(args.id, args.prompt, args.interactionMode ?? undefined, _ctx.userId);
   },
   terminateSession: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.terminate(args.id, ctx.actorType, ctx.userId);

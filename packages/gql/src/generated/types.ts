@@ -225,6 +225,19 @@ export type BranchDiffFile = {
   status: Scalars['String']['output'];
 };
 
+export type BridgeAccessChallengeResult = {
+  __typename?: 'BridgeAccessChallengeResult';
+  challengeId: Scalars['ID']['output'];
+  runtimeId: Scalars['ID']['output'];
+  runtimeLabel: Scalars['String']['output'];
+};
+
+export type BridgeAccessGrantResult = {
+  __typename?: 'BridgeAccessGrantResult';
+  granted: Scalars['Boolean']['output'];
+  sessionId?: Maybe<Scalars['ID']['output']>;
+};
+
 export type Channel = {
   __typename?: 'Channel';
   aiMode?: Maybe<AutonomyMode>;
@@ -495,6 +508,7 @@ export type InboxItemStatus =
 export type InboxItemType =
   | 'agent_escalation'
   | 'agent_suggestion'
+  | 'bridge_access_request'
   | 'comment_suggestion'
   | 'field_change_suggestion'
   | 'link_suggestion'
@@ -542,6 +556,7 @@ export type Mutation = {
   assignTicket: Ticket;
   commentOnTicket: Event;
   createAiConversation: AiConversation;
+  createBridgeAccessChallenge: BridgeAccessChallengeResult;
   createChannel: Channel;
   createChannelGroup: ChannelGroup;
   createChat: Chat;
@@ -600,6 +615,7 @@ export type Mutation = {
   updateScopeAiMode: Scalars['Boolean']['output'];
   updateSessionConfig: Session;
   updateTicket: Ticket;
+  verifyBridgeAccessCode: BridgeAccessGrantResult;
 };
 
 
@@ -641,6 +657,14 @@ export type MutationCommentOnTicketArgs = {
 export type MutationCreateAiConversationArgs = {
   input: CreateAiConversationInput;
   organizationId: Scalars['ID']['input'];
+};
+
+
+export type MutationCreateBridgeAccessChallengeArgs = {
+  action: Scalars['String']['input'];
+  promptPreview?: InputMaybe<Scalars['String']['input']>;
+  runtimeId: Scalars['ID']['input'];
+  sessionId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 
@@ -979,6 +1003,12 @@ export type MutationUpdateSessionConfigArgs = {
 export type MutationUpdateTicketArgs = {
   id: Scalars['ID']['input'];
   input: UpdateTicketInput;
+};
+
+
+export type MutationVerifyBridgeAccessCodeArgs = {
+  challengeId: Scalars['ID']['input'];
+  code: Scalars['String']['input'];
 };
 
 export type Notification = {
@@ -1461,6 +1491,8 @@ export type SessionRuntimeInstance = {
   hostingMode: HostingMode;
   id: Scalars['ID']['output'];
   label: Scalars['String']['output'];
+  ownerUserId?: Maybe<Scalars['ID']['output']>;
+  ownerUserName?: Maybe<Scalars['String']['output']>;
   registeredRepoIds: Array<Scalars['ID']['output']>;
   sessionCount: Scalars['Int']['output'];
   supportedTools: Array<CodingTool>;
@@ -1479,6 +1511,7 @@ export type SetApiTokenInput = {
 
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars['String']['input']>;
+  bridgeAccessToken?: InputMaybe<Scalars['ID']['input']>;
   channelId?: InputMaybe<Scalars['ID']['input']>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars['String']['input']>;

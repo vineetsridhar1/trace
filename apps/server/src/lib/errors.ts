@@ -28,6 +28,17 @@ export class AuthenticationError extends Error {
   }
 }
 
+export class BridgeAccessRequiredError extends Error {
+  constructor(
+    public runtimeId: string,
+    public runtimeLabel: string,
+    public ownerUserId: string,
+  ) {
+    super("Bridge access verification required");
+    this.name = "BridgeAccessRequiredError";
+  }
+}
+
 /**
  * Convert domain errors to GraphQL errors with proper extensions.
  * Call this in resolvers to get consistent error codes in responses.
@@ -51,6 +62,16 @@ export function toGraphQLError(error: unknown): GraphQLError {
   if (error instanceof ValidationError) {
     return new GraphQLError(error.message, {
       extensions: { code: "BAD_USER_INPUT" },
+    });
+  }
+  if (error instanceof BridgeAccessRequiredError) {
+    return new GraphQLError(error.message, {
+      extensions: {
+        code: "BRIDGE_ACCESS_REQUIRED",
+        runtimeId: error.runtimeId,
+        runtimeLabel: error.runtimeLabel,
+        ownerUserId: error.ownerUserId,
+      },
     });
   }
   if (error instanceof Error) {

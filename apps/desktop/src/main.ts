@@ -151,6 +151,10 @@ ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: string) => {
   return installOrRepairRepoHooks(repoConfig.path);
 });
 
+ipcMain.on("set-auth-user-id", (_event, userId: string) => {
+  bridge.setUserId(userId);
+});
+
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());
 
 app.whenReady().then(() => {
