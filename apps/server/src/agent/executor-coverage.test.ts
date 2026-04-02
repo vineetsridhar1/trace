@@ -257,32 +257,6 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
     },
   },
   {
-    actionType: "channel.create",
-    args: {
-      name: "eng-platform",
-      type: "coding",
-      repoId: "repo-1",
-      baseBranch: "main",
-      groupId: "group-1",
-      projectIds: ["proj-1"],
-    },
-    assertCall: (services) => {
-      expect(services.channelService.create).toHaveBeenCalledWith(
-        {
-          name: "eng-platform",
-          organizationId: "org-1",
-          type: "coding",
-          repoId: "repo-1",
-          baseBranch: "main",
-          groupId: "group-1",
-          projectIds: ["proj-1"],
-        },
-        "agent",
-        "agent-1",
-      );
-    },
-  },
-  {
     actionType: "channel.update",
     args: { channelId: "chan-1", name: "eng-platform-core", baseBranch: "release" },
     assertCall: (services) => {
@@ -292,32 +266,6 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
         "agent",
         "agent-1",
       );
-    },
-  },
-  {
-    actionType: "channel.delete",
-    args: { channelId: "chan-1" },
-    assertCall: (services) => {
-      expect(services.channelService.delete).toHaveBeenCalledWith(
-        "chan-1",
-        "org-1",
-        "agent",
-        "agent-1",
-      );
-    },
-  },
-  {
-    actionType: "channel.join",
-    args: { channelId: "chan-1" },
-    assertCall: (services) => {
-      expect(services.channelService.join).toHaveBeenCalledWith("chan-1", "agent", "agent-1");
-    },
-  },
-  {
-    actionType: "channel.leave",
-    args: { channelId: "chan-1" },
-    assertCall: (services) => {
-      expect(services.channelService.leave).toHaveBeenCalledWith("chan-1", "agent", "agent-1");
     },
   },
   {

@@ -1,5 +1,5 @@
 /**
- * Channel domain actions — create, update, delete, join, leave, sendMessage, editMessage, deleteMessage, get
+ * Channel domain actions — sendMessage, update, editMessage, deleteMessage, get
  */
 
 import type { AgentActionRegistration, ActionDispatcher } from "./types.js";
@@ -32,36 +32,6 @@ export const channelActions: AgentActionRegistration[] = [
     scopes: ["channel"],
   },
   {
-    name: "channel.create",
-    service: "channelService",
-    method: "create",
-    description:
-      "Create a new channel in the organization. Use to set up a new text or coding space for team communication.",
-    catalogDescription: "Create/add/make a new channel (name, type, repoId, projectIds)",
-    risk: "medium",
-    suggestable: true,
-    tier: "extended",
-    parameters: {
-      fields: {
-        name: { type: "string", description: "Channel name", required: true },
-        type: {
-          type: "string",
-          description: "Channel type",
-          enum: ["text", "coding"],
-        },
-        repoId: { type: "string", description: "Repository required for coding channels" },
-        baseBranch: { type: "string", description: "Base branch for coding channels" },
-        groupId: { type: "string", description: "Channel group to place the channel in" },
-        projectIds: {
-          type: "array",
-          description: "Projects to associate the channel with",
-          items: { type: "string" },
-        },
-      },
-    },
-    scopes: ["channel", "project", "system"],
-  },
-  {
     name: "channel.update",
     service: "channelService",
     method: "update",
@@ -76,57 +46,6 @@ export const channelActions: AgentActionRegistration[] = [
         channelId: { type: "string", description: "The channel to update", required: true },
         name: { type: "string", description: "New channel name" },
         baseBranch: { type: "string", description: "New base branch for coding channels" },
-      },
-    },
-    scopes: ["channel"],
-  },
-  {
-    name: "channel.delete",
-    service: "channelService",
-    method: "delete",
-    description:
-      "Delete a channel permanently. This is a high-risk destructive action.",
-    catalogDescription: "Remove/destroy/delete a channel permanently (channelId)",
-    risk: "high",
-    suggestable: true,
-    tier: "extended",
-    parameters: {
-      fields: {
-        channelId: { type: "string", description: "The channel to delete", required: true },
-      },
-    },
-    scopes: ["channel"],
-  },
-  {
-    name: "channel.join",
-    service: "channelService",
-    method: "join",
-    description:
-      "Join a channel as a member.",
-    catalogDescription: "Join/enter a channel (channelId)",
-    risk: "low",
-    suggestable: false,
-    tier: "extended",
-    parameters: {
-      fields: {
-        channelId: { type: "string", description: "The channel to join", required: true },
-      },
-    },
-    scopes: ["channel"],
-  },
-  {
-    name: "channel.leave",
-    service: "channelService",
-    method: "leave",
-    description:
-      "Leave a channel.",
-    catalogDescription: "Leave/exit a channel (channelId)",
-    risk: "low",
-    suggestable: false,
-    tier: "extended",
-    parameters: {
-      fields: {
-        channelId: { type: "string", description: "The channel to leave", required: true },
       },
     },
     scopes: ["channel"],
@@ -253,23 +172,6 @@ export const channelDispatchers: Record<string, ActionDispatcher> = {
     );
   },
 
-  "channel.create": (services, args, ctx) => {
-    const { actorType, actorId } = actorInfo(ctx);
-    return services.channelService.create(
-      {
-        name: args.name as string,
-        organizationId: ctx.organizationId,
-        type: args.type as "text" | "coding" | undefined,
-        repoId: args.repoId as string | undefined,
-        baseBranch: args.baseBranch as string | undefined,
-        groupId: args.groupId as string | undefined,
-        projectIds: args.projectIds as string[] | undefined,
-      },
-      actorType,
-      actorId,
-    );
-  },
-
   "channel.update": (services, args, ctx) => {
     const { actorType, actorId } = actorInfo(ctx);
     return services.channelService.update(
@@ -281,26 +183,6 @@ export const channelDispatchers: Record<string, ActionDispatcher> = {
       actorType,
       actorId,
     );
-  },
-
-  "channel.delete": (services, args, ctx) => {
-    const { actorType, actorId } = actorInfo(ctx);
-    return services.channelService.delete(
-      args.channelId as string,
-      ctx.organizationId,
-      actorType,
-      actorId,
-    );
-  },
-
-  "channel.join": (services, args, ctx) => {
-    const { actorType, actorId } = actorInfo(ctx);
-    return services.channelService.join(args.channelId as string, actorType, actorId);
-  },
-
-  "channel.leave": (services, args, ctx) => {
-    const { actorType, actorId } = actorInfo(ctx);
-    return services.channelService.leave(args.channelId as string, actorType, actorId);
   },
 
   "channel.editMessage": (services, args, ctx) => {

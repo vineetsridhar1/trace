@@ -34,9 +34,7 @@ const ACTION_TO_ITEM_TYPE: Record<string, InboxItemType> = {
   "session.delete": "session_suggestion",
 
   // Channel management
-  "channel.create": "agent_suggestion",
   "channel.update": "agent_suggestion",
-  "channel.delete": "agent_suggestion",
 
   // Chat management
   "chat.create": "agent_suggestion",

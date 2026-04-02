@@ -43,27 +43,11 @@ describe("action registry", () => {
       });
   });
 
-  it("accepts the supported channel.create inputs and rejects stale ones", () => {
-    const action = findAction("channel.create");
-    expect(action).toBeDefined();
-
-    expect(validateActionParams(action!, {
-      name: "eng-platform",
-      type: "coding",
-      repoId: "repo-1",
-      projectIds: ["proj-1"],
-    })).toEqual({
-      valid: true,
-      errors: [],
-    });
-
-    expect(validateActionParams(action!, {
-      name: "eng-platform",
-      projectId: "proj-1",
-    } as Record<string, unknown>)).toEqual({
-      valid: false,
-      errors: ["Unknown field: projectId"],
-    });
+  it("does not expose removed channel lifecycle actions", () => {
+    expect(findAction("channel.create")).toBeUndefined();
+    expect(findAction("channel.delete")).toBeUndefined();
+    expect(findAction("channel.join")).toBeUndefined();
+    expect(findAction("channel.leave")).toBeUndefined();
   });
 
   it("validates updated project.linkEntity and session.list enums", () => {
