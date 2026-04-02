@@ -414,13 +414,13 @@ export function useOrgEvents() {
             // Remove sessions and session groups that belonged to this channel
             const allSessions = batch.getAll("sessions");
             for (const [sessionId, session] of Object.entries(allSessions)) {
-              if (session.channelId === channelId) {
+              if (session.channel?.id === channelId) {
                 batch.remove("sessions", sessionId);
               }
             }
             const allGroups = batch.getAll("sessionGroups");
             for (const [groupId, group] of Object.entries(allGroups)) {
-              if (group.channelId === channelId) {
+              if (group.channel?.id === channelId) {
                 batch.remove("sessionGroups", groupId);
               }
             }
