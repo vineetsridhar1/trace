@@ -6,18 +6,22 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/cjs/index.js"
     },
     "./animal-names": {
+      "types": "./dist/animal-names.d.ts",
       "import": "./dist/animal-names.js",
       "require": "./dist/cjs/animal-names.js"
     },
     "./git-hooks": {
+      "types": "./dist/git-hooks.d.ts",
       "import": "./dist/git-hooks.js",
       "require": "./dist/cjs/git-hooks.js"
     },
     "./adapters": {
+      "types": "./dist/adapters.d.ts",
       "import": "./dist/adapters.js",
       "require": "./dist/cjs/adapters.js"
     }
