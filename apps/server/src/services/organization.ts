@@ -80,6 +80,20 @@ export class OrganizationService {
     });
   }
 
+  async searchUsers(term: string) {
+    if (term.length < 2) return [];
+    return prisma.user.findMany({
+      where: {
+        OR: [
+          { email: { contains: term, mode: "insensitive" } },
+          { name: { contains: term, mode: "insensitive" } },
+        ],
+      },
+      select: { id: true, name: true, email: true, avatarUrl: true },
+      take: 10,
+    });
+  }
+
   async createRepo(input: CreateRepoInput, actorType: ActorType, actorId: string) {
     // Deduplicate by remote URL within the org — if it already exists, return it
     const existing = await prisma.repo.findUnique({

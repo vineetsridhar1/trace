@@ -4,27 +4,15 @@ import { organizationService } from "../services/organization.js";
 import { webhookService } from "../services/webhook.js";
 import { orgMemberService } from "../services/org-member.js";
 import { requireOrgContext } from "../lib/require-org.js";
-import { prisma } from "../lib/db.js";
-
 export const organizationQueries = {
   organization: (_: unknown, args: { id: string }, ctx: Context) =>
     organizationService.getOrganization(args.id, ctx.userId),
   myOrganizations: async (_: unknown, _args: Record<string, never>, ctx: Context) => {
     return orgMemberService.getUserOrgs(ctx.userId);
   },
-  searchUsers: async (_: unknown, args: { email: string }, _ctx: Context) => {
-    const term = args.email.trim();
-    if (term.length < 2) return [];
-    return prisma.user.findMany({
-      where: {
-        OR: [
-          { email: { contains: term, mode: "insensitive" } },
-          { name: { contains: term, mode: "insensitive" } },
-        ],
-      },
-      select: { id: true, name: true, email: true, avatarUrl: true },
-      take: 10,
-    });
+  searchUsers: async (_: unknown, args: { email: string }, ctx: Context) => {
+    requireOrgContext(ctx);
+    return organizationService.searchUsers(args.email.trim());
   },
   repos: (_: unknown, args: { organizationId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
@@ -93,8 +81,7 @@ export const organizationMutations = {
     args: { organizationId: string; userId: string; role?: UserRole },
     ctx: Context,
   ) => {
-    // Only admins can add members
-    await orgMemberService.assertMembership(ctx.userId, args.organizationId);
+    await orgMemberService.assertAdmin(ctx.userId, args.organizationId);
     return orgMemberService.addMember({
       organizationId: args.organizationId,
       userId: args.userId,
@@ -108,7 +95,7 @@ export const organizationMutations = {
     args: { organizationId: string; userId: string },
     ctx: Context,
   ) => {
-    await orgMemberService.assertMembership(ctx.userId, args.organizationId);
+    await orgMemberService.assertAdmin(ctx.userId, args.organizationId);
     return orgMemberService.removeMember({
       organizationId: args.organizationId,
       userId: args.userId,
@@ -121,7 +108,7 @@ export const organizationMutations = {
     args: { organizationId: string; userId: string; role: UserRole },
     ctx: Context,
   ) => {
-    await orgMemberService.assertMembership(ctx.userId, args.organizationId);
+    await orgMemberService.assertAdmin(ctx.userId, args.organizationId);
     return orgMemberService.updateRole({
       organizationId: args.organizationId,
       userId: args.userId,

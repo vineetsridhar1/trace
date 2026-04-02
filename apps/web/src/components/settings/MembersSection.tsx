@@ -96,6 +96,8 @@ export function MembersSection() {
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [searching, setSearching] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [searchDone, setSearchDone] = useState(false);
 
   const fetchMembers = useCallback(async () => {
     if (!activeOrgId) return;
@@ -117,8 +119,10 @@ export function MembersSection() {
     const trimmed = addEmail.trim();
     if (trimmed.length < 2) {
       setSearchResults([]);
+      setSearchDone(false);
       return;
     }
+    setSearchDone(false);
     const timer = setTimeout(async () => {
       setSearching(true);
       const result = await client
@@ -129,6 +133,7 @@ export function MembersSection() {
       const memberIds = new Set(members.map((m) => m.user.id));
       setSearchResults(users.filter((u) => !memberIds.has(u.id)));
       setSearching(false);
+      setSearchDone(true);
     }, 300);
     return () => clearTimeout(timer);
   }, [addEmail, members]);
@@ -157,23 +162,33 @@ export function MembersSection() {
   async function handleRemoveMember(userId: string) {
     if (!activeOrgId) return;
     setRemovingId(userId);
-    await client
+    setActionError(null);
+    const result = await client
       .mutation(REMOVE_ORG_MEMBER, { organizationId: activeOrgId, userId })
       .toPromise();
-    fetchMembers();
+    if (result.error) {
+      setActionError(result.error.message);
+    } else {
+      fetchMembers();
+    }
     setRemovingId(null);
   }
 
   async function handleRoleChange(userId: string, role: UserRole) {
     if (!activeOrgId) return;
-    await client
+    setActionError(null);
+    const result = await client
       .mutation(UPDATE_ORG_MEMBER_ROLE, {
         organizationId: activeOrgId,
         userId,
         role,
       })
       .toPromise();
-    fetchMembers();
+    if (result.error) {
+      setActionError(result.error.message);
+    } else {
+      fetchMembers();
+    }
   }
 
   return (
@@ -199,13 +214,13 @@ export function MembersSection() {
               onChange={(e) => setAddEmail(e.target.value)}
             />
             {/* Search results dropdown */}
-            {addEmail.trim().length >= 2 && (searchResults.length > 0 || searching) && (
+            {addEmail.trim().length >= 2 && (searching || searchDone) && (
               <div className="absolute top-full left-0 right-0 z-10 mt-1 rounded-lg border border-border bg-surface-elevated shadow-lg">
                 {searching ? (
                   <div className="p-3 text-center text-sm text-muted-foreground">
                     Searching...
                   </div>
-                ) : (
+                ) : searchResults.length > 0 ? (
                   searchResults.map((user) => (
                     <button
                       key={user.id}
@@ -230,8 +245,7 @@ export function MembersSection() {
                       </div>
                     </button>
                   ))
-                )}
-                {!searching && searchResults.length === 0 && addEmail.trim().length >= 2 && (
+                ) : (
                   <div className="p-3 text-center text-sm text-muted-foreground">
                     No users found. They need to sign up first.
                   </div>
@@ -254,6 +268,10 @@ export function MembersSection() {
           <p className="mt-2 text-xs text-destructive">{addError}</p>
         )}
       </div>
+
+      {actionError && (
+        <p className="mb-4 text-xs text-destructive">{actionError}</p>
+      )}
 
       {/* Members table */}
       {loading ? (
