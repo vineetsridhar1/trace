@@ -64,8 +64,8 @@ export interface ServiceContainer {
   channelService: ChannelService;
   sessionService: SessionService;
   inboxService: InboxService;
-  organizationService?: OrganizationService;
-  eventService?: EventService;
+  organizationService: OrganizationService;
+  eventService: EventService;
   /** Forward reference — created in ticket #09 (Entity Summaries). */
   summaryService?: { upsert(input: Record<string, unknown>): Promise<unknown> };
 }

@@ -107,7 +107,7 @@ export const readActions: AgentActionRegistration[] = [
 
 export const readDispatchers: Record<string, ActionDispatcher> = {
   "events.query": (services, args, ctx) => {
-    if (!services.eventService) throw new Error("eventService not available");
+
     const limit = Math.min(typeof args.limit === "number" ? args.limit : 20, 50);
     return services.eventService.query(ctx.organizationId, {
       scopeType: args.scopeType as string,
@@ -117,7 +117,7 @@ export const readDispatchers: Record<string, ActionDispatcher> = {
   },
 
   "users.search": (services, args, ctx) => {
-    if (!services.organizationService) throw new Error("organizationService not available");
+
     return services.organizationService.searchUsers(
       args.query as string,
       ctx.organizationId,
@@ -125,12 +125,12 @@ export const readDispatchers: Record<string, ActionDispatcher> = {
   },
 
   "users.getProfile": (services, args) => {
-    if (!services.organizationService) throw new Error("organizationService not available");
+
     return services.organizationService.getUserProfile(args.userId as string);
   },
 
   "org.listProjects": (services, args, ctx) => {
-    if (!services.organizationService) throw new Error("organizationService not available");
+
     return services.organizationService.listProjects(
       ctx.organizationId,
       args.repoId as string | undefined,
@@ -138,7 +138,7 @@ export const readDispatchers: Record<string, ActionDispatcher> = {
   },
 
   "org.listRepos": (services, _args, ctx) => {
-    if (!services.organizationService) throw new Error("organizationService not available");
+
     return services.organizationService.listRepos(ctx.organizationId);
   },
 };

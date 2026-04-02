@@ -42,7 +42,6 @@ export const chatActions: AgentActionRegistration[] = [
     tier: "extended",
     parameters: {
       fields: {
-        organizationId: { type: "string", description: "Organization ID", required: true },
         memberIds: {
           type: "array",
           description: "User IDs to include in the chat",
@@ -232,7 +231,7 @@ export const chatDispatchers: Record<string, ActionDispatcher> = {
     const { actorType, actorId } = actorInfo(ctx);
     return services.chatService.create(
       {
-        organizationId: args.organizationId as string,
+        organizationId: ctx.organizationId,
         memberIds: args.memberIds as string[],
         name: args.name as string | undefined,
       },

@@ -22,6 +22,18 @@ function createServices(): ServiceContainer {
     inboxService: {
       createItem: vi.fn().mockResolvedValue({ id: "inbox-1" }),
     } as unknown as ServiceContainer["inboxService"],
+    organizationService: {
+      searchUsers: vi.fn().mockResolvedValue([]),
+      createProject: vi.fn().mockResolvedValue({ id: "project-1" }),
+      linkEntityToProject: vi.fn().mockResolvedValue({ id: "project-1" }),
+      getProject: vi.fn().mockResolvedValue(null),
+      getUserProfile: vi.fn().mockResolvedValue({ id: "user-1" }),
+      listProjects: vi.fn().mockResolvedValue([]),
+      listRepos: vi.fn().mockResolvedValue([]),
+    } as unknown as ServiceContainer["organizationService"],
+    eventService: {
+      query: vi.fn().mockResolvedValue([]),
+    } as unknown as ServiceContainer["eventService"],
   };
 }
 

@@ -65,10 +65,9 @@ export const inboxDispatchers: Record<string, ActionDispatcher> = {
     return services.inboxService.createItem({
       orgId: ctx.organizationId,
       userId: args.userId as string,
-      itemType: (args.itemType as Parameters<typeof services.inboxService.createItem>[0]["itemType"]) ?? "agent_escalation",
+      itemType: "agent_escalation",
       title: args.title as string,
       summary: args.summary as string | undefined,
-      payload: args.payload as Parameters<typeof services.inboxService.createItem>[0]["payload"],
       sourceType: args.sourceType as string,
       sourceId: args.sourceId as string,
     });

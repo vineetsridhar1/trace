@@ -49,9 +49,17 @@ const actionsByName = new Map<string, AgentActionRegistration>(
   allActions.map((a) => [a.name, a]),
 );
 
+const ALL_SCOPES: ScopeType[] = ["chat", "channel", "ticket", "session", "project", "system"];
+
 const actionsByScopeCache = new Map<ScopeType, AgentActionRegistration[]>();
-for (const scope of ["chat", "channel", "ticket", "session", "project", "system"] as ScopeType[]) {
-  actionsByScopeCache.set(scope, allActions.filter((a) => a.scopes.includes(scope)));
+const coreByScopeCache = new Map<ScopeType, AgentActionRegistration[]>();
+const extendedByScopeCache = new Map<ScopeType, AgentActionRegistration[]>();
+
+for (const scope of ALL_SCOPES) {
+  const scoped = allActions.filter((a) => a.scopes.includes(scope));
+  actionsByScopeCache.set(scope, scoped);
+  coreByScopeCache.set(scope, scoped.filter((a) => a.tier === "core"));
+  extendedByScopeCache.set(scope, scoped.filter((a) => a.tier === "extended"));
 }
 
 // ---------------------------------------------------------------------------
@@ -70,6 +78,19 @@ const dispatchRegistry = new Map<string, ActionDispatcher>([
 ]);
 
 // ---------------------------------------------------------------------------
+// Startup validation — every registered action must have a dispatcher
+// ---------------------------------------------------------------------------
+
+for (const action of allActions) {
+  if (!dispatchRegistry.has(action.name)) {
+    throw new Error(
+      `Action "${action.name}" is registered but has no dispatcher. ` +
+      `Add a dispatcher in the corresponding domain file.`,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -83,14 +104,14 @@ export function getActionsByScope(scope: ScopeType): AgentActionRegistration[] {
   return actionsByScopeCache.get(scope) ?? [];
 }
 
-/** Get core actions (full schema in prompt) filtered by scope. */
+/** Get core actions (full schema in prompt) filtered by scope. Pre-computed. */
 export function getCoreActions(scope: ScopeType): AgentActionRegistration[] {
-  return getActionsByScope(scope).filter((a) => a.tier === "core");
+  return coreByScopeCache.get(scope) ?? [];
 }
 
-/** Get extended actions (catalog line in prompt) filtered by scope. */
+/** Get extended actions (catalog line in prompt) filtered by scope. Pre-computed. */
 export function getExtendedActions(scope: ScopeType): AgentActionRegistration[] {
-  return getActionsByScope(scope).filter((a) => a.tier === "extended");
+  return extendedByScopeCache.get(scope) ?? [];
 }
 
 /** Find a specific action by name. Supports backward-compat aliases. O(1). */

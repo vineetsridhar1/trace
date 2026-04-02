@@ -23,7 +23,6 @@ export const projectActions: AgentActionRegistration[] = [
     parameters: {
       fields: {
         name: { type: "string", description: "Project name", required: true },
-        organizationId: { type: "string", description: "Organization ID", required: true },
         description: { type: "string", description: "Project description" },
       },
     },
@@ -78,12 +77,12 @@ export const projectActions: AgentActionRegistration[] = [
 
 export const projectDispatchers: Record<string, ActionDispatcher> = {
   "project.create": (services, args, ctx) => {
-    if (!services.organizationService) throw new Error("organizationService not available");
+
     const { actorType, actorId } = actorInfo(ctx);
     return services.organizationService.createProject(
       {
         name: args.name as string,
-        organizationId: args.organizationId as string,
+        organizationId: ctx.organizationId,
         description: args.description as string | undefined,
       },
       actorType,
@@ -92,7 +91,7 @@ export const projectDispatchers: Record<string, ActionDispatcher> = {
   },
 
   "project.linkEntity": (services, args, ctx) => {
-    if (!services.organizationService) throw new Error("organizationService not available");
+
     const { actorType, actorId } = actorInfo(ctx);
     return services.organizationService.linkEntityToProject(
       args.entityType as EntityType,
@@ -104,7 +103,7 @@ export const projectDispatchers: Record<string, ActionDispatcher> = {
   },
 
   "project.get": (services, args, ctx) => {
-    if (!services.organizationService) throw new Error("organizationService not available");
+
     return services.organizationService.getProject(args.projectId as string, ctx.organizationId);
   },
 };

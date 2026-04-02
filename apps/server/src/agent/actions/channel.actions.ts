@@ -44,7 +44,6 @@ export const channelActions: AgentActionRegistration[] = [
     parameters: {
       fields: {
         name: { type: "string", description: "Channel name", required: true },
-        organizationId: { type: "string", description: "Organization ID", required: true },
         description: { type: "string", description: "Channel description" },
         projectId: { type: "string", description: "Project to associate the channel with" },
       },
@@ -248,7 +247,7 @@ export const channelDispatchers: Record<string, ActionDispatcher> = {
     return services.channelService.create(
       {
         name: args.name as string,
-        organizationId: args.organizationId as string,
+        organizationId: ctx.organizationId,
         description: args.description as string | undefined,
         projectId: args.projectId as string | undefined,
       },

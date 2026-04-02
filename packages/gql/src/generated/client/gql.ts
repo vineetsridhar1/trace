@@ -79,6 +79,7 @@ type Documents = {
     "\n  mutation MoveSessionToRuntime($sessionId: ID!, $runtimeInstanceId: ID!) {\n    moveSessionToRuntime(sessionId: $sessionId, runtimeInstanceId: $runtimeInstanceId) {\n      id\n    }\n  }\n": typeof types.MoveSessionToRuntimeDocument,
     "\n  mutation MoveSessionToCloud($sessionId: ID!) {\n    moveSessionToCloud(sessionId: $sessionId) {\n      id\n    }\n  }\n": typeof types.MoveSessionToCloudDocument,
     "\n  mutation DeleteSession($id: ID!) {\n    deleteSession(id: $id) {\n      id\n    }\n  }\n": typeof types.DeleteSessionDocument,
+    "\n  mutation DeleteChannel($id: ID!) {\n    deleteChannel(id: $id)\n  }\n": typeof types.DeleteChannelDocument,
     "\n  mutation DeleteSessionGroup($id: ID!) {\n    deleteSessionGroup(id: $id)\n  }\n": typeof types.DeleteSessionGroupDocument,
     "\n  mutation ArchiveSessionGroup($id: ID!) {\n    archiveSessionGroup(id: $id) {\n      id\n      archivedAt\n      worktreeDeleted\n    }\n  }\n": typeof types.ArchiveSessionGroupDocument,
     "\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n": typeof types.AvailableSessionRuntimesDocument,
@@ -166,6 +167,7 @@ const documents: Documents = {
     "\n  mutation MoveSessionToRuntime($sessionId: ID!, $runtimeInstanceId: ID!) {\n    moveSessionToRuntime(sessionId: $sessionId, runtimeInstanceId: $runtimeInstanceId) {\n      id\n    }\n  }\n": types.MoveSessionToRuntimeDocument,
     "\n  mutation MoveSessionToCloud($sessionId: ID!) {\n    moveSessionToCloud(sessionId: $sessionId) {\n      id\n    }\n  }\n": types.MoveSessionToCloudDocument,
     "\n  mutation DeleteSession($id: ID!) {\n    deleteSession(id: $id) {\n      id\n    }\n  }\n": types.DeleteSessionDocument,
+    "\n  mutation DeleteChannel($id: ID!) {\n    deleteChannel(id: $id)\n  }\n": types.DeleteChannelDocument,
     "\n  mutation DeleteSessionGroup($id: ID!) {\n    deleteSessionGroup(id: $id)\n  }\n": types.DeleteSessionGroupDocument,
     "\n  mutation ArchiveSessionGroup($id: ID!) {\n    archiveSessionGroup(id: $id) {\n      id\n      archivedAt\n      worktreeDeleted\n    }\n  }\n": types.ArchiveSessionGroupDocument,
     "\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n": types.AvailableSessionRuntimesDocument,
@@ -462,6 +464,10 @@ export function graphql(source: "\n  mutation MoveSessionToCloud($sessionId: ID!
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  mutation DeleteSession($id: ID!) {\n    deleteSession(id: $id) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation DeleteSession($id: ID!) {\n    deleteSession(id: $id) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation DeleteChannel($id: ID!) {\n    deleteChannel(id: $id)\n  }\n"): (typeof documents)["\n  mutation DeleteChannel($id: ID!) {\n    deleteChannel(id: $id)\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
