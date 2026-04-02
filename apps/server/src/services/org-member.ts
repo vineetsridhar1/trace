@@ -7,7 +7,7 @@ export class OrgMemberService {
   async addMember({
     organizationId,
     userId,
-    role = "member",
+    role,
     actorType,
     actorId,
   }: {
@@ -23,11 +23,22 @@ export class OrgMemberService {
       select: { id: true, name: true },
     });
 
+    const existingHumanMembers = await prisma.orgMember.count({
+      where: {
+        organizationId,
+        userId: { not: TRACE_AI_USER_ID },
+      },
+    });
+
+    // Ensure every organization always has at least one human admin.
+    const effectiveRole =
+      user.id !== TRACE_AI_USER_ID && existingHumanMembers === 0 ? "admin" : (role ?? "member");
+
     const member = await prisma.orgMember.create({
       data: {
         userId: user.id,
         organizationId,
-        role,
+        role: effectiveRole,
       },
       include: {
         user: { select: { id: true, name: true, email: true, avatarUrl: true } },
@@ -43,7 +54,7 @@ export class OrgMemberService {
       payload: {
         userId: user.id,
         userName: user.name,
-        role,
+        role: effectiveRole,
       },
       actorType,
       actorId,
@@ -105,7 +116,10 @@ export class OrgMemberService {
 
   async getMembers(organizationId: string) {
     return prisma.orgMember.findMany({
-      where: { organizationId },
+      where: {
+        organizationId,
+        userId: { not: TRACE_AI_USER_ID },
+      },
       include: {
         user: { select: { id: true, name: true, email: true, avatarUrl: true } },
         organization: { select: { id: true, name: true } },
