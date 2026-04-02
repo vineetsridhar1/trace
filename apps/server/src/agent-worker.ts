@@ -30,6 +30,8 @@ import { chatService } from "./services/chat.js";
 import { sessionService } from "./services/session.js";
 import { inboxService } from "./services/inbox.js";
 import { channelService } from "./services/channel.js";
+import { organizationService } from "./services/organization.js";
+import { eventService } from "./services/event.js";
 import { startSuggestionExpiryWorker, stopSuggestionExpiryWorker } from "./agent/suggestion-expiry.js";
 import { setPolicyCostTracker } from "./agent/policy-engine.js";
 import { publishWorkerStatus, publishAggregationWindows } from "./services/agent-worker-status.js";
@@ -141,6 +143,8 @@ const executor = new ActionExecutor({
   channelService,
   sessionService,
   inboxService,
+  organizationService,
+  eventService,
 });
 
 /**

@@ -1,73 +1,14 @@
-import { memo, useCallback, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
-import { MessageSquare, Code, Trash2 } from "lucide-react";
+import { memo, useMemo } from "react";
+import { MessageSquare, Code } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
 import { SidebarMenuItem, SidebarMenuButton } from "../ui/sidebar";
-import { client } from "../../lib/urql";
-import { DELETE_CHANNEL_MUTATION } from "../../lib/mutations";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "../ui/dialog";
-import { Button } from "../ui/button";
 
 function ChannelIcon({ type, className }: { type: string | undefined; className?: string }) {
   if (type === "text") return <MessageSquare size={16} className={className} />;
   return <Code size={16} className={className} />;
-}
-
-const MENU_WIDTH = 160;
-const MENU_HEIGHT = 36;
-
-function ChannelContextMenu({
-  x,
-  y,
-  onClose,
-  onDelete,
-}: {
-  x: number;
-  y: number;
-  onClose: () => void;
-  onDelete: () => void;
-}) {
-  const clampedX = Math.min(x, window.innerWidth - MENU_WIDTH);
-  const clampedY = Math.min(y, window.innerHeight - MENU_HEIGHT);
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50"
-      onClick={onClose}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        onClose();
-      }}
-    >
-      <div
-        className="absolute z-50 min-w-36 rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 animate-in fade-in-0 zoom-in-95"
-        style={{ top: clampedY, left: clampedX }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          className="flex w-full cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm outline-none select-none hover:bg-destructive/10 text-destructive"
-          onClick={() => {
-            onClose();
-            onDelete();
-          }}
-        >
-          <Trash2 size={14} />
-          Delete channel
-        </button>
-      </div>
-    </div>,
-    document.body,
-  );
 }
 
 export const ChannelItem = memo(function ChannelItem({
@@ -84,23 +25,6 @@ export const ChannelItem = memo(function ChannelItem({
   const name = useEntityField("channels", id, "name");
   const type = useEntityField("channels", id, "type");
   const hasDoneBadge = useUIStore((s) => !!s.channelDoneBadges[id]);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY });
-  }, []);
-
-  const handleConfirmDelete = useCallback(() => {
-    setShowDeleteDialog(false);
-    client
-      .mutation(DELETE_CHANNEL_MUTATION, { id })
-      .toPromise()
-      .catch((error: unknown) => {
-        console.error("Failed to delete channel:", error);
-      });
-  }, [id]);
 
   const sortableData = useMemo(
     () => ({ type: "channel" as const, id, groupId: groupId ?? null }),
@@ -131,7 +55,6 @@ export const ChannelItem = memo(function ChannelItem({
       style={style}
       {...attributes}
       {...listeners}
-      onContextMenu={handleContextMenu}
     >
       <SidebarMenuItem>
         <SidebarMenuButton isActive={isActive} onClick={onClick} tooltip={name ?? ""}>
@@ -147,35 +70,6 @@ export const ChannelItem = memo(function ChannelItem({
           <span className={hasDoneBadge ? "font-semibold" : undefined}>{name}</span>
         </SidebarMenuButton>
       </SidebarMenuItem>
-
-      {contextMenu && (
-        <ChannelContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          onClose={() => setContextMenu(null)}
-          onDelete={() => setShowDeleteDialog(true)}
-        />
-      )}
-
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete channel</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete <strong>{name}</strong>? This will permanently delete
-              all sessions and session groups in this channel. This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleConfirmDelete}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 });

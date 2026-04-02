@@ -31,6 +31,7 @@ vi.mock("./context-builder.js", () => ({
 vi.mock("./planner.js", () => ({
   DEFAULT_SONNET_MODEL: "claude-sonnet-4-20250514",
   DEFAULT_OPUS_MODEL: "claude-opus-4-20250514",
+  PLANNER_TOOL: { name: "planner_decision" },
   buildSystemPrompt: vi.fn().mockReturnValue("system prompt"),
   runPlannerTurn: vi.fn(),
 }));
@@ -587,6 +588,58 @@ describe("runPipeline", () => {
 
     // Policy engine was called (ignore was overridden to act)
     expect(mockEvaluatePolicy).toHaveBeenCalledOnce();
+  });
+
+  it("treats channel.sendMessage as the reply action for channel mentions", async () => {
+    const packet = makePacket({
+      isMention: true,
+      scopeType: "channel",
+      scopeId: "ch-1",
+      triggerEvent: {
+        id: "evt-1",
+        organizationId: "org-1",
+        scopeType: "channel",
+        scopeId: "ch-1",
+        eventType: "message_sent",
+        actorType: "user",
+        actorId: "user-1",
+        payload: { messageId: "msg-1" },
+        timestamp: new Date().toISOString(),
+      },
+    });
+    mockBuildContext.mockResolvedValue(packet);
+    mockRunPlannerTurn.mockResolvedValue(makeTurnResult("act", {
+      done: true,
+      proposedActions: [
+        { actionType: "channel.sendMessage", args: { channelId: "ch-1", text: "On it." } },
+      ],
+    }));
+    mockEvaluatePolicy.mockImplementation(async ({ plannerOutput }) => ({
+      actions: plannerOutput.proposedActions.map((action) => ({
+        action,
+        decision: "execute" as const,
+        reason: "ok",
+      })),
+      plannerOutput,
+    }));
+    (mockExecutor.execute as ReturnType<typeof vi.fn>).mockImplementation(
+      async (action: { actionType: string }) => ({ status: "success", actionType: action.actionType }),
+    );
+
+    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
+
+    expect(mockExecutor.execute).toHaveBeenCalledTimes(1);
+    expect(mockExecutor.execute).toHaveBeenCalledWith(
+      {
+        actionType: "channel.sendMessage",
+        args: { channelId: "ch-1", text: "On it.", threadId: "msg-1" },
+      },
+      {
+        organizationId: "org-1",
+        agentId: "agent-1",
+        triggerEventId: "evt-1",
+      },
+    );
   });
 
   // ── Execution logging ──

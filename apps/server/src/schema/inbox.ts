@@ -7,6 +7,8 @@ import { ticketService } from "../services/ticket.js";
 import { chatService } from "../services/chat.js";
 import { sessionService } from "../services/session.js";
 import { channelService } from "../services/channel.js";
+import { organizationService } from "../services/organization.js";
+import { eventService } from "../services/event.js";
 import { recordDismissal } from "../agent/policy-engine.js";
 
 /** Shared executor — reused across resolver calls to preserve idempotency state. */
@@ -16,6 +18,8 @@ const executor = new ActionExecutor({
   channelService,
   sessionService,
   inboxService,
+  organizationService,
+  eventService,
 });
 
 export const inboxQueries = {

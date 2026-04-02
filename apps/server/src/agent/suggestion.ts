@@ -331,6 +331,7 @@ function generateTitle(actionType: string, args: Record<string, unknown>): strin
       return `Suggested coding session: ${prompt || "no prompt"}`;
     }
     case "message.send":
+    case "channel.sendMessage":
     case "message.sendToChannel": {
       const text = typeof args.text === "string" ? args.text.slice(0, 200) : "";
       return `Suggested message: ${text || "no content"}`;

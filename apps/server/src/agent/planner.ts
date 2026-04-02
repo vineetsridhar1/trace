@@ -214,7 +214,11 @@ MULTI-TURN LOOP:
 You MUST call the planner_decision tool exactly once per turn with your decision.`;
 
 function buildActionSchemaSection(actions: AgentActionRegistration[]): string {
-  const entries = actions.map((a) => {
+  const coreActions = actions.filter((a) => a.tier === "core");
+  const extendedActions = actions.filter((a) => a.tier === "extended");
+
+  // Core actions: full schema
+  const coreEntries = coreActions.map((a) => {
     const params = Object.entries(a.parameters.fields)
       .map(([name, field]) => {
         let desc = `${name}: ${field.type}`;
@@ -227,14 +231,38 @@ function buildActionSchemaSection(actions: AgentActionRegistration[]): string {
 
     return [
       `  - name: ${a.name}`,
-      `    risk: ${a.risk}`,
-      `    suggestable: ${a.suggestable}`,
+      `    risk: ${a.risk} | suggestable: ${a.suggestable}`,
       `    description: ${a.description}`,
       params ? `    parameters:\n      ${params}` : `    parameters: (none)`,
     ].join("\n");
   });
 
-  return `<action_schema>\nAvailable actions (you MUST only use these names):\n${entries.join("\n\n")}\n</action_schema>`;
+  // Extended actions: one-line catalog entries
+  const extendedEntries = extendedActions.map((a) => {
+    const desc = a.catalogDescription ?? a.description;
+    return `  - ${a.name} — ${desc}`;
+  });
+
+  const parts = [
+    "<action_schema>",
+    "Available actions (you MUST only use these names):",
+    "",
+    "## Core Actions",
+    coreEntries.join("\n\n"),
+  ];
+
+  if (extendedEntries.length > 0) {
+    parts.push(
+      "",
+      "## Additional Actions",
+      extendedEntries.join("\n"),
+      "",
+      "To use an additional action, provide parameters matching the hints in parentheses. All entity IDs are required strings.",
+    );
+  }
+
+  parts.push("</action_schema>");
+  return parts.join("\n");
 }
 
 function buildContextSection(ctx: AgentContextPacket): string {
@@ -274,7 +302,7 @@ function buildContextSection(ctx: AgentContextPacket): string {
     scopeLines.push(
       "Channel behavior: You can read all messages in this channel. " +
       "You should generally observe and only reply when genuinely helpful. " +
-      "When replying, ALWAYS use message.sendToChannel (not message.send). " +
+      "When replying, ALWAYS use channel.sendMessage (not message.send). " +
       "Prefer threaded replies (set threadId) to minimize noise in the main channel. " +
       "Only post without a threadId for important org-wide announcements or summaries. " +
       "@mentions directed at you MUST always receive a threaded reply."
@@ -322,7 +350,7 @@ function buildContextSection(ctx: AgentContextPacket): string {
 
   // Add @mention context hint
   if (ctx.isMention) {
-    const replyAction = ctx.scopeType === "channel" ? "message.sendToChannel" : "message.send";
+    const replyAction = ctx.scopeType === "channel" ? "channel.sendMessage" : "message.send";
     scopeLines.push(
       "@mention: You were directly @mentioned in this message. " +
       `The user is expecting a helpful reply. Respond with 'act' disposition and a ${replyAction} action. ` +

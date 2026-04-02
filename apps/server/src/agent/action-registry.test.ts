@@ -42,4 +42,37 @@ describe("action registry", () => {
         ],
       });
   });
+
+  it("does not expose removed channel lifecycle actions", () => {
+    expect(findAction("channel.create")).toBeUndefined();
+    expect(findAction("channel.delete")).toBeUndefined();
+    expect(findAction("channel.join")).toBeUndefined();
+    expect(findAction("channel.leave")).toBeUndefined();
+  });
+
+  it("validates updated project.linkEntity and session.list enums", () => {
+    const projectLink = findAction("project.linkEntity");
+    const sessionList = findAction("session.list");
+    expect(projectLink).toBeDefined();
+    expect(sessionList).toBeDefined();
+
+    expect(validateActionParams(projectLink!, {
+      entityType: "repo",
+      entityId: "repo-1",
+      projectId: "proj-1",
+    })).toEqual({
+      valid: false,
+      errors: ["Field entityType must be one of: channel, ticket, session"],
+    });
+
+    expect(validateActionParams(sessionList!, { agentStatus: "active" })).toEqual({
+      valid: true,
+      errors: [],
+    });
+
+    expect(validateActionParams(sessionList!, { agentStatus: "running" })).toEqual({
+      valid: false,
+      errors: ["Field agentStatus must be one of: not_started, active, done, failed, stopped"],
+    });
+  });
 });
