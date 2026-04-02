@@ -1,0 +1,72 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY: trace
+  ECR_REGISTRY: 459063349068.dkr.ecr.us-east-1.amazonaws.com
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Log in to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: |
+            VITE_API_URL=${{ secrets.VITE_API_URL }}
+            VITE_AG_GRID_LICENSE_KEY=${{ secrets.VITE_AG_GRID_LICENSE_KEY }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Copy production compose file to EC2
+        run: |
+          scp -i ~/.ssh/id_ed25519 deploy/docker-compose.ec2.yml \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/trace/docker-compose.ec2.yml"
+
+      - name: Deploy on EC2
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
+            "cd ~/trace && \
+            aws ecr get-login-password --region '${AWS_REGION}' | docker login --username AWS --password-stdin '${ECR_REGISTRY}' && \
+            IMAGE_TAG='${GITHUB_SHA}' ECR_REGISTRY='${ECR_REGISTRY}' docker compose -f docker-compose.ec2.yml pull && \
+            IMAGE_TAG='${GITHUB_SHA}' ECR_REGISTRY='${ECR_REGISTRY}' docker compose -f docker-compose.ec2.yml up -d --wait"

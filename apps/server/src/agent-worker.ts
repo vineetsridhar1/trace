@@ -644,7 +644,9 @@ async function main(): Promise<void> {
   } catch {
     const url = process.env.REDIS_URL ?? "redis://localhost:6379";
     console.error(`\n[agent-worker] Failed to connect to Redis at ${url}`);
-    console.error("[agent-worker] Start Redis with: docker compose up -d redis\n");
+    console.error(
+      "[agent-worker] Start Redis locally, for example: docker run -d --name trace-redis -p 6379:6379 redis:7-alpine\n",
+    );
     process.exit(1);
   }
 
