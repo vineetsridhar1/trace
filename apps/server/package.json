@@ -20,6 +20,8 @@
     "@anthropic-ai/sdk": "^0.80.0",
     "@apollo/server": "^4.11.3",
     "@as-integrations/express5": "^1.1.2",
+    "@aws-sdk/client-s3": "^3.1014.0",
+    "@aws-sdk/s3-request-presigner": "^3.1014.0",
     "@graphql-tools/schema": "^10.0.14",
     "@prisma/client": "^6.19.2",
     "@trace/gql": "workspace:*",

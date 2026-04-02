@@ -92,6 +92,7 @@ export function SessionGroupContentArea({
   if (selectedSession) {
     return (
       <SessionDetailView
+        key={selectedSession.id}
         sessionId={selectedSession.id}
         hideHeader
         scrollToEventId={scrollToEventId}

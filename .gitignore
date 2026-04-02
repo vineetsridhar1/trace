@@ -3,6 +3,8 @@ node_modules/
 dist/
 .env
 .env.*
+apps/server/.env
+apps/web/.env
 !.env.example
 !**/.env.example
 *.tsbuildinfo

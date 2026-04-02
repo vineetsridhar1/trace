@@ -81,6 +81,21 @@
   background-color: rgba(255, 255, 255, 0.06) !important;
 }
 
+/* Session editor variant — compact, single-line-start */
+.session-editor .chat-editor .ql-editor {
+  padding: 8px 12px;
+  min-height: 36px;
+  max-height: 150px;
+  overflow-y: auto;
+  font-size: 14px;
+}
+.session-editor .chat-editor .ql-editor.ql-blank::before {
+  color: var(--color-muted-foreground, #71717a) !important;
+  font-style: normal !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
 /* Custom scrollbar */
 .chat-editor .ql-editor::-webkit-scrollbar {
   width: 6px;

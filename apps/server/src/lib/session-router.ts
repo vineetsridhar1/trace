@@ -2,7 +2,7 @@ import type WebSocket from "ws";
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import type { CloudMachineService } from "./cloud-machine-service.js";
-import type { BridgeTerminalCreateCommand, BridgeTerminalInputCommand, BridgeTerminalResizeCommand, BridgeTerminalDestroyCommand, BridgeListFilesCommand, BridgeReadFileCommand, BridgeBranchDiffCommand, BridgeFileAtRefCommand, BridgeBranchDiffFile } from "@trace/shared";
+import type { BridgeTerminalCreateCommand, BridgeTerminalInputCommand, BridgeTerminalResizeCommand, BridgeTerminalDestroyCommand, BridgeListFilesCommand, BridgeReadFileCommand, BridgeBranchDiffCommand, BridgeFileAtRefCommand, BridgeBranchDiffFile, BridgeListSkillsCommand, BridgeSkillInfo } from "@trace/shared";
 import { prisma } from "./db.js";
 import { apiTokenService } from "../services/api-token.js";
 import { runtimeDebug } from "./runtime-debug.js";
@@ -20,6 +20,7 @@ export type SessionCommand =
   | BridgeReadFileCommand
   | BridgeBranchDiffCommand
   | BridgeFileAtRefCommand
+  | BridgeListSkillsCommand
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
   | BridgeTerminalResizeCommand
@@ -261,6 +262,8 @@ export class SessionRouter {
   private pendingBranchDiffRequests = new Map<string, { resolve: (files: BridgeBranchDiffFile[]) => void; reject: (err: Error) => void }>();
   /** Pending file-at-ref requests: requestId → resolve/reject */
   private pendingFileAtRefRequests = new Map<string, { resolve: (content: string) => void; reject: (err: Error) => void }>();
+  /** Pending skills list requests: requestId → resolve/reject */
+  private pendingSkillsRequests = new Map<string, { resolve: (skills: BridgeSkillInfo[]) => void; reject: (err: Error) => void }>();
 
   /** Cloud adapter instance, initialized once CloudMachineService is available */
   private cloudAdapter: SessionAdapter | null = null;
@@ -751,6 +754,63 @@ export class SessionRouter {
       pending.reject(new Error(error));
     } else {
       pending.resolve(content);
+    }
+  }
+
+  /**
+   * Ask a runtime to list skills (user + project SKILL.md files).
+   */
+  listSkills(
+    runtimeId: string,
+    sessionId: string,
+    options?: {
+      workdirHint?: string;
+      includeUserSkills?: boolean;
+      includeProjectSkills?: boolean;
+      timeoutMs?: number;
+    },
+  ): Promise<BridgeSkillInfo[]> {
+    const {
+      workdirHint,
+      includeUserSkills = true,
+      includeProjectSkills = true,
+      timeoutMs = 15_000,
+    } = options ?? {};
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, {
+      type: "list_skills",
+      requestId,
+      sessionId,
+      workdirHint,
+      includeUserSkills,
+      includeProjectSkills,
+    });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<BridgeSkillInfo[]>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingSkillsRequests.delete(requestId);
+        reject(new Error("Skills list request timed out"));
+      }, timeoutMs);
+
+      this.pendingSkillsRequests.set(requestId, {
+        resolve: (skills) => { clearTimeout(timer); resolve(skills); },
+        reject: (err) => { clearTimeout(timer); reject(err); },
+      });
+    });
+  }
+
+  /** Resolve a pending skills list request (called from bridge handler). */
+  resolveSkillsRequest(requestId: string, skills: BridgeSkillInfo[], error?: string): void {
+    const pending = this.pendingSkillsRequests.get(requestId);
+    if (!pending) return;
+    this.pendingSkillsRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else {
+      pending.resolve(skills);
     }
   }
 

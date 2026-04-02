@@ -156,7 +156,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
               onClosed={() => setDisplayedSessionGroupId(null)}
             >
               {displayedSessionGroupId && (
-                <SessionGroupDetailView sessionGroupId={displayedSessionGroupId} panelMode />
+                <SessionGroupDetailView key={displayedSessionGroupId} sessionGroupId={displayedSessionGroupId} panelMode />
               )}
             </DetailPanel>
           </div>

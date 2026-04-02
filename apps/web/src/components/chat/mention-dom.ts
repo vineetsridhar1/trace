@@ -31,3 +31,21 @@ export function createCustomUserElement(
 
   return div;
 }
+
+/** Create a DOM element for the slash command autocomplete dropdown */
+export function createSlashCommandElement(name: string, description: string): HTMLElement {
+  const div = document.createElement("div");
+  div.className = "slash-command-item flex items-center gap-2";
+
+  const nameSpan = document.createElement("span");
+  nameSpan.className = "slash-command-name font-mono text-sm text-foreground";
+  nameSpan.textContent = `/${name}`;
+  div.append(nameSpan);
+
+  const descSpan = document.createElement("span");
+  descSpan.className = "slash-command-desc text-xs text-muted-foreground";
+  descSpan.textContent = description;
+  div.append(descSpan);
+
+  return div;
+}

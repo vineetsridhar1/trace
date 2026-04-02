@@ -21,6 +21,8 @@ export const HIDDEN_SESSION_PAYLOAD_TYPES = [
   "recovery_failed",
   "upgrade_workspace",
   "workspace_ready",
+  "session_resumed",
+  "session_terminated",
 ] as const;
 
 /** Set version for O(1) client-side lookups in buildSessionNodes */

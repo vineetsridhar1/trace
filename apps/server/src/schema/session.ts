@@ -2,6 +2,10 @@ import type { Context } from "../context.js";
 import type { AgentStatus, CodingTool, SessionFilters, StartSessionInput } from "@trace/gql";
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
+import { sessionRouter } from "../lib/session-router.js";
+import { BUILTIN_SLASH_COMMANDS } from "@trace/shared";
+import { prisma } from "../lib/db.js";
+import { AuthenticationError } from "../lib/errors.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { requireOrgContext } from "../lib/require-org.js";
 import {
@@ -86,6 +90,67 @@ export const sessionQueries = {
       orgId,
       ctx.userId,
     );
+  },
+  sessionSlashCommands: async (_: unknown, args: { sessionId: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+
+    const orgId = requireOrgContext(ctx);
+    const session = await prisma.session.findFirst({
+      where: { id: args.sessionId, organizationId: orgId },
+      select: {
+        id: true,
+        tool: true,
+        workdir: true,
+        hosting: true,
+        createdById: true,
+      },
+    });
+    if (!session || session.tool !== "claude_code") return [];
+
+    const runtime = sessionRouter.getRuntimeForSession(args.sessionId);
+
+    // Try to get skills from bridge
+    type SkillResult = Array<{ name: string; description: string; source: "user" | "project" }>;
+    let skills: SkillResult = [];
+    if (runtime) {
+      try {
+        const includeUserSkills = session.hosting !== "local" || session.createdById === ctx.userId;
+        skills = await sessionRouter.listSkills(
+          runtime.id,
+          args.sessionId,
+          {
+            workdirHint: session.workdir ?? undefined,
+            includeUserSkills,
+            includeProjectSkills: true,
+          },
+        );
+      } catch {
+        skills = [];
+      }
+    }
+
+    if (session.tool !== "claude_code") {
+      return [];
+    }
+
+    // Merge built-in commands with bridge skills
+    const commands: Array<{ name: string; description: string; source: string; category: string }> = [];
+
+    for (const cmd of BUILTIN_SLASH_COMMANDS) {
+      commands.push({ name: cmd.name, description: cmd.description, source: "builtin", category: cmd.category });
+    }
+
+    // Add bridge skills
+    for (const skill of skills) {
+      commands.push({
+        name: skill.name,
+        description: skill.description,
+        source: skill.source === "user" ? "user_skill" : "project_skill",
+        category: "passthrough",
+      });
+    }
+
+    return commands;
   },
 };
 
