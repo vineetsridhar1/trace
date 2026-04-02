@@ -1,17 +1,19 @@
 import { create } from "zustand";
+import type { BridgeAccessAction } from "../lib/bridge-access-error";
 
 interface ActiveChallenge {
-  challengeId: string;
   runtimeId: string;
   runtimeLabel: string;
-  action: string;
+  action: BridgeAccessAction;
+  sessionId: string | null;
+  promptPreview: string | null;
   retryAction: () => Promise<void>;
 }
 
 interface BridgeAuthState {
   activeChallenge: ActiveChallenge | null;
   showDialog: boolean;
-  /** Verified challenge ID — consumed by createQuickSession as bridgeAccessToken */
+  /** Verified challenge ID for start-session flows, consumed as bridgeAccessToken. */
   verifiedChallengeId: string | null;
   openChallenge: (challenge: Omit<ActiveChallenge, "retryAction">, retryAction: () => Promise<void>) => void;
   closeChallenge: () => void;

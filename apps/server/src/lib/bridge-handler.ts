@@ -1,3 +1,4 @@
+import type { IncomingMessage } from "http";
 import type { WebSocket } from "ws";
 import { randomUUID } from "crypto";
 import { sessionRouter } from "./session-router.js";
@@ -11,10 +12,14 @@ const DISCONNECT_GRACE_MS = 10_000;
 /** Interval between server→client pings to keep the WebSocket alive through proxies (e.g. Render). */
 const PING_INTERVAL_MS = 20_000;
 
-export function handleBridgeConnection(ws: WebSocket) {
+export function handleBridgeConnection(
+  ws: WebSocket,
+  req?: IncomingMessage & { bridgeOwnerUserId?: string },
+) {
   // Default runtime ID; replaced if the bridge sends runtime_hello
   let runtimeId: string = randomUUID();
   let registered = false;
+  const bridgeOwnerUserId = req?.bridgeOwnerUserId;
 
   runtimeDebug("bridge websocket connected", { provisionalRuntimeId: runtimeId });
 
@@ -78,7 +83,7 @@ export function handleBridgeConnection(ws: WebSocket) {
           hostingMode: (msg.hostingMode as "cloud" | "local") ?? "local",
           supportedTools: (msg.supportedTools as string[]) ?? ["claude_code", "codex", "custom"],
           registeredRepoIds: (msg.registeredRepoIds as string[]) ?? [],
-          ownerUserId: (msg.userId as string) ?? undefined,
+          ownerUserId: bridgeOwnerUserId,
         });
 
         if (existingRuntime && existingRuntime.ws !== ws) {

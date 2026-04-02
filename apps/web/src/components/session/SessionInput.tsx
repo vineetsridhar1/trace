@@ -91,12 +91,18 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
       // Check for bridge access required error — open verification dialog.
       // Capture `text` in the retry closure since the component's `message` state
       // may be stale by the time the retry fires after dialog verification.
-      if (handleBridgeAccessError(error, async () => {
-        setMessage(text);
-        // Allow React to re-render with restored text before sending
-        await new Promise((r) => setTimeout(r, 0));
-        handleSend();
-      }, "send_message")) {
+      if (
+        handleBridgeAccessError(error, {
+          action: "send_message",
+          sessionId,
+          promptPreview: text,
+          retryAction: async () => {
+            setMessage(text);
+            await new Promise((r) => setTimeout(r, 0));
+            handleSend();
+          },
+        })
+      ) {
         return;
       }
       toast.error(error instanceof Error ? error.message : "Failed to send message");

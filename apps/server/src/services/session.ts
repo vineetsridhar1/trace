@@ -223,8 +223,6 @@ type SessionGroupSnapshot = SessionGroupSummary & {
 };
 
 const INVALID_FILE_PATH_ERROR = "Invalid file path";
-const LOCAL_FILE_ACCESS_DENIED_ERROR =
-  "Access denied: you can only access files on your own local sessions";
 
 function serializeSession(session: {
   id: string;
@@ -539,12 +537,20 @@ export class SessionService {
     });
   }
 
-  private assertLocalFileOwnership(
-    sessions: Array<{ hosting: string | null; createdById: string }>,
+  private async assertLocalRuntimeAccess(
+    runtime: { id: string; label: string; hostingMode: string; ownerUserId?: string },
+    sessionId: string,
     userId: string,
-  ): void {
-    if (sessions.some((session) => session.hosting === "local" && session.createdById !== userId)) {
-      throw new Error(LOCAL_FILE_ACCESS_DENIED_ERROR);
+  ): Promise<void> {
+    if (
+      runtime.hostingMode === "local" &&
+      runtime.ownerUserId &&
+      runtime.ownerUserId !== userId
+    ) {
+      const hasGrant = await bridgeAuthService.hasSessionGrant(runtime.id, sessionId, userId);
+      if (!hasGrant) {
+        throw new BridgeAccessRequiredError(runtime.id, runtime.label, runtime.ownerUserId);
+      }
     }
   }
 
@@ -579,13 +585,13 @@ export class SessionService {
 
     const sessions = await prisma.session.findMany({
       where: { sessionGroupId, organizationId },
-      select: { id: true, workdir: true, hosting: true, createdById: true },
+      select: { id: true, workdir: true },
     });
-    this.assertLocalFileOwnership(sessions, userId);
 
     for (const session of sessions) {
       const runtime = sessionRouter.getRuntimeForSession(session.id);
       if (!runtime) continue;
+      await this.assertLocalRuntimeAccess(runtime, session.id, userId);
       return {
         runtimeId: runtime.id,
         sessionId: session.id,
@@ -887,6 +893,8 @@ export class SessionService {
       }
       return null;
     })();
+    const requestedRuntimeId =
+      input.runtimeInstanceId ?? sharedRuntimeInstanceId ?? restoreGroupRuntimeInstanceId ?? null;
     const sourceProjectIds = sourceSession?.projects.map((project) => project.projectId) ?? [];
     const sourceTicketLinks = sourceSessionId
       ? await prisma.ticketLink.findMany({
@@ -910,45 +918,52 @@ export class SessionService {
     // Resolve hosting mode: if a runtime is specified, derive from it; otherwise use explicit value or default to cloud
     let hosting = input.hosting ?? sourceSession?.hosting ?? "cloud";
     let runtimeLabel: string | undefined;
-    if (input.runtimeInstanceId) {
-      const runtime = sessionRouter.getRuntime(input.runtimeInstanceId);
+    if (requestedRuntimeId) {
+      const runtime = sessionRouter.getRuntime(requestedRuntimeId);
       runtimeDebug("startSession resolving requested runtime", {
         sessionId: "pending",
-        runtimeInstanceId: input.runtimeInstanceId,
+        runtimeInstanceId: requestedRuntimeId,
         requestedHosting: input.hosting ?? null,
+        requestedRuntimeSource: input.runtimeInstanceId
+          ? "explicit"
+          : sharedRuntimeInstanceId
+            ? "shared_group"
+            : "restore_group",
         runtimeFoundInRouter: !!runtime,
       });
       if (!runtime) {
-        throw new Error("Requested runtime not found");
-      }
-      if (
-        runtime.hostingMode === "local" &&
-        resolvedRepoId &&
-        !runtime.registeredRepoIds.includes(resolvedRepoId)
-      ) {
-        throw new Error("Selected runtime does not have this repo linked");
-      }
-      hosting = runtime.hostingMode;
-      runtimeLabel = runtime.label;
+        if (input.runtimeInstanceId) {
+          throw new Error("Requested runtime not found");
+        }
+      } else {
+        if (
+          runtime.hostingMode === "local" &&
+          resolvedRepoId &&
+          !runtime.registeredRepoIds.includes(resolvedRepoId)
+        ) {
+          throw new Error("Selected runtime does not have this repo linked");
+        }
+        hosting = runtime.hostingMode;
+        runtimeLabel = runtime.label;
 
-      // Bridge access check: require verification for local bridges owned by someone else
-      if (
-        runtime.hostingMode === "local" &&
-        runtime.ownerUserId &&
-        runtime.ownerUserId !== input.createdById
-      ) {
-        // If a bridgeAccessToken is provided, validate it
-        if (input.bridgeAccessToken) {
-          const valid = await bridgeAuthService.validateAccessToken(
-            input.bridgeAccessToken,
-            input.createdById,
-            input.runtimeInstanceId,
-          );
-          if (!valid) {
+        // Bridge access check: require verification for local bridges owned by someone else.
+        if (
+          runtime.hostingMode === "local" &&
+          runtime.ownerUserId &&
+          runtime.ownerUserId !== input.createdById
+        ) {
+          if (input.bridgeAccessToken) {
+            const valid = await bridgeAuthService.validateAccessToken(
+              input.bridgeAccessToken,
+              input.createdById,
+              requestedRuntimeId,
+            );
+            if (!valid) {
+              throw new BridgeAccessRequiredError(runtime.id, runtime.label, runtime.ownerUserId);
+            }
+          } else {
             throw new BridgeAccessRequiredError(runtime.id, runtime.label, runtime.ownerUserId);
           }
-        } else {
-          throw new BridgeAccessRequiredError(runtime.id, runtime.label, runtime.ownerUserId);
         }
       }
     }
@@ -963,7 +978,7 @@ export class SessionService {
       ? sharedConnection
       : connJson(
           defaultConnection({
-            ...(input.runtimeInstanceId && { runtimeInstanceId: input.runtimeInstanceId }),
+            ...(requestedRuntimeId && { runtimeInstanceId: requestedRuntimeId }),
             ...(runtimeLabel && { runtimeLabel }),
           }),
         );
@@ -1093,7 +1108,7 @@ export class SessionService {
     // Only provision the runtime immediately when a prompt is provided.
     // Sessions created without a prompt (e.g. Cmd+N) defer provisioning
     // until the user sends their first message.
-    if (needsRuntimeProvisioning && input.prompt) {
+    if (needsRuntimeProvisioning && (input.prompt || input.restoreCheckpointId)) {
       this.provisionRuntime({
         sessionId: session.id,
         sessionGroupId: session.sessionGroupId,
@@ -1123,16 +1138,8 @@ export class SessionService {
     // Use the caller's userId if provided; fall back to the session creator.
     const effectiveUserId = userId ?? session.createdById;
     const runtime = sessionRouter.getRuntimeForSession(id);
-    if (
-      runtime &&
-      runtime.hostingMode === "local" &&
-      runtime.ownerUserId &&
-      runtime.ownerUserId !== effectiveUserId
-    ) {
-      const hasGrant = await bridgeAuthService.hasSessionGrant(runtime.id, id, effectiveUserId);
-      if (!hasGrant) {
-        throw new BridgeAccessRequiredError(runtime.id, runtime.label, runtime.ownerUserId);
-      }
+    if (runtime) {
+      await this.assertLocalRuntimeAccess(runtime, id, effectiveUserId);
     }
 
     const startMeta =
@@ -1589,6 +1596,7 @@ export class SessionService {
       if (config.runtimeInstanceId) {
         const runtime = sessionRouter.getRuntime(config.runtimeInstanceId);
         if (!runtime) throw new Error("Requested runtime not found");
+        await this.assertLocalRuntimeAccess(runtime, sessionId, actorId);
         newHosting = runtime.hostingMode;
         runtimeLabel = runtime.label;
         sessionRouter.bindSession(sessionId, config.runtimeInstanceId);
@@ -2005,16 +2013,8 @@ export class SessionService {
 
     // Bridge access check for local bridges owned by someone else
     const runtime = sessionRouter.getRuntimeForSession(sessionId);
-    if (
-      runtime &&
-      runtime.hostingMode === "local" &&
-      runtime.ownerUserId &&
-      runtime.ownerUserId !== actorId
-    ) {
-      const hasGrant = await bridgeAuthService.hasSessionGrant(runtime.id, sessionId, actorId);
-      if (!hasGrant) {
-        throw new BridgeAccessRequiredError(runtime.id, runtime.label, runtime.ownerUserId);
-      }
+    if (runtime) {
+      await this.assertLocalRuntimeAccess(runtime, sessionId, actorId);
     }
 
     // If runtime was deferred (session created without a prompt), provision it
@@ -3218,11 +3218,28 @@ export class SessionService {
       runtimeDiagnostics: diagnostics,
     });
 
-    const allRuntimes = sessionRouter
+    const runtimesForTool = sessionRouter
       .listRuntimes()
       .filter(
         (runtime) => runtime.hostingMode === "local" && runtime.supportedTools.includes(tool),
       );
+    const ownerUserIds = [
+      ...new Set(runtimesForTool.map((runtime) => runtime.ownerUserId).filter(Boolean)),
+    ] as string[];
+    const orgMembers =
+      ownerUserIds.length === 0
+        ? []
+        : await prisma.orgMember.findMany({
+            where: {
+              organizationId,
+              userId: { in: ownerUserIds },
+            },
+            select: { userId: true },
+          });
+    const allowedOwnerIds = new Set(orgMembers.map((member) => member.userId));
+    const allRuntimes = runtimesForTool.filter(
+      (runtime) => !!runtime.ownerUserId && allowedOwnerIds.has(runtime.ownerUserId),
+    );
 
     const sessionIds = allRuntimes.flatMap((runtime) => [...runtime.boundSessions]);
     const sessions =
@@ -3238,12 +3255,14 @@ export class SessionService {
     const orgSessionIds = new Set(sessions.map((session) => session.id));
 
     // Resolve owner user names for local bridges
-    const ownerUserIds = [...new Set(allRuntimes.map((r) => r.ownerUserId).filter(Boolean))] as string[];
+    const visibleOwnerUserIds = [
+      ...new Set(allRuntimes.map((runtime) => runtime.ownerUserId).filter(Boolean)),
+    ] as string[];
     const ownerUsers =
-      ownerUserIds.length === 0
+      visibleOwnerUserIds.length === 0
         ? []
         : await prisma.user.findMany({
-            where: { id: { in: ownerUserIds } },
+            where: { id: { in: visibleOwnerUserIds } },
             select: { id: true, name: true },
           });
     const ownerNameMap = new Map(ownerUsers.map((u) => [u.id, u.name]));
@@ -3363,24 +3382,17 @@ export class SessionService {
     }
     const baseBranch = "origin/" + (group.repo?.defaultBranch ?? "main");
 
-    const sessions = await prisma.session.findMany({
-      where: { sessionGroupId, organizationId },
-      select: { id: true, workdir: true, hosting: true, createdById: true },
-    });
-    this.assertLocalFileOwnership(sessions, userId);
-
-    for (const session of sessions) {
-      const runtime = sessionRouter.getRuntimeForSession(session.id);
-      if (!runtime) continue;
-      return sessionRouter.branchDiff(
-        runtime.id,
-        session.id,
-        baseBranch,
-        session.workdir ?? group.workdir ?? undefined,
-      );
-    }
-
-    throw new Error("No connected runtime available for this session group");
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    return sessionRouter.branchDiff(
+      runtime.runtimeId,
+      runtime.sessionId,
+      baseBranch,
+      runtime.workdirHint ?? group.workdir ?? undefined,
+    );
   }
 
   /** Read a file's content at a specific git ref from a session group's runtime. */

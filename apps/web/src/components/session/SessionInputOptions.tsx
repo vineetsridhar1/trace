@@ -6,12 +6,14 @@ import { useEntityStore, useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "../../lib/mutations";
+import { handleBridgeAccessError } from "../../lib/bridge-access-error";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
 import { getModelsForTool, getDefaultModel, getModelLabel } from "./modelOptions";
 import { CLOUD_RUNTIME_ID } from "./RuntimeSelector";
 import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
 import { cn } from "../../lib/utils";
+import { toast } from "sonner";
 
 const TOOL_LABELS: Record<string, string> = {
   claude_code: "Claude Code",
@@ -147,7 +149,18 @@ export function SessionInputOptions({
         if (result.error) throw result.error;
       } catch (error) {
         rollback();
-        console.error("Failed to update session runtime:", error);
+        if (
+          handleBridgeAccessError(error, {
+            action: "switch_runtime",
+            sessionId,
+            retryAction: () => handleRuntimeChange(value),
+          })
+        ) {
+          return;
+        }
+        toast.error(
+          error instanceof Error ? error.message : "Failed to update session runtime",
+        );
       }
     },
     [isOptimistic, sessionId, currentRuntimeValue, runtimes, connection],

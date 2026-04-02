@@ -18,6 +18,8 @@ import { isTerminalStatus } from "./sessionStatus";
 import { Skeleton } from "../ui/skeleton";
 import { client } from "../../lib/urql";
 import { DISMISS_SESSION_MUTATION, SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
+import { handleBridgeAccessError } from "../../lib/bridge-access-error";
+import { toast } from "sonner";
 
 const SESSION_DETAIL_QUERY = gql`
   query SessionDetail($id: ID!) {
@@ -226,6 +228,34 @@ export function SessionDetailView({
     await client.mutation(DISMISS_SESSION_MUTATION, { id: sessionId }).toPromise();
   }, [sessionId]);
 
+  const handleQuestionResponse = useCallback(
+    async (text: string) => {
+      try {
+        const result = await client
+          .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+            sessionId,
+            text,
+            interactionMode: activePlan ? "plan" : undefined,
+          })
+          .toPromise();
+        if (result.error) throw result.error;
+      } catch (error) {
+        if (
+          handleBridgeAccessError(error, {
+            action: "send_message",
+            sessionId,
+            promptPreview: text,
+            retryAction: () => handleQuestionResponse(text),
+          })
+        ) {
+          return;
+        }
+        toast.error(error instanceof Error ? error.message : "Failed to send response");
+      }
+    },
+    [activePlan, sessionId],
+  );
+
   return (
     <EventScopeContext.Provider value={scopeKey}>
       <div className="flex h-full flex-col overflow-hidden">
@@ -291,13 +321,7 @@ export function SessionDetailView({
           <AskUserQuestionBar
             node={showQuestion}
             onResponse={(text) => {
-              client
-                .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-                  sessionId,
-                  text,
-                  interactionMode: activePlan ? "plan" : undefined,
-                })
-                .toPromise();
+              void handleQuestionResponse(text);
             }}
             onDismiss={() => {
               setDismissedQuestionId(showQuestion.id);

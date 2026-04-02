@@ -14,7 +14,7 @@ import { resolvers } from "./schema/resolvers.js";
 import type { Context } from "./context.js";
 import { authRouter } from "./routes/auth.js";
 import webhookRouter from "./routes/webhook.js";
-import { buildContext, buildWsContext } from "./lib/auth.js";
+import { buildContext, buildWsContext, verifyToken } from "./lib/auth.js";
 import { handleBridgeConnection } from "./lib/bridge-handler.js";
 import { sessionRouter } from "./lib/session-router.js";
 import { sessionService } from "./services/session.js";
@@ -88,7 +88,12 @@ async function main() {
 
   // Bridge for Electron/desktop session control
   const bridgeWss = new WebSocketServer({ noServer: true });
-  bridgeWss.on("connection", handleBridgeConnection);
+  bridgeWss.on("connection", (ws, req) => {
+    handleBridgeConnection(
+      ws,
+      req as typeof req & { bridgeOwnerUserId?: string },
+    );
+  });
 
   // Terminal relay for frontend terminal sessions
   const terminalWss = new WebSocketServer({ noServer: true });
@@ -121,18 +126,33 @@ async function main() {
         wsServer.emit("connection", ws, req);
       });
     } else if (pathname === "/bridge") {
-      // Cloud bridges must provide a valid token; local bridges (no token) are allowed
+      // Cloud bridges authenticate with a bridge token; local bridges authenticate
+      // with the same user JWT as the desktop app.
       const url = new URL(req.url ?? "", "http://localhost");
       const token = url.searchParams.get("token");
+      const authToken = url.searchParams.get("authToken");
 
       const validateAndUpgrade = async () => {
+        let bridgeOwnerUserId: string | undefined;
+
         if (token && !(await cloudMachineService.isValidBridgeToken(token))) {
           socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
           socket.destroy();
           return;
         }
+        if (!token) {
+          bridgeOwnerUserId = authToken ? verifyToken(authToken) ?? undefined : undefined;
+          if (!bridgeOwnerUserId) {
+            socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+            socket.destroy();
+            return;
+          }
+        }
 
         bridgeWss.handleUpgrade(req, socket, head, (ws) => {
+          (
+            req as typeof req & { bridgeOwnerUserId?: string }
+          ).bridgeOwnerUserId = bridgeOwnerUserId;
           bridgeWss.emit("connection", ws, req);
         });
       };

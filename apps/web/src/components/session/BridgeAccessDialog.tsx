@@ -16,7 +16,8 @@ import {
 import { toast } from "sonner";
 
 export function BridgeAccessDialog() {
-  const { activeChallenge, showDialog, closeChallenge } = useBridgeAuthStore();
+  const { activeChallenge, showDialog, closeChallenge, setVerifiedChallengeId } =
+    useBridgeAuthStore();
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [digits, setDigits] = useState(["", ""]);
   const [verifying, setVerifying] = useState(false);
@@ -34,7 +35,9 @@ export function BridgeAccessDialog() {
       const result = await client
         .mutation(CREATE_BRIDGE_ACCESS_CHALLENGE_MUTATION, {
           runtimeId: activeChallenge.runtimeId,
-          action: activeChallenge.action ?? "start_session",
+          sessionId: activeChallenge.sessionId ?? undefined,
+          action: activeChallenge.action,
+          promptPreview: activeChallenge.promptPreview ?? undefined,
         })
         .toPromise();
       if (result.error) {
@@ -117,12 +120,13 @@ export function BridgeAccessDialog() {
 
       if (result.data?.verifyBridgeAccessCode?.granted) {
         toast.success("Bridge access verified");
-        // Store the verified challenge ID so createQuickSession can use it as bridgeAccessToken
-        useBridgeAuthStore.getState().setVerifiedChallengeId(challengeId!);
+        if (!result.data.verifyBridgeAccessCode.sessionId) {
+          setVerifiedChallengeId(challengeId);
+        }
+        const retryAction = activeChallenge?.retryAction;
         closeChallenge();
-        // Retry the original action
-        if (activeChallenge?.retryAction) {
-          void activeChallenge.retryAction();
+        if (retryAction) {
+          void retryAction();
         }
       }
     } catch (err) {

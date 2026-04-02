@@ -48,7 +48,7 @@ declare global {
     ) => Promise<{ config: DesktopRepoConfig | null; status: DesktopRepoGitHookStatus | null }>;
     getRepoGitHookStatus: (repoId: string) => Promise<DesktopRepoGitHookStatus | null>;
     repairRepoGitHooks: (repoId: string) => Promise<DesktopRepoGitHookStatus | null>;
-    setAuthUserId: (userId: string) => void;
+    setBridgeAuthToken: (token: string | null) => void;
     getBridgeStatus: () => Promise<DesktopBridgeConnectionStatus>;
     onBridgeStatus: (callback: (status: DesktopBridgeConnectionStatus) => void) => () => void;
   }

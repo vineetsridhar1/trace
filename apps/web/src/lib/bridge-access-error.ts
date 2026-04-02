@@ -1,6 +1,18 @@
 import { useBridgeAuthStore } from "../stores/bridge-auth";
 import type { CombinedError } from "@urql/core";
 
+export type BridgeAccessAction =
+  | "start_session"
+  | "send_message"
+  | "switch_runtime";
+
+type BridgeAccessRetryOptions = {
+  action: BridgeAccessAction;
+  retryAction: () => Promise<void>;
+  sessionId?: string | null;
+  promptPreview?: string | null;
+};
+
 /**
  * Check if a GraphQL error is a BRIDGE_ACCESS_REQUIRED error.
  * If so, open the bridge access verification dialog and return true.
@@ -8,20 +20,20 @@ import type { CombinedError } from "@urql/core";
  */
 export function handleBridgeAccessError(
   error: unknown,
-  retryAction: () => Promise<void>,
-  action: "start_session" | "send_message" = "start_session",
+  options: BridgeAccessRetryOptions,
 ): boolean {
   const extensions = extractBridgeAccessExtensions(error);
   if (!extensions) return false;
 
   useBridgeAuthStore.getState().openChallenge(
     {
-      challengeId: "", // Will be created by the dialog
       runtimeId: extensions.runtimeId,
       runtimeLabel: extensions.runtimeLabel,
-      action,
+      action: options.action,
+      sessionId: options.sessionId ?? null,
+      promptPreview: options.promptPreview ?? null,
     },
-    retryAction,
+    options.retryAction,
   );
 
   return true;

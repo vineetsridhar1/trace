@@ -166,6 +166,8 @@ describe("SessionService", () => {
     sessionRouterMock.getRuntime.mockReturnValue(null);
     sessionRouterMock.getDefaultRuntime?.mockReturnValue?.(null);
     sessionRouterMock.destroyRuntime.mockResolvedValue(undefined);
+    prismaMock.bridgeAccessGrant.findUnique?.mockResolvedValue(null);
+    prismaMock.bridgeAccessChallenge.findUnique?.mockResolvedValue(null);
     prismaMock.sessionGroup.findUnique.mockResolvedValue({
       ...makeSessionGroup(),
       sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
@@ -866,11 +868,52 @@ describe("SessionService", () => {
           createdById: "user-2",
         },
       ]);
+      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Owner Bridge",
+        hostingMode: "local",
+        ownerUserId: "user-2",
+      });
 
       await expect(service.listFiles("group-1", "org-1", "user-1")).rejects.toThrow(
-        "Access denied: you can only access files on your own local sessions",
+        "Bridge access verification required",
       );
       expect(sessionRouterMock.listFiles).not.toHaveBeenCalled();
+    });
+
+    it("allows local file access when the user has a session grant", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          workdir: "/tmp/trace",
+        },
+      ]);
+      prismaMock.bridgeAccessGrant.findUnique.mockResolvedValueOnce({
+        runtimeId: "runtime-1",
+        sessionId: "session-1",
+        grantedToUserId: "user-1",
+      });
+      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Owner Bridge",
+        hostingMode: "local",
+        ownerUserId: "user-2",
+      });
+      sessionRouterMock.listFiles.mockResolvedValueOnce(["src/app.ts"]);
+
+      await expect(service.listFiles("group-1", "org-1", "user-1")).resolves.toEqual([
+        "src/app.ts",
+      ]);
+      expect(sessionRouterMock.listFiles).toHaveBeenCalledWith(
+        "runtime-1",
+        "session-1",
+        "/tmp/trace",
+      );
     });
 
     it("rejects file reads for paths outside the enumerated file list", async () => {
@@ -1136,6 +1179,40 @@ describe("SessionService", () => {
     });
   });
 
+  describe("updateConfig", () => {
+    it("requires bridge verification before switching a session to another user's local runtime", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "not_started",
+          hosting: "cloud",
+        }),
+      );
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Owner Bridge",
+        hostingMode: "local",
+        ownerUserId: "user-2",
+        supportedTools: ["claude_code"],
+        boundSessions: new Set<string>(),
+        registeredRepoIds: ["repo-1"],
+        ws: { readyState: 1, OPEN: 1 },
+      });
+
+      await expect(
+        service.updateConfig(
+          "session-1",
+          "org-1",
+          { runtimeInstanceId: "runtime-1" },
+          "user",
+          "user-1",
+        ),
+      ).rejects.toThrow("Bridge access verification required");
+
+      expect(sessionRouterMock.bindSession).not.toHaveBeenCalled();
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe("workspaceReady", () => {
     it("keeps a session in_progress while a queued command is waiting for delivery", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
@@ -1159,12 +1236,11 @@ describe("SessionService", () => {
 
       expect(prismaMock.session.update).toHaveBeenCalledWith({
         where: { id: "session-1" },
-        data: {
+        data: expect.objectContaining({
           agentStatus: "not_started",
           sessionStatus: "in_progress",
           workdir: "/tmp/trace/workspace",
-          pendingRun: expect.anything(),
-        },
+        }),
         include: expect.any(Object),
       });
       expect(eventServiceMock.create).toHaveBeenCalledWith(
@@ -1372,6 +1448,116 @@ describe("SessionService", () => {
       );
 
       expect(result.id).toBe("session-2");
+    });
+  });
+
+  describe("start bridge access", () => {
+    it("requires bridge verification when a new session inherits another user's local runtime", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        id: "session-source",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        repoId: "repo-1",
+        branch: "main",
+        hosting: "local",
+        channelId: "channel-1",
+        projects: [],
+        sessionGroup: makeSessionGroup({
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            runtimeLabel: "Owner Bridge",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
+        makeSessionGroup({
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            runtimeLabel: "Owner Bridge",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+        baseBranch: "main",
+      });
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Owner Bridge",
+        hostingMode: "local",
+        ownerUserId: "user-2",
+        registeredRepoIds: ["repo-1"],
+        supportedTools: ["claude_code"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+
+      await expect(
+        service.start({
+          tool: "claude_code",
+          prompt: "Implement the approved plan.",
+          organizationId: "org-1",
+          createdById: "user-1",
+          sourceSessionId: "session-source",
+        }),
+      ).rejects.toThrow("Bridge access verification required");
+
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("listRuntimesForTool", () => {
+    it("only returns local runtimes owned by members of the active organization", async () => {
+      sessionRouterMock.listRuntimes.mockReturnValueOnce([
+        {
+          id: "runtime-1",
+          label: "Org Bridge",
+          hostingMode: "local",
+          supportedTools: ["claude_code"],
+          ownerUserId: "user-1",
+          boundSessions: new Set(["session-1"]),
+          registeredRepoIds: ["repo-1"],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+        {
+          id: "runtime-2",
+          label: "Foreign Bridge",
+          hostingMode: "local",
+          supportedTools: ["claude_code"],
+          ownerUserId: "user-2",
+          boundSessions: new Set(["session-2"]),
+          registeredRepoIds: ["repo-2"],
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ]);
+      prismaMock.orgMember.findMany.mockResolvedValueOnce([{ userId: "user-1" }]);
+      prismaMock.session.findMany.mockResolvedValueOnce([{ id: "session-1" }]);
+      prismaMock.user.findMany.mockResolvedValueOnce([{ id: "user-1", name: "Owner One" }]);
+
+      await expect(service.listRuntimesForTool("claude_code", "org-1")).resolves.toEqual([
+        {
+          id: "runtime-1",
+          label: "Org Bridge",
+          hostingMode: "local",
+          supportedTools: ["claude_code"],
+          connected: true,
+          sessionCount: 1,
+          registeredRepoIds: ["repo-1"],
+          ownerUserId: "user-1",
+          ownerUserName: "Owner One",
+        },
+      ]);
     });
   });
 

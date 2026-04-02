@@ -11,6 +11,9 @@ import { useEntityField } from "../../stores/entity";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { cn } from "../../lib/utils";
+import { toast } from "sonner";
+import { handleBridgeAccessError } from "../../lib/bridge-access-error";
+import { useBridgeAuthStore } from "../../stores/bridge-auth";
 
 interface PlanResponseBarProps {
   sessionId: string;
@@ -35,9 +38,10 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
 
   const handleClearContext = useCallback(async () => {
     if (sending || !sessionGroupId) return;
+    const prompt = `Implement the following plan:\n\n${planContent}`;
     setSending(true);
     try {
-      const prompt = `Implement the following plan:\n\n${planContent}`;
+      const bridgeAccessToken = useBridgeAuthStore.getState().consumeVerifiedChallengeId();
       const result = await client
         .mutation(START_SESSION_MUTATION, {
           input: {
@@ -50,9 +54,11 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
             sessionGroupId,
             sourceSessionId: sessionId,
             prompt,
+            bridgeAccessToken: bridgeAccessToken ?? undefined,
           },
         })
         .toPromise();
+      if (result.error) throw result.error;
 
       const newSessionId = result.data?.startSession?.id;
       if (newSessionId) {
@@ -66,24 +72,66 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
           repo,
           branch,
         });
-        await client.mutation(RUN_SESSION_MUTATION, { id: newSessionId, prompt }).toPromise();
+        const runResult = await client
+          .mutation(RUN_SESSION_MUTATION, { id: newSessionId, prompt })
+          .toPromise();
+        if (runResult.error) throw runResult.error;
         openSessionTab(sessionGroupId, newSessionId);
         navigateToSession(channel?.id ?? null, sessionGroupId, newSessionId);
-        await client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
+        const terminateResult = await client
+          .mutation(TERMINATE_SESSION_MUTATION, { id: sessionId })
+          .toPromise();
+        if (terminateResult.error) throw terminateResult.error;
       }
+    } catch (error) {
+      if (
+        handleBridgeAccessError(error, {
+          action: "start_session",
+          promptPreview: prompt,
+          retryAction: () => handleClearContext(),
+        })
+      ) {
+        return;
+      }
+      toast.error(error instanceof Error ? error.message : "Failed to create session");
     } finally {
       setSending(false);
     }
-  }, [sending, sessionGroupId, planContent, tool, model, hosting, channel?.id, repo?.id, branch, sessionId, openSessionTab]);
+  }, [
+    sending,
+    sessionGroupId,
+    planContent,
+    tool,
+    model,
+    hosting,
+    channel?.id,
+    repo?.id,
+    branch,
+    sessionId,
+    openSessionTab,
+  ]);
 
   const handleKeepContext = useCallback(async () => {
     if (sending) return;
     setSending(true);
     try {
-      await client.mutation(SEND_SESSION_MESSAGE_MUTATION, {
+      const result = await client.mutation(SEND_SESSION_MESSAGE_MUTATION, {
         sessionId,
         text: "Approved. Implement this plan.",
       }).toPromise();
+      if (result.error) throw result.error;
+    } catch (error) {
+      if (
+        handleBridgeAccessError(error, {
+          action: "send_message",
+          sessionId,
+          promptPreview: "Approved. Implement this plan.",
+          retryAction: () => handleKeepContext(),
+        })
+      ) {
+        return;
+      }
+      toast.error(error instanceof Error ? error.message : "Failed to send approval");
     } finally {
       setSending(false);
     }
@@ -94,12 +142,26 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
     if (!text || sending) return;
     setSending(true);
     try {
-      await client.mutation(SEND_SESSION_MESSAGE_MUTATION, {
+      const prompt = `Please revise the plan: ${text}`;
+      const result = await client.mutation(SEND_SESSION_MESSAGE_MUTATION, {
         sessionId,
-        text: `Please revise the plan: ${text}`,
+        text: prompt,
         interactionMode: "plan",
       }).toPromise();
+      if (result.error) throw result.error;
       setFeedback("");
+    } catch (error) {
+      if (
+        handleBridgeAccessError(error, {
+          action: "send_message",
+          sessionId,
+          promptPreview: text,
+          retryAction: () => handleRevise(),
+        })
+      ) {
+        return;
+      }
+      toast.error(error instanceof Error ? error.message : "Failed to send revision request");
     } finally {
       setSending(false);
     }

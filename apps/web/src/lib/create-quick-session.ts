@@ -139,7 +139,12 @@ export async function createQuickSession(channelId: string): Promise<void> {
         registerOptimisticSessionRedirect(tempGroupId, tempSessionId, previousNav);
       }
       // Check for bridge access required — open verification dialog
-      if (handleBridgeAccessError(result.error, () => createQuickSession(channelId))) {
+      if (
+        handleBridgeAccessError(result.error, {
+          action: "start_session",
+          retryAction: () => createQuickSession(channelId),
+        })
+      ) {
         return;
       }
       toast.error("Failed to create session", { description: result.error.message });
@@ -207,6 +212,14 @@ export async function createQuickSession(channelId: string): Promise<void> {
       replaceNavigationState(previousNav);
     } else {
       registerOptimisticSessionRedirect(tempGroupId, tempSessionId, previousNav);
+    }
+    if (
+      handleBridgeAccessError(err, {
+        action: "start_session",
+        retryAction: () => createQuickSession(channelId),
+      })
+    ) {
+      return;
     }
     const message = err instanceof Error ? err.message : "Unknown error";
     toast.error("Failed to create session", { description: message });

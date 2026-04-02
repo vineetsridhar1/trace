@@ -20,6 +20,8 @@ import { InboxQuestionBody } from "./InboxQuestionBody";
 import { InboxSuggestionBody } from "./InboxSuggestionBody";
 import { InboxBridgeAccessBody } from "./InboxBridgeAccessBody";
 import type { QuestionData } from "./InboxQuestionBody";
+import { handleBridgeAccessError } from "../../lib/bridge-access-error";
+import { useBridgeAuthStore } from "../../stores/bridge-auth";
 
 const SUGGESTION_TYPES = new Set([
   "ticket_suggestion",
@@ -104,11 +106,12 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
 
   const handleApproveNewSession = useCallback(async () => {
     if (sending || !sourceId || !sessionGroupId) return;
+    const prompt = planContent
+      ? `Implement the following plan:\n\n${planContent}`
+      : "Implement the plan from the previous session.";
     setSending(true);
     try {
-      const prompt = planContent
-        ? `Implement the following plan:\n\n${planContent}`
-        : "Implement the plan from the previous session.";
+      const bridgeAccessToken = useBridgeAuthStore.getState().consumeVerifiedChallengeId();
       const result = await client
         .mutation(START_SESSION_MUTATION, {
           input: {
@@ -120,9 +123,11 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
             sessionGroupId,
             sourceSessionId: sourceId,
             prompt,
+            bridgeAccessToken: bridgeAccessToken ?? undefined,
           },
         })
         .toPromise();
+      if (result.error) throw result.error;
 
       const newSessionId = result.data?.startSession?.id;
       if (newSessionId) {
@@ -135,11 +140,28 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
           repo: sessionRepo,
           branch: sessionBranch,
         });
-        await client.mutation(RUN_SESSION_MUTATION, { id: newSessionId, prompt }).toPromise();
+        const runResult = await client
+          .mutation(RUN_SESSION_MUTATION, { id: newSessionId, prompt })
+          .toPromise();
+        if (runResult.error) throw runResult.error;
         openSessionTab(sessionGroupId, newSessionId);
         navigateToSession(sessionChannel?.id ?? null, sessionGroupId, newSessionId);
-        await client.mutation(TERMINATE_SESSION_MUTATION, { id: sourceId }).toPromise();
+        const terminateResult = await client
+          .mutation(TERMINATE_SESSION_MUTATION, { id: sourceId })
+          .toPromise();
+        if (terminateResult.error) throw terminateResult.error;
       }
+    } catch (error) {
+      if (
+        handleBridgeAccessError(error, {
+          action: "start_session",
+          promptPreview: prompt,
+          retryAction: () => handleApproveNewSession(),
+        })
+      ) {
+        return;
+      }
+      toast.error(error instanceof Error ? error.message : "Failed to create session");
     } finally {
       setSending(false);
     }
@@ -160,12 +182,25 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
     if (sending || !sourceId) return;
     setSending(true);
     try {
-      await client
+      const result = await client
         .mutation(SEND_SESSION_MESSAGE_MUTATION, {
           sessionId: sourceId,
           text: "Approved. Implement this plan.",
         })
         .toPromise();
+      if (result.error) throw result.error;
+    } catch (error) {
+      if (
+        handleBridgeAccessError(error, {
+          action: "send_message",
+          sessionId: sourceId,
+          promptPreview: "Approved. Implement this plan.",
+          retryAction: () => handleApproveKeepContext(),
+        })
+      ) {
+        return;
+      }
+      toast.error(error instanceof Error ? error.message : "Failed to send approval");
     } finally {
       setSending(false);
     }
@@ -227,13 +262,26 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
       if (!text.trim() || sending || !sourceId) return;
       setSending(true);
       try {
-        await client
+        const result = await client
           .mutation(SEND_SESSION_MESSAGE_MUTATION, {
             sessionId: sourceId,
             text,
             interactionMode,
           })
           .toPromise();
+        if (result.error) throw result.error;
+      } catch (error) {
+        if (
+          handleBridgeAccessError(error, {
+            action: "send_message",
+            sessionId: sourceId,
+            promptPreview: text,
+            retryAction: () => handleSendMessage(text, interactionMode),
+          })
+        ) {
+          return;
+        }
+        toast.error(error instanceof Error ? error.message : "Failed to send message");
       } finally {
         setSending(false);
       }

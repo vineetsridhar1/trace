@@ -66,7 +66,7 @@ export class BridgeClient implements IBridgeClient {
   /** Phase-1 git detection: sessionId → Map<toolUseId → {trigger, command}> */
   private pendingGitToolUses = new Map<string, Map<string, { trigger: import("@trace/shared").GitCheckpointTrigger; command: string }>>();
   private terminalManager: TerminalManager;
-  private userId: string | undefined;
+  private authToken: string | null = null;
 
   private gitExec: GitExecFn = (args, cwd) =>
     new Promise((resolve, reject) => {
@@ -89,20 +89,38 @@ export class BridgeClient implements IBridgeClient {
     });
   }
 
-  setUserId(userId: string) {
-    if (this.userId === userId) return;
-    this.userId = userId;
-    // Re-register with the server so ownership is tracked
+  setAuthToken(token: string | null) {
+    const nextToken = token?.trim() ? token : null;
+    if (this.authToken === nextToken) return;
+    this.authToken = nextToken;
+
+    if (!nextToken) {
+      this.disconnect();
+      return;
+    }
+
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.forceReconnect();
+    } else if (this.status === "disconnected") {
+      this.connect();
     }
   }
 
   connect() {
+    if (!this.authToken) {
+      runtimeDebug("desktop bridge connect skipped: missing auth token", {
+        instanceId: this.instanceId,
+      });
+      this.setStatus("disconnected");
+      return;
+    }
+
     this.cancelPendingReconnect();
     this.setStatus("connecting");
     runtimeDebug("desktop bridge connecting", { serverUrl: this.serverUrl, instanceId: this.instanceId });
-    this.ws = new WebSocket(`${this.serverUrl}/bridge`);
+    const bridgeUrl = new URL(`${this.serverUrl}/bridge`);
+    bridgeUrl.searchParams.set("authToken", this.authToken);
+    this.ws = new WebSocket(bridgeUrl);
 
     this.ws.on("open", () => {
       console.log("[bridge] connected to server");
@@ -220,7 +238,6 @@ export class BridgeClient implements IBridgeClient {
       supportedTools: ["claude_code", "codex", "custom"],
       registeredRepoIds: Object.keys(config.repos),
       activeTerminals: this.terminalManager.getActiveTerminals(),
-      userId: this.userId,
     });
   }
 

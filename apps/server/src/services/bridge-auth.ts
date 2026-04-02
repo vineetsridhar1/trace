@@ -18,6 +18,22 @@ function codesMatch(a: string, b: string): boolean {
 }
 
 export class BridgeAuthService {
+  private async isRuntimeVisibleInOrg(
+    ownerUserId: string,
+    organizationId: string,
+  ): Promise<boolean> {
+    const membership = await prisma.orgMember.findUnique({
+      where: {
+        userId_organizationId: {
+          userId: ownerUserId,
+          organizationId,
+        },
+      },
+      select: { userId: true },
+    });
+    return !!membership;
+  }
+
   /**
    * Check if a user has access to a runtime — either as the owner or via a session grant.
    */
@@ -68,6 +84,9 @@ export class BridgeAuthService {
     }
     if (!runtime.ownerUserId) {
       throw new Error("Runtime has no owner");
+    }
+    if (!(await this.isRuntimeVisibleInOrg(runtime.ownerUserId, input.organizationId))) {
+      throw new Error("Runtime not available in this organization");
     }
 
     const code = generateCode();

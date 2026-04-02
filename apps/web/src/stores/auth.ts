@@ -10,6 +10,10 @@ function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
+function syncDesktopBridgeAuthToken(token: string | null): void {
+  window.trace?.setBridgeAuthToken?.(token);
+}
+
 export function getAuthHeaders(): Record<string, string> {
   const token = getStoredToken();
   const headers: Record<string, string> = {};
@@ -48,6 +52,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   setToken: (token: string) => {
     localStorage.setItem(TOKEN_KEY, token);
+    syncDesktopBridgeAuthToken(token);
   },
 
   fetchMe: async () => {
@@ -57,6 +62,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         headers: getAuthHeaders(),
       });
       if (!res.ok) {
+        syncDesktopBridgeAuthToken(null);
         set({ user: null, activeOrgId: null, orgMemberships: [], loading: false });
         return;
       }
@@ -79,8 +85,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       set({ user, activeOrgId, orgMemberships, loading: false });
 
-      // Notify Electron bridge of authenticated user (for bridge ownership)
-      window.trace?.setAuthUserId?.(user.id);
+      // Keep the desktop bridge authenticated with the same token as the web app.
+      syncDesktopBridgeAuthToken(getStoredToken());
 
       // Hydrate entity store
       const { upsert } = useEntityStore.getState();
@@ -91,6 +97,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         }
       }
     } catch {
+      syncDesktopBridgeAuthToken(null);
       set({ user: null, activeOrgId: null, orgMemberships: [], loading: false });
     }
   },
@@ -98,6 +105,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: async () => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(ACTIVE_ORG_KEY);
+    syncDesktopBridgeAuthToken(null);
     await fetch(`${API_URL}/auth/logout`, {
       method: "POST",
       credentials: "include",
