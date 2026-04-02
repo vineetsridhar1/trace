@@ -128,7 +128,7 @@ export class ChatService {
     try {
       result = await prisma.$transaction(createChatInTx);
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && (error as { code: string }).code === "P2002") {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && (error as Prisma.PrismaClientKnownRequestError).code === "P2002") {
         return prisma.chat.findFirstOrThrow({
           where: {
             type: isDM ? "dm" : "group",

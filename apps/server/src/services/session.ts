@@ -221,7 +221,7 @@ type SessionGroupSnapshot = SessionGroupSummary & {
 };
 
 /** A session row with the fields needed by both SessionGroupStatusSource and sortSessionsByRecency. */
-type SessionWithTimestamps = SessionGroupStatusSource & { updatedAt: Date; createdAt: Date; [key: string]: unknown };
+type SessionWithTimestamps = SessionGroupStatusSource & { updatedAt: Date; createdAt: Date };
 
 const INVALID_FILE_PATH_ERROR = "Invalid file path";
 const LOCAL_FILE_ACCESS_DENIED_ERROR =
