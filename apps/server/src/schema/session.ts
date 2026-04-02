@@ -2,6 +2,8 @@ import type { Context } from "../context.js";
 import type { AgentStatus, CodingTool, SessionFilters, StartSessionInput } from "@trace/gql";
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
+import { sessionRouter } from "../lib/session-router.js";
+import { BUILTIN_SLASH_COMMANDS } from "@trace/shared";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { requireOrgContext } from "../lib/require-org.js";
 import {
@@ -86,6 +88,50 @@ export const sessionQueries = {
       orgId,
       ctx.userId,
     );
+  },
+  sessionSlashCommands: async (_: unknown, args: { sessionId: string }) => {
+    // Fetch session to check tool type
+    const session = await sessionService.get(args.sessionId);
+    if (!session || session.tool !== "claude_code") return [];
+
+    const runtime = sessionRouter.getRuntimeForSession(args.sessionId);
+    const isLocal = runtime?.hostingMode === "local";
+
+    // Try to get skills from bridge
+    type SkillResult = Array<{ name: string; description: string; source: "user" | "project" }>;
+    let skills: SkillResult = [];
+    if (runtime) {
+      try {
+        skills = await sessionRouter.listSkills(
+          runtime.id,
+          args.sessionId,
+          (session.workdir as string | undefined) ?? undefined,
+        );
+      } catch {
+        skills = [];
+      }
+    }
+
+    // Merge built-in commands with bridge skills
+    const commands: Array<{ name: string; description: string; source: string; category: string }> = [];
+
+    // Add built-in commands (always include passthrough + special; terminal only if local)
+    for (const cmd of BUILTIN_SLASH_COMMANDS) {
+      if (cmd.category === "terminal" && !isLocal) continue;
+      commands.push({ name: cmd.name, description: cmd.description, source: "builtin", category: cmd.category });
+    }
+
+    // Add bridge skills
+    for (const skill of skills) {
+      commands.push({
+        name: skill.name,
+        description: skill.description,
+        source: skill.source === "user" ? "user_skill" : "project_skill",
+        category: "passthrough",
+      });
+    }
+
+    return commands;
   },
 };
 

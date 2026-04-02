@@ -1,8 +1,8 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import { Send, Square, Cloud, Monitor } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
-import { SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
+import { SEND_SESSION_MESSAGE_MUTATION, CREATE_TERMINAL_MUTATION } from "../../lib/mutations";
 import { type InteractionMode, MODE_CYCLE, MODE_CONFIG, wrapPrompt } from "./interactionModes";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
@@ -17,6 +17,11 @@ import {
   reconcileOptimisticSessionMessage,
   removeOptimisticSessionMessage,
 } from "../../lib/optimistic-message";
+import { ChatEditor, type ChatEditorHandle, type SlashCommandItem } from "../chat/ChatEditor";
+import { useSlashCommands } from "./useSlashCommands";
+import { createQuickSession } from "../../lib/create-quick-session";
+import { useUIStore } from "../../stores/ui";
+import { useTerminalStore } from "../../stores/terminal";
 
 export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop: () => void }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
@@ -30,10 +35,11 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     | boolean
     | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
-  const [message, setMessage] = useState("");
+  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
+  const [hasContent, setHasContent] = useState(false);
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<InteractionMode>("code");
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<ChatEditorHandle>(null);
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
   const disconnected = isDisconnected(connection);
@@ -44,6 +50,23 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   const _lastUserMessageAt = useEntityField("sessions", sessionId, "_lastUserMessageAt") as string | undefined;
   const lastUserMessageAt = isActive ? _lastUserMessageAt : undefined;
 
+  const slashCommands = useSlashCommands(sessionId);
+  const lastSentSlashCommand = useRef<string | null>(null);
+
+  // Compact toast: when agent finishes after /compact was sent
+  const prevAgentStatus = useRef(agentStatus);
+  useEffect(() => {
+    if (
+      prevAgentStatus.current === "active" &&
+      agentStatus !== "active" &&
+      lastSentSlashCommand.current === "compact"
+    ) {
+      toast.success("Chat compacted");
+      lastSentSlashCommand.current = null;
+    }
+    prevAgentStatus.current = agentStatus;
+  }, [agentStatus]);
+
   const cycleMode = useCallback(() => {
     setMode((prev) => {
       const idx = MODE_CYCLE.indexOf(prev);
@@ -51,14 +74,12 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     });
   }, []);
 
-  const handleSend = useCallback(async () => {
-    const text = message.trim();
+  const handleSubmit = useCallback(async () => {
+    const text = editorRef.current?.getText() ?? "";
     if (!text || sending || !canSend) return;
     setSending(true);
-    setMessage("");
     const wrappedText = wrapPrompt(mode, text);
 
-    // Insert optimistic event so the message appears instantly
     const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
       sessionId,
       wrappedText,
@@ -84,18 +105,82 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
       }
 
       reconcileOptimisticSessionMessage(sessionId, tempEventId, realEventId);
+      editorRef.current?.clear();
     } catch (error) {
       removeOptimisticSessionMessage(sessionId, tempEventId);
-      setMessage(text);
       toast.error(error instanceof Error ? error.message : "Failed to send message");
     } finally {
       setSending(false);
-      inputRef.current?.focus();
+      editorRef.current?.focus();
     }
-  }, [sessionId, message, sending, mode, canSend]);
+  }, [sessionId, sending, mode, canSend]);
+
+  const handleSlashCommand = useCallback(
+    async (cmd: SlashCommandItem) => {
+      if (cmd.category === "special") {
+        // /clear — create a new session tab
+        const channelId = useUIStore.getState().activeChannelId;
+        if (channelId) {
+          void createQuickSession(channelId);
+        }
+        return;
+      }
+
+      if (cmd.category === "terminal") {
+        // Open a terminal and run `claude /<cmd>`
+        try {
+          const result = await client
+            .mutation(CREATE_TERMINAL_MUTATION, { sessionId, cols: 80, rows: 24 })
+            .toPromise();
+          if (result.data?.createTerminal) {
+            const { id: terminalId } = result.data.createTerminal as { id: string };
+            useTerminalStore.getState().addTerminal(terminalId, sessionId, sessionGroupId ?? sessionId);
+            useTerminalStore.getState().setPendingInput(terminalId, `claude /${cmd.id}\n`);
+            useUIStore.getState().setActiveTerminalId(terminalId);
+          }
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Failed to open terminal");
+        }
+        return;
+      }
+
+      // passthrough — send as text message
+      if (cmd.id === "compact") {
+        lastSentSlashCommand.current = "compact";
+      }
+
+      setSending(true);
+      const text = `/${cmd.id}`;
+      const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
+        sessionId,
+        text,
+      );
+
+      try {
+        const result = await client
+          .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+            sessionId,
+            text,
+            clientMutationId,
+          })
+          .toPromise();
+
+        if (result.error) throw result.error;
+        const realEventId = result.data?.sendSessionMessage?.id;
+        if (!realEventId) throw new Error("Failed to send message");
+        reconcileOptimisticSessionMessage(sessionId, tempEventId, realEventId);
+      } catch (error) {
+        removeOptimisticSessionMessage(sessionId, tempEventId);
+        toast.error(error instanceof Error ? error.message : "Failed to send command");
+        lastSentSlashCommand.current = null;
+      } finally {
+        setSending(false);
+      }
+    },
+    [sessionId, sessionGroupId],
+  );
 
   // Show recovery panel when disconnected — but not for not_started sessions
-  // where the user still needs to pick a runtime and type their first message
   if (disconnected && !isNotStarted) {
     return <SessionRecoveryPanel sessionId={sessionId} connection={connection} />;
   }
@@ -138,30 +223,25 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
             </TooltipContent>
           </Tooltip>
         )}
-        <textarea
-          ref={inputRef}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Tab" && e.shiftKey) {
-              e.preventDefault();
-              cycleMode();
-              return;
-            }
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleSend();
-            }
-          }}
-          disabled={!canSend || sending}
-          placeholder={placeholder}
-          rows={1}
-          style={{ fieldSizing: "content" } as React.CSSProperties}
+        <div
           className={cn(
-            "flex-1 resize-none rounded-lg border bg-surface-deep px-3 py-2 text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 disabled:opacity-50 transition-colors",
+            "flex-1 rounded-lg border bg-surface-deep transition-colors",
             MODE_CONFIG[mode].inputBorder,
           )}
-        />
+        >
+          <div className="session-editor">
+            <ChatEditor
+              ref={editorRef}
+              onSubmit={handleSubmit}
+              placeholder={placeholder}
+              disabled={!canSend || sending}
+              slashCommands={slashCommands.commands}
+              onSlashCommandSelect={handleSlashCommand}
+              onShiftTab={cycleMode}
+              onChange={(text) => setHasContent(!!text)}
+            />
+          </div>
+        </div>
         {isActive ? (
           <button
             onClick={onStop}
@@ -172,8 +252,8 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
           </button>
         ) : (
           <button
-            onClick={handleSend}
-            disabled={!message.trim() || sending || !canSend}
+            onClick={handleSubmit}
+            disabled={!hasContent || sending || !canSend}
             className={cn(
               "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
               MODE_CONFIG[mode].sendButton,

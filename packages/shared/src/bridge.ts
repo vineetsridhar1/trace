@@ -125,6 +125,13 @@ export interface BridgeFileAtRefCommand {
   workdirHint?: string;
 }
 
+export interface BridgeListSkillsCommand {
+  type: "list_skills";
+  requestId: string;
+  sessionId: string;
+  workdirHint?: string;
+}
+
 // --- Terminal commands (Server → Bridge) ---
 
 export interface BridgeTerminalCreateCommand {
@@ -168,6 +175,7 @@ export type BridgeCommand =
   | BridgeReadFileCommand
   | BridgeBranchDiffCommand
   | BridgeFileAtRefCommand
+  | BridgeListSkillsCommand
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
   | BridgeTerminalResizeCommand
@@ -283,6 +291,19 @@ export interface BridgeFileAtRefResult {
   error?: string;
 }
 
+export interface BridgeSkillInfo {
+  name: string;
+  description: string;
+  source: "user" | "project";
+}
+
+export interface BridgeSkillsResult {
+  type: "skills_result";
+  requestId: string;
+  skills: BridgeSkillInfo[];
+  error?: string;
+}
+
 // --- Terminal messages (Bridge → Server) ---
 
 export interface BridgeTerminalReady {
@@ -324,6 +345,7 @@ export type BridgeMessage =
   | BridgeFileContentResult
   | BridgeBranchDiffResult
   | BridgeFileAtRefResult
+  | BridgeSkillsResult
   | BridgeTerminalReady
   | BridgeTerminalOutput
   | BridgeTerminalExit
@@ -650,6 +672,75 @@ export async function handleFileAtRef(
       error: err instanceof Error ? err.message : "Failed to read file at ref",
     });
   }
+}
+
+// --- Shared skill listing handler ---
+
+/**
+ * Handle a `list_skills` bridge command. Scans user and project skill dirs
+ * for SKILL.md files, reads YAML frontmatter description, returns combined list.
+ */
+export async function handleListSkills(
+  cmd: BridgeListSkillsCommand,
+  sessionWorkdirs: Map<string, string>,
+  send: (msg: BridgeMessage) => void,
+  deps: {
+    userSkillsDir: string | null;
+    fs: BridgeFsLike;
+    path: BridgePathLike;
+  },
+): Promise<void> {
+  const { requestId, sessionId, workdirHint } = cmd;
+  const skills: BridgeSkillInfo[] = [];
+
+  async function scanDir(dir: string, source: "user" | "project"): Promise<void> {
+    try {
+      const entries = await deps.fs.promises.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const skillMdPath = deps.path.join(dir, entry.name, "SKILL.md");
+        try {
+          await deps.fs.promises.stat(skillMdPath);
+          // Read file to extract description from YAML frontmatter
+          const content = await new Promise<string>((resolve, reject) => {
+            deps.fs.readFile(skillMdPath, (err, data) => {
+              if (err) reject(err);
+              else resolve(data.toString("utf-8"));
+            });
+          });
+          const description = extractFrontmatterDescription(content);
+          skills.push({ name: entry.name, description: description || entry.name, source });
+        } catch {
+          // SKILL.md doesn't exist or can't be read — skip
+        }
+      }
+    } catch {
+      // Directory doesn't exist — skip
+    }
+  }
+
+  try {
+    if (deps.userSkillsDir) {
+      await scanDir(deps.userSkillsDir, "user");
+    }
+    const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
+    if (workdir) {
+      const projectSkillsDir = deps.path.join(workdir, ".claude", "skills");
+      await scanDir(projectSkillsDir, "project");
+    }
+    send({ type: "skills_result", requestId, skills });
+  } catch (err) {
+    send({ type: "skills_result", requestId, skills: [], error: err instanceof Error ? err.message : "Failed to list skills" });
+  }
+}
+
+/** Extract `description` from YAML frontmatter in a SKILL.md file. */
+function extractFrontmatterDescription(content: string): string | undefined {
+  const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
+  if (!match) return undefined;
+  const frontmatter = match[1];
+  const descMatch = frontmatter.match(/^description:\s*(.+)$/m);
+  return descMatch ? descMatch[1].trim().replace(/^["']|["']$/g, "") : undefined;
 }
 
 // --- Bridge client interface ---

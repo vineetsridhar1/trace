@@ -1097,6 +1097,7 @@ export type Query = {
   sessionGroupFileContent: Scalars['String']['output'];
   sessionGroupFiles: Array<Scalars['String']['output']>;
   sessionGroups: Array<SessionGroup>;
+  sessionSlashCommands: Array<SlashCommand>;
   sessionTerminals: Array<Terminal>;
   sessions: Array<Session>;
   threadReplies: Array<Message>;
@@ -1317,6 +1318,11 @@ export type QuerySessionGroupsArgs = {
 };
 
 
+export type QuerySessionSlashCommandsArgs = {
+  sessionId: Scalars['ID']['input'];
+};
+
+
 export type QuerySessionTerminalsArgs = {
   sessionId: Scalars['ID']['input'];
 };
@@ -1492,6 +1498,24 @@ export type SetApiTokenInput = {
   provider: ApiTokenProvider;
   token: Scalars['String']['input'];
 };
+
+export type SlashCommand = {
+  __typename?: 'SlashCommand';
+  category: SlashCommandCategory;
+  description: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+  source: SlashCommandSource;
+};
+
+export type SlashCommandCategory =
+  | 'passthrough'
+  | 'special'
+  | 'terminal';
+
+export type SlashCommandSource =
+  | 'builtin'
+  | 'project_skill'
+  | 'user_skill';
 
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars['String']['input']>;
@@ -1863,6 +1887,9 @@ export type ResolversTypes = ResolversObject<{
   SessionRuntimeInstance: ResolverTypeWrapper<SessionRuntimeInstance>;
   SessionStatus: SessionStatus;
   SetApiTokenInput: SetApiTokenInput;
+  SlashCommand: ResolverTypeWrapper<SlashCommand>;
+  SlashCommandCategory: SlashCommandCategory;
+  SlashCommandSource: SlashCommandSource;
   StartSessionInput: StartSessionInput;
   String: ResolverTypeWrapper<Scalars['String']['output']>;
   Subscription: ResolverTypeWrapper<{}>;
@@ -1946,6 +1973,7 @@ export type ResolversParentTypes = ResolversObject<{
   SessionGroup: SessionGroup;
   SessionRuntimeInstance: SessionRuntimeInstance;
   SetApiTokenInput: SetApiTokenInput;
+  SlashCommand: SlashCommand;
   StartSessionInput: StartSessionInput;
   String: Scalars['String']['output'];
   Subscription: {};
@@ -2429,6 +2457,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   sessionGroupFileContent?: Resolver<ResolversTypes['String'], ParentType, ContextType, RequireFields<QuerySessionGroupFileContentArgs, 'filePath' | 'sessionGroupId'>>;
   sessionGroupFiles?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType, RequireFields<QuerySessionGroupFilesArgs, 'sessionGroupId'>>;
   sessionGroups?: Resolver<Array<ResolversTypes['SessionGroup']>, ParentType, ContextType, RequireFields<QuerySessionGroupsArgs, 'channelId'>>;
+  sessionSlashCommands?: Resolver<Array<ResolversTypes['SlashCommand']>, ParentType, ContextType, RequireFields<QuerySessionSlashCommandsArgs, 'sessionId'>>;
   sessionTerminals?: Resolver<Array<ResolversTypes['Terminal']>, ParentType, ContextType, RequireFields<QuerySessionTerminalsArgs, 'sessionId'>>;
   sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerySessionsArgs, 'organizationId'>>;
   threadReplies?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType, RequireFields<QueryThreadRepliesArgs, 'rootMessageId'>>;
@@ -2523,6 +2552,14 @@ export type SessionRuntimeInstanceResolvers<ContextType = Context, ParentType ex
   registeredRepoIds?: Resolver<Array<ResolversTypes['ID']>, ParentType, ContextType>;
   sessionCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   supportedTools?: Resolver<Array<ResolversTypes['CodingTool']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type SlashCommandResolvers<ContextType = Context, ParentType extends ResolversParentTypes['SlashCommand'] = ResolversParentTypes['SlashCommand']> = ResolversObject<{
+  category?: Resolver<ResolversTypes['SlashCommandCategory'], ParentType, ContextType>;
+  description?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  source?: Resolver<ResolversTypes['SlashCommandSource'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -2651,6 +2688,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   SessionEndpoints?: SessionEndpointsResolvers<ContextType>;
   SessionGroup?: SessionGroupResolvers<ContextType>;
   SessionRuntimeInstance?: SessionRuntimeInstanceResolvers<ContextType>;
+  SlashCommand?: SlashCommandResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;
   Terminal?: TerminalResolvers<ContextType>;
   TerminalEndpoint?: TerminalEndpointResolvers<ContextType>;

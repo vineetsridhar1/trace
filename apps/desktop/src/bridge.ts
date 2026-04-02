@@ -13,7 +13,7 @@ import type {
   GitCheckpointContext,
   GitCheckpointTrigger,
 } from "@trace/shared";
-import { extractGitToolUsePending, extractGitToolResultTrigger, parseBranchOutput, handleListFiles, handleReadFile, handleBranchDiff, handleFileAtRef, GIT_SHOW_ARGS, GIT_DIFF_TREE_ARGS, parseGitShowOutput } from "@trace/shared";
+import { extractGitToolUsePending, extractGitToolResultTrigger, parseBranchOutput, handleListFiles, handleReadFile, handleBranchDiff, handleFileAtRef, handleListSkills, GIT_SHOW_ARGS, GIT_DIFF_TREE_ARGS, parseGitShowOutput } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
@@ -588,6 +588,13 @@ export class BridgeClient implements IBridgeClient {
       }
       case "file_at_ref": {
         void handleFileAtRef(cmd, this.sessionWorkdirs, (msg) => this.send(msg), this.gitExec);
+        break;
+      }
+      case "list_skills": {
+        void handleListSkills(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
+          userSkillsDir: path.join(os.homedir(), ".claude", "skills"),
+          fs, path,
+        });
         break;
       }
       case "terminal_create": {

@@ -91,6 +91,7 @@ type Documents = {
     "\n  mutation RegisterRepoWebhook($repoId: ID!) {\n    registerRepoWebhook(repoId: $repoId) {\n      id\n    }\n  }\n": typeof types.RegisterRepoWebhookDocument,
     "\n  mutation UnregisterRepoWebhook($repoId: ID!) {\n    unregisterRepoWebhook(repoId: $repoId) {\n      id\n    }\n  }\n": typeof types.UnregisterRepoWebhookDocument,
     "\n  query RepoBranches($repoId: ID!, $runtimeInstanceId: ID) {\n    repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)\n  }\n": typeof types.RepoBranchesDocument,
+    "\n  query SessionSlashCommands($sessionId: ID!) {\n    sessionSlashCommands(sessionId: $sessionId) {\n      name\n      description\n      source\n      category\n    }\n  }\n": typeof types.SessionSlashCommandsDocument,
     "\n  query SessionTerminals($sessionId: ID!) {\n    sessionTerminals(sessionId: $sessionId) {\n      id\n      sessionId\n    }\n  }\n": typeof types.SessionTerminalsDocument,
     "\n  mutation CreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) {\n    createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) {\n      id\n      sessionId\n    }\n  }\n": typeof types.CreateTerminalDocument,
     "\n  mutation DestroyTerminal($terminalId: ID!) {\n    destroyTerminal(terminalId: $terminalId)\n  }\n": typeof types.DestroyTerminalDocument,
@@ -178,6 +179,7 @@ const documents: Documents = {
     "\n  mutation RegisterRepoWebhook($repoId: ID!) {\n    registerRepoWebhook(repoId: $repoId) {\n      id\n    }\n  }\n": types.RegisterRepoWebhookDocument,
     "\n  mutation UnregisterRepoWebhook($repoId: ID!) {\n    unregisterRepoWebhook(repoId: $repoId) {\n      id\n    }\n  }\n": types.UnregisterRepoWebhookDocument,
     "\n  query RepoBranches($repoId: ID!, $runtimeInstanceId: ID) {\n    repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)\n  }\n": types.RepoBranchesDocument,
+    "\n  query SessionSlashCommands($sessionId: ID!) {\n    sessionSlashCommands(sessionId: $sessionId) {\n      name\n      description\n      source\n      category\n    }\n  }\n": types.SessionSlashCommandsDocument,
     "\n  query SessionTerminals($sessionId: ID!) {\n    sessionTerminals(sessionId: $sessionId) {\n      id\n      sessionId\n    }\n  }\n": types.SessionTerminalsDocument,
     "\n  mutation CreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) {\n    createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) {\n      id\n      sessionId\n    }\n  }\n": types.CreateTerminalDocument,
     "\n  mutation DestroyTerminal($terminalId: ID!) {\n    destroyTerminal(terminalId: $terminalId)\n  }\n": types.DestroyTerminalDocument,
@@ -510,6 +512,10 @@ export function graphql(source: "\n  mutation UnregisterRepoWebhook($repoId: ID!
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query RepoBranches($repoId: ID!, $runtimeInstanceId: ID) {\n    repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)\n  }\n"): (typeof documents)["\n  query RepoBranches($repoId: ID!, $runtimeInstanceId: ID) {\n    repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query SessionSlashCommands($sessionId: ID!) {\n    sessionSlashCommands(sessionId: $sessionId) {\n      name\n      description\n      source\n      category\n    }\n  }\n"): (typeof documents)["\n  query SessionSlashCommands($sessionId: ID!) {\n    sessionSlashCommands(sessionId: $sessionId) {\n      name\n      description\n      source\n      category\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
