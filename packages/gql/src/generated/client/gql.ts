@@ -43,7 +43,7 @@ type Documents = {
     "\n  mutation AddOrgMember($organizationId: ID!, $userId: ID!, $role: UserRole) {\n    addOrgMember(organizationId: $organizationId, userId: $userId, role: $role) {\n      user {\n        id\n        name\n        email\n        avatarUrl\n      }\n      role\n      joinedAt\n    }\n  }\n": typeof types.AddOrgMemberDocument,
     "\n  mutation RemoveOrgMember($organizationId: ID!, $userId: ID!) {\n    removeOrgMember(organizationId: $organizationId, userId: $userId)\n  }\n": typeof types.RemoveOrgMemberDocument,
     "\n  mutation UpdateOrgMemberRole($organizationId: ID!, $userId: ID!, $role: UserRole!) {\n    updateOrgMemberRole(organizationId: $organizationId, userId: $userId, role: $role) {\n      user {\n        id\n      }\n      role\n    }\n  }\n": typeof types.UpdateOrgMemberRoleDocument,
-    "\n  query SearchUsers($email: String!) {\n    searchUsers(email: $email) {\n      id\n      name\n      email\n      avatarUrl\n    }\n  }\n": typeof types.SearchUsersDocument,
+    "\n  query SearchUsers($query: String!) {\n    searchUsers(query: $query) {\n      id\n      name\n      email\n      avatarUrl\n    }\n  }\n": typeof types.SearchUsersDocument,
     "\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": typeof types.SettingsReposDocument,
     "\n  mutation CreateDM($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateDmDocument,
     "\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      members {\n        user {\n          id\n        }\n        joinedAt\n      }\n    }\n  }\n": typeof types.AllChannelsDocument,
@@ -130,7 +130,7 @@ const documents: Documents = {
     "\n  mutation AddOrgMember($organizationId: ID!, $userId: ID!, $role: UserRole) {\n    addOrgMember(organizationId: $organizationId, userId: $userId, role: $role) {\n      user {\n        id\n        name\n        email\n        avatarUrl\n      }\n      role\n      joinedAt\n    }\n  }\n": types.AddOrgMemberDocument,
     "\n  mutation RemoveOrgMember($organizationId: ID!, $userId: ID!) {\n    removeOrgMember(organizationId: $organizationId, userId: $userId)\n  }\n": types.RemoveOrgMemberDocument,
     "\n  mutation UpdateOrgMemberRole($organizationId: ID!, $userId: ID!, $role: UserRole!) {\n    updateOrgMemberRole(organizationId: $organizationId, userId: $userId, role: $role) {\n      user {\n        id\n      }\n      role\n    }\n  }\n": types.UpdateOrgMemberRoleDocument,
-    "\n  query SearchUsers($email: String!) {\n    searchUsers(email: $email) {\n      id\n      name\n      email\n      avatarUrl\n    }\n  }\n": types.SearchUsersDocument,
+    "\n  query SearchUsers($query: String!) {\n    searchUsers(query: $query) {\n      id\n      name\n      email\n      avatarUrl\n    }\n  }\n": types.SearchUsersDocument,
     "\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": types.SettingsReposDocument,
     "\n  mutation CreateDM($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n": types.CreateDmDocument,
     "\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      members {\n        user {\n          id\n        }\n        joinedAt\n      }\n    }\n  }\n": types.AllChannelsDocument,
@@ -321,7 +321,7 @@ export function graphql(source: "\n  mutation UpdateOrgMemberRole($organizationI
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query SearchUsers($email: String!) {\n    searchUsers(email: $email) {\n      id\n      name\n      email\n      avatarUrl\n    }\n  }\n"): (typeof documents)["\n  query SearchUsers($email: String!) {\n    searchUsers(email: $email) {\n      id\n      name\n      email\n      avatarUrl\n    }\n  }\n"];
+export function graphql(source: "\n  query SearchUsers($query: String!) {\n    searchUsers(query: $query) {\n      id\n      name\n      email\n      avatarUrl\n    }\n  }\n"): (typeof documents)["\n  query SearchUsers($query: String!) {\n    searchUsers(query: $query) {\n      id\n      name\n      email\n      avatarUrl\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

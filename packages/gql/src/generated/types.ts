@@ -1263,7 +1263,7 @@ export type QueryResolvedAiModeArgs = {
 
 
 export type QuerySearchUsersArgs = {
-  email: Scalars['String']['input'];
+  query: Scalars['String']['input'];
 };
 
 

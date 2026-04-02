@@ -65,23 +65,26 @@ describe("OrganizationService", () => {
     );
 
     expect(repo.id).toBe("repo-1");
-    expect(eventServiceMock.create).toHaveBeenCalledWith({
-      organizationId: "org-1",
-      scopeType: "system",
-      scopeId: "repo-1",
-      eventType: "repo_created",
-      payload: {
-        repo: {
-          id: "repo-1",
-          name: "trace",
-          remoteUrl: "https://github.com/acme/trace.git",
-          defaultBranch: "main",
-          webhookActive: false,
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      {
+        organizationId: "org-1",
+        scopeType: "system",
+        scopeId: "repo-1",
+        eventType: "repo_created",
+        payload: {
+          repo: {
+            id: "repo-1",
+            name: "trace",
+            remoteUrl: "https://github.com/acme/trace.git",
+            defaultBranch: "main",
+            webhookActive: false,
+          },
         },
+        actorType: "user",
+        actorId: "user-1",
       },
-      actorType: "user",
-      actorId: "user-1",
-    }, prismaMock);
+      prismaMock,
+    );
   });
 
   it("updates repos, creates projects, and links entities", async () => {
@@ -124,5 +127,40 @@ describe("OrganizationService", () => {
     await expect(
       service.linkEntityToProject("chat", "chat-1", "project-1", "user", "user-1"),
     ).rejects.toThrow("Chats cannot be linked to projects");
+  });
+
+  it("searches users outside the active organization only", async () => {
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      { id: "user-2", name: "Bob", email: "bob@example.com", avatarUrl: null },
+    ]);
+
+    const service = new OrganizationService();
+    const users = await service.searchUsers("bob", "org-1");
+
+    expect(users).toEqual([
+      { id: "user-2", name: "Bob", email: "bob@example.com", avatarUrl: null },
+    ]);
+    expect(prismaMock.user.findMany).toHaveBeenCalledWith({
+      where: {
+        id: { not: "00000000-0000-4000-a000-000000000001" },
+        orgMemberships: {
+          none: { organizationId: "org-1" },
+        },
+        OR: [
+          { email: { contains: "bob", mode: "insensitive" } },
+          { name: { contains: "bob", mode: "insensitive" } },
+        ],
+      },
+      select: { id: true, name: true, email: true, avatarUrl: true },
+      orderBy: [{ name: "asc" }, { email: "asc" }],
+      take: 10,
+    });
+  });
+
+  it("does not query for short search terms", async () => {
+    const service = new OrganizationService();
+
+    await expect(service.searchUsers("a", "org-1")).resolves.toEqual([]);
+    expect(prismaMock.user.findMany).not.toHaveBeenCalled();
   });
 });

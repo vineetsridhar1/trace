@@ -1,5 +1,11 @@
 import type { Context } from "../context.js";
-import type { CreateRepoInput, UpdateRepoInput, CreateProjectInput, EntityType, UserRole } from "@trace/gql";
+import type {
+  CreateRepoInput,
+  UpdateRepoInput,
+  CreateProjectInput,
+  EntityType,
+  UserRole,
+} from "@trace/gql";
 import { organizationService } from "../services/organization.js";
 import { webhookService } from "../services/webhook.js";
 import { orgMemberService } from "../services/org-member.js";
@@ -10,9 +16,10 @@ export const organizationQueries = {
   myOrganizations: async (_: unknown, _args: Record<string, never>, ctx: Context) => {
     return orgMemberService.getUserOrgs(ctx.userId);
   },
-  searchUsers: async (_: unknown, args: { email: string }, ctx: Context) => {
-    requireOrgContext(ctx);
-    return organizationService.searchUsers(args.email.trim());
+  searchUsers: async (_: unknown, args: { query: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    await orgMemberService.assertAdmin(ctx.userId, orgId);
+    return organizationService.searchUsers(args.query.trim(), orgId);
   },
   repos: (_: unknown, args: { organizationId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
@@ -44,13 +51,7 @@ export const organizationMutations = {
   },
   updateRepo: (_: unknown, args: { id: string; input: UpdateRepoInput }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
-    return organizationService.updateRepo(
-      args.id,
-      orgId,
-      args.input,
-      ctx.actorType,
-      ctx.userId,
-    );
+    return organizationService.updateRepo(args.id, orgId, args.input, ctx.actorType, ctx.userId);
   },
   createProject: (_: unknown, args: { input: CreateProjectInput }, ctx: Context) => {
     return organizationService.createProject(args.input, ctx.actorType, ctx.userId);
@@ -124,11 +125,17 @@ export const organizationTypeResolvers = {
     },
   },
   OrgMember: {
-    user: async (member: { userId: string; user?: { id: string; name: string; email: string; avatarUrl: string | null } }) => {
+    user: async (member: {
+      userId: string;
+      user?: { id: string; name: string; email: string; avatarUrl: string | null };
+    }) => {
       if (member.user) return member.user;
       return organizationService.getUserProfile(member.userId);
     },
-    organization: async (member: { organizationId: string; organization?: { id: string; name: string } }) => {
+    organization: async (member: {
+      organizationId: string;
+      organization?: { id: string; name: string };
+    }) => {
       if (member.organization) return member.organization;
       return organizationService.getOrganizationSummary(member.organizationId);
     },

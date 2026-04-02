@@ -1,16 +1,9 @@
 import { useState } from "react";
-import {
-  ArrowLeft,
-  GitBranch,
-  Bot,
-  SlidersHorizontal,
-  Bell,
-  Key,
-  Users,
-} from "lucide-react";
+import { ArrowLeft, GitBranch, Bot, SlidersHorizontal, Bell, Key, Users } from "lucide-react";
 import { useUIStore } from "../../stores/ui";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
+import { SidebarTrigger } from "../ui/sidebar";
 import { RepositoriesSection } from "./RepositoriesSection";
 import { AgentSettingsSection } from "./AgentSettingsSection";
 import { SessionDefaultsSection } from "./SessionDefaultsSection";
@@ -38,11 +31,15 @@ const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
 export function SettingsPage() {
   const setActivePage = useUIStore((s) => s.setActivePage);
   const [activeTab, setActiveTab] = useState<SettingsTab>("repositories");
+  const contentWidthClass =
+    activeTab === "members" || activeTab === "repositories"
+      ? "mx-auto max-w-5xl"
+      : "mx-auto max-w-2xl";
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+        <SidebarTrigger />
         <Button
           variant="ghost"
           size="icon"
@@ -54,17 +51,15 @@ export function SettingsPage() {
         <h1 className="text-lg font-semibold text-foreground">Settings</h1>
       </header>
 
-      {/* Body: sidebar + content */}
-      <div className="flex min-h-0 flex-1">
-        {/* Sidebar */}
-        <nav className="w-52 shrink-0 border-r border-border bg-surface-deep/50 p-3">
-          <ul className="space-y-0.5">
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        <nav className="shrink-0 border-b border-border bg-surface-deep/50 p-3 md:w-52 md:border-b-0 md:border-r">
+          <ul className="flex gap-1 overflow-x-auto md:block md:space-y-0.5">
             {TABS.map((tab) => (
               <li key={tab.id}>
                 <button
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+                    "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm whitespace-nowrap transition-colors",
                     activeTab === tab.id
                       ? "bg-surface-elevated text-foreground font-medium"
                       : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
@@ -78,9 +73,8 @@ export function SettingsPage() {
           </ul>
         </nav>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="mx-auto max-w-2xl">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+          <div className={contentWidthClass}>
             {activeTab === "repositories" && <RepositoriesSection />}
             {activeTab === "members" && <MembersSection />}
             {activeTab === "ai" && <AgentSettingsSection />}
