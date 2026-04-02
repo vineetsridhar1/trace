@@ -90,7 +90,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     setValue(initialHtml);
   }, [initialHtml]);
 
-  const hasSlashCommands = (slashCommands?.length ?? 0) > 0;
+  const enableSlashCommands = slashCommands !== undefined;
 
   const clearEditor = useCallback(() => {
     const editor = quillRef.current?.getEditor();
@@ -127,7 +127,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
       },
       mention: {
         allowedChars: /^[A-Za-z\s0-9_-]*$/,
-        mentionDenotationChars: hasSlashCommands ? ["@", "/"] : ["@"],
+        mentionDenotationChars: enableSlashCommands ? ["@", "/"] : ["@"],
         blotName: "mention",
         defaultMenuOrientation: "top",
         showDenotationChar: false,
@@ -183,7 +183,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
         },
       },
     }),
-    [clearEditor, hasSlashCommands],
+    [clearEditor, enableSlashCommands],
   );
 
   const submit = useCallback(async () => {

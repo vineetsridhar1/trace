@@ -16,7 +16,9 @@ const BUILTIN_FALLBACK: SlashCommandItem[] = BUILTIN_SLASH_COMMANDS.map((cmd) =>
 
 export function useSlashCommands(sessionId: string): { commands: SlashCommandItem[]; loading: boolean } {
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
-  const [commands, setCommands] = useState<SlashCommandItem[]>([]);
+  const [commands, setCommands] = useState<SlashCommandItem[]>(() =>
+    tool === "claude_code" ? BUILTIN_FALLBACK : [],
+  );
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
