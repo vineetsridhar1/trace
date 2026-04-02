@@ -347,7 +347,6 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
     assertCall: (services) => {
       expect(services.chatService.create).toHaveBeenCalledWith(
         {
-          organizationId: "org-1",
           memberIds: ["user-1", "user-2"],
           name: "release war room",
         },

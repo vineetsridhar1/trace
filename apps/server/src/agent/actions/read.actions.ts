@@ -2,6 +2,7 @@
  * Read domain actions — events.query, users.search, org.listMembers, org.listProjects, org.listRepos, users.getProfile
  */
 
+import type { ScopeType } from "@trace/gql";
 import type { AgentActionRegistration, ActionDispatcher } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -110,7 +111,7 @@ export const readDispatchers: Record<string, ActionDispatcher> = {
 
     const limit = Math.min(typeof args.limit === "number" ? args.limit : 20, 50);
     return services.eventService.query(ctx.organizationId, {
-      scopeType: args.scopeType as string,
+      scopeType: args.scopeType as ScopeType | undefined,
       scopeId: args.scopeId as string,
       limit,
     });

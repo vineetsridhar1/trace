@@ -434,18 +434,12 @@ export function useChannelDnd({
    *  to find the closest channel item — this makes both cross-container
    *  moves and within-group reordering work correctly.
    */
-  const collisionDetection: CollisionDetection = useCallback((args: {
-    active: { id: string | number };
-    collisionRect: DOMRect;
-    droppableRects: Map<string | number, DOMRect>;
-    droppableContainers: Array<{ id: string | number }>;
-    pointerCoordinates: { x: number; y: number } | null;
-  }) => {
-    const pw = pointerWithin(args as unknown as Parameters<typeof pointerWithin>[0]);
-    if (pw.length === 0) return closestCenter(args as unknown as Parameters<typeof closestCenter>[0]);
+  const collisionDetection: CollisionDetection = useCallback((args) => {
+    const pw = pointerWithin(args);
+    if (pw.length === 0) return closestCenter(args);
 
     const overId = getFirstCollision(pw, "id");
-    if (overId == null) return closestCenter(args as unknown as Parameters<typeof closestCenter>[0]);
+    if (overId == null) return closestCenter(args);
 
     const overIdStr = String(overId);
     const activeParsed = parseSortableId(String(args.active.id));
@@ -485,7 +479,7 @@ export function useChannelDnd({
           const filteredContainers = args.droppableContainers.filter((c: { id: string | number }) =>
             channelSortableIds.includes(String(c.id))
           );
-          const closest = closestCenter({ ...args, droppableContainers: filteredContainers } as unknown as Parameters<typeof closestCenter>[0]);
+          const closest = closestCenter({ ...args, droppableContainers: filteredContainers });
           if (closest.length > 0) return closest;
         }
 

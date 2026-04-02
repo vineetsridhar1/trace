@@ -20,7 +20,7 @@ export function TerminalPanel({
   onClose: () => void;
 }) {
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
-  const addTerminal = useTerminalStore((s: { addTerminal: (id: string, sessionId: string, sessionGroupId: string, status?: string) => void }) => s.addTerminal);
+  const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s: { removeTerminal: (id: string) => void }) => s.removeTerminal);
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
   const groupTerminals = useSessionGroupTerminals(sessionGroupId ?? "");

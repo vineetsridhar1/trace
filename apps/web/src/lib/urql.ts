@@ -57,7 +57,7 @@ export const client = createClient({
   exchanges: [
     fetchExchange,
     subscriptionExchange({
-      forwardSubscription(request: { query: string; variables?: Record<string, unknown> }) {
+      forwardSubscription(request) {
         const input = { ...request, query: request.query || "" };
         return {
           subscribe(sink: { next: (value: unknown) => void; error: (error: unknown) => void; complete: () => void }) {

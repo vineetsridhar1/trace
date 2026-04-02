@@ -167,7 +167,7 @@ export function AgentSettingsTab() {
             </div>
             <div className="space-y-1.5">
               <Label>Status</Label>
-              <Select value={status} onValueChange={(v: string) => { if (v) { setStatus(v); markDirty(); } }}>
+              <Select value={status} onValueChange={(v: string | null) => { if (v) { setStatus(v); markDirty(); } }}>
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
@@ -182,7 +182,7 @@ export function AgentSettingsTab() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Autonomy Mode</Label>
-              <Select value={autonomyMode} onValueChange={(v: string) => { if (v) { setAutonomyMode(v); markDirty(); } }}>
+              <Select value={autonomyMode} onValueChange={(v: string | null) => { if (v) { setAutonomyMode(v); markDirty(); } }}>
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>

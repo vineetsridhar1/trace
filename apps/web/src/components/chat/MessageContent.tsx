@@ -4,7 +4,8 @@ import { UserMention } from "./UserMention";
 import { SessionLinkCard } from "./SessionLinkCard";
 
 // Allow mention data attributes through DOMPurify
-DOMPurify.addHook("uponSanitizeAttribute", (_node: Element, data: { attrName: string; forceKeepAttr?: boolean }) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(DOMPurify as any).addHook("uponSanitizeAttribute", (_node: unknown, data: { attrName: string; forceKeepAttr?: boolean }) => {
   if (data.attrName.startsWith("data-mention-")) {
     data.forceKeepAttr = true;
   }

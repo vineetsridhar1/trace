@@ -293,7 +293,7 @@ export function MembersSection() {
                 </div>
               )}
             </div>
-            <Select value={addRole} onValueChange={(value: string) => setAddRole(value as UserRole)}>
+            <Select value={addRole} onValueChange={(value: string | null) => { if (value) setAddRole(value as UserRole); }}>
               <SelectTrigger className="w-32">
                 <SelectValue />
               </SelectTrigger>
@@ -378,7 +378,7 @@ export function MembersSection() {
                   ) : (
                     <Select
                       value={member.role}
-                      onValueChange={(v: string) => handleRoleChange(member.user.id, v as UserRole)}
+                      onValueChange={(v: string | null) => { if (v) handleRoleChange(member.user.id, v as UserRole); }}
                     >
                       <SelectTrigger className="h-8 w-full text-sm">
                         <SelectValue />

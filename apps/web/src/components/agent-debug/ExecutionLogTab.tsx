@@ -128,7 +128,7 @@ export function ExecutionLogTab() {
           <span className="text-xs text-muted-foreground">{totalCount} total</span>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={statusFilter} onValueChange={(v: string) => { if (v) { setStatusFilter(v); setPage(0); } }}>
+          <Select value={statusFilter} onValueChange={(v: string | null) => { if (v) { setStatusFilter(v); setPage(0); } }}>
             <SelectTrigger className="h-8 w-[140px] text-xs">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>

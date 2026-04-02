@@ -231,7 +231,6 @@ export const chatDispatchers: Record<string, ActionDispatcher> = {
     const { actorType, actorId } = actorInfo(ctx);
     return services.chatService.create(
       {
-        organizationId: ctx.organizationId,
         memberIds: args.memberIds as string[],
         name: args.name as string | undefined,
       },
