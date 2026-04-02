@@ -406,6 +406,17 @@ export function useOrgEvents() {
           }
         }
 
+        // Channel deleted — remove from store, navigate away if active
+        if (event.eventType === "channel_deleted" && payload) {
+          if (typeof payload.channelId === "string") {
+            batch.remove("channels", payload.channelId);
+            const ui = useUIStore.getState();
+            if (ui.activeChannelId === payload.channelId) {
+              ui.setActiveChannelId(null);
+            }
+          }
+        }
+
         // New session — upsert directly from payload
         if (event.eventType === "session_started" && payload) {
           const session = asJsonObject(payload.session);

@@ -385,6 +385,7 @@ export type Event = {
 
 export type EventType =
   | 'channel_created'
+  | 'channel_deleted'
   | 'channel_group_created'
   | 'channel_group_deleted'
   | 'channel_group_updated'
@@ -550,6 +551,7 @@ export type Mutation = {
   createTerminal: Terminal;
   createTicket: Ticket;
   deleteApiToken: Scalars['Boolean']['output'];
+  deleteChannel: Scalars['Boolean']['output'];
   deleteChannelGroup: Scalars['Boolean']['output'];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
@@ -683,6 +685,11 @@ export type MutationCreateTicketArgs = {
 
 export type MutationDeleteApiTokenArgs = {
   provider: ApiTokenProvider;
+};
+
+
+export type MutationDeleteChannelArgs = {
+  id: Scalars['ID']['input'];
 };
 
 

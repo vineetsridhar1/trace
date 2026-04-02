@@ -388,6 +388,7 @@ export type Event = {
 
 export type EventType =
   | 'channel_created'
+  | 'channel_deleted'
   | 'channel_group_created'
   | 'channel_group_deleted'
   | 'channel_group_updated'
@@ -553,6 +554,7 @@ export type Mutation = {
   createTerminal: Terminal;
   createTicket: Ticket;
   deleteApiToken: Scalars['Boolean']['output'];
+  deleteChannel: Scalars['Boolean']['output'];
   deleteChannelGroup: Scalars['Boolean']['output'];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
@@ -686,6 +688,11 @@ export type MutationCreateTicketArgs = {
 
 export type MutationDeleteApiTokenArgs = {
   provider: ApiTokenProvider;
+};
+
+
+export type MutationDeleteChannelArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -2268,6 +2275,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   createTerminal?: Resolver<ResolversTypes['Terminal'], ParentType, ContextType, RequireFields<MutationCreateTerminalArgs, 'cols' | 'rows' | 'sessionId'>>;
   createTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationCreateTicketArgs, 'input'>>;
   deleteApiToken?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteApiTokenArgs, 'provider'>>;
+  deleteChannel?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteChannelArgs, 'id'>>;
   deleteChannelGroup?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteChannelGroupArgs, 'id'>>;
   deleteChannelMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationDeleteChannelMessageArgs, 'messageId'>>;
   deleteChatMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationDeleteChatMessageArgs, 'messageId'>>;
