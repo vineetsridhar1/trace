@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
 permissions:
   id-token: write
   contents: read
@@ -57,4 +61,4 @@ jobs:
             "cd ~/trace && \
             aws ecr get-login-password --region '${AWS_REGION}' | docker login --username AWS --password-stdin '${ECR_REGISTRY}' && \
             IMAGE_TAG='${GITHUB_SHA}' ECR_REGISTRY='${ECR_REGISTRY}' docker compose pull && \
-            IMAGE_TAG='${GITHUB_SHA}' ECR_REGISTRY='${ECR_REGISTRY}' docker compose up -d"
+            IMAGE_TAG='${GITHUB_SHA}' ECR_REGISTRY='${ECR_REGISTRY}' docker compose up -d --wait"
