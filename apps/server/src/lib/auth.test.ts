@@ -7,7 +7,18 @@ vi.mock("./db.js", async () => {
 });
 
 vi.mock("./dataloader.js", () => ({
-  createUserLoader: vi.fn(() => ({ kind: "loader" })),
+  createUserLoader: vi.fn(() => ({ kind: "userLoader" })),
+  createSessionLoader: vi.fn(() => ({ kind: "sessionLoader" })),
+  createSessionGroupLoader: vi.fn(() => ({ kind: "sessionGroupLoader" })),
+  createRepoLoader: vi.fn(() => ({ kind: "repoLoader" })),
+  createEventLoader: vi.fn(() => ({ kind: "eventLoader" })),
+  createConversationLoader: vi.fn(() => ({ kind: "conversationLoader" })),
+  createBranchLoader: vi.fn(() => ({ kind: "branchLoader" })),
+  createTurnLoader: vi.fn(() => ({ kind: "turnLoader" })),
+  createChatMembersLoader: vi.fn(() => ({ kind: "chatMembersLoader" })),
+  createSessionTicketsLoader: vi.fn(() => ({ kind: "sessionTicketsLoader" })),
+  createChannelMembershipLoader: vi.fn(() => ({ kind: "channelMembershipLoader" })),
+  createChatMembershipLoader: vi.fn(() => ({ kind: "chatMembershipLoader" })),
 }));
 
 import { prisma } from "./db.js";
@@ -19,8 +30,9 @@ import {
   verifyToken,
 } from "./auth.js";
 
-const prismaMock = prisma as any;
-const createUserLoaderMock = createUserLoader as any;
+const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
+const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
+const createUserLoaderMock = createUserLoader as unknown as ReturnType<typeof vi.fn>;
 
 describe("auth helpers", () => {
   beforeEach(() => {
@@ -33,40 +45,37 @@ describe("auth helpers", () => {
   });
 
   it("verifies valid tokens and rejects invalid ones", () => {
-    const token = jwt.sign({ userId: "user-1" }, process.env.JWT_SECRET!);
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
 
     expect(verifyToken(token)).toBe("user-1");
     expect(verifyToken("bad-token")).toBeNull();
   });
 
   it("builds a context from a bearer token", async () => {
-    prismaMock.user.findUnique.mockResolvedValueOnce({
-      id: "user-1",
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
+    prismaMock.orgMember.findFirst.mockResolvedValueOnce({
       organizationId: "org-1",
       role: "admin",
     });
 
-    const token = jwt.sign({ userId: "user-1" }, process.env.JWT_SECRET!);
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
     const context = await buildContext({
       req: {
         headers: { authorization: `Bearer ${token}` },
         cookies: {},
       },
-    } as any);
+    } as unknown as Parameters<typeof buildContext>[0]);
 
-    expect(context).toEqual({
-      userId: "user-1",
-      organizationId: "org-1",
-      role: "admin",
-      actorType: "user",
-      userLoader: { kind: "loader" },
-    });
+    expect(context.userId).toBe("user-1");
+    expect(context.organizationId).toBe("org-1");
+    expect(context.role).toBe("admin");
+    expect(context.actorType).toBe("user");
     expect(createUserLoaderMock).toHaveBeenCalled();
   });
 
   it("falls back to x-user-id headers when no token is present", async () => {
-    prismaMock.user.findUnique.mockResolvedValueOnce({
-      id: "user-2",
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-2" });
+    prismaMock.orgMember.findFirst.mockResolvedValueOnce({
       organizationId: "org-2",
       role: "member",
     });
@@ -76,7 +85,7 @@ describe("auth helpers", () => {
         headers: { "x-user-id": "user-2" },
         cookies: {},
       },
-    } as any);
+    } as unknown as Parameters<typeof buildContext>[0]);
 
     expect(context.userId).toBe("user-2");
     expect(context.organizationId).toBe("org-2");
@@ -88,13 +97,13 @@ describe("auth helpers", () => {
   });
 
   it("builds websocket context from cookies", async () => {
-    prismaMock.user.findUnique.mockResolvedValueOnce({
-      id: "user-3",
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-3" });
+    prismaMock.orgMember.findFirst.mockResolvedValueOnce({
       organizationId: "org-3",
       role: "observer",
     });
 
-    const token = jwt.sign({ userId: "user-3" }, process.env.JWT_SECRET!);
+    const token = jwt.sign({ userId: "user-3" }, JWT_SECRET);
     const context = await buildWsContext(undefined, `trace_token=${token}`);
 
     expect(context.userId).toBe("user-3");

@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// Set encryption key before the service module is evaluated (vi.hoisted runs before imports)
+vi.hoisted(() => {
+  // 32-byte hex key for aes-256-gcm test encryption
+  process.env.TOKEN_ENCRYPTION_KEY =
+    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+});
+
 vi.mock("../lib/db.js", async () => {
   const { createPrismaMock } = await import("../../test/helpers.js");
   return { prisma: createPrismaMock() };

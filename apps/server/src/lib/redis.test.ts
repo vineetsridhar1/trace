@@ -1,16 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 
 const hoisted = vi.hoisted(() => {
-  const instances: any[] = [];
-  const RedisMock = vi.fn().mockImplementation((url: string, options: Record<string, unknown>) => {
-    const client = {
-      on: vi.fn(),
-      connect: vi.fn().mockResolvedValue(undefined),
-      disconnect: vi.fn(),
-    };
-    instances.push({ url, options, client });
-    return client;
-  });
+  const instances: Array<{ url: string; options: Record<string, unknown>; client: Record<string, unknown> }> = [];
+
+  class RedisMock {
+    on = vi.fn();
+    connect = vi.fn().mockResolvedValue(undefined);
+    disconnect = vi.fn();
+
+    constructor(url: string, options: Record<string, unknown>) {
+      instances.push({ url, options, client: this });
+    }
+  }
 
   return { instances, RedisMock };
 });
@@ -24,7 +25,7 @@ import { connectRedis, disconnectRedis, redis, redisSub } from "./redis.js";
 describe("redis client helpers", () => {
   it("creates named redis clients with lazy connect", async () => {
     expect(hoisted.instances).toHaveLength(2);
-    expect(hoisted.instances[0].url).toBe(process.env.REDIS_URL);
+    expect(hoisted.instances[0].url).toBe(process.env.REDIS_URL ?? "redis://localhost:6379");
     expect(hoisted.instances[0].options).toMatchObject({
       lazyConnect: true,
       connectionName: "main",
