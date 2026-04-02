@@ -4,7 +4,7 @@ services:
     environment:
       ROLE: web
     ports:
-      - "127.0.0.1:3000:3000"
+      - "80:3000"
     restart: unless-stopped
     healthcheck:
       test:
@@ -19,12 +19,6 @@ services:
 
   backend:
     image: ${ECR_REGISTRY:-459063349068.dkr.ecr.us-east-1.amazonaws.com}/trace:${IMAGE_TAG:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        VITE_API_URL: ${VITE_API_URL:-}
-        VITE_AG_GRID_LICENSE_KEY: ${VITE_AG_GRID_LICENSE_KEY:-}
     environment:
       ROLE: backend
       NODE_ENV: production

@@ -42,6 +42,9 @@ jobs:
         with:
           context: .
           push: true
+          build-args: |
+            VITE_API_URL=${{ secrets.VITE_API_URL }}
+            VITE_AG_GRID_LICENSE_KEY=${{ secrets.VITE_AG_GRID_LICENSE_KEY }}
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
@@ -53,6 +56,11 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
 
+      - name: Copy production compose file to EC2
+        run: |
+          scp -i ~/.ssh/id_ed25519 deploy/docker-compose.ec2.yml \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/trace/docker-compose.ec2.yml"
+
       - name: Deploy on EC2
         env:
           GITHUB_SHA: ${{ github.sha }}
@@ -60,5 +68,5 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
             "cd ~/trace && \
             aws ecr get-login-password --region '${AWS_REGION}' | docker login --username AWS --password-stdin '${ECR_REGISTRY}' && \
-            IMAGE_TAG='${GITHUB_SHA}' ECR_REGISTRY='${ECR_REGISTRY}' docker compose pull && \
-            IMAGE_TAG='${GITHUB_SHA}' ECR_REGISTRY='${ECR_REGISTRY}' docker compose up -d --wait"
+            IMAGE_TAG='${GITHUB_SHA}' ECR_REGISTRY='${ECR_REGISTRY}' docker compose -f docker-compose.ec2.yml pull && \
+            IMAGE_TAG='${GITHUB_SHA}' ECR_REGISTRY='${ECR_REGISTRY}' docker compose -f docker-compose.ec2.yml up -d --wait"
