@@ -240,7 +240,8 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
       setValue(content);
       if (onChangeRef.current) {
         const editor = quillRef.current?.getEditor();
-        onChangeRef.current(editor?.getText().trim() ?? "");
+        const text = editor?.getText().replace(/\n$/, "") ?? "";
+        onChangeRef.current(text);
       }
     },
     [],

@@ -22,14 +22,15 @@ export function useSlashCommands(sessionId: string): { commands: SlashCommandIte
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (tool !== "claude_code") {
+    if (!sessionId) {
       setCommands([]);
       setLoading(false);
       return;
     }
 
     let cancelled = false;
-    setCommands(BUILTIN_FALLBACK);
+    const shouldSeedBuiltins = tool !== "codex" && tool !== "custom";
+    setCommands(shouldSeedBuiltins ? BUILTIN_FALLBACK : []);
     setLoading(true);
     client
       .query(SESSION_SLASH_COMMANDS_QUERY, { sessionId })
