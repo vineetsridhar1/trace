@@ -140,6 +140,30 @@ export const sessionActions: AgentActionRegistration[] = [
     },
     scopes: ["session", "channel", "chat", "ticket"],
   },
+  {
+    name: "session.list",
+    service: "sessionService",
+    method: "list",
+    description:
+      "List sessions in the organization. Optionally filter by status, tool, repo, or channel.",
+    catalogDescription: "List/browse sessions (agentStatus, tool, repoId, channelId)",
+    risk: "low",
+    suggestable: false,
+    tier: "extended",
+    parameters: {
+      fields: {
+        agentStatus: {
+          type: "string",
+          description: "Filter by agent status",
+          enum: ["idle", "running", "paused", "completed", "failed", "terminated"],
+        },
+        tool: { type: "string", description: "Filter by coding tool" },
+        repoId: { type: "string", description: "Filter by repository ID" },
+        channelId: { type: "string", description: "Filter by channel ID" },
+      },
+    },
+    scopes: ["session", "channel", "chat", "ticket", "project"],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -198,5 +222,14 @@ export const sessionDispatchers: Record<string, ActionDispatcher> = {
 
   "session.get": (services, args) => {
     return services.sessionService.get(args.sessionId as string);
+  },
+
+  "session.list": (services, args, ctx) => {
+    return services.sessionService.list(ctx.organizationId, {
+      agentStatus: args.agentStatus as string | undefined,
+      tool: args.tool as string | undefined,
+      repoId: args.repoId as string | undefined,
+      channelId: args.channelId as string | undefined,
+    });
   },
 };

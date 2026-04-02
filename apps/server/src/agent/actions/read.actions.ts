@@ -1,5 +1,5 @@
 /**
- * Read domain actions — events.query, users.search
+ * Read domain actions — events.query, users.search, org.listMembers, org.listProjects, org.listRepos, users.getProfile
  */
 
 import type { AgentActionRegistration, ActionDispatcher } from "./types.js";
@@ -50,6 +50,55 @@ export const readActions: AgentActionRegistration[] = [
     },
     scopes: ["chat", "channel", "ticket", "session", "project"],
   },
+  {
+    name: "users.getProfile",
+    service: "organizationService",
+    method: "getUserProfile",
+    description:
+      "Get a user's profile by ID including name, email, and avatar.",
+    catalogDescription: "Fetch/view a user's profile by ID (userId)",
+    risk: "low",
+    suggestable: false,
+    tier: "extended",
+    parameters: {
+      fields: {
+        userId: { type: "string", description: "The user ID to look up", required: true },
+      },
+    },
+    scopes: ["chat", "channel", "ticket", "session", "project"],
+  },
+  {
+    name: "org.listProjects",
+    service: "organizationService",
+    method: "listProjects",
+    description:
+      "List all projects in the organization. Optionally filter by repo.",
+    catalogDescription: "List/browse all projects in the org (repoId)",
+    risk: "low",
+    suggestable: false,
+    tier: "extended",
+    parameters: {
+      fields: {
+        repoId: { type: "string", description: "Filter projects by repository ID" },
+      },
+    },
+    scopes: ["chat", "channel", "ticket", "session", "project", "system"],
+  },
+  {
+    name: "org.listRepos",
+    service: "organizationService",
+    method: "listRepos",
+    description:
+      "List all repositories connected to the organization.",
+    catalogDescription: "List/browse all repos in the org",
+    risk: "low",
+    suggestable: false,
+    tier: "extended",
+    parameters: {
+      fields: {},
+    },
+    scopes: ["chat", "channel", "ticket", "session", "project", "system"],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -73,5 +122,23 @@ export const readDispatchers: Record<string, ActionDispatcher> = {
       args.query as string,
       ctx.organizationId,
     );
+  },
+
+  "users.getProfile": (services, args) => {
+    if (!services.organizationService) throw new Error("organizationService not available");
+    return services.organizationService.getUserProfile(args.userId as string);
+  },
+
+  "org.listProjects": (services, args, ctx) => {
+    if (!services.organizationService) throw new Error("organizationService not available");
+    return services.organizationService.listProjects(
+      ctx.organizationId,
+      args.repoId as string | undefined,
+    );
+  },
+
+  "org.listRepos": (services, _args, ctx) => {
+    if (!services.organizationService) throw new Error("organizationService not available");
+    return services.organizationService.listRepos(ctx.organizationId);
   },
 };

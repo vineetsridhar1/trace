@@ -159,6 +159,56 @@ export const chatActions: AgentActionRegistration[] = [
     },
     scopes: ["chat", "channel", "ticket", "session"],
   },
+  {
+    name: "chat.listMessages",
+    service: "chatService",
+    method: "getMessages",
+    description:
+      "Read recent messages from a chat. Use to understand what was discussed or to get context before responding.",
+    catalogDescription: "Read/fetch recent messages in a chat (chatId, limit)",
+    risk: "low",
+    suggestable: false,
+    tier: "extended",
+    parameters: {
+      fields: {
+        chatId: { type: "string", description: "The chat to read messages from", required: true },
+        limit: { type: "number", description: "Maximum number of messages to return (default 20, max 50)" },
+      },
+    },
+    scopes: ["chat"],
+  },
+  {
+    name: "chat.list",
+    service: "chatService",
+    method: "getChats",
+    description:
+      "List all chats (DMs and group chats) the agent is a member of.",
+    catalogDescription: "List/browse all chats the agent is in",
+    risk: "low",
+    suggestable: false,
+    tier: "extended",
+    parameters: {
+      fields: {},
+    },
+    scopes: ["chat", "channel", "ticket", "session", "project"],
+  },
+  {
+    name: "chat.getMembers",
+    service: "chatService",
+    method: "getMembers",
+    description:
+      "List all members of a chat. Use to see who is in a group chat.",
+    catalogDescription: "List/get members of a chat (chatId)",
+    risk: "low",
+    suggestable: false,
+    tier: "extended",
+    parameters: {
+      fields: {
+        chatId: { type: "string", description: "The chat to list members for", required: true },
+      },
+    },
+    scopes: ["chat"],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -237,5 +287,22 @@ export const chatDispatchers: Record<string, ActionDispatcher> = {
 
   "chat.get": (services, args, ctx) => {
     return services.chatService.getChat(args.chatId as string, ctx.agentId);
+  },
+
+  "chat.listMessages": (services, args, ctx) => {
+    const limit = Math.min(typeof args.limit === "number" ? args.limit : 20, 50);
+    return services.chatService.getMessages(
+      args.chatId as string,
+      ctx.agentId,
+      { limit },
+    );
+  },
+
+  "chat.list": (services, _args, ctx) => {
+    return services.chatService.getChats(ctx.agentId);
+  },
+
+  "chat.getMembers": (services, args) => {
+    return services.chatService.getMembers(args.chatId as string);
   },
 };

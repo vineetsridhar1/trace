@@ -173,6 +173,58 @@ export const channelActions: AgentActionRegistration[] = [
     },
     scopes: ["channel", "chat", "ticket", "session", "project"],
   },
+  {
+    name: "channel.list",
+    service: "channelService",
+    method: "listChannels",
+    description:
+      "List channels in the organization. Optionally filter by project.",
+    catalogDescription: "List/browse all channels in the org (projectId)",
+    risk: "low",
+    suggestable: false,
+    tier: "extended",
+    parameters: {
+      fields: {
+        projectId: { type: "string", description: "Filter channels by project ID" },
+      },
+    },
+    scopes: ["channel", "chat", "ticket", "session", "project", "system"],
+  },
+  {
+    name: "channel.listMessages",
+    service: "channelService",
+    method: "getChannelMessages",
+    description:
+      "Read recent messages from a channel. Use to understand what was discussed or to get context before responding.",
+    catalogDescription: "Read/fetch recent messages in a channel (channelId, limit)",
+    risk: "low",
+    suggestable: false,
+    tier: "extended",
+    parameters: {
+      fields: {
+        channelId: { type: "string", description: "The channel to read messages from", required: true },
+        limit: { type: "number", description: "Maximum number of messages to return (default 20, max 50)" },
+      },
+    },
+    scopes: ["channel"],
+  },
+  {
+    name: "channel.getMembers",
+    service: "channelService",
+    method: "getMembers",
+    description:
+      "List all members of a channel. Use to find who is in a channel before sending messages or assigning work.",
+    catalogDescription: "List/get members of a channel (channelId)",
+    risk: "low",
+    suggestable: false,
+    tier: "extended",
+    parameters: {
+      fields: {
+        channelId: { type: "string", description: "The channel to list members for", required: true },
+      },
+    },
+    scopes: ["channel"],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -259,5 +311,26 @@ export const channelDispatchers: Record<string, ActionDispatcher> = {
 
   "channel.get": (services, args, ctx) => {
     return services.channelService.getChannel(args.channelId as string, ctx.agentId);
+  },
+
+  "channel.list": (services, args, ctx) => {
+    return services.channelService.listChannels(
+      ctx.organizationId,
+      ctx.agentId,
+      { projectId: args.projectId as string | undefined },
+    );
+  },
+
+  "channel.listMessages": (services, args, ctx) => {
+    const limit = Math.min(typeof args.limit === "number" ? args.limit : 20, 50);
+    return services.channelService.getChannelMessages(
+      args.channelId as string,
+      ctx.agentId,
+      { limit },
+    );
+  },
+
+  "channel.getMembers": (services, args) => {
+    return services.channelService.getMembers(args.channelId as string);
   },
 };
