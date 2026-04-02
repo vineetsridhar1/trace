@@ -219,6 +219,17 @@ export const REPO_BRANCHES_QUERY = gql`
   }
 `;
 
+export const SESSION_SLASH_COMMANDS_QUERY = gql`
+  query SessionSlashCommands($sessionId: ID!) {
+    sessionSlashCommands(sessionId: $sessionId) {
+      name
+      description
+      source
+      category
+    }
+  }
+`;
+
 export const SESSION_TERMINALS_QUERY = gql`
   query SessionTerminals($sessionId: ID!) {
     sessionTerminals(sessionId: $sessionId) {

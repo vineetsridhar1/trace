@@ -173,6 +173,15 @@ export function handleBridgeConnection(ws: WebSocket) {
         return;
       }
 
+      if (msg.type === "skills_result" && typeof msg.requestId === "string") {
+        sessionRouter.resolveSkillsRequest(
+          msg.requestId,
+          Array.isArray(msg.skills) ? msg.skills as Array<{ name: string; description: string; source: "user" | "project" }> : [],
+          typeof msg.error === "string" ? msg.error : undefined,
+        );
+        return;
+      }
+
       // Terminal messages — relay directly to frontend, no event store
       if (msg.type === "terminal_ready" || msg.type === "terminal_output" ||
           msg.type === "terminal_exit" || msg.type === "terminal_error") {

@@ -67,6 +67,25 @@ enum CodingTool {
   custom
 }
 
+enum SlashCommandSource {
+  user_skill
+  project_skill
+  builtin
+}
+
+enum SlashCommandCategory {
+  passthrough
+  terminal
+  special
+}
+
+type SlashCommand {
+  name: String!
+  description: String!
+  source: SlashCommandSource!
+  category: SlashCommandCategory!
+}
+
 enum ChannelType {
   text
   coding
@@ -878,6 +897,7 @@ type Query {
   sessionGroupFileContent(sessionGroupId: ID!, filePath: String!): String!
   sessionGroupBranchDiff(sessionGroupId: ID!): [BranchDiffFile!]!
   sessionGroupFileAtRef(sessionGroupId: ID!, filePath: String!, ref: String!): String!
+  sessionSlashCommands(sessionId: ID!): [SlashCommand!]!
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
   chats: [Chat!]!
   chat(id: ID!): Chat

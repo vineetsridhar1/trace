@@ -1094,6 +1094,7 @@ export type Query = {
   sessionGroupFileContent: Scalars['String']['output'];
   sessionGroupFiles: Array<Scalars['String']['output']>;
   sessionGroups: Array<SessionGroup>;
+  sessionSlashCommands: Array<SlashCommand>;
   sessionTerminals: Array<Terminal>;
   sessions: Array<Session>;
   threadReplies: Array<Message>;
@@ -1314,6 +1315,11 @@ export type QuerySessionGroupsArgs = {
 };
 
 
+export type QuerySessionSlashCommandsArgs = {
+  sessionId: Scalars['ID']['input'];
+};
+
+
 export type QuerySessionTerminalsArgs = {
   sessionId: Scalars['ID']['input'];
 };
@@ -1489,6 +1495,24 @@ export type SetApiTokenInput = {
   provider: ApiTokenProvider;
   token: Scalars['String']['input'];
 };
+
+export type SlashCommand = {
+  __typename?: 'SlashCommand';
+  category: SlashCommandCategory;
+  description: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+  source: SlashCommandSource;
+};
+
+export type SlashCommandCategory =
+  | 'passthrough'
+  | 'special'
+  | 'terminal';
+
+export type SlashCommandSource =
+  | 'builtin'
+  | 'project_skill'
+  | 'user_skill';
 
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars['String']['input']>;
