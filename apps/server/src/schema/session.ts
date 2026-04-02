@@ -129,6 +129,10 @@ export const sessionQueries = {
       }
     }
 
+    if (session.tool !== "claude_code") {
+      return [];
+    }
+
     // Merge built-in commands with bridge skills
     const commands: Array<{ name: string; description: string; source: string; category: string }> = [];
 

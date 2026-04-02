@@ -29,7 +29,7 @@ export function useSlashCommands(sessionId: string): { commands: SlashCommandIte
     }
 
     let cancelled = false;
-    const shouldSeedBuiltins = tool !== "codex" && tool !== "custom";
+    const shouldSeedBuiltins = tool === "claude_code";
     setCommands(shouldSeedBuiltins ? BUILTIN_FALLBACK : []);
     setLoading(true);
     client
