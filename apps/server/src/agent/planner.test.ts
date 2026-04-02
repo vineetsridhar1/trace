@@ -279,11 +279,11 @@ describe("Tier 2 Planner", () => {
     });
 
     it("defaults to ignore when LLM throws an error", async () => {
-      const adapter = makeMockAdapterError("API rate limited");
+      const adapter = makeMockAdapterError("Invalid API key");
       const result = await runPlanner(makeContextPacket(), { adapter });
 
       expect(result.output.disposition).toBe("ignore");
-      expect(result.output.rationaleSummary).toContain("API rate limited");
+      expect(result.output.rationaleSummary).toContain("Invalid API key");
       expect(result.usage.inputTokens).toBe(0);
       expect(result.latencyMs).toBeGreaterThanOrEqual(0);
     });

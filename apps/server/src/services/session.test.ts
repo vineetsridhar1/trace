@@ -554,6 +554,7 @@ describe("SessionService", () => {
         tool: "claude_code",
         hosting: "cloud",
         restoreCheckpointId: "checkpoint-1",
+        prompt: "restore session",
       } as any);
 
       expect(result.id).toBe("session-restored");
@@ -1164,6 +1165,7 @@ describe("SessionService", () => {
           sessionStatus: "in_progress",
           workdir: "/tmp/trace/workspace",
           pendingRun: expect.anything(),
+          readOnlyWorkspace: false,
         },
         include: expect.any(Object),
       });

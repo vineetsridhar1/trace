@@ -6,6 +6,7 @@ vi.mock("../lib/db.js", async () => {
 });
 
 import { prisma } from "../lib/db.js";
+import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { AgentIdentityService } from "./agent-identity.js";
 
 const prismaMock = prisma as any;
@@ -28,7 +29,7 @@ describe("AgentIdentityService", () => {
 
     const service = new AgentIdentityService();
     await expect(service.getOrCreate("org-1")).resolves.toEqual({
-      agentId: "agent-1",
+      agentId: TRACE_AI_USER_ID,
       organizationId: "org-1",
       name: "Trace AI",
       status: "enabled",
@@ -77,9 +78,9 @@ describe("AgentIdentityService", () => {
       dailyLimitCents: 500,
     });
 
-    expect(map.get("org-1")?.agentId).toBe("agent-1");
+    expect(map.get("org-1")?.agentId).toBe(TRACE_AI_USER_ID);
     expect(updated).toEqual({
-      agentId: "agent-1",
+      agentId: TRACE_AI_USER_ID,
       organizationId: "org-1",
       name: "Agent Smith",
       status: "disabled",

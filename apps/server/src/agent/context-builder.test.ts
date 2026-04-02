@@ -17,6 +17,7 @@ vi.mock("../lib/db.js", () => ({
   prisma: {
     chat: {
       findUnique: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
     },
     ticket: {
       findUnique: vi.fn().mockResolvedValue(null),
@@ -24,14 +25,26 @@ vi.mock("../lib/db.js", () => ({
     },
     session: {
       findUnique: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
     },
     channel: {
       findUnique: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
     },
     project: {
       findUnique: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
     },
     ticketLink: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    ticketProject: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    channelProject: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    sessionProject: {
       findMany: vi.fn().mockResolvedValue([]),
     },
     event: {
@@ -59,6 +72,14 @@ vi.mock("../services/ticket.js", () => ({
   ticketService: {
     searchByRelevance: vi.fn().mockResolvedValue([]),
   },
+}));
+
+vi.mock("./soul-file-resolver.js", () => ({
+  resolveSoulFile: vi.fn((input: { orgSoulFile: string }) => input.orgSoulFile),
+}));
+
+vi.mock("../services/scope-autonomy.js", () => ({
+  resolveAutonomyMode: vi.fn().mockResolvedValue("suggest"),
 }));
 
 // ---------------------------------------------------------------------------

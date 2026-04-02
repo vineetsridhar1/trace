@@ -40,11 +40,10 @@ describe("actor service helpers", () => {
   });
 
   it("batch resolves and deduplicates actor references", async () => {
+    // Agents are now User rows — user.findMany is called with both user and agent IDs
     prismaMock.user.findMany.mockResolvedValueOnce([
       { id: "u1", name: "Alice", avatarUrl: "a.png" },
-    ]);
-    prismaMock.agentIdentity.findMany.mockResolvedValueOnce([
-      { id: "a1", name: "Helper" },
+      { id: "a1", name: "Helper", avatarUrl: null },
     ]);
 
     const actors = await resolveActors([
@@ -55,7 +54,7 @@ describe("actor service helpers", () => {
     ]);
 
     expect(prismaMock.user.findMany).toHaveBeenCalledWith({
-      where: { id: { in: ["u1"] } },
+      where: { id: { in: ["u1", "a1"] } },
       select: { id: true, name: true, avatarUrl: true },
     });
     expect(actors.get("user:u1")).toEqual({
