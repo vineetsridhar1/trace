@@ -450,6 +450,7 @@ export type ExecutionStatus =
 export type GitCheckpoint = {
   __typename?: 'GitCheckpoint';
   author: Scalars['String']['output'];
+  changedFiles: Array<Scalars['String']['output']>;
   commitSha: Scalars['String']['output'];
   committedAt: Scalars['DateTime']['output'];
   createdAt: Scalars['DateTime']['output'];

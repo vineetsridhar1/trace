@@ -148,6 +148,7 @@ function makeGitCheckpoint(overrides: Record<string, unknown> = {}) {
     author: "Test User <test@example.com>",
     committedAt: new Date("2024-01-02T00:00:00.000Z"),
     filesChanged: 3,
+    changedFiles: ["src/a.ts", "src/b.ts", "README.md"],
     createdAt: new Date("2024-01-02T00:00:01.000Z"),
     ...overrides,
   };

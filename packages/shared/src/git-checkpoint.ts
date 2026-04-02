@@ -52,6 +52,7 @@ export function parseGitShowOutput(
     author,
     committedAt,
     filesChanged: diffStdout.split("\n").filter(Boolean).length,
+    changedFiles: diffStdout.split("\n").filter(Boolean),
     source: "bridge_parser",
   };
 }
@@ -85,6 +86,7 @@ export interface GitCheckpointBridgePayload {
   author: string;
   committedAt: string;
   filesChanged: number;
+  changedFiles: string[];
   source?: "bridge_parser" | "git_hook";
   checkpointContextId?: string | null;
   promptEventId?: string | null;

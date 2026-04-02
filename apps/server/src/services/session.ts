@@ -287,6 +287,7 @@ function serializeGitCheckpoint(checkpoint: {
   author: string;
   committedAt: Date;
   filesChanged: number;
+  changedFiles: string[];
   createdAt: Date;
 }) {
   return {
@@ -302,6 +303,7 @@ function serializeGitCheckpoint(checkpoint: {
     author: checkpoint.author,
     committedAt: checkpoint.committedAt.toISOString(),
     filesChanged: checkpoint.filesChanged,
+    changedFiles: checkpoint.changedFiles,
     createdAt: checkpoint.createdAt.toISOString(),
   };
 }
@@ -2494,6 +2496,7 @@ export class SessionService {
             author: checkpoint.author,
             committedAt: new Date(checkpoint.committedAt),
             filesChanged: checkpoint.filesChanged,
+            changedFiles: checkpoint.changedFiles ?? [],
           },
         });
       } else {
@@ -2510,6 +2513,7 @@ export class SessionService {
             author: checkpoint.author,
             committedAt: new Date(checkpoint.committedAt),
             filesChanged: checkpoint.filesChanged,
+            changedFiles: checkpoint.changedFiles ?? [],
           },
         });
       }

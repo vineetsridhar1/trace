@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { GitCheckpoint } from "@trace/gql";
 import { shortSha } from "@trace/shared";
-import { GitCommitHorizontal, RotateCcw } from "lucide-react";
+import { ChevronRight, FileText, GitCommitHorizontal, RotateCcw } from "lucide-react";
 import { client } from "../../lib/urql";
 import { START_SESSION_MUTATION } from "../../lib/mutations";
 import { useEntityField, useEntityStore } from "../../stores/entity";
@@ -44,6 +44,7 @@ export function CheckpointPanel({
   );
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [pendingCheckpoint, setPendingCheckpoint] = useState<GitCheckpoint | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
 
   const checkpoints = useMemo(() => {
@@ -151,70 +152,105 @@ export function CheckpointPanel({
         const sessionName = sessionNameById[checkpoint.sessionId] ?? "Session";
         const isHighlighted = checkpoint.id === highlightCheckpointId;
         const isCurrent = index === 0;
+        const isExpanded = expandedId === checkpoint.id;
+        const changedFiles = (checkpoint as GitCheckpoint & { changedFiles?: string[] }).changedFiles ?? [];
+        const hasFiles = changedFiles.length > 0;
 
         return (
           <div
             key={checkpoint.id}
             ref={isHighlighted ? highlightRef : undefined}
             className={cn(
-              "flex items-start gap-2 border-b border-border/40 px-3 py-2.5 transition-colors hover:bg-surface-elevated cursor-pointer",
+              "border-b border-border/40 transition-colors",
               isHighlighted && "bg-surface-elevated/60",
             )}
-            onClick={() => onCheckpointClick?.(checkpoint.sessionId, checkpoint.promptEventId)}
           >
-            <GitCommitHorizontal
-              size={12}
-              className={cn(
-                "mt-0.5 shrink-0",
-                isCurrent ? "text-emerald-400" : "text-muted-foreground",
-              )}
-            />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <span className="shrink-0 font-mono text-[11px] text-foreground">
-                  {shortSha(checkpoint.commitSha)}
-                </span>
-                {isCurrent && (
-                  <span className="shrink-0 rounded-full bg-emerald-400/15 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-emerald-400">
-                    Current
+            <div
+              className="flex items-start gap-2 px-3 py-2.5 cursor-pointer hover:bg-surface-elevated"
+              onClick={() => {
+                if (hasFiles) {
+                  setExpandedId(isExpanded ? null : checkpoint.id);
+                } else {
+                  onCheckpointClick?.(checkpoint.sessionId, checkpoint.promptEventId);
+                }
+              }}
+            >
+              <div className="flex items-center gap-1 mt-0.5 shrink-0">
+                {hasFiles && (
+                  <ChevronRight
+                    size={10}
+                    className={cn(
+                      "text-muted-foreground transition-transform duration-150",
+                      isExpanded && "rotate-90",
+                    )}
+                  />
+                )}
+                <GitCommitHorizontal
+                  size={12}
+                  className={isCurrent ? "text-emerald-400" : "text-muted-foreground"}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="shrink-0 font-mono text-[11px] text-foreground">
+                    {shortSha(checkpoint.commitSha)}
                   </span>
-                )}
-              </div>
-              <p className="mt-0.5 truncate text-xs text-foreground/80">
-                {checkpoint.subject}
-              </p>
-              <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <span className="truncate">
-                  {sessionName}
-                </span>
-                <span>·</span>
-                <span className="shrink-0">
-                  {formatCheckpointTime(checkpoint.committedAt)}
-                </span>
-                {checkpoint.filesChanged > 0 && (
-                  <>
-                    <span>·</span>
-                    <span className="shrink-0">
-                      {checkpoint.filesChanged} file{checkpoint.filesChanged !== 1 ? "s" : ""}
+                  {isCurrent && (
+                    <span className="shrink-0 rounded-full bg-emerald-400/15 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-emerald-400">
+                      Current
                     </span>
-                  </>
-                )}
+                  )}
+                </div>
+                <p className="mt-0.5 truncate text-xs text-foreground/80">
+                  {checkpoint.subject}
+                </p>
+                <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                  <span className="truncate">
+                    {sessionName}
+                  </span>
+                  <span>·</span>
+                  <span className="shrink-0">
+                    {formatCheckpointTime(checkpoint.committedAt)}
+                  </span>
+                  {checkpoint.filesChanged > 0 && (
+                    <>
+                      <span>·</span>
+                      <span className="shrink-0">
+                        {checkpoint.filesChanged} file{checkpoint.filesChanged !== 1 ? "s" : ""}
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
+
+              {!isCurrent && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); requestRestore(checkpoint); }}
+                  disabled={restoringId !== null}
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-deep hover:text-foreground disabled:opacity-50"
+                  title="Restore as new session"
+                >
+                  <RotateCcw
+                    size={11}
+                    className={restoringId === checkpoint.id ? "animate-spin" : ""}
+                  />
+                </button>
+              )}
             </div>
 
-            {!isCurrent && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); requestRestore(checkpoint); }}
-                disabled={restoringId !== null}
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-deep hover:text-foreground disabled:opacity-50"
-                title="Restore as new session"
-              >
-                <RotateCcw
-                  size={11}
-                  className={restoringId === checkpoint.id ? "animate-spin" : ""}
-                />
-              </button>
+            {isExpanded && hasFiles && (
+              <div className="border-t border-border/20 bg-surface-deep/50 px-3 py-1.5">
+                {changedFiles.map((file: string) => (
+                  <div
+                    key={file}
+                    className="flex items-center gap-1.5 py-0.5 text-[11px] text-muted-foreground"
+                  >
+                    <FileText size={10} className="shrink-0 text-muted-foreground/60" />
+                    <span className="truncate font-mono">{file}</span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         );

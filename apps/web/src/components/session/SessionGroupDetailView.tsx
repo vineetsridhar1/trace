@@ -44,6 +44,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         author
         committedAt
         filesChanged
+        changedFiles
         createdAt
       }
       repo {

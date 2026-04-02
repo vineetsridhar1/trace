@@ -68,6 +68,7 @@ const SESSION_DETAIL_QUERY = gql`
           author
           committedAt
           filesChanged
+          changedFiles
           createdAt
         }
         channel {

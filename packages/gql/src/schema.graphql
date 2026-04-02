@@ -337,6 +337,7 @@ type GitCheckpoint {
   author: String!
   committedAt: DateTime!
   filesChanged: Int!
+  changedFiles: [String!]!
   createdAt: DateTime!
 }
 

@@ -453,6 +453,7 @@ export type ExecutionStatus =
 export type GitCheckpoint = {
   __typename?: 'GitCheckpoint';
   author: Scalars['String']['output'];
+  changedFiles: Array<Scalars['String']['output']>;
   commitSha: Scalars['String']['output'];
   committedAt: Scalars['DateTime']['output'];
   createdAt: Scalars['DateTime']['output'];
@@ -2208,6 +2209,7 @@ export type EventResolvers<ContextType = Context, ParentType extends ResolversPa
 
 export type GitCheckpointResolvers<ContextType = Context, ParentType extends ResolversParentTypes['GitCheckpoint'] = ResolversParentTypes['GitCheckpoint']> = ResolversObject<{
   author?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  changedFiles?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType>;
   commitSha?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   committedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
