@@ -96,28 +96,14 @@ router.get("/auth/github/callback", async (req, res) => {
         },
       });
     } else {
-      // New user — create top-level user and add to first org
-      const org = await prisma.organization.findFirst({ orderBy: { createdAt: "asc" } });
-
-      if (!org) {
-        return res.status(400).json({ error: "No organization available to join" });
-      }
-
+      // New user — create account without any org membership.
+      // Users must be explicitly invited to an organization.
       user = await prisma.user.create({
         data: {
           email,
           name: ghUser.name || ghUser.login,
           githubId: ghUser.id,
           avatarUrl: ghUser.avatar_url,
-        },
-      });
-
-      // Create org membership
-      await prisma.orgMember.create({
-        data: {
-          userId: user.id,
-          organizationId: org.id,
-          role: "member",
         },
       });
     }

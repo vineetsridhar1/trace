@@ -1,5 +1,12 @@
-import type { CreateRepoInput, UpdateRepoInput, CreateProjectInput, EntityType, ActorType } from "@trace/gql";
+import type {
+  CreateRepoInput,
+  UpdateRepoInput,
+  CreateProjectInput,
+  EntityType,
+  ActorType,
+} from "@trace/gql";
 import { prisma } from "../lib/db.js";
+import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { eventService } from "./event.js";
 
 const PROJECT_INCLUDE = {
@@ -80,6 +87,26 @@ export class OrganizationService {
     });
   }
 
+  async searchUsers(query: string, organizationId: string) {
+    if (query.length < 2) return [];
+
+    return prisma.user.findMany({
+      where: {
+        id: { not: TRACE_AI_USER_ID },
+        orgMemberships: {
+          none: { organizationId },
+        },
+        OR: [
+          { email: { contains: query, mode: "insensitive" } },
+          { name: { contains: query, mode: "insensitive" } },
+        ],
+      },
+      select: { id: true, name: true, email: true, avatarUrl: true },
+      orderBy: [{ name: "asc" }, { email: "asc" }],
+      take: 10,
+    });
+  }
+
   async createRepo(input: CreateRepoInput, actorType: ActorType, actorId: string) {
     // Deduplicate by remote URL within the org — if it already exists, return it
     const existing = await prisma.repo.findUnique({
@@ -105,23 +132,26 @@ export class OrganizationService {
         include: { projects: true, sessions: true },
       });
 
-      const event = await eventService.create({
-        organizationId: input.organizationId,
-        scopeType: "system",
-        scopeId: repo.id,
-        eventType: "repo_created",
-        payload: {
-          repo: {
-            id: repo.id,
-            name: repo.name,
-            remoteUrl: repo.remoteUrl,
-            defaultBranch: repo.defaultBranch,
-            webhookActive: !!repo.webhookId,
+      const event = await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "system",
+          scopeId: repo.id,
+          eventType: "repo_created",
+          payload: {
+            repo: {
+              id: repo.id,
+              name: repo.name,
+              remoteUrl: repo.remoteUrl,
+              defaultBranch: repo.defaultBranch,
+              webhookActive: !!repo.webhookId,
+            },
           },
+          actorType,
+          actorId,
         },
-        actorType,
-        actorId,
-      }, tx);
+        tx,
+      );
 
       return [repo, event] as const;
     });
@@ -129,7 +159,13 @@ export class OrganizationService {
     return repo;
   }
 
-  async updateRepo(id: string, organizationId: string, input: UpdateRepoInput, actorType: ActorType, actorId: string) {
+  async updateRepo(
+    id: string,
+    organizationId: string,
+    input: UpdateRepoInput,
+    actorType: ActorType,
+    actorId: string,
+  ) {
     const [repo] = await prisma.$transaction(async (tx) => {
       // Verify repo belongs to caller's org before updating
       await tx.repo.findFirstOrThrow({
@@ -146,23 +182,26 @@ export class OrganizationService {
         include: { projects: true, sessions: true },
       });
 
-      const event = await eventService.create({
-        organizationId: repo.organizationId,
-        scopeType: "system",
-        scopeId: repo.id,
-        eventType: "repo_updated",
-        payload: {
-          repo: {
-            id: repo.id,
-            name: repo.name,
-            remoteUrl: repo.remoteUrl,
-            defaultBranch: repo.defaultBranch,
-            webhookActive: !!repo.webhookId,
+      const event = await eventService.create(
+        {
+          organizationId: repo.organizationId,
+          scopeType: "system",
+          scopeId: repo.id,
+          eventType: "repo_updated",
+          payload: {
+            repo: {
+              id: repo.id,
+              name: repo.name,
+              remoteUrl: repo.remoteUrl,
+              defaultBranch: repo.defaultBranch,
+              webhookActive: !!repo.webhookId,
+            },
           },
+          actorType,
+          actorId,
         },
-        actorType,
-        actorId,
-      }, tx);
+        tx,
+      );
 
       return [repo, event] as const;
     });
@@ -181,15 +220,18 @@ export class OrganizationService {
         include: PROJECT_INCLUDE,
       });
 
-      const event = await eventService.create({
-        organizationId: input.organizationId,
-        scopeType: "system",
-        scopeId: project.id,
-        eventType: "entity_linked",
-        payload: { type: "project_created", projectId: project.id, name: project.name },
-        actorType,
-        actorId,
-      }, tx);
+      const event = await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "system",
+          scopeId: project.id,
+          eventType: "entity_linked",
+          payload: { type: "project_created", projectId: project.id, name: project.name },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
 
       return [project, event] as const;
     });
@@ -214,21 +256,28 @@ export class OrganizationService {
         session: () => tx.sessionProject.create({ data: { sessionId: entityId, projectId } }),
         ticket: () => tx.ticketProject.create({ data: { ticketId: entityId, projectId } }),
         channel: () => tx.channelProject.create({ data: { channelId: entityId, projectId } }),
-        chat: () => { throw new Error("Chats cannot be linked to projects"); },
-        message: () => { throw new Error("Messages cannot be linked to projects"); },
+        chat: () => {
+          throw new Error("Chats cannot be linked to projects");
+        },
+        message: () => {
+          throw new Error("Messages cannot be linked to projects");
+        },
       };
 
       await joinOps[entityType]();
 
-      await eventService.create({
-        organizationId: project.organizationId,
-        scopeType: "system",
-        scopeId: projectId,
-        eventType: "entity_linked",
-        payload: { entityType, entityId, projectId },
-        actorType,
-        actorId,
-      }, tx);
+      await eventService.create(
+        {
+          organizationId: project.organizationId,
+          scopeType: "system",
+          scopeId: projectId,
+          eventType: "entity_linked",
+          payload: { entityType, entityId, projectId },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
 
       return tx.project.findUniqueOrThrow({
         where: { id: projectId },

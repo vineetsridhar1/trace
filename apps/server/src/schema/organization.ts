@@ -1,15 +1,25 @@
 import type { Context } from "../context.js";
-import type { CreateRepoInput, UpdateRepoInput, CreateProjectInput, EntityType, UserRole } from "@trace/gql";
+import type {
+  CreateRepoInput,
+  UpdateRepoInput,
+  CreateProjectInput,
+  EntityType,
+  UserRole,
+} from "@trace/gql";
 import { organizationService } from "../services/organization.js";
 import { webhookService } from "../services/webhook.js";
 import { orgMemberService } from "../services/org-member.js";
 import { requireOrgContext } from "../lib/require-org.js";
-
 export const organizationQueries = {
   organization: (_: unknown, args: { id: string }, ctx: Context) =>
     organizationService.getOrganization(args.id, ctx.userId),
   myOrganizations: async (_: unknown, _args: Record<string, never>, ctx: Context) => {
     return orgMemberService.getUserOrgs(ctx.userId);
+  },
+  searchUsers: async (_: unknown, args: { query: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    await orgMemberService.assertAdmin(ctx.userId, orgId);
+    return organizationService.searchUsers(args.query.trim(), orgId);
   },
   repos: (_: unknown, args: { organizationId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
@@ -41,13 +51,7 @@ export const organizationMutations = {
   },
   updateRepo: (_: unknown, args: { id: string; input: UpdateRepoInput }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
-    return organizationService.updateRepo(
-      args.id,
-      orgId,
-      args.input,
-      ctx.actorType,
-      ctx.userId,
-    );
+    return organizationService.updateRepo(args.id, orgId, args.input, ctx.actorType, ctx.userId);
   },
   createProject: (_: unknown, args: { input: CreateProjectInput }, ctx: Context) => {
     return organizationService.createProject(args.input, ctx.actorType, ctx.userId);
@@ -78,8 +82,7 @@ export const organizationMutations = {
     args: { organizationId: string; userId: string; role?: UserRole },
     ctx: Context,
   ) => {
-    // Only admins can add members
-    await orgMemberService.assertMembership(ctx.userId, args.organizationId);
+    await orgMemberService.assertAdmin(ctx.userId, args.organizationId);
     return orgMemberService.addMember({
       organizationId: args.organizationId,
       userId: args.userId,
@@ -93,7 +96,7 @@ export const organizationMutations = {
     args: { organizationId: string; userId: string },
     ctx: Context,
   ) => {
-    await orgMemberService.assertMembership(ctx.userId, args.organizationId);
+    await orgMemberService.assertAdmin(ctx.userId, args.organizationId);
     return orgMemberService.removeMember({
       organizationId: args.organizationId,
       userId: args.userId,
@@ -106,7 +109,7 @@ export const organizationMutations = {
     args: { organizationId: string; userId: string; role: UserRole },
     ctx: Context,
   ) => {
-    await orgMemberService.assertMembership(ctx.userId, args.organizationId);
+    await orgMemberService.assertAdmin(ctx.userId, args.organizationId);
     return orgMemberService.updateRole({
       organizationId: args.organizationId,
       userId: args.userId,
@@ -122,11 +125,17 @@ export const organizationTypeResolvers = {
     },
   },
   OrgMember: {
-    user: async (member: { userId: string; user?: { id: string; name: string; email: string; avatarUrl: string | null } }) => {
+    user: async (member: {
+      userId: string;
+      user?: { id: string; name: string; email: string; avatarUrl: string | null };
+    }) => {
       if (member.user) return member.user;
       return organizationService.getUserProfile(member.userId);
     },
-    organization: async (member: { organizationId: string; organization?: { id: string; name: string } }) => {
+    organization: async (member: {
+      organizationId: string;
+      organization?: { id: string; name: string };
+    }) => {
       if (member.organization) return member.organization;
       return organizationService.getOrganizationSummary(member.organizationId);
     },
