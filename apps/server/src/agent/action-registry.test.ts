@@ -42,4 +42,53 @@ describe("action registry", () => {
         ],
       });
   });
+
+  it("accepts the supported channel.create inputs and rejects stale ones", () => {
+    const action = findAction("channel.create");
+    expect(action).toBeDefined();
+
+    expect(validateActionParams(action!, {
+      name: "eng-platform",
+      type: "coding",
+      repoId: "repo-1",
+      projectIds: ["proj-1"],
+    })).toEqual({
+      valid: true,
+      errors: [],
+    });
+
+    expect(validateActionParams(action!, {
+      name: "eng-platform",
+      projectId: "proj-1",
+    } as Record<string, unknown>)).toEqual({
+      valid: false,
+      errors: ["Unknown field: projectId"],
+    });
+  });
+
+  it("validates updated project.linkEntity and session.list enums", () => {
+    const projectLink = findAction("project.linkEntity");
+    const sessionList = findAction("session.list");
+    expect(projectLink).toBeDefined();
+    expect(sessionList).toBeDefined();
+
+    expect(validateActionParams(projectLink!, {
+      entityType: "repo",
+      entityId: "repo-1",
+      projectId: "proj-1",
+    })).toEqual({
+      valid: false,
+      errors: ["Field entityType must be one of: channel, ticket, session"],
+    });
+
+    expect(validateActionParams(sessionList!, { agentStatus: "active" })).toEqual({
+      valid: true,
+      errors: [],
+    });
+
+    expect(validateActionParams(sessionList!, { agentStatus: "running" })).toEqual({
+      valid: false,
+      errors: ["Field agentStatus must be one of: not_started, active, done, failed, stopped"],
+    });
+  });
 });

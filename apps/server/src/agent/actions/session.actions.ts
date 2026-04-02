@@ -155,7 +155,7 @@ export const sessionActions: AgentActionRegistration[] = [
         agentStatus: {
           type: "string",
           description: "Filter by agent status",
-          enum: ["idle", "running", "paused", "completed", "failed", "terminated"],
+          enum: ["not_started", "active", "done", "failed", "stopped"],
         },
         tool: { type: "string", description: "Filter by coding tool" },
         repoId: { type: "string", description: "Filter by repository ID" },

@@ -382,11 +382,7 @@ async function executeTurn(input: ExecuteTurnInput): Promise<TurnResult> {
       });
       executionResults.push({ ...result, decision: "execute" });
 
-      if (
-        (actionResult.action.actionType === "message.send" ||
-          actionResult.action.actionType === "message.sendToChannel") &&
-        result.status === "success"
-      ) {
+      if (isReplyAction(actionResult.action.actionType) && result.status === "success") {
         state.anyMessageSendExecuted = true;
       }
 
@@ -664,14 +660,14 @@ function injectParentId(plannerOutput: PlannerOutput, packet: AgentContextPacket
     if (action.actionType === "message.send" && !action.args.parentId) {
       action.args.parentId = triggerMessageId;
     }
-    if (action.actionType === "message.sendToChannel" && !action.args.threadId) {
+    if (isChannelReplyAction(action.actionType) && !action.args.threadId) {
       action.args.threadId = triggerMessageId;
     }
   }
 }
 
 /**
- * Build a scope-aware reply action. Uses message.sendToChannel for channel
+ * Build a scope-aware reply action. Uses channel.sendMessage for channel
  * scopes and message.send for chat scopes.
  */
 function buildReplyAction(
@@ -681,7 +677,7 @@ function buildReplyAction(
 ): ProposedAction {
   if (packet.scopeType === "channel") {
     return {
-      actionType: "message.sendToChannel",
+      actionType: "channel.sendMessage",
       args: {
         channelId: packet.scopeId,
         text,
@@ -747,6 +743,16 @@ interface PostLoopInput {
   batch: AggregatedBatch;
   startTime: number;
   logger: PipelineLogger;
+}
+
+function isReplyAction(actionType: string): boolean {
+  return actionType === "message.send" ||
+    actionType === "message.sendToChannel" ||
+    actionType === "channel.sendMessage";
+}
+
+function isChannelReplyAction(actionType: string): boolean {
+  return actionType === "message.sendToChannel" || actionType === "channel.sendMessage";
 }
 
 async function postLoop(input: PostLoopInput): Promise<void> {
@@ -936,7 +942,7 @@ async function sendActionConfirmation(
 
   // Only reply if something actually happened
   const executedNonMessage = allExecuted.filter(
-    (r) => r.status === "success" && r.actionType !== "message.send" && r.actionType !== "message.sendToChannel" && r.actionType !== "no_op",
+    (r) => r.status === "success" && !isReplyAction(r.actionType) && r.actionType !== "no_op",
   );
   const hasSuggestions = allSuggested.length > 0;
 
@@ -963,7 +969,7 @@ async function sendActionConfirmation(
   // Thread to the trigger message — only use actual message IDs, not event IDs
   const triggerMessageId = state.packet.triggerEvent.payload.messageId as string | undefined;
 
-  const actionType = scopeType === "channel" ? "message.sendToChannel" : "message.send";
+  const actionType = scopeType === "channel" ? "channel.sendMessage" : "message.send";
   const args =
     scopeType === "channel"
       ? { channelId: scopeId, text, ...(triggerMessageId ? { threadId: triggerMessageId } : {}) }

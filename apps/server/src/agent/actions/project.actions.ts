@@ -16,14 +16,14 @@ export const projectActions: AgentActionRegistration[] = [
     method: "createProject",
     description:
       "Create a new project in the organization. Projects group related channels, tickets, and sessions.",
-    catalogDescription: "Create/add/make a new project (name, description)",
+    catalogDescription: "Create/add/make a new project (name, repoId)",
     risk: "medium",
     suggestable: true,
     tier: "extended",
     parameters: {
       fields: {
         name: { type: "string", description: "Project name", required: true },
-        description: { type: "string", description: "Project description" },
+        repoId: { type: "string", description: "Repository to associate the project with" },
       },
     },
     scopes: ["project", "channel", "chat", "system"],
@@ -33,7 +33,7 @@ export const projectActions: AgentActionRegistration[] = [
     service: "organizationService",
     method: "linkEntityToProject",
     description:
-      "Link an entity (channel, ticket, session, repo) to a project for organizational grouping.",
+      "Link an entity (channel, ticket, or session) to a project for organizational grouping.",
     catalogDescription: "Link/associate an entity to a project (entityType, entityId, projectId)",
     risk: "low",
     suggestable: true,
@@ -44,7 +44,7 @@ export const projectActions: AgentActionRegistration[] = [
           type: "string",
           description: "Type of entity to link",
           required: true,
-          enum: ["channel", "ticket", "session", "repo"],
+          enum: ["channel", "ticket", "session"],
         },
         entityId: { type: "string", description: "ID of the entity to link", required: true },
         projectId: { type: "string", description: "Project to link the entity to", required: true },
@@ -83,7 +83,7 @@ export const projectDispatchers: Record<string, ActionDispatcher> = {
       {
         name: args.name as string,
         organizationId: ctx.organizationId,
-        description: args.description as string | undefined,
+        repoId: args.repoId as string | undefined,
       },
       actorType,
       actorId,

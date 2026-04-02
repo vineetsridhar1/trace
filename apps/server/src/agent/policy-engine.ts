@@ -168,7 +168,7 @@ export function clearSuggestionRates(): void {
 // DM promotion helpers
 // ---------------------------------------------------------------------------
 
-const MESSAGE_ACTIONS = new Set(["message.send", "message.sendToChannel"]);
+const MESSAGE_ACTIONS = new Set(["message.send", "message.sendToChannel", "channel.sendMessage"]);
 
 /** Returns true for actions that send a message (safe to auto-execute in DMs). */
 function isMessageAction(actionType: string): boolean {

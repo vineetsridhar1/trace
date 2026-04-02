@@ -147,6 +147,7 @@ export class ActionExecutor {
         error: `Unknown action: ${actionType}`,
       };
     }
+    const canonicalActionType = registration.name;
 
     // ---- Validate parameters ----
     const validation = validateActionParams(registration, args);
@@ -162,7 +163,7 @@ export class ActionExecutor {
     // Include a hash of the args so that two different actions of the same type
     // on the same trigger event are not incorrectly deduplicated.
     const argsHash = hashArgs(JSON.stringify(args));
-    const idempotencyKey = `agent:${ctx.agentId}:${actionType}:${ctx.triggerEventId}:${argsHash}`;
+    const idempotencyKey = `agent:${ctx.agentId}:${canonicalActionType}:${ctx.triggerEventId}:${argsHash}`;
     if (await this.idempotency.has(idempotencyKey)) {
       return {
         status: "success",
@@ -173,7 +174,7 @@ export class ActionExecutor {
 
     // ---- Execute via registry-driven dispatch ----
     try {
-      const result = await this.dispatch(actionType, args, ctx);
+      const result = await this.dispatch(canonicalActionType, args, ctx);
       await this.idempotency.set(idempotencyKey);
       return { status: "success", actionType, result };
     } catch (err) {

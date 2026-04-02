@@ -301,4 +301,43 @@ describe("ActionExecutor", () => {
       "agent-1",
     );
   });
+
+  it("dispatches channel.sendMessage", async () => {
+    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
+
+    const result = await executor.execute(
+      { actionType: "channel.sendMessage", args: { channelId: "chan-1", text: "hello", threadId: "msg-1" } },
+      { ...ctx, triggerEventId: "evt-channel-new" },
+    );
+
+    expect(result.status).toBe("success");
+    expect(services.channelService.sendMessage).toHaveBeenCalledWith(
+      "chan-1",
+      "hello",
+      "msg-1",
+      "agent",
+      "agent-1",
+    );
+  });
+
+  it("deduplicates channel.sendMessage and message.sendToChannel aliases", async () => {
+    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
+
+    const first = await executor.execute(
+      { actionType: "channel.sendMessage", args: { channelId: "chan-1", text: "hello", threadId: "msg-1" } },
+      { ...ctx, triggerEventId: "evt-channel-alias" },
+    );
+    const second = await executor.execute(
+      { actionType: "message.sendToChannel", args: { channelId: "chan-1", text: "hello", threadId: "msg-1" } },
+      { ...ctx, triggerEventId: "evt-channel-alias" },
+    );
+
+    expect(first.status).toBe("success");
+    expect(second).toEqual({
+      status: "success",
+      actionType: "message.sendToChannel",
+      result: "duplicate — already executed for this trigger event",
+    });
+    expect(services.channelService.sendMessage).toHaveBeenCalledTimes(1);
+  });
 });
