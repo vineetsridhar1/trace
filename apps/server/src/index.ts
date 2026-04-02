@@ -13,6 +13,7 @@ import { makeExecutableSchema } from "@graphql-tools/schema";
 import { resolvers } from "./schema/resolvers.js";
 import type { Context } from "./context.js";
 import { authRouter } from "./routes/auth.js";
+import { uploadRouter } from "./routes/upload.js";
 import webhookRouter from "./routes/webhook.js";
 import { buildContext, buildWsContext } from "./lib/auth.js";
 import { handleBridgeConnection } from "./lib/bridge-handler.js";
@@ -32,34 +33,30 @@ async function main() {
   const app = express();
   const httpServer = createServer(app);
   const schema = makeExecutableSchema({ typeDefs, resolvers });
+  const PORT = process.env.PORT ?? 4000;
+  let startupReady = false;
 
-  // Connect Redis and initialize pub/sub message listener
-  try {
-    await connectRedis();
-    pubsub.init();
-  } catch {
-    const url = process.env.REDIS_URL ?? "redis://localhost:6379";
-    console.error(`\n[redis] Failed to connect to Redis at ${url}`);
-    console.error("[redis] Start Redis with: docker compose up -d redis\n");
-    process.exit(1);
-  }
+  app.get("/health", (_req, res) => {
+    res.json({ status: "ok", ready: startupReady });
+  });
 
   // Initialize cloud machine service and inject into session router
   const cloudMachineService = new CloudMachineService(flyProvider, "fly");
   sessionRouter.setCloudMachineService(cloudMachineService);
 
-  app.use(cors({
-    origin: process.env.CORS_ALLOWED_ORIGINS
-      ? process.env.CORS_ALLOWED_ORIGINS.split(",")
-      : true,
-    credentials: true,
-  }));
+  app.use(
+    cors({
+      origin: process.env.CORS_ALLOWED_ORIGINS ? process.env.CORS_ALLOWED_ORIGINS.split(",") : true,
+      credentials: true,
+    }),
+  );
   // Webhook route needs raw body for signature verification — register before express.json()
   app.use("/webhooks/github", express.raw({ type: "application/json" }), webhookRouter);
 
   app.use(express.json());
   app.use(cookieParser());
   app.use(authRouter);
+  app.use(uploadRouter);
 
   // GraphQL subscriptions
   const wsServer = new WebSocketServer({ noServer: true });
@@ -107,7 +104,11 @@ async function main() {
           runtimeId: stale.runtimeId,
           sessionId,
         });
-        void sessionService.markConnectionLost(sessionId, "runtime_heartbeat_timeout", stale.runtimeId);
+        void sessionService.markConnectionLost(
+          sessionId,
+          "runtime_heartbeat_timeout",
+          stale.runtimeId,
+        );
       }
     }
   }, 5_000);
@@ -170,6 +171,26 @@ async function main() {
   await apollo.start();
   app.use("/graphql", expressMiddleware(apollo, { context: buildContext }));
 
+  await new Promise<void>((resolve) => {
+    httpServer.listen(PORT, () => {
+      console.log(`Server ready at http://localhost:${PORT}/graphql`);
+      console.log(`Subscriptions ready at ws://localhost:${PORT}/ws`);
+      console.log(`Bridge ready at ws://localhost:${PORT}/bridge`);
+      resolve();
+    });
+  });
+
+  // Connect Redis and initialize pub/sub message listener after binding the health check port.
+  try {
+    await connectRedis();
+    pubsub.init();
+  } catch {
+    const url = process.env.REDIS_URL ?? "redis://localhost:6379";
+    console.error(`\n[redis] Failed to connect to Redis at ${url}`);
+    console.error("[redis] Start Redis with: docker compose up -d redis\n");
+    process.exit(1);
+  }
+
   // Restore cloud machine state from DB
   await cloudMachineService.restoreFromDb();
 
@@ -179,6 +200,10 @@ async function main() {
     console.log(`Subscriptions ready at ws://localhost:${PORT}/ws`);
     console.log(`Bridge ready at ws://localhost:${PORT}/bridge`);
   });
+  startupReady = true;
 }
 
-main().catch(console.error);
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

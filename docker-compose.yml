@@ -1,16 +1,76 @@
 services:
-  redis:
-    image: redis:7-alpine
+  web:
+    image: ${ECR_REGISTRY:-459063349068.dkr.ecr.us-east-1.amazonaws.com}/trace:${IMAGE_TAG:-latest}
+    environment:
+      ROLE: web
     ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    command: redis-server --appendonly yes
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://localhost:3000/'').then(r=>{if(!r.ok)throw new Error(''bad status'');process.exit(0)}).catch(()=>process.exit(1))"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
-volumes:
-  redis-data:
+  backend:
+    image: ${ECR_REGISTRY:-459063349068.dkr.ecr.us-east-1.amazonaws.com}/trace:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
+        VITE_AG_GRID_LICENSE_KEY: ${VITE_AG_GRID_LICENSE_KEY:-}
+    environment:
+      ROLE: backend
+      NODE_ENV: production
+      PORT: "4000"
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
+      TRACE_WEB_URL: ${TRACE_WEB_URL}
+      TRACE_SERVER_PUBLIC_URL: ${TRACE_SERVER_PUBLIC_URL}
+      S3_BUCKET: ${S3_BUCKET}
+      AWS_REGION: ${AWS_REGION}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://trace.example.com}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      FLY_API_TOKEN: ${FLY_API_TOKEN:-}
+      FLY_APP_NAME: ${FLY_APP_NAME:-}
+      CONTAINER_IMAGE: ${CONTAINER_IMAGE:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    ports:
+      - "127.0.0.1:4000:4000"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://localhost:4000/health'').then(r=>{if(!r.ok)throw new Error(''bad status'');process.exit(0)}).catch(()=>process.exit(1))"',
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  worker:
+    image: ${ECR_REGISTRY:-459063349068.dkr.ecr.us-east-1.amazonaws.com}/trace:${IMAGE_TAG:-latest}
+    environment:
+      ROLE: worker
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy

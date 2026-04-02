@@ -8,7 +8,7 @@ export const EventScopeContext = createContext<string>("");
 
 export function useEventScopeKey(): string {
   const key = useContext(EventScopeContext);
-  if (process.env.NODE_ENV !== "production" && !key) {
+  if (import.meta.env.DEV && !key) {
     console.warn("useEventScopeKey() called outside of an EventScopeContext.Provider");
   }
   return key;

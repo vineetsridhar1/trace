@@ -3,7 +3,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { useConnectionStore } from "../stores/connection";
 import { CircleDot } from "lucide-react";
 
-type DesktopBridgeStatus = Awaited<ReturnType<TraceElectronBridge["getBridgeStatus"]>>;
+type DesktopBridgeStatus = Awaited<ReturnType<NonNullable<Window["trace"]>["getBridgeStatus"]>>;
 
 const isElectron = typeof window.trace?.getBridgeStatus === "function";
 

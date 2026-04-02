@@ -1,4 +1,5 @@
 import type { ExpressContextFunctionArgument } from "@as-integrations/express5";
+import type { Request } from "express";
 import jwt from "jsonwebtoken";
 import type { Context } from "../context.js";
 import { AuthenticationError } from "./errors.js";
@@ -57,16 +58,16 @@ async function getFirstOrgMembership(userId: string) {
     orderBy: { joinedAt: "asc" },
     select: { organizationId: true, role: true },
   });
+export function getRequestToken(req: Pick<Request, "headers" | "cookies">): string | undefined {
+  const authHeader = req.headers.authorization;
+  return authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : req.cookies?.trace_token;
 }
 
 export async function buildContext({ req }: ExpressContextFunctionArgument): Promise<Context> {
   let userId: string | undefined;
 
   // Accept token from Authorization header, cookie, or x-user-id fallback
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith("Bearer ")
-    ? authHeader.slice(7)
-    : req.cookies?.trace_token;
+  const token = getRequestToken(req);
   if (token) {
     try {
       const payload = jwt.verify(token, JWT_SECRET) as { userId: string };
@@ -135,9 +136,11 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
   };
 }
 
-export async function buildWsContext(connectionParams?: Record<string, unknown>, cookieHeader?: string): Promise<Context> {
-  const token =
-    (connectionParams?.token as string) ?? parseCookieToken(cookieHeader);
+export async function buildWsContext(
+  connectionParams?: Record<string, unknown>,
+  cookieHeader?: string,
+): Promise<Context> {
+  const token = (connectionParams?.token as string) ?? parseCookieToken(cookieHeader);
 
   if (!token) throw new AuthenticationError("Missing auth token for WebSocket");
 

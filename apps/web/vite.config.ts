@@ -81,6 +81,7 @@ export default defineConfig({
     proxy: {
       "/auth": api,
       "/graphql": api,
+      "/uploads": api,
       "/ws": {
         target: api,
         ws: true,
