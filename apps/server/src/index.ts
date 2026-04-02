@@ -33,7 +33,7 @@ async function main() {
   const app = express();
   const httpServer = createServer(app);
   const schema = makeExecutableSchema({ typeDefs, resolvers });
-  const PORT = process.env.PORT ?? 4000;
+  const PORT = Number(process.env.PORT) || 4000 + Number(process.env.TRACE_PORT || 0);
   let startupReady = false;
 
   app.get("/health", (_req, res) => {
@@ -172,7 +172,7 @@ async function main() {
   app.use("/graphql", expressMiddleware(apollo, { context: buildContext }));
 
   await new Promise<void>((resolve) => {
-    httpServer.listen(PORT, () => {
+    httpServer.listen(PORT, "0.0.0.0", () => {
       console.log(`Server ready at http://localhost:${PORT}/graphql`);
       console.log(`Subscriptions ready at ws://localhost:${PORT}/ws`);
       console.log(`Bridge ready at ws://localhost:${PORT}/bridge`);
@@ -187,19 +187,15 @@ async function main() {
   } catch {
     const url = process.env.REDIS_URL ?? "redis://localhost:6379";
     console.error(`\n[redis] Failed to connect to Redis at ${url}`);
-    console.error("[redis] Start Redis locally, for example: docker run -d --name trace-redis -p 6379:6379 redis:7-alpine\n");
+    console.error(
+      "[redis] Start Redis locally, for example: docker run -d --name trace-redis -p 6379:6379 redis:7-alpine\n",
+    );
     process.exit(1);
   }
 
   // Restore cloud machine state from DB
   await cloudMachineService.restoreFromDb();
 
-  const PORT = Number(process.env.PORT) || 4000 + Number(process.env.TRACE_PORT || 0);
-  httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server ready at http://localhost:${PORT}/graphql`);
-    console.log(`Subscriptions ready at ws://localhost:${PORT}/ws`);
-    console.log(`Bridge ready at ws://localhost:${PORT}/bridge`);
-  });
   startupReady = true;
 }
 
