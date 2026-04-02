@@ -22,8 +22,8 @@ COPY apps/web/ apps/web/
 COPY tsconfig.base.json ./
 RUN cd apps/server && npx prisma generate
 RUN node packages/gql/scripts/codegen.cjs
-RUN pnpm --filter @trace/gql build
 RUN pnpm --filter @trace/shared build
+RUN pnpm --filter @trace/gql build
 RUN pnpm --filter @trace/server build
 ARG VITE_API_URL=""
 ARG VITE_AG_GRID_LICENSE_KEY=""
