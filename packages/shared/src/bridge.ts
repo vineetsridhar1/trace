@@ -130,6 +130,8 @@ export interface BridgeListSkillsCommand {
   requestId: string;
   sessionId: string;
   workdirHint?: string;
+  includeUserSkills?: boolean;
+  includeProjectSkills?: boolean;
 }
 
 // --- Terminal commands (Server → Bridge) ---
@@ -566,7 +568,16 @@ export type GitExecFn = (
 
 /** Reject refs that could be interpreted as git flags or contain dangerous patterns. */
 function hasInvalidGitRef(ref: string): boolean {
-  return !ref || ref.startsWith("-") || ref.includes("..") || /[\x00-\x1f\x7f]/.test(ref);
+  if (!ref || ref.startsWith("-") || ref.includes("..")) {
+    return true;
+  }
+  for (const char of ref) {
+    const code = char.charCodeAt(0);
+    if (code <= 31 || code === 127) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -677,8 +688,8 @@ export async function handleFileAtRef(
 // --- Shared skill listing handler ---
 
 /**
- * Handle a `list_skills` bridge command. Scans user and project skill dirs
- * for SKILL.md files, reads YAML frontmatter description, returns combined list.
+ * Handle a `list_skills` bridge command. Scans user and project slash-command
+ * locations for skills and legacy command files, returning the combined list.
  */
 export async function handleListSkills(
   cmd: BridgeListSkillsCommand,
@@ -690,26 +701,44 @@ export async function handleListSkills(
     path: BridgePathLike;
   },
 ): Promise<void> {
-  const { requestId, sessionId, workdirHint } = cmd;
+  const {
+    requestId,
+    sessionId,
+    workdirHint,
+    includeUserSkills = true,
+    includeProjectSkills = true,
+  } = cmd;
   const skills: BridgeSkillInfo[] = [];
+  const seenNames = new Set<string>();
 
-  async function scanDir(dir: string, source: "user" | "project"): Promise<void> {
+  async function addDiscoveredCommand(
+    content: string,
+    source: "user" | "project",
+    fallbackName: string,
+  ): Promise<void> {
+    const metadata = parseSlashCommandFrontmatter(content);
+    if (metadata.userInvocable === false) return;
+
+    const name = metadata.name ?? fallbackName;
+    if (!name || seenNames.has(name)) return;
+
+    seenNames.add(name);
+    skills.push({
+      name,
+      description: metadata.description ?? extractMarkdownSummary(content) ?? name,
+      source,
+    });
+  }
+
+  async function scanSkillsDir(dir: string, source: "user" | "project"): Promise<void> {
     try {
       const entries = await deps.fs.promises.readdir(dir, { withFileTypes: true });
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
         const skillMdPath = deps.path.join(dir, entry.name, "SKILL.md");
         try {
-          await deps.fs.promises.stat(skillMdPath);
-          // Read file to extract description from YAML frontmatter
-          const content = await new Promise<string>((resolve, reject) => {
-            deps.fs.readFile(skillMdPath, (err, data) => {
-              if (err) reject(err);
-              else resolve(data.toString("utf-8"));
-            });
-          });
-          const description = extractFrontmatterDescription(content);
-          skills.push({ name: entry.name, description: description || entry.name, source });
+          const content = await readUtf8File(skillMdPath, deps.fs);
+          await addDiscoveredCommand(content, source, entry.name);
         } catch {
           // SKILL.md doesn't exist or can't be read — skip
         }
@@ -719,14 +748,39 @@ export async function handleListSkills(
     }
   }
 
+  async function scanCommandsDir(dir: string, source: "user" | "project"): Promise<void> {
+    try {
+      const entries = await deps.fs.promises.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const entryPath = deps.path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await scanCommandsDir(entryPath, source);
+          continue;
+        }
+        if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+        try {
+          const content = await readUtf8File(entryPath, deps.fs);
+          const fallbackName = entry.name.replace(/\.md$/i, "");
+          await addDiscoveredCommand(content, source, fallbackName);
+        } catch {
+          // Command file can't be read — skip
+        }
+      }
+    } catch {
+      // Directory doesn't exist — skip
+    }
+  }
+
   try {
-    if (deps.userSkillsDir) {
-      await scanDir(deps.userSkillsDir, "user");
+    if (deps.userSkillsDir && includeUserSkills) {
+      await scanSkillsDir(deps.userSkillsDir, "user");
+      await scanCommandsDir(deps.path.resolve(deps.userSkillsDir, "..", "commands"), "user");
     }
     const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
-    if (workdir) {
+    if (workdir && includeProjectSkills) {
       const projectSkillsDir = deps.path.join(workdir, ".claude", "skills");
-      await scanDir(projectSkillsDir, "project");
+      await scanSkillsDir(projectSkillsDir, "project");
+      await scanCommandsDir(deps.path.join(workdir, ".claude", "commands"), "project");
     }
     send({ type: "skills_result", requestId, skills });
   } catch (err) {
@@ -734,13 +788,59 @@ export async function handleListSkills(
   }
 }
 
-/** Extract `description` from YAML frontmatter in a SKILL.md file. */
-function extractFrontmatterDescription(content: string): string | undefined {
-  const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
-  if (!match) return undefined;
+async function readUtf8File(filePath: string, fsLike: BridgeFsLike): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    fsLike.readFile(filePath, (err, data) => {
+      if (err) reject(err);
+      else resolve(data.toString("utf-8"));
+    });
+  });
+}
+
+function parseSlashCommandFrontmatter(content: string): {
+  name?: string;
+  description?: string;
+  userInvocable?: boolean;
+} {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  if (!match) return {};
+
   const frontmatter = match[1];
-  const descMatch = frontmatter.match(/^description:\s*(.+)$/m);
-  return descMatch ? descMatch[1].trim().replace(/^["']|["']$/g, "") : undefined;
+  return {
+    name: extractFrontmatterValue(frontmatter, "name"),
+    description: extractFrontmatterValue(frontmatter, "description"),
+    userInvocable: parseFrontmatterBoolean(extractFrontmatterValue(frontmatter, "user-invocable")),
+  };
+}
+
+function extractFrontmatterValue(frontmatter: string, key: string): string | undefined {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = frontmatter.match(new RegExp(`^${escapedKey}:\\s*(.+)$`, "m"));
+  return match ? match[1].trim().replace(/^["']|["']$/g, "") : undefined;
+}
+
+function parseFrontmatterBoolean(value: string | undefined): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return undefined;
+}
+
+function extractMarkdownSummary(content: string): string | undefined {
+  const body = content
+    .replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "")
+    .trim();
+  if (!body) return undefined;
+
+  const lines = body
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !line.startsWith("#"));
+
+  if (lines.length === 0) return undefined;
+
+  return lines[0];
 }
 
 // --- Bridge client interface ---

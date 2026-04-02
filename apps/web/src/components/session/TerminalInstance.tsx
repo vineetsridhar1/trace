@@ -51,14 +51,9 @@ export function TerminalInstance({ terminalId, visible }: { terminalId: string; 
 
     socket.onEvent((event) => {
       switch (event.type) {
-        case "ready": {
+        case "ready":
           setTerminalStatus(terminalId, "active");
-          const pending = useTerminalStore.getState().consumePendingInput(terminalId);
-          if (pending) {
-            socket.write(pending);
-          }
           break;
-        }
         case "output":
           term.write(event.data);
           break;

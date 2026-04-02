@@ -760,9 +760,31 @@ export class SessionRouter {
   /**
    * Ask a runtime to list skills (user + project SKILL.md files).
    */
-  listSkills(runtimeId: string, sessionId: string, workdirHint?: string, timeoutMs = 15_000): Promise<BridgeSkillInfo[]> {
+  listSkills(
+    runtimeId: string,
+    sessionId: string,
+    options?: {
+      workdirHint?: string;
+      includeUserSkills?: boolean;
+      includeProjectSkills?: boolean;
+      timeoutMs?: number;
+    },
+  ): Promise<BridgeSkillInfo[]> {
+    const {
+      workdirHint,
+      includeUserSkills = true,
+      includeProjectSkills = true,
+      timeoutMs = 15_000,
+    } = options ?? {};
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, { type: "list_skills", requestId, sessionId, workdirHint });
+    const result = this.sendToRuntime(runtimeId, {
+      type: "list_skills",
+      requestId,
+      sessionId,
+      workdirHint,
+      includeUserSkills,
+      includeProjectSkills,
+    });
     if (result !== "delivered") {
       return Promise.reject(new Error(`Runtime not available: ${result}`));
     }

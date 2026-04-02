@@ -13,7 +13,6 @@ export interface TerminalEntry {
 
 interface TerminalState {
   terminals: Record<string, TerminalEntry>;
-  pendingInput: Record<string, string>;
   addTerminal: (
     id: string,
     sessionId: string,
@@ -23,13 +22,10 @@ interface TerminalState {
   setTerminalStatus: (id: string, status: TerminalStatus) => void;
   renameTerminal: (id: string, name: string) => void;
   removeTerminal: (id: string) => void;
-  setPendingInput: (terminalId: string, input: string) => void;
-  consumePendingInput: (terminalId: string) => string | undefined;
 }
 
-export const useTerminalStore = create<TerminalState>((set, get) => ({
+export const useTerminalStore = create<TerminalState>((set) => ({
   terminals: {},
-  pendingInput: {},
 
   addTerminal: (id, sessionId, sessionGroupId, status) =>
     set((state) => ({
@@ -59,22 +55,6 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       const { [id]: _, ...rest } = state.terminals;
       return { terminals: rest };
     }),
-
-  setPendingInput: (terminalId, input) =>
-    set((state) => ({
-      pendingInput: { ...state.pendingInput, [terminalId]: input },
-    })),
-
-  consumePendingInput: (terminalId) => {
-    const input = get().pendingInput[terminalId];
-    if (input !== undefined) {
-      set((state) => {
-        const { [terminalId]: _, ...rest } = state.pendingInput;
-        return { pendingInput: rest };
-      });
-    }
-    return input;
-  },
 }));
 
 export function useSessionGroupTerminals(sessionGroupId: string): TerminalEntry[] {

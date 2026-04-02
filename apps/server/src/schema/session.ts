@@ -4,6 +4,8 @@ import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { BUILTIN_SLASH_COMMANDS } from "@trace/shared";
+import { prisma } from "../lib/db.js";
+import { AuthenticationError } from "../lib/errors.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { requireOrgContext } from "../lib/require-org.js";
 import {
@@ -89,23 +91,38 @@ export const sessionQueries = {
       ctx.userId,
     );
   },
-  sessionSlashCommands: async (_: unknown, args: { sessionId: string }) => {
-    // Fetch session to check tool type
-    const session = await sessionService.get(args.sessionId);
+  sessionSlashCommands: async (_: unknown, args: { sessionId: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+
+    const orgId = requireOrgContext(ctx);
+    const session = await prisma.session.findFirst({
+      where: { id: args.sessionId, organizationId: orgId },
+      select: {
+        id: true,
+        tool: true,
+        workdir: true,
+        hosting: true,
+        createdById: true,
+      },
+    });
     if (!session || session.tool !== "claude_code") return [];
 
     const runtime = sessionRouter.getRuntimeForSession(args.sessionId);
-    const isLocal = runtime?.hostingMode === "local";
 
     // Try to get skills from bridge
     type SkillResult = Array<{ name: string; description: string; source: "user" | "project" }>;
     let skills: SkillResult = [];
     if (runtime) {
       try {
+        const includeUserSkills = session.hosting !== "local" || session.createdById === ctx.userId;
         skills = await sessionRouter.listSkills(
           runtime.id,
           args.sessionId,
-          (session.workdir as string | undefined) ?? undefined,
+          {
+            workdirHint: session.workdir ?? undefined,
+            includeUserSkills,
+            includeProjectSkills: true,
+          },
         );
       } catch {
         skills = [];
@@ -115,9 +132,7 @@ export const sessionQueries = {
     // Merge built-in commands with bridge skills
     const commands: Array<{ name: string; description: string; source: string; category: string }> = [];
 
-    // Add built-in commands (always include passthrough + special; terminal only if local)
     for (const cmd of BUILTIN_SLASH_COMMANDS) {
-      if (cmd.category === "terminal" && !isLocal) continue;
       commands.push({ name: cmd.name, description: cmd.description, source: "builtin", category: cmd.category });
     }
 

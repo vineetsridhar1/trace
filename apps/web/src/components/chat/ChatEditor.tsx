@@ -92,6 +92,15 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
 
   const hasSlashCommands = (slashCommands?.length ?? 0) > 0;
 
+  const clearEditor = useCallback(() => {
+    const editor = quillRef.current?.getEditor();
+    if (editor) {
+      editor.setText("");
+    }
+    setValue("");
+    onChangeRef.current?.("");
+  }, []);
+
   const modules = useMemo(
     () => ({
       toolbar: false,
@@ -167,19 +176,14 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
           if (item.denotationChar === "/") {
             // Don't insert the slash command into the editor — handle it externally
             onSlashCommandSelectRef.current?.(item as unknown as SlashCommandItem);
-            // Clear the editor text that triggered the mention (the "/search" text)
-            const editor = quillRef.current?.getEditor();
-            if (editor) {
-              editor.setText("");
-            }
+            clearEditor();
             return;
           }
           insertItem(item);
         },
       },
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [hasSlashCommands],
+    [clearEditor, hasSlashCommands],
   );
 
   const submit = useCallback(async () => {
@@ -192,12 +196,12 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
 
     try {
       await Promise.resolve(onSubmit(html));
-      setValue("");
+      clearEditor();
       return true;
     } catch {
       return false;
     }
-  }, [disabled, onSubmit]);
+  }, [clearEditor, disabled, onSubmit]);
 
   useImperativeHandle(
     ref,
@@ -211,10 +215,10 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
         return editor?.getText().trim() ?? "";
       },
       clear: () => {
-        setValue("");
+        clearEditor();
       },
     }),
-    [submit],
+    [clearEditor, submit],
   );
 
   const handleKeyDown = useCallback(

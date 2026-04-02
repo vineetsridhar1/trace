@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { Send, Square, Cloud, Monitor } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
-import { SEND_SESSION_MESSAGE_MUTATION, CREATE_TERMINAL_MUTATION } from "../../lib/mutations";
+import { SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
 import { type InteractionMode, MODE_CYCLE, MODE_CONFIG, wrapPrompt } from "./interactionModes";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
@@ -21,7 +21,6 @@ import { ChatEditor, type ChatEditorHandle, type SlashCommandItem } from "../cha
 import { useSlashCommands } from "./useSlashCommands";
 import { createQuickSession } from "../../lib/create-quick-session";
 import { useUIStore } from "../../stores/ui";
-import { useTerminalStore } from "../../stores/terminal";
 
 export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop: () => void }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
@@ -35,7 +34,6 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     | boolean
     | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
-  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
   const [hasContent, setHasContent] = useState(false);
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<InteractionMode>("code");
@@ -111,25 +109,6 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
         return;
       }
 
-      if (cmd.category === "terminal") {
-        // Open a terminal and run `claude /<cmd>`
-        try {
-          const result = await client
-            .mutation(CREATE_TERMINAL_MUTATION, { sessionId, cols: 80, rows: 24 })
-            .toPromise();
-          if (result.data?.createTerminal) {
-            const { id: terminalId } = result.data.createTerminal as { id: string };
-            useTerminalStore.getState().addTerminal(terminalId, sessionId, sessionGroupId ?? sessionId);
-            useTerminalStore.getState().setPendingInput(terminalId, `claude /${cmd.id}\n`);
-            useUIStore.getState().setActiveTerminalId(terminalId);
-          }
-        } catch (error) {
-          toast.error(error instanceof Error ? error.message : "Failed to open terminal");
-        }
-        return;
-      }
-
-      // passthrough — send as text message (user/project skills)
       setSending(true);
       const text = `/${cmd.id}`;
       const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
@@ -157,7 +136,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
         setSending(false);
       }
     },
-    [sessionId, sessionGroupId],
+    [sessionId],
   );
 
   // Show recovery panel when disconnected — but not for not_started sessions

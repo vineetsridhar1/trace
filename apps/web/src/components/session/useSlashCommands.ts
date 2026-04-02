@@ -1,37 +1,40 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
+import { BUILTIN_SLASH_COMMANDS } from "@trace/shared";
 import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { SESSION_SLASH_COMMANDS_QUERY } from "../../lib/mutations";
 import type { SlashCommandItem } from "../chat/ChatEditor";
 
-const BUILTIN_FALLBACK: SlashCommandItem[] = [
-  { id: "clear", value: "clear", description: "Start a new session", source: "builtin", category: "special", type: "slash_command" },
-  { id: "compact", value: "compact", description: "Compact conversation context", source: "builtin", category: "terminal", type: "slash_command" },
-  { id: "cost", value: "cost", description: "Show token usage and cost", source: "builtin", category: "terminal", type: "slash_command" },
-  { id: "help", value: "help", description: "Show help information", source: "builtin", category: "terminal", type: "slash_command" },
-];
+const BUILTIN_FALLBACK: SlashCommandItem[] = BUILTIN_SLASH_COMMANDS.map((cmd) => ({
+  id: cmd.name,
+  value: cmd.name,
+  description: cmd.description,
+  source: "builtin",
+  category: cmd.category,
+  type: "slash_command" as const,
+}));
 
 export function useSlashCommands(sessionId: string): { commands: SlashCommandItem[]; loading: boolean } {
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const [commands, setCommands] = useState<SlashCommandItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const fetchedRef = useRef(false);
 
   useEffect(() => {
     if (tool !== "claude_code") {
       setCommands([]);
+      setLoading(false);
       return;
     }
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
 
+    let cancelled = false;
+    setCommands(BUILTIN_FALLBACK);
     setLoading(true);
     client
       .query(SESSION_SLASH_COMMANDS_QUERY, { sessionId })
       .toPromise()
       .then((result) => {
+        if (cancelled) return;
         if (result.error || !result.data?.sessionSlashCommands) {
-          setCommands(BUILTIN_FALLBACK);
           return;
         }
         const mapped: SlashCommandItem[] = result.data.sessionSlashCommands.map(
@@ -46,12 +49,16 @@ export function useSlashCommands(sessionId: string): { commands: SlashCommandIte
         );
         setCommands(mapped);
       })
-      .catch(() => {
-        setCommands(BUILTIN_FALLBACK);
-      })
+      .catch(() => {})
       .finally(() => {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [sessionId, tool]);
 
   return { commands, loading };
