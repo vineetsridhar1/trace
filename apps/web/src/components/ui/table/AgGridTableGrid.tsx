@@ -46,14 +46,14 @@ export default function AgGridTableGrid<T extends { id: string }>({
         animateRows={true}
         rowHeight={50}
         enableCellTextSelection={true}
-        getRowId={params => params.data.id}
+        getRowId={(params: { data: { id: string } }) => params.data.id}
         rowClassRules={{
-          'selected-row': params => {
+          'selected-row': (params: { data?: { id?: string } }) => {
             return Boolean(selectedRowIds && selectedRowIds.includes(params.data?.id || ''));
           },
         }}
         autoGroupColumnDef={{ cellClass: 'group-row' }}
-        getRowHeight={params => {
+        getRowHeight={(params: { node: { group?: boolean } }) => {
           if (params.node.group) return 40;
           return undefined;
         }}

@@ -556,7 +556,7 @@ export async function runPlanner(
   try {
     const systemPrompt = buildSystemPrompt(ctx);
 
-    const response = await withRetry(() =>
+    const response: LLMResponse = await withRetry(() =>
       adapter.complete({
         model,
         system: systemPrompt,
@@ -653,7 +653,7 @@ export async function runPlannerTurn(
   const maxTokens = 1024;
   const startTime = Date.now();
 
-  const response = await withRetry(() =>
+  const response: LLMResponse = await withRetry(() =>
     adapter.complete({
       model,
       system: systemPrompt,

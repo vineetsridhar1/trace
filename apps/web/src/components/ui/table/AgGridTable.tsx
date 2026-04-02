@@ -8,13 +8,13 @@ import type { TableState } from './table-types';
 const lazyModule = lazy(() => import('./AgGridTableGrid'));
 
 const createTableStore = <T,>(columns: ColDef<T>[] = []) => {
-  return create<TableState<T>>(set => ({
+  return create<TableState<T>>((set: (partial: Partial<TableState<T>>) => void) => ({
     columns,
-    setColumns: columns => set({ columns }),
+    setColumns: (columns: ColDef<T>[]) => set({ columns } as Partial<TableState<T>>),
     rows: [],
-    setRows: rows => set({ rows }),
+    setRows: (rows: T[]) => set({ rows } as Partial<TableState<T>>),
     loading: false,
-    setLoading: loading => set({ loading }),
+    setLoading: (loading: boolean) => set({ loading } as Partial<TableState<T>>),
   }));
 };
 
@@ -40,9 +40,9 @@ export const createTable = <T extends { id: string }>({
     columnDefs?: GridOptions<T>['columnDefs'];
     selectedRowIds?: string[];
   }) => {
-    const rows = useTable(state => state.rows);
-    const storedColumns = useTable(state => state.columns);
-    const loading = useTable(state => state.loading);
+    const rows = useTable((state: TableState<T>) => state.rows);
+    const storedColumns = useTable((state: TableState<T>) => state.columns);
+    const loading = useTable((state: TableState<T>) => state.loading);
 
     if (loading) return null;
 

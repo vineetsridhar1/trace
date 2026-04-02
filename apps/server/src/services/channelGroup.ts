@@ -1,4 +1,5 @@
 import type { ActorType } from "@trace/gql";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 
@@ -12,7 +13,7 @@ export class ChannelGroupService {
   }
 
   async create(input: { organizationId: string; name: string; position?: number | null }, actorType: ActorType, actorId: string) {
-    const [group] = await prisma.$transaction(async (tx) => {
+    const [group] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // If no position specified, append after all top-level items (ungrouped channels + groups)
       let position = input.position ?? null;
       if (position === null) {
@@ -56,7 +57,7 @@ export class ChannelGroupService {
   }
 
   async update(id: string, input: { name?: string | null; position?: number | null; isCollapsed?: boolean | null }, actorType: ActorType, actorId: string) {
-    const [group] = await prisma.$transaction(async (tx) => {
+    const [group] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const data: Record<string, unknown> = {};
       if (input.name != null) data.name = input.name;
       if (input.position != null) data.position = input.position;
@@ -85,7 +86,7 @@ export class ChannelGroupService {
   }
 
   async delete(id: string, actorType: ActorType, actorId: string) {
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const group = await tx.channelGroup.findUniqueOrThrow({ where: { id } });
 
       // Find channels in this group before ungrouping
@@ -110,7 +111,7 @@ export class ChannelGroupService {
         eventType: "channel_group_deleted",
         payload: {
           channelGroupId: id,
-          ungroupedChannels: affectedChannels.map((c) => ({ id: c.id, name: c.name, type: c.type, position: c.position, groupId: null })),
+          ungroupedChannels: affectedChannels.map((c: { id: string; name: string; type: string; position: number }) => ({ id: c.id, name: c.name, type: c.type, position: c.position, groupId: null })),
         },
         actorType,
         actorId,
@@ -121,7 +122,7 @@ export class ChannelGroupService {
   }
 
   async moveChannel(input: { channelId: string; groupId?: string | null; position: number }, actorType: ActorType, actorId: string) {
-    const [channel] = await prisma.$transaction(async (tx) => {
+    const [channel] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const channel = await tx.channel.update({
         where: { id: input.channelId },
         data: {
@@ -147,7 +148,7 @@ export class ChannelGroupService {
   }
 
   async reorderGroups(organizationId: string, groupIds: string[], actorType: ActorType, actorId: string) {
-    const groups = await prisma.$transaction(async (tx) => {
+    const groups = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const updated = await Promise.all(
         groupIds.map((id, index) =>
           tx.channelGroup.update({
@@ -163,7 +164,7 @@ export class ChannelGroupService {
         scopeType: "system",
         scopeId: organizationId,
         eventType: "channel_group_updated",
-        payload: { reorder: true, groups: updated.map((g) => ({ id: g.id, position: g.position })) },
+        payload: { reorder: true, groups: updated.map((g: { id: string; position: number }) => ({ id: g.id, position: g.position })) },
         actorType,
         actorId,
       }, tx);
@@ -175,7 +176,7 @@ export class ChannelGroupService {
   }
 
   async reorderChannels(groupId: string | null, channelIds: string[], actorType: ActorType, actorId: string) {
-    const channels = await prisma.$transaction(async (tx) => {
+    const channels = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const updated = await Promise.all(
         channelIds.map((id, index) =>
           tx.channel.update({
@@ -193,7 +194,7 @@ export class ChannelGroupService {
         scopeType: "system",
         scopeId: organizationId,
         eventType: "channel_updated",
-        payload: { reorder: true, channels: updated.map((c) => ({ id: c.id, position: c.position, groupId: c.groupId })) },
+        payload: { reorder: true, channels: updated.map((c: { id: string; position: number; groupId: string | null }) => ({ id: c.id, position: c.position, groupId: c.groupId })) },
         actorType,
         actorId,
       }, tx);

@@ -36,7 +36,7 @@ export function SessionRuntimePicker({
     client
       .query(AVAILABLE_SESSION_RUNTIMES_QUERY, { sessionId })
       .toPromise()
-      .then((result) => {
+      .then((result: { data?: Record<string, unknown> }) => {
         if (result.data?.availableSessionRuntimes) {
           setRuntimes(result.data.availableSessionRuntimes as RuntimeInstance[]);
         }
@@ -135,7 +135,7 @@ export function SessionRuntimePicker({
           </button>
 
           {/* Local bridges */}
-          {runtimes.map((rt) => (
+          {runtimes.map((rt: RuntimeInstance) => (
             <button
               key={rt.id}
               onClick={() => handleMove(rt.id)}

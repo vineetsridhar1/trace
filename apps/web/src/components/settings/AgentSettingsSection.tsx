@@ -53,7 +53,7 @@ interface AgentIdentityData {
 }
 
 export function AgentSettingsSection() {
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const [identity, setIdentity] = useState<AgentIdentityData | null>(null);
   const [soulFile, setSoulFile] = useState("");
   const [autonomyMode, setAutonomyMode] = useState("observe");
@@ -193,7 +193,7 @@ export function AgentSettingsSection() {
             id="soul-file"
             placeholder="Leave empty to use the platform default soul file..."
             value={soulFile}
-            onChange={(e) => handleSoulFileChange(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleSoulFileChange(e.target.value)}
             className="font-mono text-xs min-h-[200px]"
           />
         </div>

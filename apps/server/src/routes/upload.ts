@@ -1,7 +1,7 @@
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
-import { Router, type Router as RouterType } from "express";
+import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { prisma } from "../lib/db.js";
 import { getRequestToken, verifyToken } from "../lib/auth.js";
 import { S3_BUCKET, s3 } from "../lib/s3.js";
@@ -25,7 +25,7 @@ function sanitizeFilename(filename: string): string {
   return `${truncatedBase}${suffix}`.slice(0, MAX_FILENAME_LENGTH);
 }
 
-router.post("/uploads/presign", async (req, res) => {
+router.post("/uploads/presign", async (req: Request, res: Response) => {
   const token = getRequestToken(req);
   if (!token) {
     return res.status(401).json({ error: "Not authenticated" });

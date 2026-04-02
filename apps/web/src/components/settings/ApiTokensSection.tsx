@@ -63,7 +63,7 @@ const PROVIDER_META: Record<string, { label: string; placeholder: string; descri
 };
 
 export function ApiTokensSection() {
-  const user = useAuthStore((s) => s.user);
+  const user = useAuthStore((s: { user: { id: string } | null }) => s.user);
   const [tokens, setTokens] = useState<TokenStatus[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
@@ -112,7 +112,7 @@ export function ApiTokensSection() {
       </div>
 
       <div className="space-y-3">
-        {tokens.map((token) => {
+        {tokens.map((token: TokenStatus) => {
           const meta = PROVIDER_META[token.provider];
           if (!meta) return null;
           const isEditing = editing === token.provider;
@@ -182,8 +182,8 @@ export function ApiTokensSection() {
                     <Textarea
                       placeholder={meta.placeholder}
                       value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      onKeyDown={(e) => {
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInputValue(e.target.value)}
+                      onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
                         if (e.key === "Escape") {
                           setEditing(null);
                           setInputValue("");
@@ -198,8 +198,8 @@ export function ApiTokensSection() {
                         type={showInput ? "text" : "password"}
                         placeholder={meta.placeholder}
                         value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        onKeyDown={(e) => {
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInputValue(e.target.value)}
+                        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                           if (e.key === "Enter") handleSave(token.provider);
                           if (e.key === "Escape") {
                             setEditing(null);

@@ -79,9 +79,9 @@ const ROLE_LABELS: Record<string, { label: string; icon: typeof Shield }> = {
 };
 
 export function MembersSection() {
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const currentUserId = useAuthStore((s) => s.user?.id);
-  const orgMemberships = useAuthStore((s) => s.orgMemberships);
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
+  const currentUserId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
+  const orgMemberships = useAuthStore((s: { orgMemberships: Array<{ organizationId: string; role: string }> }) => s.orgMemberships);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -95,7 +95,7 @@ export function MembersSection() {
   const [searchDone, setSearchDone] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const activeMembership = orgMemberships.find(
-    (membership) => membership.organizationId === activeOrgId,
+    (membership: { organizationId: string; role: string }) => membership.organizationId === activeOrgId,
   );
   const canManageMembers = activeMembership?.role === "admin";
 
@@ -252,7 +252,7 @@ export function MembersSection() {
               <Input
                 placeholder="Search by name or email..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
               />
               {searchQuery.trim().length >= 2 && (searching || searchDone) && (
                 <div className="absolute top-full left-0 right-0 z-10 mt-1 rounded-lg border border-border bg-surface-elevated shadow-lg">
@@ -261,7 +261,7 @@ export function MembersSection() {
                       Searching...
                     </div>
                   ) : searchResults.length > 0 ? (
-                    searchResults.map((user) => (
+                    searchResults.map((user: SearchUser) => (
                       <button
                         key={user.id}
                         className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors first:rounded-t-lg last:rounded-b-lg hover:bg-surface-hover"
@@ -293,7 +293,7 @@ export function MembersSection() {
                 </div>
               )}
             </div>
-            <Select value={addRole} onValueChange={(value) => setAddRole(value as UserRole)}>
+            <Select value={addRole} onValueChange={(value: string) => setAddRole(value as UserRole)}>
               <SelectTrigger className="w-32">
                 <SelectValue />
               </SelectTrigger>
@@ -338,7 +338,7 @@ export function MembersSection() {
             </span>
             <span />
           </div>
-          {members.map((member) => {
+          {members.map((member: Member) => {
             const isCurrentUser = member.user.id === currentUserId;
             const roleMeta = ROLE_LABELS[member.role] ?? ROLE_LABELS.member;
             return (
@@ -378,7 +378,7 @@ export function MembersSection() {
                   ) : (
                     <Select
                       value={member.role}
-                      onValueChange={(v) => handleRoleChange(member.user.id, v as UserRole)}
+                      onValueChange={(v: string) => handleRoleChange(member.user.id, v as UserRole)}
                     >
                       <SelectTrigger className="h-8 w-full text-sm">
                         <SelectValue />

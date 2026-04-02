@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "../../stores/auth";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { Button } from "../ui/button";
@@ -77,7 +77,7 @@ const DISPOSITION_LABELS: Record<string, string> = {
 };
 
 export function ExecutionLogTab() {
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const [logs, setLogs] = useState<ExecutionLogItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -128,7 +128,7 @@ export function ExecutionLogTab() {
           <span className="text-xs text-muted-foreground">{totalCount} total</span>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={statusFilter} onValueChange={(v) => { if (v) { setStatusFilter(v); setPage(0); } }}>
+          <Select value={statusFilter} onValueChange={(v: string) => { if (v) { setStatusFilter(v); setPage(0); } }}>
             <SelectTrigger className="h-8 w-[140px] text-xs">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
@@ -178,7 +178,7 @@ export function ExecutionLogTab() {
                   </td>
                 </tr>
               )}
-              {!loading && logs.map((log) => (
+              {!loading && logs.map((log: ExecutionLogItem) => (
                 <tr
                   key={log.id}
                   onClick={() => setSelectedLogId(log.id)}
@@ -234,7 +234,7 @@ export function ExecutionLogTab() {
               size="icon"
               className="h-7 w-7"
               disabled={page === 0}
-              onClick={() => setPage((p) => p - 1)}
+              onClick={() => setPage((p: number) => p - 1)}
             >
               <ChevronLeft size={14} />
             </Button>
@@ -243,7 +243,7 @@ export function ExecutionLogTab() {
               size="icon"
               className="h-7 w-7"
               disabled={page >= totalPages - 1}
-              onClick={() => setPage((p) => p + 1)}
+              onClick={() => setPage((p: number) => p + 1)}
             >
               <ChevronRight size={14} />
             </Button>

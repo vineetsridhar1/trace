@@ -48,7 +48,7 @@ export function handleBridgeConnection(ws: WebSocket) {
     queues.set(sessionId, next);
   }
 
-  ws.on("message", (raw) => {
+  ws.on("message", (raw: Buffer | string) => {
     try {
       const msg = JSON.parse(raw.toString());
 
@@ -231,7 +231,7 @@ export function handleBridgeConnection(ws: WebSocket) {
     }
   });
 
-  ws.on("error", (err) => {
+  ws.on("error", (err: Error) => {
     runtimeDebug("bridge websocket error", { runtimeId, error: err.message });
   });
 

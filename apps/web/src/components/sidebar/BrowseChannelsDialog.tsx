@@ -65,8 +65,8 @@ export function BrowseChannelsDialog() {
   const [loading, setLoading] = useState(false);
   const [loadedOrgId, setLoadedOrgId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const userId = useAuthStore((s) => s.user?.id);
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
+  const userId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
 
   const fetchChannels = useCallback(async () => {
     if (!activeOrgId) return;
@@ -107,7 +107,7 @@ export function BrowseChannelsDialog() {
     setPendingAction(null);
   };
 
-  const filtered = channels.filter((ch) =>
+  const filtered = channels.filter((ch: BrowseChannel) =>
     ch.name.toLowerCase().includes(search.toLowerCase()),
   );
 
@@ -126,7 +126,7 @@ export function BrowseChannelsDialog() {
         <div className="space-y-3">
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
             placeholder="Search channels..."
             autoFocus
           />
@@ -140,8 +140,8 @@ export function BrowseChannelsDialog() {
               </p>
             )}
             {!loading &&
-              filtered.map((ch) => {
-                const isMember = ch.members.some((m) => m.user.id === userId);
+              filtered.map((ch: BrowseChannel) => {
+                const isMember = ch.members.some((m: { user: { id: string } }) => m.user.id === userId);
                 const isPending = pendingAction === ch.id;
                 return (
                   <div

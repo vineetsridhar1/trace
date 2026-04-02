@@ -125,7 +125,7 @@ function parseNavFromPath(path: string): {
 }
 
 export function useHistorySync() {
-  const restoreNav = useUIStore((s) => s._restoreNav);
+  const restoreNav = useUIStore((s: { _restoreNav: (channelId: string | null, sessionGroupId: string | null, sessionId: string | null, page?: ActivePage, chatId?: string | null, channelSubPage?: ChannelSubPage) => void }) => s._restoreNav);
 
   useEffect(() => {
     const parsedNav = parseNavFromPath(window.location.pathname);

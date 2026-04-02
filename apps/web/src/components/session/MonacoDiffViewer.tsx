@@ -49,7 +49,7 @@ export function MonacoDiffViewer({
             ref: defaultBranch,
           })
           .toPromise()
-          .then((r) => {
+          .then((r: { error?: unknown; data?: Record<string, unknown> }) => {
             if (r.error) return "";
             return (r.data?.sessionGroupFileAtRef as string) ?? "";
           });
@@ -62,7 +62,7 @@ export function MonacoDiffViewer({
             filePath,
           })
           .toPromise()
-          .then((r) => {
+          .then((r: { error?: { message: string }; data?: Record<string, unknown> }) => {
             if (r.error) throw new Error(r.error.message);
             return (r.data?.sessionGroupFileContent as string) ?? "";
           });

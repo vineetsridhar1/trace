@@ -15,7 +15,7 @@ const orgMemberCache = new Map<string, OrgMember[]>();
 
 /** Fetch org members into the entity store (once per org) and return them for mention autocomplete */
 export function useOrgMembers(): OrgMember[] {
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const requestIdRef = useRef(0);
   const [members, setMembers] = useState<OrgMember[]>([]);
 
@@ -40,12 +40,10 @@ export function useOrgMembers(): OrgMember[] {
     void client
       .query(ORG_MEMBERS_QUERY, { id: activeOrgId })
       .toPromise()
-      .then((result) => {
+      .then((result: { data?: { organization?: { members?: Array<{ user: User; role: string; joinedAt: string }> } } }) => {
         if (requestId !== requestIdRef.current) return;
 
-        const rawMembers = result.data?.organization?.members as
-          | Array<{ user: User; role: string; joinedAt: string }>
-          | undefined;
+        const rawMembers = result.data?.organization?.members;
         if (!rawMembers) return;
 
         const users = rawMembers.map((m) => m.user);

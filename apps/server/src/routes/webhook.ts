@@ -82,7 +82,7 @@ async function findMatchingRepo(
     });
 
     const exactRepo = exactMatches.find(
-      (candidate) =>
+      (candidate: { webhookSecret: string | null }) =>
         candidate.webhookSecret != null &&
         verifySignature(rawBody, signature, candidate.webhookSecret),
     );
@@ -98,7 +98,7 @@ async function findMatchingRepo(
   });
 
   const repo = repoCandidates.find(
-    (candidate) =>
+    (candidate: { webhookSecret: string | null }) =>
       candidate.webhookSecret != null &&
       verifySignature(rawBody, signature, candidate.webhookSecret),
   );

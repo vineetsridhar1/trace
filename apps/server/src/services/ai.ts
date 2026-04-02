@@ -114,12 +114,12 @@ class AIService {
       messages.push({ role: "assistant", content: response.content });
 
       // Execute tool calls and collect results
-      const toolUseBlocks = response.content.filter(
+      const toolUseBlocks: LLMToolUseContent[] = (response.content as Array<{ type: string } & Record<string, unknown>>).filter(
         (b): b is LLMToolUseContent => b.type === "tool_use",
       );
 
       const toolResults: LLMToolResultContent[] = await Promise.all(
-        toolUseBlocks.map(async (block) => {
+        toolUseBlocks.map(async (block: LLMToolUseContent) => {
           try {
             const result = await executeToolCall(block.name, block.input);
             return {

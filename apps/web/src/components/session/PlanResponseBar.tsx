@@ -24,7 +24,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
   const [selected, setSelected] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const [sending, setSending] = useState(false);
-  const openSessionTab = useUIStore((s) => s.openSessionTab);
+  const openSessionTab = useUIStore((s: { openSessionTab: (groupId: string, sessionId: string) => void }) => s.openSessionTab);
   const channel = useEntityField("sessions", sessionId, "channel") as { id: string } | null | undefined;
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
@@ -161,11 +161,11 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
         <input
           type="text"
           value={feedback}
-          onChange={(e) => {
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
             setFeedback(e.target.value);
             if (e.target.value) setSelected(null);
           }}
-          onKeyDown={(e) => {
+          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               if (feedback.trim()) {

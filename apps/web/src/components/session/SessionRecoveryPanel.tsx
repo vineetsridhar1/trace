@@ -54,7 +54,7 @@ export function SessionRecoveryPanel({
       }
       // Schedule next attempt only if still mounted and not cancelled
       if (!cancelled) {
-        setAutoRetryCount((c) => c + 1);
+        setAutoRetryCount((c: number) => c + 1);
       }
     }, delay);
 

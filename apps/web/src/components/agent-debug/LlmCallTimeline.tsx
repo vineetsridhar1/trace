@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, Clock, Cpu, DollarSign, ArrowDownUp } from "
 import { cn } from "../../lib/utils";
 import { LlmCallDetail, type LlmCallData } from "./LlmCallDetail";
 
-function TimelineEntry({ call }: { call: LlmCallData }) {
+function TimelineEntry({ call }: { key?: string | number; call: LlmCallData }) {
   const [expanded, setExpanded] = useState(false);
 
   return (

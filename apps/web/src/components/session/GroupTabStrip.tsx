@@ -73,7 +73,7 @@ export function GroupTabStrip({
   canNewChat,
   canOpenTerminal,
 }: GroupTabStripProps) {
-  const sessionDoneBadges = useUIStore((s) => s.sessionDoneBadges);
+  const sessionDoneBadges = useUIStore((s: { sessionDoneBadges: Record<string, boolean> }) => s.sessionDoneBadges);
   const sessionById = new Map(groupSessions.map((s) => [s.id, s]));
   const tabRefs = useRef<Map<string, HTMLElement>>(new Map());
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -98,7 +98,7 @@ export function GroupTabStrip({
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "t") {
         e.preventDefault();
-        setDropdownOpen((v) => !v);
+        setDropdownOpen((v: boolean) => !v);
       }
     }
     document.addEventListener("keydown", handleKeyDown);
@@ -139,7 +139,7 @@ export function GroupTabStrip({
             return (
               <div
                 key={session.id}
-                ref={(el) => setTabRef(session.id, el)}
+                ref={(el: HTMLElement | null) => setTabRef(session.id, el)}
                 className={cn(
                   tabBase,
                   "max-w-[260px] gap-0 p-0",
@@ -186,7 +186,7 @@ export function GroupTabStrip({
             return (
               <div
                 key={terminal.id}
-                ref={(el) => setTabRef(terminal.id, el)}
+                ref={(el: HTMLElement | null) => setTabRef(terminal.id, el)}
                 className={cn(
                   tabBase,
                   "max-w-[260px] gap-0 p-0",
@@ -218,8 +218,8 @@ export function GroupTabStrip({
                       autoFocus
                       className="min-w-24 max-w-[180px] bg-transparent text-xs outline-none border-b border-foreground/30"
                       value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      onKeyDown={(e) => {
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditValue(e.target.value)}
+                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                         if (e.key === "Enter") {
                           onRenameTerminal(terminal.id, editValue);
                           setEditingTerminalId(null);
@@ -233,7 +233,7 @@ export function GroupTabStrip({
                           setEditingTerminalId(null);
                         }
                       }}
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e: React.MouseEvent) => e.stopPropagation()}
                     />
                   ) : (
                     <span className="truncate">{label}</span>
@@ -256,7 +256,7 @@ export function GroupTabStrip({
             return (
               <div
                 key={file.filePath}
-                ref={(el) => setTabRef(file.filePath, el)}
+                ref={(el: HTMLElement | null) => setTabRef(file.filePath, el)}
                 className={cn(
                   tabBase,
                   "max-w-[260px] gap-0 p-0",

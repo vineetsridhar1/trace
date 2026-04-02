@@ -12,7 +12,7 @@ class PubSub {
    * Publish a payload to a topic. Serializes to JSON and sends via Redis.
    */
   publish<T>(topic: string, payload: T): void {
-    redis.publish(topic, JSON.stringify(payload)).catch((err) => {
+    redis.publish(topic, JSON.stringify(payload)).catch((err: Error) => {
       console.error(`[pubsub] publish error on topic ${topic}:`, err.message);
     });
   }
@@ -42,7 +42,7 @@ class PubSub {
       handlers = new Set();
       this.subscriptions.set(topic, handlers);
       // First subscriber for this topic — tell Redis to subscribe
-      redisSub.subscribe(topic).catch((err) => {
+      redisSub.subscribe(topic).catch((err: Error) => {
         console.error(`[pubsub] subscribe error on topic ${topic}:`, err.message);
       });
     }

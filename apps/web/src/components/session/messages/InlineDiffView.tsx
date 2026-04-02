@@ -41,7 +41,7 @@ export function InlineDiffView({ oldString, newString, filePath }: InlineDiffVie
         <div className="inline-diff-filepath">{filePath}</div>
       )}
       <div className="inline-diff-lines">
-        {lines.map((line, i) => (
+        {lines.map((line: DiffLine, i: number) => (
           <div
             key={i}
             className={`inline-diff-line inline-diff-${line.type}`}

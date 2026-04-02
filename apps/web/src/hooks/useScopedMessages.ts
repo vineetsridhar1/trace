@@ -115,7 +115,7 @@ export function useScopedMessages({
 
     const activeSubscription = client
       .subscription(subscription.query, subscription.variables)
-      .subscribe((result) => {
+      .subscribe((result: { data?: Record<string, unknown> }) => {
         const event = getEventFromResult(
           result.data as Record<string, unknown> | undefined,
           subscription.resultField,

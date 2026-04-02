@@ -61,9 +61,9 @@ export function SessionHeader({
     | Record<string, unknown>
     | null
     | undefined;
-  const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
-  const isFullscreen = useDetailPanelStore((s) => s.isFullscreen);
-  const toggleFullscreen = useDetailPanelStore((s) => s.toggleFullscreen);
+  const setActiveSessionId = useUIStore((s: { setActiveSessionId: (id: string | null) => void }) => s.setActiveSessionId);
+  const isFullscreen = useDetailPanelStore((s: { isFullscreen: boolean }) => s.isFullscreen);
+  const toggleFullscreen = useDetailPanelStore((s: { toggleFullscreen: () => void }) => s.toggleFullscreen);
   const [showHistory, setShowHistory] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
   const prUrl = groupPrUrl ?? null;

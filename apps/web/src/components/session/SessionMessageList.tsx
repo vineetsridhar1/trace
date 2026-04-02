@@ -9,7 +9,8 @@ import { AskUserQuestionInline } from "./messages/AskUserQuestionInline";
 import { CommandExecutionRow } from "./messages/CommandExecutionRow";
 import type { SessionNode, AgentToolResult } from "./groupReadGlob";
 
-interface SessionMessageListProps {
+export interface SessionMessageListProps {
+  key?: React.Key;
   nodes: SessionNode[];
   gitCheckpoints: GitCheckpoint[];
   hasOlder?: boolean;
@@ -57,11 +58,11 @@ export function SessionMessageList({
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: () => 80,
     overscan: 10,
-    getItemKey: (index) => {
+    getItemKey: (index: number) => {
       const node = nodes[index];
       return node.kind === "readglob-group" ? `rg:${node.items[0].id}` : node.id;
     },
-    measureElement: (element) => element.getBoundingClientRect().height,
+    measureElement: (element: Element) => element.getBoundingClientRect().height,
   });
 
   // Track whether the user is near the bottom via scroll events
@@ -215,7 +216,7 @@ export function SessionMessageList({
           position: "relative",
         }}
       >
-        {virtualItems.map((virtualRow) => {
+        {virtualItems.map((virtualRow: { key: React.Key; index: number; start: number }) => {
           const node = nodes[virtualRow.index];
           return (
             <div

@@ -108,6 +108,7 @@ export function SessionGroupDetailView({
   sessionGroupId,
   panelMode,
 }: {
+  key?: string | number;
   sessionGroupId: string;
   panelMode?: boolean;
 }) {
@@ -138,28 +139,28 @@ export function SessionGroupDetailView({
     "worktreeDeleted",
   ) as boolean | undefined;
 
-  const activeSessionGroupId = useUIStore((s) => s.activeSessionGroupId);
-  const activeSessionId = useUIStore((s) => s.activeSessionId);
-  const activeTerminalId = useUIStore((s) => s.activeTerminalId);
-  const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
-  const setActiveTerminalId = useUIStore((s) => s.setActiveTerminalId);
-  const openTabIds = useUIStore((s) => s.openSessionTabsByGroup[sessionGroupId]);
-  const openSessionTab = useUIStore((s) => s.openSessionTab);
-  const closeSessionTab = useUIStore((s) => s.closeSessionTab);
-  const initSessionTabs = useUIStore((s) => s.initSessionTabs);
-  const toggleFullscreen = useDetailPanelStore((s) => s.toggleFullscreen);
-  const isFullscreen = useDetailPanelStore((s) => s.isFullscreen);
-  const currentUserId = useAuthStore((s) => s.user?.id);
-  const upsert = useEntityStore((s) => s.upsert);
-  const upsertMany = useEntityStore((s) => s.upsertMany);
+  const activeSessionGroupId = useUIStore((s: { activeSessionGroupId: string | null }) => s.activeSessionGroupId);
+  const activeSessionId = useUIStore((s: { activeSessionId: string | null }) => s.activeSessionId);
+  const activeTerminalId = useUIStore((s: { activeTerminalId: string | null }) => s.activeTerminalId);
+  const setActiveSessionId = useUIStore((s: { setActiveSessionId: (id: string | null) => void }) => s.setActiveSessionId);
+  const setActiveTerminalId = useUIStore((s: { setActiveTerminalId: (id: string | null) => void }) => s.setActiveTerminalId);
+  const openTabIds = useUIStore((s: { openSessionTabsByGroup: Record<string, string[]> }) => s.openSessionTabsByGroup[sessionGroupId]);
+  const openSessionTab = useUIStore((s: { openSessionTab: (groupId: string, sessionId: string) => void }) => s.openSessionTab);
+  const closeSessionTab = useUIStore((s: { closeSessionTab: (groupId: string, sessionId: string) => void }) => s.closeSessionTab);
+  const initSessionTabs = useUIStore((s: { initSessionTabs: (groupId: string, sessionIds: string[]) => void }) => s.initSessionTabs);
+  const toggleFullscreen = useDetailPanelStore((s: { toggleFullscreen: () => void }) => s.toggleFullscreen);
+  const isFullscreen = useDetailPanelStore((s: { isFullscreen: boolean }) => s.isFullscreen);
+  const currentUserId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
+  const upsert = useEntityStore((s: { upsert: ReturnType<typeof useEntityStore.getState>["upsert"] }) => s.upsert);
+  const upsertMany = useEntityStore((s: { upsertMany: ReturnType<typeof useEntityStore.getState>["upsertMany"] }) => s.upsertMany);
   const terminals = useSessionGroupTerminals(sessionGroupId);
 
   const [showSidebar, setShowSidebar] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
   const [highlightCheckpointId, setHighlightCheckpointId] = useState<string | null>(null);
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
-  const addTerminal = useTerminalStore((s) => s.addTerminal);
-  const renameTerminal = useTerminalStore((s) => s.renameTerminal);
+  const addTerminal = useTerminalStore((s: { addTerminal: (id: string, sessionId: string, sessionGroupId: string, status?: string) => void }) => s.addTerminal);
+  const renameTerminal = useTerminalStore((s: { renameTerminal: (id: string, name: string) => void }) => s.renameTerminal);
 
   const { groupSessions, selectedSession, sessionTabs, sessionsByRecency } =
     useSessionGroupSessions(sessionGroupId, openTabIds, activeSessionId);
@@ -184,16 +185,16 @@ export function SessionGroupDetailView({
     client
       .query(SESSION_GROUP_DETAIL_QUERY, { id: sessionGroupId })
       .toPromise()
-      .then((result) => {
+      .then((result: { data?: Record<string, unknown> }) => {
         if (!result.data?.sessionGroup) return;
-        const fetchedGroup = result.data.sessionGroup;
+        const fetchedGroup = result.data.sessionGroup as Record<string, unknown> & { id: string; sessions?: unknown[] };
         const existingGroup = useEntityStore.getState().sessionGroups[fetchedGroup.id];
         upsert(
           "sessionGroups",
           fetchedGroup.id,
           existingGroup ? { ...existingGroup, ...fetchedGroup } : fetchedGroup,
         );
-        const fetchedSessions = fetchedGroup.sessions;
+        const fetchedSessions = fetchedGroup.sessions as Array<Record<string, unknown> & { id: string }> | undefined;
         if (Array.isArray(fetchedSessions)) {
           const existingSessions = useEntityStore.getState().sessions;
           upsertMany(
@@ -211,7 +212,7 @@ export function SessionGroupDetailView({
   useEffect(() => {
     if (activeSessionGroupId !== sessionGroupId) return;
     if (sessionsByRecency.length === 0) return;
-    if (activeSessionId && sessionsByRecency.some((s) => s.id === activeSessionId)) return;
+    if (activeSessionId && sessionsByRecency.some((s: SessionEntity) => s.id === activeSessionId)) return;
     setActiveSessionId(sessionsByRecency[0].id);
   }, [activeSessionGroupId, activeSessionId, sessionGroupId, sessionsByRecency, setActiveSessionId]);
 
@@ -234,7 +235,7 @@ export function SessionGroupDetailView({
     const firstSessionId = groupSessions[0]?.id;
     if (!firstSessionId) return;
 
-    const existingGroupTerminals = Object.values(useTerminalStore.getState().terminals).filter(
+    const existingGroupTerminals = (Object.values(useTerminalStore.getState().terminals) as Array<{ sessionGroupId: string }>).filter(
       (t) => t.sessionGroupId === sessionGroupId,
     );
     if (existingGroupTerminals.length > 0) return;
@@ -242,7 +243,7 @@ export function SessionGroupDetailView({
     client
       .query(SESSION_TERMINALS_QUERY, { sessionId: firstSessionId })
       .toPromise()
-      .then((result) => {
+      .then((result: { data?: Record<string, unknown> }) => {
         if (aborted) return;
         const serverTerminals = (result.data?.sessionTerminals as Terminal[] | undefined) ?? [];
         for (const terminal of serverTerminals) {
@@ -313,7 +314,7 @@ export function SessionGroupDetailView({
   }, []);
 
   const handleToggleSidebar = useCallback(() => {
-    setShowSidebar((prev) => {
+    setShowSidebar((prev: boolean) => {
       if (prev) setHighlightCheckpointId(null);
       return !prev;
     });

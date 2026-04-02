@@ -32,7 +32,7 @@ function normalizeThreadRepliers(
   return [
     nextActor,
     ...(existing ?? []).filter(
-      (replier) => `${replier.type}:${replier.id}` !== `${nextActor.type}:${nextActor.id}`,
+      (replier: { type: string; id: string }) => `${replier.type}:${replier.id}` !== `${nextActor.type}:${nextActor.id}`,
     ),
   ].slice(0, 3);
 }
@@ -94,7 +94,7 @@ export function upsertScopedMessageFromEvent(event: Event, scope: MessageScope) 
       const pending = takePendingOptimisticChat(scope.scopeId, event);
       if (pending) {
         const scopeKey = eventScopeKey("chat", scope.scopeId);
-        useEntityStore.setState((state) => {
+        useEntityStore.setState((state: { messages: Record<string, Message>; eventsByScope: Record<string, Record<string, Event>> }) => {
           // Build the message inside the updater so we read the latest state
           const freshExisting = state.messages[messageId] as Message | undefined;
           const msg = buildScopedMessage(scope, event, payload, freshExisting);

@@ -26,7 +26,7 @@ export const ticketColumns: ColDef<TicketRow>[] = [
     field: "status",
     width: 120,
     filter: true,
-    valueFormatter: (params) => ticketStatusLabel[params.value as TicketStatus] ?? params.value,
+    valueFormatter: (params: { value: unknown }) => ticketStatusLabel[params.value as TicketStatus] ?? params.value,
     cellRenderer: (params: ICellRendererParams<TicketRow>) => (
       <TicketStatusCell row={params.data} />
     ),
@@ -39,7 +39,7 @@ export const ticketColumns: ColDef<TicketRow>[] = [
     field: "priority",
     width: 110,
     filter: true,
-    valueFormatter: (params) => ticketPriorityLabel[params.value as Priority] ?? params.value,
+    valueFormatter: (params: { value: unknown }) => ticketPriorityLabel[params.value as Priority] ?? params.value,
     cellRenderer: (params: ICellRendererParams<TicketRow>) => (
       <TicketPriorityCell row={params.data} />
     ),
@@ -49,8 +49,8 @@ export const ticketColumns: ColDef<TicketRow>[] = [
     headerName: "Assignees",
     width: 150,
     filter: true,
-    filterValueGetter: (params) =>
-      (params.data?.assignees ?? []).map((u) => u.name).join(", "),
+    filterValueGetter: (params: { data?: TicketRow }) =>
+      (params.data?.assignees ?? []).map((u: { name: string }) => u.name).join(", "),
     cellRenderer: (params: ICellRendererParams<TicketRow>) => (
       <TicketAssigneesCell row={params.data} />
     ),

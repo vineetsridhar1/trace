@@ -87,7 +87,8 @@ class TerminalService {
           where: { id: { in: terminalSessionIds }, organizationId },
           select: { id: true, hosting: true, createdById: true },
         });
-    const owningSessionMap = new Map(owningSessions.map((item) => [item.id, item]));
+    type OwningSession = { id: string; hosting: string | null; createdById: string };
+    const owningSessionMap = new Map<string, OwningSession>(owningSessions.map((item: OwningSession) => [item.id, item]));
 
     return terminalIds.flatMap((id) => {
       const ownerSessionId = terminalRelay.getSessionId(id) ?? sessionId;

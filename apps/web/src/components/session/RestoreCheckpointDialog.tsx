@@ -49,7 +49,7 @@ export function RestoreCheckpointDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onCancel()}>
+    <Dialog open={open} onOpenChange={(isOpen: boolean) => !isOpen && onCancel()}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -72,7 +72,7 @@ export function RestoreCheckpointDialog({
           <input
             type="checkbox"
             checked={dontShow}
-            onChange={(e) => setDontShow(e.target.checked)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDontShow(e.target.checked)}
             className="rounded border-border"
           />
           Don&apos;t show this again

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
-import { useConnectionStore } from "../stores/connection";
+import { useConnectionStore, type ConnectionState } from "../stores/connection";
 import { CircleDot } from "lucide-react";
 
 type DesktopBridgeStatus = Awaited<ReturnType<NonNullable<Window["trace"]>["getBridgeStatus"]>>;
@@ -9,7 +9,7 @@ const isElectron = typeof window.trace?.getBridgeStatus === "function";
 
 export function ConnectionStatus() {
   const [status, setStatus] = useState<DesktopBridgeStatus | null>(null);
-  const connected = useConnectionStore((s) => s.connected);
+  const connected = useConnectionStore((s: ConnectionState) => s.connected);
 
   useEffect(() => {
     if (!isElectron || !window.trace?.getBridgeStatus || !window.trace?.onBridgeStatus) return;

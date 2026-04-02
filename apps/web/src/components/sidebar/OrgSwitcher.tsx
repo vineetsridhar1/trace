@@ -1,15 +1,15 @@
 import { ChevronDown, Check } from "lucide-react";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore, type OrgMembership } from "../../stores/auth";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { getInitials } from "../../lib/utils";
 
 export function OrgSwitcher({ large }: { large?: boolean }) {
-  const orgMemberships = useAuthStore((s) => s.orgMemberships);
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const setActiveOrg = useAuthStore((s) => s.setActiveOrg);
+  const orgMemberships = useAuthStore((s: { orgMemberships: OrgMembership[] }) => s.orgMemberships);
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
+  const setActiveOrg = useAuthStore((s: { setActiveOrg: (orgId: string) => void }) => s.setActiveOrg);
 
-  const activeOrg = orgMemberships.find((m) => m.organizationId === activeOrgId)?.organization;
-  const orgList = orgMemberships.map((m) => m.organization);
+  const activeOrg = orgMemberships.find((m: OrgMembership) => m.organizationId === activeOrgId)?.organization;
+  const orgList = orgMemberships.map((m: OrgMembership) => m.organization);
 
   return (
     <Popover>
@@ -30,7 +30,7 @@ export function OrgSwitcher({ large }: { large?: boolean }) {
       </PopoverTrigger>
       <PopoverContent side="bottom" align="center" sideOffset={4} className="!w-56 gap-0 p-1.5">
         <p className="px-2 py-1 text-xs font-medium text-muted-foreground">Switch server</p>
-        {orgList.map((org) => (
+        {orgList.map((org: { id: string; name: string }) => (
           <button
             key={org.id}
             onClick={() => setActiveOrg(org.id)}

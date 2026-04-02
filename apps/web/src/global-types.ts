@@ -1,6 +1,15 @@
-/// <reference types="vite/client" />
-
 declare global {
+  interface ImportMetaEnv {
+    readonly DEV?: boolean;
+    readonly VITE_API_URL?: string;
+    readonly VITE_WS_URL?: string;
+    readonly VITE_AG_GRID_LICENSE_KEY?: string;
+  }
+
+  interface ImportMeta {
+    readonly env: ImportMetaEnv;
+  }
+
   type DesktopBridgeConnectionStatus = "connecting" | "connected" | "disconnected";
   type DesktopGitHookState = "not_installed" | "trace_managed" | "custom_present" | "chained" | "error";
 

@@ -24,7 +24,7 @@ export const ChannelItem = memo(function ChannelItem({
 }) {
   const name = useEntityField("channels", id, "name");
   const type = useEntityField("channels", id, "type");
-  const hasDoneBadge = useUIStore((s) => !!s.channelDoneBadges[id]);
+  const hasDoneBadge = useUIStore((s: { channelDoneBadges: Record<string, boolean> }) => !!s.channelDoneBadges[id]);
 
   const sortableData = useMemo(
     () => ({ type: "channel" as const, id, groupId: groupId ?? null }),

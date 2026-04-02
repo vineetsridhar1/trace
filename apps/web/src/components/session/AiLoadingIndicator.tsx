@@ -22,7 +22,7 @@ export function AiLoadingIndicator({ model, startedAt }: AiLoadingIndicatorProps
       if (startedAt) {
         setElapsed(Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000)));
       } else {
-        setElapsed((s) => s + 1);
+        setElapsed((prev: number) => prev + 1);
       }
     }, 1000);
     return () => clearInterval(interval);

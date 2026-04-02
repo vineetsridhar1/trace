@@ -3,7 +3,7 @@ import { Hash, Pencil } from "lucide-react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
 import { useEntityField } from "../../stores/entity";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "../../stores/auth";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { SidebarTrigger } from "../ui/sidebar";
 import { AddMemberDialog } from "./AddMemberDialog";
@@ -23,7 +23,7 @@ export function ChatHeader({ chatId }: { chatId: string }) {
   const members = useEntityField("chats", chatId, "members") as
     | Array<{ user: { id: string; name: string; avatarUrl?: string } }>
     | undefined;
-  const currentUserId = useAuthStore((s) => s.user?.id);
+  const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
 
   const otherMember = members?.find((member) => member.user.id !== currentUserId);
   const displayName = name ?? (type === "dm" ? (otherMember?.user.name ?? "Direct Message") : "Group Chat");
@@ -94,7 +94,7 @@ export function ChatHeader({ chatId }: { chatId: string }) {
             <input
               ref={inputRef}
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
               onBlur={handleSubmit}
               onKeyDown={handleKeyDown}
               className="h-7 rounded border border-border bg-surface-elevated px-2 text-lg font-bold text-foreground outline-none focus:border-ring"

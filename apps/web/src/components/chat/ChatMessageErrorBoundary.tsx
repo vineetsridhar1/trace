@@ -9,6 +9,7 @@ interface State {
 }
 
 export class ChatMessageErrorBoundary extends Component<Props, State> {
+  declare props: Readonly<Props>;
   state: State = { hasError: false };
 
   static getDerivedStateFromError(): State {

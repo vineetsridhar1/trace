@@ -101,8 +101,8 @@ class TerminalRelay {
           where: { id: { in: sessionIds } },
           select: { id: true, sessionGroupId: true },
         });
-    const sessionGroupIds = new Map(
-      sessions.map((session) => [session.id, session.sessionGroupId ?? null]),
+    const sessionGroupIds = new Map<string, string | null>(
+      sessions.map((session: { id: string; sessionGroupId: string | null }) => [session.id, session.sessionGroupId ?? null]),
     );
 
     for (const { terminalId, sessionId } of terminals) {

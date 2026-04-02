@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ArrowLeft, Activity, DollarSign, Settings, List } from "lucide-react";
-import { useUIStore } from "../../stores/ui";
+import { useUIStore, type UIState } from "../../stores/ui";
 import { Button } from "../ui/button";
 import { ExecutionLogTab } from "./ExecutionLogTab";
 import { CostDashboardTab } from "./CostDashboardTab";
@@ -16,7 +16,7 @@ const TABS: Array<{ id: DebugTab; label: string; icon: typeof Activity }> = [
 ];
 
 export function AgentDebugPage() {
-  const setActivePage = useUIStore((s) => s.setActivePage);
+  const setActivePage = useUIStore((s: UIState) => s.setActivePage);
   const [activeTab, setActiveTab] = useState<DebugTab>("executions");
 
   return (

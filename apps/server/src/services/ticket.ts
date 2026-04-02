@@ -1,4 +1,5 @@
 import type { CreateTicketInput, UpdateTicketInput, ActorType, EntityType } from "@trace/gql";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 
@@ -44,7 +45,7 @@ export class TicketService {
   }
 
   async create(input: CreateTicketServiceInput) {
-    const [ticket] = await prisma.$transaction(async (tx) => {
+    const [ticket] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const ticket = await tx.ticket.create({
         data: {
           title: input.title,
@@ -59,7 +60,7 @@ export class TicketService {
           }),
           ...(input.assigneeIds?.length && {
             assignees: {
-              create: input.assigneeIds.map((userId) => ({ userId })),
+              create: input.assigneeIds.map((userId: string) => ({ userId })),
             },
           }),
         },
@@ -144,7 +145,7 @@ export class TicketService {
     actorType: ActorType;
     actorId: string;
   }) {
-    const ticket = await prisma.$transaction(async (tx) => {
+    const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.ticketAssignee.create({
         data: { ticketId, userId },
       });
@@ -176,7 +177,7 @@ export class TicketService {
     actorType: ActorType;
     actorId: string;
   }) {
-    const ticket = await prisma.$transaction(async (tx) => {
+    const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.ticketAssignee.delete({
         where: { ticketId_userId: { ticketId, userId } },
       });
@@ -209,7 +210,7 @@ export class TicketService {
     actorType: ActorType;
     actorId: string;
   }) {
-    const ticket = await prisma.$transaction(async (tx) => {
+    const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.ticketLink.create({
         data: { ticketId, entityType, entityId },
       });
@@ -242,7 +243,7 @@ export class TicketService {
     actorType: ActorType;
     actorId: string;
   }) {
-    const ticket = await prisma.$transaction(async (tx) => {
+    const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.ticketLink.delete({
         where: {
           ticketId_entityType_entityId: { ticketId, entityType, entityId },

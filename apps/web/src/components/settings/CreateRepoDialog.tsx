@@ -41,7 +41,7 @@ export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
   // Manual fallback fields (browser only)
   const [manualName, setManualName] = useState("");
   const [manualRemoteUrl, setManualRemoteUrl] = useState("");
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const isMobile = useIsMobile();
 
   async function handlePickFolder() {
@@ -166,7 +166,7 @@ export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
                 </label>
                 <Input
                   value={manualName}
-                  onChange={(e) => setManualName(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setManualName(e.target.value)}
                   placeholder="e.g. api-server"
                   autoFocus={!isMobile}
                 />
@@ -175,7 +175,7 @@ export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
                 <label className="mb-1.5 block text-sm text-muted-foreground">Remote URL</label>
                 <Input
                   value={manualRemoteUrl}
-                  onChange={(e) => setManualRemoteUrl(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setManualRemoteUrl(e.target.value)}
                   placeholder="e.g. git@github.com:org/repo.git"
                 />
               </div>

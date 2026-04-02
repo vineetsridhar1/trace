@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import type { Actor } from "@trace/gql";
 import { useMessageField } from "../../stores/entity";
-import { useAuthStore } from "../../stores/auth";
-import { useUIStore } from "../../stores/ui";
+import { useAuthStore, type AuthState } from "../../stores/auth";
+import { useUIStore, type UIState } from "../../stores/ui";
 import { client } from "../../lib/urql";
 import {
   DELETE_CHAT_MESSAGE_MUTATION,
@@ -38,8 +38,8 @@ export function ChatMessage({
   const deletedAt = useMessageField(messageId, "deletedAt");
   const editedAt = useMessageField(messageId, "editedAt");
   const channelId = useMessageField(messageId, "channelId");
-  const currentUserId = useAuthStore((s) => s.user?.id);
-  const setActiveThreadId = useUIStore((s) => s.setActiveThreadId);
+  const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
+  const setActiveThreadId = useUIStore((s: UIState) => s.setActiveThreadId);
   const isMobile = useIsMobile();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState(false);

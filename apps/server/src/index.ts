@@ -7,8 +7,10 @@ import cookieParser from "cookie-parser";
 import { createServer } from "http";
 import { readFileSync } from "fs";
 import { createRequire } from "module";
-import { WebSocketServer } from "ws";
+import { WebSocketServer, type WebSocket } from "ws";
 import { useServer } from "graphql-ws/lib/use/ws";
+import type { IncomingMessage } from "http";
+import type { Duplex } from "stream";
 import { makeExecutableSchema } from "@graphql-tools/schema";
 import { resolvers } from "./schema/resolvers.js";
 import type { Context } from "./context.js";
@@ -36,7 +38,7 @@ async function main() {
   const PORT = Number(process.env.PORT) || 4000 + Number(process.env.TRACE_PORT || 0);
   let startupReady = false;
 
-  app.get("/health", (_req, res) => {
+  app.get("/health", (_req: express.Request, res: express.Response) => {
     res.json({ status: "ok", ready: startupReady });
   });
 
@@ -63,7 +65,7 @@ async function main() {
   const wsServerCleanup = useServer(
     {
       schema,
-      onConnect: async (ctx) => {
+      onConnect: async (ctx: { connectionParams?: Readonly<Record<string, unknown>>; extra: Record<string, unknown> & { request?: { headers: { cookie?: string } } } }) => {
         try {
           const context = await buildWsContext(
             ctx.connectionParams as Record<string, unknown> | undefined,
@@ -76,7 +78,7 @@ async function main() {
           return false;
         }
       },
-      context: async (ctx) => {
+      context: async (ctx: { extra: Record<string, unknown> }) => {
         return (ctx.extra as Record<string, unknown>).__context as Context;
       },
     },
@@ -114,11 +116,11 @@ async function main() {
   }, 5_000);
 
   // Route WebSocket upgrades by path
-  httpServer.on("upgrade", (req, socket, head) => {
+  httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const { pathname } = new URL(req.url ?? "", "http://localhost");
 
     if (pathname === "/ws") {
-      wsServer.handleUpgrade(req, socket, head, (ws) => {
+      wsServer.handleUpgrade(req, socket, head, (ws: WebSocket) => {
         wsServer.emit("connection", ws, req);
       });
     } else if (pathname === "/bridge") {
@@ -133,13 +135,13 @@ async function main() {
           return;
         }
 
-        bridgeWss.handleUpgrade(req, socket, head, (ws) => {
+        bridgeWss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
           bridgeWss.emit("connection", ws, req);
         });
       };
       validateAndUpgrade().catch(() => socket.destroy());
     } else if (pathname === "/terminal") {
-      terminalWss.handleUpgrade(req, socket, head, (ws) => {
+      terminalWss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
         terminalWss.emit("connection", ws, req);
       });
     } else {

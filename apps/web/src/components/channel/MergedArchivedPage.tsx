@@ -8,13 +8,13 @@ import type {
 } from "ag-grid-community";
 import type { SessionGroup } from "@trace/gql";
 import { client } from "../../lib/urql";
-import { useEntityStore } from "../../stores/entity";
+import { useEntityStore, type EntityState } from "../../stores/entity";
 import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
-import { useUIStore } from "../../stores/ui";
+import { useUIStore, type UIState } from "../../stores/ui";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
 import { DeleteSessionGroupDialog } from "../session/DeleteSessionGroupDialog";
-import { createTable } from "../ui/table";
+import { createTable, type TableState } from "../ui/table";
 import { sessionColumns, applySessionsColumnMode } from "./sessions-table-columns";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { FILTER_STORAGE_KEY_PREFIX } from "./sessions-table-types";
@@ -82,8 +82,8 @@ function TabTable({
   tab: Tab;
   active: boolean;
 }) {
-  const upsertMany = useEntityStore((s) => s.upsertMany);
-  const activeSessionGroupId = useUIStore((s) => s.activeSessionGroupId);
+  const upsertMany = useEntityStore((s: EntityState) => s.upsertMany);
+  const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
   const rows = useSessionGroupRows(
     channelId,
     tab === "merged" ? { status: "merged" } : { archived: true },
@@ -95,8 +95,8 @@ function TabTable({
     name: string;
     sessionCount: number;
   } | null>(null);
-  const setMergedRows = useMergedTable((s) => s.setRows);
-  const setArchivedRows = useArchivedTable((s) => s.setRows);
+  const setMergedRows = useMergedTable((s: TableState<SessionGroupRow>) => s.setRows);
+  const setArchivedRows = useArchivedTable((s: TableState<SessionGroupRow>) => s.setRows);
   const setRows = tab === "merged" ? setMergedRows : setArchivedRows;
   const GridTable = tab === "merged" ? MergedGridTable : ArchivedGridTable;
   const queryKey = `${channelId}:${tab}`;

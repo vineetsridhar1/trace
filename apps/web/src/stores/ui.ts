@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { useEntityStore } from "./entity";
+import type { SessionEntity } from "./entity";
 import {
   buildPath as buildPathInternal,
   persistActiveChannelId,
@@ -29,7 +30,7 @@ function optimisticSessionRedirectKey(sessionGroupId: string, sessionId: string)
   return `${sessionGroupId}:${sessionId}`;
 }
 
-interface UIState {
+export interface UIState {
   activePage: ActivePage;
   setActivePage: (page: ActivePage) => void;
   activeChannelId: string | null;
@@ -83,7 +84,10 @@ export function buildPath(
   return buildPathInternal(channelId, sessionGroupId, sessionId, page, chatId);
 }
 
-export const useUIStore = create<UIState>((set, get) => ({
+type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
+type GetState<T> = () => T;
+
+export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState<UIState>) => ({
   activePage: "main",
   activeChannelId: null,
   activeChatId: null,
@@ -95,7 +99,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   lastSelectedSessionIdsByGroup: {},
   openSessionTabsByGroup: {},
   channelSubPage: null,
-  setChannelSubPage: (subPage) => {
+  setChannelSubPage: (subPage: ChannelSubPage) => {
     set({ channelSubPage: subPage });
     const state = get();
     replaceNav(
@@ -111,12 +115,12 @@ export const useUIStore = create<UIState>((set, get) => ({
   channelDoneBadges: {},
   sessionDoneBadges: {},
   sessionGroupDoneBadges: {},
-  triggerRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
+  triggerRefresh: () => set((s: UIState) => ({ refreshTick: s.refreshTick + 1 })),
 
-  openSessionTab: (groupId, sessionId) => {
-    set((s) => {
+  openSessionTab: (groupId: string, sessionId: string) => {
+    set((s: UIState) => {
       const existing = s.openSessionTabsByGroup[groupId] ?? [];
-      if (existing.includes(sessionId)) return s;
+      if (existing.includes(sessionId)) return {};
       return {
         openSessionTabsByGroup: {
           ...s.openSessionTabsByGroup,
@@ -126,13 +130,13 @@ export const useUIStore = create<UIState>((set, get) => ({
     });
   },
 
-  closeSessionTab: (groupId, sessionId) => {
+  closeSessionTab: (groupId: string, sessionId: string) => {
     const state = get();
     const existing = state.openSessionTabsByGroup[groupId] ?? [];
     if (existing.length <= 1) return;
     const idx = existing.indexOf(sessionId);
     if (idx === -1) return;
-    const next = existing.filter((id) => id !== sessionId);
+    const next = existing.filter((id: string) => id !== sessionId);
     const updates: Partial<UIState> = {
       openSessionTabsByGroup: {
         ...state.openSessionTabsByGroup,
@@ -154,9 +158,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     set(updates);
   },
 
-  initSessionTabs: (groupId, sessionIds) => {
-    set((s) => {
-      if (s.openSessionTabsByGroup[groupId]) return s;
+  initSessionTabs: (groupId: string, sessionIds: string[]) => {
+    set((s: UIState) => {
+      if (s.openSessionTabsByGroup[groupId]) return {};
       return {
         openSessionTabsByGroup: {
           ...s.openSessionTabsByGroup,
@@ -166,7 +170,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     });
   },
 
-  setActivePage: (page) => {
+  setActivePage: (page: ActivePage) => {
     set({ activePage: page, channelSubPage: null });
     if (page === "settings") {
       pushNav(null, null, null, "settings");
@@ -191,9 +195,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     );
   },
 
-  setActiveChannelId: (id) => {
+  setActiveChannelId: (id: string | null) => {
     persistActiveChannelId(id);
-    set((s) => {
+    set((s: UIState) => {
       let channelDoneBadges = s.channelDoneBadges;
       if (id && channelDoneBadges[id]) {
         const { [id]: _, ...rest } = channelDoneBadges;
@@ -214,45 +218,45 @@ export const useUIStore = create<UIState>((set, get) => ({
     pushNav(id, null, null);
   },
 
-  markChatUnread: (chatId) => {
-    set((s) => {
-      if (s.unreadChatIds[chatId]) return s;
+  markChatUnread: (chatId: string) => {
+    set((s: UIState) => {
+      if (s.unreadChatIds[chatId]) return {};
       return { unreadChatIds: { ...s.unreadChatIds, [chatId]: true } };
     });
   },
 
-  markChatRead: (chatId) => {
-    set((s) => {
-      if (!s.unreadChatIds[chatId]) return s;
+  markChatRead: (chatId: string) => {
+    set((s: UIState) => {
+      if (!s.unreadChatIds[chatId]) return {};
       const { [chatId]: _, ...rest } = s.unreadChatIds;
       return { unreadChatIds: rest };
     });
   },
 
-  markChannelDone: (channelId) => {
-    set((s) => {
-      if (s.channelDoneBadges[channelId]) return s;
+  markChannelDone: (channelId: string) => {
+    set((s: UIState) => {
+      if (s.channelDoneBadges[channelId]) return {};
       return { channelDoneBadges: { ...s.channelDoneBadges, [channelId]: true } };
     });
   },
 
-  markSessionDone: (sessionId) => {
-    set((s) => {
-      if (s.sessionDoneBadges[sessionId]) return s;
+  markSessionDone: (sessionId: string) => {
+    set((s: UIState) => {
+      if (s.sessionDoneBadges[sessionId]) return {};
       return { sessionDoneBadges: { ...s.sessionDoneBadges, [sessionId]: true } };
     });
   },
 
-  markSessionGroupDone: (sessionGroupId) => {
-    set((s) => {
-      if (s.sessionGroupDoneBadges[sessionGroupId]) return s;
+  markSessionGroupDone: (sessionGroupId: string) => {
+    set((s: UIState) => {
+      if (s.sessionGroupDoneBadges[sessionGroupId]) return {};
       return { sessionGroupDoneBadges: { ...s.sessionGroupDoneBadges, [sessionGroupId]: true } };
     });
   },
 
-  setActiveChatId: (id) => {
+  setActiveChatId: (id: string | null) => {
     persistActiveChatId(id);
-    set((s) => {
+    set((s: UIState) => {
       let unreadChatIds = s.unreadChatIds;
       if (id && unreadChatIds[id]) {
         const { [id]: _, ...rest } = unreadChatIds;
@@ -273,7 +277,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     pushNav(null, null, null, "main", id);
   },
 
-  setActiveSessionGroupId: (groupId, sessionId) => {
+  setActiveSessionGroupId: (groupId: string | null, sessionId?: string | null) => {
     const currentChannelId = get().activeChannelId;
     const currentSubPage = get().channelSubPage;
     if (groupId === null) {
@@ -296,7 +300,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     const nextSubPage = channelId === currentChannelId ? currentSubPage : null;
     persistActiveChannelId(channelId);
     persistActiveSessionNav(groupId, nextSessionId);
-    set((state) => {
+    set((state: UIState) => {
       let channelDoneBadges = state.channelDoneBadges;
       if (channelId && channelDoneBadges[channelId]) {
         const { [channelId]: _, ...rest } = channelDoneBadges;
@@ -331,7 +335,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     pushNav(channelId, groupId, nextSessionId, "main", null, nextSubPage);
   },
 
-  setActiveSessionId: (id) => {
+  setActiveSessionId: (id: string | null) => {
     const currentChannelId = get().activeChannelId;
     const currentSessionGroupId = get().activeSessionGroupId;
     const currentSubPage = get().channelSubPage;
@@ -358,7 +362,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     // so browser back goes to the sessions table instead of the previous tab
     const stayingInGroup =
       sessionGroupId === currentSessionGroupId && currentSessionGroupId !== null;
-    set((state) => {
+    set((state: UIState) => {
       let sessionDoneBadges = state.sessionDoneBadges;
       if (sessionDoneBadges[id]) {
         const { [id]: _, ...rest } = sessionDoneBadges;
@@ -383,15 +387,15 @@ export const useUIStore = create<UIState>((set, get) => ({
     }
   },
 
-  setActiveTerminalId: (id) => {
+  setActiveTerminalId: (id: string | null) => {
     set({ activeTerminalId: id });
   },
 
-  setActiveThreadId: (id) => {
+  setActiveThreadId: (id: string | null) => {
     set({ activeThreadId: id });
   },
 
-  restoreLastVisited: (tab) => {
+  restoreLastVisited: (tab: "dm" | "main") => {
     if (tab === "dm") {
       const chatId = localStorage.getItem("trace:activeChatId");
       if (chatId) get().setActiveChatId(chatId);
@@ -407,7 +411,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       if (channelId || sessionGroupId) {
         // Set Zustand state directly — don't re-persist to localStorage
         // since we're reading from it and don't want cross-tab clearing
-        set((state) => ({
+        set((state: UIState) => ({
           activePage: "main" as ActivePage,
           activeChannelId: channelId,
           activeSessionGroupId: sessionGroupId,
@@ -426,11 +430,11 @@ export const useUIStore = create<UIState>((set, get) => ({
     }
   },
 
-  _restoreNav: (channelId, sessionGroupId, sessionId, page, chatId, channelSubPage) => {
+  _restoreNav: (channelId: string | null, sessionGroupId: string | null, sessionId: string | null, page?: ActivePage, chatId?: string | null, channelSubPage?: ChannelSubPage) => {
     persistActiveChannelId(channelId);
     if (chatId) persistActiveChatId(chatId);
     if (page === "main" && !chatId) persistActiveSessionNav(sessionGroupId, sessionId);
-    set((state) => {
+    set((state: UIState) => {
       let channelDoneBadges = state.channelDoneBadges;
       if (channelId && channelDoneBadges[channelId]) {
         const { [channelId]: _, ...rest } = channelDoneBadges;
@@ -482,9 +486,9 @@ export function getPreferredSessionIdForGroup(
   if (fallbackSessionId) return fallbackSessionId;
 
   // Fall through to the most recent session in the group
-  const mostRecent = Object.values(useEntityStore.getState().sessions)
-    .filter((s) => s.sessionGroupId === sessionGroupId)
-    .sort((a, b) => {
+  const mostRecent = (Object.values(useEntityStore.getState().sessions) as SessionEntity[])
+    .filter((s: SessionEntity) => s.sessionGroupId === sessionGroupId)
+    .sort((a: SessionEntity, b: SessionEntity) => {
       const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       if (diff !== 0) return diff;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();

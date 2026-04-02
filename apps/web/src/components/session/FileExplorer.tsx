@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import { Loader2, RefreshCw } from "lucide-react";
 import { client } from "../../lib/urql";
-import { buildTree } from "./file-explorer-utils";
+import { buildTree, type FileTreeNode } from "./file-explorer-utils";
 import { FileTreeItem } from "./FileTreeItem";
 
 const SESSION_GROUP_FILES_QUERY = gql`
@@ -66,7 +66,7 @@ export function FileExplorer({
   }, [tree]);
 
   const handleToggle = useCallback((path: string) => {
-    setExpandedPaths((prev) => {
+    setExpandedPaths((prev: Set<string>) => {
       const next = new Set(prev);
       if (next.has(path)) {
         next.delete(path);
@@ -123,7 +123,7 @@ export function FileExplorer({
         </button>
       </div>
       <div className="native-scrollbar min-h-0 flex-1 overflow-y-auto py-0.5">
-        {tree.map((node) => (
+        {tree.map((node: FileTreeNode) => (
           <FileTreeItem
             key={node.path}
             node={node}

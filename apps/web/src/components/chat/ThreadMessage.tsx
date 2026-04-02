@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { useMessageField } from "../../stores/entity";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "../../stores/auth";
 import { client } from "../../lib/urql";
 import {
   DELETE_CHAT_MESSAGE_MUTATION,
@@ -18,7 +18,7 @@ import { MessageActionsSheet } from "./MessageActionsSheet";
 import { InlineMessageEditor } from "./InlineMessageEditor";
 import { textToEditorHtml } from "./message-utils";
 
-export function ThreadMessage({ messageId }: { messageId: string }) {
+export function ThreadMessage({ messageId }: { key?: string | number; messageId: string }) {
   const text = useMessageField(messageId, "text");
   const html = useMessageField(messageId, "html");
   const actor = useMessageField(messageId, "actor");
@@ -26,7 +26,7 @@ export function ThreadMessage({ messageId }: { messageId: string }) {
   const deletedAt = useMessageField(messageId, "deletedAt");
   const editedAt = useMessageField(messageId, "editedAt");
   const channelId = useMessageField(messageId, "channelId");
-  const currentUserId = useAuthStore((s) => s.user?.id);
+  const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
   const isMobile = useIsMobile();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState(false);

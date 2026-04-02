@@ -13,7 +13,7 @@ import { RepoDesktopSection } from "./RepoDesktopSection";
 
 const isElectron = typeof window.trace?.getRepoConfig === "function";
 
-export function RepoCard({ id, desktopRefreshKey }: { id: string; desktopRefreshKey?: number }) {
+export function RepoCard({ id, desktopRefreshKey }: { key?: React.Key; id: string; desktopRefreshKey?: number }) {
   const name = useEntityField("repos", id, "name");
   const remoteUrl = useEntityField("repos", id, "remoteUrl");
   const defaultBranch = useEntityField("repos", id, "defaultBranch");

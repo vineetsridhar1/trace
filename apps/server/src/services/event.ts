@@ -178,7 +178,7 @@ export class EventService {
     const streamKey = `stream:org:${organizationId}:events`;
     redis
       .xadd(streamKey, "*", "event", JSON.stringify(event))
-      .catch((err) => {
+      .catch((err: Error) => {
         console.error(`[event-service] XADD to ${streamKey} failed:`, err.message);
       });
   }

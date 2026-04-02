@@ -1,5 +1,5 @@
 import { HelpCircle } from "lucide-react";
-import type { Question } from "@trace/shared";
+import type { Question, QuestionOption } from "@trace/shared";
 import { formatTime } from "./utils";
 
 interface AskUserQuestionInlineProps {
@@ -27,7 +27,7 @@ export function AskUserQuestionInline({ questions, timestamp }: AskUserQuestionI
             <div className="mt-0.5 text-sm text-foreground">{q.question}</div>
             {q.options.length > 0 && (
               <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {q.options.map((opt) => (
+                {q.options.map((opt: QuestionOption) => (
                   <span
                     key={opt.label}
                     title={opt.description}

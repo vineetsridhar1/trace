@@ -32,7 +32,7 @@ export function BranchCombobox({ repoId, runtimeInstanceId, value, onChange }: B
     client
       .query(REPO_BRANCHES_QUERY, { repoId, runtimeInstanceId: runtimeInstanceId ?? null })
       .toPromise()
-      .then((result) => {
+      .then((result: { error?: unknown; data?: { repoBranches?: string[] } }) => {
         if (result.error) {
           setBranches([]);
           setError("Could not load branches");
@@ -48,7 +48,7 @@ export function BranchCombobox({ repoId, runtimeInstanceId, value, onChange }: B
   }, [open, runtimeInstanceId, repoId]);
 
   const filtered = search
-    ? branches.filter((b) => b.toLowerCase().includes(search.toLowerCase()))
+    ? branches.filter((b: string) => b.toLowerCase().includes(search.toLowerCase()))
     : branches;
 
   const displayValue = value || defaultBranch || "main";
@@ -70,7 +70,7 @@ export function BranchCombobox({ repoId, runtimeInstanceId, value, onChange }: B
           <input
             ref={inputRef}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
             placeholder="Search branches..."
             className="flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground"
           />
@@ -85,7 +85,7 @@ export function BranchCombobox({ repoId, runtimeInstanceId, value, onChange }: B
               {branches.length === 0 ? "No branches found" : "No matches"}
             </p>
           )}
-          {filtered.map((branch) => (
+          {filtered.map((branch: string) => (
             <button
               key={branch}
               type="button"

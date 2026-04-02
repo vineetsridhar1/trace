@@ -6,6 +6,7 @@ import {
   useEntitiesByIds,
   useEntityField,
   useSessionIdsByGroup,
+  type SessionEntity,
 } from "../../stores/entity";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
@@ -17,7 +18,7 @@ interface SessionHistoryProps {
 }
 
 export function SessionHistory({ sessionId }: SessionHistoryProps) {
-  const openSessionTab = useUIStore((s) => s.openSessionTab);
+  const openSessionTab = useUIStore((s: { openSessionTab: (groupId: string, sessionId: string) => void }) => s.openSessionTab);
   const [creatingFromId, setCreatingFromId] = useState<string | null>(null);
 
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
@@ -41,7 +42,7 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
   }, [sessionGroupId, groupSessionEntities]);
 
   const sessionsById = useMemo(
-    () => new Map(groupSessions.map((entry) => [entry.id, entry])),
+    () => new Map(groupSessions.map((entry: SessionEntity) => [entry.id, entry])),
     [groupSessions],
   );
 
@@ -105,7 +106,7 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
       <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         Sessions
       </div>
-      {groupSessions.map((entry) => {
+      {groupSessions.map((entry: SessionEntity) => {
         const displayAgentStatus = getDisplayAgentStatus(entry.agentStatus, entry.sessionStatus);
         const color = agentStatusColor[displayAgentStatus] ?? "text-muted-foreground";
 

@@ -16,7 +16,7 @@ export function UserProfileChatCard({
   fallbackAvatarUrl,
   children,
 }: UserProfileChatCardProps) {
-  const currentUserId = useAuthStore((s) => s.user?.id);
+  const currentUserId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
 
   return (
     <UserProfileCard

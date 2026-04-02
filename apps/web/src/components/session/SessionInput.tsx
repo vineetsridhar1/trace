@@ -36,7 +36,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
   const [hasContent, setHasContent] = useState(false);
   const [sending, setSending] = useState(false);
-  const [mode, setMode] = useState<InteractionMode>("code");
+  const [mode, setMode] = useState<"code" | "plan" | "ask">("code");
   const editorRef = useRef<ChatEditorHandle>(null);
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
@@ -51,7 +51,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   const slashCommands = useSlashCommands(sessionId);
 
   const cycleMode = useCallback(() => {
-    setMode((prev) => {
+    setMode((prev: InteractionMode) => {
       const idx = MODE_CYCLE.indexOf(prev);
       return MODE_CYCLE[(idx + 1) % MODE_CYCLE.length];
     });
@@ -126,7 +126,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     <div
       className={cn(
         "shrink-0 border-t px-4 py-3 transition-colors",
-        MODE_CONFIG[mode].containerBorder,
+        MODE_CONFIG[mode as InteractionMode].containerBorder,
       )}
     >
       <div className="flex items-center gap-2">
@@ -134,11 +134,11 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
           <Tooltip>
             <TooltipTrigger className="flex items-center text-muted-foreground">
               {hosting === "cloud" ? (
-                <Cloud size={14} className={cn("transition-colors", MODE_CONFIG[mode].iconColor)} />
+                <Cloud size={14} className={cn("transition-colors", MODE_CONFIG[mode as InteractionMode].iconColor)} />
               ) : (
                 <Monitor
                   size={14}
-                  className={cn("transition-colors", MODE_CONFIG[mode].iconColor)}
+                  className={cn("transition-colors", MODE_CONFIG[mode as InteractionMode].iconColor)}
                 />
               )}
             </TooltipTrigger>
@@ -154,7 +154,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
         <div
           className={cn(
             "flex-1 rounded-lg border bg-surface-deep transition-colors",
-            MODE_CONFIG[mode].inputBorder,
+            MODE_CONFIG[mode as InteractionMode].inputBorder,
           )}
         >
           <div className="session-editor">
@@ -165,7 +165,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
               disabled={!canSend || sending}
               slashCommands={slashCommands.commands}
               onShiftTab={cycleMode}
-              onChange={(text) => {
+              onChange={(text: string) => {
                 setHasContent(text.trim().length > 0);
               }}
             />
@@ -185,7 +185,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
             disabled={!hasContent || sending || !canSend}
             className={cn(
               "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
-              MODE_CONFIG[mode].sendButton,
+              MODE_CONFIG[mode as InteractionMode].sendButton,
             )}
           >
             <Send size={16} />

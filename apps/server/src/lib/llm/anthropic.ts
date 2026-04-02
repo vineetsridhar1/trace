@@ -8,6 +8,7 @@ import type {
   LLMStreamEvent,
   LLMContentBlock,
   LLMMessage,
+  LLMToolDefinition,
 } from "@trace/shared";
 
 type AnthropicMessage = Anthropic.MessageParam;
@@ -99,7 +100,7 @@ function toAnthropicMessages(messages: LLMMessage[]): AnthropicMessage[] {
 
 function toAnthropicTools(tools: LLMRequestOptions["tools"]): AnthropicTool[] | undefined {
   if (!tools?.length) return undefined;
-  return tools.map((t) => ({
+  return tools.map((t: LLMToolDefinition) => ({
     name: t.name,
     description: t.description,
     input_schema: t.inputSchema as Anthropic.Tool["input_schema"],

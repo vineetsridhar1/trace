@@ -47,7 +47,7 @@ function CollapsibleSection({
   );
 }
 
-function MessageCard({ message }: { message: Record<string, unknown> }) {
+function MessageCard({ message }: { key?: string | number; message: Record<string, unknown> }) {
   const role = String(message.role ?? "unknown");
   const roleColor =
     role === "assistant"

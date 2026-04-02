@@ -220,6 +220,9 @@ type SessionGroupSnapshot = SessionGroupSummary & {
   status: DerivedSessionGroupStatus;
 };
 
+/** A session row with the fields needed by both SessionGroupStatusSource and sortSessionsByRecency. */
+type SessionWithTimestamps = SessionGroupStatusSource & { updatedAt: Date; createdAt: Date };
+
 const INVALID_FILE_PATH_ERROR = "Invalid file path";
 const LOCAL_FILE_ACCESS_DENIED_ERROR =
   "Access denied: you can only access files on your own local sessions";
@@ -614,24 +617,30 @@ export class SessionService {
       include: SESSION_GROUP_INCLUDE,
     });
 
-    const mapped = groups.map((group) => {
-      const sessions = sortSessionsByRecency(group.sessions);
+    type SessionGroupWithSessions = SessionGroupSummary & {
+      sessions: SessionWithTimestamps[];
+    };
+
+    const mapped = (groups as SessionGroupWithSessions[]).map((group) => {
+      const sessions = sortSessionsByRecency<SessionWithTimestamps>(group.sessions);
       return {
         ...buildSessionGroupSnapshot(group, sessions),
         sessions,
       };
     });
 
+    type MappedGroup = (typeof mapped)[number];
+
     // Post-query filter for derived status (computed from child sessions)
     let filtered = mapped;
     if (options?.status) {
-      filtered = mapped.filter((g) => g.status === options.status);
+      filtered = mapped.filter((g: MappedGroup) => g.status === options.status);
     } else if (!shouldIncludeArchived) {
       // Default main table: exclude merged groups (server-side)
-      filtered = mapped.filter((g) => g.status !== "merged");
+      filtered = mapped.filter((g: MappedGroup) => g.status !== "merged");
     }
 
-    return filtered.sort((a, b) => {
+    return filtered.sort((a: MappedGroup, b: MappedGroup) => {
       const aLatest = a.sessions[0];
       const bLatest = b.sessions[0];
       const aTs = aLatest?.updatedAt ?? a.updatedAt;
@@ -647,9 +656,12 @@ export class SessionService {
     });
 
     if (!group) return null;
-    const sessions = sortSessionsByRecency(group.sessions);
+    const typedGroup = group as SessionGroupSummary & {
+      sessions: SessionWithTimestamps[];
+    };
+    const sessions = sortSessionsByRecency<SessionWithTimestamps>(typedGroup.sessions);
     return {
-      ...buildSessionGroupSnapshot(group, sessions),
+      ...buildSessionGroupSnapshot(typedGroup, sessions),
       sessions,
     };
   }
@@ -885,7 +897,7 @@ export class SessionService {
       }
       return null;
     })();
-    const sourceProjectIds = sourceSession?.projects.map((project) => project.projectId) ?? [];
+    const sourceProjectIds = sourceSession?.projects.map((project: { projectId: string }) => project.projectId) ?? [];
     const sourceTicketLinks = sourceSessionId
       ? await prisma.ticketLink.findMany({
           where: { entityType: "session", entityId: sourceSessionId },
@@ -950,7 +962,7 @@ export class SessionService {
     const initialSessionStatus: SessionStatus = "in_progress";
     const initialCheckpointContextId = resolvedRepoId && input.prompt ? randomUUID() : null;
 
-    const session = await prisma.$transaction(async (tx) => {
+    const session = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const sessionGroup = existingGroup
         ? await (async () => {
             const nextGroupData: Prisma.SessionGroupUncheckedUpdateInput = {};
@@ -1006,7 +1018,7 @@ export class SessionService {
           readOnlyWorkspace,
           ...(projectIds.length > 0 && {
             projects: {
-              create: projectIds.map((projectId) => ({ projectId })),
+              create: projectIds.map((projectId: string) => ({ projectId })),
             },
           }),
         },
@@ -1015,7 +1027,7 @@ export class SessionService {
 
       if (sourceTicketLinks.length > 0) {
         await tx.ticketLink.createMany({
-          data: sourceTicketLinks.map((ticketLink) => ({
+          data: sourceTicketLinks.map((ticketLink: { ticketId: string }) => ({
             ticketId: ticketLink.ticketId,
             entityType: "session",
             entityId: session.id,
@@ -1365,7 +1377,7 @@ export class SessionService {
     }
 
     let deletedSessionGroupId: string | null = null;
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.sessionProject.deleteMany({ where: { sessionId: id } });
       await tx.ticketLink.deleteMany({ where: { entityType: "session", entityId: id } });
       await tx.session.delete({ where: { id } });
@@ -1852,14 +1864,14 @@ export class SessionService {
       take: 10,
     });
 
-    const hasPendingPlan = recentEvents.some((evt) => {
+    const hasPendingPlan = recentEvents.some((evt: { payload: Prisma.JsonValue }) => {
       return hasPlanBlock(evt.payload as Record<string, unknown>);
     });
 
     // Safety net for adapters that exit cleanly after emitting a question
     // (Claude Code hangs on stdin so recordOutput handles it first, but other
     // adapters may reach complete() with a question still pending).
-    const hasQuestion = recentEvents.some((evt) => {
+    const hasQuestion = recentEvents.some((evt: { payload: Prisma.JsonValue }) => {
       return hasQuestionBlock(evt.payload as Record<string, unknown>);
     });
 
@@ -1898,7 +1910,7 @@ export class SessionService {
     // Skip if recordOutput() already set needs_input (and created the inbox item).
     if (newSessionStatus === "needs_input" && current.sessionStatus !== "needs_input") {
       // Find the event that triggered needs_input to extract question/plan data
-      const triggerEvent = recentEvents.find((evt) => {
+      const triggerEvent = recentEvents.find((evt: { payload: Prisma.JsonValue }) => {
         const p = evt.payload as Record<string, unknown>;
         return hasQuestionBlock(p) || hasPlanBlock(p);
       });
@@ -2176,7 +2188,7 @@ export class SessionService {
 
   async workspaceReady(sessionId: string, workdir: string, branch?: string, slug?: string) {
     // Read and clear pendingRun atomically in a transaction to prevent double-delivery
-    const [session, pendingRun] = await prisma.$transaction(async (tx) => {
+    const [session, pendingRun] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const prev = await tx.session.findUniqueOrThrow({
         where: { id: sessionId },
         select: { pendingRun: true, agentStatus: true, sessionStatus: true },
@@ -2409,7 +2421,7 @@ export class SessionService {
 
     runtimeDebug("restoreSessionsForRuntime loaded sessions", {
       runtimeId,
-      sessionIds: sessions.map((session) => session.id),
+      sessionIds: sessions.map((session: { id: string }) => session.id),
     });
 
     for (const session of sessions) {
@@ -2858,7 +2870,7 @@ export class SessionService {
     const bootstrapPrompt = buildMigrationPrompt(context);
 
     // Create child session and copy ticket links in a single transaction
-    const childSession = await prisma.$transaction(async (tx) => {
+    const childSession = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const child = await tx.session.create({
         data: {
           name: session.name,
@@ -2898,7 +2910,7 @@ export class SessionService {
 
       if (ticketLinks.length > 0) {
         await tx.ticketLink.createMany({
-          data: ticketLinks.map((tl) => ({
+          data: ticketLinks.map((tl: { ticketId: string }) => ({
             ticketId: tl.ticketId,
             entityType: "session",
             entityId: child.id,
@@ -3029,7 +3041,7 @@ export class SessionService {
     const bootstrapPrompt = buildMigrationPrompt(context);
 
     // Create child session and copy ticket links in a single transaction
-    const childSession = await prisma.$transaction(async (tx) => {
+    const childSession = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const child = await tx.session.create({
         data: {
           name: session.name,
@@ -3064,7 +3076,7 @@ export class SessionService {
 
       if (ticketLinks.length > 0) {
         await tx.ticketLink.createMany({
-          data: ticketLinks.map((tl) => ({
+          data: ticketLinks.map((tl: { ticketId: string }) => ({
             ticketId: tl.ticketId,
             entityType: "session",
             entityId: child.id,
@@ -3177,7 +3189,7 @@ export class SessionService {
             },
             select: { id: true },
           });
-    const orgSessionIds = new Set(sessions.map((session) => session.id));
+    const orgSessionIds = new Set(sessions.map((session: { id: string }) => session.id));
 
     const result = allRuntimes.map((r) => ({
       id: r.id,
@@ -3513,7 +3525,7 @@ export class SessionService {
 
     const shouldMirrorToSessions = Object.keys(sessionData).length > 0;
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.sessionGroup.update({
         where: { id: sessionGroupId },
         data: groupData,

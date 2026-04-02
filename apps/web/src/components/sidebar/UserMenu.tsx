@@ -6,9 +6,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { getInitials } from "../../lib/utils";
 
 export function UserMenu() {
-  const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
-  const setActivePage = useUIStore((s) => s.setActivePage);
+  const user = useAuthStore((s: { user: { id: string; name: string; email: string; avatarUrl: string | null } | null }) => s.user);
+  const logout = useAuthStore((s: { logout: () => Promise<void> }) => s.logout);
+  const setActivePage = useUIStore((s: { setActivePage: (page: string) => void }) => s.setActivePage);
 
   return (
     <Popover>

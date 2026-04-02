@@ -2,9 +2,9 @@ import { useEffect, useCallback, useState } from "react";
 import { Code, GitBranch, Archive } from "lucide-react";
 import { gql } from "@urql/core";
 import type { SessionGroup } from "@trace/gql";
-import { useEntityStore, useEntityField } from "../../stores/entity";
+import { useEntityStore, useEntityField, type EntityState } from "../../stores/entity";
 import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
-import { useUIStore } from "../../stores/ui";
+import { useUIStore, type UIState } from "../../stores/ui";
 import { client } from "../../lib/urql";
 import { StartSessionDialog } from "./StartSessionDialog";
 import { SessionsTable } from "./SessionsTable";
@@ -72,11 +72,11 @@ const SESSION_GROUPS_QUERY = gql`
 export function CodingChannelView({ channelId }: { channelId: string }) {
   const channelName = useEntityField("channels", channelId, "name");
   const baseBranch = useEntityField("channels", channelId, "baseBranch") as string | null | undefined;
-  const upsertMany = useEntityStore((s) => s.upsertMany);
+  const upsertMany = useEntityStore((s: EntityState) => s.upsertMany);
   const [loading, setLoading] = useState(true);
-  const refreshTick = useUIStore((s) => s.refreshTick);
-  const channelSubPage = useUIStore((s) => s.channelSubPage);
-  const setChannelSubPage = useUIStore((s) => s.setChannelSubPage);
+  const refreshTick = useUIStore((s: UIState) => s.refreshTick);
+  const channelSubPage = useUIStore((s: UIState) => s.channelSubPage);
+  const setChannelSubPage = useUIStore((s: UIState) => s.setChannelSubPage);
 
   const fetchSessionGroups = useCallback(async () => {
     const result = await client.query(SESSION_GROUPS_QUERY, { channelId, archived: false }).toPromise();

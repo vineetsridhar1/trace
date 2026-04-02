@@ -1,5 +1,5 @@
 import sanitize from "sanitize-html";
-import { load } from "cheerio";
+import { load, type AnyNode } from "cheerio";
 
 export interface ExtractedMention {
   userId: string;
@@ -34,7 +34,7 @@ export function extractMentions(html: string): ExtractedMention[] {
   const mentions: ExtractedMention[] = [];
   const seen = new Set<string>();
 
-  $("span.mention[data-mention-id]").each((_, el) => {
+  $("span.mention[data-mention-id]").each((_: number, el: AnyNode) => {
     const userId = $(el).attr("data-mention-id");
     const name = $(el).attr("data-mention-value") ?? $(el).text().replace(/^@/, "");
     if (userId && !seen.has(userId)) {
@@ -50,13 +50,13 @@ export function extractMentions(html: string): ExtractedMention[] {
 export function stripHtml(html: string): string {
   const $ = load(html);
   // Replace mention spans with @name for readable plain text
-  $("span.mention").each((_, el) => {
+  $("span.mention").each((_: number, el: AnyNode) => {
     const name = $(el).attr("data-mention-value") ?? $(el).text();
     $(el).replaceWith(name.startsWith("@") ? name : `@${name}`);
   });
   // Replace <br> and block elements with newlines
   $("br").replaceWith("\n");
-  $("p").each((_, el) => {
+  $("p").each((_: number, el: AnyNode) => {
     $(el).append("\n");
   });
   return $.text().replace(/\n{3,}/g, "\n\n").trim();

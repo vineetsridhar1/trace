@@ -9,7 +9,7 @@ function createClient(name: string): Redis {
     connectionName: name,
   });
 
-  client.on("error", (err) => {
+  client.on("error", (err: Error) => {
     console.error(`[redis:${name}] connection error:`, err.message);
   });
 

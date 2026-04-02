@@ -4,7 +4,7 @@ import type { Ticket } from "@trace/gql";
 import type { TicketRow } from "./tickets-table-types";
 
 export function useTicketRows(): TicketRow[] {
-  const tickets = useEntityStore((s) => s.tickets);
+  const tickets = useEntityStore((s: { tickets: Record<string, unknown> }) => s.tickets);
 
   return useMemo(() => {
     return (Object.values(tickets) as Array<Ticket & { id: string }>)

@@ -13,10 +13,10 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 export function SessionDefaultsSection() {
-  const defaultTool = usePreferencesStore((s) => s.defaultTool);
-  const defaultModel = usePreferencesStore((s) => s.defaultModel);
-  const setDefaultTool = usePreferencesStore((s) => s.setDefaultTool);
-  const setDefaultModel = usePreferencesStore((s) => s.setDefaultModel);
+  const defaultTool = usePreferencesStore((s: { defaultTool: string | null }) => s.defaultTool);
+  const defaultModel = usePreferencesStore((s: { defaultModel: string | null }) => s.defaultModel);
+  const setDefaultTool = usePreferencesStore((s: { setDefaultTool: (tool: string | null) => void }) => s.setDefaultTool);
+  const setDefaultModel = usePreferencesStore((s: { setDefaultModel: (model: string | null) => void }) => s.setDefaultModel);
 
   const effectiveTool = defaultTool ?? "claude_code";
   const modelOptions = getModelsForTool(effectiveTool);
@@ -82,7 +82,7 @@ export function SessionDefaultsSection() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">None (use default)</SelectItem>
-                {modelOptions.map((m) => (
+                {modelOptions.map((m: { value: string; label: string }) => (
                   <SelectItem key={m.value} value={m.value}>
                     {m.label}
                   </SelectItem>

@@ -84,7 +84,7 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
     | null
     | undefined;
 
-  const openSessionTab = useUIStore((s) => s.openSessionTab);
+  const openSessionTab = useUIStore((s: { openSessionTab: (groupId: string, sessionId: string) => void }) => s.openSessionTab);
   const [sending, setSending] = useState(false);
 
   const isQuestion = itemType === "question";

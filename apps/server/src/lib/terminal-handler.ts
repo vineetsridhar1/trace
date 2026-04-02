@@ -90,7 +90,7 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
     }
   }
 
-  ws.on("message", (raw) => {
+  ws.on("message", (raw: Buffer | string) => {
     try {
       const msg = JSON.parse(raw.toString());
 
@@ -165,7 +165,7 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
     }
   });
 
-  ws.on("error", (err) => {
+  ws.on("error", (err: Error) => {
     console.warn("[terminal-handler] websocket error:", err.message);
   });
 

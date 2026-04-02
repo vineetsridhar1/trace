@@ -125,7 +125,7 @@ async function getProjectOverride(
         where: { ticketId: scopeId },
         select: { projectId: true },
       });
-      projectIds = links.map((l) => l.projectId);
+      projectIds = links.map((l: { projectId: string }) => l.projectId);
       break;
     }
     case "channel": {
@@ -133,7 +133,7 @@ async function getProjectOverride(
         where: { channelId: scopeId },
         select: { projectId: true },
       });
-      projectIds = links.map((l) => l.projectId);
+      projectIds = links.map((l: { projectId: string }) => l.projectId);
       break;
     }
     case "session": {
@@ -141,7 +141,7 @@ async function getProjectOverride(
         where: { sessionId: scopeId },
         select: { projectId: true },
       });
-      projectIds = links.map((l) => l.projectId);
+      projectIds = links.map((l: { projectId: string }) => l.projectId);
       break;
     }
     case "chat": {

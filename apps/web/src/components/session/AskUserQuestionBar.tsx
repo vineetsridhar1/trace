@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from "react";
 import { ChevronLeft, ChevronRight, Send, X } from "lucide-react";
-import type { Question } from "@trace/shared";
+import type { Question, QuestionOption } from "@trace/shared";
 import { useQuestionState } from "../../hooks/useQuestionState";
 import { QuestionOptionPill } from "./messages/QuestionOptionPill";
 
@@ -75,7 +75,7 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
 
       {/* Option pills */}
       <div className="mb-2 flex flex-wrap gap-1.5">
-        {question.options.map((opt) => (
+        {question.options.map((opt: QuestionOption) => (
           <QuestionOptionPill
             key={opt.label}
             label={opt.label}
@@ -92,7 +92,7 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
         <input
           type="text"
           value={currentCustom}
-          onChange={(e) => setCustomText(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomText(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Other..."
           className="min-w-0 flex-1 rounded-md border border-border bg-surface-deep px-2.5 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-accent/50"

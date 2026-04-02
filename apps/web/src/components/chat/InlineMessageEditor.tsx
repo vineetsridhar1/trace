@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from "react";
 import { Check, X } from "lucide-react";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "../../stores/auth";
 import { useOrgMembers } from "../../hooks/useOrgMembers";
 import { Button } from "../ui/button";
 import { ChatEditor, type ChatEditorHandle } from "./ChatEditor";
@@ -17,7 +17,7 @@ export function InlineMessageEditor({
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const editorRef = useRef<ChatEditorHandle>(null);
-  const currentUserId = useAuthStore((s) => s.user?.id);
+  const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
   const mentionableUsers = useOrgMembers();
 
   const handleSubmit = useCallback(

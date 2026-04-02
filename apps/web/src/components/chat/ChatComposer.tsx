@@ -3,7 +3,7 @@ import { Send } from "lucide-react";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { toast } from "sonner";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "../../stores/auth";
 import { useOrgMembers } from "../../hooks/useOrgMembers";
 import { Button } from "../ui/button";
 import { ChatEditor, type ChatEditorHandle } from "./ChatEditor";
@@ -29,7 +29,7 @@ const SEND_CHAT_MESSAGE = gql`
 export function ChatComposer({ chatId, parentId }: { chatId: string; parentId?: string }) {
   const [sending, setSending] = useState(false);
   const editorRef = useRef<ChatEditorHandle>(null);
-  const currentUserId = useAuthStore((s) => s.user?.id);
+  const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
   const mentionableUsers = useOrgMembers();
 
   const handleSubmit = useCallback(

@@ -18,14 +18,14 @@ export async function normalizeMembers(
       ? await tx.chatMember.findMany({ where: { chatId: scope.id, leftAt: null } })
       : await tx.channelMember.findMany({ where: { channelId: scope.id, leftAt: null } });
 
-  const userIds = members.map((m) => m.userId);
+  const userIds = members.map((m: { userId: string }) => m.userId);
   const users = await tx.user.findMany({
     where: { id: { in: userIds } },
     select: { id: true, name: true, avatarUrl: true },
   });
-  const userMap = new Map(users.map((u) => [u.id, u]));
+  const userMap = new Map(users.map((u: { id: string; name: string | null; avatarUrl: string | null }) => [u.id, u] as const));
 
-  return members.map((m) => ({
+  return members.map((m: { userId: string; joinedAt: Date }) => ({
     user: userMap.get(m.userId) ?? { id: m.userId, name: "Unknown", avatarUrl: null },
     joinedAt: m.joinedAt.toISOString(),
   }));
