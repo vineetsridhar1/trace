@@ -60,7 +60,7 @@ export function BridgeAccessDialog() {
       const result = await client
         .mutation(CREATE_CHALLENGE_MUTATION, {
           runtimeId: activeChallenge.runtimeId,
-          action: "start_session",
+          action: activeChallenge.action ?? "start_session",
         })
         .toPromise();
       if (result.error) {

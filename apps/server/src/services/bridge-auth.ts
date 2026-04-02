@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { randomInt, timingSafeEqual } from "crypto";
 import { prisma } from "../lib/db.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { inboxService } from "./inbox.js";
@@ -8,9 +9,12 @@ const CHALLENGE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_ATTEMPTS = 3;
 
 function generateCode(): string {
-  return Math.floor(Math.random() * 100)
-    .toString()
-    .padStart(2, "0");
+  return randomInt(100).toString().padStart(2, "0");
+}
+
+function codesMatch(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
 export class BridgeAuthService {
@@ -122,88 +126,107 @@ export class BridgeAuthService {
 
   /**
    * Verify a challenge code. On success, creates a grant (or stores verified status for start flow).
+   * Uses a transaction with atomic status checks to prevent race conditions.
    */
   async verifyChallenge(challengeId: string, code: string, userId: string) {
-    const challenge = await prisma.bridgeAccessChallenge.findUnique({
-      where: { id: challengeId },
-    });
+    return prisma.$transaction(async (tx) => {
+      // SELECT FOR UPDATE to prevent concurrent verification attempts
+      const challenges = await tx.$queryRaw<Array<{
+        id: string;
+        code: string;
+        requesterId: string;
+        status: string;
+        attempts: number;
+        expiresAt: Date;
+        runtimeId: string;
+        sessionId: string | null;
+        organizationId: string;
+      }>>`
+        SELECT "id", "code", "requesterId", "status", "attempts", "expiresAt",
+               "runtimeId", "sessionId", "organizationId"
+        FROM "BridgeAccessChallenge"
+        WHERE "id" = ${challengeId}
+        FOR UPDATE
+      `;
 
-    if (!challenge) {
-      throw new Error("Challenge not found");
-    }
-
-    if (challenge.requesterId !== userId) {
-      throw new Error("Not authorized to verify this challenge");
-    }
-
-    if (challenge.status !== "pending") {
-      throw new Error("Challenge is no longer active");
-    }
-
-    if (new Date() > challenge.expiresAt) {
-      await prisma.bridgeAccessChallenge.update({
-        where: { id: challengeId },
-        data: { status: "expired" },
-      });
-      throw new Error("Challenge has expired");
-    }
-
-    if (challenge.code !== code) {
-      const newAttempts = challenge.attempts + 1;
-      const expired = newAttempts >= MAX_ATTEMPTS;
-      await prisma.bridgeAccessChallenge.update({
-        where: { id: challengeId },
-        data: {
-          attempts: newAttempts,
-          status: expired ? "expired" : "pending",
-        },
-      });
-      if (expired) {
-        throw new Error("Too many failed attempts. Please request a new code.");
+      const challenge = challenges[0];
+      if (!challenge) {
+        throw new Error("Challenge not found");
       }
-      throw new Error("Incorrect code");
-    }
 
-    // Code is correct — mark challenge as verified
-    await prisma.bridgeAccessChallenge.update({
-      where: { id: challengeId },
-      data: { status: "verified" },
-    });
+      if (challenge.requesterId !== userId) {
+        throw new Error("Not authorized to verify this challenge");
+      }
 
-    // Resolve the inbox item
-    await inboxService.resolveBySource({
-      sourceType: "bridge_challenge",
-      sourceId: challengeId,
-      orgId: challenge.organizationId,
-      resolution: "verified",
-    });
+      if (challenge.status !== "pending") {
+        throw new Error("Challenge is no longer active");
+      }
 
-    // If this is for an existing session, create the grant immediately
-    if (challenge.sessionId) {
-      await prisma.bridgeAccessGrant.upsert({
-        where: {
-          runtimeId_sessionId_grantedToUserId: {
+      if (new Date() > challenge.expiresAt) {
+        await tx.bridgeAccessChallenge.update({
+          where: { id: challengeId },
+          data: { status: "expired" },
+        });
+        throw new Error("Challenge has expired");
+      }
+
+      if (!codesMatch(challenge.code, code)) {
+        const newAttempts = challenge.attempts + 1;
+        const expired = newAttempts >= MAX_ATTEMPTS;
+        await tx.bridgeAccessChallenge.update({
+          where: { id: challengeId },
+          data: {
+            attempts: newAttempts,
+            status: expired ? "expired" : "pending",
+          },
+        });
+        if (expired) {
+          throw new Error("Too many failed attempts. Please request a new code.");
+        }
+        throw new Error("Incorrect code");
+      }
+
+      // Code is correct — mark challenge as verified
+      await tx.bridgeAccessChallenge.update({
+        where: { id: challengeId },
+        data: { status: "verified" },
+      });
+
+      // Resolve the inbox item (outside transaction is fine — idempotent)
+      void inboxService.resolveBySource({
+        sourceType: "bridge_challenge",
+        sourceId: challengeId,
+        orgId: challenge.organizationId,
+        resolution: "verified",
+      });
+
+      // If this is for an existing session, create the grant immediately
+      if (challenge.sessionId) {
+        await tx.bridgeAccessGrant.upsert({
+          where: {
+            runtimeId_sessionId_grantedToUserId: {
+              runtimeId: challenge.runtimeId,
+              sessionId: challenge.sessionId,
+              grantedToUserId: userId,
+            },
+          },
+          update: {},
+          create: {
             runtimeId: challenge.runtimeId,
             sessionId: challenge.sessionId,
             grantedToUserId: userId,
+            organizationId: challenge.organizationId,
+            challengeId: challenge.id,
           },
-        },
-        update: {},
-        create: {
-          runtimeId: challenge.runtimeId,
-          sessionId: challenge.sessionId,
-          grantedToUserId: userId,
-          organizationId: challenge.organizationId,
-          challengeId: challenge.id,
-        },
-      });
-      return { granted: true, sessionId: challenge.sessionId };
-    }
+        });
+        return { granted: true, sessionId: challenge.sessionId };
+      }
 
-    // For start_session flow, the challenge is just verified.
-    // The grant will be created when the session is actually started
-    // using the bridgeAccessToken (challengeId).
-    return { granted: true, sessionId: null };
+      // For start_session flow, the challenge is just verified.
+      // The grant will be created when the session is actually started
+      // using the bridgeAccessToken (challengeId).
+      return { granted: true, sessionId: null };
+    });
   }
 
   /**

@@ -1119,19 +1119,19 @@ export class SessionService {
       include: SESSION_INCLUDE,
     });
 
-    // Bridge access check for local bridges owned by someone else
-    if (userId) {
-      const runtime = sessionRouter.getRuntimeForSession(id);
-      if (
-        runtime &&
-        runtime.hostingMode === "local" &&
-        runtime.ownerUserId &&
-        runtime.ownerUserId !== userId
-      ) {
-        const hasGrant = await bridgeAuthService.hasSessionGrant(runtime.id, id, userId);
-        if (!hasGrant) {
-          throw new BridgeAccessRequiredError(runtime.id, runtime.label, runtime.ownerUserId);
-        }
+    // Bridge access check for local bridges owned by someone else.
+    // Use the caller's userId if provided; fall back to the session creator.
+    const effectiveUserId = userId ?? session.createdById;
+    const runtime = sessionRouter.getRuntimeForSession(id);
+    if (
+      runtime &&
+      runtime.hostingMode === "local" &&
+      runtime.ownerUserId &&
+      runtime.ownerUserId !== effectiveUserId
+    ) {
+      const hasGrant = await bridgeAuthService.hasSessionGrant(runtime.id, id, effectiveUserId);
+      if (!hasGrant) {
+        throw new BridgeAccessRequiredError(runtime.id, runtime.label, runtime.ownerUserId);
       }
     }
 

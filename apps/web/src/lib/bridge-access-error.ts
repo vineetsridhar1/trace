@@ -9,6 +9,7 @@ import type { CombinedError } from "@urql/core";
 export function handleBridgeAccessError(
   error: unknown,
   retryAction: () => Promise<void>,
+  action: "start_session" | "send_message" = "start_session",
 ): boolean {
   const extensions = extractBridgeAccessExtensions(error);
   if (!extensions) return false;
@@ -18,6 +19,7 @@ export function handleBridgeAccessError(
       challengeId: "", // Will be created by the dialog
       runtimeId: extensions.runtimeId,
       runtimeLabel: extensions.runtimeLabel,
+      action,
     },
     retryAction,
   );

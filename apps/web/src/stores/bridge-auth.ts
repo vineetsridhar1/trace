@@ -4,6 +4,7 @@ interface ActiveChallenge {
   challengeId: string;
   runtimeId: string;
   runtimeLabel: string;
+  action: string;
   retryAction: () => Promise<void>;
 }
 
