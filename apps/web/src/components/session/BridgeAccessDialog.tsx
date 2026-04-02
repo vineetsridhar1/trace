@@ -9,37 +9,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { useBridgeAuthStore } from "@/stores/bridge-auth";
 import { client } from "@/lib/urql";
-import { gql } from "@urql/core";
+import {
+  CREATE_BRIDGE_ACCESS_CHALLENGE_MUTATION,
+  VERIFY_BRIDGE_ACCESS_CODE_MUTATION,
+} from "@/lib/mutations";
 import { toast } from "sonner";
-
-const CREATE_CHALLENGE_MUTATION = gql`
-  mutation CreateBridgeAccessChallenge(
-    $runtimeId: ID!
-    $action: String!
-    $sessionId: ID
-    $promptPreview: String
-  ) {
-    createBridgeAccessChallenge(
-      runtimeId: $runtimeId
-      action: $action
-      sessionId: $sessionId
-      promptPreview: $promptPreview
-    ) {
-      challengeId
-      runtimeId
-      runtimeLabel
-    }
-  }
-`;
-
-const VERIFY_CODE_MUTATION = gql`
-  mutation VerifyBridgeAccessCode($challengeId: ID!, $code: String!) {
-    verifyBridgeAccessCode(challengeId: $challengeId, code: $code) {
-      granted
-      sessionId
-    }
-  }
-`;
 
 export function BridgeAccessDialog() {
   const { activeChallenge, showDialog, closeChallenge } = useBridgeAuthStore();
@@ -58,7 +32,7 @@ export function BridgeAccessDialog() {
     setDigits(["", ""]);
     try {
       const result = await client
-        .mutation(CREATE_CHALLENGE_MUTATION, {
+        .mutation(CREATE_BRIDGE_ACCESS_CHALLENGE_MUTATION, {
           runtimeId: activeChallenge.runtimeId,
           action: activeChallenge.action ?? "start_session",
         })
@@ -125,7 +99,7 @@ export function BridgeAccessDialog() {
     try {
       const code = `${digits[0]}${digits[1]}`;
       const result = await client
-        .mutation(VERIFY_CODE_MUTATION, { challengeId, code })
+        .mutation(VERIFY_BRIDGE_ACCESS_CODE_MUTATION, { challengeId, code })
         .toPromise();
 
       if (result.error) {
@@ -144,9 +118,7 @@ export function BridgeAccessDialog() {
       if (result.data?.verifyBridgeAccessCode?.granted) {
         toast.success("Bridge access verified");
         // Store the verified challenge ID so createQuickSession can use it as bridgeAccessToken
-        if (challengeId) {
-          useBridgeAuthStore.getState().setVerifiedChallengeId(challengeId);
-        }
+        useBridgeAuthStore.getState().setVerifiedChallengeId(challengeId!);
         closeChallenge();
         // Retry the original action
         if (activeChallenge?.retryAction) {

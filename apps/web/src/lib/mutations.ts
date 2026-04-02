@@ -288,3 +288,32 @@ export const DELETE_CHANNEL_MESSAGE_MUTATION = gql`
     }
   }
 `;
+
+export const CREATE_BRIDGE_ACCESS_CHALLENGE_MUTATION = gql`
+  mutation CreateBridgeAccessChallenge(
+    $runtimeId: ID!
+    $action: String!
+    $sessionId: ID
+    $promptPreview: String
+  ) {
+    createBridgeAccessChallenge(
+      runtimeId: $runtimeId
+      action: $action
+      sessionId: $sessionId
+      promptPreview: $promptPreview
+    ) {
+      challengeId
+      runtimeId
+      runtimeLabel
+    }
+  }
+`;
+
+export const VERIFY_BRIDGE_ACCESS_CODE_MUTATION = gql`
+  mutation VerifyBridgeAccessCode($challengeId: ID!, $code: String!) {
+    verifyBridgeAccessCode(challengeId: $challengeId, code: $code) {
+      granted
+      sessionId
+    }
+  }
+`;

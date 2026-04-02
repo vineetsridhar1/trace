@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, BridgeAccessChallengeStatus } from "@prisma/client";
 import { randomInt, timingSafeEqual } from "crypto";
 import { prisma } from "../lib/db.js";
 import { sessionRouter } from "../lib/session-router.js";
@@ -158,14 +158,14 @@ export class BridgeAuthService {
         throw new Error("Not authorized to verify this challenge");
       }
 
-      if (challenge.status !== "pending") {
+      if (challenge.status !== BridgeAccessChallengeStatus.pending) {
         throw new Error("Challenge is no longer active");
       }
 
       if (new Date() > challenge.expiresAt) {
         await tx.bridgeAccessChallenge.update({
           where: { id: challengeId },
-          data: { status: "expired" },
+          data: { status: BridgeAccessChallengeStatus.expired },
         });
         throw new Error("Challenge has expired");
       }
@@ -177,7 +177,7 @@ export class BridgeAuthService {
           where: { id: challengeId },
           data: {
             attempts: newAttempts,
-            status: expired ? "expired" : "pending",
+            status: expired ? BridgeAccessChallengeStatus.expired : BridgeAccessChallengeStatus.pending,
           },
         });
         if (expired) {
@@ -189,7 +189,7 @@ export class BridgeAuthService {
       // Code is correct — mark challenge as verified
       await tx.bridgeAccessChallenge.update({
         where: { id: challengeId },
-        data: { status: "verified" },
+        data: { status: BridgeAccessChallengeStatus.verified },
       });
 
       // Resolve the inbox item (outside transaction is fine — idempotent)
@@ -241,7 +241,7 @@ export class BridgeAuthService {
     if (!challenge) return false;
     if (challenge.requesterId !== userId) return false;
     if (challenge.runtimeId !== runtimeId) return false;
-    if (challenge.status !== "verified") return false;
+    if (challenge.status !== BridgeAccessChallengeStatus.verified) return false;
     if (new Date() > challenge.expiresAt) return false;
 
     return true;
@@ -255,7 +255,7 @@ export class BridgeAuthService {
       where: { id: challengeId },
     });
 
-    if (!challenge || challenge.status !== "verified") {
+    if (!challenge || challenge.status !== BridgeAccessChallengeStatus.verified) {
       throw new Error("Invalid or unverified challenge");
     }
 
@@ -284,10 +284,10 @@ export class BridgeAuthService {
   async expireChallenges() {
     await prisma.bridgeAccessChallenge.updateMany({
       where: {
-        status: "pending",
+        status: BridgeAccessChallengeStatus.pending,
         expiresAt: { lt: new Date() },
       },
-      data: { status: "expired" },
+      data: { status: BridgeAccessChallengeStatus.expired },
     });
   }
 }

@@ -867,6 +867,12 @@ model AiTurn {
   @@index([parentTurnId])
 }
 
+enum BridgeAccessChallengeStatus {
+  pending
+  verified
+  expired
+}
+
 model BridgeAccessChallenge {
   id               String   @id @default(cuid())
   code             String
@@ -879,7 +885,7 @@ model BridgeAccessChallenge {
   action           String
   promptPreview    String?
   sessionId        String?
-  status           String   @default("pending")
+  status           BridgeAccessChallengeStatus @default(pending)
   attempts         Int      @default(0)
   expiresAt        DateTime
   createdAt        DateTime @default(now())
