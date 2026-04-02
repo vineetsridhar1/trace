@@ -101,6 +101,36 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     onChangeRef.current?.("");
   }, []);
 
+  const isMentionMenuOpen = useCallback(() => {
+    const editor = quillRef.current?.getEditor();
+    const mentionModule = editor?.getModule("mention") as { isOpen?: boolean } | undefined;
+    return mentionModule?.isOpen === true;
+  }, []);
+
+  const insertSlashCommandText = useCallback((commandName: string) => {
+    const editor = quillRef.current?.getEditor();
+    if (!editor) return;
+
+    const selection = editor.getSelection(true);
+    const cursorIndex = selection?.index ?? 0;
+    const textBeforeCursor = editor.getText(0, cursorIndex);
+    const match = textBeforeCursor.match(/\/[^\s]*$/);
+    const replacement = `/${commandName} `;
+
+    if (match) {
+      const start = cursorIndex - match[0].length;
+      editor.deleteText(start, match[0].length, "user");
+      editor.insertText(start, replacement, "user");
+      editor.setSelection(start + replacement.length, 0, "silent");
+    } else {
+      editor.insertText(cursorIndex, replacement, "user");
+      editor.setSelection(cursorIndex + replacement.length, 0, "silent");
+    }
+
+    setValue(editor.root.innerHTML);
+    onChangeRef.current?.(editor.getText().replace(/\n$/, ""));
+  }, []);
+
   const modules = useMemo(
     () => ({
       toolbar: false,
@@ -174,16 +204,15 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
           insertItem: (item: Record<string, unknown>) => void,
         ) => {
           if (item.denotationChar === "/") {
-            // Don't insert the slash command into the editor — handle it externally
+            insertSlashCommandText(String(item.value ?? ""));
             onSlashCommandSelectRef.current?.(item as unknown as SlashCommandItem);
-            clearEditor();
             return;
           }
           insertItem(item);
         },
       },
     }),
-    [clearEditor, enableSlashCommands],
+    [enableSlashCommands, insertSlashCommandText],
   );
 
   const submit = useCallback(async () => {
@@ -228,11 +257,14 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
       }
 
       if (e.key === "Enter" && !e.shiftKey) {
+        if (isMentionMenuOpen()) {
+          return;
+        }
         e.preventDefault();
         void submit();
       }
     },
-    [submit],
+    [isMentionMenuOpen, submit],
   );
 
   const handleChange = useCallback(

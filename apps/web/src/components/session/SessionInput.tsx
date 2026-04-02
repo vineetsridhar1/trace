@@ -17,7 +17,7 @@ import {
   reconcileOptimisticSessionMessage,
   removeOptimisticSessionMessage,
 } from "../../lib/optimistic-message";
-import { ChatEditor, type ChatEditorHandle, type SlashCommandItem } from "../chat/ChatEditor";
+import { ChatEditor, type ChatEditorHandle } from "../chat/ChatEditor";
 import { useSlashCommands } from "./useSlashCommands";
 import { createQuickSession } from "../../lib/create-quick-session";
 import { useUIStore } from "../../stores/ui";
@@ -60,8 +60,18 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   const handleSubmit = useCallback(async () => {
     const text = editorRef.current?.getText() ?? "";
     if (!text || sending || !canSend) return;
+
+    if (text === "/clear") {
+      const channelId = useUIStore.getState().activeChannelId;
+      if (channelId) {
+        editorRef.current?.clear();
+        void createQuickSession(channelId);
+      }
+      return;
+    }
+
     setSending(true);
-    const wrappedText = wrapPrompt(mode, text);
+    const wrappedText = text.startsWith("/") ? text : wrapPrompt(mode, text);
 
     const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
       sessionId,
@@ -97,47 +107,6 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
       editorRef.current?.focus();
     }
   }, [sessionId, sending, mode, canSend]);
-
-  const handleSlashCommand = useCallback(
-    async (cmd: SlashCommandItem) => {
-      if (cmd.category === "special") {
-        // /clear — create a new session tab
-        const channelId = useUIStore.getState().activeChannelId;
-        if (channelId) {
-          void createQuickSession(channelId);
-        }
-        return;
-      }
-
-      setSending(true);
-      const text = `/${cmd.id}`;
-      const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
-        sessionId,
-        text,
-      );
-
-      try {
-        const result = await client
-          .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-            sessionId,
-            text,
-            clientMutationId,
-          })
-          .toPromise();
-
-        if (result.error) throw result.error;
-        const realEventId = result.data?.sendSessionMessage?.id;
-        if (!realEventId) throw new Error("Failed to send message");
-        reconcileOptimisticSessionMessage(sessionId, tempEventId, realEventId);
-      } catch (error) {
-        removeOptimisticSessionMessage(sessionId, tempEventId);
-        toast.error(error instanceof Error ? error.message : "Failed to send command");
-      } finally {
-        setSending(false);
-      }
-    },
-    [sessionId],
-  );
 
   // Show recovery panel when disconnected — but not for not_started sessions
   if (disconnected && !isNotStarted) {
@@ -195,7 +164,6 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
               placeholder={placeholder}
               disabled={!canSend || sending}
               slashCommands={slashCommands.commands}
-              onSlashCommandSelect={handleSlashCommand}
               onShiftTab={cycleMode}
               onChange={(text) => {
                 setHasContent(text.trim().length > 0);
