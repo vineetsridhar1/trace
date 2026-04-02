@@ -18,6 +18,8 @@ import {
   registerOptimisticSessionRedirect,
 } from "../stores/ui";
 import { getDefaultModel } from "../components/session/modelOptions";
+import { handleBridgeAccessError } from "./bridge-access-error";
+import { useBridgeAuthStore } from "../stores/bridge-auth";
 
 /**
  * Resolve the best runtime for a new session based on user preference.
@@ -112,6 +114,9 @@ export async function createQuickSession(channelId: string): Promise<void> {
     const { runtimeInstanceId, hosting } = await resolveDefaultRuntime(prefTool, channelRepoId);
     const isCloud = !runtimeInstanceId || hosting === "cloud";
 
+    // Consume any verified bridge access token (set after successful verification)
+    const bridgeAccessToken = useBridgeAuthStore.getState().consumeVerifiedChallengeId();
+
     const result = await client
       .mutation(START_SESSION_MUTATION, {
         input: {
@@ -121,6 +126,7 @@ export async function createQuickSession(channelId: string): Promise<void> {
           runtimeInstanceId: isCloud ? undefined : runtimeInstanceId,
           channelId,
           repoId: channelRepoId ?? undefined,
+          bridgeAccessToken: bridgeAccessToken ?? undefined,
         },
       })
       .toPromise();
@@ -131,6 +137,10 @@ export async function createQuickSession(channelId: string): Promise<void> {
         replaceNavigationState(previousNav);
       } else {
         registerOptimisticSessionRedirect(tempGroupId, tempSessionId, previousNav);
+      }
+      // Check for bridge access required — open verification dialog
+      if (handleBridgeAccessError(result.error, () => createQuickSession(channelId))) {
+        return;
       }
       toast.error("Failed to create session", { description: result.error.message });
       return;

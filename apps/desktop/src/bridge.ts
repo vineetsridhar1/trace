@@ -66,6 +66,7 @@ export class BridgeClient implements IBridgeClient {
   /** Phase-1 git detection: sessionId → Map<toolUseId → {trigger, command}> */
   private pendingGitToolUses = new Map<string, Map<string, { trigger: import("@trace/shared").GitCheckpointTrigger; command: string }>>();
   private terminalManager: TerminalManager;
+  private userId: string | undefined;
 
   private gitExec: GitExecFn = (args, cwd) =>
     new Promise((resolve, reject) => {
@@ -86,6 +87,15 @@ export class BridgeClient implements IBridgeClient {
         this.send({ type: "terminal_exit", terminalId, exitCode });
       },
     });
+  }
+
+  setUserId(userId: string) {
+    if (this.userId === userId) return;
+    this.userId = userId;
+    // Re-register with the server so ownership is tracked
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.forceReconnect();
+    }
   }
 
   connect() {
@@ -210,6 +220,7 @@ export class BridgeClient implements IBridgeClient {
       supportedTools: ["claude_code", "codex", "custom"],
       registeredRepoIds: Object.keys(config.repos),
       activeTerminals: this.terminalManager.getActiveTerminals(),
+      userId: this.userId,
     });
   }
 

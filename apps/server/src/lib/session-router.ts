@@ -42,6 +42,8 @@ export interface RuntimeInstance {
   registeredRepoIds: string[];
   lastHeartbeat: number;
   boundSessions: Set<string>;
+  /** The authenticated user who owns this bridge (local bridges only). */
+  ownerUserId?: string;
 }
 
 // --- SessionAdapter interface ---
@@ -280,6 +282,7 @@ export class SessionRouter {
     hostingMode: "cloud" | "local";
     supportedTools: string[];
     registeredRepoIds?: string[];
+    ownerUserId?: string;
   }) {
     const existing = this.runtimes.get(runtime.id);
     const boundSessions = existing?.boundSessions ?? new Set<string>();
@@ -296,6 +299,7 @@ export class SessionRouter {
       registeredRepoIds: runtime.registeredRepoIds ?? existing?.registeredRepoIds ?? [],
       lastHeartbeat: Date.now(),
       boundSessions,
+      ownerUserId: runtime.ownerUserId,
     });
     runtimeDebug("registered runtime", {
       runtimeId: runtime.id,

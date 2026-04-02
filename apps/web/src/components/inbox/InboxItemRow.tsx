@@ -18,6 +18,7 @@ import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { InboxPlanBody } from "./InboxPlanBody";
 import { InboxQuestionBody } from "./InboxQuestionBody";
 import { InboxSuggestionBody } from "./InboxSuggestionBody";
+import { InboxBridgeAccessBody } from "./InboxBridgeAccessBody";
 import type { QuestionData } from "./InboxQuestionBody";
 
 const SUGGESTION_TYPES = new Set([
@@ -39,6 +40,7 @@ function itemTypeLabel(itemType: string | undefined): string {
   if (!itemType) return "";
   if (itemType === "question") return "Question";
   if (itemType === "plan") return "Plan";
+  if (itemType === "bridge_access_request") return "Bridge Access";
   if (SUGGESTION_TYPES.has(itemType)) return "Suggestion";
   return itemType;
 }
@@ -89,6 +91,7 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
 
   const isQuestion = itemType === "question";
   const isSuggestion = isSuggestionType(itemType as string | undefined);
+  const isBridgeAccess = itemType === "bridge_access_request";
   const isResolved = status === "resolved" || status === "dismissed" || status === "expired";
   const planContent = (payload?.planContent as string) ?? "";
   const questions = (payload?.questions as QuestionData[] | undefined) ?? [];
@@ -298,7 +301,12 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
       </div>
 
       {/* Type-specific body */}
-      {isSuggestion ? (
+      {isBridgeAccess ? (
+        <InboxBridgeAccessBody
+          payload={payload ?? {}}
+          onDismiss={handleDismiss}
+        />
+      ) : isSuggestion ? (
         <InboxSuggestionBody
           payload={payload ?? {}}
           sending={sending}

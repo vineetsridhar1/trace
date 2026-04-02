@@ -17,6 +17,7 @@ import {
   reconcileOptimisticSessionMessage,
   removeOptimisticSessionMessage,
 } from "../../lib/optimistic-message";
+import { handleBridgeAccessError } from "../../lib/bridge-access-error";
 
 export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop: () => void }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
@@ -87,6 +88,10 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     } catch (error) {
       removeOptimisticSessionMessage(sessionId, tempEventId);
       setMessage(text);
+      // Check for bridge access required error — open verification dialog
+      if (handleBridgeAccessError(error, () => handleSend())) {
+        return;
+      }
       toast.error(error instanceof Error ? error.message : "Failed to send message");
     } finally {
       setSending(false);
