@@ -35,7 +35,6 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
   const [hasContent, setHasContent] = useState(false);
-  const [editorText, setEditorText] = useState("");
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<InteractionMode>("code");
   const editorRef = useRef<ChatEditorHandle>(null);
@@ -50,11 +49,6 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   const lastUserMessageAt = isActive ? _lastUserMessageAt : undefined;
 
   const slashCommands = useSlashCommands(sessionId);
-  const slashFilterMatch = editorText.match(/^\/([^\s]*)$/);
-  const slashFilter = slashFilterMatch ? slashFilterMatch[1].toLowerCase() : null;
-  const visibleSlashCommands = slashFilter === null
-    ? []
-    : slashCommands.commands.filter((cmd) => cmd.value.toLowerCase().startsWith(slashFilter));
 
   const cycleMode = useCallback(() => {
     setMode((prev) => {
@@ -194,39 +188,16 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
             MODE_CONFIG[mode].inputBorder,
           )}
         >
-          <div className="relative session-editor">
-            {slashFilter !== null && (
-              <div className="absolute bottom-full left-0 right-0 z-50 mb-2 overflow-hidden rounded-lg border bg-surface-elevated shadow-lg">
-                {visibleSlashCommands.length > 0 ? (
-                  <div className="max-h-64 overflow-y-auto p-1">
-                    {visibleSlashCommands.map((cmd) => (
-                      <button
-                        key={`${cmd.source}:${cmd.id}`}
-                        type="button"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          void handleSlashCommand(cmd);
-                        }}
-                        className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-surface-deep"
-                      >
-                        <span className="font-mono text-foreground">/{cmd.value}</span>
-                        <span className="truncate text-xs text-muted-foreground">{cmd.description}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="px-3 py-2 text-sm text-muted-foreground">No matching commands</div>
-                )}
-              </div>
-            )}
+          <div className="session-editor">
             <ChatEditor
               ref={editorRef}
               onSubmit={handleSubmit}
               placeholder={placeholder}
               disabled={!canSend || sending}
+              slashCommands={slashCommands.commands}
+              onSlashCommandSelect={handleSlashCommand}
               onShiftTab={cycleMode}
               onChange={(text) => {
-                setEditorText(text);
                 setHasContent(text.trim().length > 0);
               }}
             />
