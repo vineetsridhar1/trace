@@ -406,12 +406,28 @@ export function useOrgEvents() {
           }
         }
 
-        // Channel deleted — remove from store, navigate away if active
+        // Channel deleted — remove channel and its sessions/groups from store
         if (event.eventType === "channel_deleted" && payload) {
           if (typeof payload.channelId === "string") {
-            batch.remove("channels", payload.channelId);
+            const channelId = payload.channelId;
+
+            // Remove sessions and session groups that belonged to this channel
+            const allSessions = batch.getAll("sessions");
+            for (const [sessionId, session] of Object.entries(allSessions)) {
+              if (session.channelId === channelId) {
+                batch.remove("sessions", sessionId);
+              }
+            }
+            const allGroups = batch.getAll("sessionGroups");
+            for (const [groupId, group] of Object.entries(allGroups)) {
+              if (group.channelId === channelId) {
+                batch.remove("sessionGroups", groupId);
+              }
+            }
+
+            batch.remove("channels", channelId);
             const ui = useUIStore.getState();
-            if (ui.activeChannelId === payload.channelId) {
+            if (ui.activeChannelId === channelId) {
               ui.setActiveChannelId(null);
             }
           }

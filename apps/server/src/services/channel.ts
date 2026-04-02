@@ -614,7 +614,7 @@ export class ChannelService {
     return hydrateMessages(replies);
   }
 
-  async delete(id: string, actorType: ActorType, actorId: string) {
+  async delete(id: string, organizationId: string, actorType: ActorType, actorId: string) {
     const channel = await prisma.channel.findUniqueOrThrow({
       where: { id },
       select: {
@@ -624,6 +624,10 @@ export class ChannelService {
         groupId: true,
       },
     });
+
+    if (channel.organizationId !== organizationId) {
+      throw new AuthorizationError("Not authorized to delete this channel");
+    }
 
     // Delete all sessions (which cascades session cleanup via sessionService)
     const sessions = await prisma.session.findMany({
@@ -635,37 +639,27 @@ export class ChannelService {
       await sessionService.delete(session.id, actorType, actorId);
     }
 
-    // Delete any remaining session groups linked to this channel
-    const sessionGroups = await prisma.sessionGroup.findMany({
-      where: { channelId: id },
-      select: { id: true },
-    });
-    if (sessionGroups.length > 0) {
-      await prisma.sessionGroup.deleteMany({
-        where: { channelId: id },
-      });
-    }
-
-    // Delete the channel (ChannelMember + Message cascade via DB)
+    // Delete remaining session groups, channel associations, and the channel itself
     await prisma.$transaction(async (tx) => {
+      await tx.sessionGroup.deleteMany({ where: { channelId: id } });
       await tx.channelProject.deleteMany({ where: { channelId: id } });
       await tx.ticketLink.deleteMany({ where: { entityType: "channel", entityId: id } });
       await tx.ticket.updateMany({ where: { channelId: id }, data: { channelId: null } });
       await tx.channel.delete({ where: { id } });
-    });
 
-    await eventService.create({
-      organizationId: channel.organizationId,
-      scopeType: "system",
-      scopeId: channel.organizationId,
-      eventType: "channel_deleted",
-      payload: {
-        channelId: id,
-        name: channel.name,
-        groupId: channel.groupId,
-      },
-      actorType,
-      actorId,
+      await eventService.create({
+        organizationId: channel.organizationId,
+        scopeType: "system",
+        scopeId: channel.organizationId,
+        eventType: "channel_deleted",
+        payload: {
+          channelId: id,
+          name: channel.name,
+          groupId: channel.groupId,
+        },
+        actorType,
+        actorId,
+      }, tx);
     });
 
     return true;

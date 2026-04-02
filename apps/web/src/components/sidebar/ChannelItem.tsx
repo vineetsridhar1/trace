@@ -23,6 +23,9 @@ function ChannelIcon({ type, className }: { type: string | undefined; className?
   return <Code size={16} className={className} />;
 }
 
+const MENU_WIDTH = 160;
+const MENU_HEIGHT = 36;
+
 function ChannelContextMenu({
   x,
   y,
@@ -34,6 +37,9 @@ function ChannelContextMenu({
   onClose: () => void;
   onDelete: () => void;
 }) {
+  const clampedX = Math.min(x, window.innerWidth - MENU_WIDTH);
+  const clampedY = Math.min(y, window.innerHeight - MENU_HEIGHT);
+
   return createPortal(
     <div
       className="fixed inset-0 z-50"
@@ -45,7 +51,7 @@ function ChannelContextMenu({
     >
       <div
         className="absolute z-50 min-w-36 rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 animate-in fade-in-0 zoom-in-95"
-        style={{ top: y, left: x }}
+        style={{ top: clampedY, left: clampedX }}
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -87,8 +93,13 @@ export const ChannelItem = memo(function ChannelItem({
   }, []);
 
   const handleConfirmDelete = useCallback(() => {
-    client.mutation(DELETE_CHANNEL_MUTATION, { id }).toPromise();
     setShowDeleteDialog(false);
+    client
+      .mutation(DELETE_CHANNEL_MUTATION, { id })
+      .toPromise()
+      .catch((error: unknown) => {
+        console.error("Failed to delete channel:", error);
+      });
   }, [id]);
 
   const sortableData = useMemo(
