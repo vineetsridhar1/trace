@@ -86,32 +86,29 @@ export function upsertScopedMessageFromEvent(event: Event, scope: MessageScope) 
   if (event.eventType === "message_sent") {
     const nextMessage = buildScopedMessage(scope, event, payload, existing);
 
-    // Chat optimistic reconciliation happens here (inline setState) because
-    // chats have both a message entity and a scoped event to clean up atomically.
+    // Chat optimistic reconciliation happens here because chats have both a
+    // message entity and a scoped event to clean up.
     // Session optimistic reconciliation is handled in useOrgEvents + useSessionEvents
     // since sessions only have scoped events (no separate message entity).
     if (scope.scopeType === "chat") {
       const pending = takePendingOptimisticChat(scope.scopeId, event);
       if (pending) {
+        // Use store methods so _messageIdsByScope stays in sync
+        const store = useEntityStore.getState();
+        store.remove("messages", pending.tempMessageId);
+        store.upsert("messages", messageId, buildScopedMessage(scope, event, payload, store.messages[messageId] as Message | undefined));
+
+        // Clean up the optimistic scoped event
         const scopeKey = eventScopeKey("chat", scope.scopeId);
-        useEntityStore.setState((state: { messages: Record<string, Message>; eventsByScope: Record<string, Record<string, Event>> }) => {
-          // Build the message inside the updater so we read the latest state
-          const freshExisting = state.messages[messageId] as Message | undefined;
-          const msg = buildScopedMessage(scope, event, payload, freshExisting);
-
-          const nextMessages = { ...state.messages };
-          delete nextMessages[pending.tempMessageId];
-          nextMessages[messageId] = msg;
-
+        useEntityStore.setState((state: { eventsByScope: Record<string, Record<string, Event>> }) => {
           const bucket = state.eventsByScope[scopeKey];
           if (bucket && bucket[pending.tempEventId]) {
             const { [pending.tempEventId]: _, ...restBucket } = bucket;
             return {
-              messages: nextMessages,
               eventsByScope: { ...state.eventsByScope, [scopeKey]: restBucket },
             };
           }
-          return { messages: nextMessages };
+          return {};
         });
       } else {
         upsert("messages", messageId, nextMessage);

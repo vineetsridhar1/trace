@@ -391,20 +391,17 @@ export function removeOptimisticChatMessage(
     (entry) => entry.tempMessageId === tempMessageId && entry.tempEventId === tempEventId,
   );
 
+  // Use store.remove so _messageIdsByScope index stays in sync
+  useEntityStore.getState().remove("messages", tempMessageId);
+
   const scopeKey = eventScopeKey("chat", chatId);
-
-  // Remove message entity + scoped event atomically
   useEntityStore.setState((state: EntityStoreState) => {
-    const messages = { ...state.messages };
-    delete messages[tempMessageId];
-
     const bucket = state.eventsByScope[scopeKey];
     if (!bucket || !bucket[tempEventId]) {
-      return { messages };
+      return {};
     }
     const { [tempEventId]: _, ...rest } = bucket;
     return {
-      messages,
       eventsByScope: { ...state.eventsByScope, [scopeKey]: rest },
     };
   });
@@ -438,22 +435,27 @@ export function upsertFetchedChatMessagesWithOptimisticResolution(
     (entry) => !!entry.expectedRealMessageId && realMessageIds.has(entry.expectedRealMessageId),
   );
 
+  // Use upsertMany so the _messageIdsByScope index is updated correctly.
+  // This ensures messages appear in useMessageIdsForScope selectors.
+  useEntityStore.getState().upsertMany("messages", messages);
+
+  if (matched.length === 0) {
+    return;
+  }
+
+  // Clean up optimistic message entities via store.remove so the index stays in sync
+  const store = useEntityStore.getState();
+  for (const entry of matched) {
+    store.remove("messages", entry.tempMessageId);
+  }
+
+  // Clean up optimistic scoped events
   useEntityStore.setState((state: EntityStoreState) => {
-    const nextMessages = { ...state.messages };
-    for (const message of messages) {
-      nextMessages[message.id] = message;
-    }
-
-    if (matched.length === 0) {
-      return { messages: nextMessages };
-    }
-
     let nextEventsByScope = state.eventsByScope;
     let bucket = state.eventsByScope[scopeKey];
     let bucketChanged = false;
 
     for (const entry of matched) {
-      delete nextMessages[entry.tempMessageId];
       if (bucket?.[entry.tempEventId]) {
         if (!bucketChanged) {
           nextEventsByScope = { ...state.eventsByScope };
@@ -466,12 +468,9 @@ export function upsertFetchedChatMessagesWithOptimisticResolution(
     }
 
     if (!bucketChanged) {
-      return { messages: nextMessages };
+      return {};
     }
 
-    return {
-      messages: nextMessages,
-      eventsByScope: nextEventsByScope,
-    };
+    return { eventsByScope: nextEventsByScope };
   });
 }
