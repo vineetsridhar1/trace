@@ -96,13 +96,19 @@ export function AgentSettingsSection() {
   async function handleSave() {
     if (!activeOrgId) return;
     setSaving(true);
-    await client
+    setError(null);
+    const result = await client
       .mutation(UPDATE_AGENT_SETTINGS, {
         organizationId: activeOrgId,
         input: { soulFile, autonomyMode, status },
       })
       .toPromise();
     setSaving(false);
+
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
 
     setDirty(false);
     // Refetch to get the updated state from the server
