@@ -176,13 +176,19 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     return;
   }
 
+  // ── DMs always use Sonnet — direct conversations need comprehension ──
+  const isDm =
+    packet.scopeType === "chat" &&
+    packet.scopeEntity?.data.type === "dm";
+  const isDmPromoted = !isRuleBasedTier3 && isDm;
+
   // ── Initialize loop state ──
   const state: LoopState = {
     packet,
-    currentTier: isRuleBasedTier3 ? "tier3" : "tier2",
-    promoted: isRuleBasedTier3,
-    promotionReason: isRuleBasedTier3 ? "rule_based:router" : undefined,
-    promotedModel: isRuleBasedTier3 ? opusModel : null,
+    currentTier: isRuleBasedTier3 ? "tier3" : isDmPromoted ? "tier3" : "tier2",
+    promoted: isRuleBasedTier3 || isDmPromoted,
+    promotionReason: isRuleBasedTier3 ? "rule_based:router" : isDmPromoted ? "dm_conversation" : undefined,
+    promotedModel: isRuleBasedTier3 ? opusModel : isDmPromoted ? sonnetModel : null,
     messageHistory: [{ role: "user", content: INITIAL_USER_MESSAGE }],
     turnResults: [],
     llmCallRecords: [],
