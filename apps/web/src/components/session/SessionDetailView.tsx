@@ -265,7 +265,7 @@ export function SessionDetailView({
                   initial={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.3, ease: "easeOut" }}
-                  className="absolute inset-0 bg-background/70 backdrop-blur-[1px] pointer-events-none"
+                  className="absolute inset-0 bg-background pointer-events-none"
                 >
                   <div className="flex flex-col gap-4 p-4">
                     {Array.from({ length: 4 }).map((_, i) => (

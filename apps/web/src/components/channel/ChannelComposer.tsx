@@ -23,7 +23,7 @@ export function ChannelComposer({ channelId, parentId }: { channelId: string; pa
   const mentionableUsers = useOrgMembers();
 
   const handleSubmit = useCallback(
-    async (html: string) => {
+    async (html: string, _text: string) => {
       if (sending) return;
 
       setSending(true);

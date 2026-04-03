@@ -35,7 +35,6 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
   const [hasContent, setHasContent] = useState(false);
-  const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<"code" | "plan" | "ask">("code");
   const editorRef = useRef<ChatEditorHandle>(null);
   const isActive = agentStatus === "active";
@@ -57,20 +56,17 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     });
   }, []);
 
-  const handleSubmit = useCallback(async () => {
-    const text = editorRef.current?.getText() ?? "";
-    if (!text || sending || !canSend) return;
+  const handleSubmit = useCallback(async (_html: string, text: string) => {
+    if (!text || !canSend) return;
 
     if (text === "/clear") {
       const channelId = useUIStore.getState().activeChannelId;
       if (channelId) {
-        editorRef.current?.clear();
         void createQuickSession(channelId);
       }
       return;
     }
 
-    setSending(true);
     const wrappedText = text.startsWith("/") ? text : wrapPrompt(mode, text);
 
     const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
@@ -98,15 +94,13 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
       }
 
       reconcileOptimisticSessionMessage(sessionId, tempEventId, realEventId);
-      editorRef.current?.clear();
     } catch (error) {
       removeOptimisticSessionMessage(sessionId, tempEventId);
       toast.error(error instanceof Error ? error.message : "Failed to send message");
-    } finally {
-      setSending(false);
-      editorRef.current?.focus();
+      // Re-throw so ChatEditor.submit() catches it and restores the editor content
+      throw error;
     }
-  }, [sessionId, sending, mode, canSend]);
+  }, [sessionId, mode, canSend]);
 
   // Show recovery panel when disconnected — but not for not_started sessions
   if (disconnected && !isNotStarted) {
@@ -162,7 +156,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
               ref={editorRef}
               onSubmit={handleSubmit}
               placeholder={placeholder}
-              disabled={!canSend || sending}
+              disabled={!canSend}
               slashCommands={slashCommands.commands}
               onShiftTab={cycleMode}
               onChange={(text: string) => {
@@ -181,8 +175,8 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
           </button>
         ) : (
           <button
-            onClick={handleSubmit}
-            disabled={!hasContent || sending || !canSend}
+            onClick={() => void editorRef.current?.submit()}
+            disabled={!hasContent || !canSend}
             className={cn(
               "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
               MODE_CONFIG[mode as InteractionMode].sendButton,
