@@ -1134,6 +1134,7 @@ function toExecutionDisposition(disposition: string | undefined): ExecutionDispo
 
 function buildReplayPacket(packet: AgentContextPacket): Record<string, unknown> {
   return {
+    organizationId: packet.organizationId,
     scopeKey: packet.scopeKey,
     scopeType: packet.scopeType,
     scopeId: packet.scopeId,

@@ -272,7 +272,7 @@ export class MemoryService {
       tokenBudget: input.tokenBudget * 2, // fetch more, we'll re-rank
     });
 
-    // 2. Semantic pass — try to embed the query and do cosine similarity
+    // 2. Semantic pass — embed query text, cosine similarity with same visibility + subject filters
     let semanticResults: Array<{ id: string; similarity: number }> = [];
     try {
       const { embedding } = await embeddingService.embed(input.queryText);
@@ -283,6 +283,15 @@ export class MemoryService {
         ? `AND ("sourceScopeType" = '${input.scopeType}' AND "sourceScopeId" = '${input.scopeId}')`
         : `AND "sourceIsDm" = false`;
 
+      // Build subject filter clause — same subjects as the recency pass
+      let subjectClause = "";
+      if (input.relevantSubjects.length > 0) {
+        const pairs = input.relevantSubjects
+          .map((s) => `("subjectType" = '${s.type.replace(/'/g, "''")}' AND "subjectId" = '${s.id.replace(/'/g, "''")}')`)
+          .join(" OR ");
+        subjectClause = `AND (${pairs})`;
+      }
+
       semanticResults = await prisma.$queryRawUnsafe<Array<{ id: string; similarity: number }>>(
         `SELECT id, 1 - (embedding <=> $1::vector) as similarity
          FROM "DerivedMemory"
@@ -290,6 +299,7 @@ export class MemoryService {
            AND "validTo" IS NULL
            AND embedding IS NOT NULL
            ${dmClause}
+           ${subjectClause}
          ORDER BY embedding <=> $1::vector
          LIMIT $3`,
         vectorStr,

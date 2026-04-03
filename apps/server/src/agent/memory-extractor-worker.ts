@@ -137,10 +137,11 @@ async function doExtractForScope(
     whereClause.timestamp = { gt: new Date(lastWatermark) };
   }
 
-  // Fetch high-signal events since last extraction
+  // Fetch high-signal events since last extraction, oldest-first so we process
+  // chronologically and can advance the watermark to the newest processed event.
   const events = await prisma.event.findMany({
     where: whereClause,
-    orderBy: { timestamp: "desc" },
+    orderBy: { timestamp: "asc" },
     take: EVENTS_PER_EXTRACTION,
   });
 
@@ -169,9 +170,9 @@ async function doExtractForScope(
   // Run extraction
   const result = await extractMemories(extractionEvents, { scopeType, scopeId });
 
-  // Store extracted memories
-  const startEventId = events[events.length - 1].id;
-  const endEventId = events[0].id;
+  // Store extracted memories (events are ordered oldest-first)
+  const startEventId = events[0].id;
+  const endEventId = events[events.length - 1].id;
 
   for (const memory of result.memories) {
     try {
@@ -210,9 +211,11 @@ async function doExtractForScope(
     }).catch(() => {});
   }
 
-  // Update watermark to the most recent event's timestamp
-  // events[0] is the most recent (ordered by timestamp desc)
-  await redis.set(watermarkKey, events[0].timestamp.toISOString()).catch(() => {});
+  // Advance watermark to the newest processed event's timestamp.
+  // Events are ordered oldest-first, so the last element is the newest.
+  // If >EVENTS_PER_EXTRACTION events arrived, the next cycle picks up from here.
+  const newestProcessed = events[events.length - 1];
+  await redis.set(watermarkKey, newestProcessed.timestamp.toISOString()).catch(() => {});
 
   log("extraction complete", {
     organizationId,

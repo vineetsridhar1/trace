@@ -20,9 +20,10 @@ vi.mock("./context-builder.js", () => ({
       soulFile: 3_000,
       scopeEntity: 6_000,
       eventBatch: 18_000,
-      relevantEntities: 22_000,
-      summaries: 18_000,
-      recentEvents: 14_000,
+      relevantEntities: 18_000,
+      summaries: 16_000,
+      memories: 8_000,
+      recentEvents: 12_000,
       actors: 3_000,
     },
   },
@@ -32,7 +33,7 @@ vi.mock("./planner.js", () => ({
   DEFAULT_SONNET_MODEL: "claude-sonnet-4-20250514",
   DEFAULT_OPUS_MODEL: "claude-opus-4-20250514",
   PLANNER_TOOL: { name: "planner_decision" },
-  buildSystemPrompt: vi.fn().mockReturnValue("system prompt"),
+  buildSystemPrompt: vi.fn().mockReturnValue({ text: "system prompt", blockVersions: { "system-preamble": 1 } }),
   runPlannerTurn: vi.fn(),
 }));
 
@@ -55,6 +56,12 @@ vi.mock("./suggestion.js", () => ({
 
 vi.mock("./summary-worker.js", () => ({
   refreshSummary: vi.fn().mockResolvedValue({ costCents: 0.5 }),
+}));
+
+vi.mock("./soul-file-resolver.js", () => ({
+  fetchProjectSoulFile: vi.fn().mockResolvedValue(undefined),
+  fetchRepoIdForScope: vi.fn().mockResolvedValue(undefined),
+  loadRepoSoulFile: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../services/execution-logging.js", () => ({
@@ -156,6 +163,7 @@ function makePacket(overrides?: Partial<AgentContextPacket>): AgentContextPacket
     relevantEntities: [],
     recentEvents: [],
     summaries: [],
+    memories: [],
     actors: [],
     permissions: { autonomyMode: "suggest", actions: [] },
     tokenBudget: { total: 60000, used: 5000, sections: { trigger: 200 } },
@@ -638,6 +646,9 @@ describe("runPipeline", () => {
         organizationId: "org-1",
         agentId: "agent-1",
         triggerEventId: "evt-1",
+        scopeType: "channel",
+        scopeId: "ch-1",
+        isDm: false,
       },
     );
   });
