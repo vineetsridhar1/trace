@@ -223,11 +223,20 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     const text = editor.getText().trim();
     if (!text) return false;
 
+    // Clear input immediately so it feels instant — the optimistic message
+    // is already in the store by the time onSubmit returns synchronously.
+    clearEditor();
+
     try {
       await Promise.resolve(onSubmit(html));
-      clearEditor();
       return true;
     } catch {
+      // Restore editor content on failure so the user can retry
+      setValue(html);
+      const ed = quillRef.current?.getEditor();
+      if (ed) {
+        ed.clipboard.dangerouslyPasteHTML(html);
+      }
       return false;
     }
   }, [clearEditor, disabled, onSubmit]);
