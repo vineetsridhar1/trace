@@ -190,6 +190,15 @@ export function buildSessionNodes(
       continue;
     }
 
+    // Skip lifecycle events that add no useful content to the history
+    // (reuse the same hidden set that filters payload.type on session_output events)
+    if (HIDDEN_SESSION_PAYLOAD_TYPE_SET.has(event.eventType)) {
+      continue;
+    }
+    if (event.eventType === "session_started" && !asJsonObject(event.payload)?.prompt) {
+      continue;
+    }
+
     if (event.eventType === "session_output") {
       const payload = asJsonObject(event.payload);
 
