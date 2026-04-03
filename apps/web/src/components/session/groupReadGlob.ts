@@ -190,6 +190,14 @@ export function buildSessionNodes(
       continue;
     }
 
+    // Skip lifecycle events that add no useful content to the history
+    if (event.eventType === "session_started" && !asJsonObject(event.payload)?.prompt) {
+      continue;
+    }
+    if (event.eventType === "session_terminated") {
+      continue;
+    }
+
     if (event.eventType === "session_output") {
       const payload = asJsonObject(event.payload);
 
