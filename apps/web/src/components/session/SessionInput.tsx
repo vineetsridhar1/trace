@@ -56,11 +56,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     });
   }, []);
 
-  const handleSubmit = useCallback(async (html: string) => {
-    // Extract plain text from the html provided by ChatEditor.submit()
-    const div = document.createElement("div");
-    div.innerHTML = html;
-    const text = div.textContent?.trim() ?? "";
+  const handleSubmit = useCallback(async (_html: string, text: string) => {
     if (!text || !canSend) return;
 
     if (text === "/clear") {

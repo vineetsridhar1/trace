@@ -21,7 +21,7 @@ export function InlineMessageEditor({
   const mentionableUsers = useOrgMembers();
 
   const handleSubmit = useCallback(
-    async (html: string) => {
+    async (html: string, _text: string) => {
       if (savingRef.current) return;
       savingRef.current = true;
       setSaving(true);

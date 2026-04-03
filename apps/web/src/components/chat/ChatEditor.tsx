@@ -43,7 +43,7 @@ export interface ChatEditorHandle {
 }
 
 interface ChatEditorProps {
-  onSubmit: (html: string) => void | Promise<void>;
+  onSubmit: (html: string, text: string) => void | Promise<void>;
   placeholder?: string;
   disabled?: boolean;
   initialHtml?: string;
@@ -228,7 +228,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     clearEditor();
 
     try {
-      await Promise.resolve(onSubmit(html));
+      await Promise.resolve(onSubmit(html, text));
       return true;
     } catch {
       // Restore editor content on failure so the user can retry.

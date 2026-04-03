@@ -32,7 +32,7 @@ export function ChatComposer({ chatId, parentId }: { chatId: string; parentId?: 
   const mentionableUsers = useOrgMembers();
 
   const handleSubmit = useCallback(
-    async (html: string) => {
+    async (html: string, _text: string) => {
       // Insert optimistic message so it appears instantly
       const {
         messageId: tempMessageId,
