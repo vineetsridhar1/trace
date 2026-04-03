@@ -19,6 +19,7 @@
  */
 
 import { estimateTokens } from "./context-builder.js";
+import { prisma } from "../lib/db.js";
 
 // ---------------------------------------------------------------------------
 // Platform default (inlined to avoid build-time asset resolution issues)
@@ -99,4 +100,127 @@ export function resolveSoulFile(input: SoulFileResolutionInput): string {
   }
 
   return truncateToTokenBudget(resolved, budget);
+}
+
+// ---------------------------------------------------------------------------
+// Project soul file fetcher — looks up the soul file from the project
+// linked to the scope entity (channel, session, or ticket).
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the project-level soul file for a given scope.
+ *
+ * Follows scope → project joins:
+ * - channel → ChannelProject → Project
+ * - session → SessionProject → Project
+ * - ticket → TicketProject → Project
+ *
+ * Returns the project soul file string, or undefined if not found/empty.
+ */
+export async function fetchProjectSoulFile(
+  organizationId: string,
+  scopeType: string,
+  scopeId: string,
+): Promise<string | undefined> {
+  try {
+    let project: { soulFile: string } | null = null;
+
+    if (scopeType === "channel") {
+      const link = await prisma.channelProject.findFirst({
+        where: { channelId: scopeId, project: { organizationId } },
+        select: { project: { select: { soulFile: true } } },
+      });
+      project = link?.project ?? null;
+    } else if (scopeType === "session") {
+      const link = await prisma.sessionProject.findFirst({
+        where: { sessionId: scopeId, project: { organizationId } },
+        select: { project: { select: { soulFile: true } } },
+      });
+      project = link?.project ?? null;
+    } else if (scopeType === "ticket") {
+      const link = await prisma.ticketProject.findFirst({
+        where: { ticketId: scopeId, project: { organizationId } },
+        select: { project: { select: { soulFile: true } } },
+      });
+      project = link?.project ?? null;
+    }
+    // chat and system scopes don't have project links
+
+    if (project?.soulFile?.trim()) {
+      return project.soulFile;
+    }
+    return undefined;
+  } catch {
+    // Non-critical — fall back to org/default soul file
+    return undefined;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Repo soul file loader — reads .trace/soul.md from the repo filesystem
+// ---------------------------------------------------------------------------
+
+/** Simple TTL cache for repo soul files to avoid repeated file I/O. */
+const repoSoulFileCache = new Map<string, { content: string | undefined; expiresAt: number }>();
+const REPO_SOUL_FILE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Load the repo-level soul file from `.trace/soul.md` in the repo working directory.
+ *
+ * This requires the repo to have a local clone accessible from the server.
+ * For sessions running on Fly machines, the file may not be accessible — in that
+ * case this function returns undefined and the resolver falls back to project/org/default.
+ *
+ * Results are cached per repoId with a 5-minute TTL.
+ */
+export async function loadRepoSoulFile(repoId: string): Promise<string | undefined> {
+  // Check cache
+  const cached = repoSoulFileCache.get(repoId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.content;
+  }
+
+  try {
+    // Look up the repo to find its clone path
+    const repo = await prisma.repo.findUnique({
+      where: { id: repoId },
+      select: { remoteUrl: true, setupConfig: true },
+    });
+
+    if (!repo) {
+      cacheRepoSoulFile(repoId, undefined);
+      return undefined;
+    }
+
+    // The setupConfig may contain a local clone path for repos set up locally
+    const config = repo.setupConfig as Record<string, unknown> | null;
+    const clonePath = config?.localPath as string | undefined;
+
+    if (!clonePath) {
+      // No local path available — can't read from filesystem
+      cacheRepoSoulFile(repoId, undefined);
+      return undefined;
+    }
+
+    // Attempt to read .trace/soul.md from the repo
+    const { readFile } = await import("fs/promises");
+    const { join } = await import("path");
+    const soulFilePath = join(clonePath, ".trace", "soul.md");
+
+    const content = await readFile(soulFilePath, "utf-8");
+    const trimmed = content.trim() || undefined;
+    cacheRepoSoulFile(repoId, trimmed);
+    return trimmed;
+  } catch {
+    // File doesn't exist or can't be read — graceful fallback
+    cacheRepoSoulFile(repoId, undefined);
+    return undefined;
+  }
+}
+
+function cacheRepoSoulFile(repoId: string, content: string | undefined): void {
+  repoSoulFileCache.set(repoId, {
+    content,
+    expiresAt: Date.now() + REPO_SOUL_FILE_TTL_MS,
+  });
 }

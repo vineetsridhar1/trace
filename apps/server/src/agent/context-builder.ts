@@ -23,6 +23,7 @@ import type { AgentEvent } from "./router.js";
 import type { OrgAgentSettings } from "../services/agent-identity.js";
 import { resolveSoulFile } from "./soul-file-resolver.js";
 import { resolveAutonomyMode, type AutonomyScopeType } from "../services/scope-autonomy.js";
+import { memoryService } from "../services/memory.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,6 +45,15 @@ export interface ContextSummary {
   structuredData: Record<string, unknown>;
   fresh: boolean;
   eventCount: number;
+}
+
+/** A derived memory included in the context packet. */
+export interface ContextMemory {
+  kind: string;
+  subjectType: string;
+  subjectId: string;
+  content: string;
+  confidence: number;
 }
 
 /** Actor information resolved from user IDs in the batch. */
@@ -87,6 +97,9 @@ export interface AgentContextPacket {
 
   /** Rolling summaries for the scope and relevant entities. */
   summaries: ContextSummary[];
+
+  /** Derived memories relevant to this context. */
+  memories: ContextMemory[];
 
   /** Actors involved in the batch events. */
   actors: ContextActor[];
@@ -134,6 +147,7 @@ export interface TokenBudgetConfig {
     eventBatch: number;
     relevantEntities: number;
     summaries: number;
+    memories: number;
     recentEvents: number;
     actors: number;
   };
@@ -148,9 +162,10 @@ export const TIER2_TOKEN_BUDGET: TokenBudgetConfig = {
     soulFile: 2_000,
     scopeEntity: 4_000,
     eventBatch: 10_000,
-    relevantEntities: 12_000,
-    summaries: 10_000,
-    recentEvents: 8_000,
+    relevantEntities: 10_000,
+    summaries: 9_000,
+    memories: 4_000,
+    recentEvents: 7_000,
     actors: 2_000,
   },
 };
@@ -164,9 +179,10 @@ export const TIER3_TOKEN_BUDGET: TokenBudgetConfig = {
     soulFile: 3_000,
     scopeEntity: 6_000,
     eventBatch: 18_000,
-    relevantEntities: 22_000,
-    summaries: 18_000,
-    recentEvents: 14_000,
+    relevantEntities: 18_000,
+    summaries: 16_000,
+    memories: 8_000,
+    recentEvents: 12_000,
     actors: 3_000,
   },
 };
@@ -975,6 +991,32 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
       });
   recordSection("summaries", estimateObjectTokens(summaries));
 
+  // --- 7b. Derived memories ---
+  const relevantSubjects = extractSubjects(events, relevantEntities, scopeEntity);
+  let memories: ContextMemory[] = [];
+  if (budget.sections.memories > 0) {
+    try {
+      const rawMemories = await memoryService.fetchForContext({
+        organizationId,
+        scopeType: scopeType as PrismaScopeType,
+        scopeId,
+        isDm: isDmScope,
+        relevantSubjects,
+        tokenBudget: budget.sections.memories,
+      });
+      memories = rawMemories.map((m) => ({
+        kind: m.kind,
+        subjectType: m.subjectType,
+        subjectId: m.subjectId,
+        content: m.content,
+        confidence: m.confidence,
+      }));
+    } catch {
+      // Non-critical — agent works without memories
+    }
+  }
+  recordSection("memories", estimateObjectTokens(memories));
+
   // --- 8. Recent events beyond the batch ---
   const batchIds = new Set(events.map((e) => e.id));
   const recentEvents = await fetchRecentEvents({
@@ -1006,6 +1048,7 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
     relevantEntities,
     recentEvents: recentTruncated,
     summaries,
+    memories,
     actors,
     permissions: {
       autonomyMode: effectiveAutonomyMode,
@@ -1068,4 +1111,44 @@ function truncateEventsToFit(events: AgentEvent[], budget: number): AgentEvent[]
   }
 
   return result;
+}
+
+/**
+ * Extract subject identifiers from events and entities for memory retrieval.
+ * Returns a list of { type, id } pairs representing entities that memories
+ * might be about.
+ */
+function extractSubjects(
+  events: AgentEvent[],
+  relevantEntities: ContextEntity[],
+  scopeEntity: ContextEntity | null,
+): Array<{ type: string; id: string }> {
+  const seen = new Set<string>();
+  const subjects: Array<{ type: string; id: string }> = [];
+
+  function add(type: string, id: string): void {
+    const key = `${type}:${id}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    subjects.push({ type, id });
+  }
+
+  // Scope entity
+  if (scopeEntity) {
+    add(scopeEntity.type, scopeEntity.id);
+  }
+
+  // Relevant entities
+  for (const entity of relevantEntities) {
+    add(entity.type, entity.id);
+  }
+
+  // Actors from events
+  for (const event of events) {
+    if (event.actorId) {
+      add(event.actorType === "agent" ? "agent" : "user", event.actorId);
+    }
+  }
+
+  return subjects;
 }

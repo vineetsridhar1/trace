@@ -23,6 +23,8 @@ import {
 import { EventAggregator, type AggregatedBatch } from "./agent/aggregator.js";
 import { costTrackingService } from "./services/cost-tracking.js";
 import { startSummaryWorker, stopSummaryWorker, trackEventForSummary } from "./agent/summary-worker.js";
+import { startMemoryExtractorWorker, stopMemoryExtractorWorker, trackEventForMemoryExtraction } from "./agent/memory-extractor-worker.js";
+import { startEmbeddingWorker, stopEmbeddingWorker } from "./agent/embedding-worker.js";
 import { ActionExecutor } from "./agent/executor.js";
 import { runPipeline } from "./agent/pipeline.js";
 import { ticketService } from "./services/ticket.js";
@@ -33,6 +35,7 @@ import { channelService } from "./services/channel.js";
 import { organizationService } from "./services/organization.js";
 import { eventService } from "./services/event.js";
 import { startSuggestionExpiryWorker, stopSuggestionExpiryWorker } from "./agent/suggestion-expiry.js";
+import { memoryService } from "./services/memory.js";
 import { setPolicyCostTracker } from "./agent/policy-engine.js";
 import { publishWorkerStatus, publishAggregationWindows } from "./services/agent-worker-status.js";
 import { Semaphore } from "./agent/concurrency.js";
@@ -145,6 +148,7 @@ const executor = new ActionExecutor({
   inboxService,
   organizationService,
   eventService,
+  memoryService,
 });
 
 /**
@@ -456,6 +460,9 @@ async function processEvents(orgId: string, entries: StreamEntry[]): Promise<voi
       // Track event count for summary freshness (non-blocking)
       trackEventForSummary(orgId, event.scopeType, event.scopeId).catch(() => {});
 
+      // Track event for memory extraction (non-blocking)
+      trackEventForMemoryExtraction(orgId, event.scopeType, event.scopeId, event.eventType).catch(() => {});
+
       // Route the event
       const result = routeEvent(event, agentContext);
       incrementMetric("eventsProcessed");
@@ -584,6 +591,8 @@ async function shutdown(signal: string): Promise<void> {
   stopTimers();
   cachedCostTracker.stop();
   stopSummaryWorker();
+  stopMemoryExtractorWorker();
+  stopEmbeddingWorker();
   stopSuggestionExpiryWorker();
   stopRedisHealthMonitor();
 
@@ -682,6 +691,14 @@ async function main(): Promise<void> {
   // Start the background summary refresh worker
   startSummaryWorker(() => activeOrgs);
   log("summary worker started");
+
+  // Start the memory extractor worker
+  startMemoryExtractorWorker(() => activeOrgs);
+  log("memory extractor worker started");
+
+  // Start the embedding worker (Phase 4 — populates vector embeddings)
+  startEmbeddingWorker();
+  log("embedding worker started");
 
   // Start the suggestion expiry worker
   startSuggestionExpiryWorker();
