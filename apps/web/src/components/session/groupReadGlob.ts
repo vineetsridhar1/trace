@@ -191,10 +191,11 @@ export function buildSessionNodes(
     }
 
     // Skip lifecycle events that add no useful content to the history
-    if (event.eventType === "session_started" && !asJsonObject(event.payload)?.prompt) {
+    // (reuse the same hidden set that filters payload.type on session_output events)
+    if (HIDDEN_SESSION_PAYLOAD_TYPE_SET.has(event.eventType)) {
       continue;
     }
-    if (event.eventType === "session_terminated") {
+    if (event.eventType === "session_started" && !asJsonObject(event.payload)?.prompt) {
       continue;
     }
 
