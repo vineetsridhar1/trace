@@ -231,8 +231,8 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
       await Promise.resolve(onSubmit(html));
       return true;
     } catch {
-      // Restore editor content on failure so the user can retry
-      setValue(html);
+      // Restore editor content on failure so the user can retry.
+      // Only use the Quill imperative path — handleChange will propagate to setValue.
       const ed = quillRef.current?.getEditor();
       if (ed) {
         ed.clipboard.dangerouslyPasteHTML(html);

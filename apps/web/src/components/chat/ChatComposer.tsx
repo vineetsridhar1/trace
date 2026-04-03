@@ -64,6 +64,7 @@ export function ChatComposer({ chatId, parentId }: { chatId: string; parentId?: 
         removeOptimisticChatMessage(chatId, tempMessageId, tempEventId);
         console.error("Failed to send chat message", error);
         toast.error(error instanceof Error ? error.message : "Failed to send message");
+        // Re-throw so ChatEditor.submit() catches it and restores the editor content
         throw error;
       }
     },
