@@ -131,15 +131,19 @@ export async function extractMemories(
     .filter(Boolean)
     .join("\n");
 
-  const response = await withRetry(() =>
-    adapter.chat({
+  const rawResponse = await withRetry(() =>
+    adapter.complete({
       model: EXTRACTION_MODEL,
       maxTokens: 1024,
       temperature: 0,
       system: EXTRACTION_SYSTEM_PROMPT,
       messages: [{ role: "user", content: userPrompt }],
     }),
-  ) as { content: Array<{ type: string; text?: string }>; usage: { inputTokens: number; outputTokens: number } };
+  );
+  const response = rawResponse as {
+    content: Array<{ type: string; text?: string }>;
+    usage: { inputTokens: number; outputTokens: number };
+  };
 
   // Parse the response
   const responseText = response.content

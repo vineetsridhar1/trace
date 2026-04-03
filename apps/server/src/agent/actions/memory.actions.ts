@@ -65,6 +65,9 @@ export const memoryDispatchers: Record<string, ActionDispatcher> = {
       subjectType: args.subjectType as string | undefined,
       kind: args.kind as import("@prisma/client").MemoryKind | undefined,
       limit: typeof args.limit === "number" ? args.limit : undefined,
+      scopeType: ctx.scopeType as import("@prisma/client").ScopeType | undefined,
+      scopeId: ctx.scopeId,
+      isDm: ctx.isDm,
     });
   },
 };

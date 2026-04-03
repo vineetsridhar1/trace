@@ -40,6 +40,10 @@ export interface SearchMemoryInput {
   subjectType?: string;
   kind?: MemoryKind;
   limit?: number;
+  /** Current scope context for privacy enforcement. */
+  scopeType?: ScopeType;
+  scopeId?: string;
+  isDm?: boolean;
 }
 
 export interface FetchForContextInput {
@@ -106,6 +110,28 @@ export class MemoryService {
     if (input.query) {
       where.content = { contains: input.query, mode: "insensitive" };
     }
+
+    // Privacy enforcement: apply the same visibility rules as fetchForContext
+    const visibilityConditions: Prisma.DerivedMemoryWhereInput[] = [];
+
+    if (input.scopeType && input.scopeId) {
+      // Always allow memories from the current scope
+      visibilityConditions.push({
+        sourceScopeType: input.scopeType,
+        sourceScopeId: input.scopeId,
+      });
+
+      if (!input.isDm) {
+        // In non-DM scopes, also allow memories from other non-DM scopes
+        visibilityConditions.push({ sourceIsDm: false });
+      }
+      // In DM scopes, only the current scope's memories are visible (rule above)
+    } else {
+      // No scope context provided — exclude all DM-sourced memories as a safe default
+      visibilityConditions.push({ sourceIsDm: false });
+    }
+
+    where.OR = visibilityConditions;
 
     return prisma.derivedMemory.findMany({
       where,

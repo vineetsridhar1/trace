@@ -82,6 +82,10 @@ export interface AgentContext {
   agentId: string;
   /** The event that triggered this action — used for idempotency. */
   triggerEventId: string;
+  /** Scope context for privacy-aware actions like memory.search. */
+  scopeType?: string;
+  scopeId?: string;
+  isDm?: boolean;
 }
 
 // ---------------------------------------------------------------------------

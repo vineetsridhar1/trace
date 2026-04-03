@@ -992,18 +992,36 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
   recordSection("summaries", estimateObjectTokens(summaries));
 
   // --- 7b. Derived memories ---
+  // Try hybrid search (semantic + recency) first, fall back to recency-only.
   const relevantSubjects = extractSubjects(events, relevantEntities, scopeEntity);
   let memories: ContextMemory[] = [];
   if (budget.sections.memories > 0) {
     try {
-      const rawMemories = await memoryService.fetchForContext({
+      // Build query text from trigger event for semantic search
+      const triggerText = triggerEvent.payload.text ??
+        triggerEvent.payload.title ??
+        triggerEvent.payload.content ??
+        JSON.stringify(triggerEvent.payload).slice(0, 200);
+
+      const rawMemories = await memoryService.hybridSearch({
         organizationId,
         scopeType: scopeType as PrismaScopeType,
         scopeId,
         isDm: isDmScope,
+        queryText: String(triggerText),
         relevantSubjects,
         tokenBudget: budget.sections.memories,
-      });
+      }).catch(() =>
+        // Fall back to recency-only if hybrid search fails (e.g., no embeddings)
+        memoryService.fetchForContext({
+          organizationId,
+          scopeType: scopeType as PrismaScopeType,
+          scopeId,
+          isDm: isDmScope,
+          relevantSubjects,
+          tokenBudget: budget.sections.memories,
+        }),
+      );
       memories = rawMemories.map((m) => ({
         kind: m.kind,
         subjectType: m.subjectType,

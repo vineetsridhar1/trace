@@ -156,6 +156,61 @@ export async function fetchProjectSoulFile(
   }
 }
 
+/**
+ * Fetch the repo ID linked to a scope, for use with loadRepoSoulFile().
+ * Follows: session → Repo, channel → Repo, or scope → project → repo.
+ */
+export async function fetchRepoIdForScope(
+  organizationId: string,
+  scopeType: string,
+  scopeId: string,
+): Promise<string | undefined> {
+  try {
+    // Sessions may have a direct repo link
+    if (scopeType === "session") {
+      const session = await prisma.session.findUnique({
+        where: { id: scopeId },
+        select: { repoId: true },
+      });
+      if (session?.repoId) return session.repoId;
+    }
+
+    // Channels may have a direct repo link
+    if (scopeType === "channel") {
+      const channel = await prisma.channel.findUnique({
+        where: { id: scopeId },
+        select: { repoId: true },
+      });
+      if (channel?.repoId) return channel.repoId;
+    }
+
+    // Fall back to project → repo
+    if (scopeType === "channel") {
+      const link = await prisma.channelProject.findFirst({
+        where: { channelId: scopeId, project: { organizationId } },
+        select: { project: { select: { repoId: true } } },
+      });
+      if (link?.project?.repoId) return link.project.repoId;
+    } else if (scopeType === "session") {
+      const link = await prisma.sessionProject.findFirst({
+        where: { sessionId: scopeId, project: { organizationId } },
+        select: { project: { select: { repoId: true } } },
+      });
+      if (link?.project?.repoId) return link.project.repoId;
+    } else if (scopeType === "ticket") {
+      const link = await prisma.ticketProject.findFirst({
+        where: { ticketId: scopeId, project: { organizationId } },
+        select: { project: { select: { repoId: true } } },
+      });
+      if (link?.project?.repoId) return link.project.repoId;
+    }
+
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Repo soul file loader — reads .trace/soul.md from the repo filesystem
 // ---------------------------------------------------------------------------

@@ -39,6 +39,8 @@ const EVENTS_PER_EXTRACTION = 50; // max events per extraction call
 const SCOPE_EVENT_COUNT_PREFIX = "agent:memory:events:";
 /** Redis SET tracking scopes with pending memory extraction events. */
 const ACTIVE_SCOPES_SET_KEY = "agent:memory:active_scopes";
+/** Redis key storing the last extracted event ID per scope (watermark). */
+const WATERMARK_PREFIX = "agent:memory:watermark:";
 
 const EXTRACTION_MODEL = process.env.AGENT_MEMORY_MODEL ?? "claude-haiku-4-5-20251001";
 
@@ -120,14 +122,24 @@ async function doExtractForScope(
   scopeType: string,
   scopeId: string,
 ): Promise<void> {
-  // Fetch recent high-signal events
+  // Read the watermark — last extracted event's timestamp for this scope
+  const watermarkKey = `${WATERMARK_PREFIX}${organizationId}:${scopeType}:${scopeId}`;
+  const lastWatermark = await redis.get(watermarkKey).catch(() => null);
+
+  // Build query — only fetch events after the watermark
+  const whereClause: Record<string, unknown> = {
+    organizationId,
+    scopeType: scopeType as ScopeType,
+    scopeId,
+    eventType: { in: [...EXTRACTABLE_EVENT_TYPES] as EventType[] },
+  };
+  if (lastWatermark) {
+    whereClause.timestamp = { gt: new Date(lastWatermark) };
+  }
+
+  // Fetch high-signal events since last extraction
   const events = await prisma.event.findMany({
-    where: {
-      organizationId,
-      scopeType: scopeType as ScopeType,
-      scopeId,
-      eventType: { in: [...EXTRACTABLE_EVENT_TYPES] as EventType[] },
-    },
+    where: whereClause,
     orderBy: { timestamp: "desc" },
     take: EVENTS_PER_EXTRACTION,
   });
@@ -197,6 +209,10 @@ async function doExtractForScope(
       isSummary: false,
     }).catch(() => {});
   }
+
+  // Update watermark to the most recent event's timestamp
+  // events[0] is the most recent (ordered by timestamp desc)
+  await redis.set(watermarkKey, events[0].timestamp.toISOString()).catch(() => {});
 
   log("extraction complete", {
     organizationId,

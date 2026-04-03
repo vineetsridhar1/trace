@@ -79,8 +79,38 @@ async function embedEntitySummaries(): Promise<number> {
   return unembedded.length;
 }
 
+/** Check if pgvector extension and embedding columns are available. */
+let pgvectorAvailable: boolean | null = null;
+
+async function checkPgvectorAvailable(): Promise<boolean> {
+  if (pgvectorAvailable !== null) return pgvectorAvailable;
+  try {
+    // Check if the embedding column exists on DerivedMemory
+    await prisma.$queryRaw`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'DerivedMemory' AND column_name = 'embedding'
+    `;
+    const result = await prisma.$queryRaw<Array<{ column_name: string }>>`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'DerivedMemory' AND column_name = 'embedding'
+    `;
+    pgvectorAvailable = result.length > 0;
+    if (!pgvectorAvailable) {
+      log("pgvector embedding column not found — embedding worker will be idle until migration is applied");
+    }
+    return pgvectorAvailable;
+  } catch {
+    pgvectorAvailable = false;
+    log("pgvector check failed — embedding worker will be idle");
+    return false;
+  }
+}
+
 async function runEmbeddingCycle(): Promise<void> {
   try {
+    // Skip if pgvector isn't set up yet
+    if (!(await checkPgvectorAvailable())) return;
+
     const memoriesEmbedded = await embedDerivedMemories();
     const summariesEmbedded = await embedEntitySummaries();
 

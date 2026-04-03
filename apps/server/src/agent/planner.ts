@@ -529,7 +529,7 @@ export async function runPlanner(
   const startTime = Date.now();
 
   try {
-    const systemPrompt = buildSystemPrompt(ctx);
+    const { text: systemPrompt } = buildSystemPrompt(ctx);
 
     const response: LLMResponse = await withRetry(() =>
       adapter.complete({
