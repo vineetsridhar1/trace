@@ -151,7 +151,6 @@ function makeMockAdapterError(message: string): LLMAdapter {
 describe("Tier 2 Planner", () => {
   beforeEach(() => {
     setAdapterForTest(null);
-    delete process.env.AGENT_COMPACT_CONTEXT;
     delete process.env.AGENT_DEBUG_RAW_CONTEXT;
   });
 
@@ -504,10 +503,12 @@ describe("Tier 2 Planner", () => {
       expect(capturedSystem).toContain("no_op");
       expect(capturedSystem).toContain("<soul_file>");
       expect(capturedSystem).toContain("Be friendly and proactive.");
-      expect(capturedSystem).toContain("<trigger_event>");
       expect(capturedSystem).toContain("<scope>");
+      expect(capturedSystem).toContain("<decision_context>");
+      expect(capturedSystem).toContain("<recent_signals");
       expect(capturedSystem).toContain("<actors>");
       expect(capturedSystem).toContain("ignore");
+      expect(capturedSystem).not.toContain("<trigger_event>");
     });
 
     it("includes relevant entities and summaries when present", async () => {
@@ -547,57 +548,6 @@ describe("Tier 2 Planner", () => {
             hop: 1,
           },
         ],
-        summaries: [
-          {
-            entityType: "chat",
-            entityId: "chat-1",
-            content: "Team discussed deployment.",
-            structuredData: {},
-            fresh: true,
-            eventCount: 10,
-          },
-        ],
-      });
-
-      await runPlanner(ctx, { adapter: capturingAdapter });
-
-      expect(capturedSystem).toContain("<relevant_entities");
-      expect(capturedSystem).toContain("Existing bug");
-      expect(capturedSystem).toContain("<summaries>");
-      expect(capturedSystem).toContain("Team discussed deployment.");
-    });
-
-    it("renders compact context sections when AGENT_COMPACT_CONTEXT is enabled", async () => {
-      process.env.AGENT_COMPACT_CONTEXT = "1";
-
-      let capturedSystem = "";
-      const capturingAdapter: LLMAdapter = {
-        provider: "anthropic",
-        async complete(options: LLMRequestOptions): Promise<LLMResponse> {
-          capturedSystem = options.system ?? "";
-          return {
-            content: [
-              {
-                type: "tool_use",
-                id: "t1",
-                name: "planner_decision",
-                input: {
-                  disposition: "ignore",
-                  confidence: 0.5,
-                  rationaleSummary: "Test.",
-                  proposedActions: [],
-                },
-              },
-            ],
-            stopReason: "tool_use",
-            usage: { inputTokens: 100, outputTokens: 50 },
-            model: "test-model",
-          };
-        },
-        async *stream(): AsyncIterable<LLMStreamEvent> {},
-      };
-
-      const ctx = makeContextPacket({
         entitySnapshots: [
           { type: "chat", id: "chat-1", label: "Engineering", facts: ["chat_type: group"] },
           { type: "ticket", id: "t-99", label: "Existing bug", facts: ["status: todo"] },
@@ -609,31 +559,9 @@ describe("Tier 2 Planner", () => {
             content: "Team discussed deployment.",
             structuredData: {
               narrative: "Team discussed deployment.",
-              decisions: ["Ship after smoke tests"],
-              openQuestions: [],
-              actionItems: [],
-              blockers: ["Waiting on CI"],
             },
             fresh: true,
             eventCount: 10,
-          },
-        ],
-        memories: [
-          {
-            kind: "decision",
-            subjectType: "project",
-            subjectId: "proj-1",
-            content: "Prefer shipping the base memory system before expanding embeddings.",
-            confidence: 0.9,
-          },
-        ],
-        recentSignals: [
-          {
-            timestamp: "2026-03-24T10:01:00Z",
-            actor: "user:user-1",
-            kind: "message",
-            text: "Should we expand embeddings now or later?",
-            sourceEventId: "evt-2",
           },
         ],
       });
@@ -641,11 +569,11 @@ describe("Tier 2 Planner", () => {
       await runPlanner(ctx, { adapter: capturingAdapter });
 
       expect(capturedSystem).toContain("Use context in this order of authority");
-      expect(capturedSystem).toContain("<decision_context>");
       expect(capturedSystem).toContain("<entity_snapshot");
       expect(capturedSystem).toContain("<summary_snapshot>");
-      expect(capturedSystem).toContain("<memory_snapshot");
-      expect(capturedSystem).toContain("<recent_signals");
+      expect(capturedSystem).toContain("Existing bug");
+      expect(capturedSystem).toContain("Team discussed deployment.");
+      expect(capturedSystem).toContain("<decision_context>");
       expect(capturedSystem).not.toContain("<trigger_event>");
       expect(capturedSystem).not.toContain("<event_batch");
       expect(capturedSystem).not.toContain("<scope_entity");

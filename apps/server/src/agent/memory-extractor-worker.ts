@@ -13,7 +13,7 @@
  * event range), not a single narrative.
  */
 
-import type { Event, EventType, ScopeType } from "@prisma/client";
+import type { EventType, Prisma, ScopeType } from "@prisma/client";
 import { redis } from "../lib/redis.js";
 import { prisma } from "../lib/db.js";
 import { memoryService } from "../services/memory.js";
@@ -37,10 +37,14 @@ const EVENTS_PER_EXTRACTION = 50; // max events per extraction call
 
 /** Redis key tracking per-scope event counts for memory extraction. */
 const SCOPE_EVENT_COUNT_PREFIX = "agent:memory:events:";
+/** Redis key storing when a scope first had pending extraction work. */
+const SCOPE_FIRST_PENDING_AT_PREFIX = "agent:memory:first_pending_at:";
 /** Redis SET tracking scopes with pending memory extraction events. */
 const ACTIVE_SCOPES_SET_KEY = "agent:memory:active_scopes";
 /** Redis key storing the last extracted event ID per scope (watermark). */
 const WATERMARK_PREFIX = "agent:memory:watermark:";
+/** Extract low-volume scopes once they have been waiting long enough. */
+const STALE_SCOPE_AGE_MS = 10 * 60_000;
 
 const EXTRACTION_MODEL = process.env.AGENT_MEMORY_MODEL ?? "claude-haiku-4-5-20251001";
 
@@ -63,10 +67,12 @@ export async function trackEventForMemoryExtraction(
   if (!EXTRACTABLE_EVENT_TYPES.has(eventType)) return;
 
   const scopeRef = `${organizationId}:${scopeType}:${scopeId}`;
-  const key = `${SCOPE_EVENT_COUNT_PREFIX}${scopeRef}`;
+  const countKey = `${SCOPE_EVENT_COUNT_PREFIX}${scopeRef}`;
+  const firstPendingKey = `${SCOPE_FIRST_PENDING_AT_PREFIX}${scopeRef}`;
   try {
     const pipeline = redis.pipeline();
-    pipeline.incr(key);
+    pipeline.incr(countKey);
+    pipeline.setnx(firstPendingKey, new Date().toISOString());
     pipeline.sadd(ACTIVE_SCOPES_SET_KEY, scopeRef);
     await pipeline.exec();
   } catch {
@@ -75,19 +81,147 @@ export async function trackEventForMemoryExtraction(
 }
 
 /**
- * Atomically read and reset the event counter for a scope.
+ * Read the pending extraction state for a scope without consuming it.
  */
-async function getAndResetScopeEventCount(scopeRef: string): Promise<number> {
-  const key = `${SCOPE_EVENT_COUNT_PREFIX}${scopeRef}`;
+async function getScopePendingState(scopeRef: string): Promise<{
+  count: number;
+  firstPendingAt: Date | null;
+}> {
+  const countKey = `${SCOPE_EVENT_COUNT_PREFIX}${scopeRef}`;
+  const firstPendingKey = `${SCOPE_FIRST_PENDING_AT_PREFIX}${scopeRef}`;
   try {
-    const val = await redis.getdel(key);
-    if (val) {
-      await redis.srem(ACTIVE_SCOPES_SET_KEY, scopeRef);
-    }
-    return val ? parseInt(val, 10) : 0;
+    const [countRaw, firstPendingRaw] = await redis.mget(countKey, firstPendingKey);
+    return {
+      count: countRaw ? parseInt(countRaw, 10) : 0,
+      firstPendingAt: firstPendingRaw ? new Date(firstPendingRaw) : null,
+    };
   } catch {
-    return 0;
+    return { count: 0, firstPendingAt: null };
   }
+}
+
+async function clearScopePendingState(scopeRef: string): Promise<void> {
+  const countKey = `${SCOPE_EVENT_COUNT_PREFIX}${scopeRef}`;
+  const firstPendingKey = `${SCOPE_FIRST_PENDING_AT_PREFIX}${scopeRef}`;
+  try {
+    const pipeline = redis.pipeline();
+    pipeline.del(countKey);
+    pipeline.del(firstPendingKey);
+    pipeline.srem(ACTIVE_SCOPES_SET_KEY, scopeRef);
+    await pipeline.exec();
+  } catch {
+    // Best effort cleanup
+  }
+}
+
+async function markScopeProgress(
+  scopeRef: string,
+  processedCount: number,
+  hasRemainingBacklog: boolean,
+): Promise<void> {
+  const countKey = `${SCOPE_EVENT_COUNT_PREFIX}${scopeRef}`;
+  const firstPendingKey = `${SCOPE_FIRST_PENDING_AT_PREFIX}${scopeRef}`;
+
+  try {
+    const remainingRaw = await redis.decrby(countKey, processedCount);
+    const remainingCount = Math.max(remainingRaw, 0);
+
+    if (remainingCount > 0 || hasRemainingBacklog) {
+      const pipeline = redis.pipeline();
+      if (remainingCount <= 0 && hasRemainingBacklog) {
+        // Keep the scope active for another pass when DB backlog exceeds Redis accounting.
+        pipeline.set(countKey, "1");
+      }
+      pipeline.set(firstPendingKey, new Date().toISOString());
+      pipeline.sadd(ACTIVE_SCOPES_SET_KEY, scopeRef);
+      await pipeline.exec();
+      return;
+    }
+  } catch {
+    if (hasRemainingBacklog) {
+      try {
+        const pipeline = redis.pipeline();
+        pipeline.set(countKey, "1");
+        pipeline.set(firstPendingKey, new Date().toISOString());
+        pipeline.sadd(ACTIVE_SCOPES_SET_KEY, scopeRef);
+        await pipeline.exec();
+        return;
+      } catch {
+        // Fall through to best-effort cleanup
+      }
+    }
+  }
+
+  await clearScopePendingState(scopeRef);
+}
+
+type ExtractionWatermark = {
+  timestamp: string;
+  eventId?: string;
+};
+
+function parseWatermark(raw: string | null): ExtractionWatermark | null {
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as { timestamp?: string; eventId?: string };
+    if (parsed.timestamp) {
+      return {
+        timestamp: parsed.timestamp,
+        ...(parsed.eventId ? { eventId: parsed.eventId } : {}),
+      };
+    }
+  } catch {
+    // Backward compatibility: older watermarks stored just the timestamp string.
+  }
+
+  return { timestamp: raw };
+}
+
+function buildPendingEventsWhere(input: {
+  organizationId: string;
+  scopeType: string;
+  scopeId: string;
+  watermark: ExtractionWatermark | null;
+}): Prisma.EventWhereInput {
+  const whereClause: Prisma.EventWhereInput = {
+    organizationId: input.organizationId,
+    scopeType: input.scopeType as ScopeType,
+    scopeId: input.scopeId,
+    eventType: { in: [...EXTRACTABLE_EVENT_TYPES] as EventType[] },
+  };
+
+  if (!input.watermark) {
+    return whereClause;
+  }
+
+  const watermarkTimestamp = new Date(input.watermark.timestamp);
+  if (input.watermark.eventId) {
+    whereClause.AND = [
+      {
+        OR: [
+          { timestamp: { gt: watermarkTimestamp } },
+          {
+            timestamp: watermarkTimestamp,
+            id: { gt: input.watermark.eventId },
+          },
+        ],
+      },
+    ];
+  } else {
+    whereClause.timestamp = { gt: watermarkTimestamp };
+  }
+
+  return whereClause;
+}
+
+function shouldExtractScope(
+  pendingState: { count: number; firstPendingAt: Date | null },
+  nowMs = Date.now(),
+): boolean {
+  if (pendingState.count >= STALE_EVENT_THRESHOLD) return true;
+  if (pendingState.count <= 0 || !pendingState.firstPendingAt) return false;
+  return nowMs - pendingState.firstPendingAt.getTime() >= STALE_SCOPE_AGE_MS;
 }
 
 // ---------------------------------------------------------------------------
@@ -122,30 +256,34 @@ async function doExtractForScope(
   scopeType: string,
   scopeId: string,
 ): Promise<void> {
+  const scopeRef = `${organizationId}:${scopeType}:${scopeId}`;
   // Read the watermark — last extracted event's timestamp for this scope
   const watermarkKey = `${WATERMARK_PREFIX}${organizationId}:${scopeType}:${scopeId}`;
-  const lastWatermark = await redis.get(watermarkKey).catch(() => null);
+  const lastWatermark = parseWatermark(await redis.get(watermarkKey).catch(() => null));
 
   // Build query — only fetch events after the watermark
-  const whereClause: Record<string, unknown> = {
+  const whereClause = buildPendingEventsWhere({
     organizationId,
-    scopeType: scopeType as ScopeType,
+    scopeType,
     scopeId,
-    eventType: { in: [...EXTRACTABLE_EVENT_TYPES] as EventType[] },
-  };
-  if (lastWatermark) {
-    whereClause.timestamp = { gt: new Date(lastWatermark) };
-  }
+    watermark: lastWatermark,
+  });
 
   // Fetch high-signal events since last extraction, oldest-first so we process
   // chronologically and can advance the watermark to the newest processed event.
   const events = await prisma.event.findMany({
     where: whereClause,
-    orderBy: { timestamp: "asc" },
+    orderBy: [
+      { timestamp: "asc" },
+      { id: "asc" },
+    ],
     take: EVENTS_PER_EXTRACTION,
   });
 
-  if (events.length === 0) return;
+  if (events.length === 0) {
+    await clearScopePendingState(scopeRef);
+    return;
+  }
 
   // Convert to extraction format
   const extractionEvents: ExtractionEvent[] = events.map((e) => ({
@@ -213,9 +351,28 @@ async function doExtractForScope(
 
   // Advance watermark to the newest processed event's timestamp.
   // Events are ordered oldest-first, so the last element is the newest.
-  // If >EVENTS_PER_EXTRACTION events arrived, the next cycle picks up from here.
+  // Include the event ID so same-timestamp rows don't get skipped.
   const newestProcessed = events[events.length - 1];
-  await redis.set(watermarkKey, newestProcessed.timestamp.toISOString()).catch(() => {});
+  const nextWatermark: ExtractionWatermark = {
+    timestamp: newestProcessed.timestamp.toISOString(),
+    eventId: newestProcessed.id,
+  };
+  await redis.set(watermarkKey, JSON.stringify(nextWatermark)).catch(() => {});
+
+  const remaining = await prisma.event.findFirst({
+    where: buildPendingEventsWhere({
+      organizationId,
+      scopeType,
+      scopeId,
+      watermark: nextWatermark,
+    }),
+    orderBy: [
+      { timestamp: "asc" },
+      { id: "asc" },
+    ],
+    select: { id: true },
+  });
+  await markScopeProgress(scopeRef, events.length, !!remaining);
 
   log("extraction complete", {
     organizationId,
@@ -254,8 +411,8 @@ async function runExtractionCycle(): Promise<void> {
       // Only process scopes from active orgs
       if (activeOrgSet && !activeOrgSet.has(orgId)) continue;
 
-      const count = await getAndResetScopeEventCount(scopeRef);
-      if (count >= STALE_EVENT_THRESHOLD) {
+      const pendingState = await getScopePendingState(scopeRef);
+      if (shouldExtractScope(pendingState)) {
         scopesToProcess.push({ orgId, scopeType, scopeId });
       }
 
@@ -298,3 +455,10 @@ export function stopMemoryExtractorWorker(): void {
   }
   log("memory extractor worker stopped");
 }
+
+export const __testOnly__ = {
+  buildPendingEventsWhere,
+  parseWatermark,
+  shouldExtractScope,
+  runExtractionCycle,
+};

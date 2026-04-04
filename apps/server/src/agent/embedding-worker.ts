@@ -9,7 +9,7 @@
  */
 
 import { prisma } from "../lib/db.js";
-import { embeddingService } from "../services/embedding.js";
+import { EmbeddingUnavailableError, embeddingService } from "../services/embedding.js";
 import { createAgentLogger } from "./logger.js";
 
 // ---------------------------------------------------------------------------
@@ -81,22 +81,20 @@ async function embedEntitySummaries(): Promise<number> {
 
 /** Check if pgvector extension and embedding columns are available. */
 let pgvectorAvailable: boolean | null = null;
+let embeddingConfigLogged = false;
 
 async function checkPgvectorAvailable(): Promise<boolean> {
   if (pgvectorAvailable !== null) return pgvectorAvailable;
   try {
-    // Check if the embedding column exists on DerivedMemory
-    await prisma.$queryRaw`
-      SELECT column_name FROM information_schema.columns
-      WHERE table_name = 'DerivedMemory' AND column_name = 'embedding'
+    const result = await prisma.$queryRaw<Array<{ table_name: string }>>`
+      SELECT table_name
+      FROM information_schema.columns
+      WHERE column_name = 'embedding'
+        AND table_name IN ('DerivedMemory', 'EntitySummary')
     `;
-    const result = await prisma.$queryRaw<Array<{ column_name: string }>>`
-      SELECT column_name FROM information_schema.columns
-      WHERE table_name = 'DerivedMemory' AND column_name = 'embedding'
-    `;
-    pgvectorAvailable = result.length > 0;
+    pgvectorAvailable = result.length === 2;
     if (!pgvectorAvailable) {
-      log("pgvector embedding column not found — embedding worker will be idle until migration is applied");
+      log("pgvector embedding columns not found — embedding worker will be idle until migration is applied");
     }
     return pgvectorAvailable;
   } catch {
@@ -108,6 +106,14 @@ async function checkPgvectorAvailable(): Promise<boolean> {
 
 async function runEmbeddingCycle(): Promise<void> {
   try {
+    if (!embeddingService.isConfigured()) {
+      if (!embeddingConfigLogged) {
+        log("embedding API key not configured — embedding worker will remain idle");
+        embeddingConfigLogged = true;
+      }
+      return;
+    }
+
     // Skip if pgvector isn't set up yet
     if (!(await checkPgvectorAvailable())) return;
 
@@ -121,6 +127,13 @@ async function runEmbeddingCycle(): Promise<void> {
       });
     }
   } catch (err) {
+    if (err instanceof EmbeddingUnavailableError) {
+      if (!embeddingConfigLogged) {
+        log("embedding API key not configured — embedding worker will remain idle");
+        embeddingConfigLogged = true;
+      }
+      return;
+    }
     logError("embedding cycle failed", err);
   }
 }
@@ -145,3 +158,8 @@ export function stopEmbeddingWorker(): void {
   }
   log("embedding worker stopped");
 }
+
+export const __testOnly__ = {
+  checkPgvectorAvailable,
+  runEmbeddingCycle,
+};

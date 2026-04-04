@@ -183,7 +183,6 @@ export interface BuildSystemPromptResult {
 
 export function buildSystemPrompt(ctx: AgentContextPacket): BuildSystemPromptResult {
   const parts: string[] = [];
-  const useCompactContext = isCompactContextEnabled();
 
   // 1. System preamble
   parts.push(BLOCK_SYSTEM_PREAMBLE.content);
@@ -196,9 +195,7 @@ export function buildSystemPrompt(ctx: AgentContextPacket): BuildSystemPromptRes
     parts.push(`<soul_file>\n${ctx.soulFile}\n</soul_file>`);
   }
 
-  if (useCompactContext) {
-    parts.push(BLOCK_CONTEXT_USAGE.content);
-  }
+  parts.push(BLOCK_CONTEXT_USAGE.content);
 
   // 4. Context packet
   parts.push(buildContextSection(ctx));
@@ -207,12 +204,6 @@ export function buildSystemPrompt(ctx: AgentContextPacket): BuildSystemPromptRes
     text: parts.join("\n\n"),
     blockVersions: getBlockVersions(),
   };
-}
-
-// SYSTEM_PREAMBLE is now in prompt-blocks.ts as BLOCK_SYSTEM_PREAMBLE
-
-function isCompactContextEnabled(): boolean {
-  return process.env.AGENT_COMPACT_CONTEXT === "1";
 }
 
 function isRawContextDebugEnabled(): boolean {
@@ -272,11 +263,7 @@ function buildActionSchemaSection(actions: AgentActionRegistration[]): string {
 }
 
 function buildContextSection(ctx: AgentContextPacket): string {
-  if (isCompactContextEnabled()) {
-    return buildCompactContextSection(ctx);
-  }
-
-  return buildLegacyContextSection(ctx);
+  return buildCompactContextSection(ctx);
 }
 
 function buildScopeSection(ctx: AgentContextPacket): string {
@@ -345,79 +332,6 @@ function buildScopeSection(ctx: AgentContextPacket): string {
   }
 
   parts.push(`<scope>\n${scopeLines.join("\n")}\n</scope>`);
-  return parts.join("\n\n");
-}
-
-function buildLegacyContextSection(ctx: AgentContextPacket): string {
-  const parts: string[] = [buildScopeSection(ctx)];
-
-  // Trigger event
-  parts.push(
-    `<trigger_event>\n${JSON.stringify(ctx.triggerEvent, null, 2)}\n</trigger_event>`,
-  );
-
-  // Event batch
-  if (ctx.eventBatch.length > 1) {
-    parts.push(
-      `<event_batch count="${ctx.eventBatch.length}">\n${JSON.stringify(ctx.eventBatch, null, 2)}\n</event_batch>`,
-    );
-  }
-
-  // Scope entity
-  if (ctx.scopeEntity) {
-    parts.push(
-      `<scope_entity type="${ctx.scopeEntity.type}">\n${JSON.stringify(ctx.scopeEntity.data, null, 2)}\n</scope_entity>`,
-    );
-  }
-
-  // Relevant entities
-  if (ctx.relevantEntities.length > 0) {
-    const entityStr = ctx.relevantEntities
-      .map(
-        (e) =>
-          `  [${e.type}:${e.id} hop=${e.hop}] ${JSON.stringify(e.data)}`,
-      )
-      .join("\n");
-    parts.push(`<relevant_entities count="${ctx.relevantEntities.length}">\n${entityStr}\n</relevant_entities>`);
-  }
-
-  // Summaries
-  if (ctx.summaries.length > 0) {
-    const summaryStr = ctx.summaries
-      .map(
-        (s) =>
-          `  [${s.entityType}:${s.entityId} fresh=${s.fresh} events=${s.eventCount}]\n  ${s.content}`,
-      )
-      .join("\n\n");
-    parts.push(`<summaries>\n${summaryStr}\n</summaries>`);
-  }
-
-  // Memories
-  if (ctx.memories && ctx.memories.length > 0) {
-    const memoryStr = ctx.memories
-      .map(
-        (m) =>
-          `  [${m.kind}] ${m.subjectType}:${m.subjectId} (confidence=${m.confidence})\n  ${m.content}`,
-      )
-      .join("\n\n");
-    parts.push(`<memories count="${ctx.memories.length}">\nThese are facts, decisions, preferences, and patterns extracted from past events:\n${memoryStr}\n</memories>`);
-  }
-
-  // Recent events
-  if (ctx.recentEvents.length > 0) {
-    parts.push(
-      `<recent_events count="${ctx.recentEvents.length}">\n${JSON.stringify(ctx.recentEvents, null, 2)}\n</recent_events>`,
-    );
-  }
-
-  // Actors
-  if (ctx.actors.length > 0) {
-    const actorStr = ctx.actors
-      .map((a) => `  ${a.name} (${a.type}, ${a.role}) — ${a.id}`)
-      .join("\n");
-    parts.push(`<actors>\n${actorStr}\n</actors>`);
-  }
-
   return parts.join("\n\n");
 }
 

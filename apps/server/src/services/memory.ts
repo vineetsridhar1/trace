@@ -2,12 +2,13 @@
  * Memory Service — manages DerivedMemory records with provenance, lifecycle,
  * and query-time visibility enforcement.
  *
- * Visibility rules (enforced in fetchForContext, not stored as enum):
+ * Visibility rules:
  * 1. Always include memories from the current scope
- * 2. Include memories from non-DM scopes in the same project
- * 3. Include org-wide subject memories from any non-DM scope
- * 4. Never surface memories where sourceIsDm=true outside that specific DM scope
- * 5. Membership checks for chat-sourced memories
+ * 2. Never surface DM memories outside that specific DM
+ * 3. Allow non-chat memories across scopes when they share a project
+ * 4. Allow org-shared subjects (user/project/repo/team) from non-chat, non-DM scopes
+ * 5. Keep chat-sourced memories scoped to the originating chat unless we have
+ *    a stronger membership model for broader reuse
  */
 
 import type { DerivedMemory, MemoryKind, Prisma, ScopeType } from "@prisma/client";
@@ -63,13 +64,30 @@ export interface SupersedeInput {
   newMemoryId: string;
 }
 
+type ScopeMetadata = {
+  type: ScopeType;
+  id: string;
+  isDm: boolean;
+  projectIds: string[];
+};
+
+type VisibilityContext = {
+  scopeType: ScopeType;
+  scopeId: string;
+  isDm: boolean;
+};
+
+const ORG_SHARED_SUBJECT_TYPES = new Set(["user", "project", "repo", "team"]);
+const RECENCY_CANDIDATE_LIMIT = 200;
+const SEMANTIC_CANDIDATE_MULTIPLIER = 4;
+
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
 
 export class MemoryService {
   /**
-   * Create or update a derived memory record.
+   * Create a derived memory record.
    */
   async upsert(input: UpsertMemoryInput) {
     return prisma.derivedMemory.create({
@@ -92,52 +110,30 @@ export class MemoryService {
   }
 
   /**
-   * Search memories by text content. Simple ILIKE search — will be replaced
-   * with semantic search in Phase 4 (embeddings).
+   * Search memories by text content.
    */
   async search(input: SearchMemoryInput) {
     const limit = Math.min(input.limit ?? 20, 50);
-
-    const where: Prisma.DerivedMemoryWhereInput = {
+    const candidates = await this.queryCandidateMemories({
       organizationId: input.organizationId,
-      validTo: null, // only active memories
-    };
-
-    if (input.subjectType) where.subjectType = input.subjectType;
-    if (input.kind) where.kind = input.kind;
-
-    // Text search via ILIKE on content
-    if (input.query) {
-      where.content = { contains: input.query, mode: "insensitive" };
-    }
-
-    // Privacy enforcement: apply the same visibility rules as fetchForContext
-    const visibilityConditions: Prisma.DerivedMemoryWhereInput[] = [];
-
-    if (input.scopeType && input.scopeId) {
-      // Always allow memories from the current scope
-      visibilityConditions.push({
-        sourceScopeType: input.scopeType,
-        sourceScopeId: input.scopeId,
-      });
-
-      if (!input.isDm) {
-        // In non-DM scopes, also allow memories from other non-DM scopes
-        visibilityConditions.push({ sourceIsDm: false });
-      }
-      // In DM scopes, only the current scope's memories are visible (rule above)
-    } else {
-      // No scope context provided — exclude all DM-sourced memories as a safe default
-      visibilityConditions.push({ sourceIsDm: false });
-    }
-
-    where.OR = visibilityConditions;
-
-    return prisma.derivedMemory.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: limit,
+      scopeType: input.scopeType,
+      scopeId: input.scopeId,
+      isDm: input.isDm ?? false,
+      subjectType: input.subjectType,
+      kind: input.kind,
+      contentQuery: input.query,
+      candidateLimit: Math.max(limit * 4, 50),
     });
+
+    const visible = input.scopeType && input.scopeId
+      ? await this.filterVisibleMemories(candidates, {
+          scopeType: input.scopeType,
+          scopeId: input.scopeId,
+          isDm: input.isDm ?? false,
+        })
+      : this.filterSafeOrgWideMemories(candidates);
+
+    return visible.slice(0, limit);
   }
 
   /**
@@ -169,86 +165,25 @@ export class MemoryService {
 
   /**
    * Fetch memories relevant to the current context, with privacy enforcement.
-   *
-   * Visibility rules:
-   * 1. Always include memories from the current scope
-   * 2. Include memories from non-DM scopes in the same org
-   * 3. Never surface DM-sourced memories outside that specific DM scope
-   * 4. Filter by relevant subjects when provided
    */
   async fetchForContext(input: FetchForContextInput) {
-    const { organizationId, scopeType, scopeId, isDm, relevantSubjects } = input;
-
-    // Build OR conditions for visibility
-    const orConditions: Prisma.DerivedMemoryWhereInput[] = [];
-
-    // Rule 1: Always include memories from the current scope
-    orConditions.push({
-      sourceScopeType: scopeType,
-      sourceScopeId: scopeId,
+    const candidates = await this.queryCandidateMemories({
+      organizationId: input.organizationId,
+      scopeType: input.scopeType,
+      scopeId: input.scopeId,
+      isDm: input.isDm,
+      relevantSubjects: input.relevantSubjects,
+      candidateLimit: RECENCY_CANDIDATE_LIMIT,
     });
 
-    // Rule 2: Include memories from non-DM scopes (cross-scope awareness)
-    // Rule 3+4: Never surface DM-sourced memories outside that DM
-    if (!isDm) {
-      orConditions.push({
-        sourceIsDm: false,
-      });
-    }
-    // If we're in a DM, we only see memories from this specific DM (rule 1 above)
-
-    // Subject filter — only fetch memories about entities relevant to the context
-    const subjectFilters: Prisma.DerivedMemoryWhereInput[] = [];
-    if (relevantSubjects.length > 0) {
-      for (const subject of relevantSubjects) {
-        subjectFilters.push({
-          subjectType: subject.type,
-          subjectId: subject.id,
-        });
-      }
-    }
-
-    const where: Prisma.DerivedMemoryWhereInput = {
-      organizationId,
-      validTo: null, // only active memories
-      OR: orConditions,
-    };
-
-    // If we have subject filters, add them as an additional AND condition
-    if (subjectFilters.length > 0) {
-      where.AND = [{ OR: subjectFilters }];
-    }
-
-    // Fetch more than we need, then truncate to token budget
-    const memories = await prisma.derivedMemory.findMany({
-      where,
-      orderBy: [
-        { confidence: "desc" },
-        { createdAt: "desc" },
-      ],
-      take: 50,
-    });
-
-    // Truncate to token budget (rough: ~1.3 tokens per word)
-    const result: typeof memories = [];
-    let estimatedTokens = 0;
-    for (const mem of memories) {
-      const memTokens = Math.ceil(mem.content.split(/\s+/).length * 1.3) + 20; // +20 for metadata
-      if (estimatedTokens + memTokens > input.tokenBudget) break;
-      result.push(mem);
-      estimatedTokens += memTokens;
-    }
-
-    return result;
+    const visible = await this.filterVisibleMemories(candidates, input);
+    return truncateMemoriesToBudget(visible, input.tokenBudget);
   }
+
   /**
    * Hybrid retrieval: combines recency-based and semantic search results.
    *
-   * 1. Recency pass: recent memories matching visibility rules (current behavior)
-   * 2. Semantic pass: embed query text, cosine similarity against memories with embeddings
-   * 3. Merge: 0.6 * semantic + 0.3 * recency + 0.1 * confidence, truncate to budget
-   *
-   * Falls back to recency-only if semantic search fails or no embeddings exist.
+   * Falls back to recency-only if semantic search fails or embeddings are unavailable.
    */
   async hybridSearch(input: {
     organizationId: string;
@@ -262,106 +197,368 @@ export class MemoryService {
   }): Promise<DerivedMemory[]> {
     const limit = input.limit ?? 30;
 
-    // 1. Recency pass
     const recencyResults = await this.fetchForContext({
       organizationId: input.organizationId,
       scopeType: input.scopeType,
       scopeId: input.scopeId,
       isDm: input.isDm,
       relevantSubjects: input.relevantSubjects,
-      tokenBudget: input.tokenBudget * 2, // fetch more, we'll re-rank
+      tokenBudget: input.tokenBudget * 2,
     });
 
-    // 2. Semantic pass — embed query text, cosine similarity with same visibility + subject filters
-    let semanticResults: Array<{ id: string; similarity: number }> = [];
-    try {
-      const { embedding } = await embeddingService.embed(input.queryText);
-      const vectorStr = `[${embedding.join(",")}]`;
-
-      // Build DM visibility clause
-      const dmClause = input.isDm
-        ? `AND ("sourceScopeType" = '${input.scopeType}' AND "sourceScopeId" = '${input.scopeId}')`
-        : `AND "sourceIsDm" = false`;
-
-      // Build subject filter clause — same subjects as the recency pass
-      let subjectClause = "";
-      if (input.relevantSubjects.length > 0) {
-        const pairs = input.relevantSubjects
-          .map((s) => `("subjectType" = '${s.type.replace(/'/g, "''")}' AND "subjectId" = '${s.id.replace(/'/g, "''")}')`)
-          .join(" OR ");
-        subjectClause = `AND (${pairs})`;
-      }
-
-      semanticResults = await prisma.$queryRawUnsafe<Array<{ id: string; similarity: number }>>(
-        `SELECT id, 1 - (embedding <=> $1::vector) as similarity
-         FROM "DerivedMemory"
-         WHERE "organizationId" = $2
-           AND "validTo" IS NULL
-           AND embedding IS NOT NULL
-           ${dmClause}
-           ${subjectClause}
-         ORDER BY embedding <=> $1::vector
-         LIMIT $3`,
-        vectorStr,
-        input.organizationId,
-        limit,
-      );
-    } catch {
-      // Semantic search unavailable — fall back to recency only
-    }
-
-    // 3. Merge results
-    if (semanticResults.length === 0) {
-      // No semantic results — return recency-only
+    if (!input.queryText.trim() || !embeddingService.isConfigured()) {
       return recencyResults.slice(0, limit);
     }
 
-    // Build a scored map
-    const scoredMap = new Map<string, { memory: DerivedMemory; score: number }>();
+    try {
+      const { embedding } = await embeddingService.embed(input.queryText);
+      const vectorStr = `[${embedding.join(",")}]`;
+      const semanticRows = await prisma.$queryRawUnsafe<Array<{ id: string; similarity: number }>>(
+        this.buildSemanticSearchSql(input, vectorStr),
+      );
 
-    // Score recency results (position-based: top = 1.0, bottom = 0.0)
-    for (let i = 0; i < recencyResults.length; i++) {
-      const recencyScore = 1 - i / Math.max(recencyResults.length, 1);
-      const mem = recencyResults[i];
-      scoredMap.set(mem.id, {
-        memory: mem,
-        score: 0.3 * recencyScore + 0.1 * mem.confidence,
+      if (semanticRows.length === 0) {
+        return recencyResults.slice(0, limit);
+      }
+
+      const semanticMemories = await prisma.derivedMemory.findMany({
+        where: {
+          id: { in: semanticRows.map((row) => row.id) },
+        },
       });
-    }
+      const visibleSemanticMemories = await this.filterVisibleMemories(semanticMemories, input);
+      const semanticSimilarityById = new Map(
+        semanticRows.map((row) => [row.id, row.similarity] as const),
+      );
 
-    // Add semantic scores
-    for (const { id, similarity } of semanticResults) {
-      const existing = scoredMap.get(id);
-      if (existing) {
-        existing.score += 0.6 * similarity;
-      } else {
-        // Need to fetch the full memory
-        const mem = await prisma.derivedMemory.findUnique({ where: { id } });
-        if (mem) {
-          scoredMap.set(id, {
-            memory: mem,
-            score: 0.6 * similarity + 0.1 * mem.confidence,
+      if (visibleSemanticMemories.length === 0) {
+        return recencyResults.slice(0, limit);
+      }
+
+      const scoredMap = new Map<string, { memory: DerivedMemory; score: number }>();
+
+      for (let i = 0; i < recencyResults.length; i++) {
+        const recencyScore = 1 - i / Math.max(recencyResults.length, 1);
+        const mem = recencyResults[i];
+        scoredMap.set(mem.id, {
+          memory: mem,
+          score: 0.3 * recencyScore + 0.1 * mem.confidence,
+        });
+      }
+
+      for (const memory of visibleSemanticMemories) {
+        const similarity = semanticSimilarityById.get(memory.id);
+        if (similarity == null) continue;
+
+        const existing = scoredMap.get(memory.id);
+        if (existing) {
+          existing.score += 0.6 * similarity;
+        } else {
+          scoredMap.set(memory.id, {
+            memory,
+            score: 0.6 * similarity + 0.1 * memory.confidence,
           });
         }
       }
+
+      const ranked = [...scoredMap.values()]
+        .sort((a, b) => b.score - a.score)
+        .map((entry) => entry.memory);
+
+      return truncateMemoriesToBudget(ranked, input.tokenBudget).slice(0, limit);
+    } catch {
+      return recencyResults.slice(0, limit);
     }
-
-    // Sort by score descending, truncate to budget
-    const sorted = [...scoredMap.values()]
-      .sort((a, b) => b.score - a.score);
-
-    const result: DerivedMemory[] = [];
-    let estimatedTokens = 0;
-    for (const { memory } of sorted) {
-      const memTokens = Math.ceil(memory.content.split(/\s+/).length * 1.3) + 20;
-      if (estimatedTokens + memTokens > input.tokenBudget) break;
-      result.push(memory);
-      estimatedTokens += memTokens;
-      if (result.length >= limit) break;
-    }
-
-    return result;
   }
+
+  private async queryCandidateMemories(input: {
+    organizationId: string;
+    scopeType?: ScopeType;
+    scopeId?: string;
+    isDm?: boolean;
+    relevantSubjects?: Array<{ type: string; id: string }>;
+    subjectType?: string;
+    kind?: MemoryKind;
+    contentQuery?: string;
+    candidateLimit: number;
+  }): Promise<DerivedMemory[]> {
+    const where: Prisma.DerivedMemoryWhereInput = {
+      organizationId: input.organizationId,
+      validTo: null,
+    };
+
+    if (input.scopeType && input.scopeId) {
+      where.OR = input.isDm
+        ? [{ sourceScopeType: input.scopeType, sourceScopeId: input.scopeId }]
+        : [
+            { sourceScopeType: input.scopeType, sourceScopeId: input.scopeId },
+            { sourceIsDm: false },
+          ];
+    } else {
+      where.sourceIsDm = false;
+    }
+
+    if (input.subjectType) where.subjectType = input.subjectType;
+    if (input.kind) where.kind = input.kind;
+    if (input.contentQuery) {
+      where.content = { contains: input.contentQuery, mode: "insensitive" };
+    }
+    if (input.relevantSubjects && input.relevantSubjects.length > 0) {
+      where.AND = [
+        {
+          OR: input.relevantSubjects.map((subject) => ({
+            subjectType: subject.type,
+            subjectId: subject.id,
+          })),
+        },
+      ];
+    }
+
+    return prisma.derivedMemory.findMany({
+      where,
+      orderBy: [
+        { confidence: "desc" },
+        { createdAt: "desc" },
+      ],
+      take: input.candidateLimit,
+    });
+  }
+
+  private async filterVisibleMemories(
+    memories: DerivedMemory[],
+    context: VisibilityContext,
+  ): Promise<DerivedMemory[]> {
+    if (memories.length === 0) return [];
+
+    const metadataByScope = await this.loadScopeMetadata([
+      { scopeType: context.scopeType, scopeId: context.scopeId },
+      ...memories.map((memory) => ({
+        scopeType: memory.sourceScopeType,
+        scopeId: memory.sourceScopeId,
+      })),
+    ]);
+
+    const currentScope = metadataByScope.get(scopeKey(context.scopeType, context.scopeId)) ?? {
+      type: context.scopeType,
+      id: context.scopeId,
+      isDm: context.isDm,
+      projectIds: [],
+    };
+
+    return memories.filter((memory) => {
+      const sourceScope = metadataByScope.get(
+        scopeKey(memory.sourceScopeType, memory.sourceScopeId),
+      );
+      return isMemoryVisibleInContext(memory, currentScope, sourceScope);
+    });
+  }
+
+  private filterSafeOrgWideMemories(memories: DerivedMemory[]): DerivedMemory[] {
+    return memories.filter((memory) =>
+      !memory.sourceIsDm &&
+      memory.sourceScopeType !== "chat" &&
+      ORG_SHARED_SUBJECT_TYPES.has(memory.subjectType),
+    );
+  }
+
+  private async loadScopeMetadata(
+    refs: Array<{ scopeType: ScopeType; scopeId: string }>,
+  ): Promise<Map<string, ScopeMetadata>> {
+    const metadata = new Map<string, ScopeMetadata>();
+    const idsByType = new Map<ScopeType, Set<string>>();
+
+    for (const ref of refs) {
+      const ids = idsByType.get(ref.scopeType) ?? new Set<string>();
+      ids.add(ref.scopeId);
+      idsByType.set(ref.scopeType, ids);
+    }
+
+    const chatIds = [...(idsByType.get("chat") ?? new Set<string>())];
+    const channelIds = [...(idsByType.get("channel") ?? new Set<string>())];
+    const sessionIds = [...(idsByType.get("session") ?? new Set<string>())];
+    const ticketIds = [...(idsByType.get("ticket") ?? new Set<string>())];
+    const systemIds = [...(idsByType.get("system") ?? new Set<string>())];
+
+    const [
+      chats,
+      channels,
+      sessions,
+      tickets,
+    ] = await Promise.all([
+      chatIds.length > 0
+        ? prisma.chat.findMany({
+            where: { id: { in: chatIds } },
+            select: { id: true, type: true },
+          })
+        : Promise.resolve([]),
+      channelIds.length > 0
+        ? prisma.channel.findMany({
+            where: { id: { in: channelIds } },
+            select: { id: true, projects: { select: { projectId: true } } },
+          })
+        : Promise.resolve([]),
+      sessionIds.length > 0
+        ? prisma.session.findMany({
+            where: { id: { in: sessionIds } },
+            select: { id: true, projects: { select: { projectId: true } } },
+          })
+        : Promise.resolve([]),
+      ticketIds.length > 0
+        ? prisma.ticket.findMany({
+            where: { id: { in: ticketIds } },
+            select: { id: true, projects: { select: { projectId: true } } },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    for (const chat of chats) {
+      metadata.set(scopeKey("chat", chat.id), {
+        type: "chat",
+        id: chat.id,
+        isDm: chat.type === "dm",
+        projectIds: [],
+      });
+    }
+
+    for (const channel of channels) {
+      metadata.set(scopeKey("channel", channel.id), {
+        type: "channel",
+        id: channel.id,
+        isDm: false,
+        projectIds: channel.projects.map((project) => project.projectId),
+      });
+    }
+
+    for (const session of sessions) {
+      metadata.set(scopeKey("session", session.id), {
+        type: "session",
+        id: session.id,
+        isDm: false,
+        projectIds: session.projects.map((project) => project.projectId),
+      });
+    }
+
+    for (const ticket of tickets) {
+      metadata.set(scopeKey("ticket", ticket.id), {
+        type: "ticket",
+        id: ticket.id,
+        isDm: false,
+        projectIds: ticket.projects.map((project) => project.projectId),
+      });
+    }
+
+    for (const systemId of systemIds) {
+      metadata.set(scopeKey("system", systemId), {
+        type: "system",
+        id: systemId,
+        isDm: false,
+        projectIds: [],
+      });
+    }
+
+    return metadata;
+  }
+
+  private buildSemanticSearchSql(
+    input: {
+      organizationId: string;
+      scopeType: ScopeType;
+      scopeId: string;
+      isDm: boolean;
+      relevantSubjects: Array<{ type: string; id: string }>;
+      limit?: number;
+    },
+    vectorStr: string,
+  ): string {
+    const semanticLimit = Math.max((input.limit ?? 30) * SEMANTIC_CANDIDATE_MULTIPLIER, 50);
+    const scopeType = escapeSqlLiteral(input.scopeType);
+    const scopeId = escapeSqlLiteral(input.scopeId);
+    const organizationId = escapeSqlLiteral(input.organizationId);
+
+    const visibilityClause = input.isDm
+      ? `AND "sourceScopeType" = '${scopeType}' AND "sourceScopeId" = '${scopeId}'`
+      : `AND (("sourceScopeType" = '${scopeType}' AND "sourceScopeId" = '${scopeId}') OR "sourceIsDm" = false)`;
+
+    const subjectClause = input.relevantSubjects.length > 0
+      ? `AND (${input.relevantSubjects
+          .map((subject) =>
+            `("subjectType" = '${escapeSqlLiteral(subject.type)}' AND "subjectId" = '${escapeSqlLiteral(subject.id)}')`,
+          )
+          .join(" OR ")})`
+      : "";
+
+    return `
+      SELECT id, 1 - (embedding <=> '${escapeSqlLiteral(vectorStr)}'::vector) AS similarity
+      FROM "DerivedMemory"
+      WHERE "organizationId" = '${organizationId}'
+        AND "validTo" IS NULL
+        AND embedding IS NOT NULL
+        ${visibilityClause}
+        ${subjectClause}
+      ORDER BY embedding <=> '${escapeSqlLiteral(vectorStr)}'::vector
+      LIMIT ${semanticLimit}
+    `;
+  }
+}
+
+function scopeKey(scopeType: ScopeType, scopeId: string): string {
+  return `${scopeType}:${scopeId}`;
+}
+
+function sharesProject(a: string[], b: string[]): boolean {
+  if (a.length === 0 || b.length === 0) return false;
+  const set = new Set(a);
+  return b.some((projectId) => set.has(projectId));
+}
+
+function isMemoryVisibleInContext(
+  memory: DerivedMemory,
+  currentScope: ScopeMetadata,
+  sourceScope?: ScopeMetadata,
+): boolean {
+  if (
+    memory.sourceScopeType === currentScope.type &&
+    memory.sourceScopeId === currentScope.id
+  ) {
+    return true;
+  }
+
+  if (currentScope.isDm || memory.sourceIsDm || !sourceScope) {
+    return false;
+  }
+
+  // Chat memories stay scoped to that chat unless we add a stronger
+  // audience/membership model for safe cross-scope reuse.
+  if (sourceScope.type === "chat") {
+    return false;
+  }
+
+  if (sharesProject(currentScope.projectIds, sourceScope.projectIds)) {
+    return true;
+  }
+
+  return ORG_SHARED_SUBJECT_TYPES.has(memory.subjectType);
+}
+
+function truncateMemoriesToBudget(
+  memories: DerivedMemory[],
+  tokenBudget: number,
+): DerivedMemory[] {
+  const result: DerivedMemory[] = [];
+  let estimatedTokens = 0;
+
+  for (const memory of memories) {
+    const memoryTokens = Math.ceil(memory.content.split(/\s+/).length * 1.3) + 20;
+    if (estimatedTokens + memoryTokens > tokenBudget) break;
+    result.push(memory);
+    estimatedTokens += memoryTokens;
+  }
+
+  return result;
+}
+
+function escapeSqlLiteral(value: string): string {
+  return value.replace(/'/g, "''");
 }
 
 export const memoryService = new MemoryService();

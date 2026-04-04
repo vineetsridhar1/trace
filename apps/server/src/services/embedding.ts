@@ -35,7 +35,18 @@ const MAX_BATCH_SIZE = 100;
 // Service
 // ---------------------------------------------------------------------------
 
+export class EmbeddingUnavailableError extends Error {
+  constructor(message = "Embedding API is not configured") {
+    super(message);
+    this.name = "EmbeddingUnavailableError";
+  }
+}
+
 export class EmbeddingService {
+  isConfigured(): boolean {
+    return !!(process.env.OPENAI_API_KEY ?? process.env.EMBEDDING_API_KEY);
+  }
+
   /**
    * Embed a single text string.
    */
@@ -84,11 +95,7 @@ export class EmbeddingService {
     const baseUrl = process.env.EMBEDDING_BASE_URL ?? "https://api.openai.com/v1";
 
     if (!apiKey) {
-      // Fallback: return zero vectors if no API key configured
-      return {
-        embeddings: texts.map(() => new Array(EMBEDDING_DIMENSIONS).fill(0)),
-        inputTokens: 0,
-      };
+      throw new EmbeddingUnavailableError();
     }
 
     const response = await fetch(`${baseUrl}/embeddings`, {
@@ -115,10 +122,19 @@ export class EmbeddingService {
 
     // Sort by index to preserve order
     const sorted = data.data.sort((a, b) => a.index - b.index);
+    const embeddings = sorted.map((d) => d.embedding);
+
+    for (const embedding of embeddings) {
+      if (embedding.length !== EMBEDDING_DIMENSIONS) {
+        throw new Error(
+          `Embedding API returned ${embedding.length} dimensions, expected ${EMBEDDING_DIMENSIONS}`,
+        );
+      }
+    }
 
     return {
-      embeddings: sorted.map((d) => d.embedding),
-      inputTokens: data.usage.prompt_tokens,
+      embeddings,
+      inputTokens: data.usage?.prompt_tokens ?? 0,
     };
   }
 }

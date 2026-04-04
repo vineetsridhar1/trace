@@ -47,11 +47,22 @@ CREATE INDEX "DerivedMemory_endEventId_idx" ON "DerivedMemory"("endEventId");
 -- Phase 2A: DerivedMemory foreign key
 ALTER TABLE "DerivedMemory" ADD CONSTRAINT "DerivedMemory_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- Phase 4A: pgvector extension (must be enabled by a superuser or via cloud console)
--- Uncomment the following line if your database user has CREATE EXTENSION privileges:
--- CREATE EXTENSION IF NOT EXISTS vector;
+-- Phase 4A: pgvector extension for semantic search
+CREATE EXTENSION IF NOT EXISTS vector;
 
--- Phase 4A: Add embedding columns (requires pgvector extension)
--- These will fail if the vector extension is not installed. Run them after enabling pgvector.
--- ALTER TABLE "DerivedMemory" ADD COLUMN "embedding" vector(1536);
--- ALTER TABLE "EntitySummary" ADD COLUMN "embedding" vector(1536);
+-- Phase 4A: Add embedding columns
+ALTER TABLE "DerivedMemory" ADD COLUMN "embedding" vector(1536);
+ALTER TABLE "EntitySummary" ADD COLUMN "embedding" vector(1536);
+
+-- Phase 4A: Vector indexes for cosine similarity search
+CREATE INDEX "DerivedMemory_embedding_idx"
+ON "DerivedMemory"
+USING ivfflat ("embedding" vector_cosine_ops)
+WITH (lists = 100)
+WHERE "embedding" IS NOT NULL;
+
+CREATE INDEX "EntitySummary_embedding_idx"
+ON "EntitySummary"
+USING ivfflat ("embedding" vector_cosine_ops)
+WITH (lists = 100)
+WHERE "embedding" IS NOT NULL;
