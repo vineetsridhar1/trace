@@ -34,6 +34,7 @@ import {
   BLOCK_SESSION_COMPLETED,
   BLOCK_SESSION_PR_UPDATE,
   BLOCK_MENTION_BEHAVIOR,
+  BLOCK_CONTEXT_USAGE,
   getBlockVersions,
 } from "./prompt-blocks.js";
 
@@ -182,6 +183,7 @@ export interface BuildSystemPromptResult {
 
 export function buildSystemPrompt(ctx: AgentContextPacket): BuildSystemPromptResult {
   const parts: string[] = [];
+  const useCompactContext = isCompactContextEnabled();
 
   // 1. System preamble
   parts.push(BLOCK_SYSTEM_PREAMBLE.content);
@@ -194,6 +196,10 @@ export function buildSystemPrompt(ctx: AgentContextPacket): BuildSystemPromptRes
     parts.push(`<soul_file>\n${ctx.soulFile}\n</soul_file>`);
   }
 
+  if (useCompactContext) {
+    parts.push(BLOCK_CONTEXT_USAGE.content);
+  }
+
   // 4. Context packet
   parts.push(buildContextSection(ctx));
 
@@ -204,6 +210,14 @@ export function buildSystemPrompt(ctx: AgentContextPacket): BuildSystemPromptRes
 }
 
 // SYSTEM_PREAMBLE is now in prompt-blocks.ts as BLOCK_SYSTEM_PREAMBLE
+
+function isCompactContextEnabled(): boolean {
+  return process.env.AGENT_COMPACT_CONTEXT === "1";
+}
+
+function isRawContextDebugEnabled(): boolean {
+  return process.env.AGENT_DEBUG_RAW_CONTEXT === "1";
+}
 
 function buildActionSchemaSection(actions: AgentActionRegistration[]): string {
   const coreActions = actions.filter((a) => a.tier === "core");
@@ -258,6 +272,14 @@ function buildActionSchemaSection(actions: AgentActionRegistration[]): string {
 }
 
 function buildContextSection(ctx: AgentContextPacket): string {
+  if (isCompactContextEnabled()) {
+    return buildCompactContextSection(ctx);
+  }
+
+  return buildLegacyContextSection(ctx);
+}
+
+function buildScopeSection(ctx: AgentContextPacket): string {
   const parts: string[] = [];
 
   // Scope info — include chat type (DM vs group) when applicable
@@ -323,6 +345,11 @@ function buildContextSection(ctx: AgentContextPacket): string {
   }
 
   parts.push(`<scope>\n${scopeLines.join("\n")}\n</scope>`);
+  return parts.join("\n\n");
+}
+
+function buildLegacyContextSection(ctx: AgentContextPacket): string {
+  const parts: string[] = [buildScopeSection(ctx)];
 
   // Trigger event
   parts.push(
@@ -392,6 +419,196 @@ function buildContextSection(ctx: AgentContextPacket): string {
   }
 
   return parts.join("\n\n");
+}
+
+function buildCompactContextSection(ctx: AgentContextPacket): string {
+  const parts: string[] = [buildScopeSection(ctx)];
+
+  parts.push(buildDecisionContextSection(ctx));
+
+  const entitySnapshotSection = buildEntitySnapshotSection(ctx);
+  if (entitySnapshotSection) parts.push(entitySnapshotSection);
+
+  const summarySnapshotSection = buildSummarySnapshotSection(ctx);
+  if (summarySnapshotSection) parts.push(summarySnapshotSection);
+
+  const memorySnapshotSection = buildMemorySnapshotSection(ctx);
+  if (memorySnapshotSection) parts.push(memorySnapshotSection);
+
+  const recentSignalsSection = buildRecentSignalsSection(ctx);
+  if (recentSignalsSection) parts.push(recentSignalsSection);
+
+  if (ctx.actors.length > 0) {
+    const actorStr = ctx.actors
+      .map((a) => `  ${a.name} (${a.type}, ${a.role}) — ${a.id}`)
+      .join("\n");
+    parts.push(`<actors>\n${actorStr}\n</actors>`);
+  }
+
+  if (isRawContextDebugEnabled()) {
+    parts.push(buildRawContextDebugSection(ctx));
+  }
+
+  return parts.join("\n\n");
+}
+
+function buildDecisionContextSection(ctx: AgentContextPacket): string {
+  const lines = [
+    `trigger_type: ${ctx.decisionContext.triggerType}`,
+    `scope_type: ${ctx.decisionContext.scopeType}`,
+    `autonomy_mode: ${ctx.decisionContext.autonomyMode}`,
+    `is_mention: ${ctx.decisionContext.isMention}`,
+  ];
+
+  if (ctx.decisionContext.canonicalState.length > 0) {
+    lines.push("canonical_state:");
+    for (const fact of ctx.decisionContext.canonicalState) {
+      lines.push(`- ${fact}`);
+    }
+  }
+
+  if (ctx.decisionContext.constraints.length > 0) {
+    lines.push("constraints:");
+    for (const constraint of ctx.decisionContext.constraints) {
+      lines.push(`- ${constraint}`);
+    }
+  }
+
+  return `<decision_context>\n${lines.join("\n")}\n</decision_context>`;
+}
+
+function buildEntitySnapshotSection(ctx: AgentContextPacket): string | null {
+  if (ctx.entitySnapshots.length === 0) return null;
+
+  const body = ctx.entitySnapshots
+    .map((snapshot) => {
+      const facts = snapshot.facts.length > 0 ? ` | ${snapshot.facts.join(" | ")}` : "";
+      return `  [${snapshot.type}:${snapshot.id}] ${snapshot.label}${facts}`;
+    })
+    .join("\n");
+
+  return `<entity_snapshot count="${ctx.entitySnapshots.length}">\n${body}\n</entity_snapshot>`;
+}
+
+function buildSummarySnapshotSection(ctx: AgentContextPacket): string | null {
+  if (ctx.summaries.length === 0) return null;
+
+  const sections = ctx.summaries.map((summary) => {
+    const lines = [
+      `  [${summary.entityType}:${summary.entityId} fresh=${summary.fresh} events=${summary.eventCount}]`,
+    ];
+    const structured = summary.structuredData ?? {};
+    const narrative = asString(structured.narrative) ?? summary.content;
+    if (narrative) lines.push(`  narrative: ${truncatePromptText(narrative, 220)}`);
+
+    appendSummaryList(lines, "decisions", structured.decisions);
+    appendSummaryList(lines, "open_questions", structured.openQuestions);
+    appendSummaryList(lines, "action_items", structured.actionItems);
+    appendSummaryList(lines, "blockers", structured.blockers);
+
+    return lines.join("\n");
+  });
+
+  return `<summary_snapshot>\n${sections.join("\n\n")}\n</summary_snapshot>`;
+}
+
+function buildMemorySnapshotSection(ctx: AgentContextPacket): string | null {
+  if (!ctx.memories || ctx.memories.length === 0) return null;
+
+  const grouped = new Map<string, string[]>();
+  for (const memory of ctx.memories) {
+    const group = grouped.get(memory.kind) ?? [];
+    group.push(
+      `  - ${memory.subjectType}:${memory.subjectId} (confidence=${memory.confidence}) ${truncatePromptText(memory.content, 180)}`,
+    );
+    grouped.set(memory.kind, group);
+  }
+
+  const blocks: string[] = [];
+  for (const [kind, entries] of grouped) {
+    blocks.push(`[${kind}]\n${entries.join("\n")}`);
+  }
+
+  return `<memory_snapshot count="${ctx.memories.length}">\n${blocks.join("\n\n")}\n</memory_snapshot>`;
+}
+
+function buildRecentSignalsSection(ctx: AgentContextPacket): string | null {
+  if (ctx.recentSignals.length === 0) return null;
+
+  const actorNames = new Map(ctx.actors.map((actor) => [actor.id, actor.name]));
+  const body = ctx.recentSignals
+    .map((signal) => {
+      const actor = resolveSignalActor(signal.actor, actorNames);
+      return `  - [${formatSignalTimestamp(signal.timestamp)}] ${actor} | ${signal.kind} | ${signal.text}`;
+    })
+    .join("\n");
+
+  return `<recent_signals count="${ctx.recentSignals.length}">\n${body}\n</recent_signals>`;
+}
+
+function buildRawContextDebugSection(ctx: AgentContextPacket): string {
+  const parts: string[] = [];
+  parts.push(`<trigger_event>\n${JSON.stringify(ctx.triggerEvent, null, 2)}\n</trigger_event>`);
+
+  if (ctx.eventBatch.length > 1) {
+    parts.push(
+      `<event_batch count="${ctx.eventBatch.length}">\n${JSON.stringify(ctx.eventBatch, null, 2)}\n</event_batch>`,
+    );
+  }
+
+  if (ctx.scopeEntity) {
+    parts.push(
+      `<scope_entity type="${ctx.scopeEntity.type}">\n${JSON.stringify(ctx.scopeEntity.data, null, 2)}\n</scope_entity>`,
+    );
+  }
+
+  if (ctx.relevantEntities.length > 0) {
+    const entityStr = ctx.relevantEntities
+      .map((e) => `  [${e.type}:${e.id} hop=${e.hop}] ${JSON.stringify(e.data)}`)
+      .join("\n");
+    parts.push(`<relevant_entities count="${ctx.relevantEntities.length}">\n${entityStr}\n</relevant_entities>`);
+  }
+
+  if (ctx.recentEvents.length > 0) {
+    parts.push(
+      `<recent_events count="${ctx.recentEvents.length}">\n${JSON.stringify(ctx.recentEvents, null, 2)}\n</recent_events>`,
+    );
+  }
+
+  return parts.join("\n\n");
+}
+
+function appendSummaryList(lines: string[], label: string, value: unknown): void {
+  if (!Array.isArray(value) || value.length === 0) return;
+  lines.push(`  ${label}:`);
+  for (const entry of value) {
+    if (typeof entry !== "string" || !entry.trim()) continue;
+    lines.push(`  - ${entry}`);
+  }
+}
+
+function asString(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  return value.trim();
+}
+
+function truncatePromptText(text: string, max: number): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, max - 3)}...`;
+}
+
+function formatSignalTimestamp(timestamp: string): string {
+  return timestamp.replace("T", " ").replace(".000Z", "Z").slice(0, 16);
+}
+
+function resolveSignalActor(
+  actor: string,
+  actorNames: Map<string, string>,
+): string {
+  if (actor === "system") return "system";
+  const [, actorId] = actor.split(":");
+  return actorNames.get(actorId) ?? actor;
 }
 
 // ---------------------------------------------------------------------------

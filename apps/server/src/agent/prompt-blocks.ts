@@ -120,6 +120,18 @@ export const BLOCK_MENTION_BEHAVIOR: PromptBlock = {
     "You may also propose additional actions (e.g., ticket.create) alongside the reply.",
 };
 
+export const BLOCK_CONTEXT_USAGE: PromptBlock = {
+  id: "context-usage",
+  version: 1,
+  content: `Use context in this order of authority:
+1. Canonical decision context and scope facts
+2. Trigger event and recent signals
+3. Summaries
+4. Memories
+
+Summaries and memories are compressed evidence, not ground truth. When canonical state conflicts with stale or contradictory details, prefer the canonical state.`,
+};
+
 // ---------------------------------------------------------------------------
 // Registry — all blocks for version tracking
 // ---------------------------------------------------------------------------
@@ -133,6 +145,7 @@ const ALL_BLOCKS: PromptBlock[] = [
   BLOCK_SESSION_COMPLETED,
   BLOCK_SESSION_PR_UPDATE,
   BLOCK_MENTION_BEHAVIOR,
+  BLOCK_CONTEXT_USAGE,
 ];
 
 /** Get all block versions as a map of block ID → version number. */

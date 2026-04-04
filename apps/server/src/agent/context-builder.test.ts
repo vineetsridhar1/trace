@@ -2,8 +2,6 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
   estimateTokens,
   buildContext,
-  type AgentContextPacket,
-  type BuildContextInput,
 } from "./context-builder.js";
 import type { AggregatedBatch } from "./aggregator.js";
 import type { AgentEvent } from "./router.js";
@@ -80,6 +78,13 @@ vi.mock("./soul-file-resolver.js", () => ({
 
 vi.mock("../services/scope-autonomy.js", () => ({
   resolveAutonomyMode: vi.fn().mockResolvedValue("suggest"),
+}));
+
+vi.mock("../services/memory.js", () => ({
+  memoryService: {
+    hybridSearch: vi.fn().mockResolvedValue([]),
+    fetchForContext: vi.fn().mockResolvedValue([]),
+  },
 }));
 
 // ---------------------------------------------------------------------------
@@ -166,6 +171,9 @@ describe("buildContext", () => {
     expect(packet.soulFile).toBe("You are a helpful team assistant.");
     expect(packet.permissions.autonomyMode).toBe("suggest");
     expect(packet.permissions.actions.length).toBeGreaterThan(0);
+    expect(packet.decisionContext.triggerType).toBe("message_created");
+    expect(Array.isArray(packet.entitySnapshots)).toBe(true);
+    expect(Array.isArray(packet.recentSignals)).toBe(true);
     expect(packet.tokenBudget.total).toBe(60_000);
     expect(packet.tokenBudget.used).toBeGreaterThan(0);
   });
@@ -336,6 +344,150 @@ describe("buildContext", () => {
     expect(packet.summaries).toHaveLength(1);
     expect(packet.summaries[0].content).toContain("login bugs");
     expect(packet.summaries[0].fresh).toBe(true);
+  });
+
+  it("derives canonical session completion facts into decisionContext", async () => {
+    const { prisma } = await import("../lib/db.js");
+
+    (prisma.session.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "session_1",
+      name: "Fix login bug",
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+      tool: "codex",
+      repo: { id: "repo_1", name: "tracev2", remoteUrl: "https://github.com/org/tracev2" },
+      channel: { id: "channel_1", name: "trace-v2" },
+      projects: [],
+    });
+    (prisma.ticketLink.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+
+    const packet = await buildContext({
+      batch: makeBatch({
+        scopeKey: "session:session_1",
+        events: [
+          makeEvent({
+            scopeType: "session",
+            scopeId: "session_1",
+            eventType: "session_terminated",
+            payload: {
+              reason: "bridge_complete",
+              agentStatus: "done",
+              sessionGroup: {
+                branch: "trace/swift",
+                prUrl: "https://github.com/org/trace/pull/212",
+              },
+            },
+          }),
+        ],
+      }),
+      agentSettings: makeAgentSettings(),
+    });
+
+    expect(packet.decisionContext.triggerType).toBe("session_terminated");
+    expect(packet.decisionContext.canonicalState).toContain("session_completed: true");
+    expect(packet.decisionContext.canonicalState).toContain("session_outcome: completed");
+    expect(packet.decisionContext.canonicalState).toContain("linked_ticket_ids: none");
+    expect(packet.decisionContext.canonicalState).toContain("branch: trace/swift");
+    expect(packet.decisionContext.constraints).toContain(
+      "No linked tickets are present, so ticket.addComment is not applicable.",
+    );
+  });
+
+  it("normalizes recent signals and excludes assistant session output noise", async () => {
+    const { prisma } = await import("../lib/db.js");
+
+    (prisma.session.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "session_1",
+      name: "Fix login bug",
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+      tool: "codex",
+      repo: null,
+      channel: null,
+      projects: [],
+    });
+    (prisma.ticketLink.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+    (prisma.event.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      {
+        id: "evt_recent_session_output",
+        organizationId: "org_1",
+        scopeType: "session",
+        scopeId: "session_1",
+        eventType: "session_output",
+        actorType: "system",
+        actorId: "system",
+        payload: { type: "assistant", message: { content: [{ type: "text", text: "tool chatter" }] } },
+        timestamp: new Date("2026-04-03T19:54:50Z"),
+      },
+      {
+        id: "evt_recent_message",
+        organizationId: "org_1",
+        scopeType: "session",
+        scopeId: "session_1",
+        eventType: "message_sent",
+        actorType: "user",
+        actorId: "user_1",
+        payload: { text: "Should we expand embeddings now?" },
+        timestamp: new Date("2026-04-03T19:54:40Z"),
+      },
+      {
+        id: "evt_recent_terminated",
+        organizationId: "org_1",
+        scopeType: "session",
+        scopeId: "session_1",
+        eventType: "session_terminated",
+        actorType: "system",
+        actorId: "system",
+        payload: { reason: "bridge_complete", agentStatus: "done" },
+        timestamp: new Date("2026-04-03T19:54:30Z"),
+      },
+    ]);
+
+    const packet = await buildContext({
+      batch: makeBatch({
+        scopeKey: "session:session_1",
+        events: [
+          makeEvent({
+            id: "evt_batch_terminated",
+            scopeType: "session",
+            scopeId: "session_1",
+            eventType: "session_terminated",
+            actorType: "system",
+            actorId: "system",
+            payload: { reason: "bridge_complete", agentStatus: "done" },
+            timestamp: "2026-04-03T19:54:51Z",
+          }),
+        ],
+      }),
+      agentSettings: makeAgentSettings(),
+    });
+
+    expect(packet.recentSignals.some((signal) => signal.kind === "session_completed")).toBe(true);
+    expect(packet.recentSignals.some((signal) => signal.kind === "message")).toBe(true);
+    expect(packet.recentSignals.some((signal) => signal.sourceEventId === "evt_recent_session_output")).toBe(false);
+  });
+
+  it("marks direct mentions in decisionContext", async () => {
+    const packet = await buildContext({
+      batch: makeBatch({
+        events: [
+          makeEvent({
+            eventType: "message_sent",
+            payload: {
+              text: "Trace, can you take a look?",
+              mentions: [{ userId: "agent_org_1" }],
+            },
+          }),
+        ],
+      }),
+      agentSettings: makeAgentSettings(),
+    });
+
+    expect(packet.isMention).toBe(true);
+    expect(packet.decisionContext.isMention).toBe(true);
+    expect(packet.decisionContext.constraints).toContain(
+      "The agent was directly mentioned and should treat this as an explicit request.",
+    );
   });
 
   it("includes linked tickets for session scope entities", async () => {

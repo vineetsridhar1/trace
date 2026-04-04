@@ -54,8 +54,34 @@ function makeContextPacket(overrides?: Partial<AgentContextPacket>): AgentContex
       hop: 0,
     },
     relevantEntities: [],
+    decisionContext: {
+      triggerType: "message.created",
+      scopeType: "chat",
+      autonomyMode: "suggest",
+      isMention: false,
+      canonicalState: ["chat_type: group"],
+      constraints: ["Suggest mode: prefer proposals over direct execution."],
+    },
+    entitySnapshots: [
+      {
+        type: "chat",
+        id: "chat-1",
+        label: "Engineering",
+        facts: ["chat_type: group"],
+      },
+    ],
     recentEvents: [],
     summaries: [],
+    memories: [],
+    recentSignals: [
+      {
+        timestamp: "2026-03-24T10:00:00Z",
+        actor: "user:user-1",
+        kind: "message",
+        text: "The login page is broken, getting a 500 error",
+        sourceEventId: "evt-1",
+      },
+    ],
     actors: [{ id: "user-1", name: "Alice", role: "member", type: "user" }],
     permissions: {
       autonomyMode: "suggest",
@@ -125,6 +151,8 @@ function makeMockAdapterError(message: string): LLMAdapter {
 describe("Tier 2 Planner", () => {
   beforeEach(() => {
     setAdapterForTest(null);
+    delete process.env.AGENT_COMPACT_CONTEXT;
+    delete process.env.AGENT_DEBUG_RAW_CONTEXT;
   });
 
   describe("successful decisions", () => {
@@ -537,6 +565,92 @@ describe("Tier 2 Planner", () => {
       expect(capturedSystem).toContain("Existing bug");
       expect(capturedSystem).toContain("<summaries>");
       expect(capturedSystem).toContain("Team discussed deployment.");
+    });
+
+    it("renders compact context sections when AGENT_COMPACT_CONTEXT is enabled", async () => {
+      process.env.AGENT_COMPACT_CONTEXT = "1";
+
+      let capturedSystem = "";
+      const capturingAdapter: LLMAdapter = {
+        provider: "anthropic",
+        async complete(options: LLMRequestOptions): Promise<LLMResponse> {
+          capturedSystem = options.system ?? "";
+          return {
+            content: [
+              {
+                type: "tool_use",
+                id: "t1",
+                name: "planner_decision",
+                input: {
+                  disposition: "ignore",
+                  confidence: 0.5,
+                  rationaleSummary: "Test.",
+                  proposedActions: [],
+                },
+              },
+            ],
+            stopReason: "tool_use",
+            usage: { inputTokens: 100, outputTokens: 50 },
+            model: "test-model",
+          };
+        },
+        async *stream(): AsyncIterable<LLMStreamEvent> {},
+      };
+
+      const ctx = makeContextPacket({
+        entitySnapshots: [
+          { type: "chat", id: "chat-1", label: "Engineering", facts: ["chat_type: group"] },
+          { type: "ticket", id: "t-99", label: "Existing bug", facts: ["status: todo"] },
+        ],
+        summaries: [
+          {
+            entityType: "chat",
+            entityId: "chat-1",
+            content: "Team discussed deployment.",
+            structuredData: {
+              narrative: "Team discussed deployment.",
+              decisions: ["Ship after smoke tests"],
+              openQuestions: [],
+              actionItems: [],
+              blockers: ["Waiting on CI"],
+            },
+            fresh: true,
+            eventCount: 10,
+          },
+        ],
+        memories: [
+          {
+            kind: "decision",
+            subjectType: "project",
+            subjectId: "proj-1",
+            content: "Prefer shipping the base memory system before expanding embeddings.",
+            confidence: 0.9,
+          },
+        ],
+        recentSignals: [
+          {
+            timestamp: "2026-03-24T10:01:00Z",
+            actor: "user:user-1",
+            kind: "message",
+            text: "Should we expand embeddings now or later?",
+            sourceEventId: "evt-2",
+          },
+        ],
+      });
+
+      await runPlanner(ctx, { adapter: capturingAdapter });
+
+      expect(capturedSystem).toContain("Use context in this order of authority");
+      expect(capturedSystem).toContain("<decision_context>");
+      expect(capturedSystem).toContain("<entity_snapshot");
+      expect(capturedSystem).toContain("<summary_snapshot>");
+      expect(capturedSystem).toContain("<memory_snapshot");
+      expect(capturedSystem).toContain("<recent_signals");
+      expect(capturedSystem).not.toContain("<trigger_event>");
+      expect(capturedSystem).not.toContain("<event_batch");
+      expect(capturedSystem).not.toContain("<scope_entity");
+      expect(capturedSystem).not.toContain("<recent_events");
+      expect(capturedSystem).not.toContain("<relevant_entities");
     });
   });
 });

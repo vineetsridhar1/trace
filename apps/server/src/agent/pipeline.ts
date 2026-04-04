@@ -1145,9 +1145,12 @@ function buildReplayPacket(packet: AgentContextPacket): Record<string, unknown> 
     soulFile: packet.soulFile,
     scopeEntity: packet.scopeEntity,
     relevantEntities: packet.relevantEntities,
+    decisionContext: packet.decisionContext,
+    entitySnapshots: packet.entitySnapshots,
     recentEvents: packet.recentEvents,
     summaries: packet.summaries,
     memories: packet.memories,
+    recentSignals: packet.recentSignals,
     actors: packet.actors,
     permissions: {
       autonomyMode: packet.permissions.autonomyMode,
