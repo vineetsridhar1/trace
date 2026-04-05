@@ -58,7 +58,7 @@ Add frontend state management for AI Conversations, Branches, Turns, and shared 
 - [x] `useEntityField`-style selectors exist for all three entity types
 - [x] Query hooks hydrate Zustand and the scoped subscription hooks keep the active viewport live
 - [x] Mutation hooks are fire-and-forget — store updates come from the event stream
-- [~] Optimistic update for `sendTurn` works: user turn appears immediately, reconciles on event <!-- Race condition: sendTurn mutation returns the assistant turn ID, not the user turn ID. Reconciliation uses the wrong ID, causing duplicate user turns. Fix: reconcile when ai_turn_created event arrives for USER role instead of using mutation result. -->
+- [x] Optimistic update for `sendTurn` works: user turn appears immediately, reconciles on event <!-- Fixed: reconciliation now happens in processAiConversationEvent and useBranchTurnsSubscription when a USER turn event arrives — finds and replaces optimistic-* entries. -->
 - [x] No `useState` for shared state — everything goes through Zustand
 - [x] Components using these selectors re-render only when their specific field changes
 
