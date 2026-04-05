@@ -44,6 +44,7 @@ Wire AI Conversation actions into the Trace event stream. Every mutation that ch
 - [x] All six event types are defined and registered
 - [x] `createConversation` emits both `ai_conversation.created` and `branch.created`
 - [x] `sendTurn` emits `turn.created` for each turn (user and assistant)
+- [ ] `streamTurn` emits `turn.created` for each turn (user and assistant) — currently missing
 - [x] `updateTitle` emits `ai_conversation.title_updated`
 - [x] Event payloads contain enough data to upsert the full entity in the Zustand store
 - [x] Events flow through both the org-wide ambient stream and the scoped conversation/branch streams

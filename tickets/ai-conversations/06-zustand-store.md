@@ -9,12 +9,12 @@ Add frontend state management for AI Conversations, Branches, Turns, and shared 
 - Create the feature folder under `apps/web/src/features/ai-conversations/` and keep hooks/components/utils/store co-located there
 - Register `AiConversation`, `AiBranch`, and `AiTurn` as entity types in the Zustand entity store
 - Add entity upsert handlers for each event type:
-  - `ai_conversation.created` → upsert `AiConversation` entity
-  - `ai_conversation.title_updated` → update title field on existing entity
-  - `ai_conversation.visibility_changed` → update visibility field
-  - `branch.created` → upsert `AiBranch` entity, update the parent conversation's branch list, the parent branch's `childBranches`, and the fork turn's branch-count metadata
-  - `branch.labeled` → update label field on existing branch
-  - `turn.created` → upsert `AiTurn` entity, append to the branch's ordered turn IDs, update the branch's turn count, and update conversation activity metadata
+  - `ai_conversation_created` → upsert `AiConversation` entity
+  - `ai_conversation_title_updated` → update title field on existing entity
+  - `ai_conversation_visibility_changed` → update visibility field
+  - `ai_branch_created` → upsert `AiBranch` entity, update the parent conversation's branch list, the parent branch's `childBranches`, and the fork turn's branch-count metadata
+  - `ai_branch_labeled` → update label field on existing branch
+  - `ai_turn_created` → upsert `AiTurn` entity, append to the branch's ordered turn IDs, update the branch's turn count, and update conversation activity metadata
 - Structure the event processor so later tickets can add field-change handlers for `modelId`, `systemPrompt`, `agentObservability`, summary metadata, and other conversation fields without bypassing the same store pipeline
 - Add a small AI Conversations UI slice in Zustand for shared state:
   - active branch ID per conversation
@@ -48,7 +48,7 @@ Add frontend state management for AI Conversations, Branches, Turns, and shared 
 ## Dependencies
 
 - 05 (Event Stream Integration)
-  <!-- Ticket 05 creates: Event types and emission for all conversation/branch/turn mutations -->
+  <!-- Ticket 05 creates: 6 EventType enum values (ai_conversation_created, ai_conversation_title_updated, ai_conversation_visibility_changed, ai_branch_created, ai_branch_labeled, ai_turn_created) with ScopeType ai_conversation. Events persist via eventService.create() and broadcast to org-wide stream. Scoped subscriptions use separate topics: branchTurns(branchId) delivers Turn objects, conversationEvents(conversationId) delivers AiConversationEvent objects (conversationId, type, payload, timestamp). The conversationEvents subscription returns AiConversationEvent!, not Event!. Note: streamTurn does not yet emit events — only sendTurn does. -->
 
 ## Completion requirements
 
