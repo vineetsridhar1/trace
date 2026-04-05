@@ -75,6 +75,7 @@ enum ScopeType {
   session
   ticket
   system
+  ai_conversation
 }
 
 enum ActorType {
@@ -221,6 +222,12 @@ enum EventType {
   chat_member_added
   chat_member_removed
   chat_renamed
+  ai_conversation_created
+  ai_conversation_title_updated
+  ai_conversation_visibility_changed
+  ai_branch_created
+  ai_branch_labeled
+  ai_turn_created
 }
 
 model Organization {
