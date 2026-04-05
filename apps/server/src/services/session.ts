@@ -2234,6 +2234,52 @@ export class SessionService {
       actorId: "system",
     });
 
+    // Run channel setup script if configured (once per session group)
+    if (session.channelId) {
+      const channel = await prisma.channel.findUnique({
+        where: { id: session.channelId },
+        select: { setupScript: true },
+      });
+      if (channel?.setupScript?.trim()) {
+        try {
+          const exitCode = await terminalRelay.executeCommand(
+            sessionId,
+            session.sessionGroupId ?? null,
+            channel.setupScript.trim(),
+            workdir,
+          );
+          await eventService.create({
+            organizationId: session.organizationId,
+            scopeType: "session",
+            scopeId: sessionId,
+            eventType: "session_output",
+            payload: {
+              type: "setup_script_completed",
+              exitCode,
+              success: exitCode === 0,
+            },
+            actorType: "system",
+            actorId: "system",
+          });
+        } catch (err) {
+          await eventService.create({
+            organizationId: session.organizationId,
+            scopeType: "session",
+            scopeId: sessionId,
+            eventType: "session_output",
+            payload: {
+              type: "setup_script_completed",
+              exitCode: 1,
+              success: false,
+              error: err instanceof Error ? err.message : String(err),
+            },
+            actorType: "system",
+            actorId: "system",
+          });
+        }
+      }
+    }
+
     // If a run was queued while workspace was being prepared, execute it now
     if (pendingRun) {
       const replayResult = await this.deliverPendingCommand(sessionId, pendingRun);

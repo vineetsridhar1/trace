@@ -156,8 +156,8 @@ export function SessionDetailView({
   const hasSetupScript = Boolean(channelSetupScript?.trim());
   const setupBlocking = hasSetupScript && setupStatus === "running";
 
-  // Trigger setup script when runtime connects
-  useSetupScript(sessionGroupId ?? null, activeChannelId, sessionId);
+  // Track setup script status (server runs it during worktree creation)
+  useSetupScript(sessionGroupId ?? null, activeChannelId);
 
   const showTerminalPanel = useUIStore((s: UIState) => s.showTerminalPanel);
   const setShowTerminalPanel = useUIStore((s: UIState) => s.setShowTerminalPanel);
