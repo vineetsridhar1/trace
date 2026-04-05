@@ -26,6 +26,13 @@ enum SessionGroupStatus {
   archived
 }
 
+enum SetupStatus {
+  idle
+  running
+  completed
+  failed
+}
+
 enum TicketStatus {
   backlog
   todo
@@ -310,6 +317,8 @@ type SessionGroup {
   prUrl: String
   worktreeDeleted: Boolean!
   archivedAt: DateTime
+  setupStatus: SetupStatus!
+  setupError: String
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -969,6 +978,7 @@ type Mutation {
     clientMutationId: String
   ): Event!
   retrySessionConnection(sessionId: ID!): Session!
+  retrySessionGroupSetup(id: ID!): SessionGroup!
   moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!
   moveSessionToCloud(sessionId: ID!): Session!
   createTicket(input: CreateTicketInput!): Ticket!

@@ -520,6 +520,8 @@ model SessionGroup {
   prUrl          String?
   worktreeDeleted Boolean     @default(false)
   archivedAt      DateTime?
+  setupStatus     String      @default("idle")
+  setupError      String?
 
   sessions Session[]
   gitCheckpoints GitCheckpoint[]

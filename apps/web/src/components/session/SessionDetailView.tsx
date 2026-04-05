@@ -12,8 +12,6 @@ import { SessionInput } from "./SessionInput";
 import { PlanResponseBar } from "./PlanResponseBar";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
-import { useTerminalStore } from "../../stores/terminal";
-import type { SetupStatus } from "../../stores/terminal";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { Loader2, AlertCircle } from "lucide-react";
 import { StickyTodoList, extractLatestTodos } from "./StickyTodoList";
@@ -21,7 +19,11 @@ import { buildSessionNodes } from "./groupReadGlob";
 import { isTerminalStatus } from "./sessionStatus";
 import { Skeleton } from "../ui/skeleton";
 import { client } from "../../lib/urql";
-import { DISMISS_SESSION_MUTATION, SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
+import {
+  DISMISS_SESSION_MUTATION,
+  RETRY_SESSION_GROUP_SETUP_MUTATION,
+  SEND_SESSION_MESSAGE_MUTATION,
+} from "../../lib/mutations";
 
 const SESSION_DETAIL_QUERY = gql`
   query SessionDetail($id: ID!) {
@@ -92,6 +94,8 @@ const SESSION_DETAIL_QUERY = gql`
         }
         createdAt
         updatedAt
+        setupStatus
+        setupError
       }
       gitCheckpoints {
         id
@@ -148,15 +152,37 @@ export function SessionDetailView({
   const isLocalOwner = hosting === "local" && createdBy?.id === currentUserId;
   const isConnected = !connection || connection.state !== "disconnected";
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
-  const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
-  const setupStatus = useTerminalStore((s) => s.setupStatus[sessionGroupId ?? ""] as SetupStatus | undefined);
-  const setupError = useTerminalStore((s) => s.setupError[sessionGroupId ?? ""] as string | undefined);
-  const channelSetupScript = useEntityField("channels", activeChannelId ?? "", "setupScript") as string | null | undefined;
+  const setupStatus = useEntityField("sessionGroups", sessionGroupId ?? "", "setupStatus") as
+    | "idle"
+    | "running"
+    | "completed"
+    | "failed"
+    | undefined;
+  const setupError = useEntityField("sessionGroups", sessionGroupId ?? "", "setupError") as string | undefined;
+  const sessionGroupChannel = useEntityField("sessionGroups", sessionGroupId ?? "", "channel") as
+    | { id: string }
+    | null
+    | undefined;
+  const rawGroupChannelId = useEntityStore((s) =>
+    sessionGroupId
+      ? (s.sessionGroups[sessionGroupId] as { channelId?: string | null } | undefined)?.channelId ?? null
+      : null,
+  );
+  const sessionChannel = useEntityField("sessions", sessionId, "channel") as
+    | { id: string }
+    | null
+    | undefined;
+  const rawSessionChannelId = useEntityStore((s) =>
+    (s.sessions[sessionId] as { channelId?: string | null } | undefined)?.channelId ?? null,
+  );
+  const channelId = sessionGroupChannel?.id ?? rawGroupChannelId ?? sessionChannel?.id ?? rawSessionChannelId ?? null;
+  const channelSetupScript = useEntityField("channels", channelId ?? "", "setupScript") as string | null | undefined;
   const hasSetupScript = Boolean(channelSetupScript?.trim());
   const setupBlocking = hasSetupScript && setupStatus === "running";
 
   const showTerminalPanel = useUIStore((s: UIState) => s.showTerminalPanel);
   const setShowTerminalPanel = useUIStore((s: UIState) => s.setShowTerminalPanel);
+  const [retryingSetup, setRetryingSetup] = useState(false);
 
   const canAccessTerminal = (isCloud || isLocalOwner) && isConnected && !isTerminalStatus(agentStatus, sessionStatus) && !worktreeDeleted && !setupBlocking;
 
@@ -312,14 +338,18 @@ export function SessionDetailView({
               <span className="text-xs text-destructive">Setup failed{setupError ? `: ${setupError}` : ""}</span>
               <button
                 type="button"
+                disabled={!sessionGroupId || retryingSetup}
                 className="ml-2 text-xs text-foreground underline"
                 onClick={() => {
-                  if (sessionGroupId) {
-                    useTerminalStore.getState().setSetupStatus(sessionGroupId, "idle");
-                  }
+                  if (!sessionGroupId) return;
+                  setRetryingSetup(true);
+                  client
+                    .mutation(RETRY_SESSION_GROUP_SETUP_MUTATION, { id: sessionGroupId })
+                    .toPromise()
+                    .finally(() => setRetryingSetup(false));
                 }}
               >
-                Retry
+                {retryingSetup ? "Retrying..." : "Retry"}
               </button>
             </div>
           )}

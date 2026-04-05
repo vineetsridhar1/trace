@@ -63,6 +63,8 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       channel {
         id
       }
+      setupStatus
+      setupError
       createdAt
       updatedAt
       sessions {

@@ -75,6 +75,8 @@ type GroupWorkspaceStatePatch = {
   repoId?: string | null;
   branch?: string | null;
   slug?: string | null;
+  setupStatus?: "idle" | "running" | "completed" | "failed";
+  setupError?: string | null;
 };
 
 function defaultConnection(overrides?: Partial<SessionConnectionData>): SessionConnectionData {
@@ -189,6 +191,8 @@ const SESSION_GROUP_SUMMARY_SELECT = {
   prUrl: true,
   worktreeDeleted: true,
   archivedAt: true,
+  setupStatus: true,
+  setupError: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -2209,6 +2213,7 @@ export class SessionService {
 
       return [updated, prev.pendingRun] as const;
     });
+    const setupScript = await this.getChannelSetupScript(session.channelId);
     const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
       workdir,
       connection: session.connection as Prisma.InputJsonValue,
@@ -2216,6 +2221,8 @@ export class SessionService {
       repoId: session.repoId ?? null,
       ...(branch !== undefined ? { branch } : {}),
       ...(slug !== undefined ? { slug } : {}),
+      setupStatus: setupScript ? "running" : "idle",
+      setupError: null,
     });
 
     await eventService.create({
@@ -2234,50 +2241,14 @@ export class SessionService {
       actorId: "system",
     });
 
-    // Run channel setup script if configured (once per session group)
-    if (session.channelId) {
-      const channel = await prisma.channel.findUnique({
-        where: { id: session.channelId },
-        select: { setupScript: true },
+    if (setupScript) {
+      await this.executeSetupScript({
+        sessionId,
+        sessionGroupId: session.sessionGroupId ?? null,
+        organizationId: session.organizationId,
+        workdir,
+        setupScript,
       });
-      if (channel?.setupScript?.trim()) {
-        try {
-          const exitCode = await terminalRelay.executeCommand(
-            sessionId,
-            session.sessionGroupId ?? null,
-            channel.setupScript.trim(),
-            workdir,
-          );
-          await eventService.create({
-            organizationId: session.organizationId,
-            scopeType: "session",
-            scopeId: sessionId,
-            eventType: "session_output",
-            payload: {
-              type: "setup_script_completed",
-              exitCode,
-              success: exitCode === 0,
-            },
-            actorType: "system",
-            actorId: "system",
-          });
-        } catch (err) {
-          await eventService.create({
-            organizationId: session.organizationId,
-            scopeType: "session",
-            scopeId: sessionId,
-            eventType: "session_output",
-            payload: {
-              type: "setup_script_completed",
-              exitCode: 1,
-              success: false,
-              error: err instanceof Error ? err.message : String(err),
-            },
-            actorType: "system",
-            actorId: "system",
-          });
-        }
-      }
     }
 
     // If a run was queued while workspace was being prepared, execute it now
@@ -2329,6 +2300,81 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+  }
+
+  async retrySessionGroupSetup(
+    sessionGroupId: string,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: sessionGroupId, organizationId },
+      select: {
+        id: true,
+        workdir: true,
+        worktreeDeleted: true,
+        setupStatus: true,
+        channel: { select: { setupScript: true } },
+        sessions: {
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+          select: {
+            id: true,
+            hosting: true,
+            createdById: true,
+          },
+        },
+      },
+    });
+    if (!group) throw new Error("Session group not found");
+    if (group.setupStatus === "running") {
+      throw new Error("Setup script is already running");
+    }
+    const setupScript = group.channel?.setupScript?.trim();
+    if (!setupScript) {
+      throw new Error("No setup script configured for this session group");
+    }
+    if (group.worktreeDeleted || !group.workdir) {
+      throw new Error("Cannot retry setup without an active workspace");
+    }
+    const targetSession = group.sessions[0];
+    if (!targetSession) {
+      throw new Error("Cannot retry setup without a session");
+    }
+    if (targetSession.hosting === "local" && targetSession.createdById !== actorId) {
+      throw new Error("Access denied: you can only retry setup on your own local sessions");
+    }
+
+    const runningGroup = await this.syncGroupWorkspaceState(sessionGroupId, {
+      setupStatus: "running",
+      setupError: null,
+    });
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: targetSession.id,
+      eventType: "session_output",
+      payload: {
+        type: "setup_script_started",
+        ...(runningGroup ? { sessionGroup: runningGroup } : {}),
+      },
+      actorType,
+      actorId,
+    });
+
+    await this.executeSetupScript({
+      sessionId: targetSession.id,
+      sessionGroupId,
+      organizationId,
+      workdir: group.workdir,
+      setupScript,
+    });
+
+    const updatedGroup = await this.loadSessionGroupSnapshot(sessionGroupId);
+    if (!updatedGroup) {
+      throw new Error("Session group not found after retrying setup");
+    }
+    return updatedGroup;
   }
 
   // ─── Connection Management ───
@@ -3569,6 +3615,14 @@ export class SessionService {
       sessionData.worktreeDeleted = patch.worktreeDeleted ?? false;
     }
 
+    if (Object.prototype.hasOwnProperty.call(patch, "setupStatus")) {
+      groupData.setupStatus = patch.setupStatus ?? "idle";
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, "setupError")) {
+      groupData.setupError = patch.setupError ?? null;
+    }
+
     const shouldMirrorToSessions = Object.keys(sessionData).length > 0;
 
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -3610,6 +3664,80 @@ export class SessionService {
     if (!group) return null;
     const { sessions, ...summary } = group;
     return buildSessionGroupSnapshot(summary, sessions);
+  }
+
+  private async getChannelSetupScript(channelId: string | null | undefined): Promise<string | null> {
+    if (!channelId) return null;
+    const channel = await prisma.channel.findUnique({
+      where: { id: channelId },
+      select: { setupScript: true },
+    });
+    return channel?.setupScript?.trim() || null;
+  }
+
+  private async executeSetupScript({
+    sessionId,
+    sessionGroupId,
+    organizationId,
+    workdir,
+    setupScript,
+  }: {
+    sessionId: string;
+    sessionGroupId: string | null;
+    organizationId: string;
+    workdir: string;
+    setupScript: string;
+  }) {
+    try {
+      const exitCode = await terminalRelay.executeCommand(
+        sessionId,
+        sessionGroupId,
+        setupScript,
+        workdir,
+      );
+      const success = exitCode === 0;
+      const error = success ? null : `Setup script exited with code ${exitCode}`;
+      const sessionGroup = await this.syncGroupWorkspaceState(sessionGroupId, {
+        setupStatus: success ? "completed" : "failed",
+        setupError: error,
+      });
+      await eventService.create({
+        organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "session_output",
+        payload: {
+          type: "setup_script_completed",
+          exitCode,
+          success,
+          ...(error ? { error } : {}),
+          ...(sessionGroup ? { sessionGroup } : {}),
+        },
+        actorType: "system",
+        actorId: "system",
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      const sessionGroup = await this.syncGroupWorkspaceState(sessionGroupId, {
+        setupStatus: "failed",
+        setupError: error,
+      });
+      await eventService.create({
+        organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "session_output",
+        payload: {
+          type: "setup_script_completed",
+          exitCode: 1,
+          success: false,
+          error,
+          ...(sessionGroup ? { sessionGroup } : {}),
+        },
+        actorType: "system",
+        actorId: "system",
+      });
+    }
   }
 
   private mergeConnection(

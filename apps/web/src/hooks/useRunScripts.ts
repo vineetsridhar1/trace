@@ -1,8 +1,7 @@
 import { useCallback } from "react";
-import { useEntityField } from "../stores/entity";
+import { useEntityField, useEntityStore } from "../stores/entity";
 import { useUIStore, type UIState } from "../stores/ui";
 import { useTerminalStore } from "../stores/terminal";
-import type { SetupStatus } from "../stores/terminal";
 import { client } from "../lib/urql";
 import { CREATE_TERMINAL_MUTATION } from "../lib/mutations";
 
@@ -16,11 +15,23 @@ interface RunScript {
  * The Run button should use `hasRunScripts` to show/hide and `canRun` to enable/disable.
  */
 export function useRunScripts(sessionGroupId: string, selectedSessionId: string | null) {
-  const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
   const setShowTerminalPanel = useUIStore((s: UIState) => s.setShowTerminalPanel);
-  const runScripts = useEntityField("channels", activeChannelId ?? "", "runScripts") as RunScript[] | null | undefined;
-  const setupStatus = useTerminalStore((s) => s.setupStatus[sessionGroupId] as SetupStatus | undefined);
-  const setupScript = useEntityField("channels", activeChannelId ?? "", "setupScript") as string | null | undefined;
+  const sessionGroupChannel = useEntityField("sessionGroups", sessionGroupId, "channel") as
+    | { id: string }
+    | null
+    | undefined;
+  const rawChannelId = useEntityStore((s) =>
+    (s.sessionGroups[sessionGroupId] as { channelId?: string | null } | undefined)?.channelId ?? null,
+  );
+  const channelId = sessionGroupChannel?.id ?? rawChannelId ?? null;
+  const runScripts = useEntityField("channels", channelId ?? "", "runScripts") as RunScript[] | null | undefined;
+  const setupStatus = useEntityField("sessionGroups", sessionGroupId, "setupStatus") as
+    | "idle"
+    | "running"
+    | "completed"
+    | "failed"
+    | undefined;
+  const setupScript = useEntityField("channels", channelId ?? "", "setupScript") as string | null | undefined;
 
   const hasRunScripts = Array.isArray(runScripts) && runScripts.length > 0;
   const setupBlocking = Boolean(setupScript) && setupStatus === "running";

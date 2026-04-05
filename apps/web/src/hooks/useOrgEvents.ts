@@ -9,7 +9,6 @@ import { useUIStore, navigateToSession } from "../stores/ui";
 import { getSessionChannelId } from "../lib/session-group";
 import { notifyForEvent } from "../notifications/handlers";
 import { takePendingOptimisticSession } from "../lib/optimistic-message";
-import { handleSetupScriptCompleted, handleSetupScriptStarted } from "./setup-script-handlers";
 import type {
   AgentStatus,
   Event,
@@ -632,27 +631,6 @@ export function useOrgEvents() {
                 : (batch.get("sessions", event.scopeId)?.sessionGroupId ?? null);
             if (sessionGroupId) {
               patchGroupSessionsBranch(batch, sessionGroupId, payload.branch);
-            }
-          }
-
-          if (payload.type === "workspace_ready") {
-            const session = batch.get("sessions", event.scopeId);
-            const sessionGroupId = session?.sessionGroupId ?? null;
-            const channelId = (session?.channel as { id: string } | undefined)?.id
-              ?? useUIStore.getState().activeChannelId;
-            if (sessionGroupId && channelId) {
-              const channel = useEntityStore.getState().channels[channelId];
-              if (channel && (channel as Record<string, unknown>).setupScript) {
-                handleSetupScriptStarted(sessionGroupId);
-              }
-            }
-          }
-
-          if (payload.type === "setup_script_completed") {
-            const sessionGroupId =
-              batch.get("sessions", event.scopeId)?.sessionGroupId ?? null;
-            if (sessionGroupId) {
-              handleSetupScriptCompleted(sessionGroupId, payload as { success: boolean; exitCode?: number; error?: string });
             }
           }
 

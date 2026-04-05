@@ -31,6 +31,8 @@ const FILTERED_SESSION_GROUPS_QUERY = gql`
       prUrl
       worktreeDeleted
       archivedAt
+      setupStatus
+      setupError
       channel { id }
       createdAt
       updatedAt

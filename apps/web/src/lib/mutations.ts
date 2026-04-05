@@ -59,6 +59,16 @@ export const RETRY_SESSION_CONNECTION_MUTATION = gql`
   }
 `;
 
+export const RETRY_SESSION_GROUP_SETUP_MUTATION = gql`
+  mutation RetrySessionGroupSetup($id: ID!) {
+    retrySessionGroupSetup(id: $id) {
+      id
+      setupStatus
+      setupError
+    }
+  }
+`;
+
 export const MOVE_SESSION_TO_RUNTIME_MUTATION = gql`
   mutation MoveSessionToRuntime($sessionId: ID!, $runtimeInstanceId: ID!) {
     moveSessionToRuntime(sessionId: $sessionId, runtimeInstanceId: $runtimeInstanceId) {

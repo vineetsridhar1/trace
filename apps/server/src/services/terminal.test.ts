@@ -120,6 +120,28 @@ describe("TerminalService", () => {
       ).rejects.toThrow("Cannot create terminal: session worktree has been deleted");
     });
 
+    it("throws when the setup script is still running", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        sessionGroupId: "group-1",
+        hosting: "cloud",
+        createdById: "user-1",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        sessionGroup: { workdir: "/workspace", worktreeDeleted: false, setupStatus: "running" },
+      });
+
+      await expect(
+        terminalService.create({
+          sessionId: "session-1",
+          cols: 80,
+          rows: 24,
+          organizationId: "org-1",
+          userId: "user-1",
+        }),
+      ).rejects.toThrow("Cannot create terminal while the setup script is still running");
+    });
+
     it("throws when local session is accessed by different user", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
