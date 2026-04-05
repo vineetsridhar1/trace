@@ -42,7 +42,10 @@ export type AiConversationEntity = Omit<AiConversation, "rootBranch" | "branches
 };
 
 /** Client-side branch entity with ordered turn IDs and child branch IDs */
-export type AiBranchEntity = Omit<Branch, "conversation" | "parentBranch" | "forkTurn" | "turns" | "childBranches" | "createdBy"> & {
+export type AiBranchEntity = Omit<
+  Branch,
+  "conversation" | "parentBranch" | "forkTurn" | "turns" | "childBranches" | "createdBy"
+> & {
   conversationId: string;
   parentBranchId: string | null;
   forkTurnId: string | null;
@@ -56,6 +59,7 @@ export type AiTurnEntity = Omit<Turn, "branch" | "parentTurn" | "childBranches">
   branchId: string;
   parentTurnId: string | null;
   _optimistic?: boolean;
+  _clientMutationId?: string;
 };
 
 /** Entity types that the store manages, keyed by ID */

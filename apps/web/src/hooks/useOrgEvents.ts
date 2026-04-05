@@ -749,7 +749,13 @@ export function useOrgEvents() {
 
         // ── AI Conversation events — delegate to shared processor ───
         if (event.eventType.startsWith("ai_") && payload) {
-          processAiConversationEvent(event.eventType, payload, event.timestamp);
+          processAiConversationEvent({
+            eventType: event.eventType,
+            payload,
+            timestamp: event.timestamp,
+            conversationId:
+              event.scopeType === ("ai_conversation" as ScopeType) ? event.scopeId : undefined,
+          });
         }
 
         // Flush all accumulated mutations as a single setState call

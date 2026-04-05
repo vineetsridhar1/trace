@@ -891,6 +891,7 @@ export type MutationSendSessionMessageArgs = {
 
 export type MutationSendTurnArgs = {
   branchId: Scalars['ID']['input'];
+  clientMutationId?: InputMaybe<Scalars['String']['input']>;
   content: Scalars['String']['input'];
 };
 

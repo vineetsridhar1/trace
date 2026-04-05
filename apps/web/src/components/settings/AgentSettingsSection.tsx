@@ -5,13 +5,7 @@ import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 function Label({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }) {
   return (
     <label htmlFor={htmlFor} className="text-sm font-medium text-foreground">
@@ -159,58 +153,60 @@ export function AgentSettingsSection() {
         </div>
       )}
 
-      {identity && <div className="space-y-4 rounded-lg border border-border bg-surface-deep p-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="agent-status">Status</Label>
-            <Select value={status} onValueChange={handleStatusChange}>
-              <SelectTrigger id="agent-status">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="enabled">Enabled</SelectItem>
-                <SelectItem value="disabled">Disabled</SelectItem>
-              </SelectContent>
-            </Select>
+      {identity && (
+        <div className="space-y-4 rounded-lg border border-border bg-surface-deep p-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="agent-status">Status</Label>
+              <Select value={status} onValueChange={handleStatusChange}>
+                <SelectTrigger id="agent-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="enabled">Enabled</SelectItem>
+                  <SelectItem value="disabled">Disabled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="agent-autonomy">Autonomy Mode</Label>
+              <Select value={autonomyMode} onValueChange={handleAutonomyChange}>
+                <SelectTrigger id="agent-autonomy">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="observe">Observe</SelectItem>
+                  <SelectItem value="suggest">Suggest</SelectItem>
+                  <SelectItem value="act">Act</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="agent-autonomy">Autonomy Mode</Label>
-            <Select value={autonomyMode} onValueChange={handleAutonomyChange}>
-              <SelectTrigger id="agent-autonomy">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="observe">Observe</SelectItem>
-                <SelectItem value="suggest">Suggest</SelectItem>
-                <SelectItem value="act">Act</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label htmlFor="soul-file">Soul File</Label>
+            <p className="text-xs text-muted-foreground">
+              Markdown instructions that define the agent&apos;s personality, tone, and behavioral
+              rules. Leave empty to use the platform default.
+            </p>
+            <Textarea
+              id="soul-file"
+              placeholder="Leave empty to use the platform default soul file..."
+              value={soulFile}
+              onChange={(e) => handleSoulFileChange(e.target.value)}
+              className="font-mono text-xs min-h-[200px]"
+            />
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={handleSave} disabled={!dirty || saving} size="sm">
+              <Save size={14} className="mr-1.5" />
+              {saving ? "Saving..." : "Save changes"}
+            </Button>
           </div>
         </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="soul-file">Soul File</Label>
-          <p className="text-xs text-muted-foreground">
-            Markdown instructions that define the agent&apos;s personality, tone, and behavioral
-            rules. Leave empty to use the platform default.
-          </p>
-          <Textarea
-            id="soul-file"
-            placeholder="Leave empty to use the platform default soul file..."
-            value={soulFile}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleSoulFileChange(e.target.value)}
-            className="font-mono text-xs min-h-[200px]"
-          />
-        </div>
-
-        <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={!dirty || saving} size="sm">
-            <Save size={14} className="mr-1.5" />
-            {saving ? "Saving..." : "Save changes"}
-          </Button>
-        </div>
-      </div>}
+      )}
     </div>
   );
 }
