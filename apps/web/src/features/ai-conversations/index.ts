@@ -37,3 +37,6 @@ export {
   useSendTurn,
   useUpdateAiConversationTitle,
 } from "./hooks/useAiConversationMutations";
+
+// Utils
+export { processAiConversationEvent } from "./utils/processAiConversationEvent";

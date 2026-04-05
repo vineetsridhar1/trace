@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { gql } from "@urql/core";
 import { client } from "../../../lib/urql";
 import { useEntityStore, type AiConversationEntity, type AiBranchEntity, type AiTurnEntity } from "../../../stores/entity";
@@ -181,7 +181,6 @@ export function useAiConversationsQuery() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const fetchedRef = useRef(false);
 
   const fetchConversations = useCallback(async () => {
     if (!activeOrgId) return;
@@ -202,7 +201,6 @@ export function useAiConversationsQuery() {
     }
 
     setLoading(false);
-    fetchedRef.current = true;
   }, [activeOrgId]);
 
   useEffect(() => {

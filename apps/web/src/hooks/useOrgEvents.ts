@@ -21,9 +21,8 @@ import type {
   InboxItem,
   GitCheckpoint,
   SessionStatus,
-  AiConversationVisibility,
 } from "@trace/gql";
-import type { AiConversationEntity, AiBranchEntity, AiTurnEntity } from "../stores/entity";
+import { processAiConversationEvent } from "../features/ai-conversations/utils/processAiConversationEvent";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
   subscription OrgEvents($organizationId: ID!) {
@@ -748,140 +747,9 @@ export function useOrgEvents() {
           }
         }
 
-        // ── AI Conversation events ──────────────────────────────────
-        if (event.eventType === "ai_conversation_created" && payload) {
-          const conversationId = payload.conversationId as string | undefined;
-          if (conversationId) {
-            const existing = batch.get("aiConversations", conversationId);
-            batch.upsert("aiConversations", conversationId, {
-              ...(existing ?? {}),
-              id: conversationId,
-              title: (payload.title as string | undefined) ?? null,
-              visibility: (payload.visibility as AiConversationVisibility) ?? "PRIVATE",
-              createdById: payload.createdById as string,
-              rootBranchId: (payload.rootBranchId as string) ?? "",
-              branchIds: existing?.branchIds ?? (payload.rootBranchId ? [payload.rootBranchId as string] : []),
-              branchCount: existing?.branchCount ?? 1,
-              createdAt: event.timestamp,
-              updatedAt: (payload.updatedAt as string) ?? event.timestamp,
-            } as AiConversationEntity);
-          }
-        }
-
-        if (event.eventType === "ai_conversation_title_updated" && payload) {
-          const conversationId = payload.conversationId as string | undefined;
-          if (conversationId) {
-            batch.patch("aiConversations", conversationId, {
-              title: payload.title as string,
-              updatedAt: (payload.updatedAt as string) ?? event.timestamp,
-            } as Partial<AiConversationEntity>);
-          }
-        }
-
-        if (event.eventType === "ai_conversation_visibility_changed" && payload) {
-          const conversationId = payload.conversationId as string | undefined;
-          if (conversationId) {
-            batch.patch("aiConversations", conversationId, {
-              visibility: payload.visibility as AiConversationVisibility,
-              updatedAt: event.timestamp,
-            } as Partial<AiConversationEntity>);
-          }
-        }
-
-        if (event.eventType === "ai_branch_created" && payload) {
-          const branchId = payload.branchId as string | undefined;
-          const conversationId = payload.conversationId as string | undefined;
-          if (branchId && conversationId) {
-            const existingBranch = batch.get("aiBranches", branchId);
-            batch.upsert("aiBranches", branchId, {
-              ...(existingBranch ?? {}),
-              id: branchId,
-              conversationId,
-              parentBranchId: (payload.parentBranchId as string) ?? null,
-              forkTurnId: (payload.forkTurnId as string) ?? null,
-              label: (payload.label as string) ?? null,
-              createdById: payload.createdById as string,
-              turnIds: existingBranch?.turnIds ?? [],
-              childBranchIds: existingBranch?.childBranchIds ?? [],
-              depth: (payload.depth as number) ?? 0,
-              turnCount: existingBranch?.turnCount ?? 0,
-              createdAt: event.timestamp,
-            } as AiBranchEntity);
-
-            // Update parent conversation's branch list
-            const conversation = batch.get("aiConversations", conversationId);
-            if (conversation && !conversation.branchIds.includes(branchId)) {
-              batch.patch("aiConversations", conversationId, {
-                branchIds: [...conversation.branchIds, branchId],
-                branchCount: conversation.branchCount + 1,
-                updatedAt: event.timestamp,
-              } as Partial<AiConversationEntity>);
-            }
-
-            // Update parent branch's childBranches
-            const parentBranchId = payload.parentBranchId as string | undefined;
-            if (parentBranchId) {
-              const parentBranch = batch.get("aiBranches", parentBranchId);
-              if (parentBranch && !parentBranch.childBranchIds.includes(branchId)) {
-                batch.patch("aiBranches", parentBranchId, {
-                  childBranchIds: [...parentBranch.childBranchIds, branchId],
-                } as Partial<AiBranchEntity>);
-              }
-            }
-
-            // Update fork turn's branch count
-            const forkTurnId = payload.forkTurnId as string | undefined;
-            if (forkTurnId) {
-              const forkTurn = batch.get("aiTurns", forkTurnId);
-              if (forkTurn) {
-                batch.patch("aiTurns", forkTurnId, {
-                  branchCount: forkTurn.branchCount + 1,
-                } as Partial<AiTurnEntity>);
-              }
-            }
-          }
-        }
-
-        if (event.eventType === "ai_branch_labeled" && payload) {
-          const branchId = payload.branchId as string | undefined;
-          if (branchId) {
-            batch.patch("aiBranches", branchId, {
-              label: payload.label as string,
-            } as Partial<AiBranchEntity>);
-          }
-        }
-
-        if (event.eventType === "ai_turn_created" && payload) {
-          const turnId = payload.turnId as string | undefined;
-          const branchId = payload.branchId as string | undefined;
-          const conversationId = payload.conversationId as string | undefined;
-          if (turnId && branchId) {
-            batch.upsert("aiTurns", turnId, {
-              id: turnId,
-              branchId,
-              role: payload.role as "USER" | "ASSISTANT",
-              content: (payload.content as string) ?? "",
-              parentTurnId: (payload.parentTurnId as string) ?? null,
-              branchCount: 0,
-              createdAt: (payload.createdAt as string) ?? event.timestamp,
-            } as AiTurnEntity);
-
-            // Append to branch's ordered turn IDs
-            const branch = batch.get("aiBranches", branchId);
-            if (branch && !branch.turnIds.includes(turnId)) {
-              batch.patch("aiBranches", branchId, {
-                turnIds: [...branch.turnIds, turnId],
-                turnCount: branch.turnCount + 1,
-              } as Partial<AiBranchEntity>);
-            }
-
-            // Update conversation activity
-            if (conversationId) {
-              batch.patch("aiConversations", conversationId, {
-                updatedAt: event.timestamp,
-              } as Partial<AiConversationEntity>);
-            }
-          }
+        // ── AI Conversation events — delegate to shared processor ───
+        if (event.eventType.startsWith("ai_") && payload) {
+          processAiConversationEvent(event.eventType, payload, event.timestamp);
         }
 
         // Flush all accumulated mutations as a single setState call

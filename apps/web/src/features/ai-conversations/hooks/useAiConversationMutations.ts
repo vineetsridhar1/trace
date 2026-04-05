@@ -60,10 +60,14 @@ export function useCreateAiConversation() {
   );
 }
 
-/** Fire-and-forget with optimistic update: user turn appears immediately */
+/**
+ * Fire-and-forget with optimistic update: user turn appears immediately.
+ *
+ * Reconciliation happens in the event stream (processAiConversationEvent and
+ * useBranchTurnsSubscription): when an ai_turn_created event arrives for a
+ * USER role turn, any optimistic-* turn in the branch is swapped for the real one.
+ */
 export function useSendTurn() {
-  const userId = useAuthStore((s) => s.user?.id);
-
   return useCallback(
     async (params: { branchId: string; content: string }) => {
       const { branchId, content } = params;
@@ -98,7 +102,7 @@ export function useSendTurn() {
         } as Partial<AiBranchEntity>);
       }
 
-      // Fire mutation
+      // Fire mutation — reconciliation happens when the event arrives
       const result = await client
         .mutation(SEND_TURN_MUTATION, { branchId, content })
         .toPromise();
@@ -118,26 +122,9 @@ export function useSendTurn() {
         return null;
       }
 
-      // The real turn will arrive via branchTurns subscription or org events.
-      // When ai_turn_created event arrives, the optimistic turn remains in the list
-      // alongside the real one. We need to reconcile: swap optimistic → real.
-      // We do this by watching for the next USER turn event on this branch.
-      const realTurnId = result.data?.sendTurn?.id as string | undefined;
-      if (realTurnId && realTurnId !== optimisticId) {
-        // Replace optimistic ID in branch turn list with real ID
-        const currentBranch = useEntityStore.getState().aiBranches[branchId];
-        if (currentBranch) {
-          patch("aiBranches", branchId, {
-            turnIds: currentBranch.turnIds.map((id) => (id === optimisticId ? realTurnId : id)),
-          } as Partial<AiBranchEntity>);
-        }
-        // Remove the optimistic turn entity
-        remove("aiTurns", optimisticId);
-      }
-
-      return realTurnId ?? null;
+      return null;
     },
-    [userId],
+    [],
   );
 }
 

@@ -1,11 +1,11 @@
 import { useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
 import {
   useEntityStore,
   useEntityField,
   useEntityIds,
   type AiConversationEntity,
   type AiBranchEntity,
-  type AiTurnEntity,
 } from "../../../stores/entity";
 import { useAiConversationUIStore } from "../store/ai-conversation-ui";
 
@@ -62,12 +62,48 @@ export type TimelineEntry =
   | { type: "local-turn"; turnId: string };
 
 /**
+ * Collect ancestor branch IDs by walking parentBranchId up to the root.
+ * Used to select only the branches needed for timeline computation.
+ */
+function getAncestorBranchIds(branchId: string): string[] {
+  const ids: string[] = [];
+  const allBranches = useEntityStore.getState().aiBranches;
+  let current = allBranches[branchId];
+  while (current?.parentBranchId) {
+    ids.push(current.parentBranchId);
+    current = allBranches[current.parentBranchId];
+  }
+  return ids;
+}
+
+/**
  * Returns the derived render timeline for a branch:
  * inherited turns from ancestors, a fork separator, then local turns.
+ *
+ * Only subscribes to the current branch and its ancestors (not the entire table).
  */
 export function useBranchTimeline(branchId: string): TimelineEntry[] {
   const branch = useEntityStore((state) => state.aiBranches[branchId]);
-  const allBranches = useEntityStore((state) => state.aiBranches);
+
+  // Compute which ancestor IDs we need (stable unless parentBranchId chain changes)
+  const ancestorIds = useMemo(
+    () => (branch ? getAncestorBranchIds(branchId) : []),
+    // Re-derive when the branch's parentBranchId changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [branchId, branch?.parentBranchId],
+  );
+
+  // Subscribe only to ancestor branches, not the entire table
+  const ancestorBranches = useEntityStore(
+    useShallow((state) => {
+      const result: Record<string, AiBranchEntity> = {};
+      for (const id of ancestorIds) {
+        const b = state.aiBranches[id];
+        if (b) result[id] = b;
+      }
+      return result;
+    }),
+  );
 
   return useMemo(() => {
     if (!branch) return [];
@@ -76,12 +112,12 @@ export function useBranchTimeline(branchId: string): TimelineEntry[] {
 
     // Collect inherited turns from ancestor branches
     if (branch.parentBranchId && branch.forkTurnId) {
-      const inheritedTurns = collectInheritedTurns(allBranches, branch.parentBranchId, branch.forkTurnId);
+      const inheritedTurns = collectInheritedTurns(ancestorBranches, branch.parentBranchId, branch.forkTurnId);
       for (const turnId of inheritedTurns) {
         entries.push({ type: "inherited-turn", turnId });
       }
 
-      const parentBranch = allBranches[branch.parentBranchId];
+      const parentBranch = ancestorBranches[branch.parentBranchId];
       entries.push({
         type: "fork-separator",
         forkTurnId: branch.forkTurnId,
@@ -95,7 +131,7 @@ export function useBranchTimeline(branchId: string): TimelineEntry[] {
     }
 
     return entries;
-  }, [branch, allBranches]);
+  }, [branch, ancestorBranches]);
 }
 
 /**
@@ -103,11 +139,11 @@ export function useBranchTimeline(branchId: string): TimelineEntry[] {
  * up to and including the fork turn.
  */
 function collectInheritedTurns(
-  allBranches: Record<string, AiBranchEntity>,
+  ancestors: Record<string, AiBranchEntity>,
   parentBranchId: string,
   forkTurnId: string,
 ): string[] {
-  const parentBranch = allBranches[parentBranchId];
+  const parentBranch = ancestors[parentBranchId];
   if (!parentBranch) return [];
 
   const result: string[] = [];
@@ -115,7 +151,7 @@ function collectInheritedTurns(
   // First collect from grandparent if this branch itself is a fork
   if (parentBranch.parentBranchId && parentBranch.forkTurnId) {
     result.push(
-      ...collectInheritedTurns(allBranches, parentBranch.parentBranchId, parentBranch.forkTurnId),
+      ...collectInheritedTurns(ancestors, parentBranch.parentBranchId, parentBranch.forkTurnId),
     );
   }
 

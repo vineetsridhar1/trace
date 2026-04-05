@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import { gql } from "@urql/core";
 import { asJsonObject } from "@trace/shared";
-import type { AiConversationVisibility } from "@trace/gql";
 import { client } from "../../../lib/urql";
-import { useEntityStore, type AiBranchEntity, type AiTurnEntity, type AiConversationEntity } from "../../../stores/entity";
+import { useEntityStore, type AiBranchEntity, type AiTurnEntity } from "../../../stores/entity";
+import { processAiConversationEvent } from "../utils/processAiConversationEvent";
 
 // ── Subscription documents ─────────────────────────────────────
 
@@ -39,7 +39,8 @@ const BRANCH_TURNS_SUBSCRIPTION = gql`
  * branch creation, label updates, etc.
  *
  * This complements the org-wide subscription by providing lower-latency
- * updates for the active conversation viewport.
+ * updates for the active conversation viewport. Both paths call the same
+ * shared processor, which is idempotent.
  */
 export function useConversationEventsSubscription(conversationId: string | null) {
   useEffect(() => {
@@ -57,79 +58,8 @@ export function useConversationEventsSubscription(conversationId: string | null)
           timestamp: string;
         };
 
-        const { upsert, patch } = useEntityStore.getState();
         const payload = asJsonObject(event.payload) ?? {};
-
-        switch (event.type) {
-          case "ai_conversation_title_updated": {
-            patch("aiConversations", event.conversationId, {
-              title: payload.title as string,
-              updatedAt: (payload.updatedAt as string) ?? event.timestamp,
-            } as Partial<AiConversationEntity>);
-            break;
-          }
-
-          case "ai_conversation_visibility_changed": {
-            patch("aiConversations", event.conversationId, {
-              visibility: payload.visibility as AiConversationVisibility,
-              updatedAt: event.timestamp,
-            } as Partial<AiConversationEntity>);
-            break;
-          }
-
-          case "ai_branch_created": {
-            const branchId = payload.branchId as string | undefined;
-            if (branchId) {
-              const existingBranch = useEntityStore.getState().aiBranches[branchId];
-              upsert("aiBranches", branchId, {
-                ...(existingBranch ?? {}),
-                id: branchId,
-                conversationId: event.conversationId,
-                parentBranchId: (payload.parentBranchId as string) ?? null,
-                forkTurnId: (payload.forkTurnId as string) ?? null,
-                label: (payload.label as string) ?? null,
-                createdById: payload.createdById as string,
-                turnIds: existingBranch?.turnIds ?? [],
-                childBranchIds: existingBranch?.childBranchIds ?? [],
-                depth: (payload.depth as number) ?? 0,
-                turnCount: existingBranch?.turnCount ?? 0,
-                createdAt: event.timestamp,
-              } as AiBranchEntity);
-
-              // Update conversation branch list
-              const conversation = useEntityStore.getState().aiConversations[event.conversationId];
-              if (conversation && !conversation.branchIds.includes(branchId)) {
-                patch("aiConversations", event.conversationId, {
-                  branchIds: [...conversation.branchIds, branchId],
-                  branchCount: conversation.branchCount + 1,
-                  updatedAt: event.timestamp,
-                } as Partial<AiConversationEntity>);
-              }
-
-              // Update parent branch child list
-              const parentBranchId = payload.parentBranchId as string | undefined;
-              if (parentBranchId) {
-                const parentBranch = useEntityStore.getState().aiBranches[parentBranchId];
-                if (parentBranch && !parentBranch.childBranchIds.includes(branchId)) {
-                  patch("aiBranches", parentBranchId, {
-                    childBranchIds: [...parentBranch.childBranchIds, branchId],
-                  } as Partial<AiBranchEntity>);
-                }
-              }
-            }
-            break;
-          }
-
-          case "ai_branch_labeled": {
-            const branchId = payload.branchId as string | undefined;
-            if (branchId) {
-              patch("aiBranches", branchId, {
-                label: payload.label as string,
-              } as Partial<AiBranchEntity>);
-            }
-            break;
-          }
-        }
+        processAiConversationEvent(event.type, payload, event.timestamp);
       });
 
     return () => subscription.unsubscribe();
@@ -139,6 +69,8 @@ export function useConversationEventsSubscription(conversationId: string | null)
 /**
  * Subscribes to new turns for the active branch.
  * Each turn is upserted into the entity store and appended to the branch's turn list.
+ * Handles optimistic reconciliation: if a USER turn arrives and there's an optimistic
+ * turn in the branch, the optimistic ID is swapped for the real one.
  */
 export function useBranchTurnsSubscription(branchId: string | null) {
   useEffect(() => {
@@ -159,10 +91,25 @@ export function useBranchTurnsSubscription(branchId: string | null) {
           branch: { id: string };
         };
 
-        const { upsert, patch } = useEntityStore.getState();
+        const { upsert, patch, remove } = useEntityStore.getState();
         const turnBranchId = turn.branch.id;
 
-        // Upsert the turn (reconciles with any optimistic version)
+        // Reconcile optimistic turns: if a USER turn arrives and there's
+        // an optimistic-* entry, swap it out before upserting the real one.
+        if (turn.role === "USER") {
+          const branch = useEntityStore.getState().aiBranches[turnBranchId];
+          if (branch) {
+            const optimisticId = branch.turnIds.find((id) => id.startsWith("optimistic-"));
+            if (optimisticId) {
+              patch("aiBranches", turnBranchId, {
+                turnIds: branch.turnIds.map((id) => (id === optimisticId ? turn.id : id)),
+              } as Partial<AiBranchEntity>);
+              remove("aiTurns", optimisticId);
+            }
+          }
+        }
+
+        // Upsert the real turn
         upsert("aiTurns", turn.id, {
           id: turn.id,
           branchId: turnBranchId,
@@ -171,15 +118,14 @@ export function useBranchTurnsSubscription(branchId: string | null) {
           parentTurnId: turn.parentTurn?.id ?? null,
           branchCount: turn.branchCount,
           createdAt: turn.createdAt,
-          _optimistic: false,
         } as AiTurnEntity);
 
         // Append to branch turn list if not already present
-        const branch = useEntityStore.getState().aiBranches[turnBranchId];
-        if (branch && !branch.turnIds.includes(turn.id)) {
+        const updatedBranch = useEntityStore.getState().aiBranches[turnBranchId];
+        if (updatedBranch && !updatedBranch.turnIds.includes(turn.id)) {
           patch("aiBranches", turnBranchId, {
-            turnIds: [...branch.turnIds, turn.id],
-            turnCount: branch.turnCount + 1,
+            turnIds: [...updatedBranch.turnIds, turn.id],
+            turnCount: updatedBranch.turnCount + 1,
           } as Partial<AiBranchEntity>);
         }
       });
