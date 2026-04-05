@@ -102,6 +102,7 @@ class TerminalRelay {
     sessionGroupId: string | null,
     command: string,
     cwd?: string,
+    timeoutMs = 300_000,
   ): Promise<number> {
     return new Promise((resolve, reject) => {
       const terminalId = this.createTerminal(sessionId, sessionGroupId, 80, 24, cwd);
@@ -110,6 +111,14 @@ class TerminalRelay {
         reject(new Error("Failed to create terminal"));
         return;
       }
+
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        this.destroyTerminal(terminalId);
+        reject(new Error(`Setup script timed out after ${timeoutMs / 1000}s`));
+      }, timeoutMs);
 
       entry.onReady = () => {
         sessionRouter.send(sessionId, {
@@ -120,6 +129,9 @@ class TerminalRelay {
       };
 
       entry.onEnd = (exitCode: number | null, error?: string) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
         if (error) {
           reject(new Error(error));
         } else {

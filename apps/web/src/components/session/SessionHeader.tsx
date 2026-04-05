@@ -10,15 +10,10 @@ import {
   GitPullRequest,
   Maximize2,
   Minimize2,
-  Play,
   X,
 } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
-import { useUIStore, type UIState } from "../../stores/ui";
-import { useTerminalStore } from "../../stores/terminal";
-import type { SetupStatus } from "../../stores/terminal";
-import { client } from "../../lib/urql";
-import { CREATE_TERMINAL_MUTATION } from "../../lib/mutations";
+import { useUIStore } from "../../stores/ui";
 import { useDetailPanelStore } from "../../stores/detail-panel";
 import {
   agentStatusColor,
@@ -72,33 +67,6 @@ export function SessionHeader({
   const [showHistory, setShowHistory] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
   const prUrl = groupPrUrl ?? null;
-
-  const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
-  const sessionChannel = useEntityField("sessions", sessionId, "channel") as { id: string } | null | undefined;
-  const channelId = activeChannelId ?? sessionChannel?.id ?? "";
-  const setShowTerminalPanel = useUIStore((s: UIState) => s.setShowTerminalPanel);
-  const runScripts = useEntityField("channels", channelId, "runScripts") as Array<{ name: string; command: string }> | null | undefined;
-  const setupStatus = useTerminalStore((s) => s.setupStatus[sessionGroupId ?? ""] as SetupStatus | undefined);
-  const hasRunScripts = Array.isArray(runScripts) && runScripts.length > 0;
-  const setupBlocking = Boolean(useEntityField("channels", channelId, "setupScript")) && setupStatus === "running";
-
-  const handleRunScripts = useCallback(async () => {
-    if (!sessionGroupId || !runScripts) return;
-    const addTerminal = useTerminalStore.getState().addTerminal;
-    for (const script of runScripts) {
-      const result = await client
-        .mutation(CREATE_TERMINAL_MUTATION, { sessionId, cols: 80, rows: 24 })
-        .toPromise();
-      if (result.data?.createTerminal) {
-        const { id } = result.data.createTerminal as { id: string };
-        addTerminal(id, sessionId, sessionGroupId, "connecting", {
-          customName: script.name,
-          initialCommand: script.command,
-        });
-      }
-    }
-    setShowTerminalPanel(true);
-  }, [sessionId, sessionGroupId, runScripts, setShowTerminalPanel]);
 
   const disconnected = isDisconnected(connection);
 
@@ -211,17 +179,6 @@ export function SessionHeader({
             title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
           >
             {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-          </button>
-        )}
-
-        {hasRunScripts && (
-          <button
-            onClick={handleRunScripts}
-            disabled={setupBlocking}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-40 disabled:pointer-events-none"
-            title="Run scripts"
-          >
-            <Play size={14} />
           </button>
         )}
 

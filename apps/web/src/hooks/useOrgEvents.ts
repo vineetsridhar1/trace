@@ -9,7 +9,7 @@ import { useUIStore, navigateToSession } from "../stores/ui";
 import { getSessionChannelId } from "../lib/session-group";
 import { notifyForEvent } from "../notifications/handlers";
 import { takePendingOptimisticSession } from "../lib/optimistic-message";
-import { handleSetupScriptCompleted, handleSetupScriptStarted } from "./useSetupScript";
+import { handleSetupScriptCompleted, handleSetupScriptStarted } from "./setup-script-handlers";
 import type {
   AgentStatus,
   Event,
