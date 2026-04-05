@@ -1,11 +1,10 @@
-import { Files, GitCommitHorizontal, GitCompareArrows, Github } from "lucide-react";
+import { Files, GitCommitHorizontal, GitCompareArrows } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { FileExplorer } from "./FileExplorer";
 import { CheckpointPanel } from "./CheckpointPanel";
 import { BranchChangesPanel } from "./BranchChangesPanel";
-import { GitHubPanel } from "./GitHubPanel";
 
-export type SidebarTab = "files" | "git" | "changes" | "github";
+export type SidebarTab = "files" | "git" | "changes";
 
 interface SidebarPanelProps {
   sessionGroupId: string;
@@ -61,14 +60,6 @@ export function SidebarPanel({
           <GitCompareArrows size={12} />
           Changes
         </button>
-        <button
-          type="button"
-          onClick={() => onTabChange("github")}
-          className={cn(tabClass, activeTab === "github" ? tabActive : tabInactive)}
-        >
-          <Github size={12} />
-          GitHub
-        </button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
@@ -82,8 +73,6 @@ export function SidebarPanel({
             sessionGroupId={sessionGroupId}
             onFileClick={onDiffFileClick ?? (() => {})}
           />
-        ) : activeTab === "github" ? (
-          <GitHubPanel sessionGroupId={sessionGroupId} />
         ) : (
           <CheckpointPanel
             sessionGroupId={sessionGroupId}

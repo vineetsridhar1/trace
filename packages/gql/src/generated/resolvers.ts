@@ -471,54 +471,6 @@ export type GitCheckpoint = {
   treeSha: Scalars['String']['output'];
 };
 
-export type GitHubIssue = {
-  __typename?: 'GitHubIssue';
-  author: Scalars['String']['output'];
-  createdAt: Scalars['DateTime']['output'];
-  labels: Array<Scalars['String']['output']>;
-  number: Scalars['Int']['output'];
-  state: Scalars['String']['output'];
-  title: Scalars['String']['output'];
-  updatedAt: Scalars['DateTime']['output'];
-  url: Scalars['String']['output'];
-};
-
-export type GitHubPullRequest = {
-  __typename?: 'GitHubPullRequest';
-  additions: Scalars['Int']['output'];
-  author: Scalars['String']['output'];
-  baseBranch: Scalars['String']['output'];
-  branch: Scalars['String']['output'];
-  createdAt: Scalars['DateTime']['output'];
-  deletions: Scalars['Int']['output'];
-  draft: Scalars['Boolean']['output'];
-  number: Scalars['Int']['output'];
-  state: Scalars['String']['output'];
-  title: Scalars['String']['output'];
-  updatedAt: Scalars['DateTime']['output'];
-  url: Scalars['String']['output'];
-};
-
-export type GitHubRepoInfo = {
-  __typename?: 'GitHubRepoInfo';
-  issues: Array<GitHubIssue>;
-  pullRequests: Array<GitHubPullRequest>;
-  workflowRuns: Array<GitHubWorkflowRun>;
-};
-
-export type GitHubWorkflowRun = {
-  __typename?: 'GitHubWorkflowRun';
-  branch: Scalars['String']['output'];
-  conclusion?: Maybe<Scalars['String']['output']>;
-  createdAt: Scalars['DateTime']['output'];
-  event: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
-  name: Scalars['String']['output'];
-  status: Scalars['String']['output'];
-  updatedAt: Scalars['DateTime']['output'];
-  url: Scalars['String']['output'];
-};
-
 export type HostingMode =
   | 'cloud'
   | 'local';
@@ -1125,7 +1077,6 @@ export type Query = {
   chatMessages: Array<Message>;
   chats: Array<Chat>;
   events: Array<Event>;
-  githubRepoInfo: GitHubRepoInfo;
   inboxItems: Array<InboxItem>;
   myApiTokens: Array<ApiTokenStatus>;
   myOrganizations: Array<OrgMember>;
@@ -1262,12 +1213,6 @@ export type QueryEventsArgs = {
   organizationId: Scalars['ID']['input'];
   scope?: InputMaybe<ScopeInput>;
   types?: InputMaybe<Array<Scalars['String']['input']>>;
-};
-
-
-export type QueryGithubRepoInfoArgs = {
-  branch?: InputMaybe<Scalars['String']['input']>;
-  repoId: Scalars['ID']['input'];
 };
 
 
@@ -1907,10 +1852,6 @@ export type ResolversTypes = ResolversObject<{
   ExecutionStatus: ExecutionStatus;
   Float: ResolverTypeWrapper<Scalars['Float']['output']>;
   GitCheckpoint: ResolverTypeWrapper<GitCheckpoint>;
-  GitHubIssue: ResolverTypeWrapper<GitHubIssue>;
-  GitHubPullRequest: ResolverTypeWrapper<GitHubPullRequest>;
-  GitHubRepoInfo: ResolverTypeWrapper<GitHubRepoInfo>;
-  GitHubWorkflowRun: ResolverTypeWrapper<GitHubWorkflowRun>;
   HostingMode: HostingMode;
   ID: ResolverTypeWrapper<Scalars['ID']['output']>;
   InboxItem: ResolverTypeWrapper<InboxItem>;
@@ -2007,10 +1948,6 @@ export type ResolversParentTypes = ResolversObject<{
   ExecutionLogFilters: ExecutionLogFilters;
   Float: Scalars['Float']['output'];
   GitCheckpoint: GitCheckpoint;
-  GitHubIssue: GitHubIssue;
-  GitHubPullRequest: GitHubPullRequest;
-  GitHubRepoInfo: GitHubRepoInfo;
-  GitHubWorkflowRun: GitHubWorkflowRun;
   ID: Scalars['ID']['output'];
   InboxItem: InboxItem;
   Int: Scalars['Int']['output'];
@@ -2318,54 +2255,6 @@ export type GitCheckpointResolvers<ContextType = Context, ParentType extends Res
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
-export type GitHubIssueResolvers<ContextType = Context, ParentType extends ResolversParentTypes['GitHubIssue'] = ResolversParentTypes['GitHubIssue']> = ResolversObject<{
-  author?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
-  labels?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType>;
-  number?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
-  state?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  title?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
-  url?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
-}>;
-
-export type GitHubPullRequestResolvers<ContextType = Context, ParentType extends ResolversParentTypes['GitHubPullRequest'] = ResolversParentTypes['GitHubPullRequest']> = ResolversObject<{
-  additions?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
-  author?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  baseBranch?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  branch?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
-  deletions?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
-  draft?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
-  number?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
-  state?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  title?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
-  url?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
-}>;
-
-export type GitHubRepoInfoResolvers<ContextType = Context, ParentType extends ResolversParentTypes['GitHubRepoInfo'] = ResolversParentTypes['GitHubRepoInfo']> = ResolversObject<{
-  issues?: Resolver<Array<ResolversTypes['GitHubIssue']>, ParentType, ContextType>;
-  pullRequests?: Resolver<Array<ResolversTypes['GitHubPullRequest']>, ParentType, ContextType>;
-  workflowRuns?: Resolver<Array<ResolversTypes['GitHubWorkflowRun']>, ParentType, ContextType>;
-  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
-}>;
-
-export type GitHubWorkflowRunResolvers<ContextType = Context, ParentType extends ResolversParentTypes['GitHubWorkflowRun'] = ResolversParentTypes['GitHubWorkflowRun']> = ResolversObject<{
-  branch?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  conclusion?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
-  event?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
-  name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
-  url?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
-}>;
-
 export type InboxItemResolvers<ContextType = Context, ParentType extends ResolversParentTypes['InboxItem'] = ResolversParentTypes['InboxItem']> = ResolversObject<{
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
@@ -2548,7 +2437,6 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   chatMessages?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType, RequireFields<QueryChatMessagesArgs, 'chatId'>>;
   chats?: Resolver<Array<ResolversTypes['Chat']>, ParentType, ContextType>;
   events?: Resolver<Array<ResolversTypes['Event']>, ParentType, ContextType, RequireFields<QueryEventsArgs, 'organizationId'>>;
-  githubRepoInfo?: Resolver<ResolversTypes['GitHubRepoInfo'], ParentType, ContextType, RequireFields<QueryGithubRepoInfoArgs, 'repoId'>>;
   inboxItems?: Resolver<Array<ResolversTypes['InboxItem']>, ParentType, ContextType, RequireFields<QueryInboxItemsArgs, 'organizationId'>>;
   myApiTokens?: Resolver<Array<ResolversTypes['ApiTokenStatus']>, ParentType, ContextType>;
   myOrganizations?: Resolver<Array<ResolversTypes['OrgMember']>, ParentType, ContextType>;
@@ -2783,10 +2671,6 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   DateTime?: GraphQLScalarType;
   Event?: EventResolvers<ContextType>;
   GitCheckpoint?: GitCheckpointResolvers<ContextType>;
-  GitHubIssue?: GitHubIssueResolvers<ContextType>;
-  GitHubPullRequest?: GitHubPullRequestResolvers<ContextType>;
-  GitHubRepoInfo?: GitHubRepoInfoResolvers<ContextType>;
-  GitHubWorkflowRun?: GitHubWorkflowRunResolvers<ContextType>;
   InboxItem?: InboxItemResolvers<ContextType>;
   JSON?: GraphQLScalarType;
   Message?: MessageResolvers<ContextType>;

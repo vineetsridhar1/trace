@@ -16,7 +16,6 @@ import { agentIdentityQueries, agentIdentityMutations, agentIdentityTypeResolver
 import { agentDebugQueries, agentDebugTypeResolvers } from "./agent-debug.js";
 import { scopeAutonomyQueries, scopeAutonomyMutations } from "./scope-autonomy.js";
 import { aiConversationQueries, aiConversationMutations, aiConversationSubscriptions, aiConversationTypeResolvers } from "./ai-conversation.js";
-import { githubQueries } from "./github.js";
 import type { Context } from "../context.js";
 import { resolveActor } from "../services/actor.js";
 
@@ -61,7 +60,6 @@ export const resolvers = {
     ...agentDebugQueries,
     ...scopeAutonomyQueries,
     ...aiConversationQueries,
-    ...githubQueries,
   },
 
   Mutation: {
