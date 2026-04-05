@@ -184,6 +184,11 @@ export function SessionDetailView({
   const setShowTerminalPanel = useUIStore((s: UIState) => s.setShowTerminalPanel);
   const [retryingSetup, setRetryingSetup] = useState(false);
 
+  // Reset terminal panel when switching sessions
+  useEffect(() => {
+    setShowTerminalPanel(false);
+  }, [sessionId, setShowTerminalPanel]);
+
   const canAccessTerminal = (isCloud || isLocalOwner) && isConnected && !isTerminalStatus(agentStatus, sessionStatus) && !worktreeDeleted && !setupBlocking;
 
   // Fetch full session detail — merge to avoid wiping fields set by events
