@@ -12,7 +12,6 @@ import { SessionInput } from "./SessionInput";
 import { PlanResponseBar } from "./PlanResponseBar";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
-import { useSetupScript } from "../../hooks/useSetupScript";
 import { useTerminalStore } from "../../stores/terminal";
 import type { SetupStatus } from "../../stores/terminal";
 import { useUIStore, type UIState } from "../../stores/ui";
@@ -155,9 +154,6 @@ export function SessionDetailView({
   const channelSetupScript = useEntityField("channels", activeChannelId ?? "", "setupScript") as string | null | undefined;
   const hasSetupScript = Boolean(channelSetupScript?.trim());
   const setupBlocking = hasSetupScript && setupStatus === "running";
-
-  // Track setup script status (server runs it during worktree creation)
-  useSetupScript(sessionGroupId ?? null, activeChannelId);
 
   const showTerminalPanel = useUIStore((s: UIState) => s.showTerminalPanel);
   const setShowTerminalPanel = useUIStore((s: UIState) => s.setShowTerminalPanel);
