@@ -31,7 +31,7 @@ Add AI Conversations as a top-level navigation item in the Trace sidebar and bui
 ## Dependencies
 
 - 06 (Zustand Store & Entity Integration)
-  <!-- Ticket 06 creates: Zustand entity store for AiConversation, query hooks, selectors -->
+  <!-- Ticket 06 creates: AiConversationEntity/AiBranchEntity/AiTurnEntity registered in stores/entity.ts EntityTableMap. Feature folder at features/ai-conversations/ with barrel export from index.ts. Key imports: useAiConversationsQuery() for list hydration, useAiConversations() for sorted conversation IDs, useAiConversationField(id, field) for fine-grained selectors, useCreateAiConversation() for fire-and-forget creation. Conversations sort by updatedAt descending. Entity shape: { id, title, visibility, branchCount, createdById, rootBranchId, branchIds, createdAt, updatedAt }. -->
 
 ## Completion requirements
 
