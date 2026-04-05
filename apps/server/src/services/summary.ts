@@ -13,6 +13,33 @@ import { prisma } from "../lib/db.js";
  */
 const IGNORED_PAYLOAD_TYPES = ["connection_lost", "connection_restored"];
 
+function buildIgnoredEventFilters(): Prisma.EventWhereInput[] {
+  return IGNORED_PAYLOAD_TYPES.map((type) => ({
+    eventType: "session_output" as const,
+    payload: { path: ["type"], equals: type },
+  }));
+}
+
+async function buildAfterEventWhere(afterEventId?: string): Promise<Prisma.EventWhereInput | null> {
+  if (!afterEventId) return null;
+
+  const lastEvent = await prisma.event.findUnique({
+    where: { id: afterEventId },
+    select: { id: true, timestamp: true },
+  });
+  if (!lastEvent) return null;
+
+  return {
+    OR: [
+      { timestamp: { gt: lastEvent.timestamp } },
+      {
+        timestamp: lastEvent.timestamp,
+        id: { gt: lastEvent.id },
+      },
+    ],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -179,21 +206,12 @@ export class SummaryService {
       scopeType: input.scopeType as Prisma.EventWhereInput["scopeType"],
       scopeId: input.scopeId,
       // Exclude connection infrastructure events from the count
-      NOT: IGNORED_PAYLOAD_TYPES.map((type) => ({
-        eventType: "session_output" as const,
-        payload: { path: ["type"], equals: type },
-      })),
+      NOT: buildIgnoredEventFilters(),
     };
 
-    if (input.afterEventId) {
-      // Get the timestamp of the last summarized event to filter efficiently
-      const lastEvent = await prisma.event.findUnique({
-        where: { id: input.afterEventId },
-        select: { timestamp: true },
-      });
-      if (lastEvent) {
-        where.timestamp = { gt: lastEvent.timestamp };
-      }
+    const afterEventWhere = await buildAfterEventWhere(input.afterEventId);
+    if (afterEventWhere) {
+      where.AND = [afterEventWhere];
     }
 
     return prisma.event.count({ where });
@@ -214,21 +232,20 @@ export class SummaryService {
       organizationId: input.organizationId,
       scopeType: input.scopeType as Prisma.EventWhereInput["scopeType"],
       scopeId: input.scopeId,
+      NOT: buildIgnoredEventFilters(),
     };
 
-    if (input.afterEventId) {
-      const lastEvent = await prisma.event.findUnique({
-        where: { id: input.afterEventId },
-        select: { timestamp: true },
-      });
-      if (lastEvent) {
-        where.timestamp = { gt: lastEvent.timestamp };
-      }
+    const afterEventWhere = await buildAfterEventWhere(input.afterEventId);
+    if (afterEventWhere) {
+      where.AND = [afterEventWhere];
     }
 
     return prisma.event.findMany({
       where,
-      orderBy: { timestamp: "asc" },
+      orderBy: [
+        { timestamp: "asc" },
+        { id: "asc" },
+      ],
       take: limit,
     });
   }

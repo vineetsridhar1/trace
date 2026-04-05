@@ -39,6 +39,7 @@ import {
 import type { PolicyDecision, PolicyActionResult } from "./policy-engine.js";
 import type { ExecutionResult } from "./executor.js";
 import { buildContext } from "./context-builder.js";
+import { fetchProjectSoulFile, fetchRepoIdForScope, loadRepoSoulFile } from "./soul-file-resolver.js";
 import { evaluatePolicy } from "./policy-engine.js";
 import { ActionExecutor } from "./executor.js";
 import { createSuggestions } from "./suggestion.js";
@@ -156,12 +157,24 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
   const sonnetModel = process.env.AGENT_SONNET_MODEL ?? DEFAULT_SONNET_MODEL;
   const opusModel = process.env.AGENT_TIER3_MODEL ?? DEFAULT_OPUS_MODEL;
 
+  // ── Resolve soul files (project + repo) ──
+  const scopeType = batch.scopeKey.split(":")[0];
+  const scopeId = batch.scopeKey.split(":").slice(1).join(":");
+  const [projectSoulFile, repoSoulFile] = await Promise.all([
+    fetchProjectSoulFile(batch.organizationId, scopeType, scopeId).catch(() => undefined),
+    fetchRepoIdForScope(batch.organizationId, scopeType, scopeId)
+      .then((repoId) => repoId ? loadRepoSoulFile(repoId) : undefined)
+      .catch(() => undefined),
+  ]);
+
   // ── Build context (once) ──
   let packet: AgentContextPacket;
   try {
     packet = await buildContext({
       batch,
       agentSettings,
+      projectSoulFile,
+      repoSoulFile,
       tokenBudget: isRuleBasedTier3 ? TIER3_TOKEN_BUDGET : undefined,
     });
     log("context built", {
@@ -199,7 +212,11 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     anyMessageSendExecuted: false,
   };
 
-  const systemPrompt = buildSystemPrompt(packet);
+  const { text: systemPrompt, blockVersions } = buildSystemPrompt(packet);
+
+  // ── Capture replay packet (structured context snapshot for eval replay) ──
+  // This is re-captured after tier-3 promotion to reflect the rebuilt context.
+  let replayPacket = buildReplayPacket(packet);
 
   // ── Multi-turn loop ──
   for (let turn = 1; turn <= MAX_ITERATIONS; turn++) {
@@ -268,9 +285,15 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
         agentSettings,
         sonnetModel,
         opusModel,
+        projectSoulFile,
+        repoSoulFile,
         logger,
       });
-      if (promoted) continue; // Re-run turn 1 with promoted model
+      if (promoted) {
+        // Re-snapshot the replay packet from the rebuilt context
+        replayPacket = buildReplayPacket(state.packet);
+        continue; // Re-run turn 1 with promoted model
+      }
       // Budget suppressed — fall through
     }
 
@@ -332,7 +355,7 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
   }
 
   // ── Post-loop ──
-  await postLoop({ state, agentSettings, executor, batch, startTime, logger });
+  await postLoop({ state, agentSettings, executor, batch, startTime, replayPacket, blockVersions, logger });
 }
 
 // ---------------------------------------------------------------------------
@@ -385,6 +408,9 @@ async function executeTurn(input: ExecuteTurnInput): Promise<TurnResult> {
         organizationId: state.packet.organizationId,
         agentId: agentSettings.agentId,
         triggerEventId: state.packet.triggerEvent.id,
+        scopeType: state.packet.scopeType,
+        scopeId: state.packet.scopeId,
+        isDm: state.packet.isDm,
       });
       executionResults.push({ ...result, decision: "execute" });
 
@@ -507,11 +533,13 @@ interface HandlePromotionInput {
   agentSettings: OrgAgentSettings;
   sonnetModel: string;
   opusModel: string;
+  projectSoulFile?: string;
+  repoSoulFile?: string;
   logger: PipelineLogger;
 }
 
 async function handlePromotion(input: HandlePromotionInput): Promise<boolean> {
-  const { state, plannerOutput, llmResponse, batch, agentSettings, sonnetModel, opusModel, logger } = input;
+  const { state, plannerOutput, llmResponse, batch, agentSettings, sonnetModel, opusModel, projectSoulFile, repoSoulFile, logger } = input;
   const { log, logError } = logger;
 
   // Record Tier 2 cost before re-running
@@ -564,6 +592,8 @@ async function handlePromotion(input: HandlePromotionInput): Promise<boolean> {
       state.packet = await buildContext({
         batch,
         agentSettings,
+        projectSoulFile,
+        repoSoulFile,
         tokenBudget: TIER3_TOKEN_BUDGET,
       });
     } catch (err) {
@@ -748,6 +778,8 @@ interface PostLoopInput {
   executor: ActionExecutor;
   batch: AggregatedBatch;
   startTime: number;
+  replayPacket: Record<string, unknown>;
+  blockVersions: Record<string, number>;
   logger: PipelineLogger;
 }
 
@@ -762,7 +794,7 @@ function isChannelReplyAction(actionType: string): boolean {
 }
 
 async function postLoop(input: PostLoopInput): Promise<void> {
-  const { state, agentSettings, executor, batch, startTime, logger } = input;
+  const { state, agentSettings, executor, batch, startTime, replayPacket, blockVersions, logger } = input;
   const { log, logError } = logger;
 
   // @mention / DM fallback — guarantee a reply was sent
@@ -851,6 +883,8 @@ async function postLoop(input: PostLoopInput): Promise<void> {
     modelTier: state.currentTier,
     promoted: state.promoted,
     promotionReason: state.promotionReason,
+    replayPacket,
+    blockVersions,
     logger,
   });
 
@@ -1095,6 +1129,38 @@ function toExecutionDisposition(disposition: string | undefined): ExecutionDispo
 }
 
 // ---------------------------------------------------------------------------
+// Replay packet builder — structured context snapshot for eval replay
+// ---------------------------------------------------------------------------
+
+function buildReplayPacket(packet: AgentContextPacket): Record<string, unknown> {
+  return {
+    organizationId: packet.organizationId,
+    scopeKey: packet.scopeKey,
+    scopeType: packet.scopeType,
+    scopeId: packet.scopeId,
+    isDm: packet.isDm,
+    isMention: packet.isMention,
+    triggerEvent: packet.triggerEvent,
+    eventBatch: packet.eventBatch,
+    soulFile: packet.soulFile,
+    scopeEntity: packet.scopeEntity,
+    relevantEntities: packet.relevantEntities,
+    decisionContext: packet.decisionContext,
+    entitySnapshots: packet.entitySnapshots,
+    recentEvents: packet.recentEvents,
+    summaries: packet.summaries,
+    memories: packet.memories,
+    recentSignals: packet.recentSignals,
+    actors: packet.actors,
+    permissions: {
+      autonomyMode: packet.permissions.autonomyMode,
+      // Exclude full action registrations — they can be re-derived from scope type
+      actionNames: packet.permissions.actions.map((a) => a.name),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Persistence helpers
 // ---------------------------------------------------------------------------
 
@@ -1117,6 +1183,8 @@ interface WriteLogInput {
   modelTier?: "tier2" | "tier3";
   promoted?: boolean;
   promotionReason?: string;
+  replayPacket?: Record<string, unknown>;
+  blockVersions?: Record<string, number>;
   logger: PipelineLogger;
 }
 
@@ -1125,6 +1193,7 @@ async function writeExecutionLog(input: WriteLogInput): Promise<string | null> {
     packet, plannerResult, costCents, agentSettings, batch,
     disposition, status, policyDecision, finalActions, inboxItemId,
     modelTier = "tier2", promoted: wasPromoted = false, promotionReason: promoReason,
+    replayPacket: replayPkt, blockVersions: blkVersions,
     logger,
   } = input;
   try {
@@ -1152,6 +1221,8 @@ async function writeExecutionLog(input: WriteLogInput): Promise<string | null> {
       status,
       inboxItemId,
       latencyMs: plannerResult.latencyMs,
+      replayPacket: replayPkt,
+      promptVersions: blkVersions,
     });
     return log.id;
   } catch (err) {

@@ -25,6 +25,18 @@ import type {
 import type { AgentContextPacket } from "./context-builder.js";
 import type { AgentActionRegistration } from "./action-registry.js";
 import { getAgentLLMAdapter, setAgentLLMAdapterForTest, withRetry } from "./llm-adapter.js";
+import {
+  BLOCK_SYSTEM_PREAMBLE,
+  BLOCK_DM_BEHAVIOR,
+  BLOCK_GROUP_CHAT_BEHAVIOR,
+  BLOCK_CHANNEL_BEHAVIOR,
+  BLOCK_SESSION_FAILED,
+  BLOCK_SESSION_COMPLETED,
+  BLOCK_SESSION_PR_UPDATE,
+  BLOCK_MENTION_BEHAVIOR,
+  BLOCK_CONTEXT_USAGE,
+  getBlockVersions,
+} from "./prompt-blocks.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -164,11 +176,16 @@ export const PLANNER_TOOL: LLMToolDefinition = {
 // System prompt construction
 // ---------------------------------------------------------------------------
 
-export function buildSystemPrompt(ctx: AgentContextPacket): string {
+export interface BuildSystemPromptResult {
+  text: string;
+  blockVersions: Record<string, number>;
+}
+
+export function buildSystemPrompt(ctx: AgentContextPacket): BuildSystemPromptResult {
   const parts: string[] = [];
 
   // 1. System preamble
-  parts.push(SYSTEM_PREAMBLE);
+  parts.push(BLOCK_SYSTEM_PREAMBLE.content);
 
   // 2. Action schema
   parts.push(buildActionSchemaSection(ctx.permissions.actions));
@@ -178,40 +195,20 @@ export function buildSystemPrompt(ctx: AgentContextPacket): string {
     parts.push(`<soul_file>\n${ctx.soulFile}\n</soul_file>`);
   }
 
+  parts.push(BLOCK_CONTEXT_USAGE.content);
+
   // 4. Context packet
   parts.push(buildContextSection(ctx));
 
-  return parts.join("\n\n");
+  return {
+    text: parts.join("\n\n"),
+    blockVersions: getBlockVersions(),
+  };
 }
 
-const SYSTEM_PREAMBLE = `You are the decision-making component of an ambient AI agent for a project management platform called Trace.
-
-You receive context about recent events in a scope (channel, ticket, session, chat) and decide what, if anything, the agent should do.
-
-CRITICAL RULES:
-1. MOST EVENTS REQUIRE NO ACTION. "ignore" is the correct response for the vast majority of events. When in doubt, choose "ignore".
-2. Only suggest or act when you have HIGH CONFIDENCE that the action will be genuinely helpful.
-3. Never invent action names — you MUST pick from the provided action schema. If none fit, choose "ignore".
-4. Be concise in any user-visible message (1-2 sentences max).
-5. For "act" disposition, confidence must be >= 0.8 and the action must be low-risk.
-6. For "suggest" disposition, confidence should be >= 0.5.
-7. Below 0.5 confidence, always choose "ignore".
-8. Use "escalate" sparingly — only when the task exceeds your capabilities. Set promotionTarget to "sonnet" for moderate complexity or "opus" for very high complexity. Default is "sonnet".
-9. Use "summarize" when events are informational and a rolling summary update would be useful, but no user-facing action is needed.
-10. Check relevant entities carefully — do NOT suggest creating a ticket if one already exists for the same issue.
-11. Check recent events — do NOT suggest actions that have already been taken.
-
-MULTI-TURN LOOP:
-- You operate in a loop of up to 10 turns. Each turn, you propose actions, they are executed, and you see the results.
-- You may send multiple messages, create tickets, and perform other actions across turns.
-- After each turn, you'll receive a tool_result showing what was executed, suggested, or dropped, plus the current turn count.
-- Set done=true when you have nothing more to do. The pipeline enforces a hard cap of 10 turns regardless.
-- You do NOT need to do everything in one turn. Propose one or a few actions per turn, observe the results, and decide what's next.
-- If your first action is to reply to a message, you can then follow up with additional actions in subsequent turns.
-- IMPORTANT: Whenever you execute a non-message action (e.g., ticket.create, ticket.addComment), you MUST also send a message in the same or next turn to inform the user what you did. Never take an action silently — always follow up with a brief message.
-- SUGGESTED ACTIONS: When the tool_result shows actions in "suggested" (not "executed"), it means the policy downgraded them to suggestions for the user to approve. The system will automatically notify the user about pending suggestions — you do NOT need to send a separate message. Set done=true unless you have additional actions to propose.
-
-You MUST call the planner_decision tool exactly once per turn with your decision.`;
+function isRawContextDebugEnabled(): boolean {
+  return process.env.AGENT_DEBUG_RAW_CONTEXT === "1";
+}
 
 function buildActionSchemaSection(actions: AgentActionRegistration[]): string {
   const coreActions = actions.filter((a) => a.tier === "core");
@@ -266,6 +263,10 @@ function buildActionSchemaSection(actions: AgentActionRegistration[]): string {
 }
 
 function buildContextSection(ctx: AgentContextPacket): string {
+  return buildCompactContextSection(ctx);
+}
+
+function buildScopeSection(ctx: AgentContextPacket): string {
   const parts: string[] = [];
 
   // Scope info — include chat type (DM vs group) when applicable
@@ -281,32 +282,16 @@ function buildContextSection(ctx: AgentContextPacket): string {
     const chatType = ctx.scopeEntity.data.type as string | undefined;
     if (chatType === "dm") {
       scopeLines.push("Chat type: dm (direct message — 1:1 conversation with the user)");
-      scopeLines.push(
-        "DM behavior: This is a direct conversation with you. The user expects a response EVERY TIME. " +
-        "You MUST always reply — use 'act' disposition with a message.send action. " +
-        "Do NOT use 'suggest' or 'ignore' in DMs — always reply directly. " +
-        "You may also perform additional actions (create tickets, etc.) alongside your reply."
-      );
+      scopeLines.push(BLOCK_DM_BEHAVIOR.content);
     } else if (chatType === "group") {
       scopeLines.push("Chat type: group (multi-member chat)");
-      scopeLines.push(
-        "Group chat behavior: You can read all messages. Be more reserved — only act when genuinely helpful. " +
-        "@mentions directed at you MUST be treated as direct requests and always receive a reply in thread. " +
-        "For non-mention messages, you may choose to ignore, suggest, or act based on relevance."
-      );
+      scopeLines.push(BLOCK_GROUP_CHAT_BEHAVIOR.content);
     }
   }
 
   // Add channel-specific context hints
   if (ctx.scopeType === "channel") {
-    scopeLines.push(
-      "Channel behavior: You can read all messages in this channel. " +
-      "You should generally observe and only reply when genuinely helpful. " +
-      "When replying, ALWAYS use channel.sendMessage (not message.send). " +
-      "Prefer threaded replies (set threadId) to minimize noise in the main channel. " +
-      "Only post without a threadId for important org-wide announcements or summaries. " +
-      "@mentions directed at you MUST always receive a threaded reply."
-    );
+    scopeLines.push(BLOCK_CHANNEL_BEHAVIOR.content);
   }
 
   // Add session-specific context hints (terminal events only — ongoing monitoring disabled)
@@ -319,21 +304,11 @@ function buildContextSection(ctx: AgentContextPacket): string {
     const triggerType = ctx.triggerEvent.eventType;
 
     if (triggerType === "session_terminated" && ctx.triggerEvent.payload.status === "failed") {
-      scopeLines.push(
-        "FAILED SESSION: This session terminated with a failure. " +
-        "If there are linked tickets, notify the assignee(s) via ticket.addComment with what went wrong."
-      );
+      scopeLines.push(BLOCK_SESSION_FAILED.content);
     } else if (triggerType === "session_terminated" || triggerType === "session_pr_opened") {
-      scopeLines.push(
-        "SESSION COMPLETED: This session has completed or opened a PR. " +
-        "If there are linked tickets, post a completion summary via ticket.addComment " +
-        "with key information: what was changed, test results, PR link."
-      );
+      scopeLines.push(BLOCK_SESSION_COMPLETED.content);
     } else if (triggerType === "session_pr_merged" || triggerType === "session_pr_closed") {
-      scopeLines.push(
-        "SESSION PR UPDATE: A PR from this session was merged or closed. " +
-        "If there are linked tickets, consider updating their status."
-      );
+      scopeLines.push(BLOCK_SESSION_PR_UPDATE.content);
     }
 
     if (linkedTickets.length > 0) {
@@ -352,63 +327,31 @@ function buildContextSection(ctx: AgentContextPacket): string {
   if (ctx.isMention) {
     const replyAction = ctx.scopeType === "channel" ? "channel.sendMessage" : "message.send";
     scopeLines.push(
-      "@mention: You were directly @mentioned in this message. " +
-      `The user is expecting a helpful reply. Respond with 'act' disposition and a ${replyAction} action. ` +
-      "You may also propose additional actions (e.g., ticket.create) alongside the reply."
+      BLOCK_MENTION_BEHAVIOR.content.replace("{replyAction}", replyAction),
     );
   }
 
   parts.push(`<scope>\n${scopeLines.join("\n")}\n</scope>`);
+  return parts.join("\n\n");
+}
 
-  // Trigger event
-  parts.push(
-    `<trigger_event>\n${JSON.stringify(ctx.triggerEvent, null, 2)}\n</trigger_event>`,
-  );
+function buildCompactContextSection(ctx: AgentContextPacket): string {
+  const parts: string[] = [buildScopeSection(ctx)];
 
-  // Event batch
-  if (ctx.eventBatch.length > 1) {
-    parts.push(
-      `<event_batch count="${ctx.eventBatch.length}">\n${JSON.stringify(ctx.eventBatch, null, 2)}\n</event_batch>`,
-    );
-  }
+  parts.push(buildDecisionContextSection(ctx));
 
-  // Scope entity
-  if (ctx.scopeEntity) {
-    parts.push(
-      `<scope_entity type="${ctx.scopeEntity.type}">\n${JSON.stringify(ctx.scopeEntity.data, null, 2)}\n</scope_entity>`,
-    );
-  }
+  const entitySnapshotSection = buildEntitySnapshotSection(ctx);
+  if (entitySnapshotSection) parts.push(entitySnapshotSection);
 
-  // Relevant entities
-  if (ctx.relevantEntities.length > 0) {
-    const entityStr = ctx.relevantEntities
-      .map(
-        (e) =>
-          `  [${e.type}:${e.id} hop=${e.hop}] ${JSON.stringify(e.data)}`,
-      )
-      .join("\n");
-    parts.push(`<relevant_entities count="${ctx.relevantEntities.length}">\n${entityStr}\n</relevant_entities>`);
-  }
+  const summarySnapshotSection = buildSummarySnapshotSection(ctx);
+  if (summarySnapshotSection) parts.push(summarySnapshotSection);
 
-  // Summaries
-  if (ctx.summaries.length > 0) {
-    const summaryStr = ctx.summaries
-      .map(
-        (s) =>
-          `  [${s.entityType}:${s.entityId} fresh=${s.fresh} events=${s.eventCount}]\n  ${s.content}`,
-      )
-      .join("\n\n");
-    parts.push(`<summaries>\n${summaryStr}\n</summaries>`);
-  }
+  const memorySnapshotSection = buildMemorySnapshotSection(ctx);
+  if (memorySnapshotSection) parts.push(memorySnapshotSection);
 
-  // Recent events
-  if (ctx.recentEvents.length > 0) {
-    parts.push(
-      `<recent_events count="${ctx.recentEvents.length}">\n${JSON.stringify(ctx.recentEvents, null, 2)}\n</recent_events>`,
-    );
-  }
+  const recentSignalsSection = buildRecentSignalsSection(ctx);
+  if (recentSignalsSection) parts.push(recentSignalsSection);
 
-  // Actors
   if (ctx.actors.length > 0) {
     const actorStr = ctx.actors
       .map((a) => `  ${a.name} (${a.type}, ${a.role}) — ${a.id}`)
@@ -416,7 +359,170 @@ function buildContextSection(ctx: AgentContextPacket): string {
     parts.push(`<actors>\n${actorStr}\n</actors>`);
   }
 
+  if (isRawContextDebugEnabled()) {
+    parts.push(buildRawContextDebugSection(ctx));
+  }
+
   return parts.join("\n\n");
+}
+
+function buildDecisionContextSection(ctx: AgentContextPacket): string {
+  const lines = [
+    `trigger_type: ${ctx.decisionContext.triggerType}`,
+    `scope_type: ${ctx.decisionContext.scopeType}`,
+    `autonomy_mode: ${ctx.decisionContext.autonomyMode}`,
+    `is_mention: ${ctx.decisionContext.isMention}`,
+  ];
+
+  if (ctx.decisionContext.canonicalState.length > 0) {
+    lines.push("canonical_state:");
+    for (const fact of ctx.decisionContext.canonicalState) {
+      lines.push(`- ${fact}`);
+    }
+  }
+
+  if (ctx.decisionContext.constraints.length > 0) {
+    lines.push("constraints:");
+    for (const constraint of ctx.decisionContext.constraints) {
+      lines.push(`- ${constraint}`);
+    }
+  }
+
+  return `<decision_context>\n${lines.join("\n")}\n</decision_context>`;
+}
+
+function buildEntitySnapshotSection(ctx: AgentContextPacket): string | null {
+  if (ctx.entitySnapshots.length === 0) return null;
+
+  const body = ctx.entitySnapshots
+    .map((snapshot) => {
+      const facts = snapshot.facts.length > 0 ? ` | ${snapshot.facts.join(" | ")}` : "";
+      return `  [${snapshot.type}:${snapshot.id}] ${snapshot.label}${facts}`;
+    })
+    .join("\n");
+
+  return `<entity_snapshot count="${ctx.entitySnapshots.length}">\n${body}\n</entity_snapshot>`;
+}
+
+function buildSummarySnapshotSection(ctx: AgentContextPacket): string | null {
+  if (ctx.summaries.length === 0) return null;
+
+  const sections = ctx.summaries.map((summary) => {
+    const lines = [
+      `  [${summary.entityType}:${summary.entityId} fresh=${summary.fresh} events=${summary.eventCount}]`,
+    ];
+    const structured = summary.structuredData ?? {};
+    const narrative = asString(structured.narrative) ?? summary.content;
+    if (narrative) lines.push(`  narrative: ${truncatePromptText(narrative, 220)}`);
+
+    appendSummaryList(lines, "decisions", structured.decisions);
+    appendSummaryList(lines, "open_questions", structured.openQuestions);
+    appendSummaryList(lines, "action_items", structured.actionItems);
+    appendSummaryList(lines, "blockers", structured.blockers);
+
+    return lines.join("\n");
+  });
+
+  return `<summary_snapshot>\n${sections.join("\n\n")}\n</summary_snapshot>`;
+}
+
+function buildMemorySnapshotSection(ctx: AgentContextPacket): string | null {
+  if (!ctx.memories || ctx.memories.length === 0) return null;
+
+  const grouped = new Map<string, string[]>();
+  for (const memory of ctx.memories) {
+    const group = grouped.get(memory.kind) ?? [];
+    group.push(
+      `  - ${memory.subjectType}:${memory.subjectId} (confidence=${memory.confidence}) ${truncatePromptText(memory.content, 180)}`,
+    );
+    grouped.set(memory.kind, group);
+  }
+
+  const blocks: string[] = [];
+  for (const [kind, entries] of grouped) {
+    blocks.push(`[${kind}]\n${entries.join("\n")}`);
+  }
+
+  return `<memory_snapshot count="${ctx.memories.length}">\n${blocks.join("\n\n")}\n</memory_snapshot>`;
+}
+
+function buildRecentSignalsSection(ctx: AgentContextPacket): string | null {
+  if (ctx.recentSignals.length === 0) return null;
+
+  const actorNames = new Map(ctx.actors.map((actor) => [actor.id, actor.name]));
+  const body = ctx.recentSignals
+    .map((signal) => {
+      const actor = resolveSignalActor(signal.actor, actorNames);
+      return `  - [${formatSignalTimestamp(signal.timestamp)}] ${actor} | ${signal.kind} | ${signal.text}`;
+    })
+    .join("\n");
+
+  return `<recent_signals count="${ctx.recentSignals.length}">\n${body}\n</recent_signals>`;
+}
+
+function buildRawContextDebugSection(ctx: AgentContextPacket): string {
+  const parts: string[] = [];
+  parts.push(`<trigger_event>\n${JSON.stringify(ctx.triggerEvent, null, 2)}\n</trigger_event>`);
+
+  if (ctx.eventBatch.length > 1) {
+    parts.push(
+      `<event_batch count="${ctx.eventBatch.length}">\n${JSON.stringify(ctx.eventBatch, null, 2)}\n</event_batch>`,
+    );
+  }
+
+  if (ctx.scopeEntity) {
+    parts.push(
+      `<scope_entity type="${ctx.scopeEntity.type}">\n${JSON.stringify(ctx.scopeEntity.data, null, 2)}\n</scope_entity>`,
+    );
+  }
+
+  if (ctx.relevantEntities.length > 0) {
+    const entityStr = ctx.relevantEntities
+      .map((e) => `  [${e.type}:${e.id} hop=${e.hop}] ${JSON.stringify(e.data)}`)
+      .join("\n");
+    parts.push(`<relevant_entities count="${ctx.relevantEntities.length}">\n${entityStr}\n</relevant_entities>`);
+  }
+
+  if (ctx.recentEvents.length > 0) {
+    parts.push(
+      `<recent_events count="${ctx.recentEvents.length}">\n${JSON.stringify(ctx.recentEvents, null, 2)}\n</recent_events>`,
+    );
+  }
+
+  return parts.join("\n\n");
+}
+
+function appendSummaryList(lines: string[], label: string, value: unknown): void {
+  if (!Array.isArray(value) || value.length === 0) return;
+  lines.push(`  ${label}:`);
+  for (const entry of value) {
+    if (typeof entry !== "string" || !entry.trim()) continue;
+    lines.push(`  - ${entry}`);
+  }
+}
+
+function asString(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  return value.trim();
+}
+
+function truncatePromptText(text: string, max: number): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, max - 3)}...`;
+}
+
+function formatSignalTimestamp(timestamp: string): string {
+  return timestamp.replace("T", " ").replace(".000Z", "Z").slice(0, 16);
+}
+
+function resolveSignalActor(
+  actor: string,
+  actorNames: Map<string, string>,
+): string {
+  if (actor === "system") return "system";
+  const [, actorId] = actor.split(":");
+  return actorNames.get(actorId) ?? actor;
 }
 
 // ---------------------------------------------------------------------------
@@ -554,7 +660,7 @@ export async function runPlanner(
   const startTime = Date.now();
 
   try {
-    const systemPrompt = buildSystemPrompt(ctx);
+    const { text: systemPrompt } = buildSystemPrompt(ctx);
 
     const response: LLMResponse = await withRetry(() =>
       adapter.complete({

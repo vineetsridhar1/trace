@@ -54,8 +54,34 @@ function makeContextPacket(overrides?: Partial<AgentContextPacket>): AgentContex
       hop: 0,
     },
     relevantEntities: [],
+    decisionContext: {
+      triggerType: "message.created",
+      scopeType: "chat",
+      autonomyMode: "suggest",
+      isMention: false,
+      canonicalState: ["chat_type: group"],
+      constraints: ["Suggest mode: prefer proposals over direct execution."],
+    },
+    entitySnapshots: [
+      {
+        type: "chat",
+        id: "chat-1",
+        label: "Engineering",
+        facts: ["chat_type: group"],
+      },
+    ],
     recentEvents: [],
     summaries: [],
+    memories: [],
+    recentSignals: [
+      {
+        timestamp: "2026-03-24T10:00:00Z",
+        actor: "user:user-1",
+        kind: "message",
+        text: "The login page is broken, getting a 500 error",
+        sourceEventId: "evt-1",
+      },
+    ],
     actors: [{ id: "user-1", name: "Alice", role: "member", type: "user" }],
     permissions: {
       autonomyMode: "suggest",
@@ -125,6 +151,7 @@ function makeMockAdapterError(message: string): LLMAdapter {
 describe("Tier 2 Planner", () => {
   beforeEach(() => {
     setAdapterForTest(null);
+    delete process.env.AGENT_DEBUG_RAW_CONTEXT;
   });
 
   describe("successful decisions", () => {
@@ -476,10 +503,12 @@ describe("Tier 2 Planner", () => {
       expect(capturedSystem).toContain("no_op");
       expect(capturedSystem).toContain("<soul_file>");
       expect(capturedSystem).toContain("Be friendly and proactive.");
-      expect(capturedSystem).toContain("<trigger_event>");
       expect(capturedSystem).toContain("<scope>");
+      expect(capturedSystem).toContain("<decision_context>");
+      expect(capturedSystem).toContain("<recent_signals");
       expect(capturedSystem).toContain("<actors>");
       expect(capturedSystem).toContain("ignore");
+      expect(capturedSystem).not.toContain("<trigger_event>");
     });
 
     it("includes relevant entities and summaries when present", async () => {
@@ -519,12 +548,18 @@ describe("Tier 2 Planner", () => {
             hop: 1,
           },
         ],
+        entitySnapshots: [
+          { type: "chat", id: "chat-1", label: "Engineering", facts: ["chat_type: group"] },
+          { type: "ticket", id: "t-99", label: "Existing bug", facts: ["status: todo"] },
+        ],
         summaries: [
           {
             entityType: "chat",
             entityId: "chat-1",
             content: "Team discussed deployment.",
-            structuredData: {},
+            structuredData: {
+              narrative: "Team discussed deployment.",
+            },
             fresh: true,
             eventCount: 10,
           },
@@ -533,10 +568,17 @@ describe("Tier 2 Planner", () => {
 
       await runPlanner(ctx, { adapter: capturingAdapter });
 
-      expect(capturedSystem).toContain("<relevant_entities");
+      expect(capturedSystem).toContain("Use context in this order of authority");
+      expect(capturedSystem).toContain("<entity_snapshot");
+      expect(capturedSystem).toContain("<summary_snapshot>");
       expect(capturedSystem).toContain("Existing bug");
-      expect(capturedSystem).toContain("<summaries>");
       expect(capturedSystem).toContain("Team discussed deployment.");
+      expect(capturedSystem).toContain("<decision_context>");
+      expect(capturedSystem).not.toContain("<trigger_event>");
+      expect(capturedSystem).not.toContain("<event_batch");
+      expect(capturedSystem).not.toContain("<scope_entity");
+      expect(capturedSystem).not.toContain("<recent_events");
+      expect(capturedSystem).not.toContain("<relevant_entities");
     });
   });
 });

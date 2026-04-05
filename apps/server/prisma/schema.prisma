@@ -7,6 +7,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Enable pgvector extension for semantic search over memories and summaries.
+// Run `CREATE EXTENSION IF NOT EXISTS vector;` on the database before migrating.
+// The actual vector columns use Unsupported("vector(1536)") on the models.
+
 enum UserRole {
   admin
   member
@@ -138,6 +142,14 @@ enum ModelTier {
   tier3
 }
 
+enum MemoryKind {
+  fact
+  preference
+  decision
+  pattern
+  relationship
+}
+
 enum ExecutionDisposition {
   ignore
   suggest
@@ -232,6 +244,8 @@ model Organization {
   processedEvents  ProcessedAgentEvent[]
   costTrackers     AgentCostTracker[]
   entitySummaries  EntitySummary[]
+  derivedMemories  DerivedMemory[]
+  memoryExtractionCursors MemoryExtractionCursor[]
   aiConversations  AiConversation[]
 
   createdAt DateTime @default(now())
@@ -287,6 +301,8 @@ model AgentExecutionLog {
   status                ExecutionStatus
   inboxItemId           String?
   latencyMs             Int
+  replayPacket          Json?
+  promptVersions        Json?
 
   llmCalls  AgentLlmCall[]
 
@@ -365,6 +381,9 @@ model EntitySummary {
   endEventId     String?
   eventCount     Int          @default(0)
 
+  /// pgvector embedding for semantic search (Phase 4). Nullable — populated by embedding worker.
+  embedding      Unsupported("vector(1536)")?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -428,6 +447,7 @@ model Project {
   repoId         String?
   repo           Repo?        @relation(fields: [repoId], references: [id])
   aiMode         AutonomyMode?
+  soulFile       String       @default("")
 
   channels       ChannelProject[]
   sessions       SessionProject[]
@@ -671,6 +691,20 @@ model Event {
   @@index([parentId])
 }
 
+model MemoryExtractionCursor {
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id])
+  scopeType          ScopeType
+  scopeId            String
+  lastEventId        String
+  lastEventTimestamp DateTime
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@id([organizationId, scopeType, scopeId])
+  @@index([organizationId, lastEventTimestamp])
+}
+
 model GitCheckpoint {
   id             String   @id @default(uuid())
   sessionId      String
@@ -859,4 +893,48 @@ model AiTurn {
 
   @@index([branchId, createdAt])
   @@index([parentTurnId])
+}
+
+model DerivedMemory {
+  id              String       @id @default(uuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  // What kind of memory
+  kind            MemoryKind
+
+  // What it's about
+  subjectType     String       // user, project, repo, team, channel
+  subjectId       String
+
+  // Where it was extracted from (provenance)
+  sourceScopeType ScopeType
+  sourceScopeId   String
+  sourceIsDm      Boolean      @default(false)
+  startEventId    String
+  endEventId      String
+  sourceType      String       @default("auto") // "auto" | "summary" | "manual"
+
+  // The actual content
+  content         String
+  structuredData  Json         @default("{}")
+
+  // Confidence and lifecycle
+  confidence      Float        @default(0.7)
+  validFrom       DateTime     @default(now())
+  validTo         DateTime?
+  supersededBy    String?
+
+  /// pgvector embedding for semantic search (Phase 4). Nullable — populated by embedding worker.
+  embedding       Unsupported("vector(1536)")?
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([organizationId, subjectType, subjectId])
+  @@index([organizationId, sourceScopeType, sourceScopeId])
+  @@index([organizationId, kind])
+  @@index([organizationId, validTo])
+  @@index([startEventId])
+  @@index([endEventId])
 }
