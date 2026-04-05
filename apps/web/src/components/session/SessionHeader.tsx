@@ -74,11 +74,13 @@ export function SessionHeader({
   const prUrl = groupPrUrl ?? null;
 
   const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
+  const sessionChannel = useEntityField("sessions", sessionId, "channel") as { id: string } | null | undefined;
+  const channelId = activeChannelId ?? sessionChannel?.id ?? "";
   const setShowTerminalPanel = useUIStore((s: UIState) => s.setShowTerminalPanel);
-  const runScripts = useEntityField("channels", activeChannelId ?? "", "runScripts") as Array<{ name: string; command: string }> | null | undefined;
+  const runScripts = useEntityField("channels", channelId, "runScripts") as Array<{ name: string; command: string }> | null | undefined;
   const setupStatus = useTerminalStore((s) => s.setupStatus[sessionGroupId ?? ""] as SetupStatus | undefined);
   const hasRunScripts = Array.isArray(runScripts) && runScripts.length > 0;
-  const setupBlocking = Boolean(useEntityField("channels", activeChannelId ?? "", "setupScript")) && setupStatus === "running";
+  const setupBlocking = Boolean(useEntityField("channels", channelId, "setupScript")) && setupStatus === "running";
 
   const handleRunScripts = useCallback(async () => {
     if (!sessionGroupId || !runScripts) return;
