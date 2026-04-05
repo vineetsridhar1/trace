@@ -237,6 +237,8 @@ export type Channel = {
   position: Scalars['Int']['output'];
   projects: Array<Project>;
   repo?: Maybe<Repo>;
+  runScripts?: Maybe<Scalars['JSON']['output']>;
+  setupScript?: Maybe<Scalars['String']['output']>;
   type: ChannelType;
 };
 
@@ -1699,6 +1701,8 @@ export type UpdateChannelGroupInput = {
 export type UpdateChannelInput = {
   baseBranch?: InputMaybe<Scalars['String']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
+  runScripts?: InputMaybe<Scalars['JSON']['input']>;
+  setupScript?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type UpdateRepoInput = {

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 
 export type TerminalStatus = "connecting" | "active" | "exited";
+export type SetupStatus = "idle" | "running" | "completed" | "failed";
 
 export interface TerminalEntry {
   id: string;
@@ -9,31 +10,45 @@ export interface TerminalEntry {
   sessionGroupId: string;
   status: TerminalStatus;
   customName?: string;
+  initialCommand?: string;
 }
 
 interface TerminalState {
   terminals: Record<string, TerminalEntry>;
+  setupStatus: Record<string, SetupStatus>;
+  setupError: Record<string, string>;
   addTerminal: (
     id: string,
     sessionId: string,
     sessionGroupId: string,
     status?: TerminalStatus,
+    opts?: { customName?: string; initialCommand?: string },
   ) => void;
   setTerminalStatus: (id: string, status: TerminalStatus) => void;
   renameTerminal: (id: string, name: string) => void;
   removeTerminal: (id: string) => void;
+  setSetupStatus: (sessionGroupId: string, status: SetupStatus, error?: string) => void;
 }
 
 type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
 
 export const useTerminalStore = create<TerminalState>((set: SetState<TerminalState>) => ({
   terminals: {},
+  setupStatus: {},
+  setupError: {},
 
-  addTerminal: (id: string, sessionId: string, sessionGroupId: string, status?: TerminalStatus) =>
+  addTerminal: (id: string, sessionId: string, sessionGroupId: string, status?: TerminalStatus, opts?: { customName?: string; initialCommand?: string }) =>
     set((state: TerminalState) => ({
       terminals: {
         ...state.terminals,
-        [id]: { id, sessionId, sessionGroupId, status: status ?? "connecting" },
+        [id]: {
+          id,
+          sessionId,
+          sessionGroupId,
+          status: status ?? "connecting",
+          customName: opts?.customName,
+          initialCommand: opts?.initialCommand,
+        },
       },
     })),
 
@@ -57,6 +72,14 @@ export const useTerminalStore = create<TerminalState>((set: SetState<TerminalSta
       const { [id]: _, ...rest } = state.terminals;
       return { terminals: rest };
     }),
+
+  setSetupStatus: (sessionGroupId: string, status: SetupStatus, error?: string) =>
+    set((state: TerminalState) => ({
+      setupStatus: { ...state.setupStatus, [sessionGroupId]: status },
+      setupError: error
+        ? { ...state.setupError, [sessionGroupId]: error }
+        : state.setupError,
+    })),
 }));
 
 export function useSessionGroupTerminals(sessionGroupId: string): TerminalEntry[] {

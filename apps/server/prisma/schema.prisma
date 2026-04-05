@@ -466,6 +466,8 @@ model Channel {
   repo           Repo?         @relation(fields: [repoId], references: [id])
   baseBranch     String?
   aiMode         AutonomyMode?
+  setupScript    String?
+  runScripts     Json?          @default("[]")
 
   projects ChannelProject[]
   sessionGroups SessionGroup[]

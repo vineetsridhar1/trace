@@ -275,6 +275,8 @@ type Channel {
   baseBranch: String
   repo: Repo
   aiMode: AutonomyMode
+  setupScript: String
+  runScripts: JSON
   members: [ChannelMember!]!
   projects: [Project!]!
   messages(after: DateTime, limit: Int): [Event!]!
@@ -732,6 +734,8 @@ input CreateChannelInput {
 input UpdateChannelInput {
   name: String
   baseBranch: String
+  setupScript: String
+  runScripts: JSON
 }
 
 input CreateChannelGroupInput {

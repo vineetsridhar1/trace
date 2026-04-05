@@ -297,3 +297,15 @@ export const DELETE_CHANNEL_MESSAGE_MUTATION = gql`
     }
   }
 `;
+
+export const UPDATE_CHANNEL_MUTATION = gql`
+  mutation UpdateChannel($id: ID!, $input: UpdateChannelInput!) {
+    updateChannel(id: $id, input: $input) {
+      id
+      name
+      baseBranch
+      setupScript
+      runScripts
+    }
+  }
+`;

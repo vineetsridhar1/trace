@@ -17,6 +17,8 @@ const CHANNELS_QUERY = gql`
       position
       groupId
       baseBranch
+      setupScript
+      runScripts
       repo { id name }
     }
   }
