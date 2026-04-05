@@ -41,8 +41,8 @@ const SCOPE_EVENT_COUNT_PREFIX = "agent:memory:events:";
 const SCOPE_FIRST_PENDING_AT_PREFIX = "agent:memory:first_pending_at:";
 /** Redis SET tracking scopes with pending memory extraction events. */
 const ACTIVE_SCOPES_SET_KEY = "agent:memory:active_scopes";
-/** Redis key storing the last extracted event ID per scope (watermark). */
-const WATERMARK_PREFIX = "agent:memory:watermark:";
+/** Legacy Redis watermark key. New deployments store cursors durably in Postgres. */
+const LEGACY_WATERMARK_PREFIX = "agent:memory:watermark:";
 /** Extract low-volume scopes once they have been waiting long enough. */
 const STALE_SCOPE_AGE_MS = 10 * 60_000;
 
@@ -160,7 +160,7 @@ type ExtractionWatermark = {
   eventId?: string;
 };
 
-function parseWatermark(raw: string | null): ExtractionWatermark | null {
+function parseLegacyWatermark(raw: string | null): ExtractionWatermark | null {
   if (!raw) return null;
 
   try {
@@ -176,6 +176,73 @@ function parseWatermark(raw: string | null): ExtractionWatermark | null {
   }
 
   return { timestamp: raw };
+}
+
+async function loadExtractionWatermark(
+  organizationId: string,
+  scopeType: string,
+  scopeId: string,
+): Promise<{ watermark: ExtractionWatermark | null; fromLegacyRedis: boolean }> {
+  const dbCursor = await prisma.memoryExtractionCursor.findUnique({
+    where: {
+      organizationId_scopeType_scopeId: {
+        organizationId,
+        scopeType: scopeType as ScopeType,
+        scopeId,
+      },
+    },
+    select: {
+      lastEventId: true,
+      lastEventTimestamp: true,
+    },
+  });
+
+  if (dbCursor) {
+    return {
+      watermark: {
+        timestamp: dbCursor.lastEventTimestamp.toISOString(),
+        eventId: dbCursor.lastEventId,
+      },
+      fromLegacyRedis: false,
+    };
+  }
+
+  const legacyWatermarkKey = `${LEGACY_WATERMARK_PREFIX}${organizationId}:${scopeType}:${scopeId}`;
+  return {
+    watermark: parseLegacyWatermark(await redis.get(legacyWatermarkKey).catch(() => null)),
+    fromLegacyRedis: true,
+  };
+}
+
+async function persistExtractionWatermark(
+  organizationId: string,
+  scopeType: string,
+  scopeId: string,
+  watermark: ExtractionWatermark,
+): Promise<void> {
+  await prisma.memoryExtractionCursor.upsert({
+    where: {
+      organizationId_scopeType_scopeId: {
+        organizationId,
+        scopeType: scopeType as ScopeType,
+        scopeId,
+      },
+    },
+    create: {
+      organizationId,
+      scopeType: scopeType as ScopeType,
+      scopeId,
+      lastEventId: watermark.eventId ?? "",
+      lastEventTimestamp: new Date(watermark.timestamp),
+    },
+    update: {
+      lastEventId: watermark.eventId ?? "",
+      lastEventTimestamp: new Date(watermark.timestamp),
+    },
+  });
+
+  const legacyWatermarkKey = `${LEGACY_WATERMARK_PREFIX}${organizationId}:${scopeType}:${scopeId}`;
+  await redis.del(legacyWatermarkKey).catch(() => {});
 }
 
 function buildPendingEventsWhere(input: {
@@ -257,9 +324,13 @@ async function doExtractForScope(
   scopeId: string,
 ): Promise<void> {
   const scopeRef = `${organizationId}:${scopeType}:${scopeId}`;
-  // Read the watermark — last extracted event's timestamp for this scope
-  const watermarkKey = `${WATERMARK_PREFIX}${organizationId}:${scopeType}:${scopeId}`;
-  const lastWatermark = parseWatermark(await redis.get(watermarkKey).catch(() => null));
+  // Read the last processed cursor from Postgres, with a compatibility fallback
+  // to legacy Redis watermarks from older deployments.
+  const { watermark: lastWatermark, fromLegacyRedis } = await loadExtractionWatermark(
+    organizationId,
+    scopeType,
+    scopeId,
+  );
 
   // Build query — only fetch events after the watermark
   const whereClause = buildPendingEventsWhere({
@@ -281,6 +352,9 @@ async function doExtractForScope(
   });
 
   if (events.length === 0) {
+    if (lastWatermark && fromLegacyRedis && lastWatermark.eventId) {
+      await persistExtractionWatermark(organizationId, scopeType, scopeId, lastWatermark);
+    }
     await clearScopePendingState(scopeRef);
     return;
   }
@@ -357,7 +431,7 @@ async function doExtractForScope(
     timestamp: newestProcessed.timestamp.toISOString(),
     eventId: newestProcessed.id,
   };
-  await redis.set(watermarkKey, JSON.stringify(nextWatermark)).catch(() => {});
+  await persistExtractionWatermark(organizationId, scopeType, scopeId, nextWatermark);
 
   const remaining = await prisma.event.findFirst({
     where: buildPendingEventsWhere({
@@ -458,7 +532,7 @@ export function stopMemoryExtractorWorker(): void {
 
 export const __testOnly__ = {
   buildPendingEventsWhere,
-  parseWatermark,
+  parseLegacyWatermark,
   shouldExtractScope,
   runExtractionCycle,
 };

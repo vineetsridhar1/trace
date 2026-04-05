@@ -69,6 +69,10 @@ vi.mock("../lib/redis.js", () => ({
       strings.set(key, value);
       return "OK";
     }),
+    del: vi.fn(async (key: string) => {
+      strings.delete(key);
+      return 1;
+    }),
     decrby: vi.fn(async (key: string, amount: number) => {
       const current = parseInt(strings.get(key) ?? "0", 10);
       const next = current - amount;
@@ -86,6 +90,10 @@ vi.mock("../lib/db.js", () => ({
     },
     chat: {
       findUnique: vi.fn(),
+    },
+    memoryExtractionCursor: {
+      findUnique: vi.fn(),
+      upsert: vi.fn(),
     },
   },
 }));
@@ -135,6 +143,8 @@ describe("memory extractor worker", () => {
 
     (prisma.chat.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ type: "group" });
     (prisma.event.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (prisma.memoryExtractionCursor.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (prisma.memoryExtractionCursor.upsert as ReturnType<typeof vi.fn>).mockResolvedValue(null);
     (extractMemories as ReturnType<typeof vi.fn>).mockResolvedValue({
       memories: [
         {
@@ -178,9 +188,28 @@ describe("memory extractor worker", () => {
     await __testOnly__.runExtractionCycle();
 
     expect(memoryService.upsert).toHaveBeenCalledTimes(1);
+    expect(prisma.memoryExtractionCursor.upsert).toHaveBeenCalledWith({
+      where: {
+        organizationId_scopeType_scopeId: {
+          organizationId: "org-1",
+          scopeType: "chat",
+          scopeId: "chat-1",
+        },
+      },
+      create: {
+        organizationId: "org-1",
+        scopeType: "chat",
+        scopeId: "chat-1",
+        lastEventId: "evt-1",
+        lastEventTimestamp: new Date("2026-04-04T12:00:00Z"),
+      },
+      update: {
+        lastEventId: "evt-1",
+        lastEventTimestamp: new Date("2026-04-04T12:00:00Z"),
+      },
+    });
     expect(strings.has(`agent:memory:events:${scopeRef}`)).toBe(false);
     expect(getSet("agent:memory:active_scopes").size).toBe(0);
-    expect(strings.get(`agent:memory:watermark:${scopeRef}`)).toContain("\"eventId\":\"evt-1\"");
   });
 
   it("uses timestamp plus event id in the watermark query", async () => {

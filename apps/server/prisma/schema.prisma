@@ -245,6 +245,7 @@ model Organization {
   costTrackers     AgentCostTracker[]
   entitySummaries  EntitySummary[]
   derivedMemories  DerivedMemory[]
+  memoryExtractionCursors MemoryExtractionCursor[]
   aiConversations  AiConversation[]
 
   createdAt DateTime @default(now())
@@ -688,6 +689,20 @@ model Event {
   @@index([organizationId, eventType])
   @@index([organizationId, timestamp])
   @@index([parentId])
+}
+
+model MemoryExtractionCursor {
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id])
+  scopeType          ScopeType
+  scopeId            String
+  lastEventId        String
+  lastEventTimestamp DateTime
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@id([organizationId, scopeType, scopeId])
+  @@index([organizationId, lastEventTimestamp])
 }
 
 model GitCheckpoint {
