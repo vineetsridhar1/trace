@@ -18,6 +18,9 @@ interface TerminalEntry {
   scrollbackBytes: number;
   /** Timer to kill orphaned terminals that no frontend attaches to */
   orphanTimer: ReturnType<typeof setTimeout> | null;
+  /** Optional server-side callbacks for terminal lifecycle events */
+  onReady?: () => void;
+  onEnd?: (exitCode: number | null, error?: string) => void;
 }
 
 /**
@@ -87,6 +90,55 @@ class TerminalRelay {
     }
 
     return terminalId;
+  }
+
+  /**
+   * Execute a command in a headless terminal. Returns a promise that resolves
+   * with the exit code (0 = success) or rejects on error. The terminal is
+   * cleaned up automatically on completion.
+   */
+  executeCommand(
+    sessionId: string,
+    sessionGroupId: string | null,
+    command: string,
+    cwd?: string,
+    timeoutMs = 300_000,
+  ): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const terminalId = this.createTerminal(sessionId, sessionGroupId, 80, 24, cwd);
+      const entry = this.terminals.get(terminalId);
+      if (!entry) {
+        reject(new Error("Failed to create terminal"));
+        return;
+      }
+
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        this.destroyTerminal(terminalId);
+        reject(new Error(`Setup script timed out after ${timeoutMs / 1000}s`));
+      }, timeoutMs);
+
+      entry.onReady = () => {
+        sessionRouter.send(sessionId, {
+          type: "terminal_input",
+          terminalId,
+          data: command + "\n",
+        });
+      };
+
+      entry.onEnd = (exitCode: number | null, error?: string) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (error) {
+          reject(new Error(error));
+        } else {
+          resolve(exitCode ?? 1);
+        }
+      };
+    });
   }
 
   /**
@@ -232,6 +284,7 @@ class TerminalRelay {
     } else if (msg.type === "terminal_ready") {
       entry.ready = true;
       serialized = JSON.stringify({ type: "ready" });
+      entry.onReady?.();
     } else if (msg.type === "terminal_error") {
       serialized = JSON.stringify({ type: "error", message: msg.error });
     }
@@ -239,7 +292,14 @@ class TerminalRelay {
     if (!serialized) return;
 
     const isTerminalEnd = msg.type === "terminal_exit" || msg.type === "terminal_error";
-    if (isTerminalEnd) entry.terminated = true;
+    if (isTerminalEnd) {
+      entry.terminated = true;
+      if (msg.type === "terminal_exit") {
+        entry.onEnd?.(msg.exitCode as number | null);
+      } else {
+        entry.onEnd?.(null, msg.error as string | undefined);
+      }
+    }
 
     if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
       entry.frontendWs.send(serialized);

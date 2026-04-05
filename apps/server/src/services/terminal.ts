@@ -35,6 +35,7 @@ class TerminalService {
           select: {
             workdir: true,
             worktreeDeleted: true,
+            setupStatus: true,
           },
         },
       },
@@ -45,6 +46,9 @@ class TerminalService {
     }
     if (session.sessionGroup?.worktreeDeleted) {
       throw new Error("Cannot create terminal: session worktree has been deleted");
+    }
+    if (session.sessionGroup?.setupStatus === "running") {
+      throw new Error("Cannot create terminal while the setup script is still running");
     }
     this.assertLocalOwnership(session, userId);
 

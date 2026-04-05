@@ -12,12 +12,18 @@ import { SessionInput } from "./SessionInput";
 import { PlanResponseBar } from "./PlanResponseBar";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
+import { useUIStore, type UIState } from "../../stores/ui";
+import { Loader2, AlertCircle } from "lucide-react";
 import { StickyTodoList, extractLatestTodos } from "./StickyTodoList";
 import { buildSessionNodes } from "./groupReadGlob";
 import { isTerminalStatus } from "./sessionStatus";
 import { Skeleton } from "../ui/skeleton";
 import { client } from "../../lib/urql";
-import { DISMISS_SESSION_MUTATION, SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
+import {
+  DISMISS_SESSION_MUTATION,
+  RETRY_SESSION_GROUP_SETUP_MUTATION,
+  SEND_SESSION_MESSAGE_MUTATION,
+} from "../../lib/mutations";
 
 const SESSION_DETAIL_QUERY = gql`
   query SessionDetail($id: ID!) {
@@ -88,6 +94,8 @@ const SESSION_DETAIL_QUERY = gql`
         }
         createdAt
         updatedAt
+        setupStatus
+        setupError
       }
       gitCheckpoints {
         id
@@ -143,7 +151,45 @@ export function SessionDetailView({
   const isCloud = hosting === "cloud";
   const isLocalOwner = hosting === "local" && createdBy?.id === currentUserId;
   const isConnected = !connection || connection.state !== "disconnected";
-  const canAccessTerminal = (isCloud || isLocalOwner) && isConnected && !isTerminalStatus(agentStatus, sessionStatus) && !worktreeDeleted;
+  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
+  const setupStatus = useEntityField("sessionGroups", sessionGroupId ?? "", "setupStatus") as
+    | "idle"
+    | "running"
+    | "completed"
+    | "failed"
+    | undefined;
+  const setupError = useEntityField("sessionGroups", sessionGroupId ?? "", "setupError") as string | undefined;
+  const sessionGroupChannel = useEntityField("sessionGroups", sessionGroupId ?? "", "channel") as
+    | { id: string }
+    | null
+    | undefined;
+  const rawGroupChannelId = useEntityStore((s) =>
+    sessionGroupId
+      ? (s.sessionGroups[sessionGroupId] as { channelId?: string | null } | undefined)?.channelId ?? null
+      : null,
+  );
+  const sessionChannel = useEntityField("sessions", sessionId, "channel") as
+    | { id: string }
+    | null
+    | undefined;
+  const rawSessionChannelId = useEntityStore((s) =>
+    (s.sessions[sessionId] as { channelId?: string | null } | undefined)?.channelId ?? null,
+  );
+  const channelId = sessionGroupChannel?.id ?? rawGroupChannelId ?? sessionChannel?.id ?? rawSessionChannelId ?? null;
+  const channelSetupScript = useEntityField("channels", channelId ?? "", "setupScript") as string | null | undefined;
+  const hasSetupScript = Boolean(channelSetupScript?.trim());
+  const setupBlocking = hasSetupScript && setupStatus === "running";
+
+  const showTerminalPanel = useUIStore((s: UIState) => s.showTerminalPanel);
+  const setShowTerminalPanel = useUIStore((s: UIState) => s.setShowTerminalPanel);
+  const [retryingSetup, setRetryingSetup] = useState(false);
+
+  // Reset terminal panel when switching sessions
+  useEffect(() => {
+    setShowTerminalPanel(false);
+  }, [sessionId, setShowTerminalPanel]);
+
+  const canAccessTerminal = (isCloud || isLocalOwner) && isConnected && !isTerminalStatus(agentStatus, sessionStatus) && !worktreeDeleted && !setupBlocking;
 
   // Fetch full session detail — merge to avoid wiping fields set by events
   useEffect(() => {
@@ -284,8 +330,37 @@ export function SessionDetailView({
             </AnimatePresence>
           </div>
 
-          {!hideHeader && showTerminal && canAccessTerminal && (
-            <TerminalPanel sessionId={sessionId} onClose={() => setShowTerminal(false)} />
+          {!hideHeader && setupBlocking && (
+            <div className="flex items-center gap-2 border-t border-border bg-surface-deep px-4 py-2">
+              <Loader2 size={14} className="animate-spin text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Setting up environment...</span>
+            </div>
+          )}
+
+          {!hideHeader && !setupBlocking && setupStatus === "failed" && (
+            <div className="flex items-center gap-2 border-t border-border bg-destructive/10 px-4 py-2">
+              <AlertCircle size={14} className="text-destructive" />
+              <span className="text-xs text-destructive">Setup failed{setupError ? `: ${setupError}` : ""}</span>
+              <button
+                type="button"
+                disabled={!sessionGroupId || retryingSetup}
+                className="ml-2 text-xs text-foreground underline"
+                onClick={() => {
+                  if (!sessionGroupId) return;
+                  setRetryingSetup(true);
+                  client
+                    .mutation(RETRY_SESSION_GROUP_SETUP_MUTATION, { id: sessionGroupId })
+                    .toPromise()
+                    .finally(() => setRetryingSetup(false));
+                }}
+              >
+                {retryingSetup ? "Retrying..." : "Retry"}
+              </button>
+            </div>
+          )}
+
+          {!hideHeader && (showTerminal || showTerminalPanel) && canAccessTerminal && (
+            <TerminalPanel sessionId={sessionId} onClose={() => { setShowTerminal(false); setShowTerminalPanel(false); }} />
           )}
         </div>
 

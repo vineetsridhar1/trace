@@ -6,14 +6,17 @@ import {
   History,
   Maximize2,
   Minimize2,
+  Play,
   X,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { sessionStatusColor, sessionStatusLabel } from "./sessionStatus";
 import { SessionHistory } from "./SessionHistory";
+import { useRunScripts } from "../../hooks/useRunScripts";
 
 interface GroupHeaderProps {
   groupName: string | undefined;
+  sessionGroupId: string;
   selectedSessionStatus: string;
   selectedSessionId: string | null;
   groupPrUrl: string | null | undefined;
@@ -27,6 +30,7 @@ interface GroupHeaderProps {
 
 export function GroupHeader({
   groupName,
+  sessionGroupId,
   selectedSessionStatus,
   selectedSessionId,
   groupPrUrl,
@@ -39,6 +43,7 @@ export function GroupHeader({
 }: GroupHeaderProps) {
   const [showHistory, setShowHistory] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
+  const { hasRunScripts, canRun, handleRun } = useRunScripts(sessionGroupId, selectedSessionId);
 
   useEffect(() => {
     if (!showHistory) return;
@@ -87,6 +92,17 @@ export function GroupHeader({
           {groupName ?? "Session Group"}
         </h2>
       </div>
+
+      {hasRunScripts && (
+        <button
+          onClick={handleRun}
+          disabled={!canRun}
+          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
+          title="Run scripts"
+        >
+          <Play size={14} />
+        </button>
+      )}
 
       <button
         onClick={onToggleSidebar}

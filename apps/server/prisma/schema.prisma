@@ -486,6 +486,8 @@ model Channel {
   repo           Repo?         @relation(fields: [repoId], references: [id])
   baseBranch     String?
   aiMode         AutonomyMode?
+  setupScript    String?
+  runScripts     Json?          @default("[]")
 
   projects ChannelProject[]
   sessionGroups SessionGroup[]
@@ -538,6 +540,8 @@ model SessionGroup {
   prUrl          String?
   worktreeDeleted Boolean     @default(false)
   archivedAt      DateTime?
+  setupStatus     String      @default("idle")
+  setupError      String?
 
   sessions Session[]
   gitCheckpoints GitCheckpoint[]

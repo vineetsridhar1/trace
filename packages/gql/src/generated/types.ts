@@ -237,6 +237,8 @@ export type Channel = {
   position: Scalars['Int']['output'];
   projects: Array<Project>;
   repo?: Maybe<Repo>;
+  runScripts?: Maybe<Scalars['JSON']['output']>;
+  setupScript?: Maybe<Scalars['String']['output']>;
   type: ChannelType;
 };
 
@@ -578,6 +580,7 @@ export type Mutation = {
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
   retrySessionConnection: Session;
+  retrySessionGroupSetup: SessionGroup;
   runSession: Session;
   sendChannelMessage: Message;
   sendChatMessage: Message;
@@ -830,6 +833,11 @@ export type MutationReorderChannelsArgs = {
 
 export type MutationRetrySessionConnectionArgs = {
   sessionId: Scalars['ID']['input'];
+};
+
+
+export type MutationRetrySessionGroupSetupArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -1458,6 +1466,8 @@ export type SessionGroup = {
   prUrl?: Maybe<Scalars['String']['output']>;
   repo?: Maybe<Repo>;
   sessions: Array<Session>;
+  setupError?: Maybe<Scalars['String']['output']>;
+  setupStatus: SetupStatus;
   slug?: Maybe<Scalars['String']['output']>;
   status: SessionGroupStatus;
   updatedAt: Scalars['DateTime']['output'];
@@ -1495,6 +1505,12 @@ export type SetApiTokenInput = {
   provider: ApiTokenProvider;
   token: Scalars['String']['input'];
 };
+
+export type SetupStatus =
+  | 'completed'
+  | 'failed'
+  | 'idle'
+  | 'running';
 
 export type SlashCommand = {
   __typename?: 'SlashCommand';
@@ -1699,6 +1715,8 @@ export type UpdateChannelGroupInput = {
 export type UpdateChannelInput = {
   baseBranch?: InputMaybe<Scalars['String']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
+  runScripts?: InputMaybe<Scalars['JSON']['input']>;
+  setupScript?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type UpdateRepoInput = {

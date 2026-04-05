@@ -236,6 +236,14 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
+  retrySessionGroupSetup: (_: unknown, args: { id: string }, ctx: Context) => {
+    return sessionService.retrySessionGroupSetup(
+      args.id,
+      requireOrgContext(ctx),
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
   moveSessionToRuntime: (
     _: unknown,
     args: { sessionId: string; runtimeInstanceId: string },

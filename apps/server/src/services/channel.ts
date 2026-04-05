@@ -169,6 +169,20 @@ export class ChannelService {
       const data: Record<string, unknown> = {};
       if (input.name !== undefined && input.name !== null) data.name = input.name;
       if (input.baseBranch !== undefined) data.baseBranch = input.baseBranch || null;
+      if (input.setupScript !== undefined) data.setupScript = input.setupScript || null;
+      if (input.runScripts !== undefined) {
+        const scripts = input.runScripts as unknown;
+        if (scripts !== null) {
+          if (!Array.isArray(scripts)) throw new Error("runScripts must be an array");
+          if (scripts.length > 10) throw new Error("runScripts cannot exceed 10 entries");
+          for (const entry of scripts) {
+            if (typeof entry !== "object" || entry === null || typeof (entry as Record<string, unknown>).name !== "string" || typeof (entry as Record<string, unknown>).command !== "string") {
+              throw new Error("Each runScript must have a name and command string");
+            }
+          }
+        }
+        data.runScripts = scripts ?? [];
+      }
 
       if (Object.keys(data).length === 0) {
         return tx.channel.findUniqueOrThrow({ where: { id: channelId } });
@@ -186,6 +200,7 @@ export class ChannelService {
             id: updated.id, name: updated.name, type: updated.type,
             position: updated.position, groupId: updated.groupId,
             repoId: updated.repoId, baseBranch: updated.baseBranch,
+            setupScript: updated.setupScript, runScripts: updated.runScripts,
           },
         },
         actorType,

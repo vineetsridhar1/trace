@@ -63,6 +63,8 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       channel {
         id
       }
+      setupStatus
+      setupError
       createdAt
       updatedAt
       sessions {
@@ -378,6 +380,7 @@ export function SessionGroupDetailView({
         <div className="flex h-full flex-col overflow-hidden">
           <GroupHeader
             groupName={groupName as string | undefined}
+            sessionGroupId={sessionGroupId}
             selectedSessionStatus={selectedSessionStatus}
             selectedSessionId={selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)}
             groupPrUrl={groupPrUrl}

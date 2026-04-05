@@ -240,6 +240,8 @@ export type Channel = {
   position: Scalars['Int']['output'];
   projects: Array<Project>;
   repo?: Maybe<Repo>;
+  runScripts?: Maybe<Scalars['JSON']['output']>;
+  setupScript?: Maybe<Scalars['String']['output']>;
   type: ChannelType;
 };
 
@@ -581,6 +583,7 @@ export type Mutation = {
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
   retrySessionConnection: Session;
+  retrySessionGroupSetup: SessionGroup;
   runSession: Session;
   sendChannelMessage: Message;
   sendChatMessage: Message;
@@ -833,6 +836,11 @@ export type MutationReorderChannelsArgs = {
 
 export type MutationRetrySessionConnectionArgs = {
   sessionId: Scalars['ID']['input'];
+};
+
+
+export type MutationRetrySessionGroupSetupArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -1461,6 +1469,8 @@ export type SessionGroup = {
   prUrl?: Maybe<Scalars['String']['output']>;
   repo?: Maybe<Repo>;
   sessions: Array<Session>;
+  setupError?: Maybe<Scalars['String']['output']>;
+  setupStatus: SetupStatus;
   slug?: Maybe<Scalars['String']['output']>;
   status: SessionGroupStatus;
   updatedAt: Scalars['DateTime']['output'];
@@ -1498,6 +1508,12 @@ export type SetApiTokenInput = {
   provider: ApiTokenProvider;
   token: Scalars['String']['input'];
 };
+
+export type SetupStatus =
+  | 'completed'
+  | 'failed'
+  | 'idle'
+  | 'running';
 
 export type SlashCommand = {
   __typename?: 'SlashCommand';
@@ -1702,6 +1718,8 @@ export type UpdateChannelGroupInput = {
 export type UpdateChannelInput = {
   baseBranch?: InputMaybe<Scalars['String']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
+  runScripts?: InputMaybe<Scalars['JSON']['input']>;
+  setupScript?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type UpdateRepoInput = {
@@ -1887,6 +1905,7 @@ export type ResolversTypes = ResolversObject<{
   SessionRuntimeInstance: ResolverTypeWrapper<SessionRuntimeInstance>;
   SessionStatus: SessionStatus;
   SetApiTokenInput: SetApiTokenInput;
+  SetupStatus: SetupStatus;
   SlashCommand: ResolverTypeWrapper<SlashCommand>;
   SlashCommandCategory: SlashCommandCategory;
   SlashCommandSource: SlashCommandSource;
@@ -2174,6 +2193,8 @@ export type ChannelResolvers<ContextType = Context, ParentType extends Resolvers
   position?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   projects?: Resolver<Array<ResolversTypes['Project']>, ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes['Repo']>, ParentType, ContextType>;
+  runScripts?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
+  setupScript?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   type?: Resolver<ResolversTypes['ChannelType'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
@@ -2336,6 +2357,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   reorderChannelGroups?: Resolver<Array<ResolversTypes['ChannelGroup']>, ParentType, ContextType, RequireFields<MutationReorderChannelGroupsArgs, 'input'>>;
   reorderChannels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<MutationReorderChannelsArgs, 'input'>>;
   retrySessionConnection?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRetrySessionConnectionArgs, 'sessionId'>>;
+  retrySessionGroupSetup?: Resolver<ResolversTypes['SessionGroup'], ParentType, ContextType, RequireFields<MutationRetrySessionGroupSetupArgs, 'id'>>;
   runSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRunSessionArgs, 'id'>>;
   sendChannelMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationSendChannelMessageArgs, 'channelId'>>;
   sendChatMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationSendChatMessageArgs, 'chatId'>>;
@@ -2536,6 +2558,8 @@ export type SessionGroupResolvers<ContextType = Context, ParentType extends Reso
   prUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes['Repo']>, ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType>;
+  setupError?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  setupStatus?: Resolver<ResolversTypes['SetupStatus'], ParentType, ContextType>;
   slug?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   status?: Resolver<ResolversTypes['SessionGroupStatus'], ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;

@@ -58,6 +58,8 @@ export interface UIState {
   unreadChatIds: Record<string, boolean>;
   markChatUnread: (chatId: string) => void;
   markChatRead: (chatId: string) => void;
+  showTerminalPanel: boolean;
+  setShowTerminalPanel: (show: boolean) => void;
   channelDoneBadges: Record<string, boolean>;
   markChannelDone: (channelId: string) => void;
   sessionDoneBadges: Record<string, boolean>;
@@ -99,6 +101,8 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
   lastSelectedSessionIdsByGroup: {},
   openSessionTabsByGroup: {},
   channelSubPage: null,
+  showTerminalPanel: false,
+  setShowTerminalPanel: (show: boolean) => set({ showTerminalPanel: show }),
   setChannelSubPage: (subPage: ChannelSubPage) => {
     set({ channelSubPage: subPage });
     const state = get();

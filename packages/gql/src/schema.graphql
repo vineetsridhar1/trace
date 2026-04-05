@@ -26,6 +26,13 @@ enum SessionGroupStatus {
   archived
 }
 
+enum SetupStatus {
+  idle
+  running
+  completed
+  failed
+}
+
 enum TicketStatus {
   backlog
   todo
@@ -275,6 +282,8 @@ type Channel {
   baseBranch: String
   repo: Repo
   aiMode: AutonomyMode
+  setupScript: String
+  runScripts: JSON
   members: [ChannelMember!]!
   projects: [Project!]!
   messages(after: DateTime, limit: Int): [Event!]!
@@ -308,6 +317,8 @@ type SessionGroup {
   prUrl: String
   worktreeDeleted: Boolean!
   archivedAt: DateTime
+  setupStatus: SetupStatus!
+  setupError: String
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -732,6 +743,8 @@ input CreateChannelInput {
 input UpdateChannelInput {
   name: String
   baseBranch: String
+  setupScript: String
+  runScripts: JSON
 }
 
 input CreateChannelGroupInput {
@@ -965,6 +978,7 @@ type Mutation {
     clientMutationId: String
   ): Event!
   retrySessionConnection(sessionId: ID!): Session!
+  retrySessionGroupSetup(id: ID!): SessionGroup!
   moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!
   moveSessionToCloud(sessionId: ID!): Session!
   createTicket(input: CreateTicketInput!): Ticket!

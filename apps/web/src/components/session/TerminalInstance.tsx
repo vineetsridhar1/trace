@@ -51,9 +51,14 @@ export function TerminalInstance({ terminalId, visible }: { terminalId: string; 
 
     socket.onEvent((event) => {
       switch (event.type) {
-        case "ready":
+        case "ready": {
           setTerminalStatus(terminalId, "active");
+          const entry = useTerminalStore.getState().terminals[terminalId];
+          if (entry?.initialCommand) {
+            socket.write(entry.initialCommand + "\n");
+          }
           break;
+        }
         case "output":
           term.write(event.data);
           break;
