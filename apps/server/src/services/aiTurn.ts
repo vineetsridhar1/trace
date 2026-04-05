@@ -301,6 +301,66 @@ export class AiTurnService {
       },
     );
 
+    // Persist turn events and broadcast to org-wide stream
+    const organizationId = branch.conversation.organizationId;
+    const conversationId = branch.conversationId;
+
+    await eventService.create({
+      organizationId,
+      scopeType: "ai_conversation",
+      scopeId: conversationId,
+      eventType: "ai_turn_created",
+      payload: {
+        turnId: userTurn.id,
+        branchId: input.branchId,
+        conversationId,
+        role: userTurn.role,
+        parentTurnId: userTurn.parentTurnId,
+        createdAt: userTurn.createdAt.toISOString(),
+      },
+      actorType,
+      actorId,
+    });
+
+    await eventService.create({
+      organizationId,
+      scopeType: "ai_conversation",
+      scopeId: conversationId,
+      eventType: "ai_turn_created",
+      payload: {
+        turnId: assistantTurn.id,
+        branchId: input.branchId,
+        conversationId,
+        role: assistantTurn.role,
+        parentTurnId: assistantTurn.parentTurnId,
+        createdAt: assistantTurn.createdAt.toISOString(),
+      },
+      actorType,
+      actorId,
+    });
+
+    // Publish to branchTurns subscription topic
+    pubsub.publish(topics.branchTurns(input.branchId), {
+      branchTurns: userTurn,
+    });
+    pubsub.publish(topics.branchTurns(input.branchId), {
+      branchTurns: assistantTurn,
+    });
+
+    // Publish to conversation-level subscription
+    pubsub.publish(topics.conversationEvents(conversationId), {
+      conversationEvents: {
+        conversationId,
+        type: "ai_turn_created",
+        payload: {
+          turnId: assistantTurn.id,
+          branchId: input.branchId,
+          role: assistantTurn.role,
+        },
+        timestamp: new Date().toISOString(),
+      },
+    });
+
     return assistantTurn;
   }
 

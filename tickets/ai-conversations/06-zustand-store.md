@@ -48,7 +48,7 @@ Add frontend state management for AI Conversations, Branches, Turns, and shared 
 ## Dependencies
 
 - 05 (Event Stream Integration)
-  <!-- Ticket 05 creates: 6 EventType enum values (ai_conversation_created, ai_conversation_title_updated, ai_conversation_visibility_changed, ai_branch_created, ai_branch_labeled, ai_turn_created) with ScopeType ai_conversation. Events persist via eventService.create() and broadcast to org-wide stream. Scoped subscriptions use separate topics: branchTurns(branchId) delivers Turn objects, conversationEvents(conversationId) delivers AiConversationEvent objects (conversationId, type, payload, timestamp). The conversationEvents subscription returns AiConversationEvent!, not Event!. Note: streamTurn does not yet emit events — only sendTurn does. -->
+  <!-- Ticket 05 creates: 6 EventType enum values (ai_conversation_created, ai_conversation_title_updated, ai_conversation_visibility_changed, ai_branch_created, ai_branch_labeled, ai_turn_created) with ScopeType ai_conversation. Events persist via eventService.create() and broadcast to org-wide stream. Both sendTurn and streamTurn emit events. Scoped subscriptions use separate topics: branchTurns(branchId) delivers Turn objects, conversationEvents(conversationId) delivers AiConversationEvent objects (conversationId, type, payload, timestamp). The conversationEvents subscription returns AiConversationEvent!, not Event!. -->
 
 ## Completion requirements
 

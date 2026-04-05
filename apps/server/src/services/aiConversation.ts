@@ -52,62 +52,63 @@ export class AiConversationService {
         include: { branches: true },
       });
 
-      // Emit ai_conversation_created event
-      await eventService.create({
-        organizationId: input.organizationId,
-        scopeType: "ai_conversation",
-        scopeId: conversation.id,
-        eventType: "ai_conversation_created",
-        payload: {
-          conversationId: conversation.id,
-          title: conversation.title,
-          visibility: conversation.visibility,
-          createdById: actorId,
-          updatedAt: updated.updatedAt.toISOString(),
-        },
-        actorType,
-        actorId,
-      }, tx);
-
-      // Emit ai_branch_created event for root branch
-      await eventService.create({
-        organizationId: input.organizationId,
-        scopeType: "ai_conversation",
-        scopeId: conversation.id,
-        eventType: "ai_branch_created",
-        payload: {
-          branchId: rootBranch.id,
-          conversationId: conversation.id,
-          parentBranchId: null,
-          forkTurnId: null,
-          label: rootBranch.label,
-          createdById: actorId,
-        },
-        actorType,
-        actorId,
-      }, tx);
-
-      return updated;
+      return { conversation: updated, rootBranch };
     });
 
-    // Publish to conversation subscription topic (outside transaction)
-    pubsub.publish(topics.conversationEvents(result.id), {
+    const { conversation: updated, rootBranch } = result;
+
+    // Emit events after transaction commits to avoid race conditions
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "ai_conversation",
+      scopeId: updated.id,
+      eventType: "ai_conversation_created",
+      payload: {
+        conversationId: updated.id,
+        title: updated.title,
+        visibility: updated.visibility,
+        createdById: actorId,
+        updatedAt: updated.updatedAt.toISOString(),
+      },
+      actorType,
+      actorId,
+    });
+
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "ai_conversation",
+      scopeId: updated.id,
+      eventType: "ai_branch_created",
+      payload: {
+        branchId: rootBranch.id,
+        conversationId: updated.id,
+        parentBranchId: null,
+        forkTurnId: null,
+        label: rootBranch.label,
+        createdById: actorId,
+      },
+      actorType,
+      actorId,
+    });
+
+    // Publish to conversation subscription topic
+    pubsub.publish(topics.conversationEvents(updated.id), {
       conversationEvents: {
-        conversationId: result.id,
+        conversationId: updated.id,
         type: "ai_conversation_created",
         payload: {
-          conversationId: result.id,
-          title: result.title,
-          visibility: result.visibility,
-          rootBranchId: result.rootBranchId,
+          conversationId: updated.id,
+          title: updated.title,
+          visibility: updated.visibility,
+          rootBranchId: updated.rootBranchId,
           createdById: actorId,
-          updatedAt: result.updatedAt.toISOString(),
+          updatedAt: updated.updatedAt.toISOString(),
         },
         timestamp: new Date().toISOString(),
       },
     });
 
-    return result;
+    return updated;
   }
 
   /**
