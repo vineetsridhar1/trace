@@ -378,6 +378,7 @@ export function SessionGroupDetailView({
         <div className="flex h-full flex-col overflow-hidden">
           <GroupHeader
             groupName={groupName as string | undefined}
+            sessionGroupId={sessionGroupId}
             selectedSessionStatus={selectedSessionStatus}
             selectedSessionId={selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)}
             groupPrUrl={groupPrUrl}
