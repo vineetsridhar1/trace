@@ -20,8 +20,12 @@
   },
   "typesVersions": {
     "*": {
-      "git-hooks": ["dist/git-hooks.d.ts"],
-      "adapters": ["dist/adapters.d.ts"]
+      "git-hooks": [
+        "dist/git-hooks.d.ts"
+      ],
+      "adapters": [
+        "dist/adapters.d.ts"
+      ]
     }
   },
   "scripts": {
@@ -38,6 +42,7 @@
     }
   },
   "devDependencies": {
+    "@types/node": "^22.15.0",
     "node-pty": "^1.1.0",
     "typescript": "^5.7.0"
   }

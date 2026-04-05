@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { gql } from "@urql/core";
 import { client } from "../../../lib/urql";
-import { useEntityStore, type AiConversationEntity, type AiBranchEntity, type AiTurnEntity } from "../../../stores/entity";
+import {
+  useEntityStore,
+  type AiConversationEntity,
+  type AiBranchEntity,
+  type AiTurnEntity,
+} from "../../../stores/entity";
 import { useAuthStore } from "../../../stores/auth";
 import { useAiConversationUIStore } from "../store/ai-conversation-ui";
 
@@ -14,8 +19,12 @@ const AI_CONVERSATIONS_QUERY = gql`
       title
       visibility
       branchCount
-      createdBy { id }
-      rootBranch { id }
+      createdBy {
+        id
+      }
+      rootBranch {
+        id
+      }
       createdAt
       updatedAt
     }
@@ -29,17 +38,29 @@ const AI_CONVERSATION_QUERY = gql`
       title
       visibility
       branchCount
-      createdBy { id }
-      rootBranch { id }
+      createdBy {
+        id
+      }
+      rootBranch {
+        id
+      }
       branches {
         id
         label
         depth
         turnCount
-        parentBranch { id }
-        forkTurn { id }
-        childBranches { id }
-        createdBy { id }
+        parentBranch {
+          id
+        }
+        forkTurn {
+          id
+        }
+        childBranches {
+          id
+        }
+        createdBy {
+          id
+        }
         createdAt
       }
       createdAt
@@ -55,17 +76,29 @@ const BRANCH_TIMELINE_QUERY = gql`
       label
       depth
       turnCount
-      parentBranch { id }
-      forkTurn { id }
-      childBranches { id }
-      createdBy { id }
+      parentBranch {
+        id
+      }
+      forkTurn {
+        id
+      }
+      childBranches {
+        id
+      }
+      createdBy {
+        id
+      }
       createdAt
-      conversation { id }
+      conversation {
+        id
+      }
       turns {
         id
         role
         content
-        parentTurn { id }
+        parentTurn {
+          id
+        }
         branchCount
         createdAt
       }
@@ -174,6 +207,30 @@ function hydrateTurn(raw: RawTurn, branchId: string): void {
   } as AiTurnEntity);
 }
 
+async function fetchBranchWithAncestors(
+  branchId: string,
+  visited: Set<string> = new Set(),
+): Promise<void> {
+  if (!branchId || visited.has(branchId)) return;
+  visited.add(branchId);
+
+  const result = await client.query(BRANCH_TIMELINE_QUERY, { id: branchId }).toPromise();
+
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+
+  if (!result.data?.branch) return;
+
+  const branch = result.data.branch as RawBranch;
+  hydrateBranch(branch);
+
+  const parentBranchId = branch.parentBranch?.id;
+  if (parentBranchId) {
+    await fetchBranchWithAncestors(parentBranchId, visited);
+  }
+}
+
 // ── Query hooks ────────────────────────────────────────────────
 
 /** Fetches conversation list, upserts into store */
@@ -220,9 +277,7 @@ export function useAiConversationQuery(id: string) {
     setLoading(true);
     setError(null);
 
-    const result = await client
-      .query(AI_CONVERSATION_QUERY, { id })
-      .toPromise();
+    const result = await client.query(AI_CONVERSATION_QUERY, { id }).toPromise();
 
     if (result.error) {
       setError(result.error.message);
@@ -256,16 +311,10 @@ export function useBranchTimelineQuery(branchId: string) {
     if (!branchId) return;
     setLoading(true);
     setError(null);
-
-    const result = await client
-      .query(BRANCH_TIMELINE_QUERY, { id: branchId })
-      .toPromise();
-
-    if (result.error) {
-      setError(result.error.message);
-    } else if (result.data?.branch) {
-      const branch = result.data.branch as RawBranch;
-      hydrateBranch(branch);
+    try {
+      await fetchBranchWithAncestors(branchId);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Failed to load branch timeline");
     }
 
     setLoading(false);

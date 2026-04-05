@@ -2,8 +2,10 @@ import { useEffect } from "react";
 import { gql } from "@urql/core";
 import { asJsonObject } from "@trace/shared";
 import { client } from "../../../lib/urql";
-import { useEntityStore, type AiBranchEntity, type AiTurnEntity } from "../../../stores/entity";
-import { processAiConversationEvent } from "../utils/processAiConversationEvent";
+import {
+  processAiConversationEvent,
+  upsertAiTurnFromServer,
+} from "../utils/processAiConversationEvent";
 
 // ── Subscription documents ─────────────────────────────────────
 
@@ -24,10 +26,14 @@ const BRANCH_TURNS_SUBSCRIPTION = gql`
       id
       role
       content
-      parentTurn { id }
+      parentTurn {
+        id
+      }
       branchCount
       createdAt
-      branch { id }
+      branch {
+        id
+      }
     }
   }
 `;
@@ -59,7 +65,12 @@ export function useConversationEventsSubscription(conversationId: string | null)
         };
 
         const payload = asJsonObject(event.payload) ?? {};
-        processAiConversationEvent(event.type, payload, event.timestamp);
+        processAiConversationEvent({
+          eventType: event.type,
+          payload,
+          timestamp: event.timestamp,
+          conversationId: event.conversationId,
+        });
       });
 
     return () => subscription.unsubscribe();
@@ -91,43 +102,16 @@ export function useBranchTurnsSubscription(branchId: string | null) {
           branch: { id: string };
         };
 
-        const { upsert, patch, remove } = useEntityStore.getState();
-        const turnBranchId = turn.branch.id;
-
-        // Reconcile optimistic turns: if a USER turn arrives and there's
-        // an optimistic-* entry, swap it out before upserting the real one.
-        if (turn.role === "USER") {
-          const branch = useEntityStore.getState().aiBranches[turnBranchId];
-          if (branch) {
-            const optimisticId = branch.turnIds.find((id) => id.startsWith("optimistic-"));
-            if (optimisticId) {
-              patch("aiBranches", turnBranchId, {
-                turnIds: branch.turnIds.map((id) => (id === optimisticId ? turn.id : id)),
-              } as Partial<AiBranchEntity>);
-              remove("aiTurns", optimisticId);
-            }
-          }
-        }
-
-        // Upsert the real turn
-        upsert("aiTurns", turn.id, {
-          id: turn.id,
-          branchId: turnBranchId,
+        upsertAiTurnFromServer({
+          turnId: turn.id,
+          branchId: turn.branch.id,
           role: turn.role,
           content: turn.content,
           parentTurnId: turn.parentTurn?.id ?? null,
           branchCount: turn.branchCount,
           createdAt: turn.createdAt,
-        } as AiTurnEntity);
-
-        // Append to branch turn list if not already present
-        const updatedBranch = useEntityStore.getState().aiBranches[turnBranchId];
-        if (updatedBranch && !updatedBranch.turnIds.includes(turn.id)) {
-          patch("aiBranches", turnBranchId, {
-            turnIds: [...updatedBranch.turnIds, turn.id],
-            turnCount: updatedBranch.turnCount + 1,
-          } as Partial<AiBranchEntity>);
-        }
+          timestamp: turn.createdAt,
+        });
       });
 
     return () => subscription.unsubscribe();

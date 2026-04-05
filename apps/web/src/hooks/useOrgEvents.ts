@@ -168,7 +168,9 @@ function rewriteGitCheckpoints(
   replacedCommitSha: string,
   incoming: GitCheckpoint,
 ): GitCheckpoint[] {
-  const filtered = (existing ?? []).filter((checkpoint) => checkpoint.commitSha !== replacedCommitSha);
+  const filtered = (existing ?? []).filter(
+    (checkpoint) => checkpoint.commitSha !== replacedCommitSha,
+  );
   return mergeGitCheckpoints(filtered, incoming);
 }
 
@@ -524,7 +526,8 @@ export function useOrgEvents() {
               } as Partial<SessionEntity>);
             }
 
-            const existingGroup = useEntityStore.getState().sessionGroups[checkpoint.sessionGroupId];
+            const existingGroup =
+              useEntityStore.getState().sessionGroups[checkpoint.sessionGroupId];
             if (existingGroup) {
               patch("sessionGroups", checkpoint.sessionGroupId, {
                 gitCheckpoints: mergeGitCheckpoints(
@@ -548,7 +551,8 @@ export function useOrgEvents() {
               } as Partial<SessionEntity>);
             }
 
-            const existingGroup = useEntityStore.getState().sessionGroups[rewrite.checkpoint.sessionGroupId];
+            const existingGroup =
+              useEntityStore.getState().sessionGroups[rewrite.checkpoint.sessionGroupId];
             if (existingGroup) {
               patch("sessionGroups", rewrite.checkpoint.sessionGroupId, {
                 gitCheckpoints: rewriteGitCheckpoints(
@@ -605,7 +609,13 @@ export function useOrgEvents() {
 
         // ── AI Conversation events — delegate to shared processor ───
         if (event.eventType.startsWith("ai_") && payload) {
-          processAiConversationEvent(event.eventType, payload, event.timestamp);
+          processAiConversationEvent({
+            eventType: event.eventType,
+            payload,
+            timestamp: event.timestamp,
+            conversationId:
+              event.scopeType === ("ai_conversation" as ScopeType) ? event.scopeId : undefined,
+          });
         }
 
         // Fire notification handlers after all store patches are applied

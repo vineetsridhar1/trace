@@ -1,10 +1,6 @@
 import type { AiTurn, Prisma } from "@prisma/client";
 import type { ActorType } from "@trace/gql";
-import type {
-  LLMAssistantContentBlock,
-  LLMMessage,
-  LLMStreamEvent,
-} from "@trace/shared";
+import type { LLMAssistantContentBlock, LLMMessage, LLMStreamEvent } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { aiService } from "./ai.js";
 import { pubsub, topics } from "../lib/pubsub.js";
@@ -22,6 +18,7 @@ export class AiTurnService {
       branchId: string;
       content: string;
       model?: string;
+      clientMutationId?: string;
     },
     actorType: ActorType,
     actorId: string,
@@ -90,13 +87,8 @@ export class AiTurnService {
 
       // Extract text content from response
       assistantContent = response.content
-        .filter(
-          (block: LLMAssistantContentBlock) => block.type === "text",
-        )
-        .map(
-          (block: LLMAssistantContentBlock) =>
-            block.type === "text" ? block.text : "",
-        )
+        .filter((block: LLMAssistantContentBlock) => block.type === "text")
+        .map((block: LLMAssistantContentBlock) => (block.type === "text" ? block.text : ""))
         .join("");
     } catch (error) {
       // On LLM failure, delete the user turn so we don't leave orphans
@@ -105,25 +97,23 @@ export class AiTurnService {
     }
 
     // Create assistant turn and update conversation.updatedAt atomically
-    const assistantTurn = await prisma.$transaction(
-      async (tx: Prisma.TransactionClient) => {
-        const turn = await tx.aiTurn.create({
-          data: {
-            branchId: input.branchId,
-            role: "ASSISTANT",
-            content: assistantContent,
-            parentTurnId: userTurn.id,
-          },
-        });
+    const assistantTurn = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const turn = await tx.aiTurn.create({
+        data: {
+          branchId: input.branchId,
+          role: "ASSISTANT",
+          content: assistantContent,
+          parentTurnId: userTurn.id,
+        },
+      });
 
-        await tx.aiConversation.update({
-          where: { id: branch.conversationId },
-          data: { updatedAt: new Date() },
-        });
+      await tx.aiConversation.update({
+        where: { id: branch.conversationId },
+        data: { updatedAt: new Date() },
+      });
 
-        return turn;
-      },
-    );
+      return turn;
+    });
 
     // Persist turn events and broadcast to org-wide stream
     const organizationId = branch.conversation.organizationId;
@@ -142,6 +132,7 @@ export class AiTurnService {
         content: userTurn.content,
         parentTurnId: userTurn.parentTurnId,
         createdAt: userTurn.createdAt.toISOString(),
+        ...(input.clientMutationId ? { clientMutationId: input.clientMutationId } : {}),
       },
       actorType,
       actorId,
@@ -181,7 +172,11 @@ export class AiTurnService {
         payload: {
           turnId: assistantTurn.id,
           branchId: input.branchId,
+          conversationId,
           role: assistantTurn.role,
+          content: assistantTurn.content,
+          parentTurnId: assistantTurn.parentTurnId,
+          createdAt: assistantTurn.createdAt.toISOString(),
         },
         timestamp: new Date().toISOString(),
       },
@@ -281,25 +276,23 @@ export class AiTurnService {
     }
 
     // Create assistant turn
-    const assistantTurn = await prisma.$transaction(
-      async (tx: Prisma.TransactionClient) => {
-        const turn = await tx.aiTurn.create({
-          data: {
-            branchId: input.branchId,
-            role: "ASSISTANT",
-            content: fullText,
-            parentTurnId: userTurn.id,
-          },
-        });
+    const assistantTurn = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const turn = await tx.aiTurn.create({
+        data: {
+          branchId: input.branchId,
+          role: "ASSISTANT",
+          content: fullText,
+          parentTurnId: userTurn.id,
+        },
+      });
 
-        await tx.aiConversation.update({
-          where: { id: branch.conversationId },
-          data: { updatedAt: new Date() },
-        });
+      await tx.aiConversation.update({
+        where: { id: branch.conversationId },
+        data: { updatedAt: new Date() },
+      });
 
-        return turn;
-      },
-    );
+      return turn;
+    });
 
     // Persist turn events and broadcast to org-wide stream
     const organizationId = branch.conversation.organizationId;
@@ -315,6 +308,7 @@ export class AiTurnService {
         branchId: input.branchId,
         conversationId,
         role: userTurn.role,
+        content: userTurn.content,
         parentTurnId: userTurn.parentTurnId,
         createdAt: userTurn.createdAt.toISOString(),
       },
@@ -332,6 +326,7 @@ export class AiTurnService {
         branchId: input.branchId,
         conversationId,
         role: assistantTurn.role,
+        content: assistantTurn.content,
         parentTurnId: assistantTurn.parentTurnId,
         createdAt: assistantTurn.createdAt.toISOString(),
       },
@@ -355,7 +350,11 @@ export class AiTurnService {
         payload: {
           turnId: assistantTurn.id,
           branchId: input.branchId,
+          conversationId,
           role: assistantTurn.role,
+          content: assistantTurn.content,
+          parentTurnId: assistantTurn.parentTurnId,
+          createdAt: assistantTurn.createdAt.toISOString(),
         },
         timestamp: new Date().toISOString(),
       },

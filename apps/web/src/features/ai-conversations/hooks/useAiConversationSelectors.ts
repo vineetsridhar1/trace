@@ -6,6 +6,7 @@ import {
   useEntityIds,
   type AiConversationEntity,
   type AiBranchEntity,
+  type AiTurnEntity,
 } from "../../../stores/entity";
 import { useAiConversationUIStore } from "../store/ai-conversation-ui";
 
@@ -26,10 +27,8 @@ export function useAiConversationField<F extends keyof AiConversationEntity>(
 
 /** Returns sorted list of conversation IDs for the sidebar */
 export function useAiConversations(): string[] {
-  return useEntityIds(
-    "aiConversations",
-    undefined,
-    (a, b) => b.updatedAt.localeCompare(a.updatedAt),
+  return useEntityIds("aiConversations", undefined, (a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt),
   );
 }
 
@@ -62,21 +61,6 @@ export type TimelineEntry =
   | { type: "local-turn"; turnId: string };
 
 /**
- * Collect ancestor branch IDs by walking parentBranchId up to the root.
- * Used to select only the branches needed for timeline computation.
- */
-function getAncestorBranchIds(branchId: string): string[] {
-  const ids: string[] = [];
-  const allBranches = useEntityStore.getState().aiBranches;
-  let current = allBranches[branchId];
-  while (current?.parentBranchId) {
-    ids.push(current.parentBranchId);
-    current = allBranches[current.parentBranchId];
-  }
-  return ids;
-}
-
-/**
  * Returns the derived render timeline for a branch:
  * inherited turns from ancestors, a fork separator, then local turns.
  *
@@ -85,22 +69,18 @@ function getAncestorBranchIds(branchId: string): string[] {
 export function useBranchTimeline(branchId: string): TimelineEntry[] {
   const branch = useEntityStore((state) => state.aiBranches[branchId]);
 
-  // Compute which ancestor IDs we need (stable unless parentBranchId chain changes)
-  const ancestorIds = useMemo(
-    () => (branch ? getAncestorBranchIds(branchId) : []),
-    // Re-derive when the branch's parentBranchId changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [branchId, branch?.parentBranchId],
-  );
-
-  // Subscribe only to ancestor branches, not the entire table
   const ancestorBranches = useEntityStore(
     useShallow((state) => {
       const result: Record<string, AiBranchEntity> = {};
-      for (const id of ancestorIds) {
-        const b = state.aiBranches[id];
-        if (b) result[id] = b;
+      let current = state.aiBranches[branchId];
+
+      while (current?.parentBranchId) {
+        const parent = state.aiBranches[current.parentBranchId];
+        if (!parent) break;
+        result[parent.id] = parent;
+        current = parent;
       }
+
       return result;
     }),
   );
@@ -112,7 +92,11 @@ export function useBranchTimeline(branchId: string): TimelineEntry[] {
 
     // Collect inherited turns from ancestor branches
     if (branch.parentBranchId && branch.forkTurnId) {
-      const inheritedTurns = collectInheritedTurns(ancestorBranches, branch.parentBranchId, branch.forkTurnId);
+      const inheritedTurns = collectInheritedTurns(
+        ancestorBranches,
+        branch.parentBranchId,
+        branch.forkTurnId,
+      );
       for (const turnId of inheritedTurns) {
         entries.push({ type: "inherited-turn", turnId });
       }
@@ -183,9 +167,7 @@ export function useTurnField<F extends keyof AiTurnEntity>(
 
 /** Returns the active branch ID for a conversation */
 export function useActiveBranchId(conversationId: string): string | undefined {
-  return useAiConversationUIStore(
-    (state) => state.activeBranchByConversation[conversationId],
-  );
+  return useAiConversationUIStore((state) => state.activeBranchByConversation[conversationId]);
 }
 
 /** Returns the pending scroll target turn ID */
