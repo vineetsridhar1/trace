@@ -2,6 +2,7 @@ import type { AiConversationVisibility, Prisma } from "@prisma/client";
 import type { ActorType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { pubsub, topics } from "../lib/pubsub.js";
+import { eventService } from "./event.js";
 
 export class AiConversationService {
   /**
@@ -17,7 +18,7 @@ export class AiConversationService {
     actorType: ActorType,
     actorId: string,
   ) {
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Verify user belongs to org
       await tx.orgMember.findUniqueOrThrow({
         where: {
@@ -51,8 +52,63 @@ export class AiConversationService {
         include: { branches: true },
       });
 
-      return updated;
+      return { conversation: updated, rootBranch };
     });
+
+    const { conversation: updated, rootBranch } = result;
+
+    // Emit events after transaction commits to avoid race conditions
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "ai_conversation",
+      scopeId: updated.id,
+      eventType: "ai_conversation_created",
+      payload: {
+        conversationId: updated.id,
+        title: updated.title,
+        visibility: updated.visibility,
+        createdById: actorId,
+        updatedAt: updated.updatedAt.toISOString(),
+      },
+      actorType,
+      actorId,
+    });
+
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "ai_conversation",
+      scopeId: updated.id,
+      eventType: "ai_branch_created",
+      payload: {
+        branchId: rootBranch.id,
+        conversationId: updated.id,
+        parentBranchId: null,
+        forkTurnId: null,
+        label: rootBranch.label,
+        createdById: actorId,
+      },
+      actorType,
+      actorId,
+    });
+
+    // Publish to conversation subscription topic
+    pubsub.publish(topics.conversationEvents(updated.id), {
+      conversationEvents: {
+        conversationId: updated.id,
+        type: "ai_conversation_created",
+        payload: {
+          conversationId: updated.id,
+          title: updated.title,
+          visibility: updated.visibility,
+          rootBranchId: updated.rootBranchId,
+          createdById: actorId,
+          updatedAt: updated.updatedAt.toISOString(),
+        },
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    return updated;
   }
 
   /**
@@ -240,11 +296,27 @@ export class AiConversationService {
       data: { title: input.title },
     });
 
+    // Persist event and broadcast to org-wide stream
+    await eventService.create({
+      organizationId: conversation.organizationId,
+      scopeType: "ai_conversation",
+      scopeId: input.conversationId,
+      eventType: "ai_conversation_title_updated",
+      payload: {
+        conversationId: input.conversationId,
+        title: input.title,
+        updatedAt: updated.updatedAt.toISOString(),
+      },
+      actorType,
+      actorId,
+    });
+
+    // Publish to conversation subscription topic
     pubsub.publish(topics.conversationEvents(input.conversationId), {
       conversationEvents: {
         conversationId: input.conversationId,
-        type: "title_updated",
-        payload: { title: input.title },
+        type: "ai_conversation_title_updated",
+        payload: { title: input.title, updatedAt: updated.updatedAt.toISOString() },
         timestamp: new Date().toISOString(),
       },
     });
