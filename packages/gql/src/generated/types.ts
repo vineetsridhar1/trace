@@ -468,6 +468,54 @@ export type GitCheckpoint = {
   treeSha: Scalars['String']['output'];
 };
 
+export type GitHubIssue = {
+  __typename?: 'GitHubIssue';
+  author: Scalars['String']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  labels: Array<Scalars['String']['output']>;
+  number: Scalars['Int']['output'];
+  state: Scalars['String']['output'];
+  title: Scalars['String']['output'];
+  updatedAt: Scalars['DateTime']['output'];
+  url: Scalars['String']['output'];
+};
+
+export type GitHubPullRequest = {
+  __typename?: 'GitHubPullRequest';
+  additions: Scalars['Int']['output'];
+  author: Scalars['String']['output'];
+  baseBranch: Scalars['String']['output'];
+  branch: Scalars['String']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  deletions: Scalars['Int']['output'];
+  draft: Scalars['Boolean']['output'];
+  number: Scalars['Int']['output'];
+  state: Scalars['String']['output'];
+  title: Scalars['String']['output'];
+  updatedAt: Scalars['DateTime']['output'];
+  url: Scalars['String']['output'];
+};
+
+export type GitHubRepoInfo = {
+  __typename?: 'GitHubRepoInfo';
+  issues: Array<GitHubIssue>;
+  pullRequests: Array<GitHubPullRequest>;
+  workflowRuns: Array<GitHubWorkflowRun>;
+};
+
+export type GitHubWorkflowRun = {
+  __typename?: 'GitHubWorkflowRun';
+  branch: Scalars['String']['output'];
+  conclusion?: Maybe<Scalars['String']['output']>;
+  createdAt: Scalars['DateTime']['output'];
+  event: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+  updatedAt: Scalars['DateTime']['output'];
+  url: Scalars['String']['output'];
+};
+
 export type HostingMode =
   | 'cloud'
   | 'local';
@@ -1074,6 +1122,7 @@ export type Query = {
   chatMessages: Array<Message>;
   chats: Array<Chat>;
   events: Array<Event>;
+  githubRepoInfo: GitHubRepoInfo;
   inboxItems: Array<InboxItem>;
   myApiTokens: Array<ApiTokenStatus>;
   myOrganizations: Array<OrgMember>;
@@ -1210,6 +1259,12 @@ export type QueryEventsArgs = {
   organizationId: Scalars['ID']['input'];
   scope?: InputMaybe<ScopeInput>;
   types?: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+
+export type QueryGithubRepoInfoArgs = {
+  branch?: InputMaybe<Scalars['String']['input']>;
+  repoId: Scalars['ID']['input'];
 };
 
 

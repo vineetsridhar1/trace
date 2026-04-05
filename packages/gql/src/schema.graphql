@@ -922,11 +922,58 @@ type Query {
   aiConversation(id: ID!): AiConversation
   branch(id: ID!): Branch
   searchUsers(query: String!): [User!]!
+  githubRepoInfo(repoId: ID!, branch: String): GitHubRepoInfo!
 }
 
 type Terminal {
   id: ID!
   sessionId: ID!
+}
+
+# --- GitHub ---
+
+type GitHubPullRequest {
+  number: Int!
+  title: String!
+  state: String!
+  url: String!
+  author: String!
+  branch: String!
+  baseBranch: String!
+  draft: Boolean!
+  additions: Int!
+  deletions: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type GitHubIssue {
+  number: Int!
+  title: String!
+  state: String!
+  url: String!
+  author: String!
+  labels: [String!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type GitHubWorkflowRun {
+  id: ID!
+  name: String!
+  status: String!
+  conclusion: String
+  url: String!
+  branch: String!
+  event: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type GitHubRepoInfo {
+  pullRequests: [GitHubPullRequest!]!
+  issues: [GitHubIssue!]!
+  workflowRuns: [GitHubWorkflowRun!]!
 }
 
 # --- Mutations ---
