@@ -179,3 +179,13 @@ export function useScrollTargetTurnId(): string | null {
 export function useBranchSwitcherOpen(): boolean {
   return useAiConversationUIStore((state) => state.branchSwitcherOpen);
 }
+
+/** Returns the branch tree panel open state */
+export function useBranchTreePanelOpen(): boolean {
+  return useAiConversationUIStore((state) => state.branchTreePanelOpen);
+}
+
+/** Returns whether a tree node is collapsed */
+export function useTreeNodeCollapsed(branchId: string): boolean {
+  return useAiConversationUIStore((state) => !!state.collapsedTreeNodes[branchId]);
+}

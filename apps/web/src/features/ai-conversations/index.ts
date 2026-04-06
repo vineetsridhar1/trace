@@ -15,6 +15,8 @@ export {
   useActiveBranchId,
   useScrollTargetTurnId,
   useBranchSwitcherOpen,
+  useBranchTreePanelOpen,
+  useTreeNodeCollapsed,
   type TimelineEntry,
 } from "./hooks/useAiConversationSelectors";
 
@@ -37,6 +39,10 @@ export {
   useSendTurn,
   useUpdateAiConversationTitle,
 } from "./hooks/useAiConversationMutations";
+
+// Components
+export { BranchTreePanel } from "./components/BranchTreePanel";
+export { BranchTreeNode, BranchTreeNodeContainer } from "./components/BranchTreeNode";
 
 // Utils
 export { processAiConversationEvent } from "./utils/processAiConversationEvent";
