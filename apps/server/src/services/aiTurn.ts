@@ -3,23 +3,9 @@ import type { ActorType } from "@trace/gql";
 import type { LLMAssistantContentBlock, LLMMessage, LLMStreamEvent } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { aiService } from "./ai.js";
-import { aiConversationService } from "./aiConversation.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { eventService } from "./event.js";
-
-/**
- * Truncates text at a word boundary within the given max length.
- * Returns the truncated text with "..." appended if it was shortened.
- */
-function truncateAtWord(text: string, maxLength: number): string {
-  const trimmed = text.trim();
-  if (trimmed.length <= maxLength) return trimmed;
-
-  const truncated = trimmed.slice(0, maxLength);
-  const lastSpace = truncated.lastIndexOf(" ");
-  const cutPoint = lastSpace > 0 ? lastSpace : maxLength;
-  return trimmed.slice(0, cutPoint) + "...";
-}
+import { aiBranchSummaryService } from "./aiBranchSummary.js";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 
@@ -38,6 +24,8 @@ export class AiTurnService {
     actorType: ActorType,
     actorId: string,
   ): Promise<{ userTurn: AiTurn; assistantTurn: AiTurn }> {
+    const model = input.model ?? DEFAULT_MODEL;
+
     // Load the branch and verify access to the conversation
     const branch = await prisma.aiBranch.findUniqueOrThrow({
       where: { id: input.branchId },
@@ -45,10 +33,6 @@ export class AiTurnService {
         conversation: true,
       },
     });
-
-    // Use explicit model > conversation model > default
-    const model = input.model ?? branch.conversation.modelId ?? DEFAULT_MODEL;
-    const systemPrompt = branch.conversation.systemPrompt ?? undefined;
 
     // Verify user belongs to org
     await prisma.orgMember.findUniqueOrThrow({
@@ -84,40 +68,10 @@ export class AiTurnService {
       },
     });
 
-    // Auto-label: if this is the first turn on the branch and no label is set, generate one
-    if (!lastTurn && !branch.label) {
-      const autoLabel = truncateAtWord(input.content, 30);
-      await prisma.aiBranch.update({
-        where: { id: input.branchId },
-        data: { label: autoLabel },
-      });
-
-      const conversationId = branch.conversationId;
-      const organizationId = branch.conversation.organizationId;
-
-      await eventService.create({
-        organizationId,
-        scopeType: "ai_conversation",
-        scopeId: conversationId,
-        eventType: "ai_branch_labeled",
-        payload: { branchId: input.branchId, label: autoLabel, conversationId },
-        actorType,
-        actorId,
-      });
-
-      pubsub.publish(topics.conversationEvents(conversationId), {
-        conversationEvents: {
-          conversationId,
-          type: "ai_branch_labeled",
-          payload: { branchId: input.branchId, label: autoLabel, conversationId },
-          timestamp: new Date().toISOString(),
-        },
-      });
-    }
-
-    // Assemble context: walk ancestor chain for full conversation history
-    const contextTurns = await aiConversationService.buildContext(input.branchId);
-    const messages = this.turnsToMessages(contextTurns);
+    // Assemble context with budget-aware context builder
+    const { messages } = await aiBranchSummaryService.buildContextWithBudget({
+      branchId: input.branchId,
+    });
 
     // Call LLM
     let assistantContent: string;
@@ -127,7 +81,6 @@ export class AiTurnService {
         userId: actorId,
         model,
         messages,
-        system: systemPrompt,
       });
 
       // Extract text content from response
@@ -227,6 +180,19 @@ export class AiTurnService {
       },
     });
 
+    // Trigger auto-summarization in the background (non-blocking)
+    aiBranchSummaryService
+      .maybeAutoSummarize({
+        branchId: input.branchId,
+        organizationId,
+        userId: actorId,
+        actorType,
+        actorId,
+      })
+      .catch((err) => {
+        console.error("[aiTurn] auto-summarize failed:", err);
+      });
+
     return { userTurn, assistantTurn };
   }
 
@@ -247,15 +213,13 @@ export class AiTurnService {
     LLMStreamEvent | { type: "user_turn_created"; turn: AiTurn },
     AiTurn | undefined
   > {
+    const model = input.model ?? DEFAULT_MODEL;
+
     // Load the branch and verify access
     const branch = await prisma.aiBranch.findUniqueOrThrow({
       where: { id: input.branchId },
       include: { conversation: true },
     });
-
-    // Use explicit model > conversation model > default
-    const model = input.model ?? branch.conversation.modelId ?? DEFAULT_MODEL;
-    const systemPrompt = branch.conversation.systemPrompt ?? undefined;
 
     await prisma.orgMember.findUniqueOrThrow({
       where: {
@@ -287,42 +251,12 @@ export class AiTurnService {
       },
     });
 
-    // Auto-label: if this is the first turn on the branch and no label is set, generate one
-    if (!lastTurn && !branch.label) {
-      const autoLabel = truncateAtWord(input.content, 30);
-      await prisma.aiBranch.update({
-        where: { id: input.branchId },
-        data: { label: autoLabel },
-      });
-
-      const conversationId = branch.conversationId;
-      const organizationId = branch.conversation.organizationId;
-
-      await eventService.create({
-        organizationId,
-        scopeType: "ai_conversation",
-        scopeId: conversationId,
-        eventType: "ai_branch_labeled",
-        payload: { branchId: input.branchId, label: autoLabel, conversationId },
-        actorType,
-        actorId,
-      });
-
-      pubsub.publish(topics.conversationEvents(conversationId), {
-        conversationEvents: {
-          conversationId,
-          type: "ai_branch_labeled",
-          payload: { branchId: input.branchId, label: autoLabel, conversationId },
-          timestamp: new Date().toISOString(),
-        },
-      });
-    }
-
     yield { type: "user_turn_created" as const, turn: userTurn };
 
-    // Assemble context: walk ancestor chain for full conversation history
-    const contextTurns = await aiConversationService.buildContext(input.branchId);
-    const messages = this.turnsToMessages(contextTurns);
+    // Assemble context with budget-aware context builder
+    const { messages } = await aiBranchSummaryService.buildContextWithBudget({
+      branchId: input.branchId,
+    });
 
     // Stream from LLM
     let fullText = "";
@@ -332,7 +266,6 @@ export class AiTurnService {
         userId: actorId,
         model,
         messages,
-        system: systemPrompt,
       })) {
         if (event.type === "text_delta") {
           fullText += event.text;
@@ -435,6 +368,19 @@ export class AiTurnService {
         timestamp: new Date().toISOString(),
       },
     });
+
+    // Trigger auto-summarization in the background (non-blocking)
+    aiBranchSummaryService
+      .maybeAutoSummarize({
+        branchId: input.branchId,
+        organizationId,
+        userId: actorId,
+        actorType,
+        actorId,
+      })
+      .catch((err) => {
+        console.error("[aiTurn] auto-summarize failed:", err);
+      });
 
     return assistantTurn;
   }

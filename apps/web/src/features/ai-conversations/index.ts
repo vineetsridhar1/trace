@@ -14,6 +14,7 @@ export {
   useBranchField,
   useBranchTurns,
   useBranchTimeline,
+  useBranchSummary,
   useTurn,
   useTurnField,
   useActiveBranchId,
@@ -29,6 +30,8 @@ export {
   useAiConversationsQuery,
   useAiConversationQuery,
   useBranchTimelineQuery,
+  useContextHealthQuery,
+  type ContextHealthData,
 } from "./hooks/useAiConversationQueries";
 
 // Subscription hooks
@@ -46,6 +49,7 @@ export {
   useForkBranch,
   useLabelBranch,
   useUpdateAiConversation,
+  useSummarizeBranch,
 } from "./hooks/useAiConversationMutations";
 
 // Shortcut hooks

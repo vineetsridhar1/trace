@@ -50,11 +50,6 @@ export type AgentIdentity = {
   updatedAt: Scalars['DateTime']['output'];
 };
 
-export type AgentObservability =
-  | 'OFF'
-  | 'PARTICIPATE'
-  | 'SUGGEST';
-
 export type AgentStatus =
   | 'active'
   | 'done'
@@ -69,15 +64,12 @@ export type AgentTrustLevel =
 
 export type AiConversation = {
   __typename?: 'AiConversation';
-  agentObservability: AgentObservability;
   branchCount: Scalars['Int']['output'];
   branches: Array<Branch>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
   id: Scalars['ID']['output'];
-  modelId?: Maybe<Scalars['String']['output']>;
   rootBranch: Branch;
-  systemPrompt?: Maybe<Scalars['String']['output']>;
   title?: Maybe<Scalars['String']['output']>;
   updatedAt: Scalars['DateTime']['output'];
   visibility: AiConversationVisibility;
@@ -116,6 +108,7 @@ export type AutonomyMode =
 export type Branch = {
   __typename?: 'Branch';
   childBranches: Array<Branch>;
+  contextHealth: ContextHealth;
   conversation: AiConversation;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
@@ -123,6 +116,7 @@ export type Branch = {
   forkTurn?: Maybe<Turn>;
   id: Scalars['ID']['output'];
   label?: Maybe<Scalars['String']['output']>;
+  latestSummary?: Maybe<BranchSummary>;
   parentBranch?: Maybe<Branch>;
   turnCount: Scalars['Int']['output'];
   turns: Array<Turn>;
@@ -134,6 +128,16 @@ export type BranchDiffFile = {
   deletions: Scalars['Int']['output'];
   path: Scalars['String']['output'];
   status: Scalars['String']['output'];
+};
+
+export type BranchSummary = {
+  __typename?: 'BranchSummary';
+  branchId: Scalars['ID']['output'];
+  content: Scalars['String']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  summarizedTurnCount: Scalars['Int']['output'];
+  summarizedUpToTurnId: Scalars['ID']['output'];
 };
 
 export type Channel = {
@@ -208,14 +212,19 @@ export type CodingTool =
   | 'codex'
   | 'custom';
 
+export type ContextHealth = {
+  __typename?: 'ContextHealth';
+  budgetTotal: Scalars['Int']['output'];
+  percentage: Scalars['Float']['output'];
+  tokenUsage: Scalars['Int']['output'];
+};
+
 export type CostBudget = {
   __typename?: 'CostBudget';
   dailyLimitCents: Scalars['Int']['output'];
 };
 
 export type CreateAiConversationInput = {
-  modelId?: InputMaybe<Scalars['String']['input']>;
-  systemPrompt?: InputMaybe<Scalars['String']['input']>;
   title?: InputMaybe<Scalars['String']['input']>;
   visibility?: InputMaybe<AiConversationVisibility>;
 };
@@ -447,9 +456,7 @@ export type Mutation = {
   dismissSession: Session;
   editChannelMessage: Message;
   editChatMessage: Message;
-  forkBranch: Branch;
   joinChannel: Channel;
-  labelBranch: Branch;
   leaveChannel: Channel;
   leaveChat: Chat;
   linkEntityToProject: Project;
@@ -473,15 +480,14 @@ export type Mutation = {
   setApiToken: ApiTokenStatus;
   startSession: Session;
   subscribe: Participant;
+  summarizeBranch: BranchSummary;
   terminateSession: Session;
   unassignTicket: Ticket;
   unlinkTicket: Ticket;
   unmuteScope: Participant;
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
-  updateAgentObservability: AiConversation;
   updateAgentSettings: AgentIdentity;
-  updateAiConversation: AiConversation;
   updateAiConversationTitle: AiConversation;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
@@ -626,20 +632,8 @@ export type MutationEditChatMessageArgs = {
 };
 
 
-export type MutationForkBranchArgs = {
-  label?: InputMaybe<Scalars['String']['input']>;
-  turnId: Scalars['ID']['input'];
-};
-
-
 export type MutationJoinChannelArgs = {
   channelId: Scalars['ID']['input'];
-};
-
-
-export type MutationLabelBranchArgs = {
-  branchId: Scalars['ID']['input'];
-  label: Scalars['String']['input'];
 };
 
 
@@ -781,6 +775,11 @@ export type MutationSubscribeArgs = {
 };
 
 
+export type MutationSummarizeBranchArgs = {
+  branchId: Scalars['ID']['input'];
+};
+
+
 export type MutationTerminateSessionArgs = {
   id: Scalars['ID']['input'];
 };
@@ -816,21 +815,9 @@ export type MutationUnsubscribeArgs = {
 };
 
 
-export type MutationUpdateAgentObservabilityArgs = {
-  conversationId: Scalars['ID']['input'];
-  level: AgentObservability;
-};
-
-
 export type MutationUpdateAgentSettingsArgs = {
   input: UpdateAgentSettingsInput;
   organizationId: Scalars['ID']['input'];
-};
-
-
-export type MutationUpdateAiConversationArgs = {
-  conversationId: Scalars['ID']['input'];
-  input: UpdateAiConversationInput;
 };
 
 
@@ -943,7 +930,7 @@ export type Query = {
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   branch?: Maybe<Branch>;
-  branchAncestors: Array<Branch>;
+  branchSummary?: Maybe<BranchSummary>;
   channel?: Maybe<Channel>;
   channelGroups: Array<ChannelGroup>;
   channelMessages: Array<Message>;
@@ -951,6 +938,7 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
+  contextHealth: ContextHealth;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
   myApiTokens: Array<ApiTokenStatus>;
@@ -1010,7 +998,7 @@ export type QueryBranchArgs = {
 };
 
 
-export type QueryBranchAncestorsArgs = {
+export type QueryBranchSummaryArgs = {
   branchId: Scalars['ID']['input'];
 };
 
@@ -1050,6 +1038,11 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars['DateTime']['input']>;
   chatId: Scalars['ID']['input'];
   limit?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryContextHealthArgs = {
+  branchId: Scalars['ID']['input'];
 };
 
 
@@ -1478,6 +1471,7 @@ export type Turn = {
   id: Scalars['ID']['output'];
   parentTurn?: Maybe<Turn>;
   role: TurnRole;
+  summarized: Scalars['Boolean']['output'];
 };
 
 export type TurnRole =
@@ -1490,13 +1484,6 @@ export type UpdateAgentSettingsInput = {
   name?: InputMaybe<Scalars['String']['input']>;
   soulFile?: InputMaybe<Scalars['String']['input']>;
   status?: InputMaybe<OrgAgentStatus>;
-};
-
-export type UpdateAiConversationInput = {
-  modelId?: InputMaybe<Scalars['String']['input']>;
-  systemPrompt?: InputMaybe<Scalars['String']['input']>;
-  title?: InputMaybe<Scalars['String']['input']>;
-  visibility?: InputMaybe<AiConversationVisibility>;
 };
 
 export type UpdateChannelGroupInput = {
@@ -1778,14 +1765,6 @@ export type UpdateAiConversationTitleMutationVariables = Exact<{
 
 
 export type UpdateAiConversationTitleMutation = { __typename?: 'Mutation', updateAiConversationTitle: { __typename?: 'AiConversation', id: string } };
-
-export type UpdateAgentObservabilityMutationVariables = Exact<{
-  conversationId: Scalars['ID']['input'];
-  level: AgentObservability;
-}>;
-
-
-export type UpdateAgentObservabilityMutation = { __typename?: 'Mutation', updateAgentObservability: { __typename?: 'AiConversation', id: string } };
 
 export type AiConversationsQueryVariables = Exact<{
   organizationId: Scalars['ID']['input'];
@@ -2165,7 +2144,6 @@ export const DeleteChannelGroupDocument = {"kind":"Document","definitions":[{"ki
 export const CreateAiConversationDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateAiConversation"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateAiConversationInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createAiConversation"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"organizationId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}}},{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<CreateAiConversationMutation, CreateAiConversationMutationVariables>;
 export const SendTurnDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SendTurn"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"branchId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"content"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"clientMutationId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"sendTurn"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"branchId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"branchId"}}},{"kind":"Argument","name":{"kind":"Name","value":"content"},"value":{"kind":"Variable","name":{"kind":"Name","value":"content"}}},{"kind":"Argument","name":{"kind":"Name","value":"clientMutationId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"clientMutationId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<SendTurnMutation, SendTurnMutationVariables>;
 export const UpdateAiConversationTitleDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateAiConversationTitle"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"conversationId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"title"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateAiConversationTitle"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"conversationId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"conversationId"}}},{"kind":"Argument","name":{"kind":"Name","value":"title"},"value":{"kind":"Variable","name":{"kind":"Name","value":"title"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<UpdateAiConversationTitleMutation, UpdateAiConversationTitleMutationVariables>;
-export const UpdateAgentObservabilityDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateAgentObservability"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"conversationId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"level"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"AgentObservability"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateAgentObservability"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"conversationId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"conversationId"}}},{"kind":"Argument","name":{"kind":"Name","value":"level"},"value":{"kind":"Variable","name":{"kind":"Name","value":"level"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<UpdateAgentObservabilityMutation, UpdateAgentObservabilityMutationVariables>;
 export const AiConversationsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"AiConversations"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"aiConversations"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"organizationId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"visibility"}},{"kind":"Field","name":{"kind":"Name","value":"branchCount"}},{"kind":"Field","name":{"kind":"Name","value":"createdBy"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"rootBranch"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<AiConversationsQuery, AiConversationsQueryVariables>;
 export const AiConversationDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"AiConversation"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"aiConversation"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"visibility"}},{"kind":"Field","name":{"kind":"Name","value":"branchCount"}},{"kind":"Field","name":{"kind":"Name","value":"createdBy"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"rootBranch"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"branches"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"label"}},{"kind":"Field","name":{"kind":"Name","value":"depth"}},{"kind":"Field","name":{"kind":"Name","value":"turnCount"}},{"kind":"Field","name":{"kind":"Name","value":"parentBranch"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"forkTurn"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"childBranches"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"createdBy"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<AiConversationQuery, AiConversationQueryVariables>;
 export const BranchTimelineDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"BranchTimeline"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"branch"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"label"}},{"kind":"Field","name":{"kind":"Name","value":"depth"}},{"kind":"Field","name":{"kind":"Name","value":"turnCount"}},{"kind":"Field","name":{"kind":"Name","value":"parentBranch"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"forkTurn"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"childBranches"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"createdBy"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"conversation"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"turns"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"role"}},{"kind":"Field","name":{"kind":"Name","value":"content"}},{"kind":"Field","name":{"kind":"Name","value":"parentTurn"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"branchCount"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}}]}}]} as unknown as DocumentNode<BranchTimelineQuery, BranchTimelineQueryVariables>;

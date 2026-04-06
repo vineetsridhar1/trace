@@ -117,6 +117,7 @@ export type AutonomyMode =
 export type Branch = {
   __typename?: 'Branch';
   childBranches: Array<Branch>;
+  contextHealth: ContextHealth;
   conversation: AiConversation;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
@@ -124,6 +125,7 @@ export type Branch = {
   forkTurn?: Maybe<Turn>;
   id: Scalars['ID']['output'];
   label?: Maybe<Scalars['String']['output']>;
+  latestSummary?: Maybe<BranchSummary>;
   parentBranch?: Maybe<Branch>;
   turnCount: Scalars['Int']['output'];
   turns: Array<Turn>;
@@ -135,6 +137,16 @@ export type BranchDiffFile = {
   deletions: Scalars['Int']['output'];
   path: Scalars['String']['output'];
   status: Scalars['String']['output'];
+};
+
+export type BranchSummary = {
+  __typename?: 'BranchSummary';
+  branchId: Scalars['ID']['output'];
+  content: Scalars['String']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  summarizedTurnCount: Scalars['Int']['output'];
+  summarizedUpToTurnId: Scalars['ID']['output'];
 };
 
 export type Channel = {
@@ -208,6 +220,13 @@ export type CodingTool =
   | 'claude_code'
   | 'codex'
   | 'custom';
+
+export type ContextHealth = {
+  __typename?: 'ContextHealth';
+  budgetTotal: Scalars['Int']['output'];
+  percentage: Scalars['Float']['output'];
+  tokenUsage: Scalars['Int']['output'];
+};
 
 export type CostBudget = {
   __typename?: 'CostBudget';
@@ -474,6 +493,7 @@ export type Mutation = {
   setApiToken: ApiTokenStatus;
   startSession: Session;
   subscribe: Participant;
+  summarizeBranch: BranchSummary;
   terminateSession: Session;
   unassignTicket: Ticket;
   unlinkTicket: Ticket;
@@ -782,6 +802,11 @@ export type MutationSubscribeArgs = {
 };
 
 
+export type MutationSummarizeBranchArgs = {
+  branchId: Scalars['ID']['input'];
+};
+
+
 export type MutationTerminateSessionArgs = {
   id: Scalars['ID']['input'];
 };
@@ -944,6 +969,7 @@ export type Query = {
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   branch?: Maybe<Branch>;
+  branchSummary?: Maybe<BranchSummary>;
   channel?: Maybe<Channel>;
   channelGroups: Array<ChannelGroup>;
   channelMessages: Array<Message>;
@@ -951,6 +977,7 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
+  contextHealth: ContextHealth;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
   myApiTokens: Array<ApiTokenStatus>;
@@ -1010,6 +1037,11 @@ export type QueryBranchArgs = {
 };
 
 
+export type QueryBranchSummaryArgs = {
+  branchId: Scalars['ID']['input'];
+};
+
+
 export type QueryChannelArgs = {
   id: Scalars['ID']['input'];
 };
@@ -1045,6 +1077,11 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars['DateTime']['input']>;
   chatId: Scalars['ID']['input'];
   limit?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryContextHealthArgs = {
+  branchId: Scalars['ID']['input'];
 };
 
 
@@ -1473,6 +1510,7 @@ export type Turn = {
   id: Scalars['ID']['output'];
   parentTurn?: Maybe<Turn>;
   role: TurnRole;
+  summarized: Scalars['Boolean']['output'];
 };
 
 export type TurnRole =
@@ -1615,6 +1653,7 @@ export type ResolversTypes = ResolversObject<{
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
   Branch: ResolverTypeWrapper<Branch>;
   BranchDiffFile: ResolverTypeWrapper<BranchDiffFile>;
+  BranchSummary: ResolverTypeWrapper<BranchSummary>;
   Channel: ResolverTypeWrapper<Channel>;
   ChannelGroup: ResolverTypeWrapper<ChannelGroup>;
   ChannelMember: ResolverTypeWrapper<ChannelMember>;
@@ -1623,6 +1662,7 @@ export type ResolversTypes = ResolversObject<{
   ChatMember: ResolverTypeWrapper<ChatMember>;
   ChatType: ChatType;
   CodingTool: CodingTool;
+  ContextHealth: ResolverTypeWrapper<ContextHealth>;
   CostBudget: ResolverTypeWrapper<CostBudget>;
   CreateAiConversationInput: CreateAiConversationInput;
   CreateChannelGroupInput: CreateChannelGroupInput;
@@ -1636,6 +1676,7 @@ export type ResolversTypes = ResolversObject<{
   EntityType: EntityType;
   Event: ResolverTypeWrapper<Event>;
   EventType: EventType;
+  Float: ResolverTypeWrapper<Scalars['Float']['output']>;
   GitCheckpoint: ResolverTypeWrapper<GitCheckpoint>;
   HostingMode: HostingMode;
   ID: ResolverTypeWrapper<Scalars['ID']['output']>;
@@ -1703,11 +1744,13 @@ export type ResolversParentTypes = ResolversObject<{
   Boolean: Scalars['Boolean']['output'];
   Branch: Branch;
   BranchDiffFile: BranchDiffFile;
+  BranchSummary: BranchSummary;
   Channel: Channel;
   ChannelGroup: ChannelGroup;
   ChannelMember: ChannelMember;
   Chat: Chat;
   ChatMember: ChatMember;
+  ContextHealth: ContextHealth;
   CostBudget: CostBudget;
   CreateAiConversationInput: CreateAiConversationInput;
   CreateChannelGroupInput: CreateChannelGroupInput;
@@ -1718,6 +1761,7 @@ export type ResolversParentTypes = ResolversObject<{
   CreateTicketInput: CreateTicketInput;
   DateTime: Scalars['DateTime']['output'];
   Event: Event;
+  Float: Scalars['Float']['output'];
   GitCheckpoint: GitCheckpoint;
   ID: Scalars['ID']['output'];
   InboxItem: InboxItem;
@@ -1816,6 +1860,7 @@ export type ApiTokenStatusResolvers<ContextType = Context, ParentType extends Re
 
 export type BranchResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Branch'] = ResolversParentTypes['Branch']> = ResolversObject<{
   childBranches?: Resolver<Array<ResolversTypes['Branch']>, ParentType, ContextType>;
+  contextHealth?: Resolver<ResolversTypes['ContextHealth'], ParentType, ContextType>;
   conversation?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   createdBy?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
@@ -1823,6 +1868,7 @@ export type BranchResolvers<ContextType = Context, ParentType extends ResolversP
   forkTurn?: Resolver<Maybe<ResolversTypes['Turn']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   label?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  latestSummary?: Resolver<Maybe<ResolversTypes['BranchSummary']>, ParentType, ContextType>;
   parentBranch?: Resolver<Maybe<ResolversTypes['Branch']>, ParentType, ContextType>;
   turnCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   turns?: Resolver<Array<ResolversTypes['Turn']>, ParentType, ContextType>;
@@ -1834,6 +1880,16 @@ export type BranchDiffFileResolvers<ContextType = Context, ParentType extends Re
   deletions?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   path?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type BranchSummaryResolvers<ContextType = Context, ParentType extends ResolversParentTypes['BranchSummary'] = ResolversParentTypes['BranchSummary']> = ResolversObject<{
+  branchId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  content?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  summarizedTurnCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  summarizedUpToTurnId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -1880,6 +1936,13 @@ export type ChatResolvers<ContextType = Context, ParentType extends ResolversPar
 export type ChatMemberResolvers<ContextType = Context, ParentType extends ResolversParentTypes['ChatMember'] = ResolversParentTypes['ChatMember']> = ResolversObject<{
   joinedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   user?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ContextHealthResolvers<ContextType = Context, ParentType extends ResolversParentTypes['ContextHealth'] = ResolversParentTypes['ContextHealth']> = ResolversObject<{
+  budgetTotal?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  percentage?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  tokenUsage?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -2016,6 +2079,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   setApiToken?: Resolver<ResolversTypes['ApiTokenStatus'], ParentType, ContextType, RequireFields<MutationSetApiTokenArgs, 'input'>>;
   startSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationStartSessionArgs, 'input'>>;
   subscribe?: Resolver<ResolversTypes['Participant'], ParentType, ContextType, RequireFields<MutationSubscribeArgs, 'scopeId' | 'scopeType'>>;
+  summarizeBranch?: Resolver<ResolversTypes['BranchSummary'], ParentType, ContextType, RequireFields<MutationSummarizeBranchArgs, 'branchId'>>;
   terminateSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationTerminateSessionArgs, 'id'>>;
   unassignTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationUnassignTicketArgs, 'ticketId' | 'userId'>>;
   unlinkTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationUnlinkTicketArgs, 'entityId' | 'entityType' | 'ticketId'>>;
@@ -2094,6 +2158,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   availableRuntimes?: Resolver<Array<ResolversTypes['SessionRuntimeInstance']>, ParentType, ContextType, RequireFields<QueryAvailableRuntimesArgs, 'tool'>>;
   availableSessionRuntimes?: Resolver<Array<ResolversTypes['SessionRuntimeInstance']>, ParentType, ContextType, RequireFields<QueryAvailableSessionRuntimesArgs, 'sessionId'>>;
   branch?: Resolver<Maybe<ResolversTypes['Branch']>, ParentType, ContextType, RequireFields<QueryBranchArgs, 'id'>>;
+  branchSummary?: Resolver<Maybe<ResolversTypes['BranchSummary']>, ParentType, ContextType, RequireFields<QueryBranchSummaryArgs, 'branchId'>>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelArgs, 'id'>>;
   channelGroups?: Resolver<Array<ResolversTypes['ChannelGroup']>, ParentType, ContextType, RequireFields<QueryChannelGroupsArgs, 'organizationId'>>;
   channelMessages?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType, RequireFields<QueryChannelMessagesArgs, 'channelId'>>;
@@ -2101,6 +2166,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   chat?: Resolver<Maybe<ResolversTypes['Chat']>, ParentType, ContextType, RequireFields<QueryChatArgs, 'id'>>;
   chatMessages?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType, RequireFields<QueryChatMessagesArgs, 'chatId'>>;
   chats?: Resolver<Array<ResolversTypes['Chat']>, ParentType, ContextType>;
+  contextHealth?: Resolver<ResolversTypes['ContextHealth'], ParentType, ContextType, RequireFields<QueryContextHealthArgs, 'branchId'>>;
   events?: Resolver<Array<ResolversTypes['Event']>, ParentType, ContextType, RequireFields<QueryEventsArgs, 'organizationId'>>;
   inboxItems?: Resolver<Array<ResolversTypes['InboxItem']>, ParentType, ContextType, RequireFields<QueryInboxItemsArgs, 'organizationId'>>;
   myApiTokens?: Resolver<Array<ResolversTypes['ApiTokenStatus']>, ParentType, ContextType>;
@@ -2284,6 +2350,7 @@ export type TurnResolvers<ContextType = Context, ParentType extends ResolversPar
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   parentTurn?: Resolver<Maybe<ResolversTypes['Turn']>, ParentType, ContextType>;
   role?: Resolver<ResolversTypes['TurnRole'], ParentType, ContextType>;
+  summarized?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -2304,11 +2371,13 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   ApiTokenStatus?: ApiTokenStatusResolvers<ContextType>;
   Branch?: BranchResolvers<ContextType>;
   BranchDiffFile?: BranchDiffFileResolvers<ContextType>;
+  BranchSummary?: BranchSummaryResolvers<ContextType>;
   Channel?: ChannelResolvers<ContextType>;
   ChannelGroup?: ChannelGroupResolvers<ContextType>;
   ChannelMember?: ChannelMemberResolvers<ContextType>;
   Chat?: ChatResolvers<ContextType>;
   ChatMember?: ChatMemberResolvers<ContextType>;
+  ContextHealth?: ContextHealthResolvers<ContextType>;
   CostBudget?: CostBudgetResolvers<ContextType>;
   DateTime?: GraphQLScalarType;
   Event?: EventResolvers<ContextType>;
