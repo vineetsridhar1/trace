@@ -35,6 +35,8 @@ export type AiConversationEntity = Omit<AiConversation, "rootBranch" | "branches
   rootBranchId: string;
   branchIds: string[];
   createdById: string;
+  forkedFromConversationId: string | null;
+  forkedFromBranchId: string | null;
 };
 
 /** Client-side branch entity with ordered turn IDs and child branch IDs */

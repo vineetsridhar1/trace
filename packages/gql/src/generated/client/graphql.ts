@@ -68,6 +68,8 @@ export type AiConversation = {
   branches: Array<Branch>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
+  forkedFromBranchId?: Maybe<Scalars['ID']['output']>;
+  forkedFromConversationId?: Maybe<Scalars['ID']['output']>;
   id: Scalars['ID']['output'];
   rootBranch: Branch;
   title?: Maybe<Scalars['String']['output']>;
@@ -437,6 +439,7 @@ export type Mutation = {
   dismissSession: Session;
   editChannelMessage: Message;
   editChatMessage: Message;
+  forkAiConversation: AiConversation;
   joinChannel: Channel;
   leaveChannel: Channel;
   leaveChat: Chat;
@@ -609,6 +612,11 @@ export type MutationEditChannelMessageArgs = {
 export type MutationEditChatMessageArgs = {
   html: Scalars['String']['input'];
   messageId: Scalars['ID']['input'];
+};
+
+
+export type MutationForkAiConversationArgs = {
+  branchId: Scalars['ID']['input'];
 };
 
 

@@ -154,6 +154,14 @@ export function processAiConversationEvent({
           rootBranchId,
           branchIds,
           branchCount: existing?.branchCount ?? branchIds.length,
+          forkedFromConversationId:
+            (payload.forkedFromConversationId as string | undefined) ??
+            existing?.forkedFromConversationId ??
+            null,
+          forkedFromBranchId:
+            (payload.forkedFromBranchId as string | undefined) ??
+            existing?.forkedFromBranchId ??
+            null,
           createdAt: timestamp,
           updatedAt: (payload.updatedAt as string) ?? timestamp,
         } as AiConversationEntity);

@@ -19,6 +19,8 @@ const AI_CONVERSATIONS_QUERY = gql`
       title
       visibility
       branchCount
+      forkedFromConversationId
+      forkedFromBranchId
       createdBy {
         id
       }
@@ -38,6 +40,8 @@ const AI_CONVERSATION_QUERY = gql`
       title
       visibility
       branchCount
+      forkedFromConversationId
+      forkedFromBranchId
       createdBy {
         id
       }
@@ -113,6 +117,8 @@ interface RawConversation {
   title: string | null;
   visibility: string;
   branchCount: number;
+  forkedFromConversationId: string | null;
+  forkedFromBranchId: string | null;
   createdBy: { id: string };
   rootBranch: { id: string };
   branches?: RawBranch[];
@@ -156,6 +162,8 @@ function hydrateConversation(raw: RawConversation): void {
     createdById: raw.createdBy.id,
     rootBranchId: raw.rootBranch.id,
     branchIds: raw.branches?.map((b) => b.id) ?? existing?.branchIds ?? [raw.rootBranch.id],
+    forkedFromConversationId: raw.forkedFromConversationId ?? null,
+    forkedFromBranchId: raw.forkedFromBranchId ?? null,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
   } as AiConversationEntity);

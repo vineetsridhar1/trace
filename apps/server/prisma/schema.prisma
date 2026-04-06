@@ -776,6 +776,9 @@ model AiConversation {
   visibility     AiConversationVisibility @default(PRIVATE)
   rootBranchId   String?
 
+  forkedFromConversationId String?
+  forkedFromBranchId       String?
+
   branches AiBranch[]
 
   createdAt DateTime @default(now())

@@ -384,6 +384,187 @@ export class AiConversationService {
   }
 
   /**
+   * Builds the full context for a branch by collecting all turns from the
+   * branch and its ancestors (walking the parent chain). Returns a flat,
+   * chronologically-ordered list of turns.
+   */
+  async buildContext(branchId: string): Promise<
+    Array<{ id: string; role: string; content: string; parentTurnId: string | null; createdAt: Date }>
+  > {
+    const branch = await prisma.aiBranch.findUniqueOrThrow({
+      where: { id: branchId },
+    });
+
+    // Collect ancestor context first (recursive)
+    const ancestorTurns: Array<{
+      id: string;
+      role: string;
+      content: string;
+      parentTurnId: string | null;
+      createdAt: Date;
+    }> = [];
+
+    if (branch.parentBranchId && branch.forkTurnId) {
+      const parentContext = await this.buildContext(branch.parentBranchId);
+      // Include turns up to and including the fork turn
+      for (const turn of parentContext) {
+        ancestorTurns.push(turn);
+        if (turn.id === branch.forkTurnId) break;
+      }
+    }
+
+    // Fetch local turns for this branch
+    const localTurns = await prisma.aiTurn.findMany({
+      where: { branchId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, role: true, content: true, parentTurnId: true, createdAt: true },
+    });
+
+    return [...ancestorTurns, ...localTurns];
+  }
+
+  /**
+   * Forks a branch from a shared (ORG-visible) conversation into a new
+   * private conversation owned by the requesting user. Deep copies all
+   * turns from the branch context into the new conversation's root branch.
+   */
+  async forkAiConversation(
+    input: { branchId: string },
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    // Load the source branch and its conversation
+    const sourceBranch = await prisma.aiBranch.findUniqueOrThrow({
+      where: { id: input.branchId },
+      include: { conversation: true },
+    });
+
+    const sourceConversation = sourceBranch.conversation;
+
+    // Validate source conversation is ORG-visible
+    if (sourceConversation.visibility !== "ORG") {
+      throw new Error("Can only fork ORG-visible conversations");
+    }
+
+    // Verify user belongs to the same org
+    await prisma.orgMember.findUniqueOrThrow({
+      where: {
+        userId_organizationId: {
+          userId: actorId,
+          organizationId: sourceConversation.organizationId,
+        },
+      },
+    });
+
+    // Build full context (ancestor + local turns) for the source branch
+    const contextTurns = await this.buildContext(input.branchId);
+
+    // Create new conversation with deep-copied turns in a transaction
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const conversation = await tx.aiConversation.create({
+        data: {
+          organizationId: sourceConversation.organizationId,
+          createdById: actorId,
+          title: sourceConversation.title ? `${sourceConversation.title} (fork)` : "(fork)",
+          visibility: "PRIVATE",
+          forkedFromConversationId: sourceConversation.id,
+          forkedFromBranchId: input.branchId,
+        },
+      });
+
+      const rootBranch = await tx.aiBranch.create({
+        data: {
+          conversationId: conversation.id,
+          createdById: actorId,
+          label: "main",
+        },
+      });
+
+      const updated = await tx.aiConversation.update({
+        where: { id: conversation.id },
+        data: { rootBranchId: rootBranch.id },
+        include: { branches: true },
+      });
+
+      // Deep copy turns into the new root branch with new IDs, preserving order
+      let previousTurnId: string | null = null;
+      for (const turn of contextTurns) {
+        const newTurn: { id: string } = await tx.aiTurn.create({
+          data: {
+            branchId: rootBranch.id,
+            role: turn.role as "USER" | "ASSISTANT",
+            content: turn.content,
+            parentTurnId: previousTurnId,
+          },
+        });
+        previousTurnId = newTurn.id;
+      }
+
+      return { conversation: updated, rootBranch };
+    });
+
+    const { conversation: updated, rootBranch } = result;
+
+    // Emit events after transaction commits
+    await eventService.create({
+      organizationId: sourceConversation.organizationId,
+      scopeType: "ai_conversation",
+      scopeId: updated.id,
+      eventType: "ai_conversation_created",
+      payload: {
+        conversationId: updated.id,
+        title: updated.title,
+        visibility: updated.visibility,
+        rootBranchId: updated.rootBranchId,
+        createdById: actorId,
+        forkedFromConversationId: sourceConversation.id,
+        forkedFromBranchId: input.branchId,
+        updatedAt: updated.updatedAt.toISOString(),
+      },
+      actorType,
+      actorId,
+    });
+
+    await eventService.create({
+      organizationId: sourceConversation.organizationId,
+      scopeType: "ai_conversation",
+      scopeId: updated.id,
+      eventType: "ai_branch_created",
+      payload: {
+        branchId: rootBranch.id,
+        conversationId: updated.id,
+        parentBranchId: null,
+        forkTurnId: null,
+        label: rootBranch.label,
+        createdById: actorId,
+      },
+      actorType,
+      actorId,
+    });
+
+    // Publish to conversation subscription topic
+    pubsub.publish(topics.conversationEvents(updated.id), {
+      conversationEvents: {
+        conversationId: updated.id,
+        type: "ai_conversation_created",
+        payload: {
+          conversationId: updated.id,
+          title: updated.title,
+          visibility: updated.visibility,
+          rootBranchId: updated.rootBranchId,
+          createdById: actorId,
+          forkedFromConversationId: sourceConversation.id,
+          forkedFromBranchId: input.branchId,
+          updatedAt: updated.updatedAt.toISOString(),
+        },
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    return updated;
+  }
+
+  /**
    * Computes depth from an in-memory branch map (avoids N+1 queries).
    */
   private computeDepth(

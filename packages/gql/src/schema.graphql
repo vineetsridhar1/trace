@@ -535,6 +535,8 @@ type AiConversation {
   rootBranch: Branch!
   branches: [Branch!]!
   branchCount: Int!
+  forkedFromConversationId: ID
+  forkedFromBranchId: ID
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -830,6 +832,7 @@ type Mutation {
   createAiConversation(organizationId: ID!, input: CreateAiConversationInput!): AiConversation!
   sendTurn(branchId: ID!, content: String!, clientMutationId: String): Turn!
   updateAiConversationTitle(conversationId: ID!, title: String!): AiConversation!
+  forkAiConversation(branchId: ID!): AiConversation!
 }
 
 # --- Subscriptions ---

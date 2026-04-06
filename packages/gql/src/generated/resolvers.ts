@@ -69,6 +69,8 @@ export type AiConversation = {
   branches: Array<Branch>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
+  forkedFromBranchId?: Maybe<Scalars['ID']['output']>;
+  forkedFromConversationId?: Maybe<Scalars['ID']['output']>;
   id: Scalars['ID']['output'];
   rootBranch: Branch;
   title?: Maybe<Scalars['String']['output']>;
@@ -438,6 +440,7 @@ export type Mutation = {
   dismissSession: Session;
   editChannelMessage: Message;
   editChatMessage: Message;
+  forkAiConversation: AiConversation;
   joinChannel: Channel;
   leaveChannel: Channel;
   leaveChat: Chat;
@@ -610,6 +613,11 @@ export type MutationEditChannelMessageArgs = {
 export type MutationEditChatMessageArgs = {
   html: Scalars['String']['input'];
   messageId: Scalars['ID']['input'];
+};
+
+
+export type MutationForkAiConversationArgs = {
+  branchId: Scalars['ID']['input'];
 };
 
 
@@ -1740,6 +1748,8 @@ export type AiConversationResolvers<ContextType = Context, ParentType extends Re
   branches?: Resolver<Array<ResolversTypes['Branch']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   createdBy?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
+  forkedFromBranchId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
+  forkedFromConversationId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   rootBranch?: Resolver<ResolversTypes['Branch'], ParentType, ContextType>;
   title?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
@@ -1939,6 +1949,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   dismissSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationDismissSessionArgs, 'id'>>;
   editChannelMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationEditChannelMessageArgs, 'html' | 'messageId'>>;
   editChatMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationEditChatMessageArgs, 'html' | 'messageId'>>;
+  forkAiConversation?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType, RequireFields<MutationForkAiConversationArgs, 'branchId'>>;
   joinChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationJoinChannelArgs, 'channelId'>>;
   leaveChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationLeaveChannelArgs, 'channelId'>>;
   leaveChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationLeaveChatArgs, 'chatId'>>;
