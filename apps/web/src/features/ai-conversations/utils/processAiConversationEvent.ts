@@ -1,4 +1,4 @@
-import type { AiConversationVisibility } from "@trace/gql";
+import type { AgentObservability, AiConversationVisibility } from "@trace/gql";
 import type { JsonObject } from "@trace/shared";
 import {
   useEntityStore,
@@ -150,6 +150,10 @@ export function processAiConversationEvent({
           id: conversationId,
           title: (payload.title as string | undefined) ?? null,
           visibility: (payload.visibility as AiConversationVisibility) ?? "PRIVATE",
+          agentObservability:
+            (payload.agentObservability as AgentObservability) ??
+            existing?.agentObservability ??
+            "OFF",
           createdById: payload.createdById as string,
           rootBranchId,
           branchIds,
@@ -178,6 +182,17 @@ export function processAiConversationEvent({
         patch("aiConversations", conversationId, {
           visibility: payload.visibility as AiConversationVisibility,
           updatedAt: timestamp,
+        } as Partial<AiConversationEntity>);
+      }
+      break;
+    }
+
+    case "ai_conversation_agent_observability_changed": {
+      const conversationId = resolveConversationId(payload, fallbackConversationId);
+      if (conversationId) {
+        patch("aiConversations", conversationId, {
+          agentObservability: payload.agentObservability as AgentObservability,
+          updatedAt: (payload.updatedAt as string) ?? timestamp,
         } as Partial<AiConversationEntity>);
       }
       break;

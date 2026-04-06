@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { gql } from "@urql/core";
-import type { AiConversationVisibility } from "@trace/gql";
+import type { AgentObservability, AiConversationVisibility } from "@trace/gql";
 import { client } from "../../../lib/urql";
 import { useEntityStore, type AiBranchEntity, type AiTurnEntity } from "../../../stores/entity";
 import { useAuthStore } from "../../../stores/auth";
@@ -26,6 +26,14 @@ const SEND_TURN_MUTATION = gql`
 const UPDATE_AI_CONVERSATION_TITLE_MUTATION = gql`
   mutation UpdateAiConversationTitle($conversationId: ID!, $title: String!) {
     updateAiConversationTitle(conversationId: $conversationId, title: $title) {
+      id
+    }
+  }
+`;
+
+const UPDATE_AGENT_OBSERVABILITY_MUTATION = gql`
+  mutation UpdateAgentObservability($conversationId: ID!, $level: AgentObservability!) {
+    updateAgentObservability(conversationId: $conversationId, level: $level) {
       id
     }
   }
@@ -139,4 +147,20 @@ export function useUpdateAiConversationTitle() {
       console.error("Failed to update conversation title:", result.error.message);
     }
   }, []);
+}
+
+/** Fire-and-forget: updates agent observability level; event stream handles store update */
+export function useUpdateAgentObservability() {
+  return useCallback(
+    async (params: { conversationId: string; level: AgentObservability }) => {
+      const result = await client
+        .mutation(UPDATE_AGENT_OBSERVABILITY_MUTATION, params)
+        .toPromise();
+
+      if (result.error) {
+        console.error("Failed to update agent observability:", result.error.message);
+      }
+    },
+    [],
+  );
 }

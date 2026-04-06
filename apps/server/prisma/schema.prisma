@@ -177,6 +177,12 @@ enum AiConversationVisibility {
   ORG
 }
 
+enum AgentObservability {
+  OFF
+  SUGGEST
+  PARTICIPATE
+}
+
 enum TurnRole {
   USER
   ASSISTANT
@@ -854,8 +860,9 @@ model AiConversation {
   createdById    String
   createdBy      User                     @relation("AiConversationCreator", fields: [createdById], references: [id])
   title          String?
-  visibility     AiConversationVisibility @default(PRIVATE)
-  rootBranchId   String?
+  visibility          AiConversationVisibility @default(PRIVATE)
+  agentObservability  AgentObservability       @default(OFF)
+  rootBranchId        String?
 
   branches AiBranch[]
 

@@ -35,67 +35,6 @@ export type AddChatMemberInput = {
   userId: Scalars['ID']['input'];
 };
 
-export type AgentBudgetStatus = {
-  __typename?: 'AgentBudgetStatus';
-  dailyLimitCents: Scalars['Int']['output'];
-  remainingCents: Scalars['Float']['output'];
-  remainingPercent: Scalars['Float']['output'];
-  spentCents: Scalars['Float']['output'];
-};
-
-export type AgentCostEntry = {
-  __typename?: 'AgentCostEntry';
-  date: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
-  organizationId: Scalars['ID']['output'];
-  summaryCalls: Scalars['Int']['output'];
-  summaryCostCents: Scalars['Float']['output'];
-  tier2Calls: Scalars['Int']['output'];
-  tier2CostCents: Scalars['Float']['output'];
-  tier3Calls: Scalars['Int']['output'];
-  tier3CostCents: Scalars['Float']['output'];
-  totalCostCents: Scalars['Float']['output'];
-};
-
-export type AgentCostSummary = {
-  __typename?: 'AgentCostSummary';
-  budget: AgentBudgetStatus;
-  dailyCosts: Array<AgentCostEntry>;
-};
-
-export type AgentExecutionLog = {
-  __typename?: 'AgentExecutionLog';
-  agentId: Scalars['String']['output'];
-  batchSize: Scalars['Int']['output'];
-  confidence: Scalars['Float']['output'];
-  contextTokenAllocation?: Maybe<Scalars['JSON']['output']>;
-  createdAt: Scalars['DateTime']['output'];
-  disposition: ExecutionDisposition;
-  estimatedCostCents: Scalars['Float']['output'];
-  finalActions?: Maybe<Scalars['JSON']['output']>;
-  id: Scalars['ID']['output'];
-  inboxItemId?: Maybe<Scalars['String']['output']>;
-  inputTokens: Scalars['Int']['output'];
-  latencyMs: Scalars['Int']['output'];
-  llmCalls: Array<AgentLlmCall>;
-  model: Scalars['String']['output'];
-  modelTier: ModelTier;
-  organizationId: Scalars['ID']['output'];
-  outputTokens: Scalars['Int']['output'];
-  plannedActions?: Maybe<Scalars['JSON']['output']>;
-  policyDecision?: Maybe<Scalars['JSON']['output']>;
-  promoted: Scalars['Boolean']['output'];
-  promotionReason?: Maybe<Scalars['String']['output']>;
-  status: ExecutionStatus;
-  triggerEventId: Scalars['String']['output'];
-};
-
-export type AgentExecutionLogConnection = {
-  __typename?: 'AgentExecutionLogConnection';
-  items: Array<AgentExecutionLog>;
-  totalCount: Scalars['Int']['output'];
-};
-
 export type AgentIdentity = {
   __typename?: 'AgentIdentity';
   autonomyMode: AutonomyMode;
@@ -109,26 +48,10 @@ export type AgentIdentity = {
   updatedAt: Scalars['DateTime']['output'];
 };
 
-export type AgentLlmCall = {
-  __typename?: 'AgentLlmCall';
-  createdAt: Scalars['DateTime']['output'];
-  estimatedCostCents: Scalars['Float']['output'];
-  executionLogId: Scalars['ID']['output'];
-  id: Scalars['ID']['output'];
-  inputTokens: Scalars['Int']['output'];
-  latencyMs: Scalars['Int']['output'];
-  maxTokens?: Maybe<Scalars['Int']['output']>;
-  messages: Scalars['JSON']['output'];
-  model: Scalars['String']['output'];
-  outputTokens: Scalars['Int']['output'];
-  provider: Scalars['String']['output'];
-  responseContent: Scalars['JSON']['output'];
-  stopReason: Scalars['String']['output'];
-  systemPrompt?: Maybe<Scalars['String']['output']>;
-  temperature?: Maybe<Scalars['Float']['output']>;
-  tools: Scalars['JSON']['output'];
-  turnNumber: Scalars['Int']['output'];
-};
+export type AgentObservability =
+  | 'OFF'
+  | 'PARTICIPATE'
+  | 'SUGGEST';
 
 export type AgentStatus =
   | 'active'
@@ -142,25 +65,9 @@ export type AgentTrustLevel =
   | 'blocked'
   | 'suggest';
 
-export type AgentWorkerStatus = {
-  __typename?: 'AgentWorkerStatus';
-  activeOrganizations: Scalars['Int']['output'];
-  openAggregationWindows: Scalars['Int']['output'];
-  running: Scalars['Boolean']['output'];
-  uptime?: Maybe<Scalars['Int']['output']>;
-};
-
-export type AggregationWindowInfo = {
-  __typename?: 'AggregationWindowInfo';
-  eventCount: Scalars['Int']['output'];
-  lastEventAt: Scalars['DateTime']['output'];
-  openedAt: Scalars['DateTime']['output'];
-  organizationId: Scalars['ID']['output'];
-  scopeKey: Scalars['String']['output'];
-};
-
 export type AiConversation = {
   __typename?: 'AiConversation';
+  agentObservability: AgentObservability;
   branchCount: Scalars['Int']['output'];
   branches: Array<Branch>;
   createdAt: Scalars['DateTime']['output'];
@@ -227,8 +134,6 @@ export type BranchDiffFile = {
 
 export type Channel = {
   __typename?: 'Channel';
-  aiMode?: Maybe<AutonomyMode>;
-  baseBranch?: Maybe<Scalars['String']['output']>;
   groupId?: Maybe<Scalars['ID']['output']>;
   id: Scalars['ID']['output'];
   members: Array<ChannelMember>;
@@ -237,8 +142,6 @@ export type Channel = {
   position: Scalars['Int']['output'];
   projects: Array<Project>;
   repo?: Maybe<Repo>;
-  runScripts?: Maybe<Scalars['JSON']['output']>;
-  setupScript?: Maybe<Scalars['String']['output']>;
   type: ChannelType;
 };
 
@@ -269,7 +172,6 @@ export type ChannelType =
 
 export type Chat = {
   __typename?: 'Chat';
-  aiMode?: Maybe<AutonomyMode>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
   id: Scalars['ID']['output'];
@@ -319,7 +221,6 @@ export type CreateChannelGroupInput = {
 };
 
 export type CreateChannelInput = {
-  baseBranch?: InputMaybe<Scalars['String']['input']>;
   groupId?: InputMaybe<Scalars['ID']['input']>;
   name: Scalars['String']['input'];
   organizationId: Scalars['ID']['input'];
@@ -393,7 +294,6 @@ export type EventType =
   | 'ai_conversation_visibility_changed'
   | 'ai_turn_created'
   | 'channel_created'
-  | 'channel_deleted'
   | 'channel_group_created'
   | 'channel_group_deleted'
   | 'channel_group_updated'
@@ -415,7 +315,6 @@ export type EventType =
   | 'repo_created'
   | 'repo_updated'
   | 'session_deleted'
-  | 'session_group_archived'
   | 'session_output'
   | 'session_paused'
   | 'session_pr_closed'
@@ -431,29 +330,6 @@ export type EventType =
   | 'ticket_unassigned'
   | 'ticket_unlinked'
   | 'ticket_updated';
-
-export type ExecutionDisposition =
-  | 'act'
-  | 'escalate'
-  | 'ignore'
-  | 'suggest'
-  | 'summarize';
-
-export type ExecutionLogFilters = {
-  disposition?: InputMaybe<ExecutionDisposition>;
-  endDate?: InputMaybe<Scalars['DateTime']['input']>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  startDate?: InputMaybe<Scalars['DateTime']['input']>;
-  status?: InputMaybe<ExecutionStatus>;
-};
-
-export type ExecutionStatus =
-  | 'blocked'
-  | 'dropped'
-  | 'failed'
-  | 'succeeded'
-  | 'suggested';
 
 export type GitCheckpoint = {
   __typename?: 'GitCheckpoint';
@@ -532,10 +408,6 @@ export type Message = {
   updatedAt: Scalars['DateTime']['output'];
 };
 
-export type ModelTier =
-  | 'tier2'
-  | 'tier3';
-
 export type MoveChannelInput = {
   channelId: Scalars['ID']['input'];
   groupId?: InputMaybe<Scalars['ID']['input']>;
@@ -547,7 +419,6 @@ export type Mutation = {
   acceptAgentSuggestion: InboxItem;
   addChatMember: Chat;
   addOrgMember: OrgMember;
-  archiveSessionGroup: SessionGroup;
   assignTicket: Ticket;
   commentOnTicket: Event;
   createAiConversation: AiConversation;
@@ -559,7 +430,6 @@ export type Mutation = {
   createTerminal: Terminal;
   createTicket: Ticket;
   deleteApiToken: Scalars['Boolean']['output'];
-  deleteChannel: Scalars['Boolean']['output'];
   deleteChannelGroup: Scalars['Boolean']['output'];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
@@ -571,7 +441,6 @@ export type Mutation = {
   dismissSession: Session;
   editChannelMessage: Message;
   editChatMessage: Message;
-  forkBranch: Branch;
   joinChannel: Channel;
   leaveChannel: Channel;
   leaveChat: Chat;
@@ -587,7 +456,6 @@ export type Mutation = {
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
   retrySessionConnection: Session;
-  retrySessionGroupSetup: SessionGroup;
   runSession: Session;
   sendChannelMessage: Message;
   sendChatMessage: Message;
@@ -603,13 +471,12 @@ export type Mutation = {
   unmuteScope: Participant;
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
+  updateAgentObservability: AiConversation;
   updateAgentSettings: AgentIdentity;
   updateAiConversationTitle: AiConversation;
-  updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateRepo: Repo;
-  updateScopeAiMode: Scalars['Boolean']['output'];
   updateSessionConfig: Session;
   updateTicket: Ticket;
 };
@@ -630,11 +497,6 @@ export type MutationAddOrgMemberArgs = {
   organizationId: Scalars['ID']['input'];
   role?: InputMaybe<UserRole>;
   userId: Scalars['ID']['input'];
-};
-
-
-export type MutationArchiveSessionGroupArgs = {
-  id: Scalars['ID']['input'];
 };
 
 
@@ -698,11 +560,6 @@ export type MutationDeleteApiTokenArgs = {
 };
 
 
-export type MutationDeleteChannelArgs = {
-  id: Scalars['ID']['input'];
-};
-
-
 export type MutationDeleteChannelGroupArgs = {
   id: Scalars['ID']['input'];
 };
@@ -757,12 +614,6 @@ export type MutationEditChannelMessageArgs = {
 export type MutationEditChatMessageArgs = {
   html: Scalars['String']['input'];
   messageId: Scalars['ID']['input'];
-};
-
-
-export type MutationForkBranchArgs = {
-  label?: InputMaybe<Scalars['String']['input']>;
-  turnId: Scalars['ID']['input'];
 };
 
 
@@ -849,11 +700,6 @@ export type MutationRetrySessionConnectionArgs = {
 };
 
 
-export type MutationRetrySessionGroupSetupArgs = {
-  id: Scalars['ID']['input'];
-};
-
-
 export type MutationRunSessionArgs = {
   id: Scalars['ID']['input'];
   interactionMode?: InputMaybe<Scalars['String']['input']>;
@@ -871,7 +717,6 @@ export type MutationSendChannelMessageArgs = {
 
 export type MutationSendChatMessageArgs = {
   chatId: Scalars['ID']['input'];
-  clientMutationId?: InputMaybe<Scalars['String']['input']>;
   html?: InputMaybe<Scalars['String']['input']>;
   parentId?: InputMaybe<Scalars['ID']['input']>;
   text?: InputMaybe<Scalars['String']['input']>;
@@ -886,7 +731,6 @@ export type MutationSendMessageArgs = {
 
 
 export type MutationSendSessionMessageArgs = {
-  clientMutationId?: InputMaybe<Scalars['String']['input']>;
   interactionMode?: InputMaybe<Scalars['String']['input']>;
   sessionId: Scalars['ID']['input'];
   text: Scalars['String']['input'];
@@ -951,6 +795,12 @@ export type MutationUnsubscribeArgs = {
 };
 
 
+export type MutationUpdateAgentObservabilityArgs = {
+  conversationId: Scalars['ID']['input'];
+  level: AgentObservability;
+};
+
+
 export type MutationUpdateAgentSettingsArgs = {
   input: UpdateAgentSettingsInput;
   organizationId: Scalars['ID']['input'];
@@ -960,12 +810,6 @@ export type MutationUpdateAgentSettingsArgs = {
 export type MutationUpdateAiConversationTitleArgs = {
   conversationId: Scalars['ID']['input'];
   title: Scalars['String']['input'];
-};
-
-
-export type MutationUpdateChannelArgs = {
-  id: Scalars['ID']['input'];
-  input: UpdateChannelInput;
 };
 
 
@@ -988,18 +832,8 @@ export type MutationUpdateRepoArgs = {
 };
 
 
-export type MutationUpdateScopeAiModeArgs = {
-  aiMode?: InputMaybe<AutonomyMode>;
-  organizationId: Scalars['ID']['input'];
-  scopeId: Scalars['ID']['input'];
-  scopeType: Scalars['String']['input'];
-};
-
-
 export type MutationUpdateSessionConfigArgs = {
-  hosting?: InputMaybe<HostingMode>;
   model?: InputMaybe<Scalars['String']['input']>;
-  runtimeInstanceId?: InputMaybe<Scalars['ID']['input']>;
   sessionId: Scalars['ID']['input'];
   tool?: InputMaybe<CodingTool>;
 };
@@ -1066,7 +900,6 @@ export type Priority =
 
 export type Project = {
   __typename?: 'Project';
-  aiMode?: Maybe<AutonomyMode>;
   channels: Array<Channel>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
@@ -1077,18 +910,12 @@ export type Project = {
 
 export type Query = {
   __typename?: 'Query';
-  agentAggregationWindows: Array<AggregationWindowInfo>;
-  agentCostSummary: AgentCostSummary;
-  agentExecutionLog?: Maybe<AgentExecutionLog>;
-  agentExecutionLogs: AgentExecutionLogConnection;
   agentIdentity?: Maybe<AgentIdentity>;
-  agentWorkerStatus: AgentWorkerStatus;
   aiConversation?: Maybe<AiConversation>;
   aiConversations: Array<AiConversation>;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   branch?: Maybe<Branch>;
-  branchAncestors: Array<Branch>;
   channel?: Maybe<Channel>;
   channelGroups: Array<ChannelGroup>;
   channelMessages: Array<Message>;
@@ -1108,8 +935,6 @@ export type Query = {
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars['String']['output']>;
   repos: Array<Repo>;
-  resolvedAiMode: AutonomyMode;
-  searchUsers: Array<User>;
   session?: Maybe<Session>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupBranchDiff: Array<BranchDiffFile>;
@@ -1117,7 +942,6 @@ export type Query = {
   sessionGroupFileContent: Scalars['String']['output'];
   sessionGroupFiles: Array<Scalars['String']['output']>;
   sessionGroups: Array<SessionGroup>;
-  sessionSlashCommands: Array<SlashCommand>;
   sessionTerminals: Array<Terminal>;
   sessions: Array<Session>;
   threadReplies: Array<Message>;
@@ -1127,36 +951,7 @@ export type Query = {
 };
 
 
-export type QueryAgentAggregationWindowsArgs = {
-  organizationId: Scalars['ID']['input'];
-};
-
-
-export type QueryAgentCostSummaryArgs = {
-  endDate: Scalars['String']['input'];
-  organizationId: Scalars['ID']['input'];
-  startDate: Scalars['String']['input'];
-};
-
-
-export type QueryAgentExecutionLogArgs = {
-  id: Scalars['ID']['input'];
-  organizationId: Scalars['ID']['input'];
-};
-
-
-export type QueryAgentExecutionLogsArgs = {
-  filters?: InputMaybe<ExecutionLogFilters>;
-  organizationId: Scalars['ID']['input'];
-};
-
-
 export type QueryAgentIdentityArgs = {
-  organizationId: Scalars['ID']['input'];
-};
-
-
-export type QueryAgentWorkerStatusArgs = {
   organizationId: Scalars['ID']['input'];
 };
 
@@ -1184,11 +979,6 @@ export type QueryAvailableSessionRuntimesArgs = {
 
 export type QueryBranchArgs = {
   id: Scalars['ID']['input'];
-};
-
-
-export type QueryBranchAncestorsArgs = {
-  branchId: Scalars['ID']['input'];
 };
 
 
@@ -1233,7 +1023,6 @@ export type QueryChatMessagesArgs = {
 export type QueryEventsArgs = {
   after?: InputMaybe<Scalars['DateTime']['input']>;
   before?: InputMaybe<Scalars['DateTime']['input']>;
-  excludePayloadTypes?: InputMaybe<Array<Scalars['String']['input']>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   organizationId: Scalars['ID']['input'];
   scope?: InputMaybe<ScopeInput>;
@@ -1291,18 +1080,6 @@ export type QueryReposArgs = {
 };
 
 
-export type QueryResolvedAiModeArgs = {
-  organizationId: Scalars['ID']['input'];
-  scopeId: Scalars['ID']['input'];
-  scopeType: Scalars['String']['input'];
-};
-
-
-export type QuerySearchUsersArgs = {
-  query: Scalars['String']['input'];
-};
-
-
 export type QuerySessionArgs = {
   id: Scalars['ID']['input'];
 };
@@ -1337,14 +1114,7 @@ export type QuerySessionGroupFilesArgs = {
 
 
 export type QuerySessionGroupsArgs = {
-  archived?: InputMaybe<Scalars['Boolean']['input']>;
   channelId: Scalars['ID']['input'];
-  status?: InputMaybe<SessionGroupStatus>;
-};
-
-
-export type QuerySessionSlashCommandsArgs = {
-  sessionId: Scalars['ID']['input'];
 };
 
 
@@ -1476,7 +1246,6 @@ export type SessionFilters = {
 
 export type SessionGroup = {
   __typename?: 'SessionGroup';
-  archivedAt?: Maybe<Scalars['DateTime']['output']>;
   branch?: Maybe<Scalars['String']['output']>;
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
@@ -1487,9 +1256,6 @@ export type SessionGroup = {
   prUrl?: Maybe<Scalars['String']['output']>;
   repo?: Maybe<Repo>;
   sessions: Array<Session>;
-  setupError?: Maybe<Scalars['String']['output']>;
-  setupStatus: SetupStatus;
-  slug?: Maybe<Scalars['String']['output']>;
   status: SessionGroupStatus;
   updatedAt: Scalars['DateTime']['output'];
   workdir?: Maybe<Scalars['String']['output']>;
@@ -1497,7 +1263,6 @@ export type SessionGroup = {
 };
 
 export type SessionGroupStatus =
-  | 'archived'
   | 'failed'
   | 'in_progress'
   | 'in_review'
@@ -1527,35 +1292,10 @@ export type SetApiTokenInput = {
   token: Scalars['String']['input'];
 };
 
-export type SetupStatus =
-  | 'completed'
-  | 'failed'
-  | 'idle'
-  | 'running';
-
-export type SlashCommand = {
-  __typename?: 'SlashCommand';
-  category: SlashCommandCategory;
-  description: Scalars['String']['output'];
-  name: Scalars['String']['output'];
-  source: SlashCommandSource;
-};
-
-export type SlashCommandCategory =
-  | 'passthrough'
-  | 'special'
-  | 'terminal';
-
-export type SlashCommandSource =
-  | 'builtin'
-  | 'project_skill'
-  | 'user_skill';
-
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars['String']['input']>;
   channelId?: InputMaybe<Scalars['ID']['input']>;
   hosting?: InputMaybe<HostingMode>;
-  interactionMode?: InputMaybe<Scalars['String']['input']>;
   model?: InputMaybe<Scalars['String']['input']>;
   projectId?: InputMaybe<Scalars['ID']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
@@ -1575,7 +1315,6 @@ export type Subscription = {
   chatEvents: Event;
   conversationEvents: AiConversationEvent;
   orgEvents: Event;
-  sessionEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
   ticketEvents: Event;
@@ -1609,12 +1348,6 @@ export type SubscriptionConversationEventsArgs = {
 export type SubscriptionOrgEventsArgs = {
   organizationId: Scalars['ID']['input'];
   types?: InputMaybe<Array<Scalars['String']['input']>>;
-};
-
-
-export type SubscriptionSessionEventsArgs = {
-  organizationId: Scalars['ID']['input'];
-  sessionId: Scalars['ID']['input'];
 };
 
 
@@ -1663,7 +1396,6 @@ export type ThreadSummary = {
 
 export type Ticket = {
   __typename?: 'Ticket';
-  aiMode?: Maybe<AutonomyMode>;
   assignees: Array<User>;
   channel?: Maybe<Channel>;
   createdAt: Scalars['DateTime']['output'];
@@ -1731,13 +1463,6 @@ export type UpdateChannelGroupInput = {
   isCollapsed?: InputMaybe<Scalars['Boolean']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
   position?: InputMaybe<Scalars['Int']['input']>;
-};
-
-export type UpdateChannelInput = {
-  baseBranch?: InputMaybe<Scalars['String']['input']>;
-  name?: InputMaybe<Scalars['String']['input']>;
-  runScripts?: InputMaybe<Scalars['JSON']['input']>;
-  setupScript?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type UpdateRepoInput = {

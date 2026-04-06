@@ -15,6 +15,7 @@ import type {
   InboxItem,
   Message,
   AiConversation,
+  AgentObservability,
   Branch,
   Turn,
 } from "@trace/gql";
