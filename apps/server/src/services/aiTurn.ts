@@ -24,8 +24,6 @@ export class AiTurnService {
     actorType: ActorType,
     actorId: string,
   ): Promise<{ userTurn: AiTurn; assistantTurn: AiTurn }> {
-    const model = input.model ?? DEFAULT_MODEL;
-
     // Load the branch and verify access to the conversation
     const branch = await prisma.aiBranch.findUniqueOrThrow({
       where: { id: input.branchId },
@@ -33,6 +31,9 @@ export class AiTurnService {
         conversation: true,
       },
     });
+
+    const model = input.model ?? branch.conversation.modelId ?? DEFAULT_MODEL;
+    const system = branch.conversation.systemPrompt ?? undefined;
 
     // Verify user belongs to org
     await prisma.orgMember.findUniqueOrThrow({
@@ -82,6 +83,7 @@ export class AiTurnService {
         userId: actorId,
         model,
         messages,
+        system,
       });
 
       // Extract text content from response
@@ -198,6 +200,120 @@ export class AiTurnService {
   }
 
   /**
+   * Creates a single assistant turn without invoking the LLM.
+   * Used by agent-powered participation features that need to surface
+   * guidance or suggestions directly in the conversation.
+   */
+  async postAssistantTurn(
+    input: {
+      branchId: string;
+      content: string;
+      parentTurnId?: string | null;
+    },
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<AiTurn> {
+    const branch = await prisma.aiBranch.findUniqueOrThrow({
+      where: { id: input.branchId },
+      include: { conversation: true },
+    });
+
+    await prisma.orgMember.findUniqueOrThrow({
+      where: {
+        userId_organizationId: {
+          userId: actorId,
+          organizationId: branch.conversation.organizationId,
+        },
+      },
+    });
+
+    if (actorType === "agent") {
+      if (branch.conversation.agentObservability !== "PARTICIPATE") {
+        throw new Error("Agent participation is disabled for this conversation");
+      }
+    } else if (branch.conversation.createdById !== actorId) {
+      throw new Error(
+        branch.conversation.visibility === "PRIVATE"
+          ? "Conversation not found"
+          : "Only the conversation creator can send messages",
+      );
+    }
+
+    const lastTurn = await prisma.aiTurn.findFirst({
+      where: { branchId: input.branchId },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    });
+
+    const assistantTurn = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const turn = await tx.aiTurn.create({
+        data: {
+          branchId: input.branchId,
+          role: "ASSISTANT",
+          content: input.content,
+          parentTurnId: input.parentTurnId ?? lastTurn?.id ?? null,
+        },
+      });
+
+      await tx.aiConversation.update({
+        where: { id: branch.conversationId },
+        data: { updatedAt: new Date() },
+      });
+
+      return turn;
+    });
+
+    const organizationId = branch.conversation.organizationId;
+    const conversationId = branch.conversationId;
+    const payload = {
+      turnId: assistantTurn.id,
+      branchId: input.branchId,
+      conversationId,
+      role: assistantTurn.role,
+      content: assistantTurn.content,
+      parentTurnId: assistantTurn.parentTurnId,
+      createdAt: assistantTurn.createdAt.toISOString(),
+    };
+
+    await eventService.create({
+      organizationId,
+      scopeType: "ai_conversation",
+      scopeId: conversationId,
+      eventType: "ai_turn_created",
+      payload,
+      actorType,
+      actorId,
+    });
+
+    pubsub.publish(topics.branchTurns(input.branchId), {
+      branchTurns: assistantTurn,
+    });
+
+    pubsub.publish(topics.conversationEvents(conversationId), {
+      conversationEvents: {
+        conversationId,
+        type: "ai_turn_created",
+        payload,
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    aiBranchSummaryService
+      .maybeAutoSummarize({
+        branchId: input.branchId,
+        organizationId,
+        userId: actorId,
+        actorType,
+        actorId,
+      })
+      .catch((err) => {
+        console.error("[aiTurn] auto-summarize failed:", err);
+      });
+
+    return assistantTurn;
+  }
+
+  /**
    * Streams a user turn response from the LLM. Creates the user turn
    * immediately, yields stream events, then creates the assistant turn
    * after the stream completes.
@@ -214,13 +330,14 @@ export class AiTurnService {
     LLMStreamEvent | { type: "user_turn_created"; turn: AiTurn },
     AiTurn | undefined
   > {
-    const model = input.model ?? DEFAULT_MODEL;
-
     // Load the branch and verify access
     const branch = await prisma.aiBranch.findUniqueOrThrow({
       where: { id: input.branchId },
       include: { conversation: true },
     });
+
+    const model = input.model ?? branch.conversation.modelId ?? DEFAULT_MODEL;
+    const system = branch.conversation.systemPrompt ?? undefined;
 
     await prisma.orgMember.findUniqueOrThrow({
       where: {
@@ -269,6 +386,7 @@ export class AiTurnService {
         userId: actorId,
         model,
         messages,
+        system,
       })) {
         if (event.type === "text_delta") {
           fullText += event.text;

@@ -6,6 +6,7 @@ import { useBranchTimeline, type TimelineEntry } from "../hooks/useAiConversatio
 import { useEntityStore } from "../../../stores/entity";
 import { TurnItem } from "./TurnItem";
 import { ForkSeparator } from "./ForkSeparator";
+import { SummaryNode } from "./SummaryNode";
 import { TypingIndicator } from "./TypingIndicator";
 import { EmptyConversation } from "./EmptyConversation";
 import { Button } from "../../../components/ui/button";
@@ -35,7 +36,9 @@ export function TurnList({ branchId }: { branchId: string }) {
     estimateSize: (index) => {
       if (index >= timeline.length) return 40; // typing indicator
       const entry = timeline[index];
-      return entry.type === "fork-separator" ? 32 : 80;
+      if (entry.type === "fork-separator") return 32;
+      if (entry.type === "summary") return 72;
+      return 80;
     },
     overscan: 5,
   });
@@ -148,6 +151,14 @@ function TimelineItem({ entry }: { entry: TimelineEntry }) {
       return <TurnItem turnId={entry.turnId} inherited={entry.type === "inherited-turn"} />;
     case "fork-separator":
       return <ForkSeparator parentBranchLabel={entry.parentBranchLabel} />;
+    case "summary":
+      return (
+        <SummaryNode
+          summaryId={entry.summaryId}
+          branchId={entry.branchId}
+          summarizedTurnCount={entry.summarizedTurnCount}
+        />
+      );
   }
 }
 
@@ -158,5 +169,7 @@ function entryKey(entry: TimelineEntry, index: number): string {
       return `turn-${entry.turnId}`;
     case "fork-separator":
       return `fork-${entry.forkTurnId}-${index}`;
+    case "summary":
+      return `summary-${entry.summaryId}-${index}`;
   }
 }

@@ -1,24 +1,21 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
-  useEntityStore,
   useEntityField,
   useEntityIds,
-  type AiConversationEntity,
+  useEntityStore,
   type AiBranchEntity,
+  type AiBranchSummaryEntity,
+  type AiConversationEntity,
   type AiTurnEntity,
 } from "../../../stores/entity";
 import { useAuthStore } from "../../../stores/auth";
 import { useAiConversationUIStore } from "../store/ai-conversation-ui";
 
-// ── Conversation selectors ─────────────────────────────────────
-
-/** Returns the full conversation entity */
 export function useAiConversation(id: string): AiConversationEntity | undefined {
   return useEntityStore((state) => state.aiConversations[id]);
 }
 
-/** Fine-grained field selector for a conversation */
 export function useAiConversationField<F extends keyof AiConversationEntity>(
   id: string,
   field: F,
@@ -26,40 +23,52 @@ export function useAiConversationField<F extends keyof AiConversationEntity>(
   return useEntityField("aiConversations", id, field);
 }
 
-/** Returns sorted list of conversation IDs for the sidebar */
 export function useAiConversations(): string[] {
   return useEntityIds("aiConversations", undefined, (a, b) =>
     b.updatedAt.localeCompare(a.updatedAt),
   );
 }
 
-/** Returns whether the current user is the creator of the conversation */
 export function useIsConversationCreator(conversationId: string): boolean {
   const createdById = useEntityField("aiConversations", conversationId, "createdById");
-  const userId = useAuthStore((s) => s.user?.id);
+  const userId = useAuthStore((state) => state.user?.id);
   return !!userId && createdById === userId;
 }
 
-/** Returns fork provenance for a conversation (if it was forked) */
+export function useMyConversationIds(): string[] {
+  const userId = useAuthStore((state) => state.user?.id);
+  return useEntityIds(
+    "aiConversations",
+    (conversation: AiConversationEntity) => conversation.createdById === userId,
+    (a, b) => b.updatedAt.localeCompare(a.updatedAt),
+  );
+}
+
+export function useSharedConversationIds(): string[] {
+  const userId = useAuthStore((state) => state.user?.id);
+  return useEntityIds(
+    "aiConversations",
+    (conversation: AiConversationEntity) =>
+      conversation.visibility === "ORG" && conversation.createdById !== userId,
+    (a, b) => b.updatedAt.localeCompare(a.updatedAt),
+  );
+}
+
 export function useConversationForkInfo(conversationId: string): {
   forkedFromConversationId: string | null;
   forkedFromBranchId: string | null;
 } {
-  const conversation = useEntityStore((s) => s.aiConversations[conversationId]);
+  const conversation = useEntityStore((state) => state.aiConversations[conversationId]);
   return {
     forkedFromConversationId: conversation?.forkedFromConversationId ?? null,
     forkedFromBranchId: conversation?.forkedFromBranchId ?? null,
   };
 }
 
-// ── Branch selectors ───────────────────────────────────────────
-
-/** Returns the full branch entity */
 export function useBranch(id: string): AiBranchEntity | undefined {
   return useEntityStore((state) => state.aiBranches[id]);
 }
 
-/** Fine-grained field selector for a branch */
 export function useBranchField<F extends keyof AiBranchEntity>(
   id: string,
   field: F,
@@ -67,25 +76,18 @@ export function useBranchField<F extends keyof AiBranchEntity>(
   return useEntityField("aiBranches", id, field);
 }
 
-/** Returns ordered turn IDs for a branch */
 export function useBranchTurns(branchId: string): string[] {
   return useEntityStore((state) => state.aiBranches[branchId]?.turnIds ?? EMPTY_IDS);
 }
 
 const EMPTY_IDS: string[] = [];
 
-/** Timeline entry for rendering a branch view */
 export type TimelineEntry =
   | { type: "inherited-turn"; turnId: string }
   | { type: "fork-separator"; forkTurnId: string; parentBranchLabel: string | null }
-  | { type: "local-turn"; turnId: string };
+  | { type: "local-turn"; turnId: string }
+  | { type: "summary"; summaryId: string; branchId: string; summarizedTurnCount: number };
 
-/**
- * Returns the derived render timeline for a branch:
- * inherited turns from ancestors, a fork separator, then local turns.
- *
- * Only subscribes to the current branch and its ancestors (not the entire table).
- */
 export function useBranchTimeline(branchId: string): TimelineEntry[] {
   const branch = useEntityStore((state) => state.aiBranches[branchId]);
 
@@ -105,12 +107,41 @@ export function useBranchTimeline(branchId: string): TimelineEntry[] {
     }),
   );
 
+  const branchSummary = useEntityStore(
+    useShallow((state) => {
+      const summaries = state.aiBranchSummaries;
+      let latest: AiBranchSummaryEntity | undefined;
+      for (const id of Object.keys(summaries)) {
+        const summary = summaries[id];
+        if (summary.branchId === branchId) {
+          if (!latest || summary.createdAt > latest.createdAt) {
+            latest = summary;
+          }
+        }
+      }
+      return latest;
+    }),
+  );
+
+  const turnsSummarizedMap = useEntityStore(
+    useShallow((state) => {
+      if (!branch) return {};
+      const map: Record<string, boolean> = {};
+      for (const turnId of branch.turnIds) {
+        const turn = state.aiTurns[turnId];
+        if (turn) {
+          map[turnId] = turn.summarized;
+        }
+      }
+      return map;
+    }),
+  );
+
   return useMemo(() => {
     if (!branch) return [];
 
     const entries: TimelineEntry[] = [];
 
-    // Collect inherited turns from ancestor branches
     if (branch.parentBranchId && branch.forkTurnId) {
       const inheritedTurns = collectInheritedTurns(
         ancestorBranches,
@@ -129,19 +160,30 @@ export function useBranchTimeline(branchId: string): TimelineEntry[] {
       });
     }
 
-    // Local turns
-    for (const turnId of branch.turnIds) {
+    const summarizedTurnIds = branch.turnIds.filter((id) => turnsSummarizedMap[id]);
+    const unsummarizedTurnIds = branch.turnIds.filter((id) => !turnsSummarizedMap[id]);
+
+    if (branchSummary && summarizedTurnIds.length > 0) {
+      entries.push({
+        type: "summary",
+        summaryId: branchSummary.id,
+        branchId: branch.id,
+        summarizedTurnCount: branchSummary.summarizedTurnCount,
+      });
+    } else {
+      for (const turnId of summarizedTurnIds) {
+        entries.push({ type: "local-turn", turnId });
+      }
+    }
+
+    for (const turnId of unsummarizedTurnIds) {
       entries.push({ type: "local-turn", turnId });
     }
 
     return entries;
-  }, [branch, ancestorBranches]);
+  }, [ancestorBranches, branch, branchSummary, turnsSummarizedMap]);
 }
 
-/**
- * Recursively collect inherited turn IDs from ancestor branches,
- * up to and including the fork turn.
- */
 function collectInheritedTurns(
   ancestors: Record<string, AiBranchEntity>,
   parentBranchId: string,
@@ -152,14 +194,12 @@ function collectInheritedTurns(
 
   const result: string[] = [];
 
-  // First collect from grandparent if this branch itself is a fork
   if (parentBranch.parentBranchId && parentBranch.forkTurnId) {
     result.push(
       ...collectInheritedTurns(ancestors, parentBranch.parentBranchId, parentBranch.forkTurnId),
     );
   }
 
-  // Then include parent branch turns up to and including the fork turn
   for (const turnId of parentBranch.turnIds) {
     result.push(turnId);
     if (turnId === forkTurnId) break;
@@ -168,14 +208,24 @@ function collectInheritedTurns(
   return result;
 }
 
-// ── Turn selectors ─────────────────────────────────────────────
+export function useChildBranchIds(turnId: string): string[] {
+  return useEntityStore(
+    useShallow((state) => {
+      const ids: string[] = [];
+      for (const branch of Object.values(state.aiBranches)) {
+        if (branch.forkTurnId === turnId) {
+          ids.push(branch.id);
+        }
+      }
+      return ids;
+    }),
+  );
+}
 
-/** Returns the full turn entity */
 export function useTurn(id: string): AiTurnEntity | undefined {
   return useEntityStore((state) => state.aiTurns[id]);
 }
 
-/** Fine-grained field selector for a turn */
 export function useTurnField<F extends keyof AiTurnEntity>(
   id: string,
   field: F,
@@ -183,19 +233,44 @@ export function useTurnField<F extends keyof AiTurnEntity>(
   return useEntityField("aiTurns", id, field);
 }
 
-// ── UI state selectors ─────────────────────────────────────────
+export function useBranchSummary(branchId: string): AiBranchSummaryEntity | undefined {
+  return useEntityStore(
+    useShallow((state) => {
+      const summaries = state.aiBranchSummaries;
+      let latest: AiBranchSummaryEntity | undefined;
+      for (const id of Object.keys(summaries)) {
+        const summary = summaries[id];
+        if (summary.branchId === branchId) {
+          if (!latest || summary.createdAt > latest.createdAt) {
+            latest = summary;
+          }
+        }
+      }
+      return latest;
+    }),
+  );
+}
 
-/** Returns the active branch ID for a conversation */
 export function useActiveBranchId(conversationId: string): string | undefined {
   return useAiConversationUIStore((state) => state.activeBranchByConversation[conversationId]);
 }
 
-/** Returns the pending scroll target turn ID */
 export function useScrollTargetTurnId(): string | null {
   return useAiConversationUIStore((state) => state.scrollTargetTurnId);
 }
 
-/** Returns the branch switcher open state */
+export function useHighlightTurnId(): string | null {
+  return useAiConversationUIStore((state) => state.highlightTurnId);
+}
+
 export function useBranchSwitcherOpen(): boolean {
   return useAiConversationUIStore((state) => state.branchSwitcherOpen);
+}
+
+export function useBranchTreePanelOpen(): boolean {
+  return useAiConversationUIStore((state) => state.branchTreePanelOpen);
+}
+
+export function useTreeNodeCollapsed(branchId: string): boolean {
+  return useAiConversationUIStore((state) => !!state.collapsedTreeNodes[branchId]);
 }

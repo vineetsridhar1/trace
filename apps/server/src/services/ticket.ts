@@ -6,6 +6,8 @@ import { eventService } from "./event.js";
 export type CreateTicketServiceInput = CreateTicketInput & {
   actorType: ActorType;
   actorId: string;
+  conversationId?: string;
+  branchId?: string;
 };
 
 const TICKET_INCLUDE = {
@@ -46,7 +48,7 @@ export class TicketService {
 
   async create(input: CreateTicketServiceInput) {
     const [ticket] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const ticket = await tx.ticket.create({
+      const created = await tx.ticket.create({
         data: {
           title: input.title,
           description: input.description ?? "",
@@ -66,6 +68,46 @@ export class TicketService {
         },
         include: TICKET_INCLUDE,
       });
+
+      const provenanceLinks = [
+        input.conversationId
+          ? {
+              ticketId: created.id,
+              entityType: "ai_conversation",
+              entityId: input.conversationId,
+            }
+          : null,
+        input.branchId
+          ? {
+              ticketId: created.id,
+              entityType: "ai_branch",
+              entityId: input.branchId,
+            }
+          : null,
+      ].filter(
+        (
+          link,
+        ): link is {
+          ticketId: string;
+          entityType: string;
+          entityId: string;
+        } => link !== null,
+      );
+
+      if (provenanceLinks.length > 0) {
+        await tx.ticketLink.createMany({
+          data: provenanceLinks,
+          skipDuplicates: true,
+        });
+      }
+
+      const ticket =
+        provenanceLinks.length > 0
+          ? await tx.ticket.findUniqueOrThrow({
+              where: { id: created.id },
+              include: TICKET_INCLUDE,
+            })
+          : created;
 
       const event = await eventService.create({
         organizationId: input.organizationId,

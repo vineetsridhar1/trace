@@ -1,9 +1,11 @@
-import type { AiConversationVisibility } from "@trace/gql";
+import type { AgentObservability, AiConversationVisibility } from "@trace/gql";
 import type { JsonObject } from "@trace/shared";
 import {
   useEntityStore,
-  type AiConversationEntity,
   type AiBranchEntity,
+  type AiBranchSummaryEntity,
+  type AiConversationEntity,
+  type AiConversationLinkedEntityRef,
   type AiTurnEntity,
 } from "../../../stores/entity";
 
@@ -101,6 +103,7 @@ export function upsertAiTurnFromServer(turn: IncomingAiTurn): void {
     content: turn.content,
     parentTurnId: turn.parentTurnId,
     branchCount: turn.branchCount ?? existingTurn?.branchCount ?? 0,
+    summarized: existingTurn?.summarized ?? false,
     createdAt: turn.createdAt,
     _optimistic: undefined,
     _clientMutationId: undefined,
@@ -121,13 +124,6 @@ export function upsertAiTurnFromServer(turn: IncomingAiTurn): void {
   }
 }
 
-/**
- * Shared event processor for AI conversation events.
- * Called from both the org-wide subscription (useOrgEvents) and
- * the scoped conversation subscription (useConversationEventsSubscription).
- *
- * Idempotent — safe to call from both paths for the same event.
- */
 export function processAiConversationEvent({
   eventType,
   payload,
@@ -139,109 +135,199 @@ export function processAiConversationEvent({
   switch (eventType) {
     case "ai_conversation_created": {
       const conversationId = resolveConversationId(payload, fallbackConversationId);
-      if (conversationId) {
-        const existing = useEntityStore.getState().aiConversations[conversationId];
-        const rootBranchId =
-          (payload.rootBranchId as string | undefined) ?? existing?.rootBranchId ?? "";
-        const branchIds = existing?.branchIds ?? (rootBranchId ? [rootBranchId] : []);
+      if (!conversationId) break;
 
-        upsert("aiConversations", conversationId, {
-          ...(existing ?? {}),
-          id: conversationId,
-          title: (payload.title as string | undefined) ?? null,
-          visibility: (payload.visibility as AiConversationVisibility) ?? "PRIVATE",
-          createdById: payload.createdById as string,
-          rootBranchId,
-          branchIds,
-          branchCount: existing?.branchCount ?? branchIds.length,
-          forkedFromConversationId:
-            (payload.forkedFromConversationId as string | undefined) ??
-            existing?.forkedFromConversationId ??
-            null,
-          forkedFromBranchId:
-            (payload.forkedFromBranchId as string | undefined) ??
-            existing?.forkedFromBranchId ??
-            null,
-          createdAt: timestamp,
-          updatedAt: (payload.updatedAt as string) ?? timestamp,
-        } as AiConversationEntity);
-      }
+      const existing = useEntityStore.getState().aiConversations[conversationId];
+      const rootBranchId =
+        (payload.rootBranchId as string | undefined) ?? existing?.rootBranchId ?? "";
+      const branchIds = existing?.branchIds ?? (rootBranchId ? [rootBranchId] : []);
+
+      upsert("aiConversations", conversationId, {
+        ...(existing ?? {}),
+        id: conversationId,
+        title: (payload.title as string | undefined) ?? null,
+        visibility: (payload.visibility as AiConversationVisibility) ?? "PRIVATE",
+        agentObservability:
+          (payload.agentObservability as AgentObservability | undefined) ??
+          existing?.agentObservability ??
+          "OFF",
+        modelId:
+          (payload.modelId as string | undefined | null) ?? existing?.modelId ?? null,
+        systemPrompt:
+          (payload.systemPrompt as string | undefined | null) ??
+          existing?.systemPrompt ??
+          null,
+        createdById: (payload.createdById as string | undefined) ?? existing?.createdById ?? "",
+        rootBranchId,
+        branchIds,
+        branchCount: existing?.branchCount ?? branchIds.length,
+        linkedEntities: existing?.linkedEntities ?? [],
+        forkedFromConversationId:
+          (payload.forkedFromConversationId as string | undefined) ??
+          existing?.forkedFromConversationId ??
+          null,
+        forkedFromBranchId:
+          (payload.forkedFromBranchId as string | undefined) ??
+          existing?.forkedFromBranchId ??
+          null,
+        createdAt: existing?.createdAt ?? timestamp,
+        updatedAt: (payload.updatedAt as string | undefined) ?? timestamp,
+      } as AiConversationEntity);
       break;
     }
 
     case "ai_conversation_title_updated": {
       const conversationId = resolveConversationId(payload, fallbackConversationId);
-      if (conversationId) {
-        patch("aiConversations", conversationId, {
-          title: payload.title as string,
-          updatedAt: (payload.updatedAt as string) ?? timestamp,
-        } as Partial<AiConversationEntity>);
+      if (!conversationId) break;
+
+      patch("aiConversations", conversationId, {
+        title: payload.title as string,
+        updatedAt: (payload.updatedAt as string | undefined) ?? timestamp,
+      } as Partial<AiConversationEntity>);
+      break;
+    }
+
+    case "ai_conversation_updated": {
+      const conversationId = resolveConversationId(payload, fallbackConversationId);
+      if (!conversationId) break;
+
+      const updates: Partial<AiConversationEntity> = {
+        updatedAt: (payload.updatedAt as string | undefined) ?? timestamp,
+      };
+      if (payload.title !== undefined) updates.title = payload.title as string | null;
+      if (payload.modelId !== undefined) updates.modelId = payload.modelId as string | null;
+      if (payload.systemPrompt !== undefined) {
+        updates.systemPrompt = payload.systemPrompt as string | null;
       }
+      if (payload.visibility !== undefined) {
+        updates.visibility = payload.visibility as AiConversationVisibility;
+      }
+
+      patch("aiConversations", conversationId, updates);
       break;
     }
 
     case "ai_conversation_visibility_changed": {
       const conversationId = resolveConversationId(payload, fallbackConversationId);
-      if (conversationId) {
+      if (!conversationId) break;
+
+      patch("aiConversations", conversationId, {
+        visibility: payload.visibility as AiConversationVisibility,
+        updatedAt: (payload.updatedAt as string | undefined) ?? timestamp,
+      } as Partial<AiConversationEntity>);
+      break;
+    }
+
+    case "ai_conversation_observability_changed": {
+      const conversationId = resolveConversationId(payload, fallbackConversationId);
+      if (!conversationId) break;
+
+      patch("aiConversations", conversationId, {
+        agentObservability: payload.agentObservability as AgentObservability,
+        updatedAt: (payload.updatedAt as string | undefined) ?? timestamp,
+      } as Partial<AiConversationEntity>);
+      break;
+    }
+
+    case "ai_conversation_entity_linked": {
+      const conversationId = resolveConversationId(payload, fallbackConversationId);
+      if (!conversationId) break;
+
+      const existing = useEntityStore.getState().aiConversations[conversationId];
+      if (!existing) break;
+
+      const linkedEntity: AiConversationLinkedEntityRef = {
+        id: payload.linkedEntityId as string,
+        conversationId,
+        entityType: payload.entityType as string,
+        entityId: payload.entityId as string,
+        createdById: payload.createdById as string,
+        createdAt: (payload.createdAt as string | undefined) ?? timestamp,
+      };
+
+      const currentLinks = existing.linkedEntities ?? [];
+      const alreadyLinked = currentLinks.some(
+        (entry) =>
+          entry.entityType === linkedEntity.entityType && entry.entityId === linkedEntity.entityId,
+      );
+      if (!alreadyLinked) {
         patch("aiConversations", conversationId, {
-          visibility: payload.visibility as AiConversationVisibility,
-          updatedAt: timestamp,
+          linkedEntities: [...currentLinks, linkedEntity],
         } as Partial<AiConversationEntity>);
       }
+      break;
+    }
+
+    case "ai_conversation_entity_unlinked": {
+      const conversationId = resolveConversationId(payload, fallbackConversationId);
+      if (!conversationId) break;
+
+      const existing = useEntityStore.getState().aiConversations[conversationId];
+      if (!existing) break;
+
+      patch("aiConversations", conversationId, {
+        linkedEntities: (existing.linkedEntities ?? []).filter(
+          (entry) =>
+            !(
+              entry.entityType === (payload.entityType as string) &&
+              entry.entityId === (payload.entityId as string)
+            ),
+        ),
+      } as Partial<AiConversationEntity>);
       break;
     }
 
     case "ai_branch_created": {
       const branchId = payload.branchId as string | undefined;
       const conversationId = resolveConversationId(payload, fallbackConversationId);
-      if (branchId && conversationId) {
-        const existingBranch = useEntityStore.getState().aiBranches[branchId];
-        upsert("aiBranches", branchId, {
-          ...(existingBranch ?? {}),
-          id: branchId,
-          conversationId,
-          parentBranchId: (payload.parentBranchId as string) ?? null,
-          forkTurnId: (payload.forkTurnId as string) ?? null,
-          label: (payload.label as string) ?? null,
-          createdById: payload.createdById as string,
-          turnIds: existingBranch?.turnIds ?? [],
-          childBranchIds: existingBranch?.childBranchIds ?? [],
-          depth: (payload.depth as number) ?? existingBranch?.depth ?? 0,
-          turnCount: existingBranch?.turnCount ?? 0,
-          createdAt: timestamp,
-        } as AiBranchEntity);
+      if (!branchId || !conversationId) break;
 
-        const conversation = useEntityStore.getState().aiConversations[conversationId];
-        if (conversation && !conversation.branchIds.includes(branchId)) {
-          const nextBranchIds = [...conversation.branchIds, branchId];
-          const parentBranchId = (payload.parentBranchId as string | undefined) ?? null;
-          patch("aiConversations", conversationId, {
-            branchIds: nextBranchIds,
-            branchCount: nextBranchIds.length,
-            rootBranchId:
-              conversation.rootBranchId || (!parentBranchId ? branchId : conversation.rootBranchId),
-            updatedAt: timestamp,
-          } as Partial<AiConversationEntity>);
+      const existingBranch = useEntityStore.getState().aiBranches[branchId];
+      upsert("aiBranches", branchId, {
+        ...(existingBranch ?? {}),
+        id: branchId,
+        conversationId,
+        parentBranchId: (payload.parentBranchId as string | undefined) ?? null,
+        forkTurnId: (payload.forkTurnId as string | undefined) ?? null,
+        label: (payload.label as string | undefined) ?? null,
+        createdById: payload.createdById as string,
+        turnIds: existingBranch?.turnIds ?? [],
+        childBranchIds: existingBranch?.childBranchIds ?? [],
+        depth: (payload.depth as number | undefined) ?? existingBranch?.depth ?? 0,
+        turnCount: existingBranch?.turnCount ?? 0,
+        createdAt: existingBranch?.createdAt ?? timestamp,
+      } as AiBranchEntity);
+
+      const conversation = useEntityStore.getState().aiConversations[conversationId];
+      if (conversation && !conversation.branchIds.includes(branchId)) {
+        const nextBranchIds = [...conversation.branchIds, branchId];
+        const parentBranchId = (payload.parentBranchId as string | undefined) ?? null;
+        patch("aiConversations", conversationId, {
+          branchIds: nextBranchIds,
+          branchCount: nextBranchIds.length,
+          rootBranchId:
+            conversation.rootBranchId || (!parentBranchId ? branchId : conversation.rootBranchId),
+          updatedAt: timestamp,
+        } as Partial<AiConversationEntity>);
+      }
+
+      const parentBranchId = payload.parentBranchId as string | undefined;
+      if (parentBranchId) {
+        const parentBranch = useEntityStore.getState().aiBranches[parentBranchId];
+        if (parentBranch && !parentBranch.childBranchIds.includes(branchId)) {
+          patch("aiBranches", parentBranchId, {
+            childBranchIds: [...parentBranch.childBranchIds, branchId],
+          } as Partial<AiBranchEntity>);
         }
+      }
 
-        const parentBranchId = payload.parentBranchId as string | undefined;
-        if (parentBranchId) {
-          const parentBranch = useEntityStore.getState().aiBranches[parentBranchId];
-          if (parentBranch && !parentBranch.childBranchIds.includes(branchId)) {
-            patch("aiBranches", parentBranchId, {
-              childBranchIds: [...parentBranch.childBranchIds, branchId],
-            } as Partial<AiBranchEntity>);
-          }
-        }
-
-        const forkTurnId = payload.forkTurnId as string | undefined;
-        if (forkTurnId) {
-          const forkTurn = useEntityStore.getState().aiTurns[forkTurnId];
-          if (forkTurn) {
-            patch("aiTurns", forkTurnId, {
-              branchCount: forkTurn.branchCount + 1,
-            } as Partial<AiTurnEntity>);
-          }
+      const forkTurnId = payload.forkTurnId as string | undefined;
+      if (forkTurnId) {
+        const forkTurn = useEntityStore.getState().aiTurns[forkTurnId];
+        if (forkTurn) {
+          patch("aiTurns", forkTurnId, {
+            branchCount: forkTurn.branchCount + 1,
+          } as Partial<AiTurnEntity>);
         }
       }
       break;
@@ -249,10 +335,37 @@ export function processAiConversationEvent({
 
     case "ai_branch_labeled": {
       const branchId = payload.branchId as string | undefined;
-      if (branchId) {
-        patch("aiBranches", branchId, {
-          label: payload.label as string,
-        } as Partial<AiBranchEntity>);
+      if (!branchId) break;
+
+      patch("aiBranches", branchId, {
+        label: payload.label as string,
+      } as Partial<AiBranchEntity>);
+      break;
+    }
+
+    case "ai_branch_summary_updated": {
+      const summaryId = payload.summaryId as string | undefined;
+      const branchId = payload.branchId as string | undefined;
+      if (!summaryId || !branchId) break;
+
+      upsert("aiBranchSummaries", summaryId, {
+        id: summaryId,
+        branchId,
+        content: payload.content as string,
+        summarizedTurnCount: payload.summarizedTurnCount as number,
+        summarizedUpToTurnId: payload.summarizedUpToTurnId as string,
+        createdAt: (payload.createdAt as string | undefined) ?? timestamp,
+      } as AiBranchSummaryEntity);
+
+      const branch = useEntityStore.getState().aiBranches[branchId];
+      if (!branch) break;
+
+      const upToTurnId = payload.summarizedUpToTurnId as string;
+      for (const turnId of branch.turnIds) {
+        patch("aiTurns", turnId, { summarized: true } as Partial<AiTurnEntity>);
+        if (turnId === upToTurnId) {
+          break;
+        }
       }
       break;
     }
@@ -263,29 +376,29 @@ export function processAiConversationEvent({
       const conversationId = resolveConversationId(payload, fallbackConversationId);
       const role = payload.role as "USER" | "ASSISTANT" | undefined;
 
-      if (turnId && branchId && role) {
-        const hasCanonicalTurnData =
-          typeof payload.content === "string" &&
-          ("createdAt" in payload ? typeof payload.createdAt === "string" : true);
+      if (!turnId || !branchId || !role) break;
 
-        if (hasCanonicalTurnData) {
-          upsertAiTurnFromServer({
-            turnId,
-            branchId,
-            conversationId,
-            role,
-            content: payload.content as string,
-            parentTurnId: (payload.parentTurnId as string | null | undefined) ?? null,
-            branchCount: payload.branchCount as number | undefined,
-            createdAt: (payload.createdAt as string | undefined) ?? timestamp,
-            timestamp,
-            clientMutationId: payload.clientMutationId as string | undefined,
-          });
-        } else if (conversationId) {
-          patch("aiConversations", conversationId, {
-            updatedAt: timestamp,
-          } as Partial<AiConversationEntity>);
-        }
+      const hasCanonicalTurnData =
+        typeof payload.content === "string" &&
+        ("createdAt" in payload ? typeof payload.createdAt === "string" : true);
+
+      if (hasCanonicalTurnData) {
+        upsertAiTurnFromServer({
+          turnId,
+          branchId,
+          conversationId,
+          role,
+          content: payload.content as string,
+          parentTurnId: (payload.parentTurnId as string | null | undefined) ?? null,
+          branchCount: payload.branchCount as number | undefined,
+          createdAt: (payload.createdAt as string | undefined) ?? timestamp,
+          timestamp,
+          clientMutationId: payload.clientMutationId as string | undefined,
+        });
+      } else if (conversationId) {
+        patch("aiConversations", conversationId, {
+          updatedAt: timestamp,
+        } as Partial<AiConversationEntity>);
       }
       break;
     }

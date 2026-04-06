@@ -287,7 +287,6 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
         activeTerminalId: null,
         activeThreadId: null,
         channelSubPage: null,
-        activeAiConversationId: null,
         unreadChatIds,
       };
     });

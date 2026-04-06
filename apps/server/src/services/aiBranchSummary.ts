@@ -227,26 +227,29 @@ export class AiBranchSummaryService {
     const budgetTotal = input.contextBudget ?? DEFAULT_CONTEXT_BUDGET;
     const levels = await this.collectAncestorLevels(input.branchId);
 
-    const messages: LLMMessage[] = [];
+    const messageGroups: LLMMessage[][] = [];
     let totalTokens = 0;
 
-    // Allocate budget across levels (current branch first in array)
+    // Levels are collected current -> root so budget can be assigned by proximity
+    // to the active branch. Message emission is reversed later so the model still
+    // receives context in root -> leaf order.
     for (let i = 0; i < levels.length; i++) {
       const level = levels[i];
       const allocationIndex = Math.min(i, BUDGET_ALLOCATION.length - 1);
       const levelBudget = Math.floor(budgetTotal * BUDGET_ALLOCATION[allocationIndex]);
 
       let levelTokens = 0;
+      const levelMessages: LLMMessage[] = [];
 
       // If there's a summary, prepend it as system context
       if (level.summary) {
         const summaryTokens = this.estimateTokens(level.summary);
         if (levelTokens + summaryTokens <= levelBudget) {
-          messages.push({
+          levelMessages.push({
             role: "user",
             content: `[Summary of earlier conversation${level.depth > 0 ? ` (ancestor branch, depth ${level.depth})` : ""}]: ${level.summary}`,
           });
-          messages.push({
+          levelMessages.push({
             role: "assistant",
             content: "Understood, I have the context from the summarized conversation.",
           });
@@ -261,18 +264,19 @@ export class AiBranchSummaryService {
         if (levelTokens + turnTokens > levelBudget) {
           break; // Exceeds this level's budget
         }
-        messages.push({
+        levelMessages.push({
           role: turn.role === "USER" ? "user" : "assistant",
           content: turn.content,
         });
         levelTokens += turnTokens;
       }
 
+      messageGroups.push(levelMessages);
       totalTokens += levelTokens;
     }
 
     return {
-      messages,
+      messages: messageGroups.reverse().flat(),
       health: {
         tokenUsage: totalTokens,
         budgetTotal,

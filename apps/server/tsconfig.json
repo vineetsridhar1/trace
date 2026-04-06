@@ -1,6 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@trace/gql": ["../../packages/gql/src/index.ts"],
+      "@trace/shared": ["../../packages/shared/src/index.ts"]
+    },
     "outDir": "dist",
     "rootDir": "src"
   },

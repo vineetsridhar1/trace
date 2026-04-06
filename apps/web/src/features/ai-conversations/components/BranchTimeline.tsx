@@ -12,6 +12,7 @@ import {
 } from "../hooks/useAiConversationSubscriptions";
 import { TurnItem } from "./TurnItem";
 import { ForkSeparator } from "./ForkSeparator";
+import { SummaryNode } from "./SummaryNode";
 
 interface BranchTimelineProps {
   branchId: string;
@@ -120,6 +121,22 @@ function TimelineEntryRenderer({
           <TurnItem turnId={entry.turnId} onForked={onForked} />
         </motion.div>
       );
+
+    case "summary":
+      return (
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15, ease: "easeOut" }}
+        >
+          <SummaryNode
+            summaryId={entry.summaryId}
+            branchId={entry.branchId}
+            summarizedTurnCount={entry.summarizedTurnCount}
+          />
+        </motion.div>
+      );
   }
 }
 
@@ -131,5 +148,7 @@ function entryKey(entry: TimelineEntry): string {
       return `separator-${entry.forkTurnId}`;
     case "local-turn":
       return `local-${entry.turnId}`;
+    case "summary":
+      return `summary-${entry.summaryId}`;
   }
 }

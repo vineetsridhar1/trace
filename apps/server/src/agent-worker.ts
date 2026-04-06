@@ -491,6 +491,24 @@ async function processEvents(orgId: string, entries: StreamEntry[]): Promise<voi
         timestamp: raw.timestamp as string,
       };
 
+      if (event.scopeType === "ai_conversation") {
+        const conversation = await prisma.aiConversation.findUnique({
+          where: { id: event.scopeId },
+          select: { agentObservability: true },
+        });
+
+        if (!conversation || conversation.agentObservability === "OFF") {
+          log("conversation event dropped before routing", {
+            orgId,
+            streamId: entry.id,
+            eventType: event.eventType,
+            scopeId: event.scopeId,
+            reason: "conversation_observability_off",
+          });
+          continue;
+        }
+      }
+
       // Update chat membership gate before routing
       updateChatMembership(event, agentContext.agentId);
 
@@ -525,6 +543,7 @@ async function processEvents(orgId: string, entries: StreamEntry[]): Promise<voi
           conversationId,
           branchId,
           organizationId: orgId,
+          agentId: agentContext.agentId,
         }).catch((err) => {
           logError(`conversation agent error (conv=${conversationId})`, err);
         });

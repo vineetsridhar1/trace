@@ -3,14 +3,13 @@ import { gql } from "@urql/core";
 import { client } from "../../../lib/urql";
 import {
   useEntityStore,
-  type AiConversationEntity,
   type AiBranchEntity,
+  type AiBranchSummaryEntity,
+  type AiConversationEntity,
   type AiTurnEntity,
 } from "../../../stores/entity";
 import { useAuthStore } from "../../../stores/auth";
 import { useAiConversationUIStore } from "../store/ai-conversation-ui";
-
-// ── GraphQL documents ──────────────────────────────────────────
 
 const AI_CONVERSATIONS_QUERY = gql`
   query AiConversations($organizationId: ID!) {
@@ -18,6 +17,9 @@ const AI_CONVERSATIONS_QUERY = gql`
       id
       title
       visibility
+      agentObservability
+      modelId
+      systemPrompt
       branchCount
       forkedFromConversationId
       forkedFromBranchId
@@ -39,6 +41,9 @@ const AI_CONVERSATION_QUERY = gql`
       id
       title
       visibility
+      agentObservability
+      modelId
+      systemPrompt
       branchCount
       forkedFromConversationId
       forkedFromBranchId
@@ -47,6 +52,14 @@ const AI_CONVERSATION_QUERY = gql`
       }
       rootBranch {
         id
+      }
+      linkedEntities {
+        id
+        conversationId
+        entityType
+        entityId
+        createdById
+        createdAt
       }
       branches {
         id
@@ -96,10 +109,24 @@ const BRANCH_TIMELINE_QUERY = gql`
       conversation {
         id
       }
+      latestSummary {
+        id
+        branchId
+        content
+        summarizedTurnCount
+        summarizedUpToTurnId
+        createdAt
+      }
+      contextHealth {
+        tokenUsage
+        budgetTotal
+        percentage
+      }
       turns {
         id
         role
         content
+        summarized
         parentTurn {
           id
         }
@@ -110,18 +137,39 @@ const BRANCH_TIMELINE_QUERY = gql`
   }
 `;
 
-// ── Hydration helpers ──────────────────────────────────────────
+const CONTEXT_HEALTH_QUERY = gql`
+  query ContextHealth($branchId: ID!) {
+    contextHealth(branchId: $branchId) {
+      tokenUsage
+      budgetTotal
+      percentage
+    }
+  }
+`;
+
+interface RawLinkedEntity {
+  id: string;
+  conversationId: string;
+  entityType: string;
+  entityId: string;
+  createdById: string;
+  createdAt: string;
+}
 
 interface RawConversation {
   id: string;
   title: string | null;
   visibility: string;
+  agentObservability?: string;
+  modelId: string | null;
+  systemPrompt: string | null;
   branchCount: number;
   forkedFromConversationId: string | null;
   forkedFromBranchId: string | null;
   createdBy: { id: string };
   rootBranch: { id: string };
   branches?: RawBranch[];
+  linkedEntities?: RawLinkedEntity[];
   createdAt: string;
   updatedAt: string;
 }
@@ -138,15 +186,32 @@ interface RawBranch {
   createdAt: string;
   conversation?: { id: string };
   turns?: RawTurn[];
+  latestSummary?: RawBranchSummary | null;
 }
 
 interface RawTurn {
   id: string;
   role: "USER" | "ASSISTANT";
   content: string;
+  summarized: boolean;
   parentTurn: { id: string } | null;
   branchCount: number;
   createdAt: string;
+}
+
+interface RawBranchSummary {
+  id: string;
+  branchId: string;
+  content: string;
+  summarizedTurnCount: number;
+  summarizedUpToTurnId: string;
+  createdAt: string;
+}
+
+export interface ContextHealthData {
+  tokenUsage: number;
+  budgetTotal: number;
+  percentage: number;
 }
 
 function hydrateConversation(raw: RawConversation): void {
@@ -158,10 +223,14 @@ function hydrateConversation(raw: RawConversation): void {
     id: raw.id,
     title: raw.title,
     visibility: raw.visibility,
+    agentObservability: raw.agentObservability ?? existing?.agentObservability ?? "OFF",
+    modelId: raw.modelId,
+    systemPrompt: raw.systemPrompt,
     branchCount: raw.branchCount,
     createdById: raw.createdBy.id,
     rootBranchId: raw.rootBranch.id,
-    branchIds: raw.branches?.map((b) => b.id) ?? existing?.branchIds ?? [raw.rootBranch.id],
+    branchIds: raw.branches?.map((branch) => branch.id) ?? existing?.branchIds ?? [raw.rootBranch.id],
+    linkedEntities: raw.linkedEntities ?? existing?.linkedEntities ?? [],
     forkedFromConversationId: raw.forkedFromConversationId ?? null,
     forkedFromBranchId: raw.forkedFromBranchId ?? null,
     createdAt: raw.createdAt,
@@ -188,16 +257,20 @@ function hydrateBranch(raw: RawBranch, conversationId?: string): void {
     turnCount: raw.turnCount,
     parentBranchId: raw.parentBranch?.id ?? null,
     forkTurnId: raw.forkTurn?.id ?? null,
-    childBranchIds: raw.childBranches.map((b) => b.id),
+    childBranchIds: raw.childBranches.map((branch) => branch.id),
     createdById: raw.createdBy.id,
     createdAt: raw.createdAt,
-    turnIds: raw.turns?.map((t) => t.id) ?? existing?.turnIds ?? [],
+    turnIds: raw.turns?.map((turn) => turn.id) ?? existing?.turnIds ?? [],
   } as AiBranchEntity);
 
   if (raw.turns) {
     for (const turn of raw.turns) {
       hydrateTurn(turn, raw.id);
     }
+  }
+
+  if (raw.latestSummary) {
+    hydrateBranchSummary(raw.latestSummary);
   }
 }
 
@@ -209,10 +282,24 @@ function hydrateTurn(raw: RawTurn, branchId: string): void {
     branchId,
     role: raw.role,
     content: raw.content,
+    summarized: raw.summarized ?? false,
     parentTurnId: raw.parentTurn?.id ?? null,
     branchCount: raw.branchCount,
     createdAt: raw.createdAt,
   } as AiTurnEntity);
+}
+
+function hydrateBranchSummary(raw: RawBranchSummary): void {
+  const { upsert } = useEntityStore.getState();
+
+  upsert("aiBranchSummaries", raw.id, {
+    id: raw.id,
+    branchId: raw.branchId,
+    content: raw.content,
+    summarizedTurnCount: raw.summarizedTurnCount,
+    summarizedUpToTurnId: raw.summarizedUpToTurnId,
+    createdAt: raw.createdAt,
+  } as AiBranchSummaryEntity);
 }
 
 async function fetchBranchWithAncestors(
@@ -223,11 +310,9 @@ async function fetchBranchWithAncestors(
   visited.add(branchId);
 
   const result = await client.query(BRANCH_TIMELINE_QUERY, { id: branchId }).toPromise();
-
   if (result.error) {
     throw new Error(result.error.message);
   }
-
   if (!result.data?.branch) return;
 
   const branch = result.data.branch as RawBranch;
@@ -239,11 +324,8 @@ async function fetchBranchWithAncestors(
   }
 }
 
-// ── Query hooks ────────────────────────────────────────────────
-
-/** Fetches conversation list, upserts into store */
 export function useAiConversationsQuery() {
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const activeOrgId = useAuthStore((state) => state.activeOrgId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -260,8 +342,8 @@ export function useAiConversationsQuery() {
       setError(result.error.message);
     } else if (result.data?.aiConversations) {
       const conversations = result.data.aiConversations as RawConversation[];
-      for (const conv of conversations) {
-        hydrateConversation(conv);
+      for (const conversation of conversations) {
+        hydrateConversation(conversation);
       }
     }
 
@@ -275,7 +357,6 @@ export function useAiConversationsQuery() {
   return { loading, error, refetch: fetchConversations };
 }
 
-/** Fetches single conversation with branches */
 export function useAiConversationQuery(id: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -290,13 +371,12 @@ export function useAiConversationQuery(id: string) {
     if (result.error) {
       setError(result.error.message);
     } else if (result.data?.aiConversation) {
-      const conv = result.data.aiConversation as RawConversation;
-      hydrateConversation(conv);
+      const conversation = result.data.aiConversation as RawConversation;
+      hydrateConversation(conversation);
 
-      // Set active branch to root if not already set
       const uiStore = useAiConversationUIStore.getState();
       if (!uiStore.activeBranchByConversation[id]) {
-        uiStore.setActiveBranch(id, conv.rootBranch.id);
+        uiStore.setActiveBranch(id, conversation.rootBranch.id);
       }
     }
 
@@ -310,7 +390,6 @@ export function useAiConversationQuery(id: string) {
   return { loading, error, refetch: fetchConversation };
 }
 
-/** Hydrates the active branch plus ancestor turns for rendering the timeline */
 export function useBranchTimelineQuery(branchId: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -319,6 +398,7 @@ export function useBranchTimelineQuery(branchId: string) {
     if (!branchId) return;
     setLoading(true);
     setError(null);
+
     try {
       await fetchBranchWithAncestors(branchId);
     } catch (error) {
@@ -333,4 +413,26 @@ export function useBranchTimelineQuery(branchId: string) {
   }, [fetchTimeline]);
 
   return { loading, error, refetch: fetchTimeline };
+}
+
+export function useContextHealthQuery(branchId: string) {
+  const [data, setData] = useState<ContextHealthData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchHealth = useCallback(async () => {
+    if (!branchId) return;
+    setLoading(true);
+
+    const result = await client.query(CONTEXT_HEALTH_QUERY, { branchId }).toPromise();
+    if (result.data?.contextHealth) {
+      setData(result.data.contextHealth as ContextHealthData);
+    }
+    setLoading(false);
+  }, [branchId]);
+
+  useEffect(() => {
+    fetchHealth();
+  }, [fetchHealth]);
+
+  return { data, loading, refetch: fetchHealth };
 }

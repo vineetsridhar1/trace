@@ -14,6 +14,7 @@ import type { LLMAdapter, LLMAssistantContentBlock, LLMToolDefinition } from "@t
 import { createLLMAdapter } from "../lib/llm/index.js";
 import { prisma } from "../lib/db.js";
 import { aiConversationService } from "../services/aiConversation.js";
+import { aiTurnService } from "../services/aiTurn.js";
 import { createSuggestion, type CreateSuggestionInput } from "./suggestion.js";
 import type { PolicyActionResult } from "./policy-engine.js";
 import type { PlannerOutput, ProposedAction } from "./planner.js";
@@ -29,6 +30,7 @@ export interface ConversationAgentEvent {
   conversationId: string;
   branchId?: string;
   organizationId: string;
+  agentId: string;
 }
 
 interface ConversationContext {
@@ -104,6 +106,30 @@ const LABEL_TOOL: LLMToolDefinition = {
       label: {
         type: "string",
         description: "A short 2-5 word label capturing the branch topic.",
+      },
+    },
+    additionalProperties: false,
+  },
+};
+
+const SUGGEST_BRANCH_TOOL: LLMToolDefinition = {
+  name: "suggest_branch",
+  description: "Suggest whether the latest turn should be split into a new branch.",
+  inputSchema: {
+    type: "object",
+    required: ["shouldSuggest"],
+    properties: {
+      shouldSuggest: {
+        type: "boolean",
+        description: "Whether the latest turn introduces a clear tangent worth branching.",
+      },
+      message: {
+        type: "string",
+        description: "A short assistant-style message explaining why a branch would help.",
+      },
+      label: {
+        type: "string",
+        description: "Optional 2-5 word branch label suggestion.",
       },
     },
     additionalProperties: false,
@@ -350,6 +376,89 @@ export async function maybeSuggestBranchLabel(input: ConversationAgentEvent): Pr
       });
       await createSuggestion(suggestionInput);
     }
+  } catch {
+    // Best-effort
+  }
+}
+
+/**
+ * In PARTICIPATE mode, the agent can post a turn that recommends branching
+ * when the latest user turn clearly opens a separate tangent.
+ */
+export async function maybeSuggestBranch(input: ConversationAgentEvent): Promise<void> {
+  if (!input.branchId) return;
+
+  const ctx = await loadConversationContext(input.conversationId, input.branchId);
+  if (!ctx || ctx.agentObservability !== "PARTICIPATE") return;
+
+  if (input.event.eventType !== "ai_turn_created") return;
+  if ((input.event.payload.role as string | undefined) !== "USER") return;
+  if (ctx.turnCount < 3) return;
+
+  if (
+    ctx.recentContent.some((entry) =>
+      entry.includes("[ASSISTANT]: Branch suggestion:"),
+    )
+  ) {
+    return;
+  }
+
+  const contentSnippet = ctx.recentContent.slice(-6).join("\n").slice(0, 2500);
+  const adapter = getAdapter();
+  const model = process.env.AGENT_CONVERSATION_MODEL ?? DEFAULT_MODEL;
+
+  try {
+    const response = await adapter.complete({
+      model,
+      system:
+        "Review the conversation and decide whether the latest user turn introduces a clear, separable tangent " +
+        "that should move into its own branch. Only suggest branching when the topic split is strong and useful. " +
+        "If not, set shouldSuggest=false. If yes, provide a short message and optional label. Call suggest_branch.",
+      messages: [
+        {
+          role: "user",
+          content: `Evaluate whether this conversation should branch:\n\n${contentSnippet}`,
+        },
+      ],
+      tools: [SUGGEST_BRANCH_TOOL],
+      maxTokens: 256,
+      temperature: 0,
+    });
+
+    const toolBlock = response.content.find(
+      (b: LLMAssistantContentBlock) => b.type === "tool_use" && b.name === "suggest_branch",
+    );
+
+    if (!toolBlock || toolBlock.type !== "tool_use") return;
+
+    const rawInput = toolBlock.input as Record<string, unknown>;
+    if (rawInput.shouldSuggest !== true) return;
+
+    const rawMessage =
+      typeof rawInput.message === "string" ? rawInput.message.trim() : "";
+    const rawLabel = typeof rawInput.label === "string" ? rawInput.label.trim() : "";
+
+    if (!rawMessage) return;
+
+    const message = rawMessage.slice(0, 220);
+    const label = rawLabel ? rawLabel.slice(0, 50) : null;
+    const content = [
+      `Branch suggestion: ${message}`,
+      label ? `Suggested label: ${label}` : null,
+      "Use the fork action on this turn to open a branch from here.",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    await aiTurnService.postAssistantTurn(
+      {
+        branchId: input.branchId,
+        content,
+        parentTurnId: input.event.payload.turnId as string | undefined,
+      },
+      "agent",
+      input.agentId,
+    );
   } catch {
     // Best-effort
   }
@@ -604,6 +713,51 @@ export async function maybeDetectEntityLinks(input: ConversationAgentEvent): Pro
           });
           await createSuggestion(suggestionInput);
         }
+      } else if (entityType === "session") {
+        const sessions = await prisma.session.findMany({
+          where: {
+            organizationId: ctx.organizationId,
+            name: { contains: searchQuery, mode: "insensitive" },
+          },
+          take: 1,
+          select: { id: true, name: true },
+        });
+
+        if (sessions.length === 0) continue;
+        const session = sessions[0];
+        if (linkedSet.has(`session:${session.id}`)) continue;
+
+        if (ctx.agentObservability === "PARTICIPATE") {
+          try {
+            await aiConversationService.linkEntity(
+              {
+                conversationId: ctx.conversationId,
+                entityType: "session",
+                entityId: session.id,
+              },
+              "agent",
+              ctx.createdById,
+            );
+          } catch {
+            // May already be linked
+          }
+        } else {
+          const suggestionInput = buildSuggestionInput({
+            actionType: "ai_conversation.link_entity",
+            args: {
+              conversationId: ctx.conversationId,
+              entityType: "session",
+              entityId: session.id,
+            },
+            confidence: 0.65,
+            rationaleSummary: `Detected reference to session: "${session.name}"`,
+            userVisibleMessage: `Link to session: "${session.name}"?`,
+            context: buildMinimalContext(input, ctx),
+            agentId: ctx.createdById,
+            userId: ctx.createdById,
+          });
+          await createSuggestion(suggestionInput);
+        }
       }
     }
   } catch {
@@ -634,6 +788,7 @@ export async function processConversationEvent(input: ConversationAgentEvent): P
     await Promise.allSettled([
       maybeAutoTitle(input),
       maybeSuggestBranchLabel(input),
+      maybeSuggestBranch(input),
       maybeCreateTicketFromConversation(input),
       maybeDetectEntityLinks(input),
     ]);
@@ -656,13 +811,26 @@ function buildMinimalContext(
     scopeKey: `ai_conversation:${ctx.conversationId}`,
     scopeType: "ai_conversation",
     scopeId: ctx.conversationId,
+    isDm: false,
+    isMention: false,
     triggerEvent: input.event,
     eventBatch: [input.event],
     soulFile: "",
     scopeEntity: null,
     relevantEntities: [],
+    decisionContext: {
+      triggerType: input.event.eventType,
+      scopeType: "ai_conversation",
+      autonomyMode: ctx.agentObservability === "PARTICIPATE" ? "act" : "suggest",
+      isMention: false,
+      canonicalState: [],
+      constraints: [],
+    },
+    entitySnapshots: [],
     recentEvents: [],
     summaries: [],
+    memories: [],
+    recentSignals: [],
     actors: [],
     permissions: {
       autonomyMode: ctx.agentObservability === "PARTICIPATE" ? "act" : "suggest",

@@ -257,6 +257,12 @@ export class OrganizationService {
         session: () => tx.sessionProject.create({ data: { sessionId: entityId, projectId } }),
         ticket: () => tx.ticketProject.create({ data: { ticketId: entityId, projectId } }),
         channel: () => tx.channelProject.create({ data: { channelId: entityId, projectId } }),
+        ai_conversation: () => {
+          throw new Error("AI conversations cannot be linked to projects");
+        },
+        ai_branch: () => {
+          throw new Error("AI conversation branches cannot be linked to projects");
+        },
         chat: () => {
           throw new Error("Chats cannot be linked to projects");
         },

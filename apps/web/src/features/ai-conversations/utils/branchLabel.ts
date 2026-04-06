@@ -12,3 +12,11 @@ export function getBranchDisplayLabel(branch: {
   if (branch.depth === 0) return "Main";
   return `Branch ${branch.depth}`;
 }
+
+/** Truncate text at a word boundary for compact branch labels in dense UI surfaces. */
+export function truncateAtWord(text: string, max = 30): string {
+  if (text.length <= max) return text;
+  const truncated = text.slice(0, max);
+  const lastSpace = truncated.lastIndexOf(" ");
+  return `${lastSpace > 10 ? truncated.slice(0, lastSpace) : truncated}...`;
+}

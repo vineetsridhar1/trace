@@ -97,6 +97,8 @@ enum EntityType {
   channel
   chat
   message
+  ai_conversation
+  ai_branch
 }
 
 enum UserRole {
@@ -206,9 +208,11 @@ enum EventType {
   ai_conversation_created
   ai_conversation_title_updated
   ai_conversation_visibility_changed
+  ai_conversation_updated
   ai_branch_created
   ai_branch_labeled
   ai_turn_created
+  ai_branch_summary_updated
   ai_conversation_observability_changed
   ai_conversation_entity_linked
   ai_conversation_entity_unlinked
@@ -886,9 +890,9 @@ type Mutation {
   createAiConversation(organizationId: ID!, input: CreateAiConversationInput!): AiConversation!
   sendTurn(branchId: ID!, content: String!, clientMutationId: String): Turn!
   updateAiConversationTitle(conversationId: ID!, title: String!): AiConversation!
-  updateAiConversationObservability(conversationId: ID!, agentObservability: AgentObservability!): AiConversation!
+  updateAgentObservability(conversationId: ID!, level: AgentObservability!): AiConversation!
   labelBranch(branchId: ID!, label: String!): Branch!
-  forkBranch(branchId: ID!, turnId: ID!, label: String): Branch!
+  forkBranch(turnId: ID!, label: String): Branch!
   linkConversationEntity(conversationId: ID!, entityType: String!, entityId: ID!): AiConversationLinkedEntity!
   unlinkConversationEntity(conversationId: ID!, entityType: String!, entityId: ID!): Boolean!
   updateAiConversation(conversationId: ID!, input: UpdateAiConversationInput!): AiConversation!

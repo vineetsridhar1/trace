@@ -22,6 +22,9 @@ export const TurnItem = memo(function TurnItem({
   if (!role || content === undefined) return null;
 
   const isUser = role === "USER";
+  const isBranchSuggestion = !isUser && content.startsWith("Branch suggestion:");
+  const suggestedLabelMatch = content.match(/^Suggested label:\s*(.+)$/m);
+  const suggestedLabel = suggestedLabelMatch?.[1]?.trim();
 
   return (
     <div
@@ -58,10 +61,20 @@ export const TurnItem = memo(function TurnItem({
         <div className="text-sm text-foreground whitespace-pre-wrap break-words">
           {content}
         </div>
+        {isBranchSuggestion && (
+          <div className="mt-3">
+            <ForkBranchButton
+              turnId={turnId}
+              onForked={onForked}
+              alwaysVisible
+              defaultLabel={suggestedLabel || undefined}
+            />
+          </div>
+        )}
       </div>
 
       {/* Actions — fork button appears on hover */}
-      {!isOptimistic && (
+      {!isOptimistic && !isBranchSuggestion && (
         <div className="absolute right-2 top-2 flex items-center gap-0.5">
           <ForkBranchButton turnId={turnId} onForked={onForked} />
         </div>

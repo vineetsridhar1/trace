@@ -16,9 +16,16 @@ import { useForkBranch } from "../hooks/useAiConversationMutations";
 interface ForkBranchButtonProps {
   turnId: string;
   onForked?: (branchId: string) => void;
+  alwaysVisible?: boolean;
+  defaultLabel?: string;
 }
 
-export function ForkBranchButton({ turnId, onForked }: ForkBranchButtonProps) {
+export function ForkBranchButton({
+  turnId,
+  onForked,
+  alwaysVisible = false,
+  defaultLabel,
+}: ForkBranchButtonProps) {
   const forkBranch = useForkBranch();
   const [showLabelInput, setShowLabelInput] = useState(false);
   const [label, setLabel] = useState("");
@@ -44,6 +51,11 @@ export function ForkBranchButton({ turnId, onForked }: ForkBranchButtonProps) {
     },
     [forkBranch, turnId, onForked],
   );
+
+  const openLabelInput = useCallback(() => {
+    setLabel(defaultLabel ?? "");
+    setShowLabelInput(true);
+  }, [defaultLabel]);
 
   const handleLabelSubmit = useCallback(() => {
     handleFork(label.trim() || undefined);
@@ -130,13 +142,18 @@ export function ForkBranchButton({ turnId, onForked }: ForkBranchButtonProps) {
       <TooltipTrigger
         render={
           <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => setShowLabelInput(true)}
+            variant={alwaysVisible ? "secondary" : "ghost"}
+            size={alwaysVisible ? "xs" : "icon-xs"}
+            onClick={openLabelInput}
             disabled={forking}
-            className="text-muted-foreground opacity-0 group-hover/turn:opacity-100 transition-opacity"
+            className={
+              alwaysVisible
+                ? "text-foreground"
+                : "text-muted-foreground opacity-0 group-hover/turn:opacity-100 transition-opacity"
+            }
           >
             <GitBranch className="size-3.5" />
+            {alwaysVisible && <span className="ml-1 text-xs">Create branch</span>}
           </Button>
         }
       />
