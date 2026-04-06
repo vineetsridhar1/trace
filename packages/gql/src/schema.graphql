@@ -558,6 +558,8 @@ type Branch {
   childBranches: [Branch!]!
   depth: Int!
   turnCount: Int!
+  latestSummary: BranchSummary
+  contextHealth: ContextHealth!
   createdBy: User!
   createdAt: DateTime!
 }
@@ -567,10 +569,26 @@ type Turn {
   branch: Branch!
   role: TurnRole!
   content: String!
+  summarized: Boolean!
   parentTurn: Turn
   branchCount: Int!
   childBranches: [Branch!]!
   createdAt: DateTime!
+}
+
+type BranchSummary {
+  id: ID!
+  branchId: ID!
+  content: String!
+  summarizedTurnCount: Int!
+  summarizedUpToTurnId: ID!
+  createdAt: DateTime!
+}
+
+type ContextHealth {
+  tokenUsage: Int!
+  budgetTotal: Int!
+  percentage: Float!
 }
 
 type AiConversationEvent {
@@ -777,6 +795,8 @@ type Query {
   aiConversation(id: ID!): AiConversation
   branch(id: ID!): Branch
   branchAncestors(branchId: ID!): [Branch!]!
+  branchSummary(branchId: ID!): BranchSummary
+  contextHealth(branchId: ID!): ContextHealth!
 }
 
 type Terminal {
@@ -853,6 +873,7 @@ type Mutation {
   updateAgentObservability(conversationId: ID!, level: AgentObservability!): AiConversation!
   labelBranch(branchId: ID!, label: String!): Branch!
   updateAiConversation(conversationId: ID!, input: UpdateAiConversationInput!): AiConversation!
+  summarizeBranch(branchId: ID!): BranchSummary!
 }
 
 # --- Subscriptions ---

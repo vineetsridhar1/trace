@@ -80,6 +80,18 @@ const LABEL_BRANCH_MUTATION = gql`
   }
 `;
 
+const SUMMARIZE_BRANCH_MUTATION = gql`
+  mutation SummarizeBranch($branchId: ID!) {
+    summarizeBranch(branchId: $branchId) {
+      id
+      branchId
+      content
+      summarizedTurnCount
+      summarizedUpToTurnId
+      createdAt
+    }
+  }
+`;
 // ── Mutation hooks ─────────────────────────────────────────────
 
 /** Fire-and-forget: creates a conversation; event stream handles store update */
@@ -324,5 +336,19 @@ export function useLabelBranch() {
     if (result.error) {
       console.error("Failed to label branch:", result.error.message);
     }
+  }, []);
+}
+
+/** Fire-and-forget: triggers branch summarization; event stream handles store update */
+export function useSummarizeBranch() {
+  return useCallback(async (params: { branchId: string }) => {
+    const result = await client.mutation(SUMMARIZE_BRANCH_MUTATION, params).toPromise();
+
+    if (result.error) {
+      console.error("Failed to summarize branch:", result.error.message);
+      return null;
+    }
+
+    return result.data?.summarizeBranch?.id as string | undefined;
   }, []);
 }

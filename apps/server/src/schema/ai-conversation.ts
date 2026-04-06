@@ -7,6 +7,7 @@ import type {
 } from "@trace/gql";
 import { aiConversationService } from "../services/aiConversation.js";
 import { aiTurnService } from "../services/aiTurn.js";
+import { aiBranchSummaryService } from "../services/aiBranchSummary.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { prisma } from "../lib/db.js";
 
@@ -34,6 +35,16 @@ export const aiConversationQueries = {
   branchAncestors: async (_: unknown, args: { branchId: string }, ctx: Context) => {
     await aiConversationService.assertBranchAccess(args.branchId, ctx.userId);
     return aiConversationService.getBranchAncestors(args.branchId);
+  },
+
+  branchSummary: async (_: unknown, args: { branchId: string }, ctx: Context) => {
+    await aiConversationService.assertBranchAccess(args.branchId, ctx.userId);
+    return aiBranchSummaryService.getLatestSummary(args.branchId);
+  },
+
+  contextHealth: async (_: unknown, args: { branchId: string }, ctx: Context) => {
+    await aiConversationService.assertBranchAccess(args.branchId, ctx.userId);
+    return aiBranchSummaryService.getContextHealth({ branchId: args.branchId });
   },
 };
 
@@ -141,6 +152,17 @@ export const aiConversationMutations = {
       actorType: ctx.actorType,
     });
   },
+
+  summarizeBranch: async (_: unknown, args: { branchId: string }, ctx: Context) => {
+    const branch = await aiConversationService.assertBranchAccess(args.branchId, ctx.userId);
+    return aiBranchSummaryService.summarizeBranch({
+      branchId: args.branchId,
+      organizationId: branch.conversation.organizationId,
+      userId: ctx.userId,
+      actorType: ctx.actorType,
+      actorId: ctx.userId,
+    });
+  },
 };
 
 export const aiConversationSubscriptions = {
@@ -237,6 +259,14 @@ export const aiConversationTypeResolvers = {
       return prisma.aiTurn.count({
         where: { branchId: branch.id },
       });
+    },
+
+    latestSummary: (branch: { id: string }) => {
+      return aiBranchSummaryService.getLatestSummary(branch.id);
+    },
+
+    contextHealth: (branch: { id: string }) => {
+      return aiBranchSummaryService.getContextHealth({ branchId: branch.id });
     },
 
     createdBy: async (branch: { createdById: string }, _args: unknown, ctx: Context) => {

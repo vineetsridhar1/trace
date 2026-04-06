@@ -6,6 +6,7 @@ import { aiService } from "./ai.js";
 import { aiConversationService } from "./aiConversation.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { eventService } from "./event.js";
+import { aiBranchSummaryService } from "./aiBranchSummary.js";
 
 /**
  * Truncates text at a word boundary within the given max length.
@@ -115,9 +116,10 @@ export class AiTurnService {
       });
     }
 
-    // Assemble context: walk ancestor chain for full conversation history
-    const contextTurns = await aiConversationService.buildContext(input.branchId);
-    const messages = this.turnsToMessages(contextTurns);
+    // Assemble context with budget-aware context builder
+    const { messages } = await aiBranchSummaryService.buildContextWithBudget({
+      branchId: input.branchId,
+    });
 
     // Call LLM
     let assistantContent: string;
@@ -227,6 +229,19 @@ export class AiTurnService {
       },
     });
 
+    // Trigger auto-summarization in the background (non-blocking)
+    aiBranchSummaryService
+      .maybeAutoSummarize({
+        branchId: input.branchId,
+        organizationId,
+        userId: actorId,
+        actorType,
+        actorId,
+      })
+      .catch((err) => {
+        console.error("[aiTurn] auto-summarize failed:", err);
+      });
+
     return { userTurn, assistantTurn };
   }
 
@@ -320,9 +335,10 @@ export class AiTurnService {
 
     yield { type: "user_turn_created" as const, turn: userTurn };
 
-    // Assemble context: walk ancestor chain for full conversation history
-    const contextTurns = await aiConversationService.buildContext(input.branchId);
-    const messages = this.turnsToMessages(contextTurns);
+    // Assemble context with budget-aware context builder
+    const { messages } = await aiBranchSummaryService.buildContextWithBudget({
+      branchId: input.branchId,
+    });
 
     // Stream from LLM
     let fullText = "";
@@ -435,6 +451,19 @@ export class AiTurnService {
         timestamp: new Date().toISOString(),
       },
     });
+
+    // Trigger auto-summarization in the background (non-blocking)
+    aiBranchSummaryService
+      .maybeAutoSummarize({
+        branchId: input.branchId,
+        organizationId,
+        userId: actorId,
+        actorType,
+        actorId,
+      })
+      .catch((err) => {
+        console.error("[aiTurn] auto-summarize failed:", err);
+      });
 
     return assistantTurn;
   }

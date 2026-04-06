@@ -18,6 +18,7 @@ import type {
   AgentObservability,
   Branch,
   Turn,
+  BranchSummary,
 } from "@trace/gql";
 
 /** Client-side session entity with extra fields not in the GQL schema */
@@ -59,6 +60,9 @@ export type AiTurnEntity = Omit<Turn, "branch" | "parentTurn" | "childBranches">
   _clientMutationId?: string;
 };
 
+/** Client-side branch summary entity */
+export type AiBranchSummaryEntity = Omit<BranchSummary, never>;
+
 /** Entity types that the store manages, keyed by ID */
 export type EntityTableMap = {
   organizations: Organization;
@@ -76,6 +80,7 @@ export type EntityTableMap = {
   aiConversations: AiConversationEntity;
   aiBranches: AiBranchEntity;
   aiTurns: AiTurnEntity;
+  aiBranchSummaries: AiBranchSummaryEntity;
 };
 
 export type EntityType = keyof EntityTableMap;
@@ -124,6 +129,7 @@ export const useEntityStore = create<EntityState>((set) => ({
   aiConversations: {},
   aiBranches: {},
   aiTurns: {},
+  aiBranchSummaries: {},
   eventsByScope: {},
 
   upsert: (entityType, id, data) =>

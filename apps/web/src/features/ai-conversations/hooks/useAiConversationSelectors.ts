@@ -6,6 +6,7 @@ import {
   useEntityIds,
   type AiConversationEntity,
   type AiBranchEntity,
+  type AiBranchSummaryEntity,
   type AiTurnEntity,
 } from "../../../stores/entity";
 import { useAiConversationUIStore } from "../store/ai-conversation-ui";
@@ -58,11 +59,13 @@ const EMPTY_IDS: string[] = [];
 export type TimelineEntry =
   | { type: "inherited-turn"; turnId: string }
   | { type: "fork-separator"; forkTurnId: string; parentBranchLabel: string | null }
-  | { type: "local-turn"; turnId: string };
+  | { type: "local-turn"; turnId: string }
+  | { type: "summary"; summaryId: string; branchId: string; summarizedTurnCount: number };
 
 /**
  * Returns the derived render timeline for a branch:
- * inherited turns from ancestors, a fork separator, then local turns.
+ * summary nodes for summarized turns, inherited turns from ancestors,
+ * a fork separator, then local turns.
  *
  * Only subscribes to the current branch and its ancestors (not the entire table).
  */
@@ -82,6 +85,38 @@ export function useBranchTimeline(branchId: string): TimelineEntry[] {
       }
 
       return result;
+    }),
+  );
+
+  // Get the latest summary for this branch (keyed by branchId)
+  const branchSummary = useEntityStore(
+    useShallow((state) => {
+      const summaries = state.aiBranchSummaries;
+      let latest: AiBranchSummaryEntity | undefined;
+      for (const id of Object.keys(summaries)) {
+        const s = summaries[id];
+        if (s.branchId === branchId) {
+          if (!latest || s.createdAt > latest.createdAt) {
+            latest = s;
+          }
+        }
+      }
+      return latest;
+    }),
+  );
+
+  // Also get the turns table to check summarized status
+  const turnsSummarizedMap = useEntityStore(
+    useShallow((state) => {
+      if (!branch) return {};
+      const map: Record<string, boolean> = {};
+      for (const turnId of branch.turnIds) {
+        const turn = state.aiTurns[turnId];
+        if (turn) {
+          map[turnId] = turn.summarized;
+        }
+      }
+      return map;
     }),
   );
 
@@ -109,13 +144,30 @@ export function useBranchTimeline(branchId: string): TimelineEntry[] {
       });
     }
 
-    // Local turns
-    for (const turnId of branch.turnIds) {
+    // Local turns — insert summary node before unsummarized turns if summary exists
+    const summarizedTurnIds = branch.turnIds.filter((id) => turnsSummarizedMap[id]);
+    const unsummarizedTurnIds = branch.turnIds.filter((id) => !turnsSummarizedMap[id]);
+
+    if (branchSummary && summarizedTurnIds.length > 0) {
+      entries.push({
+        type: "summary",
+        summaryId: branchSummary.id,
+        branchId: branch.id,
+        summarizedTurnCount: branchSummary.summarizedTurnCount,
+      });
+    } else {
+      // No summary — show all turns including summarized ones
+      for (const turnId of summarizedTurnIds) {
+        entries.push({ type: "local-turn", turnId });
+      }
+    }
+
+    for (const turnId of unsummarizedTurnIds) {
       entries.push({ type: "local-turn", turnId });
     }
 
     return entries;
-  }, [branch, ancestorBranches]);
+  }, [branch, ancestorBranches, branchSummary, turnsSummarizedMap]);
 }
 
 /**
@@ -161,6 +213,27 @@ export function useTurnField<F extends keyof AiTurnEntity>(
   field: F,
 ): AiTurnEntity[F] | undefined {
   return useEntityField("aiTurns", id, field);
+}
+
+// ── Summary selectors ─────────────────────────────────────────
+
+/** Returns the latest branch summary entity for a branch */
+export function useBranchSummary(branchId: string): AiBranchSummaryEntity | undefined {
+  return useEntityStore(
+    useShallow((state) => {
+      const summaries = state.aiBranchSummaries;
+      let latest: AiBranchSummaryEntity | undefined;
+      for (const id of Object.keys(summaries)) {
+        const s = summaries[id];
+        if (s.branchId === branchId) {
+          if (!latest || s.createdAt > latest.createdAt) {
+            latest = s;
+          }
+        }
+      }
+      return latest;
+    }),
+  );
 }
 
 // ── UI state selectors ─────────────────────────────────────────
