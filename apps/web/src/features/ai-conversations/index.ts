@@ -19,6 +19,7 @@ export {
   useTurnField,
   useActiveBranchId,
   useScrollTargetTurnId,
+  useHighlightTurnId,
   useBranchSwitcherOpen,
   useBranchTreePanelOpen,
   useTreeNodeCollapsed,
@@ -82,6 +83,14 @@ export {
   DEFAULT_MODEL_ID,
   getModelLabel,
 } from "./constants";
+
+// Hooks
+export { useScrollToTurn } from "./hooks/useScrollToTurn";
+export { useReturnToForkShortcut } from "./hooks/useReturnToForkShortcut";
+
+// Components
+export { ReturnToForkPoint } from "./components/ReturnToForkPoint";
+export { TurnHighlight } from "./components/TurnHighlight";
 
 // Utils
 export { processAiConversationEvent } from "./utils/processAiConversationEvent";
