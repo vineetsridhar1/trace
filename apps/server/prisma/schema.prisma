@@ -214,6 +214,7 @@ enum EventType {
   ai_branch_created
   ai_branch_labeled
   ai_turn_created
+  ai_branch_summary_updated
 }
 
 model Organization {
@@ -799,6 +800,7 @@ model AiBranch {
   createdBy      User           @relation("AiBranchCreator", fields: [createdById], references: [id])
 
   turns AiTurn[]
+  summaries AiBranchSummary[]
 
   createdAt DateTime @default(now())
 
@@ -812,14 +814,30 @@ model AiTurn {
   branch       AiBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
   role         TurnRole
   content      String
+  summarized   Boolean  @default(false)
   parentTurnId String?    @unique
   parentTurn   AiTurn?    @relation("AiTurnChain", fields: [parentTurnId], references: [id])
   childTurn    AiTurn?    @relation("AiTurnChain")
 
   forkedBranches AiBranch[] @relation("ForkTurn")
+  summarizedUpTo AiBranchSummary[] @relation("SummarizedUpToTurn")
 
   createdAt DateTime @default(now())
 
   @@index([branchId, createdAt])
   @@index([parentTurnId])
+}
+
+model AiBranchSummary {
+  id                    String   @id @default(uuid())
+  branchId              String
+  branch                AiBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  content               String
+  summarizedTurnCount   Int
+  summarizedUpToTurnId  String
+  summarizedUpToTurn    AiTurn   @relation("SummarizedUpToTurn", fields: [summarizedUpToTurnId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([branchId])
 }

@@ -4,6 +4,7 @@ import {
   useEntityStore,
   type AiConversationEntity,
   type AiBranchEntity,
+  type AiBranchSummaryEntity,
   type AiTurnEntity,
 } from "../../../stores/entity";
 
@@ -245,6 +246,43 @@ export function processAiConversationEvent({
         patch("aiBranches", branchId, {
           label: payload.label as string,
         } as Partial<AiBranchEntity>);
+      }
+      break;
+    }
+
+    case "ai_branch_summary_updated": {
+      const summaryId = payload.summaryId as string | undefined;
+      const branchId = payload.branchId as string | undefined;
+      if (summaryId && branchId) {
+        upsert("aiBranchSummaries", summaryId, {
+          id: summaryId,
+          branchId,
+          content: payload.content as string,
+          summarizedTurnCount: payload.summarizedTurnCount as number,
+          summarizedUpToTurnId: payload.summarizedUpToTurnId as string,
+          createdAt: (payload.createdAt as string) ?? timestamp,
+        } as AiBranchSummaryEntity);
+
+        // Mark summarized turns in the store
+        const branch = useEntityStore.getState().aiBranches[branchId];
+        if (branch) {
+          const upToTurnId = payload.summarizedUpToTurnId as string;
+          let found = false;
+          for (const turnId of branch.turnIds) {
+            const turn = useEntityStore.getState().aiTurns[turnId];
+            if (turn && !turn.summarized) {
+              patch("aiTurns", turnId, { summarized: true } as Partial<AiTurnEntity>);
+            }
+            if (turnId === upToTurnId) {
+              found = true;
+              break;
+            }
+          }
+          // If we didn't find the upToTurnId, mark all turns from inherited context
+          if (!found) {
+            // The turn may be in ancestor branches — just update what we can
+          }
+        }
       }
       break;
     }

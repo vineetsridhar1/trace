@@ -5,6 +5,7 @@ import { prisma } from "../lib/db.js";
 import { aiService } from "./ai.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { eventService } from "./event.js";
+import { aiBranchSummaryService } from "./aiBranchSummary.js";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 
@@ -67,13 +68,10 @@ export class AiTurnService {
       },
     });
 
-    // Assemble context: all turns in the branch in chronological order
-    const turns = await prisma.aiTurn.findMany({
-      where: { branchId: input.branchId },
-      orderBy: { createdAt: "asc" },
+    // Assemble context with budget-aware context builder
+    const { messages } = await aiBranchSummaryService.buildContextWithBudget({
+      branchId: input.branchId,
     });
-
-    const messages = this.turnsToMessages(turns);
 
     // Call LLM
     let assistantContent: string;
@@ -182,6 +180,19 @@ export class AiTurnService {
       },
     });
 
+    // Trigger auto-summarization in the background (non-blocking)
+    aiBranchSummaryService
+      .maybeAutoSummarize({
+        branchId: input.branchId,
+        organizationId,
+        userId: actorId,
+        actorType,
+        actorId,
+      })
+      .catch((err) => {
+        console.error("[aiTurn] auto-summarize failed:", err);
+      });
+
     return { userTurn, assistantTurn };
   }
 
@@ -242,12 +253,10 @@ export class AiTurnService {
 
     yield { type: "user_turn_created" as const, turn: userTurn };
 
-    // Assemble context
-    const turns = await prisma.aiTurn.findMany({
-      where: { branchId: input.branchId },
-      orderBy: { createdAt: "asc" },
+    // Assemble context with budget-aware context builder
+    const { messages } = await aiBranchSummaryService.buildContextWithBudget({
+      branchId: input.branchId,
     });
-    const messages = this.turnsToMessages(turns);
 
     // Stream from LLM
     let fullText = "";
@@ -359,6 +368,19 @@ export class AiTurnService {
         timestamp: new Date().toISOString(),
       },
     });
+
+    // Trigger auto-summarization in the background (non-blocking)
+    aiBranchSummaryService
+      .maybeAutoSummarize({
+        branchId: input.branchId,
+        organizationId,
+        userId: actorId,
+        actorType,
+        actorId,
+      })
+      .catch((err) => {
+        console.error("[aiTurn] auto-summarize failed:", err);
+      });
 
     return assistantTurn;
   }

@@ -108,6 +108,7 @@ export type AutonomyMode =
 export type Branch = {
   __typename?: 'Branch';
   childBranches: Array<Branch>;
+  contextHealth: ContextHealth;
   conversation: AiConversation;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
@@ -115,6 +116,7 @@ export type Branch = {
   forkTurn?: Maybe<Turn>;
   id: Scalars['ID']['output'];
   label?: Maybe<Scalars['String']['output']>;
+  latestSummary?: Maybe<BranchSummary>;
   parentBranch?: Maybe<Branch>;
   turnCount: Scalars['Int']['output'];
   turns: Array<Turn>;
@@ -126,6 +128,16 @@ export type BranchDiffFile = {
   deletions: Scalars['Int']['output'];
   path: Scalars['String']['output'];
   status: Scalars['String']['output'];
+};
+
+export type BranchSummary = {
+  __typename?: 'BranchSummary';
+  branchId: Scalars['ID']['output'];
+  content: Scalars['String']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  summarizedTurnCount: Scalars['Int']['output'];
+  summarizedUpToTurnId: Scalars['ID']['output'];
 };
 
 export type Channel = {
@@ -199,6 +211,13 @@ export type CodingTool =
   | 'claude_code'
   | 'codex'
   | 'custom';
+
+export type ContextHealth = {
+  __typename?: 'ContextHealth';
+  budgetTotal: Scalars['Int']['output'];
+  percentage: Scalars['Float']['output'];
+  tokenUsage: Scalars['Int']['output'];
+};
 
 export type CostBudget = {
   __typename?: 'CostBudget';
@@ -461,6 +480,7 @@ export type Mutation = {
   setApiToken: ApiTokenStatus;
   startSession: Session;
   subscribe: Participant;
+  summarizeBranch: BranchSummary;
   terminateSession: Session;
   unassignTicket: Ticket;
   unlinkTicket: Ticket;
@@ -755,6 +775,11 @@ export type MutationSubscribeArgs = {
 };
 
 
+export type MutationSummarizeBranchArgs = {
+  branchId: Scalars['ID']['input'];
+};
+
+
 export type MutationTerminateSessionArgs = {
   id: Scalars['ID']['input'];
 };
@@ -905,6 +930,7 @@ export type Query = {
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   branch?: Maybe<Branch>;
+  branchSummary?: Maybe<BranchSummary>;
   channel?: Maybe<Channel>;
   channelGroups: Array<ChannelGroup>;
   channelMessages: Array<Message>;
@@ -912,6 +938,7 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
+  contextHealth: ContextHealth;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
   myApiTokens: Array<ApiTokenStatus>;
@@ -971,6 +998,11 @@ export type QueryBranchArgs = {
 };
 
 
+export type QueryBranchSummaryArgs = {
+  branchId: Scalars['ID']['input'];
+};
+
+
 export type QueryChannelArgs = {
   id: Scalars['ID']['input'];
 };
@@ -1006,6 +1038,11 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars['DateTime']['input']>;
   chatId: Scalars['ID']['input'];
   limit?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryContextHealthArgs = {
+  branchId: Scalars['ID']['input'];
 };
 
 
@@ -1434,6 +1471,7 @@ export type Turn = {
   id: Scalars['ID']['output'];
   parentTurn?: Maybe<Turn>;
   role: TurnRole;
+  summarized: Scalars['Boolean']['output'];
 };
 
 export type TurnRole =

@@ -10,6 +10,7 @@ export {
   useBranchField,
   useBranchTurns,
   useBranchTimeline,
+  useBranchSummary,
   useTurn,
   useTurnField,
   useActiveBranchId,
@@ -23,6 +24,8 @@ export {
   useAiConversationsQuery,
   useAiConversationQuery,
   useBranchTimelineQuery,
+  useContextHealthQuery,
+  type ContextHealthData,
 } from "./hooks/useAiConversationQueries";
 
 // Subscription hooks
@@ -36,6 +39,7 @@ export {
   useCreateAiConversation,
   useSendTurn,
   useUpdateAiConversationTitle,
+  useSummarizeBranch,
 } from "./hooks/useAiConversationMutations";
 
 // Utils
