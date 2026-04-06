@@ -19,6 +19,7 @@ export {
   useTurnField,
   useActiveBranchId,
   useScrollTargetTurnId,
+  useHighlightTurnId,
   useBranchSwitcherOpen,
   useBranchTreePanelOpen,
   useTreeNodeCollapsed,
@@ -84,6 +85,14 @@ export { BranchSwitcherItem } from "./components/BranchSwitcherItem";
 
 // Hooks (keyboard shortcut)
 export { useBranchSwitcherShortcut } from "./hooks/useBranchSwitcherShortcut";
+
+// Hooks
+export { useScrollToTurn } from "./hooks/useScrollToTurn";
+export { useReturnToForkShortcut } from "./hooks/useReturnToForkShortcut";
+
+// Components
+export { ReturnToForkPoint } from "./components/ReturnToForkPoint";
+export { TurnHighlight } from "./components/TurnHighlight";
 
 // Utils
 export { processAiConversationEvent } from "./utils/processAiConversationEvent";
