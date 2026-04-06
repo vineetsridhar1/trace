@@ -38,5 +38,11 @@ export {
   useUpdateAiConversationTitle,
 } from "./hooks/useAiConversationMutations";
 
+// Components
+export { BranchBreadcrumb } from "./components/BranchBreadcrumb";
+
+// Ancestor hooks
+export { useBranchAncestors, type BranchAncestorInfo } from "./hooks/useBranchAncestors";
+
 // Utils
 export { processAiConversationEvent } from "./utils/processAiConversationEvent";
