@@ -91,6 +91,14 @@ function persistActiveChatId(chatId: string | null) {
   }
 }
 
+function persistActiveAiConversationId(id: string | null) {
+  if (id) {
+    localStorage.setItem("trace:activeAiConversationId", id);
+  } else {
+    localStorage.removeItem("trace:activeAiConversationId");
+  }
+}
+
 function persistActiveSessionNav(sessionGroupId: string | null, sessionId: string | null) {
   if (sessionGroupId) {
     localStorage.setItem("trace:activeSessionGroupId", sessionGroupId);
@@ -234,6 +242,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       activePage: "main",
       activeChannelId: id,
       activeChatId: null,
+      activeAiConversationId: null,
       activeSessionGroupId: null,
       activeSessionId: null,
       activeTerminalId: null,
@@ -270,6 +279,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         activePage: "main" as ActivePage,
         activeChatId: id,
         activeChannelId: null,
+        activeAiConversationId: null,
         activeSessionGroupId: null,
         activeSessionId: null,
         activeTerminalId: null,
@@ -360,17 +370,21 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   setActiveAiConversationId: (id) => {
-    set({
-      activePage: "ai-conversations",
-      activeAiConversationId: id,
-      activeChannelId: null,
-      activeChatId: null,
-      activeSessionGroupId: null,
-      activeSessionId: null,
-      activeTerminalId: null,
-      activeThreadId: null,
-    });
-    pushNav(null, null, null, "ai-conversations", null, id);
+    if (id) {
+      set({
+        activePage: "ai-conversations",
+        activeAiConversationId: id,
+        activeChannelId: null,
+        activeChatId: null,
+        activeSessionGroupId: null,
+        activeSessionId: null,
+        activeTerminalId: null,
+        activeThreadId: null,
+      });
+      pushNav(null, null, null, "ai-conversations", null, id);
+    } else {
+      set({ activeAiConversationId: null });
+    }
   },
 
   restoreLastVisited: (tab) => {
