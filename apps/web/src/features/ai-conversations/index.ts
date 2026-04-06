@@ -44,6 +44,7 @@ export {
   useUpdateAiConversationTitle,
   useUpdateAgentObservability,
   useForkBranch,
+  useLabelBranch,
 } from "./hooks/useAiConversationMutations";
 
 // Components
@@ -53,12 +54,14 @@ export { ConversationListItem } from "./components/ConversationListItem";
 export { BranchTreePanel } from "./components/BranchTreePanel";
 export { BranchTreeNode, BranchTreeNodeContainer } from "./components/BranchTreeNode";
 export { BranchBreadcrumb } from "./components/BranchBreadcrumb";
+export { EditableBranchLabel } from "./components/EditableBranchLabel";
 
 // Ancestor hooks
 export { useBranchAncestors, type BranchAncestorInfo } from "./hooks/useBranchAncestors";
 
 // Utils
 export { processAiConversationEvent } from "./utils/processAiConversationEvent";
+export { getBranchDisplayLabel, truncateAtWord } from "./utils/branchLabel";
 
 // Components
 export { ConversationView } from "./components/ConversationView";

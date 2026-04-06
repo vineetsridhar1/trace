@@ -840,6 +840,7 @@ type Mutation {
   updateAiConversationTitle(conversationId: ID!, title: String!): AiConversation!
   forkBranch(turnId: ID!, label: String): Branch!
   updateAgentObservability(conversationId: ID!, level: AgentObservability!): AiConversation!
+  labelBranch(branchId: ID!, label: String!): Branch!
 }
 
 # --- Subscriptions ---

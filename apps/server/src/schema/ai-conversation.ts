@@ -91,6 +91,19 @@ export const aiConversationMutations = {
     );
   },
 
+  labelBranch: (
+    _: unknown,
+    args: { branchId: string; label: string },
+    ctx: Context,
+  ) => {
+    return aiConversationService.labelBranch(
+      { branchId: args.branchId, label: args.label },
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
+
+
   updateAgentObservability: (
     _: unknown,
     args: { conversationId: string; level: AgentObservability },
