@@ -69,7 +69,9 @@ export type AiConversation = {
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
   id: Scalars['ID']['output'];
+  modelId?: Maybe<Scalars['String']['output']>;
   rootBranch: Branch;
+  systemPrompt?: Maybe<Scalars['String']['output']>;
   title?: Maybe<Scalars['String']['output']>;
   updatedAt: Scalars['DateTime']['output'];
   visibility: AiConversationVisibility;
@@ -206,6 +208,8 @@ export type CostBudget = {
 };
 
 export type CreateAiConversationInput = {
+  modelId?: InputMaybe<Scalars['String']['input']>;
+  systemPrompt?: InputMaybe<Scalars['String']['input']>;
   title?: InputMaybe<Scalars['String']['input']>;
   visibility?: InputMaybe<AiConversationVisibility>;
 };
@@ -468,6 +472,7 @@ export type Mutation = {
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
   updateAgentSettings: AgentIdentity;
+  updateAiConversation: AiConversation;
   updateAiConversationTitle: AiConversation;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
@@ -793,6 +798,12 @@ export type MutationUnsubscribeArgs = {
 export type MutationUpdateAgentSettingsArgs = {
   input: UpdateAgentSettingsInput;
   organizationId: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateAiConversationArgs = {
+  conversationId: Scalars['ID']['input'];
+  input: UpdateAiConversationInput;
 };
 
 
@@ -1446,6 +1457,13 @@ export type UpdateAgentSettingsInput = {
   name?: InputMaybe<Scalars['String']['input']>;
   soulFile?: InputMaybe<Scalars['String']['input']>;
   status?: InputMaybe<OrgAgentStatus>;
+};
+
+export type UpdateAiConversationInput = {
+  modelId?: InputMaybe<Scalars['String']['input']>;
+  systemPrompt?: InputMaybe<Scalars['String']['input']>;
+  title?: InputMaybe<Scalars['String']['input']>;
+  visibility?: InputMaybe<AiConversationVisibility>;
 };
 
 export type UpdateChannelGroupInput = {

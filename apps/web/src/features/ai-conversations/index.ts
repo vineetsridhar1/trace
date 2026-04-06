@@ -36,7 +36,24 @@ export {
   useCreateAiConversation,
   useSendTurn,
   useUpdateAiConversationTitle,
+  useUpdateAiConversation,
 } from "./hooks/useAiConversationMutations";
+
+// Shortcut hooks
+export { useNewConversationShortcut } from "./hooks/useNewConversationShortcut";
+
+// Components
+export { AiConversationView } from "./components/AiConversationView";
+export { ModelPicker } from "./components/ModelPicker";
+export { ConversationSettings } from "./components/ConversationSettings";
+export { NewConversationButton } from "./components/NewConversationButton";
+
+// Constants
+export {
+  AVAILABLE_MODELS,
+  DEFAULT_MODEL_ID,
+  getModelLabel,
+} from "./constants";
 
 // Utils
 export { processAiConversationEvent } from "./utils/processAiConversationEvent";

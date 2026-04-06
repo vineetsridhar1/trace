@@ -19,6 +19,8 @@ interface UIState {
   setActiveTerminalId: (id: string | null) => void;
   activeThreadId: string | null;
   setActiveThreadId: (id: string | null) => void;
+  activeAiConversationId: string | null;
+  setActiveAiConversationId: (id: string | null) => void;
   refreshTick: number;
   triggerRefresh: () => void;
   lastSelectedSessionIdsByGroup: Record<string, string>;
@@ -137,6 +139,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   activeSessionId: null,
   activeTerminalId: null,
   activeThreadId: null,
+  activeAiConversationId: null,
   refreshTick: 0,
   lastSelectedSessionIdsByGroup: {},
   openSessionTabsByGroup: {},
@@ -226,6 +229,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       activeSessionId: null,
       activeTerminalId: null,
       activeThreadId: null,
+      activeAiConversationId: null,
     });
     pushNav(id, null, null);
   },
@@ -261,6 +265,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         activeSessionId: null,
         activeTerminalId: null,
         activeThreadId: null,
+        activeAiConversationId: null,
         unreadChatIds,
       };
     });
@@ -343,6 +348,27 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   setActiveThreadId: (id) => {
     set({ activeThreadId: id });
+  },
+
+  setActiveAiConversationId: (id) => {
+    set({
+      activeAiConversationId: id,
+      // Clear other navigation when entering AI conversation view
+      ...(id
+        ? {
+            activePage: "main" as ActivePage,
+            activeChannelId: null,
+            activeChatId: null,
+            activeSessionGroupId: null,
+            activeSessionId: null,
+            activeTerminalId: null,
+            activeThreadId: null,
+          }
+        : {}),
+    });
+    if (id) {
+      history.pushState({ aiConversationId: id }, "", `/ai/${id}`);
+    }
   },
 
   restoreLastVisited: (tab) => {

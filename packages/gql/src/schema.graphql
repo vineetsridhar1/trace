@@ -531,6 +531,8 @@ type AiConversation {
   id: ID!
   title: String
   visibility: AiConversationVisibility!
+  modelId: String
+  systemPrompt: String
   createdBy: User!
   rootBranch: Branch!
   branches: [Branch!]!
@@ -708,6 +710,15 @@ input UpdateAgentSettingsInput {
 input CreateAiConversationInput {
   title: String
   visibility: AiConversationVisibility
+  modelId: String
+  systemPrompt: String
+}
+
+input UpdateAiConversationInput {
+  title: String
+  modelId: String
+  systemPrompt: String
+  visibility: AiConversationVisibility
 }
 
 # --- Queries ---
@@ -830,6 +841,7 @@ type Mutation {
   createAiConversation(organizationId: ID!, input: CreateAiConversationInput!): AiConversation!
   sendTurn(branchId: ID!, content: String!, clientMutationId: String): Turn!
   updateAiConversationTitle(conversationId: ID!, title: String!): AiConversation!
+  updateAiConversation(conversationId: ID!, input: UpdateAiConversationInput!): AiConversation!
 }
 
 # --- Subscriptions ---

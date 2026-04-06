@@ -775,6 +775,8 @@ model AiConversation {
   title          String?
   visibility     AiConversationVisibility @default(PRIVATE)
   rootBranchId   String?
+  modelId        String?
+  systemPrompt   String?
 
   branches AiBranch[]
 
