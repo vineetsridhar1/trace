@@ -63,9 +63,13 @@ export { AiConversationView } from "./components/AiConversationView";
 export { ModelPicker } from "./components/ModelPicker";
 export { ConversationSettings } from "./components/ConversationSettings";
 export { NewConversationButton } from "./components/NewConversationButton";
+export { BranchSwitcherItem } from "./components/BranchSwitcherItem";
 
 // Ancestor hooks
 export { useBranchAncestors, type BranchAncestorInfo } from "./hooks/useBranchAncestors";
+
+// Hooks (keyboard shortcut)
+export { useBranchSwitcherShortcut } from "./hooks/useBranchSwitcherShortcut";
 
 // Constants
 export {
