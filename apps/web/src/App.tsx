@@ -10,6 +10,7 @@ import { InboxView } from "./components/inbox/InboxView";
 import { TicketsView } from "./components/tickets/TicketsView";
 import { AgentDebugPage } from "./components/agent-debug/AgentDebugPage";
 import { ConversationListContainer } from "./features/ai-conversations/components/ConversationListContainer";
+import { ConversationView } from "./features/ai-conversations";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
 import { DetailPanel } from "./components/ui/detail-panel";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "./components/ui/sidebar";
@@ -59,6 +60,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   useVisibilityRefresh();
   const activePage = useUIStore((s: UIState) => s.activePage);
   const activeChatId = useUIStore((s: UIState) => s.activeChatId);
+  const activeAiConversationId = useUIStore((s: UIState) => s.activeAiConversationId);
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
   const setActiveSessionId = useUIStore((s: UIState) => s.setActiveSessionId);
   const isFullscreen = useDetailPanelStore((s: DetailPanelState) => s.isFullscreen);
@@ -130,6 +132,8 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
                   <InboxView />
                 ) : activePage === "tickets" ? (
                   <TicketsView />
+                ) : activeAiConversationId ? (
+                  <ConversationView conversationId={activeAiConversationId} />
                 ) : activePage === "ai-conversations" ? (
                   <ConversationListContainer />
                 ) : activeChatId ? (

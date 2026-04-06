@@ -1,3 +1,6 @@
+// Components
+export { ConversationView } from "./components/ConversationView";
+
 // Store
 export { useAiConversationUIStore } from "./store/ai-conversation-ui";
 
