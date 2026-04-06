@@ -84,11 +84,11 @@ export const aiConversationMutations = {
     args: { turnId: string; label?: string | null },
     ctx: Context,
   ) => {
-    return aiConversationService.forkBranch({
-      turnId: args.turnId,
-      label: args.label ?? undefined,
-      userId: ctx.userId,
-    });
+    return aiConversationService.forkBranch(
+      { turnId: args.turnId, label: args.label ?? undefined },
+      ctx.actorType,
+      ctx.userId,
+    );
   },
 
   updateAgentObservability: (

@@ -1,90 +1,64 @@
-import { useCallback, useRef, useEffect, type KeyboardEvent } from "react";
+import { useState, useCallback, type RefObject } from "react";
 import { Send } from "lucide-react";
-import { useSendTurn } from "../hooks/useAiConversationMutations";
 import { Button } from "../../../components/ui/button";
-import { cn } from "../../../lib/utils";
+import { useSendTurn } from "../hooks/useAiConversationMutations";
 
 interface TurnInputProps {
   branchId: string;
-  disabled?: boolean;
+  inputRef?: RefObject<HTMLTextAreaElement | null>;
 }
 
-export function TurnInput({ branchId, disabled }: TurnInputProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+export function TurnInput({ branchId, inputRef }: TurnInputProps) {
+  const [value, setValue] = useState("");
   const sendTurn = useSendTurn();
+  const [sending, setSending] = useState(false);
 
-  // Auto-focus on mount and branch change
-  useEffect(() => {
-    if (!disabled) {
-      textareaRef.current?.focus();
+  const handleSend = useCallback(async () => {
+    const trimmed = value.trim();
+    if (!trimmed || sending) return;
+
+    setSending(true);
+    setValue("");
+    try {
+      await sendTurn({ branchId, content: trimmed });
+    } finally {
+      setSending(false);
+      inputRef?.current?.focus();
     }
-  }, [branchId, disabled]);
-
-  const handleSubmit = useCallback(async () => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const content = textarea.value.trim();
-    if (!content || !branchId || disabled) return;
-
-    textarea.value = "";
-    resetHeight(textarea);
-
-    await sendTurn({ branchId, content });
-  }, [branchId, disabled, sendTurn]);
+  }, [value, sending, sendTurn, branchId, inputRef]);
 
   const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        void handleSubmit();
+        handleSend();
       }
     },
-    [handleSubmit],
+    [handleSend],
   );
-
-  const handleInput = useCallback(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    resetHeight(textarea);
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
-  }, []);
 
   return (
     <div className="border-t border-border p-3">
-      <div
-        className={cn(
-          "flex items-end gap-2 rounded-lg border border-border bg-background px-3 py-2",
-          "focus-within:ring-1 focus-within:ring-ring",
-          disabled && "opacity-50",
-        )}
-      >
+      <div className="flex items-end gap-2">
         <textarea
-          ref={textareaRef}
+          ref={inputRef}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          onInput={handleInput}
-          placeholder={disabled ? "Waiting for AI response..." : "Send a message..."}
-          disabled={disabled}
+          placeholder="Type a message..."
           rows={1}
-          className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed"
-          style={{ maxHeight: 200 }}
+          disabled={sending}
+          className="flex-1 resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-1 focus:ring-ring/50 disabled:opacity-50"
         />
         <Button
-          type="button"
+          variant="default"
           size="icon"
-          variant="ghost"
-          disabled={disabled}
-          onClick={() => void handleSubmit()}
-          aria-label="Send message"
-          className="h-7 w-7 shrink-0"
+          onClick={handleSend}
+          disabled={!value.trim() || sending}
         >
-          <Send size={14} />
+          <Send className="size-4" />
         </Button>
       </div>
     </div>
   );
-}
-
-function resetHeight(el: HTMLTextAreaElement) {
-  el.style.height = "auto";
 }
