@@ -9,6 +9,7 @@ import { SettingsPage } from "./components/settings/SettingsPage";
 import { InboxView } from "./components/inbox/InboxView";
 import { TicketsView } from "./components/tickets/TicketsView";
 import { AgentDebugPage } from "./components/agent-debug/AgentDebugPage";
+import { ConversationListContainer } from "./features/ai-conversations/components/ConversationListContainer";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
 import { DetailPanel } from "./components/ui/detail-panel";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "./components/ui/sidebar";
@@ -129,6 +130,8 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
                   <InboxView />
                 ) : activePage === "tickets" ? (
                   <TicketsView />
+                ) : activePage === "ai-conversations" ? (
+                  <ConversationListContainer />
                 ) : activeChatId ? (
                   <ChatView chatId={activeChatId} />
                 ) : activeChannelId ? (

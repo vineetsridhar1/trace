@@ -38,5 +38,10 @@ export {
   useUpdateAiConversationTitle,
 } from "./hooks/useAiConversationMutations";
 
+// Components
+export { ConversationListContainer } from "./components/ConversationListContainer";
+export { ConversationList } from "./components/ConversationList";
+export { ConversationListItem } from "./components/ConversationListItem";
+
 // Utils
 export { processAiConversationEvent } from "./utils/processAiConversationEvent";
