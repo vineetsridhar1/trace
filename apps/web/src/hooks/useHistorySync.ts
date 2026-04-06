@@ -7,13 +7,22 @@ function parseNavFromPath(path: string): {
   sessionGroupId: string | null;
   sessionId: string | null;
   chatId: string | null;
+  aiConversationId: string | null;
   page: ActivePage;
 } {
   if (path.startsWith("/settings")) {
-    return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, page: "settings" };
+    return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, aiConversationId: null, page: "settings" };
   }
   if (path.startsWith("/inbox")) {
-    return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, page: "inbox" };
+    return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, aiConversationId: null, page: "inbox" };
+  }
+
+  const conversationDetailMatch = path.match(/^\/conversations\/([^/]+)/);
+  if (conversationDetailMatch) {
+    return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, aiConversationId: conversationDetailMatch[1], page: "ai-conversations" };
+  }
+  if (path.startsWith("/conversations")) {
+    return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, aiConversationId: null, page: "ai-conversations" };
   }
 
   const chatMatch = path.match(/^\/dm\/([^/]+)/);
@@ -23,6 +32,7 @@ function parseNavFromPath(path: string): {
       sessionGroupId: null,
       sessionId: null,
       chatId: chatMatch[1],
+      aiConversationId: null,
       page: "main",
     };
   }
@@ -34,6 +44,7 @@ function parseNavFromPath(path: string): {
       sessionGroupId: channelGroupSessionMatch[2],
       sessionId: channelGroupSessionMatch[3],
       chatId: null,
+      aiConversationId: null,
       page: "main",
     };
   }
@@ -45,6 +56,7 @@ function parseNavFromPath(path: string): {
       sessionGroupId: channelGroupMatch[2],
       sessionId: null,
       chatId: null,
+      aiConversationId: null,
       page: "main",
     };
   }
@@ -56,6 +68,7 @@ function parseNavFromPath(path: string): {
       sessionGroupId: groupSessionMatch[1],
       sessionId: groupSessionMatch[2],
       chatId: null,
+      aiConversationId: null,
       page: "main",
     };
   }
@@ -67,6 +80,7 @@ function parseNavFromPath(path: string): {
       sessionGroupId: groupMatch[1],
       sessionId: null,
       chatId: null,
+      aiConversationId: null,
       page: "main",
     };
   }
@@ -78,42 +92,49 @@ function parseNavFromPath(path: string): {
       sessionGroupId: null,
       sessionId: null,
       chatId: null,
+      aiConversationId: null,
       page: "main",
     };
   }
 
-  return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, page: "main" };
+  return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, aiConversationId: null, page: "main" };
 }
 
 export function useHistorySync() {
   const restoreNav = useUIStore((s) => s._restoreNav);
 
   useEffect(() => {
-    const { channelId, sessionGroupId, sessionId, chatId, page } = parseNavFromPath(
+    const { channelId, sessionGroupId, sessionId, chatId, aiConversationId, page } = parseNavFromPath(
       window.location.pathname,
     );
+    const isSpecialPage = page === "settings" || page === "inbox" || page === "ai-conversations";
     const initialChat =
-      (page === "settings" || page === "inbox" || channelId)
+      (isSpecialPage || channelId)
         ? null
         : (chatId ?? localStorage.getItem("trace:activeChatId"));
     const initialChannel =
-      (page === "settings" || page === "inbox" || initialChat)
+      (isSpecialPage || initialChat)
         ? null
         : (channelId ?? localStorage.getItem("trace:activeChannelId"));
     const initialSessionGroupId =
-      (page === "settings" || page === "inbox" || initialChat)
+      (isSpecialPage || initialChat)
         ? null
         : (sessionGroupId ?? localStorage.getItem("trace:activeSessionGroupId"));
     const initialSessionId =
-      (page === "settings" || page === "inbox" || initialChat)
+      (isSpecialPage || initialChat)
         ? null
         : (sessionId ?? localStorage.getItem("trace:activeSessionId"));
+    const initialAiConversationId = page === "ai-conversations" ? aiConversationId : null;
 
     let path: string;
     if (page === "settings") {
       path = "/settings";
     } else if (page === "inbox") {
       path = "/inbox";
+    } else if (page === "ai-conversations" && initialAiConversationId) {
+      path = `/conversations/${initialAiConversationId}`;
+    } else if (page === "ai-conversations") {
+      path = "/conversations";
     } else if (initialChat) {
       path = `/dm/${initialChat}`;
     } else if (initialChannel && initialSessionGroupId && initialSessionId) {
@@ -131,12 +152,12 @@ export function useHistorySync() {
     }
 
     history.replaceState(
-      { channelId: initialChannel, sessionGroupId: initialSessionGroupId, sessionId: initialSessionId, page, chatId: initialChat },
+      { channelId: initialChannel, sessionGroupId: initialSessionGroupId, sessionId: initialSessionId, page, chatId: initialChat, aiConversationId: initialAiConversationId },
       "",
       path,
     );
 
-    restoreNav(initialChannel, initialSessionGroupId, initialSessionId, page, initialChat);
+    restoreNav(initialChannel, initialSessionGroupId, initialSessionId, page, initialChat, initialAiConversationId);
 
     function onPopState(e: PopStateEvent) {
       const state = e.state as {
@@ -144,6 +165,7 @@ export function useHistorySync() {
         sessionGroupId: string | null;
         sessionId: string | null;
         chatId?: string | null;
+        aiConversationId?: string | null;
         page?: ActivePage;
       } | null;
 
@@ -154,12 +176,13 @@ export function useHistorySync() {
           state.sessionId,
           state.page,
           state.chatId,
+          state.aiConversationId,
         );
         return;
       }
 
       const nav = parseNavFromPath(window.location.pathname);
-      restoreNav(nav.channelId, nav.sessionGroupId, nav.sessionId, nav.page, nav.chatId);
+      restoreNav(nav.channelId, nav.sessionGroupId, nav.sessionId, nav.page, nav.chatId, nav.aiConversationId);
     }
 
     function onMouseUp(e: MouseEvent) {

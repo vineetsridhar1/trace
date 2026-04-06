@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { useEntityStore } from "./entity";
 import { getSessionChannelId, getSessionGroupChannelId } from "../lib/session-group";
 
-export type ActivePage = "main" | "settings" | "inbox";
+export type ActivePage = "main" | "settings" | "inbox" | "ai-conversations";
 
 interface UIState {
   activePage: ActivePage;
@@ -19,6 +19,8 @@ interface UIState {
   setActiveTerminalId: (id: string | null) => void;
   activeThreadId: string | null;
   setActiveThreadId: (id: string | null) => void;
+  activeAiConversationId: string | null;
+  setActiveAiConversationId: (id: string | null) => void;
   refreshTick: number;
   triggerRefresh: () => void;
   lastSelectedSessionIdsByGroup: Record<string, string>;
@@ -36,6 +38,7 @@ interface UIState {
     sessionId: string | null,
     page?: ActivePage,
     chatId?: string | null,
+    aiConversationId?: string | null,
   ) => void;
 }
 
@@ -45,9 +48,12 @@ export function buildPath(
   sessionId: string | null,
   page: ActivePage = "main",
   chatId: string | null = null,
+  aiConversationId: string | null = null,
 ): string {
   if (page === "settings") return "/settings";
   if (page === "inbox") return "/inbox";
+  if (page === "ai-conversations" && aiConversationId) return `/conversations/${aiConversationId}`;
+  if (page === "ai-conversations") return "/conversations";
   if (chatId) return `/dm/${chatId}`;
   if (channelId && sessionGroupId && sessionId) return `/c/${channelId}/g/${sessionGroupId}/s/${sessionId}`;
   if (channelId && sessionGroupId) return `/c/${channelId}/g/${sessionGroupId}`;
@@ -63,9 +69,10 @@ function pushNav(
   sessionId: string | null,
   page: ActivePage = "main",
   chatId: string | null = null,
+  aiConversationId: string | null = null,
 ) {
-  const path = buildPath(channelId, sessionGroupId, sessionId, page, chatId);
-  history.pushState({ channelId, sessionGroupId, sessionId, page, chatId }, "", path);
+  const path = buildPath(channelId, sessionGroupId, sessionId, page, chatId, aiConversationId);
+  history.pushState({ channelId, sessionGroupId, sessionId, page, chatId, aiConversationId }, "", path);
 }
 
 function persistActiveChannelId(channelId: string | null) {
@@ -137,6 +144,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   activeSessionId: null,
   activeTerminalId: null,
   activeThreadId: null,
+  activeAiConversationId: null,
   refreshTick: 0,
   lastSelectedSessionIdsByGroup: {},
   openSessionTabsByGroup: {},
@@ -206,6 +214,10 @@ export const useUIStore = create<UIState>((set, get) => ({
       pushNav(null, null, null, "inbox");
       return;
     }
+    if (page === "ai-conversations") {
+      pushNav(null, null, null, "ai-conversations", null, get().activeAiConversationId);
+      return;
+    }
 
     pushNav(
       get().activeChannelId,
@@ -226,6 +238,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       activeSessionId: null,
       activeTerminalId: null,
       activeThreadId: null,
+      activeAiConversationId: null,
     });
     pushNav(id, null, null);
   },
@@ -261,6 +274,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         activeSessionId: null,
         activeTerminalId: null,
         activeThreadId: null,
+        activeAiConversationId: null,
         unreadChatIds,
       };
     });
@@ -345,6 +359,20 @@ export const useUIStore = create<UIState>((set, get) => ({
     set({ activeThreadId: id });
   },
 
+  setActiveAiConversationId: (id) => {
+    set({
+      activePage: "ai-conversations",
+      activeAiConversationId: id,
+      activeChannelId: null,
+      activeChatId: null,
+      activeSessionGroupId: null,
+      activeSessionId: null,
+      activeTerminalId: null,
+      activeThreadId: null,
+    });
+    pushNav(null, null, null, "ai-conversations", null, id);
+  },
+
   restoreLastVisited: (tab) => {
     if (tab === "dm") {
       const chatId = localStorage.getItem("trace:activeChatId");
@@ -379,7 +407,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     }
   },
 
-  _restoreNav: (channelId, sessionGroupId, sessionId, page, chatId) => {
+  _restoreNav: (channelId, sessionGroupId, sessionId, page, chatId, aiConversationId) => {
     persistActiveChannelId(channelId);
     if (chatId) persistActiveChatId(chatId);
     if (page === "main" && !chatId) persistActiveSessionNav(sessionGroupId, sessionId);
@@ -391,6 +419,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       activeTerminalId: null,
       activeChatId: chatId ?? null,
       activeThreadId: null,
+      activeAiConversationId: aiConversationId ?? null,
       lastSelectedSessionIdsByGroup:
         sessionGroupId && sessionId
           ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: sessionId }

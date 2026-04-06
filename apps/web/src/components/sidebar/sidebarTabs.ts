@@ -18,7 +18,7 @@ export function getPreferredSidebarTab(
   currentTab: SidebarTab,
 ) {
   if (activeChatId) return "dm";
-  if (activeChannelId || activePage === "inbox") return "main";
+  if (activeChannelId || activePage === "inbox" || activePage === "ai-conversations") return "main";
   return currentTab;
 }
 
