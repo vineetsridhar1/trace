@@ -22,6 +22,7 @@ export {
   useBranchSwitcherOpen,
   useBranchTreePanelOpen,
   useTreeNodeCollapsed,
+  useChildBranchIds,
   type TimelineEntry,
 } from "./hooks/useAiConversationSelectors";
 
@@ -95,3 +96,5 @@ export { TurnItem } from "./components/TurnItem";
 export { TurnInput } from "./components/TurnInput";
 export { ForkBranchButton } from "./components/ForkBranchButton";
 export { ForkSeparator } from "./components/ForkSeparator";
+export { BranchIndicator } from "./components/BranchIndicator";
+export { BranchPopoverList } from "./components/BranchPopoverList";
