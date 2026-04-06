@@ -81,6 +81,7 @@ const AGGREGATE_EVENT_TYPES = new Set<string>([
   "ai_turn_created",
   "ai_conversation_created",
   "ai_conversation_agent_observability_changed",
+  "ai_branch_created",
 ]);
 
 /**

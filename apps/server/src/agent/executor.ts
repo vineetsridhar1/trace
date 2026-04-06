@@ -47,6 +47,13 @@ export interface ServiceContainer {
   inboxService: InboxService;
   /** Forward reference — created in ticket #09 (Entity Summaries). */
   summaryService?: { upsert(input: Record<string, unknown>): Promise<unknown> };
+  /** AI Conversation service for agent-powered conversation features. */
+  aiConversationService?: {
+    updateTitle(input: { conversationId: string; title: string }, actorType: ActorType, actorId: string): Promise<unknown>;
+    labelBranch(input: { branchId: string; label: string }, actorType: ActorType, actorId: string): Promise<unknown>;
+    forkBranch(input: { branchId: string; turnId: string; label?: string }, actorType: ActorType, actorId: string): Promise<unknown>;
+    linkEntity(input: { conversationId: string; entityType: string; entityId: string }, actorType: ActorType, actorId: string): Promise<unknown>;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -322,6 +329,60 @@ export class ActionExecutor {
 
           default:
             throw new Error(`Unknown summaryService method: ${method}`);
+        }
+      }
+
+      // ---- aiConversationService ----
+      case "aiConversationService": {
+        const svc = this.services.aiConversationService;
+        if (!svc) {
+          throw new Error("aiConversationService is not yet available");
+        }
+        switch (method) {
+          case "updateTitle":
+            return svc.updateTitle(
+              {
+                conversationId: args.conversationId as string,
+                title: args.title as string,
+              },
+              actorType,
+              actorId,
+            );
+
+          case "labelBranch":
+            return svc.labelBranch(
+              {
+                branchId: args.branchId as string,
+                label: args.label as string,
+              },
+              actorType,
+              actorId,
+            );
+
+          case "forkBranch":
+            return svc.forkBranch(
+              {
+                branchId: args.branchId as string,
+                turnId: args.turnId as string,
+                label: args.label as string | undefined,
+              },
+              actorType,
+              actorId,
+            );
+
+          case "linkEntity":
+            return svc.linkEntity(
+              {
+                conversationId: args.conversationId as string,
+                entityType: args.entityType as string,
+                entityId: args.entityId as string,
+              },
+              actorType,
+              actorId,
+            );
+
+          default:
+            throw new Error(`Unknown aiConversationService method: ${method}`);
         }
       }
 

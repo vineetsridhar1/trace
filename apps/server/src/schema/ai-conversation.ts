@@ -61,6 +61,11 @@ export const aiConversationMutations = {
         visibility: args.input.visibility ?? undefined,
         modelId: args.input.modelId ?? undefined,
         systemPrompt: args.input.systemPrompt ?? undefined,
+        agentObservability: (args.input as Record<string, unknown>).agentObservability as
+          | "OFF"
+          | "SUGGEST"
+          | "PARTICIPATE"
+          | undefined,
       },
       ctx.actorType,
       ctx.userId,
@@ -134,6 +139,13 @@ export const aiConversationMutations = {
         systemPrompt: args.input.systemPrompt,
         visibility: args.input.visibility ?? undefined,
       },
+  updateAiConversationObservability: (
+    _: unknown,
+    args: { conversationId: string; agentObservability: AgentObservability },
+    ctx: Context,
+  ) => {
+    return aiConversationService.updateObservability(
+      { conversationId: args.conversationId, agentObservability: args.agentObservability as "OFF" | "SUGGEST" | "PARTICIPATE" },
       ctx.actorType,
       ctx.userId,
     );
@@ -174,6 +186,40 @@ export const aiConversationMutations = {
       actorType: ctx.actorType,
       actorId: ctx.userId,
     });
+  forkBranch: (
+    _: unknown,
+    args: { branchId: string; turnId: string; label?: string | null },
+    ctx: Context,
+  ) => {
+    return aiConversationService.forkBranch(
+      { branchId: args.branchId, turnId: args.turnId, label: args.label ?? undefined },
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
+
+  linkConversationEntity: (
+    _: unknown,
+    args: { conversationId: string; entityType: string; entityId: string },
+    ctx: Context,
+  ) => {
+    return aiConversationService.linkEntity(
+      { conversationId: args.conversationId, entityType: args.entityType, entityId: args.entityId },
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
+
+  unlinkConversationEntity: (
+    _: unknown,
+    args: { conversationId: string; entityType: string; entityId: string },
+    ctx: Context,
+  ) => {
+    return aiConversationService.unlinkEntity(
+      { conversationId: args.conversationId, entityType: args.entityType, entityId: args.entityId },
+      ctx.actorType,
+      ctx.userId,
+    );
   },
 };
 
@@ -225,6 +271,13 @@ export const aiConversationTypeResolvers = {
     branchCount: (conversation: { id: string }) => {
       return prisma.aiBranch.count({
         where: { conversationId: conversation.id },
+      });
+    },
+
+    linkedEntities: (conversation: { id: string }) => {
+      return prisma.aiConversationLinkedEntity.findMany({
+        where: { conversationId: conversation.id },
+        orderBy: { createdAt: "asc" },
       });
     },
   },

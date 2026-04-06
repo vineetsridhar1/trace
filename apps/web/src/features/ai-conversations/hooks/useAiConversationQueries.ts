@@ -52,6 +52,14 @@ const AI_CONVERSATION_QUERY = gql`
       rootBranch {
         id
       }
+      linkedEntities {
+        id
+        conversationId
+        entityType
+        entityId
+        createdById
+        createdAt
+      }
       branches {
         id
         label
@@ -140,6 +148,15 @@ const CONTEXT_HEALTH_QUERY = gql`
 
 // ── Hydration helpers ──────────────────────────────────────────
 
+interface RawLinkedEntity {
+  id: string;
+  conversationId: string;
+  entityType: string;
+  entityId: string;
+  createdById: string;
+  createdAt: string;
+}
+
 interface RawConversation {
   id: string;
   title: string | null;
@@ -151,6 +168,7 @@ interface RawConversation {
   createdBy: { id: string; name?: string };
   rootBranch: { id: string };
   branches?: RawBranch[];
+  linkedEntities?: RawLinkedEntity[];
   createdAt: string;
   updatedAt: string;
 }
@@ -212,6 +230,7 @@ function hydrateConversation(raw: RawConversation): void {
     createdById: raw.createdBy.id,
     rootBranchId: raw.rootBranch.id,
     branchIds: raw.branches?.map((b) => b.id) ?? existing?.branchIds ?? [raw.rootBranch.id],
+    linkedEntities: raw.linkedEntities ?? existing?.linkedEntities ?? [],
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
   } as AiConversationEntity);

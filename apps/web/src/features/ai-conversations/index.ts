@@ -56,6 +56,11 @@ export {
   useUpdateAiConversation,
   useSummarizeBranch,
   useUpdateAiConversationVisibility,
+  useUpdateAiConversationObservability,
+  useLabelBranch,
+  useForkBranch,
+  useLinkConversationEntity,
+  useUnlinkConversationEntity,
 } from "./hooks/useAiConversationMutations";
 
 // Shortcut hooks

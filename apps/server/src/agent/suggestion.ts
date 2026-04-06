@@ -27,6 +27,11 @@ const ACTION_TO_ITEM_TYPE: Record<string, InboxItemType> = {
   "link.create": "link_suggestion",
   "session.start": "session_suggestion",
   "message.send": "message_suggestion",
+  "ai_conversation.set_title": "agent_suggestion",
+  "branch.suggest_label": "agent_suggestion",
+  "ticket.create_from_conversation": "ticket_suggestion",
+  "ai_conversation.link_entity": "link_suggestion",
+  "branch.suggest": "agent_suggestion",
 };
 
 function mapActionToItemType(actionType: string): InboxItemType {
@@ -174,6 +179,16 @@ function generateTitle(actionType: string, args: Record<string, unknown>): strin
       return `Suggested coding session`;
     case "message.send":
       return `Suggested message`;
+    case "ai_conversation.set_title":
+      return `Suggested title: ${(args.title as string) || "Untitled"}`;
+    case "branch.suggest_label":
+      return `Suggested branch label: ${(args.label as string) || "Label"}`;
+    case "ticket.create_from_conversation":
+      return `Suggested ticket from conversation: ${(args.title as string) || "New ticket"}`;
+    case "ai_conversation.link_entity":
+      return `Suggested link to ${(args.entityType as string) || "entity"}`;
+    case "branch.suggest":
+      return `Suggested branch: ${(args.label as string) || "New branch"}`;
     default:
       return `Agent suggestion: ${actionType}`;
   }

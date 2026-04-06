@@ -209,6 +209,9 @@ enum EventType {
   ai_branch_created
   ai_branch_labeled
   ai_turn_created
+  ai_conversation_observability_changed
+  ai_conversation_entity_linked
+  ai_conversation_entity_unlinked
 }
 
 # --- Core Types ---
@@ -544,8 +547,18 @@ type AiConversation {
   rootBranch: Branch!
   branches: [Branch!]!
   branchCount: Int!
+  linkedEntities: [AiConversationLinkedEntity!]!
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+type AiConversationLinkedEntity {
+  id: ID!
+  conversationId: ID!
+  entityType: String!
+  entityId: ID!
+  createdById: ID!
+  createdAt: DateTime!
 }
 
 type Branch {
@@ -744,6 +757,7 @@ input UpdateAiConversationInput {
   modelId: String
   systemPrompt: String
   visibility: AiConversationVisibility
+  agentObservability: AgentObservability
 }
 
 # --- Queries ---
@@ -875,6 +889,11 @@ type Mutation {
   updateAiConversation(conversationId: ID!, input: UpdateAiConversationInput!): AiConversation!
   summarizeBranch(branchId: ID!): BranchSummary!
   updateAiConversationVisibility(conversationId: ID!, visibility: AiConversationVisibility!): AiConversation!
+  updateAiConversationObservability(conversationId: ID!, agentObservability: AgentObservability!): AiConversation!
+  labelBranch(branchId: ID!, label: String!): Branch!
+  forkBranch(branchId: ID!, turnId: ID!, label: String): Branch!
+  linkConversationEntity(conversationId: ID!, entityType: String!, entityId: ID!): AiConversationLinkedEntity!
+  unlinkConversationEntity(conversationId: ID!, entityType: String!, entityId: ID!): Boolean!
 }
 
 # --- Subscriptions ---

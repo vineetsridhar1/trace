@@ -32,11 +32,22 @@ export type SessionGroupEntity = SessionGroup & {
   _sortTimestamp?: string;
 };
 
+/** Linked entity reference on a conversation */
+export interface AiConversationLinkedEntityRef {
+  id: string;
+  conversationId: string;
+  entityType: string;
+  entityId: string;
+  createdById: string;
+  createdAt: string;
+}
+
 /** Client-side AI conversation entity with denormalized IDs for fast lookups */
-export type AiConversationEntity = Omit<AiConversation, "rootBranch" | "branches" | "createdBy"> & {
+export type AiConversationEntity = Omit<AiConversation, "rootBranch" | "branches" | "createdBy" | "linkedEntities"> & {
   rootBranchId: string;
   branchIds: string[];
   createdById: string;
+  linkedEntities: AiConversationLinkedEntityRef[];
 };
 
 /** Client-side branch entity with ordered turn IDs and child branch IDs */

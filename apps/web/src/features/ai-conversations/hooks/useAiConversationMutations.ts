@@ -35,6 +35,9 @@ const UPDATE_AI_CONVERSATION_TITLE_MUTATION = gql`
 const UPDATE_AGENT_OBSERVABILITY_MUTATION = gql`
   mutation UpdateAgentObservability($conversationId: ID!, $level: AgentObservability!) {
     updateAgentObservability(conversationId: $conversationId, level: $level) {
+const UPDATE_AI_CONVERSATION_OBSERVABILITY_MUTATION = gql`
+  mutation UpdateAiConversationObservability($conversationId: ID!, $agentObservability: AgentObservability!) {
+    updateAiConversationObservability(conversationId: $conversationId, agentObservability: $agentObservability) {
       id
     }
   }
@@ -100,6 +103,28 @@ const SUMMARIZE_BRANCH_MUTATION = gql`
     }
   }
 `;
+const FORK_BRANCH_MUTATION = gql`
+  mutation ForkBranch($branchId: ID!, $turnId: ID!, $label: String) {
+    forkBranch(branchId: $branchId, turnId: $turnId, label: $label) {
+      id
+    }
+  }
+`;
+
+const LINK_CONVERSATION_ENTITY_MUTATION = gql`
+  mutation LinkConversationEntity($conversationId: ID!, $entityType: String!, $entityId: ID!) {
+    linkConversationEntity(conversationId: $conversationId, entityType: $entityType, entityId: $entityId) {
+      id
+    }
+  }
+`;
+
+const UNLINK_CONVERSATION_ENTITY_MUTATION = gql`
+  mutation UnlinkConversationEntity($conversationId: ID!, $entityType: String!, $entityId: ID!) {
+    unlinkConversationEntity(conversationId: $conversationId, entityType: $entityType, entityId: $entityId)
+  }
+`;
+
 // ── Mutation hooks ─────────────────────────────────────────────
 
 /** Fire-and-forget: creates a conversation; event stream handles store update */
@@ -112,6 +137,7 @@ export function useCreateAiConversation() {
       visibility?: AiConversationVisibility;
       modelId?: string;
       systemPrompt?: string;
+      agentObservability?: AgentObservability;
     }) => {
       if (!activeOrgId) return null;
 
@@ -225,6 +251,16 @@ export function useUpdateAgentObservability() {
 
       if (result.error) {
         console.error("Failed to update agent observability:", result.error.message);
+/** Fire-and-forget: updates conversation observability level */
+export function useUpdateAiConversationObservability() {
+  return useCallback(
+    async (params: { conversationId: string; agentObservability: AgentObservability }) => {
+      const result = await client
+        .mutation(UPDATE_AI_CONVERSATION_OBSERVABILITY_MUTATION, params)
+        .toPromise();
+
+      if (result.error) {
+        console.error("Failed to update conversation observability:", result.error.message);
       }
     },
     [],
@@ -353,6 +389,7 @@ export function useForkBranch() {
 }
 
 /** Fire-and-forget: labels a branch; event stream handles store update */
+/** Fire-and-forget: labels a branch */
 export function useLabelBranch() {
   return useCallback(async (params: { branchId: string; label: string }) => {
     const result = await client.mutation(LABEL_BRANCH_MUTATION, params).toPromise();
@@ -375,4 +412,47 @@ export function useSummarizeBranch() {
 
     return result.data?.summarizeBranch?.id as string | undefined;
   }, []);
+/** Fire-and-forget: forks a branch at a given turn */
+export function useForkBranch() {
+  return useCallback(
+    async (params: { branchId: string; turnId: string; label?: string }) => {
+      const result = await client.mutation(FORK_BRANCH_MUTATION, params).toPromise();
+
+      if (result.error) {
+        console.error("Failed to fork branch:", result.error.message);
+        return null;
+      }
+
+      return result.data?.forkBranch?.id as string | undefined;
+    },
+    [],
+  );
+}
+
+/** Fire-and-forget: links an entity to a conversation */
+export function useLinkConversationEntity() {
+  return useCallback(
+    async (params: { conversationId: string; entityType: string; entityId: string }) => {
+      const result = await client.mutation(LINK_CONVERSATION_ENTITY_MUTATION, params).toPromise();
+
+      if (result.error) {
+        console.error("Failed to link conversation entity:", result.error.message);
+      }
+    },
+    [],
+  );
+}
+
+/** Fire-and-forget: unlinks an entity from a conversation */
+export function useUnlinkConversationEntity() {
+  return useCallback(
+    async (params: { conversationId: string; entityType: string; entityId: string }) => {
+      const result = await client.mutation(UNLINK_CONVERSATION_ENTITY_MUTATION, params).toPromise();
+
+      if (result.error) {
+        console.error("Failed to unlink conversation entity:", result.error.message);
+      }
+    },
+    [],
+  );
 }
