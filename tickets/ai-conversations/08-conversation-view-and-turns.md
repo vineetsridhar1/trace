@@ -42,7 +42,7 @@ Build the main conversation view — the screen where users see turns and intera
 ## Dependencies
 
 - 06 (Zustand Store & Entity Integration)
-  <!-- Ticket 06 creates: Zustand selectors for turns/branches, query/mutation hooks, optimistic updates -->
+  <!-- Ticket 06 creates: Feature folder at features/ai-conversations/. Key imports from index.ts: useAiConversationQuery(id) hydrates conversation+branches, useBranchTimelineQuery(branchId) hydrates turns, useConversationEventsSubscription(conversationId) and useBranchTurnsSubscription(branchId) for viewport updates, useSendTurn() for optimistic fire-and-forget, useBranchTimeline(branchId) for derived TimelineEntry[] (inherited-turn | fork-separator | local-turn), useTurn(id)/useTurnField(id, field) for rendering, useActiveBranchId(conversationId) from UI slice. NOTE: sendTurn optimistic reconciliation has a known race condition — the mutation returns the assistant turn ID, not the user turn. Reconciliation should be done when ai_turn_created event arrives for USER role. Fix this before shipping ticket 08. -->
 
 ## Completion requirements
 

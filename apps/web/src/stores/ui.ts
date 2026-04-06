@@ -13,7 +13,7 @@ import {
   resolveSessionGroupIdForSession,
 } from "./ui-navigation";
 
-export type ActivePage = "main" | "settings" | "inbox" | "tickets" | "agent-debug";
+export type ActivePage = "main" | "settings" | "inbox" | "tickets" | "agent-debug" | "ai-conversations";
 export type ChannelSubPage = "sessions" | "merged-archived" | null;
 export interface NavigationState {
   channelId: string | null;
@@ -22,6 +22,7 @@ export interface NavigationState {
   page: ActivePage;
   chatId: string | null;
   channelSubPage: ChannelSubPage;
+  aiConversationId?: string | null;
 }
 
 const optimisticSessionRedirects = new Map<string, NavigationState>();
@@ -45,6 +46,8 @@ export interface UIState {
   setActiveTerminalId: (id: string | null) => void;
   activeThreadId: string | null;
   setActiveThreadId: (id: string | null) => void;
+  activeAiConversationId: string | null;
+  setActiveAiConversationId: (id: string | null) => void;
   refreshTick: number;
   triggerRefresh: () => void;
   lastSelectedSessionIdsByGroup: Record<string, string>;
@@ -73,6 +76,7 @@ export interface UIState {
     page?: ActivePage,
     chatId?: string | null,
     channelSubPage?: ChannelSubPage,
+    aiConversationId?: string | null,
   ) => void;
 }
 
@@ -82,8 +86,9 @@ export function buildPath(
   sessionId: string | null,
   page: ActivePage = "main",
   chatId: string | null = null,
+  aiConversationId: string | null = null,
 ): string {
-  return buildPathInternal(channelId, sessionGroupId, sessionId, page, chatId);
+  return buildPathInternal(channelId, sessionGroupId, sessionId, page, chatId, aiConversationId);
 }
 
 type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
@@ -97,6 +102,7 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
   activeSessionId: null,
   activeTerminalId: null,
   activeThreadId: null,
+  activeAiConversationId: null,
   refreshTick: 0,
   lastSelectedSessionIdsByGroup: {},
   openSessionTabsByGroup: {},
@@ -188,6 +194,10 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
       pushNav(null, null, null, "tickets");
       return;
     }
+    if (page === "ai-conversations") {
+      pushNav(null, null, null, "ai-conversations", null, null, get().activeAiConversationId);
+      return;
+    }
 
     pushNav(
       get().activeChannelId,
@@ -215,6 +225,7 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
         activeSessionId: null,
         activeTerminalId: null,
         activeThreadId: null,
+        activeAiConversationId: null,
         channelSubPage: null,
         channelDoneBadges,
       };
@@ -270,11 +281,13 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
         activePage: "main" as ActivePage,
         activeChatId: id,
         activeChannelId: null,
+        activeAiConversationId: null,
         activeSessionGroupId: null,
         activeSessionId: null,
         activeTerminalId: null,
         activeThreadId: null,
         channelSubPage: null,
+        activeAiConversationId: null,
         unreadChatIds,
       };
     });
@@ -399,6 +412,21 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
     set({ activeThreadId: id });
   },
 
+  setActiveAiConversationId: (id: string | null) => {
+    set({
+      activePage: "ai-conversations" as ActivePage,
+      activeAiConversationId: id,
+      activeChannelId: null,
+      activeChatId: null,
+      activeSessionGroupId: null,
+      activeSessionId: null,
+      activeTerminalId: null,
+      activeThreadId: null,
+      channelSubPage: null,
+    });
+    pushNav(null, null, null, "ai-conversations", null, null, id);
+  },
+
   restoreLastVisited: (tab: "dm" | "main") => {
     if (tab === "dm") {
       const chatId = localStorage.getItem("trace:activeChatId");
@@ -434,7 +462,7 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
     }
   },
 
-  _restoreNav: (channelId: string | null, sessionGroupId: string | null, sessionId: string | null, page?: ActivePage, chatId?: string | null, channelSubPage?: ChannelSubPage) => {
+  _restoreNav: (channelId: string | null, sessionGroupId: string | null, sessionId: string | null, page?: ActivePage, chatId?: string | null, channelSubPage?: ChannelSubPage, aiConversationId?: string | null) => {
     persistActiveChannelId(channelId);
     if (chatId) persistActiveChatId(chatId);
     if (page === "main" && !chatId) persistActiveSessionNav(sessionGroupId, sessionId);
@@ -462,6 +490,7 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
         activeTerminalId: null,
         activeChatId: chatId ?? null,
         activeThreadId: null,
+        activeAiConversationId: aiConversationId ?? null,
         channelSubPage: channelSubPage ?? null,
         channelDoneBadges,
         sessionDoneBadges,

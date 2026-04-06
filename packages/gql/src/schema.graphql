@@ -23,14 +23,6 @@ enum SessionGroupStatus {
   failed
   stopped
   merged
-  archived
-}
-
-enum SetupStatus {
-  idle
-  running
-  completed
-  failed
 }
 
 enum TicketStatus {
@@ -74,25 +66,6 @@ enum CodingTool {
   custom
 }
 
-enum SlashCommandSource {
-  user_skill
-  project_skill
-  builtin
-}
-
-enum SlashCommandCategory {
-  passthrough
-  terminal
-  special
-}
-
-type SlashCommand {
-  name: String!
-  description: String!
-  source: SlashCommandSource!
-  category: SlashCommandCategory!
-}
-
 enum ChannelType {
   text
   coding
@@ -109,6 +82,7 @@ enum ScopeType {
   session
   ticket
   system
+  ai_conversation
 }
 
 enum ActorType {
@@ -180,6 +154,12 @@ enum AiConversationVisibility {
   ORG
 }
 
+enum AgentObservability {
+  OFF
+  SUGGEST
+  PARTICIPATE
+}
+
 enum TurnRole {
   USER
   ASSISTANT
@@ -211,7 +191,6 @@ enum EventType {
   channel_member_removed
   channel_group_created
   channel_group_updated
-  channel_deleted
   channel_group_deleted
   member_joined
   member_left
@@ -220,11 +199,19 @@ enum EventType {
   session_pr_opened
   session_pr_merged
   session_pr_closed
-  session_group_archived
   chat_created
   chat_member_added
   chat_member_removed
   chat_renamed
+  ai_conversation_created
+  ai_conversation_title_updated
+  ai_conversation_visibility_changed
+  ai_branch_created
+  ai_branch_labeled
+  ai_turn_created
+  ai_conversation_observability_changed
+  ai_conversation_entity_linked
+  ai_conversation_entity_unlinked
 }
 
 # --- Core Types ---
@@ -267,7 +254,6 @@ type Project {
   id: ID!
   name: String!
   repo: Repo
-  aiMode: AutonomyMode
   channels: [Channel!]!
   sessions: [Session!]!
   tickets: [Ticket!]!
@@ -279,11 +265,7 @@ type Channel {
   type: ChannelType!
   position: Int!
   groupId: ID
-  baseBranch: String
   repo: Repo
-  aiMode: AutonomyMode
-  setupScript: String
-  runScripts: JSON
   members: [ChannelMember!]!
   projects: [Project!]!
   messages(after: DateTime, limit: Int): [Event!]!
@@ -305,7 +287,6 @@ type ChannelGroup {
 type SessionGroup {
   id: ID!
   name: String!
-  slug: String
   status: SessionGroupStatus!
   channel: Channel
   repo: Repo
@@ -316,9 +297,6 @@ type SessionGroup {
   connection: SessionConnection
   prUrl: String
   worktreeDeleted: Boolean!
-  archivedAt: DateTime
-  setupStatus: SetupStatus!
-  setupError: String
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -381,7 +359,6 @@ type Ticket {
   labels: [String!]!
   origin: Event
   channel: Channel
-  aiMode: AutonomyMode
   projects: [Project!]!
   sessions: [Session!]!
   links: [TicketLink!]!
@@ -444,7 +421,6 @@ type Chat {
   id: ID!
   type: ChatType!
   name: String
-  aiMode: AutonomyMode
   members: [ChatMember!]!
   messages(after: DateTime, before: DateTime, limit: Int): [Message!]!
   createdBy: User!
@@ -480,129 +456,6 @@ type AgentIdentity {
 
 type CostBudget {
   dailyLimitCents: Int!
-}
-
-# --- Agent Debug Console Types ---
-
-enum ExecutionDisposition {
-  ignore
-  suggest
-  act
-  summarize
-  escalate
-}
-
-enum ExecutionStatus {
-  succeeded
-  suggested
-  blocked
-  dropped
-  failed
-}
-
-enum ModelTier {
-  tier2
-  tier3
-}
-
-type AgentExecutionLog {
-  id: ID!
-  organizationId: ID!
-  triggerEventId: String!
-  batchSize: Int!
-  agentId: String!
-  modelTier: ModelTier!
-  model: String!
-  promoted: Boolean!
-  promotionReason: String
-  inputTokens: Int!
-  outputTokens: Int!
-  estimatedCostCents: Float!
-  contextTokenAllocation: JSON
-  disposition: ExecutionDisposition!
-  confidence: Float!
-  plannedActions: JSON
-  policyDecision: JSON
-  finalActions: JSON
-  status: ExecutionStatus!
-  inboxItemId: String
-  latencyMs: Int!
-  createdAt: DateTime!
-  llmCalls: [AgentLlmCall!]!
-}
-
-type AgentLlmCall {
-  id: ID!
-  executionLogId: ID!
-  turnNumber: Int!
-  model: String!
-  provider: String!
-  systemPrompt: String
-  messages: JSON!
-  tools: JSON!
-  maxTokens: Int
-  temperature: Float
-  responseContent: JSON!
-  stopReason: String!
-  inputTokens: Int!
-  outputTokens: Int!
-  estimatedCostCents: Float!
-  latencyMs: Int!
-  createdAt: DateTime!
-}
-
-type AgentExecutionLogConnection {
-  items: [AgentExecutionLog!]!
-  totalCount: Int!
-}
-
-type AgentCostEntry {
-  id: ID!
-  organizationId: ID!
-  date: String!
-  totalCostCents: Float!
-  tier2Calls: Int!
-  tier2CostCents: Float!
-  tier3Calls: Int!
-  tier3CostCents: Float!
-  summaryCalls: Int!
-  summaryCostCents: Float!
-}
-
-type AgentBudgetStatus {
-  dailyLimitCents: Int!
-  spentCents: Float!
-  remainingCents: Float!
-  remainingPercent: Float!
-}
-
-type AgentCostSummary {
-  budget: AgentBudgetStatus!
-  dailyCosts: [AgentCostEntry!]!
-}
-
-type AgentWorkerStatus {
-  running: Boolean!
-  uptime: Int
-  openAggregationWindows: Int!
-  activeOrganizations: Int!
-}
-
-type AggregationWindowInfo {
-  scopeKey: String!
-  organizationId: ID!
-  eventCount: Int!
-  openedAt: DateTime!
-  lastEventAt: DateTime!
-}
-
-input ExecutionLogFilters {
-  status: ExecutionStatus
-  disposition: ExecutionDisposition
-  startDate: DateTime
-  endDate: DateTime
-  limit: Int
-  offset: Int
 }
 
 type ThreadSummary {
@@ -687,12 +540,27 @@ type AiConversation {
   id: ID!
   title: String
   visibility: AiConversationVisibility!
+  agentObservability: AgentObservability!
+  modelId: String
+  systemPrompt: String
   createdBy: User!
   rootBranch: Branch!
   branches: [Branch!]!
   branchCount: Int!
+  linkedEntities: [AiConversationLinkedEntity!]!
+  forkedFromConversationId: ID
+  forkedFromBranchId: ID
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+type AiConversationLinkedEntity {
+  id: ID!
+  conversationId: ID!
+  entityType: String!
+  entityId: ID!
+  createdById: ID!
+  createdAt: DateTime!
 }
 
 type Branch {
@@ -705,6 +573,8 @@ type Branch {
   childBranches: [Branch!]!
   depth: Int!
   turnCount: Int!
+  latestSummary: BranchSummary
+  contextHealth: ContextHealth!
   createdBy: User!
   createdAt: DateTime!
 }
@@ -714,10 +584,26 @@ type Turn {
   branch: Branch!
   role: TurnRole!
   content: String!
+  summarized: Boolean!
   parentTurn: Turn
   branchCount: Int!
   childBranches: [Branch!]!
   createdAt: DateTime!
+}
+
+type BranchSummary {
+  id: ID!
+  branchId: ID!
+  content: String!
+  summarizedTurnCount: Int!
+  summarizedUpToTurnId: ID!
+  createdAt: DateTime!
+}
+
+type ContextHealth {
+  tokenUsage: Int!
+  budgetTotal: Int!
+  percentage: Float!
 }
 
 type AiConversationEvent {
@@ -734,17 +620,9 @@ input CreateChannelInput {
   name: String!
   type: ChannelType
   repoId: ID
-  baseBranch: String
   projectIds: [ID!]
   groupId: ID
   position: Int
-}
-
-input UpdateChannelInput {
-  name: String
-  baseBranch: String
-  setupScript: String
-  runScripts: JSON
 }
 
 input CreateChannelGroupInput {
@@ -789,7 +667,6 @@ input StartSessionInput {
   restoreCheckpointId: ID
   projectId: ID
   prompt: String
-  interactionMode: String
 }
 
 input SessionFilters {
@@ -873,6 +750,16 @@ input UpdateAgentSettingsInput {
 input CreateAiConversationInput {
   title: String
   visibility: AiConversationVisibility
+  agentObservability: AgentObservability
+  modelId: String
+  systemPrompt: String
+}
+
+input UpdateAiConversationInput {
+  title: String
+  modelId: String
+  systemPrompt: String
+  visibility: AiConversationVisibility
 }
 
 # --- Queries ---
@@ -887,7 +774,7 @@ type Query {
   channels(organizationId: ID!, projectId: ID, memberOnly: Boolean): [Channel!]!
   channelGroups(organizationId: ID!): [ChannelGroup!]!
   channel(id: ID!): Channel
-  sessionGroups(channelId: ID!, archived: Boolean, status: SessionGroupStatus): [SessionGroup!]!
+  sessionGroups(channelId: ID!): [SessionGroup!]!
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
@@ -901,7 +788,6 @@ type Query {
     after: DateTime
     before: DateTime
     limit: Int
-    excludePayloadTypes: [String!]
   ): [Event!]!
   availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!
   availableRuntimes(tool: CodingTool!): [SessionRuntimeInstance!]!
@@ -910,7 +796,6 @@ type Query {
   sessionGroupFileContent(sessionGroupId: ID!, filePath: String!): String!
   sessionGroupBranchDiff(sessionGroupId: ID!): [BranchDiffFile!]!
   sessionGroupFileAtRef(sessionGroupId: ID!, filePath: String!, ref: String!): String!
-  sessionSlashCommands(sessionId: ID!): [SlashCommand!]!
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
   chats: [Chat!]!
   chat(id: ID!): Chat
@@ -922,19 +807,13 @@ type Query {
   myApiTokens: [ApiTokenStatus!]!
   sessionTerminals(sessionId: ID!): [Terminal!]!
   agentIdentity(organizationId: ID!): AgentIdentity
-  resolvedAiMode(organizationId: ID!, scopeType: String!, scopeId: ID!): AutonomyMode!
-  agentExecutionLogs(
-    organizationId: ID!
-    filters: ExecutionLogFilters
-  ): AgentExecutionLogConnection!
-  agentExecutionLog(organizationId: ID!, id: ID!): AgentExecutionLog
-  agentCostSummary(organizationId: ID!, startDate: String!, endDate: String!): AgentCostSummary!
-  agentWorkerStatus(organizationId: ID!): AgentWorkerStatus!
-  agentAggregationWindows(organizationId: ID!): [AggregationWindowInfo!]!
   aiConversations(organizationId: ID!, visibility: AiConversationVisibility): [AiConversation!]!
   aiConversation(id: ID!): AiConversation
   branch(id: ID!): Branch
   searchUsers(query: String!): [User!]!
+  branchAncestors(branchId: ID!): [Branch!]!
+  branchSummary(branchId: ID!): BranchSummary
+  contextHealth(branchId: ID!): ContextHealth!
 }
 
 type Terminal {
@@ -946,9 +825,7 @@ type Terminal {
 
 type Mutation {
   createChannel(input: CreateChannelInput!): Channel!
-  updateChannel(id: ID!, input: UpdateChannelInput!): Channel!
   joinChannel(channelId: ID!): Channel!
-  deleteChannel(id: ID!): Boolean!
   leaveChannel(channelId: ID!): Channel!
   createChannelGroup(input: CreateChannelGroupInput!): ChannelGroup!
   updateChannelGroup(id: ID!, input: UpdateChannelGroupInput!): ChannelGroup!
@@ -962,23 +839,10 @@ type Mutation {
   terminateSession(id: ID!): Session!
   dismissSession(id: ID!): Session!
   deleteSession(id: ID!): Session!
-  archiveSessionGroup(id: ID!): SessionGroup!
   deleteSessionGroup(id: ID!): Boolean!
-  updateSessionConfig(
-    sessionId: ID!
-    tool: CodingTool
-    model: String
-    hosting: HostingMode
-    runtimeInstanceId: ID
-  ): Session!
-  sendSessionMessage(
-    sessionId: ID!
-    text: String!
-    interactionMode: String
-    clientMutationId: String
-  ): Event!
+  updateSessionConfig(sessionId: ID!, tool: CodingTool, model: String): Session!
+  sendSessionMessage(sessionId: ID!, text: String!, interactionMode: String): Event!
   retrySessionConnection(sessionId: ID!): Session!
-  retrySessionGroupSetup(id: ID!): SessionGroup!
   moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!
   moveSessionToCloud(sessionId: ID!): Session!
   createTicket(input: CreateTicketInput!): Ticket!
@@ -1002,13 +866,7 @@ type Mutation {
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!
   createChat(input: CreateChatInput!): Chat!
-  sendChatMessage(
-    chatId: ID!
-    text: String
-    html: String
-    parentId: ID
-    clientMutationId: String
-  ): Message!
+  sendChatMessage(chatId: ID!, text: String, html: String, parentId: ID): Message!
   editChatMessage(messageId: ID!, html: String!): Message!
   deleteChatMessage(messageId: ID!): Message!
   sendChannelMessage(channelId: ID!, text: String, html: String, parentId: ID): Message!
@@ -1021,19 +879,22 @@ type Mutation {
   unsubscribe(scopeType: String!, scopeId: ID!): Boolean!
   muteScope(scopeType: String!, scopeId: ID!): Participant!
   unmuteScope(scopeType: String!, scopeId: ID!): Participant!
-  updateScopeAiMode(
-    organizationId: ID!
-    scopeType: String!
-    scopeId: ID!
-    aiMode: AutonomyMode
-  ): Boolean!
   updateAgentSettings(organizationId: ID!, input: UpdateAgentSettingsInput!): AgentIdentity!
   addOrgMember(organizationId: ID!, userId: ID!, role: UserRole): OrgMember!
   removeOrgMember(organizationId: ID!, userId: ID!): Boolean!
   updateOrgMemberRole(organizationId: ID!, userId: ID!, role: UserRole!): OrgMember!
   createAiConversation(organizationId: ID!, input: CreateAiConversationInput!): AiConversation!
-  sendTurn(branchId: ID!, content: String!): Turn!
+  sendTurn(branchId: ID!, content: String!, clientMutationId: String): Turn!
   updateAiConversationTitle(conversationId: ID!, title: String!): AiConversation!
+  updateAiConversationObservability(conversationId: ID!, agentObservability: AgentObservability!): AiConversation!
+  labelBranch(branchId: ID!, label: String!): Branch!
+  forkBranch(branchId: ID!, turnId: ID!, label: String): Branch!
+  linkConversationEntity(conversationId: ID!, entityType: String!, entityId: ID!): AiConversationLinkedEntity!
+  unlinkConversationEntity(conversationId: ID!, entityType: String!, entityId: ID!): Boolean!
+  updateAiConversation(conversationId: ID!, input: UpdateAiConversationInput!): AiConversation!
+  summarizeBranch(branchId: ID!): BranchSummary!
+  updateAiConversationVisibility(conversationId: ID!, visibility: AiConversationVisibility!): AiConversation!
+  forkAiConversation(branchId: ID!): AiConversation!
 }
 
 # --- Subscriptions ---
@@ -1047,6 +908,5 @@ type Subscription {
   sessionStatusChanged(sessionId: ID!, organizationId: ID!): Session!
   chatEvents(chatId: ID!, types: [String!]): Event!
   branchTurns(branchId: ID!): Turn!
-  sessionEvents(sessionId: ID!, organizationId: ID!): Event!
   conversationEvents(conversationId: ID!): AiConversationEvent!
 }

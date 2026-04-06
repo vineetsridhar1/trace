@@ -9,6 +9,8 @@ import { SettingsPage } from "./components/settings/SettingsPage";
 import { InboxView } from "./components/inbox/InboxView";
 import { TicketsView } from "./components/tickets/TicketsView";
 import { AgentDebugPage } from "./components/agent-debug/AgentDebugPage";
+import { ConversationListContainer } from "./features/ai-conversations/components/ConversationListContainer";
+import { ConversationView } from "./features/ai-conversations";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
 import { DetailPanel } from "./components/ui/detail-panel";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "./components/ui/sidebar";
@@ -17,6 +19,8 @@ import { Button } from "./components/ui/button";
 import { useOrgEvents } from "./hooks/useOrgEvents";
 import { useHistorySync } from "./hooks/useHistorySync";
 import { useVisibilityRefresh } from "./hooks/useVisibilityRefresh";
+import { useNewConversationShortcut } from "./features/ai-conversations";
+import { AiConversationView } from "./features/ai-conversations/components/AiConversationView";
 import { useIsMobile } from "./hooks/use-mobile";
 import { Toaster } from "./components/ui/sonner";
 import { InstallBanner } from "./components/InstallBanner";
@@ -56,8 +60,10 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   useOrgEvents();
   useHistorySync();
   useVisibilityRefresh();
+  useNewConversationShortcut();
   const activePage = useUIStore((s: UIState) => s.activePage);
   const activeChatId = useUIStore((s: UIState) => s.activeChatId);
+  const activeAiConversationId = useUIStore((s: UIState) => s.activeAiConversationId);
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
   const setActiveSessionId = useUIStore((s: UIState) => s.setActiveSessionId);
   const isFullscreen = useDetailPanelStore((s: DetailPanelState) => s.isFullscreen);
@@ -129,6 +135,10 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
                   <InboxView />
                 ) : activePage === "tickets" ? (
                   <TicketsView />
+                ) : activeAiConversationId ? (
+                  <AiConversationView conversationId={activeAiConversationId} />
+                ) : activePage === "ai-conversations" ? (
+                  <ConversationListContainer />
                 ) : activeChatId ? (
                   <ChatView chatId={activeChatId} />
                 ) : activeChannelId ? (

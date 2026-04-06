@@ -22,6 +22,7 @@ import type {
   GitCheckpoint,
   SessionStatus,
 } from "@trace/gql";
+import { processAiConversationEvent } from "../features/ai-conversations/utils/processAiConversationEvent";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
   subscription OrgEvents($organizationId: ID!) {
@@ -744,6 +745,17 @@ export function useOrgEvents() {
           if (item && typeof item.id === "string") {
             batch.upsert("inboxItems", item.id, item as unknown as InboxItem);
           }
+        }
+
+        // ── AI Conversation events — delegate to shared processor ───
+        if (event.eventType.startsWith("ai_") && payload) {
+          processAiConversationEvent({
+            eventType: event.eventType,
+            payload,
+            timestamp: event.timestamp,
+            conversationId:
+              event.scopeType === ("ai_conversation" as ScopeType) ? event.scopeId : undefined,
+          });
         }
 
         // Flush all accumulated mutations as a single setState call

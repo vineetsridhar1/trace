@@ -18,29 +18,22 @@ import {
   setCostTracker,
   type AgentEvent,
   type CostTracker,
-  type ChatType,
 } from "./agent/router.js";
 import { EventAggregator, type AggregatedBatch } from "./agent/aggregator.js";
 import { costTrackingService } from "./services/cost-tracking.js";
 import { startSummaryWorker, stopSummaryWorker, trackEventForSummary } from "./agent/summary-worker.js";
-import { startMemoryExtractorWorker, stopMemoryExtractorWorker, trackEventForMemoryExtraction } from "./agent/memory-extractor-worker.js";
-import { startEmbeddingWorker, stopEmbeddingWorker } from "./agent/embedding-worker.js";
+import { buildContext } from "./agent/context-builder.js";
+import { runPlanner } from "./agent/planner.js";
+import { evaluatePolicy, type PolicyDecision } from "./agent/policy-engine.js";
 import { ActionExecutor } from "./agent/executor.js";
-import { runPipeline } from "./agent/pipeline.js";
+import { createSuggestions } from "./agent/suggestion.js";
 import { ticketService } from "./services/ticket.js";
 import { chatService } from "./services/chat.js";
 import { sessionService } from "./services/session.js";
 import { inboxService } from "./services/inbox.js";
-import { channelService } from "./services/channel.js";
-import { organizationService } from "./services/organization.js";
-import { eventService } from "./services/event.js";
 import { startSuggestionExpiryWorker, stopSuggestionExpiryWorker } from "./agent/suggestion-expiry.js";
-import { memoryService } from "./services/memory.js";
-import { setPolicyCostTracker } from "./agent/policy-engine.js";
-import { publishWorkerStatus, publishAggregationWindows } from "./services/agent-worker-status.js";
-import { Semaphore } from "./agent/concurrency.js";
-import { createAgentLogger, incrementMetric, getMetrics } from "./agent/logger.js";
-import { startRedisHealthMonitor, stopRedisHealthMonitor } from "./agent/redis-health.js";
+import { processConversationEvent } from "./agent/conversation-agent.js";
+import { aiConversationService } from "./services/aiConversation.js";
 
 // ---------------------------------------------------------------------------
 // Cached cost tracker — bridges async CostTrackingService to sync router interface
@@ -124,40 +117,19 @@ let shuttingDown = false;
 const aggregator = new EventAggregator(handleBatch);
 
 /**
- * Concurrency limiter — caps parallel pipeline executions to prevent
- * cascading failures when many aggregation windows close simultaneously.
- */
-const pipelineSemaphore = new Semaphore(
-  parseInt(process.env.AGENT_MAX_CONCURRENT_PIPELINES ?? "5", 10),
-);
-
-/**
- * Tracks pending pipeline promises for graceful shutdown and ACK timing.
- * We ACK events optimistically but track pipelines for shutdown draining.
- */
-const pendingPipelines = new Set<Promise<void>>();
-
-/**
  * Shared executor instance — reused across batch handlers.
  */
 const executor = new ActionExecutor({
   ticketService,
   chatService,
-  channelService,
   sessionService,
   inboxService,
-  organizationService,
-  eventService,
-  memoryService,
+  aiConversationService,
 });
 
 /**
  * Handle a closed aggregation window.
- * Delegates to the pipeline module which chains:
- * context → planner → policy engine → execute/suggest → logging.
- *
- * Uses a semaphore to cap concurrent pipeline executions and tracks
- * pending pipelines for graceful shutdown draining.
+ * Full pipeline: context → planner → policy engine → execute / suggest.
  */
 function handleBatch(batch: AggregatedBatch): void {
   log("batch ready", {
@@ -169,41 +141,129 @@ function handleBatch(batch: AggregatedBatch): void {
     ...(batch.maxTier !== undefined ? { maxTier: batch.maxTier } : {}),
   });
 
+  // Build context packet asynchronously — don't block the aggregator
   const agentSettings = agentContexts.get(batch.organizationId);
   if (!agentSettings) {
     log("skipping batch — no agent settings", { orgId: batch.organizationId });
     return;
   }
 
-  incrementMetric("pipelineStarted");
-  incrementMetric("batchesClosed");
+  buildContext({ batch, agentSettings })
+    .then(async (packet) => {
+      log("context packet built", {
+        scopeKey: packet.scopeKey,
+        orgId: packet.organizationId,
+        scopeType: packet.scopeType,
+        triggerEventType: packet.triggerEvent.eventType,
+        relevantEntities: packet.relevantEntities.length,
+        summaries: packet.summaries.length,
+        actors: packet.actors.length,
+        actions: packet.permissions.actions.length,
+        tokensUsed: packet.tokenBudget.used,
+        tokensTotal: packet.tokenBudget.total,
+      });
 
-  // Run through the semaphore to limit concurrent pipeline executions
-  const pipeline = pipelineSemaphore
-    .run(() => runPipeline({ batch, agentSettings, executor }))
-    .then(() => {
-      incrementMetric("pipelineCompleted");
+      // ── Planner (ticket #11) ──
+      const plannerResult = await runPlanner(packet);
+      const { output: plannerOutput } = plannerResult;
+
+      log("planner decided", {
+        scopeKey: packet.scopeKey,
+        disposition: plannerOutput.disposition,
+        confidence: plannerOutput.confidence,
+        actionCount: plannerOutput.proposedActions.length,
+        model: plannerResult.model,
+        latencyMs: plannerResult.latencyMs,
+      });
+
+      // If the planner says ignore, we're done
+      if (plannerOutput.disposition === "ignore") return;
+
+      // ── Policy engine (ticket #12) ──
+      const policyResult = await evaluatePolicy({
+        plannerOutput,
+        context: packet,
+      });
+
+      // Group actions by decision
+      const byDecision = new Map<PolicyDecision, typeof policyResult.actions>();
+      for (const actionResult of policyResult.actions) {
+        const existing = byDecision.get(actionResult.decision) ?? [];
+        existing.push(actionResult);
+        byDecision.set(actionResult.decision, existing);
+      }
+
+      log("policy evaluated", {
+        scopeKey: packet.scopeKey,
+        execute: byDecision.get("execute")?.length ?? 0,
+        suggest: byDecision.get("suggest")?.length ?? 0,
+        drop: byDecision.get("drop")?.length ?? 0,
+      });
+
+      // ── Execute actions ──
+      const executes = byDecision.get("execute") ?? [];
+      for (const actionResult of executes) {
+        const result = await executor.execute(actionResult.action, {
+          organizationId: packet.organizationId,
+          agentId: agentSettings.agentId,
+          triggerEventId: packet.triggerEvent.id,
+        });
+        log("action executed", {
+          scopeKey: packet.scopeKey,
+          actionType: result.actionType,
+          status: result.status,
+          ...(result.error ? { error: result.error } : {}),
+        });
+      }
+
+      // ── Create suggestions (ticket #14) ──
+      const suggests = byDecision.get("suggest") ?? [];
+      if (suggests.length > 0) {
+        // Determine the best recipient — use the trigger event's actor if they're a user
+        const triggerActorType = packet.triggerEvent.actorType;
+        const triggerActorId = packet.triggerEvent.actorId;
+        const userId = triggerActorType === "user" ? triggerActorId : agentSettings.agentId;
+
+        const items = await createSuggestions({
+          suggestions: suggests,
+          plannerOutput,
+          context: packet,
+          agentId: agentSettings.agentId,
+          userId,
+        });
+
+        log("suggestions created", {
+          scopeKey: packet.scopeKey,
+          count: items.length,
+          types: items.map((i) => i.itemType),
+        });
+      }
     })
     .catch((err) => {
-      incrementMetric("pipelineFailed");
       logError("agent pipeline failed", err);
-    })
-    .finally(() => {
-      pendingPipelines.delete(pipeline);
     });
-
-  pendingPipelines.add(pipeline);
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const workerLogger = createAgentLogger("agent-worker");
-const { log, logError } = workerLogger;
-
 function streamKey(orgId: string): string {
   return `${STREAM_KEY_PREFIX}${orgId}${STREAM_KEY_SUFFIX}`;
+}
+
+function log(msg: string, data?: Record<string, unknown>): void {
+  const prefix = `[agent-worker]`;
+  if (data) {
+    console.log(prefix, msg, JSON.stringify(data));
+  } else {
+    console.log(prefix, msg);
+  }
+}
+
+function logError(msg: string, err: unknown): void {
+  const message = err instanceof Error ? err.message : String(err);
+  console.error(`[agent-worker] ${msg}:`, message);
 }
 
 // ---------------------------------------------------------------------------
@@ -281,7 +341,7 @@ async function loadAgentIdentities(): Promise<void> {
 
 /**
  * Seed the chat membership gate for all orgs where the agent is a member.
- * Queries the ChatMember table joined with Chat to get the chat type (dm/group).
+ * Queries the ChatMember table for rows matching the agent's identity ID.
  */
 async function seedChatMembershipGate(): Promise<void> {
   for (const [orgId, settings] of agentContexts) {
@@ -291,20 +351,14 @@ async function seedChatMembershipGate(): Promise<void> {
           userId: settings.agentId,
           leftAt: null,
         },
-        select: {
-          chatId: true,
-          chat: { select: { type: true } },
-        },
+        select: { chatId: true },
       });
 
-      const chats = memberships.map((m: { chatId: string; chat: { type: string } }) => ({
-        chatId: m.chatId,
-        type: (m.chat.type === "dm" ? "dm" : "group") as ChatType,
-      }));
-      seedChatMemberships(orgId, chats);
+      const chatIds = memberships.map((m) => m.chatId);
+      seedChatMemberships(orgId, chatIds);
 
-      if (chats.length > 0) {
-        log("seeded chat memberships", { orgId, chatCount: chats.length });
+      if (chatIds.length > 0) {
+        log("seeded chat memberships", { orgId, chatCount: chatIds.length });
       }
     } catch (err) {
       logError(`failed to seed chat memberships for org ${orgId}`, err);
@@ -440,33 +494,11 @@ async function processEvents(orgId: string, entries: StreamEntry[]): Promise<voi
       // Update chat membership gate before routing
       updateChatMembership(event, agentContext.agentId);
 
-      // When the agent is removed from a chat, immediately close any open
-      // aggregation windows for that chat scope (ticket #17).
-      if (
-        event.eventType === "chat_member_removed" &&
-        event.payload.userId === agentContext.agentId
-      ) {
-        const scopePrefix = `chat:${event.scopeId}`;
-        const closed = await aggregator.closeWindowsForScope(orgId, scopePrefix);
-        if (closed > 0) {
-          log("closed aggregation windows for removed chat", {
-            orgId,
-            chatId: event.scopeId,
-            windowsClosed: closed,
-          });
-        }
-      }
-
       // Track event count for summary freshness (non-blocking)
       trackEventForSummary(orgId, event.scopeType, event.scopeId).catch(() => {});
 
-      // Track event for memory extraction (non-blocking)
-      trackEventForMemoryExtraction(orgId, event.scopeType, event.scopeId, event.eventType).catch(() => {});
-
       // Route the event
       const result = routeEvent(event, agentContext);
-      incrementMetric("eventsProcessed");
-      if (result.decision === "drop") incrementMetric("eventsDropped");
 
       log("event routed", {
         orgId,
@@ -482,6 +514,20 @@ async function processEvents(orgId: string, entries: StreamEntry[]): Promise<voi
       // Feed non-dropped events into the aggregator
       if (result.decision !== "drop") {
         await aggregator.ingest(event, result);
+      }
+
+      // Conversation agent features — fire-and-forget for ai_conversation-scoped events
+      if (event.scopeType === "ai_conversation" && result.decision !== "drop") {
+        const conversationId = event.scopeId;
+        const branchId = (event.payload.branchId as string | undefined) ?? undefined;
+        processConversationEvent({
+          event,
+          conversationId,
+          branchId,
+          organizationId: orgId,
+        }).catch((err) => {
+          logError(`conversation agent error (conv=${conversationId})`, err);
+        });
       }
     } catch (err) {
       logError(`unparseable event (orgId=${orgId}, streamId=${entry.id})`, err);
@@ -526,28 +572,6 @@ function sleep(ms: number): Promise<void> {
 
 let orgPollTimer: ReturnType<typeof setInterval> | null = null;
 let rateLimitCleanupTimer: ReturnType<typeof setInterval> | null = null;
-let statusHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
-const workerStartedAt = Date.now();
-
-function startStatusHeartbeat(): void {
-  // Publish status immediately, then every 15 seconds
-  const publish = () => {
-    const metrics = getMetrics();
-    publishWorkerStatus({
-      running: !shuttingDown,
-      startedAt: workerStartedAt,
-      openAggregationWindows: aggregator.openWindowCount,
-      activeOrganizations: activeOrgs.size,
-      lastHeartbeat: Date.now(),
-      activePipelines: pipelineSemaphore.activeCount,
-      pendingPipelines: pipelineSemaphore.pendingCount,
-      ...metrics,
-    }).catch(() => {});
-    publishAggregationWindows(aggregator.getOpenWindows()).catch(() => {});
-  };
-  publish();
-  statusHeartbeatTimer = setInterval(publish, 15_000);
-}
 
 function startOrgPolling(): void {
   orgPollTimer = setInterval(() => {
@@ -573,10 +597,6 @@ function stopTimers(): void {
     clearInterval(rateLimitCleanupTimer);
     rateLimitCleanupTimer = null;
   }
-  if (statusHeartbeatTimer) {
-    clearInterval(statusHeartbeatTimer);
-    statusHeartbeatTimer = null;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -591,10 +611,7 @@ async function shutdown(signal: string): Promise<void> {
   stopTimers();
   cachedCostTracker.stop();
   stopSummaryWorker();
-  stopMemoryExtractorWorker();
-  stopEmbeddingWorker();
   stopSuggestionExpiryWorker();
-  stopRedisHealthMonitor();
 
   // Stop aggregator — emits all open windows so no events are lost
   try {
@@ -602,17 +619,6 @@ async function shutdown(signal: string): Promise<void> {
     log("aggregator stopped");
   } catch (err) {
     logError("error stopping aggregator", err);
-  }
-
-  // Drain pending pipelines — wait for in-flight work to complete
-  if (pendingPipelines.size > 0) {
-    log(`draining ${pendingPipelines.size} pending pipeline(s)...`);
-    const drainTimeout = new Promise<void>((resolve) => setTimeout(resolve, 30_000));
-    await Promise.race([
-      Promise.allSettled([...pendingPipelines]),
-      drainTimeout,
-    ]);
-    log("pipeline drain complete", { remaining: pendingPipelines.size });
   }
 
   // Give the consume loop time to exit its current XREADGROUP block.
@@ -657,9 +663,7 @@ async function main(): Promise<void> {
   } catch {
     const url = process.env.REDIS_URL ?? "redis://localhost:6379";
     console.error(`\n[agent-worker] Failed to connect to Redis at ${url}`);
-    console.error(
-      "[agent-worker] Start Redis locally, for example: docker run -d --name trace-redis -p 6379:6379 redis:7-alpine\n",
-    );
+    console.error("[agent-worker] Start Redis with: docker compose up -d redis\n");
     process.exit(1);
   }
 
@@ -670,10 +674,8 @@ async function main(): Promise<void> {
   // Seed chat membership gate from database
   await seedChatMembershipGate();
 
-  // Wire up cost tracker so the router and policy engine enforce budget degradation.
-  // Both use the same CachedCostTracker — no duplicate caching.
+  // Wire up cost tracker so the router enforces budget degradation
   setCostTracker(cachedCostTracker);
-  setPolicyCostTracker(cachedCostTracker);
   await cachedCostTracker.refreshAll(activeOrgs);
   cachedCostTracker.start(() => activeOrgs);
   log("cost tracker initialized");
@@ -692,25 +694,9 @@ async function main(): Promise<void> {
   startSummaryWorker(() => activeOrgs);
   log("summary worker started");
 
-  // Start the memory extractor worker
-  startMemoryExtractorWorker(() => activeOrgs);
-  log("memory extractor worker started");
-
-  // Start the embedding worker (Phase 4 — populates vector embeddings)
-  startEmbeddingWorker();
-  log("embedding worker started");
-
   // Start the suggestion expiry worker
   startSuggestionExpiryWorker();
   log("suggestion expiry worker started");
-
-  // Start Redis health monitoring
-  startRedisHealthMonitor();
-  log("redis health monitor started");
-
-  // Start publishing worker status to Redis for the debug console
-  startStatusHeartbeat();
-  log("status heartbeat started");
 
   // Enter the main consume loop (blocks until shutdown)
   await consumeLoop();
