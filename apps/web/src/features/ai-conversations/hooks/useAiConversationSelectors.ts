@@ -175,6 +175,11 @@ export function useScrollTargetTurnId(): string | null {
   return useAiConversationUIStore((state) => state.scrollTargetTurnId);
 }
 
+/** Returns the turn ID currently highlighted after a scroll-to-fork navigation */
+export function useHighlightTurnId(): string | null {
+  return useAiConversationUIStore((state) => state.highlightTurnId);
+}
+
 /** Returns the branch switcher open state */
 export function useBranchSwitcherOpen(): boolean {
   return useAiConversationUIStore((state) => state.branchSwitcherOpen);

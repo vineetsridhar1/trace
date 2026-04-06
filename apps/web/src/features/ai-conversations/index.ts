@@ -14,6 +14,7 @@ export {
   useTurnField,
   useActiveBranchId,
   useScrollTargetTurnId,
+  useHighlightTurnId,
   useBranchSwitcherOpen,
   type TimelineEntry,
 } from "./hooks/useAiConversationSelectors";
@@ -37,6 +38,14 @@ export {
   useSendTurn,
   useUpdateAiConversationTitle,
 } from "./hooks/useAiConversationMutations";
+
+// Hooks
+export { useScrollToTurn } from "./hooks/useScrollToTurn";
+export { useReturnToForkShortcut } from "./hooks/useReturnToForkShortcut";
+
+// Components
+export { ReturnToForkPoint } from "./components/ReturnToForkPoint";
+export { TurnHighlight } from "./components/TurnHighlight";
 
 // Utils
 export { processAiConversationEvent } from "./utils/processAiConversationEvent";
