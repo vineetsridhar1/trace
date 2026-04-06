@@ -76,7 +76,9 @@ export type AiConversation = {
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
   id: Scalars['ID']['output'];
+  modelId?: Maybe<Scalars['String']['output']>;
   rootBranch: Branch;
+  systemPrompt?: Maybe<Scalars['String']['output']>;
   title?: Maybe<Scalars['String']['output']>;
   updatedAt: Scalars['DateTime']['output'];
   visibility: AiConversationVisibility;
@@ -213,6 +215,8 @@ export type CostBudget = {
 };
 
 export type CreateAiConversationInput = {
+  modelId?: InputMaybe<Scalars['String']['input']>;
+  systemPrompt?: InputMaybe<Scalars['String']['input']>;
   title?: InputMaybe<Scalars['String']['input']>;
   visibility?: InputMaybe<AiConversationVisibility>;
 };
@@ -478,6 +482,7 @@ export type Mutation = {
   unsubscribe: Scalars['Boolean']['output'];
   updateAgentObservability: AiConversation;
   updateAgentSettings: AgentIdentity;
+  updateAiConversation: AiConversation;
   updateAiConversationTitle: AiConversation;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
@@ -821,6 +826,12 @@ export type MutationUpdateAgentObservabilityArgs = {
 export type MutationUpdateAgentSettingsArgs = {
   input: UpdateAgentSettingsInput;
   organizationId: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateAiConversationArgs = {
+  conversationId: Scalars['ID']['input'];
+  input: UpdateAiConversationInput;
 };
 
 
@@ -1482,6 +1493,13 @@ export type UpdateAgentSettingsInput = {
   status?: InputMaybe<OrgAgentStatus>;
 };
 
+export type UpdateAiConversationInput = {
+  modelId?: InputMaybe<Scalars['String']['input']>;
+  systemPrompt?: InputMaybe<Scalars['String']['input']>;
+  title?: InputMaybe<Scalars['String']['input']>;
+  visibility?: InputMaybe<AiConversationVisibility>;
+};
+
 export type UpdateChannelGroupInput = {
   isCollapsed?: InputMaybe<Scalars['Boolean']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
@@ -1672,6 +1690,7 @@ export type ResolversTypes = ResolversObject<{
   Turn: ResolverTypeWrapper<Turn>;
   TurnRole: TurnRole;
   UpdateAgentSettingsInput: UpdateAgentSettingsInput;
+  UpdateAiConversationInput: UpdateAiConversationInput;
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateRepoInput: UpdateRepoInput;
   UpdateTicketInput: UpdateTicketInput;
@@ -1742,6 +1761,7 @@ export type ResolversParentTypes = ResolversObject<{
   TicketLink: TicketLink;
   Turn: Turn;
   UpdateAgentSettingsInput: UpdateAgentSettingsInput;
+  UpdateAiConversationInput: UpdateAiConversationInput;
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateRepoInput: UpdateRepoInput;
   UpdateTicketInput: UpdateTicketInput;
@@ -1776,7 +1796,9 @@ export type AiConversationResolvers<ContextType = Context, ParentType extends Re
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   createdBy?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  modelId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   rootBranch?: Resolver<ResolversTypes['Branch'], ParentType, ContextType>;
+  systemPrompt?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   title?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   visibility?: Resolver<ResolversTypes['AiConversationVisibility'], ParentType, ContextType>;
@@ -2008,6 +2030,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   unsubscribe?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationUnsubscribeArgs, 'scopeId' | 'scopeType'>>;
   updateAgentObservability?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType, RequireFields<MutationUpdateAgentObservabilityArgs, 'conversationId' | 'level'>>;
   updateAgentSettings?: Resolver<ResolversTypes['AgentIdentity'], ParentType, ContextType, RequireFields<MutationUpdateAgentSettingsArgs, 'input' | 'organizationId'>>;
+  updateAiConversation?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType, RequireFields<MutationUpdateAiConversationArgs, 'conversationId' | 'input'>>;
   updateAiConversationTitle?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType, RequireFields<MutationUpdateAiConversationTitleArgs, 'conversationId' | 'title'>>;
   updateChannelGroup?: Resolver<ResolversTypes['ChannelGroup'], ParentType, ContextType, RequireFields<MutationUpdateChannelGroupArgs, 'id' | 'input'>>;
   updateOrgMemberRole?: Resolver<ResolversTypes['OrgMember'], ParentType, ContextType, RequireFields<MutationUpdateOrgMemberRoleArgs, 'organizationId' | 'role' | 'userId'>>;

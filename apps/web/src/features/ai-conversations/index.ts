@@ -45,7 +45,11 @@ export {
   useUpdateAgentObservability,
   useForkBranch,
   useLabelBranch,
+  useUpdateAiConversation,
 } from "./hooks/useAiConversationMutations";
+
+// Shortcut hooks
+export { useNewConversationShortcut } from "./hooks/useNewConversationShortcut";
 
 // Components
 export { ConversationListContainer } from "./components/ConversationListContainer";
@@ -55,9 +59,20 @@ export { BranchTreePanel } from "./components/BranchTreePanel";
 export { BranchTreeNode, BranchTreeNodeContainer } from "./components/BranchTreeNode";
 export { BranchBreadcrumb } from "./components/BranchBreadcrumb";
 export { EditableBranchLabel } from "./components/EditableBranchLabel";
+export { AiConversationView } from "./components/AiConversationView";
+export { ModelPicker } from "./components/ModelPicker";
+export { ConversationSettings } from "./components/ConversationSettings";
+export { NewConversationButton } from "./components/NewConversationButton";
 
 // Ancestor hooks
 export { useBranchAncestors, type BranchAncestorInfo } from "./hooks/useBranchAncestors";
+
+// Constants
+export {
+  AVAILABLE_MODELS,
+  DEFAULT_MODEL_ID,
+  getModelLabel,
+} from "./constants";
 
 // Utils
 export { processAiConversationEvent } from "./utils/processAiConversationEvent";

@@ -40,6 +40,14 @@ const UPDATE_AGENT_OBSERVABILITY_MUTATION = gql`
   }
 `;
 
+const UPDATE_AI_CONVERSATION_MUTATION = gql`
+  mutation UpdateAiConversation($conversationId: ID!, $input: UpdateAiConversationInput!) {
+    updateAiConversation(conversationId: $conversationId, input: $input) {
+      id
+    }
+  }
+`;
+
 const FORK_BRANCH_MUTATION = gql`
   mutation ForkBranch($turnId: ID!, $label: String) {
     forkBranch(turnId: $turnId, label: $label) {
@@ -79,7 +87,12 @@ export function useCreateAiConversation() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
 
   return useCallback(
-    async (input: { title?: string; visibility?: AiConversationVisibility }) => {
+    async (input: {
+      title?: string;
+      visibility?: AiConversationVisibility;
+      modelId?: string;
+      systemPrompt?: string;
+    }) => {
       if (!activeOrgId) return null;
 
       const result = await client
@@ -192,6 +205,30 @@ export function useUpdateAgentObservability() {
 
       if (result.error) {
         console.error("Failed to update agent observability:", result.error.message);
+      }
+    },
+    [],
+  );
+}
+
+/** Fire-and-forget: updates conversation fields; event stream handles store update */
+export function useUpdateAiConversation() {
+  return useCallback(
+    async (params: {
+      conversationId: string;
+      input: {
+        title?: string;
+        modelId?: string | null;
+        systemPrompt?: string | null;
+        visibility?: AiConversationVisibility;
+      };
+    }) => {
+      const result = await client
+        .mutation(UPDATE_AI_CONVERSATION_MUTATION, params)
+        .toPromise();
+
+      if (result.error) {
+        console.error("Failed to update conversation:", result.error.message);
       }
     },
     [],

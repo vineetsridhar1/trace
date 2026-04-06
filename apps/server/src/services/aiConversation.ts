@@ -14,6 +14,8 @@ export class AiConversationService {
       organizationId: string;
       title?: string;
       visibility?: AiConversationVisibility;
+      modelId?: string;
+      systemPrompt?: string;
     },
     actorType: ActorType,
     actorId: string,
@@ -35,6 +37,8 @@ export class AiConversationService {
           createdById: actorId,
           title: input.title ?? null,
           visibility: input.visibility ?? "PRIVATE",
+          modelId: input.modelId ?? null,
+          systemPrompt: input.systemPrompt ?? null,
         },
       });
 
@@ -67,6 +71,8 @@ export class AiConversationService {
         conversationId: updated.id,
         title: updated.title,
         visibility: updated.visibility,
+        modelId: updated.modelId,
+        systemPrompt: updated.systemPrompt,
         rootBranchId: updated.rootBranchId,
         createdById: actorId,
         updatedAt: updated.updatedAt.toISOString(),
@@ -101,6 +107,8 @@ export class AiConversationService {
           conversationId: updated.id,
           title: updated.title,
           visibility: updated.visibility,
+          modelId: updated.modelId,
+          systemPrompt: updated.systemPrompt,
           rootBranchId: updated.rootBranchId,
           createdById: actorId,
           updatedAt: updated.updatedAt.toISOString(),
@@ -268,6 +276,75 @@ export class AiConversationService {
         },
       },
     });
+  }
+
+  /**
+   * Updates conversation fields (title, modelId, systemPrompt, visibility).
+   * Only the creator can update. Emits ai_conversation_updated event.
+   */
+  async updateConversation(
+    input: {
+      conversationId: string;
+      title?: string;
+      modelId?: string | null;
+      systemPrompt?: string | null;
+      visibility?: AiConversationVisibility;
+    },
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    const conversation = await prisma.aiConversation.findUniqueOrThrow({
+      where: { id: input.conversationId },
+    });
+
+    if (conversation.createdById !== actorId) {
+      throw new Error("Only the conversation creator can update the conversation");
+    }
+
+    const data: Record<string, unknown> = {};
+    if (input.title !== undefined) data.title = input.title;
+    if (input.modelId !== undefined) data.modelId = input.modelId;
+    if (input.systemPrompt !== undefined) data.systemPrompt = input.systemPrompt;
+    if (input.visibility !== undefined) data.visibility = input.visibility;
+
+    if (Object.keys(data).length === 0) {
+      return conversation;
+    }
+
+    const updated = await prisma.aiConversation.update({
+      where: { id: input.conversationId },
+      data,
+    });
+
+    const payload: Record<string, string | null> = {
+      conversationId: input.conversationId,
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+    if (input.title !== undefined) payload.title = input.title ?? null;
+    if (input.modelId !== undefined) payload.modelId = input.modelId ?? null;
+    if (input.systemPrompt !== undefined) payload.systemPrompt = input.systemPrompt ?? null;
+    if (input.visibility !== undefined) payload.visibility = input.visibility ?? null;
+
+    await eventService.create({
+      organizationId: conversation.organizationId,
+      scopeType: "ai_conversation",
+      scopeId: input.conversationId,
+      eventType: "ai_conversation_updated",
+      payload,
+      actorType,
+      actorId,
+    });
+
+    pubsub.publish(topics.conversationEvents(input.conversationId), {
+      conversationEvents: {
+        conversationId: input.conversationId,
+        type: "ai_conversation_updated",
+        payload,
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    return updated;
   }
 
   /**
