@@ -51,6 +51,11 @@ export type AgentIdentity = {
   updatedAt: Scalars['DateTime']['output'];
 };
 
+export type AgentObservability =
+  | 'OFF'
+  | 'PARTICIPATE'
+  | 'SUGGEST';
+
 export type AgentStatus =
   | 'active'
   | 'done'
@@ -65,6 +70,7 @@ export type AgentTrustLevel =
 
 export type AiConversation = {
   __typename?: 'AiConversation';
+  agentObservability: AgentObservability;
   branchCount: Scalars['Int']['output'];
   branches: Array<Branch>;
   createdAt: Scalars['DateTime']['output'];
@@ -469,6 +475,7 @@ export type Mutation = {
   unmuteScope: Participant;
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
+  updateAgentObservability: AiConversation;
   updateAgentSettings: AgentIdentity;
   updateAiConversationTitle: AiConversation;
   updateChannelGroup: ChannelGroup;
@@ -795,6 +802,12 @@ export type MutationUnregisterRepoWebhookArgs = {
 export type MutationUnsubscribeArgs = {
   scopeId: Scalars['ID']['input'];
   scopeType: Scalars['String']['input'];
+};
+
+
+export type MutationUpdateAgentObservabilityArgs = {
+  conversationId: Scalars['ID']['input'];
+  level: AgentObservability;
 };
 
 
@@ -1571,6 +1584,7 @@ export type ResolversTypes = ResolversObject<{
   ActorType: ActorType;
   AddChatMemberInput: AddChatMemberInput;
   AgentIdentity: ResolverTypeWrapper<AgentIdentity>;
+  AgentObservability: AgentObservability;
   AgentStatus: AgentStatus;
   AgentTrustLevel: AgentTrustLevel;
   AiConversation: ResolverTypeWrapper<AiConversation>;
@@ -1749,6 +1763,7 @@ export type AgentIdentityResolvers<ContextType = Context, ParentType extends Res
 }>;
 
 export type AiConversationResolvers<ContextType = Context, ParentType extends ResolversParentTypes['AiConversation'] = ResolversParentTypes['AiConversation']> = ResolversObject<{
+  agentObservability?: Resolver<ResolversTypes['AgentObservability'], ParentType, ContextType>;
   branchCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   branches?: Resolver<Array<ResolversTypes['Branch']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
@@ -1983,6 +1998,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   unmuteScope?: Resolver<ResolversTypes['Participant'], ParentType, ContextType, RequireFields<MutationUnmuteScopeArgs, 'scopeId' | 'scopeType'>>;
   unregisterRepoWebhook?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationUnregisterRepoWebhookArgs, 'repoId'>>;
   unsubscribe?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationUnsubscribeArgs, 'scopeId' | 'scopeType'>>;
+  updateAgentObservability?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType, RequireFields<MutationUpdateAgentObservabilityArgs, 'conversationId' | 'level'>>;
   updateAgentSettings?: Resolver<ResolversTypes['AgentIdentity'], ParentType, ContextType, RequireFields<MutationUpdateAgentSettingsArgs, 'input' | 'organizationId'>>;
   updateAiConversationTitle?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType, RequireFields<MutationUpdateAiConversationTitleArgs, 'conversationId' | 'title'>>;
   updateChannelGroup?: Resolver<ResolversTypes['ChannelGroup'], ParentType, ContextType, RequireFields<MutationUpdateChannelGroupArgs, 'id' | 'input'>>;

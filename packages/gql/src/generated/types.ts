@@ -48,6 +48,11 @@ export type AgentIdentity = {
   updatedAt: Scalars['DateTime']['output'];
 };
 
+export type AgentObservability =
+  | 'OFF'
+  | 'PARTICIPATE'
+  | 'SUGGEST';
+
 export type AgentStatus =
   | 'active'
   | 'done'
@@ -62,6 +67,7 @@ export type AgentTrustLevel =
 
 export type AiConversation = {
   __typename?: 'AiConversation';
+  agentObservability: AgentObservability;
   branchCount: Scalars['Int']['output'];
   branches: Array<Branch>;
   createdAt: Scalars['DateTime']['output'];
@@ -466,6 +472,7 @@ export type Mutation = {
   unmuteScope: Participant;
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
+  updateAgentObservability: AiConversation;
   updateAgentSettings: AgentIdentity;
   updateAiConversationTitle: AiConversation;
   updateChannelGroup: ChannelGroup;
@@ -792,6 +799,12 @@ export type MutationUnregisterRepoWebhookArgs = {
 export type MutationUnsubscribeArgs = {
   scopeId: Scalars['ID']['input'];
   scopeType: Scalars['String']['input'];
+};
+
+
+export type MutationUpdateAgentObservabilityArgs = {
+  conversationId: Scalars['ID']['input'];
+  level: AgentObservability;
 };
 
 

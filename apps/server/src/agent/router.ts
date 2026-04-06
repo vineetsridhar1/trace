@@ -7,7 +7,9 @@
  * Ticket: #04
  */
 
+import type { AgentObservability } from "@prisma/client";
 import type { OrgAgentSettings } from "../services/agent-identity.js";
+import { prisma } from "../lib/db.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -76,6 +78,9 @@ const AGGREGATE_EVENT_TYPES = new Set<string>([
   "ticket_updated",
   "ticket_commented",
   "session_output",
+  "ai_turn_created",
+  "ai_conversation_created",
+  "ai_conversation_agent_observability_changed",
 ]);
 
 /**
@@ -232,6 +237,57 @@ function getMaxTier(remaining: number): number | undefined {
 }
 
 // ---------------------------------------------------------------------------
+// AI Conversation observability lookup
+// ---------------------------------------------------------------------------
+
+/**
+ * In-memory cache for conversation observability levels.
+ * Key: conversationId, Value: { level, expiry }
+ */
+const conversationObservabilityCache = new Map<
+  string,
+  { level: AgentObservability; expiry: number }
+>();
+
+const OBSERVABILITY_CACHE_TTL_MS = 30_000; // 30 seconds
+
+/**
+ * Get the agent observability level for a conversation.
+ * Uses a short-lived cache to avoid hitting the DB on every event.
+ */
+export async function getConversationObservability(
+  conversationId: string,
+): Promise<AgentObservability> {
+  const cached = conversationObservabilityCache.get(conversationId);
+  const now = Date.now();
+
+  if (cached && now < cached.expiry) {
+    return cached.level;
+  }
+
+  try {
+    const conversation = await prisma.aiConversation.findUnique({
+      where: { id: conversationId },
+      select: { agentObservability: true },
+    });
+
+    const level = conversation?.agentObservability ?? "OFF";
+    conversationObservabilityCache.set(conversationId, {
+      level,
+      expiry: now + OBSERVABILITY_CACHE_TTL_MS,
+    });
+    return level;
+  } catch {
+    return "OFF";
+  }
+}
+
+/** Invalidate the cache entry when observability changes (called by event handler) */
+export function invalidateObservabilityCache(conversationId: string): void {
+  conversationObservabilityCache.delete(conversationId);
+}
+
+// ---------------------------------------------------------------------------
 // Main routing function
 // ---------------------------------------------------------------------------
 
@@ -296,4 +352,48 @@ export function routeEvent(
 
   // 9. Default: drop (conservative — new event types must be explicitly opted in)
   return { decision: "drop", reason: "no_matching_rule" };
+}
+
+/**
+ * Async routing wrapper that handles AI conversation observability gating.
+ * For ai_conversation-scoped events, checks the conversation's observability level
+ * before delegating to the synchronous routeEvent.
+ *
+ * Returns the routing result with an additional `observability` annotation
+ * when relevant (SUGGEST or PARTICIPATE).
+ */
+export async function routeEventAsync(
+  event: AgentEvent,
+  settings: OrgAgentSettings,
+): Promise<RoutingResult & { observability?: AgentObservability }> {
+  // Handle observability cache invalidation for setting-change events
+  if (event.eventType === "ai_conversation_agent_observability_changed") {
+    invalidateObservabilityCache(event.scopeId);
+  }
+
+  // Gate AI conversation-scoped events by observability level
+  if (event.scopeType === "ai_conversation") {
+    const level = await getConversationObservability(event.scopeId);
+
+    if (level === "OFF") {
+      return { decision: "drop", reason: "conversation_observability_off" };
+    }
+
+    // For SUGGEST/PARTICIPATE, run normal routing but annotate with observability level
+    const baseResult = routeEvent(event, settings);
+
+    // If the base router would drop it (e.g. self-trigger, rate limit), respect that
+    if (baseResult.decision === "drop") {
+      return baseResult;
+    }
+
+    return {
+      ...baseResult,
+      observability: level,
+      // SUGGEST: agent can observe and suggest but not post turns
+      // PARTICIPATE: agent can observe and post turns
+    };
+  }
+
+  return routeEvent(event, settings);
 }

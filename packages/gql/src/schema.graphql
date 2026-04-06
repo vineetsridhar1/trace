@@ -154,6 +154,12 @@ enum AiConversationVisibility {
   ORG
 }
 
+enum AgentObservability {
+  OFF
+  SUGGEST
+  PARTICIPATE
+}
+
 enum TurnRole {
   USER
   ASSISTANT
@@ -531,6 +537,7 @@ type AiConversation {
   id: ID!
   title: String
   visibility: AiConversationVisibility!
+  agentObservability: AgentObservability!
   createdBy: User!
   rootBranch: Branch!
   branches: [Branch!]!
@@ -832,6 +839,7 @@ type Mutation {
   sendTurn(branchId: ID!, content: String!, clientMutationId: String): Turn!
   updateAiConversationTitle(conversationId: ID!, title: String!): AiConversation!
   forkBranch(turnId: ID!, label: String): Branch!
+  updateAgentObservability(conversationId: ID!, level: AgentObservability!): AiConversation!
 }
 
 # --- Subscriptions ---

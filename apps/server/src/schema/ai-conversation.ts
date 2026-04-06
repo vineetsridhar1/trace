@@ -1,5 +1,5 @@
 import type { Context } from "../context.js";
-import type { AiConversationVisibility, CreateAiConversationInput } from "@trace/gql";
+import type { AgentObservability, AiConversationVisibility, CreateAiConversationInput } from "@trace/gql";
 import { aiConversationService } from "../services/aiConversation.js";
 import { aiTurnService } from "../services/aiTurn.js";
 import { pubsub, topics } from "../lib/pubsub.js";
@@ -88,6 +88,19 @@ export const aiConversationMutations = {
       turnId: args.turnId,
       label: args.label ?? undefined,
       userId: ctx.userId,
+    });
+  },
+
+  updateAgentObservability: (
+    _: unknown,
+    args: { conversationId: string; level: AgentObservability },
+    ctx: Context,
+  ) => {
+    return aiConversationService.updateAgentObservability({
+      conversationId: args.conversationId,
+      level: args.level,
+      userId: ctx.userId,
+      actorType: ctx.actorType,
     });
   },
 };
