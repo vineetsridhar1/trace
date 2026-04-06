@@ -148,6 +148,21 @@ function collectInheritedTurns(
   return result;
 }
 
+/** Returns child branch IDs for a given turn (branches forked from this turn) */
+export function useChildBranchIds(turnId: string): string[] {
+  return useEntityStore(
+    useShallow((state) => {
+      const ids: string[] = [];
+      for (const branch of Object.values(state.aiBranches)) {
+        if (branch.forkTurnId === turnId) {
+          ids.push(branch.id);
+        }
+      }
+      return ids;
+    }),
+  );
+}
+
 // ── Turn selectors ─────────────────────────────────────────────
 
 /** Returns the full turn entity */

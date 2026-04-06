@@ -15,6 +15,7 @@ export {
   useActiveBranchId,
   useScrollTargetTurnId,
   useBranchSwitcherOpen,
+  useChildBranchIds,
   type TimelineEntry,
 } from "./hooks/useAiConversationSelectors";
 
@@ -38,5 +39,10 @@ export {
   useUpdateAiConversationTitle,
 } from "./hooks/useAiConversationMutations";
 
+// Components
+export { BranchIndicator } from "./components/BranchIndicator";
+export { BranchPopoverList } from "./components/BranchPopoverList";
+
 // Utils
 export { processAiConversationEvent } from "./utils/processAiConversationEvent";
+export { getBranchDisplayLabel } from "./utils/branchLabel";
