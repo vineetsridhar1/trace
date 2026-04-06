@@ -20,6 +20,7 @@ import type {
   GitCheckpoint,
   SessionStatus,
 } from "@trace/gql";
+import { processAiConversationEvent } from "../features/ai-conversations/utils/processAiConversationEvent";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
   subscription OrgEvents($organizationId: ID!) {
@@ -167,7 +168,9 @@ function rewriteGitCheckpoints(
   replacedCommitSha: string,
   incoming: GitCheckpoint,
 ): GitCheckpoint[] {
-  const filtered = (existing ?? []).filter((checkpoint) => checkpoint.commitSha !== replacedCommitSha);
+  const filtered = (existing ?? []).filter(
+    (checkpoint) => checkpoint.commitSha !== replacedCommitSha,
+  );
   return mergeGitCheckpoints(filtered, incoming);
 }
 
@@ -523,7 +526,8 @@ export function useOrgEvents() {
               } as Partial<SessionEntity>);
             }
 
-            const existingGroup = useEntityStore.getState().sessionGroups[checkpoint.sessionGroupId];
+            const existingGroup =
+              useEntityStore.getState().sessionGroups[checkpoint.sessionGroupId];
             if (existingGroup) {
               patch("sessionGroups", checkpoint.sessionGroupId, {
                 gitCheckpoints: mergeGitCheckpoints(
@@ -547,7 +551,8 @@ export function useOrgEvents() {
               } as Partial<SessionEntity>);
             }
 
-            const existingGroup = useEntityStore.getState().sessionGroups[rewrite.checkpoint.sessionGroupId];
+            const existingGroup =
+              useEntityStore.getState().sessionGroups[rewrite.checkpoint.sessionGroupId];
             if (existingGroup) {
               patch("sessionGroups", rewrite.checkpoint.sessionGroupId, {
                 gitCheckpoints: rewriteGitCheckpoints(
@@ -600,6 +605,17 @@ export function useOrgEvents() {
           if (item && typeof item.id === "string") {
             upsert("inboxItems", item.id, item as unknown as InboxItem);
           }
+        }
+
+        // ── AI Conversation events — delegate to shared processor ───
+        if (event.eventType.startsWith("ai_") && payload) {
+          processAiConversationEvent({
+            eventType: event.eventType,
+            payload,
+            timestamp: event.timestamp,
+            conversationId:
+              event.scopeType === ("ai_conversation" as ScopeType) ? event.scopeId : undefined,
+          });
         }
 
         // Fire notification handlers after all store patches are applied

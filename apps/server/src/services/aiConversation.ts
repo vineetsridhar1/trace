@@ -67,6 +67,7 @@ export class AiConversationService {
         conversationId: updated.id,
         title: updated.title,
         visibility: updated.visibility,
+        rootBranchId: updated.rootBranchId,
         createdById: actorId,
         updatedAt: updated.updatedAt.toISOString(),
       },
@@ -151,10 +152,7 @@ export class AiConversationService {
       where: { id: conversationId },
     });
 
-    if (
-      conversation.visibility === "PRIVATE" &&
-      conversation.createdById !== userId
-    ) {
+    if (conversation.visibility === "PRIVATE" && conversation.createdById !== userId) {
       throw new Error("Conversation not found");
     }
 
@@ -181,10 +179,7 @@ export class AiConversationService {
     const conversation = await prisma.aiConversation.findFirst({
       where: {
         id,
-        OR: [
-          { createdById: requestingUserId },
-          { visibility: "ORG" },
-        ],
+        OR: [{ createdById: requestingUserId }, { visibility: "ORG" }],
       },
       include: {
         branches: {
@@ -354,10 +349,10 @@ export class AiConversationService {
 
     // Compute depth for each branch
     const branchMap = new Map<string, { parentBranchId: string | null }>(
-      branches.map((b: typeof branches[number]) => [b.id, b]),
+      branches.map((b: (typeof branches)[number]) => [b.id, b]),
     );
 
-    return branches.map((branch: typeof branches[number]) => ({
+    return branches.map((branch: (typeof branches)[number]) => ({
       ...branch,
       turnCount: branch._count.turns,
       depth: this.computeDepth(branch.id, branchMap),
@@ -372,11 +367,10 @@ export class AiConversationService {
     let currentId: string | null = branchId;
 
     while (currentId) {
-      const current: { parentBranchId: string | null } =
-        await prisma.aiBranch.findUniqueOrThrow({
-          where: { id: currentId },
-          select: { parentBranchId: true },
-        });
+      const current: { parentBranchId: string | null } = await prisma.aiBranch.findUniqueOrThrow({
+        where: { id: currentId },
+        select: { parentBranchId: true },
+      });
 
       if (current.parentBranchId === null) {
         break;

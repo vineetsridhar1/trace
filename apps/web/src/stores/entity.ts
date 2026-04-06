@@ -14,6 +14,9 @@ import type {
   Event,
   InboxItem,
   Message,
+  AiConversation,
+  Branch,
+  Turn,
 } from "@trace/gql";
 
 /** Client-side session entity with extra fields not in the GQL schema */
@@ -25,6 +28,34 @@ export type SessionEntity = Session & {
 
 export type SessionGroupEntity = SessionGroup & {
   _sortTimestamp?: string;
+};
+
+/** Client-side AI conversation entity with denormalized IDs for fast lookups */
+export type AiConversationEntity = Omit<AiConversation, "rootBranch" | "branches" | "createdBy"> & {
+  rootBranchId: string;
+  branchIds: string[];
+  createdById: string;
+};
+
+/** Client-side branch entity with ordered turn IDs and child branch IDs */
+export type AiBranchEntity = Omit<
+  Branch,
+  "conversation" | "parentBranch" | "forkTurn" | "turns" | "childBranches" | "createdBy"
+> & {
+  conversationId: string;
+  parentBranchId: string | null;
+  forkTurnId: string | null;
+  turnIds: string[];
+  childBranchIds: string[];
+  createdById: string;
+};
+
+/** Client-side turn entity with denormalized IDs */
+export type AiTurnEntity = Omit<Turn, "branch" | "parentTurn" | "childBranches"> & {
+  branchId: string;
+  parentTurnId: string | null;
+  _optimistic?: boolean;
+  _clientMutationId?: string;
 };
 
 /** Entity types that the store manages, keyed by ID */
@@ -41,6 +72,9 @@ export type EntityTableMap = {
   tickets: Ticket;
   inboxItems: InboxItem;
   messages: Message;
+  aiConversations: AiConversationEntity;
+  aiBranches: AiBranchEntity;
+  aiTurns: AiTurnEntity;
 };
 
 export type EntityType = keyof EntityTableMap;
@@ -57,7 +91,11 @@ interface EntityActions {
     items: Array<EntityTableMap[T] & { id: string }>,
   ) => void;
   /** Shallow-merge a partial update into an existing entity */
-  patch: <T extends EntityType>(entityType: T, id: string, data: Partial<EntityTableMap[T]>) => void;
+  patch: <T extends EntityType>(
+    entityType: T,
+    id: string,
+    data: Partial<EntityTableMap[T]>,
+  ) => void;
   remove: (entityType: EntityType, id: string) => void;
   /** Upsert a single event into its scoped bucket */
   upsertScopedEvent: (scopeKey: string, id: string, event: Event) => void;
@@ -82,6 +120,9 @@ export const useEntityStore = create<EntityState>((set) => ({
   tickets: {},
   inboxItems: {},
   messages: {},
+  aiConversations: {},
+  aiBranches: {},
+  aiTurns: {},
   eventsByScope: {},
 
   upsert: (entityType, id, data) =>

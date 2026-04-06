@@ -828,7 +828,7 @@ type Mutation {
   removeOrgMember(organizationId: ID!, userId: ID!): Boolean!
   updateOrgMemberRole(organizationId: ID!, userId: ID!, role: UserRole!): OrgMember!
   createAiConversation(organizationId: ID!, input: CreateAiConversationInput!): AiConversation!
-  sendTurn(branchId: ID!, content: String!): Turn!
+  sendTurn(branchId: ID!, content: String!, clientMutationId: String): Turn!
   updateAiConversationTitle(conversationId: ID!, title: String!): AiConversation!
 }
 

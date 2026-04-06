@@ -46,11 +46,15 @@ export const aiConversationMutations = {
 
   sendTurn: async (
     _: unknown,
-    args: { branchId: string; content: string },
+    args: { branchId: string; content: string; clientMutationId?: string | null },
     ctx: Context,
   ) => {
     const { assistantTurn } = await aiTurnService.sendTurn(
-      { branchId: args.branchId, content: args.content },
+      {
+        branchId: args.branchId,
+        content: args.content,
+        clientMutationId: args.clientMutationId ?? undefined,
+      },
       ctx.actorType,
       ctx.userId,
     );
@@ -76,9 +80,7 @@ export const aiConversationSubscriptions = {
     subscribe: async (_: unknown, args: { branchId: string }, ctx: Context) => {
       await aiConversationService.assertBranchAccess(args.branchId, ctx.userId);
 
-      return pubsub.asyncIterator<{ branchTurns: unknown }>(
-        topics.branchTurns(args.branchId),
-      );
+      return pubsub.asyncIterator<{ branchTurns: unknown }>(topics.branchTurns(args.branchId));
     },
   },
 
@@ -95,11 +97,7 @@ export const aiConversationSubscriptions = {
 
 export const aiConversationTypeResolvers = {
   AiConversation: {
-    createdBy: async (
-      conversation: { createdById: string },
-      _args: unknown,
-      ctx: Context,
-    ) => {
+    createdBy: async (conversation: { createdById: string }, _args: unknown, ctx: Context) => {
       const user = await ctx.userLoader.load(conversation.createdById);
       if (!user) throw new Error("User not found");
       return user;
@@ -173,11 +171,7 @@ export const aiConversationTypeResolvers = {
       });
     },
 
-    createdBy: async (
-      branch: { createdById: string },
-      _args: unknown,
-      ctx: Context,
-    ) => {
+    createdBy: async (branch: { createdById: string }, _args: unknown, ctx: Context) => {
       const user = await ctx.userLoader.load(branch.createdById);
       if (!user) throw new Error("User not found");
       return user;

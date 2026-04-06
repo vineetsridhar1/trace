@@ -52,15 +52,15 @@ Add frontend state management for AI Conversations, Branches, Turns, and shared 
 
 ## Completion requirements
 
-- [ ] `AiConversation`, `AiBranch`, and `AiTurn` are registered as entity types in the Zustand store
-- [ ] All event types correctly upsert/update entities in the store
-- [ ] Shared AI Conversation UI state lives in Zustand rather than being threaded through component-local state
-- [ ] `useEntityField`-style selectors exist for all three entity types
-- [ ] Query hooks hydrate Zustand and the scoped subscription hooks keep the active viewport live
-- [ ] Mutation hooks are fire-and-forget — store updates come from the event stream
-- [ ] Optimistic update for `sendTurn` works: user turn appears immediately, reconciles on event
-- [ ] No `useState` for shared state — everything goes through Zustand
-- [ ] Components using these selectors re-render only when their specific field changes
+- [x] `AiConversation`, `AiBranch`, and `AiTurn` are registered as entity types in the Zustand store
+- [x] All event types correctly upsert/update entities in the store
+- [x] Shared AI Conversation UI state lives in Zustand rather than being threaded through component-local state
+- [x] `useEntityField`-style selectors exist for all three entity types
+- [x] Query hooks hydrate Zustand and the scoped subscription hooks keep the active viewport live
+- [x] Mutation hooks are fire-and-forget — store updates come from the event stream
+- [x] Optimistic update for `sendTurn` works: user turn appears immediately, reconciles on event <!-- Fixed: reconciliation now happens in processAiConversationEvent and useBranchTurnsSubscription when a USER turn event arrives — finds and replaces optimistic-* entries. -->
+- [x] No `useState` for shared state — everything goes through Zustand
+- [x] Components using these selectors re-render only when their specific field changes
 
 ## How to test
 
