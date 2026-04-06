@@ -874,6 +874,7 @@ type Mutation {
   labelBranch(branchId: ID!, label: String!): Branch!
   updateAiConversation(conversationId: ID!, input: UpdateAiConversationInput!): AiConversation!
   summarizeBranch(branchId: ID!): BranchSummary!
+  updateAiConversationVisibility(conversationId: ID!, visibility: AiConversationVisibility!): AiConversation!
 }
 
 # --- Subscriptions ---

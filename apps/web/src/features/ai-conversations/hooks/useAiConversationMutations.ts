@@ -40,6 +40,14 @@ const UPDATE_AGENT_OBSERVABILITY_MUTATION = gql`
   }
 `;
 
+const UPDATE_AI_CONVERSATION_VISIBILITY_MUTATION = gql`
+  mutation UpdateAiConversationVisibility($conversationId: ID!, $visibility: AiConversationVisibility!) {
+    updateAiConversationVisibility(conversationId: $conversationId, visibility: $visibility) {
+      id
+    }
+  }
+`;
+
 const UPDATE_AI_CONVERSATION_MUTATION = gql`
   mutation UpdateAiConversation($conversationId: ID!, $input: UpdateAiConversationInput!) {
     updateAiConversation(conversationId: $conversationId, input: $input) {
@@ -217,6 +225,22 @@ export function useUpdateAgentObservability() {
 
       if (result.error) {
         console.error("Failed to update agent observability:", result.error.message);
+      }
+    },
+    [],
+  );
+}
+
+/** Fire-and-forget: updates conversation visibility; event stream handles store update */
+export function useUpdateAiConversationVisibility() {
+  return useCallback(
+    async (params: { conversationId: string; visibility: AiConversationVisibility }) => {
+      const result = await client
+        .mutation(UPDATE_AI_CONVERSATION_VISIBILITY_MUTATION, params)
+        .toPromise();
+
+      if (result.error) {
+        console.error("Failed to update conversation visibility:", result.error.message);
       }
     },
     [],

@@ -61,12 +61,13 @@ export class AiTurnService {
       },
     });
 
-    // Verify access: private conversations only accessible to creator
-    if (
-      branch.conversation.visibility === "PRIVATE" &&
-      branch.conversation.createdById !== actorId
-    ) {
-      throw new Error("Conversation not found");
+    // Only the conversation creator can send turns (even for ORG-visible conversations)
+    if (branch.conversation.createdById !== actorId) {
+      throw new Error(
+        branch.conversation.visibility === "PRIVATE"
+          ? "Conversation not found"
+          : "Only the conversation creator can send messages",
+      );
     }
 
     // Get the last turn in the branch to set parentTurnId
@@ -281,11 +282,13 @@ export class AiTurnService {
       },
     });
 
-    if (
-      branch.conversation.visibility === "PRIVATE" &&
-      branch.conversation.createdById !== actorId
-    ) {
-      throw new Error("Conversation not found");
+    // Only the conversation creator can send turns (even for ORG-visible conversations)
+    if (branch.conversation.createdById !== actorId) {
+      throw new Error(
+        branch.conversation.visibility === "PRIVATE"
+          ? "Conversation not found"
+          : "Only the conversation creator can send messages",
+      );
     }
 
     const lastTurn = await prisma.aiTurn.findFirst({

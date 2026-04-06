@@ -109,6 +109,18 @@ export const aiConversationMutations = {
     );
   },
 
+  updateAiConversationVisibility: (
+    _: unknown,
+    args: { conversationId: string; visibility: AiConversationVisibility },
+    ctx: Context,
+  ) => {
+    return aiConversationService.updateVisibility(
+      { conversationId: args.conversationId, visibility: args.visibility },
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
+
   updateAiConversation: (
     _: unknown,
     args: { conversationId: string; input: UpdateAiConversationInput },
