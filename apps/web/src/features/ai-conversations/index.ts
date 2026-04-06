@@ -38,5 +38,12 @@ export {
   useUpdateAiConversationTitle,
 } from "./hooks/useAiConversationMutations";
 
+// Components
+export { BranchSwitcher } from "./components/BranchSwitcher";
+export { BranchSwitcherItem } from "./components/BranchSwitcherItem";
+
+// Hooks (keyboard shortcut)
+export { useBranchSwitcherShortcut } from "./hooks/useBranchSwitcherShortcut";
+
 // Utils
 export { processAiConversationEvent } from "./utils/processAiConversationEvent";
