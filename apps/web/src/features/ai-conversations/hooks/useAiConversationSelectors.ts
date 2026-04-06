@@ -8,6 +8,7 @@ import {
   type AiBranchEntity,
   type AiTurnEntity,
 } from "../../../stores/entity";
+import { useAuthStore } from "../../../stores/auth";
 import { useAiConversationUIStore } from "../store/ai-conversation-ui";
 
 // ── Conversation selectors ─────────────────────────────────────
@@ -29,6 +30,33 @@ export function useAiConversationField<F extends keyof AiConversationEntity>(
 export function useAiConversations(): string[] {
   return useEntityIds("aiConversations", undefined, (a, b) =>
     b.updatedAt.localeCompare(a.updatedAt),
+  );
+}
+
+/** Returns whether the current user is the conversation creator */
+export function useIsConversationCreator(conversationId: string): boolean {
+  const createdById = useEntityField("aiConversations", conversationId, "createdById");
+  const userId = useAuthStore((s) => s.user?.id);
+  return !!userId && createdById === userId;
+}
+
+/** Returns conversation IDs owned by the current user, sorted by updatedAt desc */
+export function useMyConversationIds(): string[] {
+  const userId = useAuthStore((s) => s.user?.id);
+  return useEntityIds(
+    "aiConversations",
+    (c: AiConversationEntity) => c.createdById === userId,
+    (a, b) => b.updatedAt.localeCompare(a.updatedAt),
+  );
+}
+
+/** Returns ORG-visible conversation IDs created by other users, sorted by updatedAt desc */
+export function useSharedConversationIds(): string[] {
+  const userId = useAuthStore((s) => s.user?.id);
+  return useEntityIds(
+    "aiConversations",
+    (c: AiConversationEntity) => c.visibility === "ORG" && c.createdById !== userId,
+    (a, b) => b.updatedAt.localeCompare(a.updatedAt),
   );
 }
 

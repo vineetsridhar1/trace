@@ -320,6 +320,61 @@ export class AiConversationService {
   }
 
   /**
+   * Updates conversation visibility. Only the creator can change visibility.
+   */
+  async updateVisibility(
+    input: { conversationId: string; visibility: AiConversationVisibility },
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    const conversation = await prisma.aiConversation.findUniqueOrThrow({
+      where: { id: input.conversationId },
+    });
+
+    if (conversation.createdById !== actorId) {
+      throw new Error("Only the conversation creator can change visibility");
+    }
+
+    if (conversation.visibility === input.visibility) {
+      return conversation;
+    }
+
+    const updated = await prisma.aiConversation.update({
+      where: { id: input.conversationId },
+      data: { visibility: input.visibility },
+    });
+
+    await eventService.create({
+      organizationId: conversation.organizationId,
+      scopeType: "ai_conversation",
+      scopeId: input.conversationId,
+      eventType: "ai_conversation_visibility_changed",
+      payload: {
+        conversationId: input.conversationId,
+        visibility: input.visibility,
+        updatedAt: updated.updatedAt.toISOString(),
+      },
+      actorType,
+      actorId,
+    });
+
+    pubsub.publish(topics.conversationEvents(input.conversationId), {
+      conversationEvents: {
+        conversationId: input.conversationId,
+        type: "ai_conversation_visibility_changed",
+        payload: {
+          conversationId: input.conversationId,
+          visibility: input.visibility,
+          updatedAt: updated.updatedAt.toISOString(),
+        },
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    return updated;
+  }
+
+  /**
    * Returns a branch with its turns ordered by creation time.
    * Enforces access control through the parent conversation.
    */

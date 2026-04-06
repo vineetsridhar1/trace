@@ -6,6 +6,9 @@ export {
   useAiConversation,
   useAiConversationField,
   useAiConversations,
+  useIsConversationCreator,
+  useMyConversationIds,
+  useSharedConversationIds,
   useBranch,
   useBranchField,
   useBranchTurns,
@@ -36,6 +39,7 @@ export {
   useCreateAiConversation,
   useSendTurn,
   useUpdateAiConversationTitle,
+  useUpdateAiConversationVisibility,
 } from "./hooks/useAiConversationMutations";
 
 // Utils

@@ -470,6 +470,7 @@ export type Mutation = {
   unsubscribe: Scalars['Boolean']['output'];
   updateAgentSettings: AgentIdentity;
   updateAiConversationTitle: AiConversation;
+  updateAiConversationVisibility: AiConversation;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateRepo: Repo;
@@ -800,6 +801,12 @@ export type MutationUpdateAgentSettingsArgs = {
 export type MutationUpdateAiConversationTitleArgs = {
   conversationId: Scalars['ID']['input'];
   title: Scalars['String']['input'];
+};
+
+
+export type MutationUpdateAiConversationVisibilityArgs = {
+  conversationId: Scalars['ID']['input'];
+  visibility: AiConversationVisibility;
 };
 
 
@@ -1971,6 +1978,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   unsubscribe?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationUnsubscribeArgs, 'scopeId' | 'scopeType'>>;
   updateAgentSettings?: Resolver<ResolversTypes['AgentIdentity'], ParentType, ContextType, RequireFields<MutationUpdateAgentSettingsArgs, 'input' | 'organizationId'>>;
   updateAiConversationTitle?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType, RequireFields<MutationUpdateAiConversationTitleArgs, 'conversationId' | 'title'>>;
+  updateAiConversationVisibility?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType, RequireFields<MutationUpdateAiConversationVisibilityArgs, 'conversationId' | 'visibility'>>;
   updateChannelGroup?: Resolver<ResolversTypes['ChannelGroup'], ParentType, ContextType, RequireFields<MutationUpdateChannelGroupArgs, 'id' | 'input'>>;
   updateOrgMemberRole?: Resolver<ResolversTypes['OrgMember'], ParentType, ContextType, RequireFields<MutationUpdateOrgMemberRoleArgs, 'organizationId' | 'role' | 'userId'>>;
   updateRepo?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationUpdateRepoArgs, 'id' | 'input'>>;
