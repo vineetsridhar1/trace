@@ -40,6 +40,15 @@ const UPDATE_AGENT_OBSERVABILITY_MUTATION = gql`
   }
 `;
 
+const LABEL_BRANCH_MUTATION = gql`
+  mutation LabelBranch($branchId: ID!, $label: String!) {
+    labelBranch(branchId: $branchId, label: $label) {
+      id
+      label
+    }
+  }
+`;
+
 const FORK_BRANCH_MUTATION = gql`
   mutation ForkBranch($turnId: ID!, $label: String) {
     forkBranch(turnId: $turnId, label: $label) {
@@ -268,4 +277,15 @@ export function useForkBranch() {
     },
     [],
   );
+}
+
+/** Fire-and-forget: labels a branch; event stream handles store update */
+export function useLabelBranch() {
+  return useCallback(async (params: { branchId: string; label: string }) => {
+    const result = await client.mutation(LABEL_BRANCH_MUTATION, params).toPromise();
+
+    if (result.error) {
+      console.error("Failed to label branch:", result.error.message);
+    }
+  }, []);
 }

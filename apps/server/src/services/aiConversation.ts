@@ -549,6 +549,60 @@ export class AiConversationService {
   }
 
   /**
+   * Labels (or renames) a branch. Only the conversation creator or branch creator can label.
+   * Emits an `ai_branch_labeled` event and publishes to conversation events topic.
+   */
+  async labelBranch(
+    input: { branchId: string; label: string },
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    const branch = await this.assertBranchAccess(input.branchId, actorId);
+
+    // Only conversation creator or branch creator can label
+    if (branch.conversation.createdById !== actorId && branch.createdById !== actorId) {
+      throw new Error("Only the conversation or branch creator can label a branch");
+    }
+
+    const updated = await prisma.aiBranch.update({
+      where: { id: input.branchId },
+      data: { label: input.label },
+    });
+
+    const conversationId = branch.conversationId;
+    const organizationId = branch.conversation.organizationId;
+
+    await eventService.create({
+      organizationId,
+      scopeType: "ai_conversation",
+      scopeId: conversationId,
+      eventType: "ai_branch_labeled",
+      payload: {
+        branchId: input.branchId,
+        label: input.label,
+        conversationId,
+      },
+      actorType,
+      actorId,
+    });
+
+    pubsub.publish(topics.conversationEvents(conversationId), {
+      conversationEvents: {
+        conversationId,
+        type: "ai_branch_labeled",
+        payload: {
+          branchId: input.branchId,
+          label: input.label,
+          conversationId,
+        },
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    return updated;
+  }
+
+  /**
    * Computes depth of a branch by walking the parent chain. Root = 0.
    */
   async getBranchDepth(branchId: string): Promise<number> {

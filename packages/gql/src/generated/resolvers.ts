@@ -446,6 +446,7 @@ export type Mutation = {
   editChatMessage: Message;
   forkBranch: Branch;
   joinChannel: Channel;
+  labelBranch: Branch;
   leaveChannel: Channel;
   leaveChat: Chat;
   linkEntityToProject: Project;
@@ -629,6 +630,12 @@ export type MutationForkBranchArgs = {
 
 export type MutationJoinChannelArgs = {
   channelId: Scalars['ID']['input'];
+};
+
+
+export type MutationLabelBranchArgs = {
+  branchId: Scalars['ID']['input'];
+  label: Scalars['String']['input'];
 };
 
 
@@ -1963,6 +1970,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   editChatMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationEditChatMessageArgs, 'html' | 'messageId'>>;
   forkBranch?: Resolver<ResolversTypes['Branch'], ParentType, ContextType, RequireFields<MutationForkBranchArgs, 'turnId'>>;
   joinChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationJoinChannelArgs, 'channelId'>>;
+  labelBranch?: Resolver<ResolversTypes['Branch'], ParentType, ContextType, RequireFields<MutationLabelBranchArgs, 'branchId' | 'label'>>;
   leaveChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationLeaveChannelArgs, 'channelId'>>;
   leaveChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationLeaveChatArgs, 'chatId'>>;
   linkEntityToProject?: Resolver<ResolversTypes['Project'], ParentType, ContextType, RequireFields<MutationLinkEntityToProjectArgs, 'entityId' | 'entityType' | 'projectId'>>;

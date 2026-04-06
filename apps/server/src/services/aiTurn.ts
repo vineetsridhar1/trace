@@ -7,6 +7,20 @@ import { aiConversationService } from "./aiConversation.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { eventService } from "./event.js";
 
+/**
+ * Truncates text at a word boundary within the given max length.
+ * Returns the truncated text with "..." appended if it was shortened.
+ */
+function truncateAtWord(text: string, maxLength: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxLength) return trimmed;
+
+  const truncated = trimmed.slice(0, maxLength);
+  const lastSpace = truncated.lastIndexOf(" ");
+  const cutPoint = lastSpace > 0 ? lastSpace : maxLength;
+  return trimmed.slice(0, cutPoint) + "...";
+}
+
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 
 export class AiTurnService {
@@ -67,6 +81,37 @@ export class AiTurnService {
         parentTurnId: lastTurn?.id ?? null,
       },
     });
+
+    // Auto-label: if this is the first turn on the branch and no label is set, generate one
+    if (!lastTurn && !branch.label) {
+      const autoLabel = truncateAtWord(input.content, 30);
+      await prisma.aiBranch.update({
+        where: { id: input.branchId },
+        data: { label: autoLabel },
+      });
+
+      const conversationId = branch.conversationId;
+      const organizationId = branch.conversation.organizationId;
+
+      await eventService.create({
+        organizationId,
+        scopeType: "ai_conversation",
+        scopeId: conversationId,
+        eventType: "ai_branch_labeled",
+        payload: { branchId: input.branchId, label: autoLabel, conversationId },
+        actorType,
+        actorId,
+      });
+
+      pubsub.publish(topics.conversationEvents(conversationId), {
+        conversationEvents: {
+          conversationId,
+          type: "ai_branch_labeled",
+          payload: { branchId: input.branchId, label: autoLabel, conversationId },
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
 
     // Assemble context: walk ancestor chain for full conversation history
     const contextTurns = await aiConversationService.buildContext(input.branchId);
@@ -236,6 +281,37 @@ export class AiTurnService {
         parentTurnId: lastTurn?.id ?? null,
       },
     });
+
+    // Auto-label: if this is the first turn on the branch and no label is set, generate one
+    if (!lastTurn && !branch.label) {
+      const autoLabel = truncateAtWord(input.content, 30);
+      await prisma.aiBranch.update({
+        where: { id: input.branchId },
+        data: { label: autoLabel },
+      });
+
+      const conversationId = branch.conversationId;
+      const organizationId = branch.conversation.organizationId;
+
+      await eventService.create({
+        organizationId,
+        scopeType: "ai_conversation",
+        scopeId: conversationId,
+        eventType: "ai_branch_labeled",
+        payload: { branchId: input.branchId, label: autoLabel, conversationId },
+        actorType,
+        actorId,
+      });
+
+      pubsub.publish(topics.conversationEvents(conversationId), {
+        conversationEvents: {
+          conversationId,
+          type: "ai_branch_labeled",
+          payload: { branchId: input.branchId, label: autoLabel, conversationId },
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
 
     yield { type: "user_turn_created" as const, turn: userTurn };
 
