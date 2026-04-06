@@ -76,6 +76,8 @@ const AGGREGATE_EVENT_TYPES = new Set<string>([
   "ticket_updated",
   "ticket_commented",
   "session_output",
+  "ai_turn_created",
+  "ai_branch_created",
 ]);
 
 /**

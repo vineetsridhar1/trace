@@ -32,6 +32,8 @@ import { chatService } from "./services/chat.js";
 import { sessionService } from "./services/session.js";
 import { inboxService } from "./services/inbox.js";
 import { startSuggestionExpiryWorker, stopSuggestionExpiryWorker } from "./agent/suggestion-expiry.js";
+import { processConversationEvent } from "./agent/conversation-agent.js";
+import { aiConversationService } from "./services/aiConversation.js";
 
 // ---------------------------------------------------------------------------
 // Cached cost tracker — bridges async CostTrackingService to sync router interface
@@ -122,6 +124,7 @@ const executor = new ActionExecutor({
   chatService,
   sessionService,
   inboxService,
+  aiConversationService,
 });
 
 /**
@@ -511,6 +514,20 @@ async function processEvents(orgId: string, entries: StreamEntry[]): Promise<voi
       // Feed non-dropped events into the aggregator
       if (result.decision !== "drop") {
         await aggregator.ingest(event, result);
+      }
+
+      // Conversation agent features — fire-and-forget for ai_conversation-scoped events
+      if (event.scopeType === "ai_conversation" && result.decision !== "drop") {
+        const conversationId = event.scopeId;
+        const branchId = (event.payload.branchId as string | undefined) ?? undefined;
+        processConversationEvent({
+          event,
+          conversationId,
+          branchId,
+          organizationId: orgId,
+        }).catch((err) => {
+          logError(`conversation agent error (conv=${conversationId})`, err);
+        });
       }
     } catch (err) {
       logError(`unparseable event (orgId=${orgId}, streamId=${entry.id})`, err);

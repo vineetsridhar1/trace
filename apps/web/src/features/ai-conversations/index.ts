@@ -36,6 +36,11 @@ export {
   useCreateAiConversation,
   useSendTurn,
   useUpdateAiConversationTitle,
+  useUpdateAiConversationObservability,
+  useLabelBranch,
+  useForkBranch,
+  useLinkConversationEntity,
+  useUnlinkConversationEntity,
 } from "./hooks/useAiConversationMutations";
 
 // Utils

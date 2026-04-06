@@ -8,7 +8,7 @@
 
 export type RiskLevel = "low" | "medium" | "high";
 
-export type ScopeType = "chat" | "channel" | "ticket" | "session" | "project" | "system";
+export type ScopeType = "chat" | "channel" | "ticket" | "session" | "project" | "system" | "ai_conversation";
 
 export interface ParameterField {
   type: "string" | "number" | "boolean" | "array";
@@ -222,6 +222,100 @@ const actionRegistry: AgentActionRegistration[] = [
       },
     },
     scopes: ["chat", "channel", "ticket", "session"],
+  },
+  {
+    name: "ai_conversation.set_title",
+    service: "aiConversationService",
+    method: "updateTitle",
+    description:
+      "Set or update the title of an AI conversation. Use when a conversation has no title and enough context (2-3 exchanges) exists to generate a concise, descriptive title.",
+    risk: "low",
+    suggestable: true,
+    parameters: {
+      fields: {
+        conversationId: { type: "string", description: "The conversation ID", required: true },
+        title: { type: "string", description: "Concise title for the conversation (under 60 chars)", required: true },
+      },
+    },
+    scopes: ["ai_conversation"],
+  },
+  {
+    name: "branch.suggest_label",
+    service: "aiConversationService",
+    method: "labelBranch",
+    description:
+      "Set or suggest a label for a branch. Use when a branch has no label and its first turn provides enough context to generate a short 2-5 word label describing the branch topic.",
+    risk: "low",
+    suggestable: true,
+    parameters: {
+      fields: {
+        branchId: { type: "string", description: "The branch ID to label", required: true },
+        label: { type: "string", description: "Short 2-5 word label for the branch", required: true },
+      },
+    },
+    scopes: ["ai_conversation"],
+  },
+  {
+    name: "ticket.create_from_conversation",
+    service: "ticketService",
+    method: "create",
+    description:
+      "Create a ticket from conversation content. Use when a conversation reveals a bug, decision, or actionable insight that should be tracked. Pre-populate the ticket with context from the conversation.",
+    risk: "medium",
+    suggestable: true,
+    parameters: {
+      fields: {
+        title: { type: "string", description: "Ticket title derived from conversation topic", required: true },
+        description: { type: "string", description: "Ticket description with context from the conversation", required: true },
+        conversationId: { type: "string", description: "The conversation to link back to" },
+        branchId: { type: "string", description: "The specific branch the ticket relates to" },
+        priority: {
+          type: "string",
+          description: "Ticket priority level",
+          enum: ["low", "medium", "high", "urgent"],
+        },
+        labels: {
+          type: "array",
+          description: "Labels to apply to the ticket",
+          items: { type: "string" },
+        },
+      },
+    },
+    scopes: ["ai_conversation"],
+  },
+  {
+    name: "ai_conversation.link_entity",
+    service: "aiConversationService",
+    method: "linkEntity",
+    description:
+      "Link a conversation to an existing ticket or session. Use when the conversation references or relates to an existing entity that should be connected for traceability.",
+    risk: "low",
+    suggestable: true,
+    parameters: {
+      fields: {
+        conversationId: { type: "string", description: "The conversation to link from", required: true },
+        entityType: { type: "string", description: "Type of entity to link (ticket, session)", required: true, enum: ["ticket", "session"] },
+        entityId: { type: "string", description: "ID of the entity to link to", required: true },
+      },
+    },
+    scopes: ["ai_conversation"],
+  },
+  {
+    name: "branch.suggest",
+    service: "aiConversationService",
+    method: "forkBranch",
+    description:
+      "Suggest creating a new branch when the conversation goes on a tangent. Only use in PARTICIPATE mode when there is a clear topic shift that would benefit from a separate branch.",
+    risk: "medium",
+    suggestable: false,
+    parameters: {
+      fields: {
+        branchId: { type: "string", description: "The branch to fork from", required: true },
+        turnId: { type: "string", description: "The turn ID at which to fork", required: true },
+        label: { type: "string", description: "Short label for the new branch" },
+      },
+    },
+    scopes: ["ai_conversation"],
   },
   {
     name: "no_op",

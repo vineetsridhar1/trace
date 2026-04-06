@@ -48,6 +48,11 @@ export type AgentIdentity = {
   updatedAt: Scalars['DateTime']['output'];
 };
 
+export type AgentObservability =
+  | 'OFF'
+  | 'PARTICIPATE'
+  | 'SUGGEST';
+
 export type AgentStatus =
   | 'active'
   | 'done'
@@ -62,11 +67,13 @@ export type AgentTrustLevel =
 
 export type AiConversation = {
   __typename?: 'AiConversation';
+  agentObservability: AgentObservability;
   branchCount: Scalars['Int']['output'];
   branches: Array<Branch>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
   id: Scalars['ID']['output'];
+  linkedEntities: Array<AiConversationLinkedEntity>;
   rootBranch: Branch;
   title?: Maybe<Scalars['String']['output']>;
   updatedAt: Scalars['DateTime']['output'];
@@ -79,6 +86,16 @@ export type AiConversationEvent = {
   payload: Scalars['JSON']['output'];
   timestamp: Scalars['DateTime']['output'];
   type: Scalars['String']['output'];
+};
+
+export type AiConversationLinkedEntity = {
+  __typename?: 'AiConversationLinkedEntity';
+  conversationId: Scalars['ID']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  createdById: Scalars['ID']['output'];
+  entityId: Scalars['ID']['output'];
+  entityType: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
 };
 
 export type AiConversationVisibility =
@@ -204,6 +221,7 @@ export type CostBudget = {
 };
 
 export type CreateAiConversationInput = {
+  agentObservability?: InputMaybe<AgentObservability>;
   title?: InputMaybe<Scalars['String']['input']>;
   visibility?: InputMaybe<AiConversationVisibility>;
 };
@@ -284,6 +302,9 @@ export type EventType =
   | 'ai_branch_created'
   | 'ai_branch_labeled'
   | 'ai_conversation_created'
+  | 'ai_conversation_entity_linked'
+  | 'ai_conversation_entity_unlinked'
+  | 'ai_conversation_observability_changed'
   | 'ai_conversation_title_updated'
   | 'ai_conversation_visibility_changed'
   | 'ai_turn_created'
@@ -435,9 +456,12 @@ export type Mutation = {
   dismissSession: Session;
   editChannelMessage: Message;
   editChatMessage: Message;
+  forkBranch: Branch;
   joinChannel: Channel;
+  labelBranch: Branch;
   leaveChannel: Channel;
   leaveChat: Chat;
+  linkConversationEntity: AiConversationLinkedEntity;
   linkEntityToProject: Project;
   linkTicket: Ticket;
   moveChannel: Channel;
@@ -461,11 +485,13 @@ export type Mutation = {
   subscribe: Participant;
   terminateSession: Session;
   unassignTicket: Ticket;
+  unlinkConversationEntity: Scalars['Boolean']['output'];
   unlinkTicket: Ticket;
   unmuteScope: Participant;
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
   updateAgentSettings: AgentIdentity;
+  updateAiConversationObservability: AiConversation;
   updateAiConversationTitle: AiConversation;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
@@ -610,8 +636,21 @@ export type MutationEditChatMessageArgs = {
 };
 
 
+export type MutationForkBranchArgs = {
+  branchId: Scalars['ID']['input'];
+  label?: InputMaybe<Scalars['String']['input']>;
+  turnId: Scalars['ID']['input'];
+};
+
+
 export type MutationJoinChannelArgs = {
   channelId: Scalars['ID']['input'];
+};
+
+
+export type MutationLabelBranchArgs = {
+  branchId: Scalars['ID']['input'];
+  label: Scalars['String']['input'];
 };
 
 
@@ -622,6 +661,13 @@ export type MutationLeaveChannelArgs = {
 
 export type MutationLeaveChatArgs = {
   chatId: Scalars['ID']['input'];
+};
+
+
+export type MutationLinkConversationEntityArgs = {
+  conversationId: Scalars['ID']['input'];
+  entityId: Scalars['ID']['input'];
+  entityType: Scalars['String']['input'];
 };
 
 
@@ -764,6 +810,13 @@ export type MutationUnassignTicketArgs = {
 };
 
 
+export type MutationUnlinkConversationEntityArgs = {
+  conversationId: Scalars['ID']['input'];
+  entityId: Scalars['ID']['input'];
+  entityType: Scalars['String']['input'];
+};
+
+
 export type MutationUnlinkTicketArgs = {
   entityId: Scalars['ID']['input'];
   entityType: EntityType;
@@ -791,6 +844,12 @@ export type MutationUnsubscribeArgs = {
 export type MutationUpdateAgentSettingsArgs = {
   input: UpdateAgentSettingsInput;
   organizationId: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateAiConversationObservabilityArgs = {
+  agentObservability: AgentObservability;
+  conversationId: Scalars['ID']['input'];
 };
 
 
