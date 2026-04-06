@@ -165,12 +165,6 @@ enum AiConversationVisibility {
   ORG
 }
 
-enum AgentObservability {
-  OFF
-  SUGGEST
-  PARTICIPATE
-}
-
 enum TurnRole {
   USER
   ASSISTANT
@@ -220,9 +214,6 @@ enum EventType {
   ai_branch_created
   ai_branch_labeled
   ai_turn_created
-  ai_conversation_observability_changed
-  ai_conversation_entity_linked
-  ai_conversation_entity_unlinked
 }
 
 model Organization {
@@ -776,38 +767,25 @@ model Participant {
 }
 
 model AiConversation {
-  id                  String                   @id @default(uuid())
-  organizationId      String
-  organization        Organization             @relation(fields: [organizationId], references: [id])
-  createdById         String
-  createdBy           User                     @relation("AiConversationCreator", fields: [createdById], references: [id])
-  title               String?
-  visibility          AiConversationVisibility @default(PRIVATE)
-  agentObservability  AgentObservability       @default(OFF)
-  rootBranchId        String?
+  id             String                   @id @default(uuid())
+  organizationId String
+  organization   Organization             @relation(fields: [organizationId], references: [id])
+  createdById    String
+  createdBy      User                     @relation("AiConversationCreator", fields: [createdById], references: [id])
+  title          String?
+  visibility     AiConversationVisibility @default(PRIVATE)
+  rootBranchId   String?
 
-  branches       AiBranch[]
-  linkedEntities AiConversationLinkedEntity[]
+  forkedFromConversationId String?
+  forkedFromBranchId       String?
+
+  branches AiBranch[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([organizationId, createdById])
   @@index([organizationId, updatedAt])
-}
-
-model AiConversationLinkedEntity {
-  id             String         @id @default(uuid())
-  conversationId String
-  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  entityType     String         // "ticket", "session", etc.
-  entityId       String
-  createdById    String
-  createdAt      DateTime       @default(now())
-
-  @@unique([conversationId, entityType, entityId])
-  @@index([conversationId])
-  @@index([entityType, entityId])
 }
 
 model AiBranch {

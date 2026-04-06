@@ -18,8 +18,9 @@ const AI_CONVERSATIONS_QUERY = gql`
       id
       title
       visibility
-      agentObservability
       branchCount
+      forkedFromConversationId
+      forkedFromBranchId
       createdBy {
         id
       }
@@ -38,21 +39,14 @@ const AI_CONVERSATION_QUERY = gql`
       id
       title
       visibility
-      agentObservability
       branchCount
+      forkedFromConversationId
+      forkedFromBranchId
       createdBy {
         id
       }
       rootBranch {
         id
-      }
-      linkedEntities {
-        id
-        conversationId
-        entityType
-        entityId
-        createdById
-        createdAt
       }
       branches {
         id
@@ -118,25 +112,16 @@ const BRANCH_TIMELINE_QUERY = gql`
 
 // ── Hydration helpers ──────────────────────────────────────────
 
-interface RawLinkedEntity {
-  id: string;
-  conversationId: string;
-  entityType: string;
-  entityId: string;
-  createdById: string;
-  createdAt: string;
-}
-
 interface RawConversation {
   id: string;
   title: string | null;
   visibility: string;
-  agentObservability?: string;
   branchCount: number;
+  forkedFromConversationId: string | null;
+  forkedFromBranchId: string | null;
   createdBy: { id: string };
   rootBranch: { id: string };
   branches?: RawBranch[];
-  linkedEntities?: RawLinkedEntity[];
   createdAt: string;
   updatedAt: string;
 }
@@ -173,12 +158,12 @@ function hydrateConversation(raw: RawConversation): void {
     id: raw.id,
     title: raw.title,
     visibility: raw.visibility,
-    agentObservability: raw.agentObservability ?? existing?.agentObservability ?? "OFF",
     branchCount: raw.branchCount,
     createdById: raw.createdBy.id,
     rootBranchId: raw.rootBranch.id,
     branchIds: raw.branches?.map((b) => b.id) ?? existing?.branchIds ?? [raw.rootBranch.id],
-    linkedEntities: raw.linkedEntities ?? existing?.linkedEntities ?? [],
+    forkedFromConversationId: raw.forkedFromConversationId ?? null,
+    forkedFromBranchId: raw.forkedFromBranchId ?? null,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
   } as AiConversationEntity);

@@ -1,4 +1,4 @@
-import type { AgentObservability, AiConversationVisibility } from "@trace/gql";
+import type { AiConversationVisibility } from "@trace/gql";
 import type { JsonObject } from "@trace/shared";
 import {
   useEntityStore,
@@ -150,12 +150,18 @@ export function processAiConversationEvent({
           id: conversationId,
           title: (payload.title as string | undefined) ?? null,
           visibility: (payload.visibility as AiConversationVisibility) ?? "PRIVATE",
-          agentObservability: (payload.agentObservability as AgentObservability) ?? existing?.agentObservability ?? "OFF",
           createdById: payload.createdById as string,
           rootBranchId,
           branchIds,
           branchCount: existing?.branchCount ?? branchIds.length,
-          linkedEntities: existing?.linkedEntities ?? [],
+          forkedFromConversationId:
+            (payload.forkedFromConversationId as string | undefined) ??
+            existing?.forkedFromConversationId ??
+            null,
+          forkedFromBranchId:
+            (payload.forkedFromBranchId as string | undefined) ??
+            existing?.forkedFromBranchId ??
+            null,
           createdAt: timestamp,
           updatedAt: (payload.updatedAt as string) ?? timestamp,
         } as AiConversationEntity);
@@ -247,64 +253,6 @@ export function processAiConversationEvent({
         patch("aiBranches", branchId, {
           label: payload.label as string,
         } as Partial<AiBranchEntity>);
-      }
-      break;
-    }
-
-    case "ai_conversation_observability_changed": {
-      const conversationId = resolveConversationId(payload, fallbackConversationId);
-      if (conversationId) {
-        patch("aiConversations", conversationId, {
-          agentObservability: payload.agentObservability as AgentObservability,
-          updatedAt: (payload.updatedAt as string) ?? timestamp,
-        } as Partial<AiConversationEntity>);
-      }
-      break;
-    }
-
-    case "ai_conversation_entity_linked": {
-      const conversationId = resolveConversationId(payload, fallbackConversationId);
-      if (conversationId) {
-        const existing = useEntityStore.getState().aiConversations[conversationId];
-        if (existing) {
-          const linkedEntity = {
-            id: payload.linkedEntityId as string,
-            conversationId,
-            entityType: payload.entityType as string,
-            entityId: payload.entityId as string,
-            createdById: payload.createdById as string,
-            createdAt: timestamp,
-          };
-          const currentLinks = existing.linkedEntities ?? [];
-          const alreadyLinked = currentLinks.some(
-            (l) => l.entityType === linkedEntity.entityType && l.entityId === linkedEntity.entityId,
-          );
-          if (!alreadyLinked) {
-            patch("aiConversations", conversationId, {
-              linkedEntities: [...currentLinks, linkedEntity],
-            } as Partial<AiConversationEntity>);
-          }
-        }
-      }
-      break;
-    }
-
-    case "ai_conversation_entity_unlinked": {
-      const conversationId = resolveConversationId(payload, fallbackConversationId);
-      if (conversationId) {
-        const existing = useEntityStore.getState().aiConversations[conversationId];
-        if (existing) {
-          const currentLinks = existing.linkedEntities ?? [];
-          patch("aiConversations", conversationId, {
-            linkedEntities: currentLinks.filter(
-              (l) =>
-                !(
-                  l.entityType === (payload.entityType as string) &&
-                  l.entityId === (payload.entityId as string)
-                ),
-            ),
-          } as Partial<AiConversationEntity>);
-        }
       }
       break;
     }

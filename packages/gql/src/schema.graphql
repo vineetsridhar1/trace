@@ -548,6 +548,8 @@ type AiConversation {
   branches: [Branch!]!
   branchCount: Int!
   linkedEntities: [AiConversationLinkedEntity!]!
+  forkedFromConversationId: ID
+  forkedFromBranchId: ID
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -892,6 +894,7 @@ type Mutation {
   updateAiConversation(conversationId: ID!, input: UpdateAiConversationInput!): AiConversation!
   summarizeBranch(branchId: ID!): BranchSummary!
   updateAiConversationVisibility(conversationId: ID!, visibility: AiConversationVisibility!): AiConversation!
+  forkAiConversation(branchId: ID!): AiConversation!
 }
 
 # --- Subscriptions ---

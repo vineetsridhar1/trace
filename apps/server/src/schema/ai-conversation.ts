@@ -1,9 +1,5 @@
 import type { Context } from "../context.js";
-import type {
-  AgentObservability,
-  AiConversationVisibility,
-  CreateAiConversationInput,
-} from "@trace/gql";
+import type { AiConversationVisibility, CreateAiConversationInput } from "@trace/gql";
 import { aiConversationService } from "../services/aiConversation.js";
 import { aiTurnService } from "../services/aiTurn.js";
 import { pubsub, topics } from "../lib/pubsub.js";
@@ -42,11 +38,6 @@ export const aiConversationMutations = {
         organizationId: args.organizationId,
         title: args.input.title ?? undefined,
         visibility: args.input.visibility ?? undefined,
-        agentObservability: (args.input as Record<string, unknown>).agentObservability as
-          | "OFF"
-          | "SUGGEST"
-          | "PARTICIPATE"
-          | undefined,
       },
       ctx.actorType,
       ctx.userId,
@@ -83,61 +74,13 @@ export const aiConversationMutations = {
     );
   },
 
-  updateAiConversationObservability: (
+  forkAiConversation: (
     _: unknown,
-    args: { conversationId: string; agentObservability: AgentObservability },
+    args: { branchId: string },
     ctx: Context,
   ) => {
-    return aiConversationService.updateObservability(
-      { conversationId: args.conversationId, agentObservability: args.agentObservability as "OFF" | "SUGGEST" | "PARTICIPATE" },
-      ctx.actorType,
-      ctx.userId,
-    );
-  },
-
-  labelBranch: (
-    _: unknown,
-    args: { branchId: string; label: string },
-    ctx: Context,
-  ) => {
-    return aiConversationService.labelBranch(
-      { branchId: args.branchId, label: args.label },
-      ctx.actorType,
-      ctx.userId,
-    );
-  },
-
-  forkBranch: (
-    _: unknown,
-    args: { branchId: string; turnId: string; label?: string | null },
-    ctx: Context,
-  ) => {
-    return aiConversationService.forkBranch(
-      { branchId: args.branchId, turnId: args.turnId, label: args.label ?? undefined },
-      ctx.actorType,
-      ctx.userId,
-    );
-  },
-
-  linkConversationEntity: (
-    _: unknown,
-    args: { conversationId: string; entityType: string; entityId: string },
-    ctx: Context,
-  ) => {
-    return aiConversationService.linkEntity(
-      { conversationId: args.conversationId, entityType: args.entityType, entityId: args.entityId },
-      ctx.actorType,
-      ctx.userId,
-    );
-  },
-
-  unlinkConversationEntity: (
-    _: unknown,
-    args: { conversationId: string; entityType: string; entityId: string },
-    ctx: Context,
-  ) => {
-    return aiConversationService.unlinkEntity(
-      { conversationId: args.conversationId, entityType: args.entityType, entityId: args.entityId },
+    return aiConversationService.forkAiConversation(
+      { branchId: args.branchId },
       ctx.actorType,
       ctx.userId,
     );
@@ -192,13 +135,6 @@ export const aiConversationTypeResolvers = {
     branchCount: (conversation: { id: string }) => {
       return prisma.aiBranch.count({
         where: { conversationId: conversation.id },
-      });
-    },
-
-    linkedEntities: (conversation: { id: string }) => {
-      return prisma.aiConversationLinkedEntity.findMany({
-        where: { conversationId: conversation.id },
-        orderBy: { createdAt: "asc" },
       });
     },
   },

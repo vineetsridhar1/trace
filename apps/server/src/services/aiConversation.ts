@@ -1,4 +1,4 @@
-import type { AgentObservability, AiConversationVisibility, Prisma } from "@prisma/client";
+import type { AiConversationVisibility, Prisma } from "@prisma/client";
 import type { ActorType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { pubsub, topics } from "../lib/pubsub.js";
@@ -14,7 +14,6 @@ export class AiConversationService {
       organizationId: string;
       title?: string;
       visibility?: AiConversationVisibility;
-      agentObservability?: AgentObservability;
     },
     actorType: ActorType,
     actorId: string,
@@ -36,7 +35,6 @@ export class AiConversationService {
           createdById: actorId,
           title: input.title ?? null,
           visibility: input.visibility ?? "PRIVATE",
-          agentObservability: input.agentObservability ?? "OFF",
         },
       });
 
@@ -69,7 +67,6 @@ export class AiConversationService {
         conversationId: updated.id,
         title: updated.title,
         visibility: updated.visibility,
-        agentObservability: updated.agentObservability,
         rootBranchId: updated.rootBranchId,
         createdById: actorId,
         updatedAt: updated.updatedAt.toISOString(),
@@ -104,7 +101,6 @@ export class AiConversationService {
           conversationId: updated.id,
           title: updated.title,
           visibility: updated.visibility,
-          agentObservability: updated.agentObservability,
           rootBranchId: updated.rootBranchId,
           createdById: actorId,
           updatedAt: updated.updatedAt.toISOString(),
@@ -324,61 +320,6 @@ export class AiConversationService {
   }
 
   /**
-   * Updates conversation visibility. Only the creator can change visibility.
-   */
-  async updateVisibility(
-    input: { conversationId: string; visibility: AiConversationVisibility },
-    actorType: ActorType,
-    actorId: string,
-  ) {
-    const conversation = await prisma.aiConversation.findUniqueOrThrow({
-      where: { id: input.conversationId },
-    });
-
-    if (conversation.createdById !== actorId) {
-      throw new Error("Only the conversation creator can change visibility");
-    }
-
-    if (conversation.visibility === input.visibility) {
-      return conversation;
-    }
-
-    const updated = await prisma.aiConversation.update({
-      where: { id: input.conversationId },
-      data: { visibility: input.visibility },
-    });
-
-    await eventService.create({
-      organizationId: conversation.organizationId,
-      scopeType: "ai_conversation",
-      scopeId: input.conversationId,
-      eventType: "ai_conversation_visibility_changed",
-      payload: {
-        conversationId: input.conversationId,
-        visibility: input.visibility,
-        updatedAt: updated.updatedAt.toISOString(),
-      },
-      actorType,
-      actorId,
-    });
-
-    pubsub.publish(topics.conversationEvents(input.conversationId), {
-      conversationEvents: {
-        conversationId: input.conversationId,
-        type: "ai_conversation_visibility_changed",
-        payload: {
-          conversationId: input.conversationId,
-          visibility: input.visibility,
-          updatedAt: updated.updatedAt.toISOString(),
-        },
-        timestamp: new Date().toISOString(),
-      },
-    });
-
-    return updated;
-  }
-
-  /**
    * Returns a branch with its turns ordered by creation time.
    * Enforces access control through the parent conversation.
    */
@@ -443,46 +384,177 @@ export class AiConversationService {
   }
 
   /**
-   * Updates the agent observability level for a conversation.
+   * Builds the full context for a branch by collecting all turns from the
+   * branch and its ancestors (walking the parent chain). Returns a flat,
+   * chronologically-ordered list of turns.
    */
-  async updateObservability(
-    input: { conversationId: string; agentObservability: AgentObservability },
+  async buildContext(branchId: string): Promise<
+    Array<{ id: string; role: string; content: string; parentTurnId: string | null; createdAt: Date }>
+  > {
+    const branch = await prisma.aiBranch.findUniqueOrThrow({
+      where: { id: branchId },
+    });
+
+    // Collect ancestor context first (recursive)
+    const ancestorTurns: Array<{
+      id: string;
+      role: string;
+      content: string;
+      parentTurnId: string | null;
+      createdAt: Date;
+    }> = [];
+
+    if (branch.parentBranchId && branch.forkTurnId) {
+      const parentContext = await this.buildContext(branch.parentBranchId);
+      // Include turns up to and including the fork turn
+      for (const turn of parentContext) {
+        ancestorTurns.push(turn);
+        if (turn.id === branch.forkTurnId) break;
+      }
+    }
+
+    // Fetch local turns for this branch
+    const localTurns = await prisma.aiTurn.findMany({
+      where: { branchId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, role: true, content: true, parentTurnId: true, createdAt: true },
+    });
+
+    return [...ancestorTurns, ...localTurns];
+  }
+
+  /**
+   * Forks a branch from a shared (ORG-visible) conversation into a new
+   * private conversation owned by the requesting user. Deep copies all
+   * turns from the branch context into the new conversation's root branch.
+   */
+  async forkAiConversation(
+    input: { branchId: string },
     actorType: ActorType,
     actorId: string,
   ) {
-    const conversation = await prisma.aiConversation.findUniqueOrThrow({
-      where: { id: input.conversationId },
+    // Load the source branch and its conversation
+    const sourceBranch = await prisma.aiBranch.findUniqueOrThrow({
+      where: { id: input.branchId },
+      include: { conversation: true },
     });
 
-    if (conversation.createdById !== actorId) {
-      throw new Error("Only the conversation creator can update observability");
+    const sourceConversation = sourceBranch.conversation;
+
+    // Validate source conversation is ORG-visible
+    if (sourceConversation.visibility !== "ORG") {
+      throw new Error("Can only fork ORG-visible conversations");
     }
 
-    const updated = await prisma.aiConversation.update({
-      where: { id: input.conversationId },
-      data: { agentObservability: input.agentObservability },
+    // Verify user belongs to the same org
+    await prisma.orgMember.findUniqueOrThrow({
+      where: {
+        userId_organizationId: {
+          userId: actorId,
+          organizationId: sourceConversation.organizationId,
+        },
+      },
     });
 
+    // Build full context (ancestor + local turns) for the source branch
+    const contextTurns = await this.buildContext(input.branchId);
+
+    // Create new conversation with deep-copied turns in a transaction
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const conversation = await tx.aiConversation.create({
+        data: {
+          organizationId: sourceConversation.organizationId,
+          createdById: actorId,
+          title: sourceConversation.title ? `${sourceConversation.title} (fork)` : "(fork)",
+          visibility: "PRIVATE",
+          forkedFromConversationId: sourceConversation.id,
+          forkedFromBranchId: input.branchId,
+        },
+      });
+
+      const rootBranch = await tx.aiBranch.create({
+        data: {
+          conversationId: conversation.id,
+          createdById: actorId,
+          label: "main",
+        },
+      });
+
+      const updated = await tx.aiConversation.update({
+        where: { id: conversation.id },
+        data: { rootBranchId: rootBranch.id },
+        include: { branches: true },
+      });
+
+      // Deep copy turns into the new root branch with new IDs, preserving order
+      let previousTurnId: string | null = null;
+      for (const turn of contextTurns) {
+        const newTurn: { id: string } = await tx.aiTurn.create({
+          data: {
+            branchId: rootBranch.id,
+            role: turn.role as "USER" | "ASSISTANT",
+            content: turn.content,
+            parentTurnId: previousTurnId,
+          },
+        });
+        previousTurnId = newTurn.id;
+      }
+
+      return { conversation: updated, rootBranch };
+    });
+
+    const { conversation: updated, rootBranch } = result;
+
+    // Emit events after transaction commits
     await eventService.create({
-      organizationId: conversation.organizationId,
+      organizationId: sourceConversation.organizationId,
       scopeType: "ai_conversation",
-      scopeId: input.conversationId,
-      eventType: "ai_conversation_observability_changed",
+      scopeId: updated.id,
+      eventType: "ai_conversation_created",
       payload: {
-        conversationId: input.conversationId,
-        agentObservability: input.agentObservability,
+        conversationId: updated.id,
+        title: updated.title,
+        visibility: updated.visibility,
+        rootBranchId: updated.rootBranchId,
+        createdById: actorId,
+        forkedFromConversationId: sourceConversation.id,
+        forkedFromBranchId: input.branchId,
         updatedAt: updated.updatedAt.toISOString(),
       },
       actorType,
       actorId,
     });
 
-    pubsub.publish(topics.conversationEvents(input.conversationId), {
+    await eventService.create({
+      organizationId: sourceConversation.organizationId,
+      scopeType: "ai_conversation",
+      scopeId: updated.id,
+      eventType: "ai_branch_created",
+      payload: {
+        branchId: rootBranch.id,
+        conversationId: updated.id,
+        parentBranchId: null,
+        forkTurnId: null,
+        label: rootBranch.label,
+        createdById: actorId,
+      },
+      actorType,
+      actorId,
+    });
+
+    // Publish to conversation subscription topic
+    pubsub.publish(topics.conversationEvents(updated.id), {
       conversationEvents: {
-        conversationId: input.conversationId,
-        type: "ai_conversation_observability_changed",
+        conversationId: updated.id,
+        type: "ai_conversation_created",
         payload: {
-          agentObservability: input.agentObservability,
+          conversationId: updated.id,
+          title: updated.title,
+          visibility: updated.visibility,
+          rootBranchId: updated.rootBranchId,
+          createdById: actorId,
+          forkedFromConversationId: sourceConversation.id,
+          forkedFromBranchId: input.branchId,
           updatedAt: updated.updatedAt.toISOString(),
         },
         timestamp: new Date().toISOString(),
@@ -490,274 +562,6 @@ export class AiConversationService {
     });
 
     return updated;
-  }
-
-  /**
-   * Labels a branch. Only the conversation creator can label.
-   */
-  async labelBranch(
-    input: { branchId: string; label: string },
-    actorType: ActorType,
-    actorId: string,
-  ) {
-    const branch = await prisma.aiBranch.findUniqueOrThrow({
-      where: { id: input.branchId },
-      include: { conversation: true },
-    });
-
-    // For agent actors, skip ownership check (agent acts on behalf of the system)
-    if (actorType === "user" && branch.conversation.createdById !== actorId) {
-      throw new Error("Only the conversation creator can label branches");
-    }
-
-    const updated = await prisma.aiBranch.update({
-      where: { id: input.branchId },
-      data: { label: input.label },
-    });
-
-    await eventService.create({
-      organizationId: branch.conversation.organizationId,
-      scopeType: "ai_conversation",
-      scopeId: branch.conversationId,
-      eventType: "ai_branch_labeled",
-      payload: {
-        branchId: input.branchId,
-        conversationId: branch.conversationId,
-        label: input.label,
-      },
-      actorType,
-      actorId,
-    });
-
-    pubsub.publish(topics.conversationEvents(branch.conversationId), {
-      conversationEvents: {
-        conversationId: branch.conversationId,
-        type: "ai_branch_labeled",
-        payload: { branchId: input.branchId, label: input.label },
-        timestamp: new Date().toISOString(),
-      },
-    });
-
-    return updated;
-  }
-
-  /**
-   * Forks a new branch from the given turn in the given branch.
-   */
-  async forkBranch(
-    input: { branchId: string; turnId: string; label?: string },
-    actorType: ActorType,
-    actorId: string,
-  ) {
-    const branch = await prisma.aiBranch.findUniqueOrThrow({
-      where: { id: input.branchId },
-      include: { conversation: true },
-    });
-
-    // Verify actor has access
-    if (actorType === "user") {
-      if (
-        branch.conversation.visibility === "PRIVATE" &&
-        branch.conversation.createdById !== actorId
-      ) {
-        throw new Error("Conversation not found");
-      }
-      if (branch.conversation.createdById !== actorId) {
-        await prisma.orgMember.findUniqueOrThrow({
-          where: {
-            userId_organizationId: {
-              userId: actorId,
-              organizationId: branch.conversation.organizationId,
-            },
-          },
-        });
-      }
-    }
-
-    // Verify the turn belongs to this branch
-    await prisma.aiTurn.findFirstOrThrow({
-      where: { id: input.turnId, branchId: input.branchId },
-    });
-
-    const newBranch = await prisma.aiBranch.create({
-      data: {
-        conversationId: branch.conversationId,
-        parentBranchId: input.branchId,
-        forkTurnId: input.turnId,
-        label: input.label ?? null,
-        createdById: actorId,
-      },
-    });
-
-    // Copy turns up to and including the fork point
-    const turnsToFork = await prisma.aiTurn.findMany({
-      where: { branchId: input.branchId },
-      orderBy: { createdAt: "asc" },
-    });
-
-    let parentTurnId: string | null = null;
-    for (const turn of turnsToFork) {
-      const copied: { id: string } = await prisma.aiTurn.create({
-        data: {
-          branchId: newBranch.id,
-          role: turn.role,
-          content: turn.content,
-          parentTurnId,
-        },
-        select: { id: true },
-      });
-      parentTurnId = copied.id;
-      if (turn.id === input.turnId) break;
-    }
-
-    await eventService.create({
-      organizationId: branch.conversation.organizationId,
-      scopeType: "ai_conversation",
-      scopeId: branch.conversationId,
-      eventType: "ai_branch_created",
-      payload: {
-        branchId: newBranch.id,
-        conversationId: branch.conversationId,
-        parentBranchId: input.branchId,
-        forkTurnId: input.turnId,
-        label: newBranch.label,
-        createdById: actorId,
-      },
-      actorType,
-      actorId,
-    });
-
-    pubsub.publish(topics.conversationEvents(branch.conversationId), {
-      conversationEvents: {
-        conversationId: branch.conversationId,
-        type: "ai_branch_created",
-        payload: {
-          branchId: newBranch.id,
-          conversationId: branch.conversationId,
-          parentBranchId: input.branchId,
-          forkTurnId: input.turnId,
-          label: newBranch.label,
-          createdById: actorId,
-        },
-        timestamp: new Date().toISOString(),
-      },
-    });
-
-    return newBranch;
-  }
-
-  /**
-   * Links an external entity (ticket, session, etc.) to a conversation.
-   */
-  async linkEntity(
-    input: { conversationId: string; entityType: string; entityId: string },
-    actorType: ActorType,
-    actorId: string,
-  ) {
-    const conversation = await prisma.aiConversation.findUniqueOrThrow({
-      where: { id: input.conversationId },
-    });
-
-    // For agent actors, skip ownership check
-    if (actorType === "user" && conversation.createdById !== actorId) {
-      throw new Error("Only the conversation creator can link entities");
-    }
-
-    const link = await prisma.aiConversationLinkedEntity.create({
-      data: {
-        conversationId: input.conversationId,
-        entityType: input.entityType,
-        entityId: input.entityId,
-        createdById: actorId,
-      },
-    });
-
-    await eventService.create({
-      organizationId: conversation.organizationId,
-      scopeType: "ai_conversation",
-      scopeId: input.conversationId,
-      eventType: "ai_conversation_entity_linked",
-      payload: {
-        conversationId: input.conversationId,
-        linkedEntityId: link.id,
-        entityType: input.entityType,
-        entityId: input.entityId,
-        createdById: actorId,
-      },
-      actorType,
-      actorId,
-    });
-
-    pubsub.publish(topics.conversationEvents(input.conversationId), {
-      conversationEvents: {
-        conversationId: input.conversationId,
-        type: "ai_conversation_entity_linked",
-        payload: {
-          linkedEntityId: link.id,
-          entityType: input.entityType,
-          entityId: input.entityId,
-          createdById: actorId,
-        },
-        timestamp: new Date().toISOString(),
-      },
-    });
-
-    return link;
-  }
-
-  /**
-   * Unlinks an external entity from a conversation.
-   */
-  async unlinkEntity(
-    input: { conversationId: string; entityType: string; entityId: string },
-    actorType: ActorType,
-    actorId: string,
-  ) {
-    const conversation = await prisma.aiConversation.findUniqueOrThrow({
-      where: { id: input.conversationId },
-    });
-
-    if (actorType === "user" && conversation.createdById !== actorId) {
-      throw new Error("Only the conversation creator can unlink entities");
-    }
-
-    await prisma.aiConversationLinkedEntity.delete({
-      where: {
-        conversationId_entityType_entityId: {
-          conversationId: input.conversationId,
-          entityType: input.entityType,
-          entityId: input.entityId,
-        },
-      },
-    });
-
-    await eventService.create({
-      organizationId: conversation.organizationId,
-      scopeType: "ai_conversation",
-      scopeId: input.conversationId,
-      eventType: "ai_conversation_entity_unlinked",
-      payload: {
-        conversationId: input.conversationId,
-        entityType: input.entityType,
-        entityId: input.entityId,
-      },
-      actorType,
-      actorId,
-    });
-
-    pubsub.publish(topics.conversationEvents(input.conversationId), {
-      conversationEvents: {
-        conversationId: input.conversationId,
-        type: "ai_conversation_entity_unlinked",
-        payload: {
-          entityType: input.entityType,
-          entityId: input.entityId,
-        },
-        timestamp: new Date().toISOString(),
-      },
-    });
-
-    return true;
   }
 
   /**

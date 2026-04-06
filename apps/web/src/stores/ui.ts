@@ -211,7 +211,6 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
 
   setActiveChannelId: (id: string | null) => {
     persistActiveChannelId(id);
-<<<<<<< HEAD
     set((s: UIState) => {
       let channelDoneBadges = s.channelDoneBadges;
       if (id && channelDoneBadges[id]) {
@@ -413,7 +412,6 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
     set({ activeThreadId: id });
   },
 
-<<<<<<< HEAD
   setActiveAiConversationId: (id: string | null) => {
     set({
       activePage: "ai-conversations" as ActivePage,

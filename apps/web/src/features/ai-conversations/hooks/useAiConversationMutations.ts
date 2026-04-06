@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { gql } from "@urql/core";
-import type { AgentObservability, AiConversationVisibility } from "@trace/gql";
+import type { AiConversationVisibility } from "@trace/gql";
+import { toast } from "sonner";
 import { client } from "../../../lib/urql";
 import { useEntityStore, type AiBranchEntity, type AiTurnEntity } from "../../../stores/entity";
 import { useAuthStore } from "../../../stores/auth";
@@ -31,41 +32,11 @@ const UPDATE_AI_CONVERSATION_TITLE_MUTATION = gql`
   }
 `;
 
-const UPDATE_AI_CONVERSATION_OBSERVABILITY_MUTATION = gql`
-  mutation UpdateAiConversationObservability($conversationId: ID!, $agentObservability: AgentObservability!) {
-    updateAiConversationObservability(conversationId: $conversationId, agentObservability: $agentObservability) {
+const FORK_AI_CONVERSATION_MUTATION = gql`
+  mutation ForkAiConversation($branchId: ID!) {
+    forkAiConversation(branchId: $branchId) {
       id
     }
-  }
-`;
-
-const LABEL_BRANCH_MUTATION = gql`
-  mutation LabelBranch($branchId: ID!, $label: String!) {
-    labelBranch(branchId: $branchId, label: $label) {
-      id
-    }
-  }
-`;
-
-const FORK_BRANCH_MUTATION = gql`
-  mutation ForkBranch($branchId: ID!, $turnId: ID!, $label: String) {
-    forkBranch(branchId: $branchId, turnId: $turnId, label: $label) {
-      id
-    }
-  }
-`;
-
-const LINK_CONVERSATION_ENTITY_MUTATION = gql`
-  mutation LinkConversationEntity($conversationId: ID!, $entityType: String!, $entityId: ID!) {
-    linkConversationEntity(conversationId: $conversationId, entityType: $entityType, entityId: $entityId) {
-      id
-    }
-  }
-`;
-
-const UNLINK_CONVERSATION_ENTITY_MUTATION = gql`
-  mutation UnlinkConversationEntity($conversationId: ID!, $entityType: String!, $entityId: ID!) {
-    unlinkConversationEntity(conversationId: $conversationId, entityType: $entityType, entityId: $entityId)
   }
 `;
 
@@ -76,11 +47,7 @@ export function useCreateAiConversation() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
 
   return useCallback(
-    async (input: {
-      title?: string;
-      visibility?: AiConversationVisibility;
-      agentObservability?: AgentObservability;
-    }) => {
+    async (input: { title?: string; visibility?: AiConversationVisibility }) => {
       if (!activeOrgId) return null;
 
       const result = await client
@@ -183,74 +150,28 @@ export function useUpdateAiConversationTitle() {
   }, []);
 }
 
-/** Fire-and-forget: updates conversation observability level */
-export function useUpdateAiConversationObservability() {
-  return useCallback(
-    async (params: { conversationId: string; agentObservability: AgentObservability }) => {
-      const result = await client
-        .mutation(UPDATE_AI_CONVERSATION_OBSERVABILITY_MUTATION, params)
-        .toPromise();
-
-      if (result.error) {
-        console.error("Failed to update conversation observability:", result.error.message);
-      }
-    },
-    [],
-  );
-}
-
-/** Fire-and-forget: labels a branch */
-export function useLabelBranch() {
-  return useCallback(async (params: { branchId: string; label: string }) => {
-    const result = await client.mutation(LABEL_BRANCH_MUTATION, params).toPromise();
+/**
+ * Forks an ORG-visible conversation branch into a new private conversation.
+ * Returns the new conversation ID on success, or null on failure.
+ * Shows a toast on success.
+ */
+export function useForkAiConversation() {
+  return useCallback(async (params: { branchId: string }): Promise<string | null> => {
+    const result = await client
+      .mutation(FORK_AI_CONVERSATION_MUTATION, { branchId: params.branchId })
+      .toPromise();
 
     if (result.error) {
-      console.error("Failed to label branch:", result.error.message);
+      console.error("Failed to fork conversation:", result.error.message);
+      toast.error("Failed to fork conversation");
+      return null;
     }
+
+    const newId = result.data?.forkAiConversation?.id as string | undefined;
+    if (newId) {
+      toast.success("Forked conversation created");
+    }
+
+    return newId ?? null;
   }, []);
-}
-
-/** Fire-and-forget: forks a branch at a given turn */
-export function useForkBranch() {
-  return useCallback(
-    async (params: { branchId: string; turnId: string; label?: string }) => {
-      const result = await client.mutation(FORK_BRANCH_MUTATION, params).toPromise();
-
-      if (result.error) {
-        console.error("Failed to fork branch:", result.error.message);
-        return null;
-      }
-
-      return result.data?.forkBranch?.id as string | undefined;
-    },
-    [],
-  );
-}
-
-/** Fire-and-forget: links an entity to a conversation */
-export function useLinkConversationEntity() {
-  return useCallback(
-    async (params: { conversationId: string; entityType: string; entityId: string }) => {
-      const result = await client.mutation(LINK_CONVERSATION_ENTITY_MUTATION, params).toPromise();
-
-      if (result.error) {
-        console.error("Failed to link conversation entity:", result.error.message);
-      }
-    },
-    [],
-  );
-}
-
-/** Fire-and-forget: unlinks an entity from a conversation */
-export function useUnlinkConversationEntity() {
-  return useCallback(
-    async (params: { conversationId: string; entityType: string; entityId: string }) => {
-      const result = await client.mutation(UNLINK_CONVERSATION_ENTITY_MUTATION, params).toPromise();
-
-      if (result.error) {
-        console.error("Failed to unlink conversation entity:", result.error.message);
-      }
-    },
-    [],
-  );
 }
