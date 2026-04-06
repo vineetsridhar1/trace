@@ -1,4 +1,4 @@
-import type { AiConversationVisibility, Prisma } from "@prisma/client";
+import type { AiConversationVisibility, AiTurn, Prisma } from "@prisma/client";
 import type { ActorType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { pubsub, topics } from "../lib/pubsub.js";
@@ -381,6 +381,152 @@ export class AiConversationService {
     }
 
     return depth;
+  }
+
+  /**
+   * Forks a new branch from a specific turn in an existing branch.
+   * The new branch will inherit all conversation context up to and including the fork turn.
+   */
+  async forkBranch(input: { turnId: string; label?: string; userId: string }) {
+    // Load the turn with its branch and conversation
+    const turn = await prisma.aiTurn.findUniqueOrThrow({
+      where: { id: input.turnId },
+      include: {
+        branch: {
+          include: { conversation: true },
+        },
+      },
+    });
+
+    const branch = turn.branch;
+    const conversation = branch.conversation;
+
+    // Verify user has access to the conversation
+    await this.assertConversationAccess(conversation.id, input.userId);
+
+    // Create the new forked branch
+    const newBranch = await prisma.aiBranch.create({
+      data: {
+        conversationId: conversation.id,
+        parentBranchId: branch.id,
+        forkTurnId: input.turnId,
+        label: input.label ?? null,
+        createdById: input.userId,
+      },
+    });
+
+    // Emit ai_branch_created event
+    await eventService.create({
+      organizationId: conversation.organizationId,
+      scopeType: "ai_conversation",
+      scopeId: conversation.id,
+      eventType: "ai_branch_created",
+      payload: {
+        branchId: newBranch.id,
+        conversationId: conversation.id,
+        parentBranchId: branch.id,
+        forkTurnId: input.turnId,
+        label: newBranch.label,
+        createdById: input.userId,
+      },
+      actorType: "user",
+      actorId: input.userId,
+    });
+
+    // Publish to conversation subscription topic
+    pubsub.publish(topics.conversationEvents(conversation.id), {
+      conversationEvents: {
+        conversationId: conversation.id,
+        type: "ai_branch_created",
+        payload: {
+          branchId: newBranch.id,
+          conversationId: conversation.id,
+          parentBranchId: branch.id,
+          forkTurnId: input.turnId,
+          label: newBranch.label,
+          createdById: input.userId,
+        },
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    return newBranch;
+  }
+
+  /**
+   * Recursively assembles the full conversation context for a branch by walking
+   * the ancestor chain. Returns a flat array of turns from root to the current branch,
+   * in chronological order as the LLM should see them.
+   *
+   * For a forked branch, this includes:
+   * 1. All ancestor turns up to and including the fork point (recursive)
+   * 2. All turns in the current branch
+   */
+  async buildContext(branchId: string, upToTurnId?: string): Promise<AiTurn[]> {
+    const branch = await prisma.aiBranch.findUniqueOrThrow({
+      where: { id: branchId },
+    });
+
+    // Get turns in this branch, optionally up to a specific turn
+    let branchTurns: AiTurn[];
+    if (upToTurnId) {
+      // Get the fork turn to determine the cutoff time
+      const forkTurn = await prisma.aiTurn.findUniqueOrThrow({
+        where: { id: upToTurnId },
+      });
+
+      branchTurns = await prisma.aiTurn.findMany({
+        where: {
+          branchId,
+          createdAt: { lte: forkTurn.createdAt },
+        },
+        orderBy: { createdAt: "asc" },
+      });
+    } else {
+      branchTurns = await prisma.aiTurn.findMany({
+        where: { branchId },
+        orderBy: { createdAt: "asc" },
+      });
+    }
+
+    // Base case: root branch (no parent)
+    if (branch.parentBranchId === null) {
+      return branchTurns;
+    }
+
+    // Recursive case: get parent context up to the fork turn
+    const parentContext = await this.buildContext(
+      branch.parentBranchId,
+      branch.forkTurnId ?? undefined,
+    );
+
+    return [...parentContext, ...branchTurns];
+  }
+
+  /**
+   * Returns the ordered list of ancestor branches from root to the specified branch.
+   * Useful for breadcrumb UI showing the branch lineage.
+   */
+  async getBranchAncestors(branchId: string): Promise<Array<{ id: string; label: string | null; parentBranchId: string | null; forkTurnId: string | null }>> {
+    const ancestors: Array<{ id: string; label: string | null; parentBranchId: string | null; forkTurnId: string | null }> = [];
+    let currentId: string | null = branchId;
+
+    while (currentId) {
+      const result: { id: string; label: string | null; parentBranchId: string | null; forkTurnId: string | null } =
+        await prisma.aiBranch.findUniqueOrThrow({
+          where: { id: currentId },
+          select: { id: true, label: true, parentBranchId: true, forkTurnId: true },
+        });
+
+      ancestors.unshift(result);
+
+      if (result.parentBranchId === null) {
+        break;
+      }
+      currentId = result.parentBranchId;
+    }
+
+    return ancestors;
   }
 
   /**

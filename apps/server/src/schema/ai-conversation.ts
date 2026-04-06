@@ -25,6 +25,11 @@ export const aiConversationQueries = {
   branch: (_: unknown, args: { id: string }, ctx: Context) => {
     return aiConversationService.getBranch(args.id, ctx.userId);
   },
+
+  branchAncestors: async (_: unknown, args: { branchId: string }, ctx: Context) => {
+    await aiConversationService.assertBranchAccess(args.branchId, ctx.userId);
+    return aiConversationService.getBranchAncestors(args.branchId);
+  },
 };
 
 export const aiConversationMutations = {
@@ -72,6 +77,18 @@ export const aiConversationMutations = {
       ctx.actorType,
       ctx.userId,
     );
+  },
+
+  forkBranch: (
+    _: unknown,
+    args: { turnId: string; label?: string | null },
+    ctx: Context,
+  ) => {
+    return aiConversationService.forkBranch({
+      turnId: args.turnId,
+      label: args.label ?? undefined,
+      userId: ctx.userId,
+    });
   },
 };
 

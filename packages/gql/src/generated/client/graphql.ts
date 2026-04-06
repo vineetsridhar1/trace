@@ -437,6 +437,7 @@ export type Mutation = {
   dismissSession: Session;
   editChannelMessage: Message;
   editChatMessage: Message;
+  forkBranch: Branch;
   joinChannel: Channel;
   leaveChannel: Channel;
   leaveChat: Chat;
@@ -609,6 +610,12 @@ export type MutationEditChannelMessageArgs = {
 export type MutationEditChatMessageArgs = {
   html: Scalars['String']['input'];
   messageId: Scalars['ID']['input'];
+};
+
+
+export type MutationForkBranchArgs = {
+  label?: InputMaybe<Scalars['String']['input']>;
+  turnId: Scalars['ID']['input'];
 };
 
 
@@ -905,6 +912,7 @@ export type Query = {
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   branch?: Maybe<Branch>;
+  branchAncestors: Array<Branch>;
   channel?: Maybe<Channel>;
   channelGroups: Array<ChannelGroup>;
   channelMessages: Array<Message>;
@@ -968,6 +976,11 @@ export type QueryAvailableSessionRuntimesArgs = {
 
 export type QueryBranchArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryBranchAncestorsArgs = {
+  branchId: Scalars['ID']['input'];
 };
 
 

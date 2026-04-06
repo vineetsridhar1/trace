@@ -758,6 +758,7 @@ type Query {
   aiConversations(organizationId: ID!, visibility: AiConversationVisibility): [AiConversation!]!
   aiConversation(id: ID!): AiConversation
   branch(id: ID!): Branch
+  branchAncestors(branchId: ID!): [Branch!]!
 }
 
 type Terminal {
@@ -830,6 +831,7 @@ type Mutation {
   createAiConversation(organizationId: ID!, input: CreateAiConversationInput!): AiConversation!
   sendTurn(branchId: ID!, content: String!, clientMutationId: String): Turn!
   updateAiConversationTitle(conversationId: ID!, title: String!): AiConversation!
+  forkBranch(turnId: ID!, label: String): Branch!
 }
 
 # --- Subscriptions ---

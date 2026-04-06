@@ -3,6 +3,7 @@ import type { ActorType } from "@trace/gql";
 import type { LLMAssistantContentBlock, LLMMessage, LLMStreamEvent } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { aiService } from "./ai.js";
+import { aiConversationService } from "./aiConversation.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { eventService } from "./event.js";
 
@@ -67,13 +68,9 @@ export class AiTurnService {
       },
     });
 
-    // Assemble context: all turns in the branch in chronological order
-    const turns = await prisma.aiTurn.findMany({
-      where: { branchId: input.branchId },
-      orderBy: { createdAt: "asc" },
-    });
-
-    const messages = this.turnsToMessages(turns);
+    // Assemble context: walk ancestor chain for full conversation history
+    const contextTurns = await aiConversationService.buildContext(input.branchId);
+    const messages = this.turnsToMessages(contextTurns);
 
     // Call LLM
     let assistantContent: string;
@@ -242,12 +239,9 @@ export class AiTurnService {
 
     yield { type: "user_turn_created" as const, turn: userTurn };
 
-    // Assemble context
-    const turns = await prisma.aiTurn.findMany({
-      where: { branchId: input.branchId },
-      orderBy: { createdAt: "asc" },
-    });
-    const messages = this.turnsToMessages(turns);
+    // Assemble context: walk ancestor chain for full conversation history
+    const contextTurns = await aiConversationService.buildContext(input.branchId);
+    const messages = this.turnsToMessages(contextTurns);
 
     // Stream from LLM
     let fullText = "";
