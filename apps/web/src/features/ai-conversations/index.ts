@@ -52,6 +52,10 @@ export { ConversationList } from "./components/ConversationList";
 export { ConversationListItem } from "./components/ConversationListItem";
 export { BranchTreePanel } from "./components/BranchTreePanel";
 export { BranchTreeNode, BranchTreeNodeContainer } from "./components/BranchTreeNode";
+export { BranchBreadcrumb } from "./components/BranchBreadcrumb";
+
+// Ancestor hooks
+export { useBranchAncestors, type BranchAncestorInfo } from "./hooks/useBranchAncestors";
 
 // Utils
 export { processAiConversationEvent } from "./utils/processAiConversationEvent";
