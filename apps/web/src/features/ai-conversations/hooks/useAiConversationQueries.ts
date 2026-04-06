@@ -24,6 +24,7 @@ const AI_CONVERSATIONS_QUERY = gql`
       branchCount
       createdBy {
         id
+        name
       }
       rootBranch {
         id
@@ -144,7 +145,7 @@ interface RawConversation {
   modelId: string | null;
   systemPrompt: string | null;
   branchCount: number;
-  createdBy: { id: string };
+  createdBy: { id: string; name?: string };
   rootBranch: { id: string };
   branches?: RawBranch[];
   createdAt: string;
@@ -193,7 +194,7 @@ interface RawContextHealth {
 }
 
 function hydrateConversation(raw: RawConversation): void {
-  const { upsert } = useEntityStore.getState();
+  const { upsert, patch } = useEntityStore.getState();
   const existing = useEntityStore.getState().aiConversations[raw.id];
 
   upsert("aiConversations", raw.id, {
@@ -210,6 +211,14 @@ function hydrateConversation(raw: RawConversation): void {
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
   } as AiConversationEntity);
+
+  // Hydrate the creator user name if available (for shared conversations)
+  if (raw.createdBy.name) {
+    const existingUser = useEntityStore.getState().users[raw.createdBy.id];
+    if (existingUser) {
+      patch("users", raw.createdBy.id, { name: raw.createdBy.name });
+    }
+  }
 
   if (raw.branches) {
     for (const branch of raw.branches) {

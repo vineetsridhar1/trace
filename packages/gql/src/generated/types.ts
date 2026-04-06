@@ -501,6 +501,7 @@ export type Mutation = {
   updateAgentSettings: AgentIdentity;
   updateAiConversation: AiConversation;
   updateAiConversationTitle: AiConversation;
+  updateAiConversationVisibility: AiConversation;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateRepo: Repo;
@@ -860,6 +861,12 @@ export type MutationUpdateAiConversationArgs = {
 export type MutationUpdateAiConversationTitleArgs = {
   conversationId: Scalars['ID']['input'];
   title: Scalars['String']['input'];
+};
+
+
+export type MutationUpdateAiConversationVisibilityArgs = {
+  conversationId: Scalars['ID']['input'];
+  visibility: AiConversationVisibility;
 };
 
 

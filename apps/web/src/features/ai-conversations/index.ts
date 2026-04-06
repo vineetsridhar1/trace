@@ -10,6 +10,9 @@ export {
   useAiConversation,
   useAiConversationField,
   useAiConversations,
+  useIsConversationCreator,
+  useMyConversationIds,
+  useSharedConversationIds,
   useBranch,
   useBranchField,
   useBranchTurns,
@@ -52,6 +55,7 @@ export {
   useLabelBranch,
   useUpdateAiConversation,
   useSummarizeBranch,
+  useUpdateAiConversationVisibility,
 } from "./hooks/useAiConversationMutations";
 
 // Shortcut hooks
