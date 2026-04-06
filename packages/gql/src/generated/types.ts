@@ -441,6 +441,7 @@ export type Mutation = {
   dismissSession: Session;
   editChannelMessage: Message;
   editChatMessage: Message;
+  forkBranch: Branch;
   joinChannel: Channel;
   leaveChannel: Channel;
   leaveChat: Chat;
@@ -614,6 +615,12 @@ export type MutationEditChannelMessageArgs = {
 export type MutationEditChatMessageArgs = {
   html: Scalars['String']['input'];
   messageId: Scalars['ID']['input'];
+};
+
+
+export type MutationForkBranchArgs = {
+  label?: InputMaybe<Scalars['String']['input']>;
+  turnId: Scalars['ID']['input'];
 };
 
 

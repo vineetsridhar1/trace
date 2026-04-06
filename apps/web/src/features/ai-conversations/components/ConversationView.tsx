@@ -1,78 +1,66 @@
-import { SidebarTrigger } from "../../../components/ui/sidebar";
+import { useCallback, useRef } from "react";
 import {
   useAiConversationQuery,
-  useBranchTimelineQuery,
 } from "../hooks/useAiConversationQueries";
-import {
-  useConversationEventsSubscription,
-  useBranchTurnsSubscription,
-} from "../hooks/useAiConversationSubscriptions";
-import { useActiveBranchId, useAiConversationField } from "../hooks/useAiConversationSelectors";
-import { useEntityStore } from "../../../stores/entity";
-import { TurnList } from "./TurnList";
+import { useConversationEventsSubscription } from "../hooks/useAiConversationSubscriptions";
+import { useActiveBranchId } from "../hooks/useAiConversationSelectors";
+import { BranchTimeline } from "./BranchTimeline";
+import { BranchSwitcher } from "./BranchSwitcher";
 import { TurnInput } from "./TurnInput";
-import { Skeleton } from "../../../components/ui/skeleton";
 
-export function ConversationView({ conversationId }: { conversationId: string }) {
-  const { loading: convLoading } = useAiConversationQuery(conversationId);
+interface ConversationViewProps {
+  conversationId: string;
+}
+
+export function ConversationView({ conversationId }: ConversationViewProps) {
+  const { loading } = useAiConversationQuery(conversationId);
   const activeBranchId = useActiveBranchId(conversationId);
-  const title = useAiConversationField(conversationId, "title");
-  const rootBranchId = useAiConversationField(conversationId, "rootBranchId");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const branchId = activeBranchId ?? rootBranchId ?? "";
-  const { loading: branchLoading } = useBranchTimelineQuery(branchId);
-
-  // Real-time subscriptions
+  // Subscribe to conversation-level events
   useConversationEventsSubscription(conversationId);
-  useBranchTurnsSubscription(branchId || null);
 
-  // Check if AI is generating (last turn is USER with no ASSISTANT following)
-  const isAiGenerating = useIsAiGenerating(branchId);
+  const focusInput = useCallback(() => {
+    // Small delay to let the DOM update after branch switch
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  }, []);
 
-  const loading = convLoading || branchLoading;
+  if (loading && !activeBranchId) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        Loading...
+      </div>
+    );
+  }
+
+  if (!activeBranchId) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        No branch selected.
+      </div>
+    );
+  }
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-        <SidebarTrigger />
-        <h2 className="truncate text-sm font-medium text-foreground">
-          {title ?? "New Conversation"}
-        </h2>
-      </header>
+    <div className="flex flex-col h-full">
+      {/* Branch switcher bar */}
+      <BranchSwitcher conversationId={conversationId} />
 
-      {loading ? (
-        <ConversationSkeleton />
-      ) : (
-        <>
-          <TurnList branchId={branchId} />
-          <TurnInput branchId={branchId} disabled={isAiGenerating} />
-        </>
-      )}
-    </div>
-  );
-}
+      {/* Scrollable timeline */}
+      <div className="flex-1 overflow-y-auto">
+        <BranchTimeline
+          branchId={activeBranchId}
+          onFocusInput={focusInput}
+        />
+      </div>
 
-function useIsAiGenerating(branchId: string): boolean {
-  return useEntityStore((state) => {
-    const branch = state.aiBranches[branchId];
-    if (!branch || branch.turnIds.length === 0) return false;
-    const lastTurnId = branch.turnIds[branch.turnIds.length - 1];
-    const lastTurn = state.aiTurns[lastTurnId];
-    return lastTurn?.role === "USER" && !lastTurn._optimistic;
-  });
-}
-
-function ConversationSkeleton() {
-  return (
-    <div className="flex-1 overflow-hidden px-4 py-6 space-y-6">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className={i % 2 === 0 ? "flex justify-end" : ""}>
-          <div className="max-w-[80%] space-y-2">
-            <Skeleton className="h-4 w-48" />
-            <Skeleton className="h-4 w-64" />
-          </div>
-        </div>
-      ))}
+      {/* Input */}
+      <TurnInput
+        branchId={activeBranchId}
+        inputRef={inputRef}
+      />
     </div>
   );
 }
