@@ -23,6 +23,8 @@ const AI_CONVERSATIONS_QUERY = gql`
       modelId
       systemPrompt
       branchCount
+      forkedFromConversationId
+      forkedFromBranchId
       createdBy {
         id
         name
@@ -46,6 +48,8 @@ const AI_CONVERSATION_QUERY = gql`
       modelId
       systemPrompt
       branchCount
+      forkedFromConversationId
+      forkedFromBranchId
       createdBy {
         id
       }
@@ -166,6 +170,9 @@ interface RawConversation {
   systemPrompt: string | null;
   branchCount: number;
   createdBy: { id: string; name?: string };
+  forkedFromConversationId: string | null;
+  forkedFromBranchId: string | null;
+  createdBy: { id: string };
   rootBranch: { id: string };
   branches?: RawBranch[];
   linkedEntities?: RawLinkedEntity[];
@@ -231,6 +238,8 @@ function hydrateConversation(raw: RawConversation): void {
     rootBranchId: raw.rootBranch.id,
     branchIds: raw.branches?.map((b) => b.id) ?? existing?.branchIds ?? [raw.rootBranch.id],
     linkedEntities: raw.linkedEntities ?? existing?.linkedEntities ?? [],
+    forkedFromConversationId: raw.forkedFromConversationId ?? null,
+    forkedFromBranchId: raw.forkedFromBranchId ?? null,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
   } as AiConversationEntity);

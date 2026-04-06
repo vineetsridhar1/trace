@@ -800,6 +800,10 @@ model AiConversation {
 
   branches       AiBranch[]
   linkedEntities AiConversationLinkedEntity[]
+  forkedFromConversationId String?
+  forkedFromBranchId       String?
+
+  branches AiBranch[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

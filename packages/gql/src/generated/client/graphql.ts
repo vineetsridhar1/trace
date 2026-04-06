@@ -74,6 +74,8 @@ export type AiConversation = {
   branches: Array<Branch>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
+  forkedFromBranchId?: Maybe<Scalars['ID']['output']>;
+  forkedFromConversationId?: Maybe<Scalars['ID']['output']>;
   id: Scalars['ID']['output'];
   modelId?: Maybe<Scalars['String']['output']>;
   linkedEntities: Array<AiConversationLinkedEntity>;
@@ -482,6 +484,7 @@ export type Mutation = {
   editChannelMessage: Message;
   editChatMessage: Message;
   forkBranch: Branch;
+  forkAiConversation: AiConversation;
   joinChannel: Channel;
   labelBranch: Branch;
   leaveChannel: Channel;
@@ -669,6 +672,8 @@ export type MutationForkBranchArgs = {
   branchId: Scalars['ID']['input'];
   label?: InputMaybe<Scalars['String']['input']>;
   turnId: Scalars['ID']['input'];
+export type MutationForkAiConversationArgs = {
+  branchId: Scalars['ID']['input'];
 };
 
 

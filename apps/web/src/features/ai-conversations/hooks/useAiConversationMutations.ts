@@ -1,6 +1,8 @@
 import { useCallback } from "react";
 import { gql } from "@urql/core";
 import type { AgentObservability, AiConversationVisibility } from "@trace/gql";
+import type { AiConversationVisibility } from "@trace/gql";
+import { toast } from "sonner";
 import { client } from "../../../lib/urql";
 import { useEntityStore, type AiBranchEntity, type AiTurnEntity } from "../../../stores/entity";
 import { useAuthStore } from "../../../stores/auth";
@@ -38,6 +40,9 @@ const UPDATE_AGENT_OBSERVABILITY_MUTATION = gql`
 const UPDATE_AI_CONVERSATION_OBSERVABILITY_MUTATION = gql`
   mutation UpdateAiConversationObservability($conversationId: ID!, $agentObservability: AgentObservability!) {
     updateAiConversationObservability(conversationId: $conversationId, agentObservability: $agentObservability) {
+const FORK_AI_CONVERSATION_MUTATION = gql`
+  mutation ForkAiConversation($branchId: ID!) {
+    forkAiConversation(branchId: $branchId) {
       id
     }
   }
@@ -455,4 +460,28 @@ export function useUnlinkConversationEntity() {
     },
     [],
   );
+/**
+ * Forks an ORG-visible conversation branch into a new private conversation.
+ * Returns the new conversation ID on success, or null on failure.
+ * Shows a toast on success.
+ */
+export function useForkAiConversation() {
+  return useCallback(async (params: { branchId: string }): Promise<string | null> => {
+    const result = await client
+      .mutation(FORK_AI_CONVERSATION_MUTATION, { branchId: params.branchId })
+      .toPromise();
+
+    if (result.error) {
+      console.error("Failed to fork conversation:", result.error.message);
+      toast.error("Failed to fork conversation");
+      return null;
+    }
+
+    const newId = result.data?.forkAiConversation?.id as string | undefined;
+    if (newId) {
+      toast.success("Forked conversation created");
+    }
+
+    return newId ?? null;
+  }, []);
 }

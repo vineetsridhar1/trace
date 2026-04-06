@@ -35,6 +35,7 @@ export function useAiConversations(): string[] {
 }
 
 /** Returns whether the current user is the conversation creator */
+/** Returns whether the current user is the creator of the conversation */
 export function useIsConversationCreator(conversationId: string): boolean {
   const createdById = useEntityField("aiConversations", conversationId, "createdById");
   const userId = useAuthStore((s) => s.user?.id);
@@ -59,6 +60,16 @@ export function useSharedConversationIds(): string[] {
     (c: AiConversationEntity) => c.visibility === "ORG" && c.createdById !== userId,
     (a, b) => b.updatedAt.localeCompare(a.updatedAt),
   );
+/** Returns fork provenance for a conversation (if it was forked) */
+export function useConversationForkInfo(conversationId: string): {
+  forkedFromConversationId: string | null;
+  forkedFromBranchId: string | null;
+} {
+  const conversation = useEntityStore((s) => s.aiConversations[conversationId]);
+  return {
+    forkedFromConversationId: conversation?.forkedFromConversationId ?? null,
+    forkedFromBranchId: conversation?.forkedFromBranchId ?? null,
+  };
 }
 
 // ── Branch selectors ───────────────────────────────────────────

@@ -548,6 +548,8 @@ type AiConversation {
   branches: [Branch!]!
   branchCount: Int!
   linkedEntities: [AiConversationLinkedEntity!]!
+  forkedFromConversationId: ID
+  forkedFromBranchId: ID
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -894,6 +896,7 @@ type Mutation {
   forkBranch(branchId: ID!, turnId: ID!, label: String): Branch!
   linkConversationEntity(conversationId: ID!, entityType: String!, entityId: ID!): AiConversationLinkedEntity!
   unlinkConversationEntity(conversationId: ID!, entityType: String!, entityId: ID!): Boolean!
+  forkAiConversation(branchId: ID!): AiConversation!
 }
 
 # --- Subscriptions ---

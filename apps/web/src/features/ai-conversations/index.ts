@@ -13,6 +13,7 @@ export {
   useIsConversationCreator,
   useMyConversationIds,
   useSharedConversationIds,
+  useConversationForkInfo,
   useBranch,
   useBranchField,
   useBranchTurns,
@@ -61,6 +62,7 @@ export {
   useForkBranch,
   useLinkConversationEntity,
   useUnlinkConversationEntity,
+  useForkAiConversation,
 } from "./hooks/useAiConversationMutations";
 
 // Shortcut hooks

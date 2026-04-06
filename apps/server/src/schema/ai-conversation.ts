@@ -217,6 +217,13 @@ export const aiConversationMutations = {
   ) => {
     return aiConversationService.unlinkEntity(
       { conversationId: args.conversationId, entityType: args.entityType, entityId: args.entityId },
+  forkAiConversation: (
+    _: unknown,
+    args: { branchId: string },
+    ctx: Context,
+  ) => {
+    return aiConversationService.forkAiConversation(
+      { branchId: args.branchId },
       ctx.actorType,
       ctx.userId,
     );
