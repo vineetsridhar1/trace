@@ -36,7 +36,18 @@ export {
   useCreateAiConversation,
   useSendTurn,
   useUpdateAiConversationTitle,
+  useForkBranch,
 } from "./hooks/useAiConversationMutations";
 
 // Utils
 export { processAiConversationEvent } from "./utils/processAiConversationEvent";
+
+// Components
+export { ConversationView } from "./components/ConversationView";
+export { BranchTimeline } from "./components/BranchTimeline";
+export { BranchSwitcher } from "./components/BranchSwitcher";
+export { BranchBadge } from "./components/BranchBadge";
+export { TurnItem } from "./components/TurnItem";
+export { TurnInput } from "./components/TurnInput";
+export { ForkBranchButton } from "./components/ForkBranchButton";
+export { ForkSeparator } from "./components/ForkSeparator";

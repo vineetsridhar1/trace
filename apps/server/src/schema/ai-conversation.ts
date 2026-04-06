@@ -73,6 +73,18 @@ export const aiConversationMutations = {
       ctx.userId,
     );
   },
+
+  forkBranch: (
+    _: unknown,
+    args: { turnId: string; label?: string | null },
+    ctx: Context,
+  ) => {
+    return aiConversationService.forkBranch(
+      { turnId: args.turnId, label: args.label ?? undefined },
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
 };
 
 export const aiConversationSubscriptions = {

@@ -438,6 +438,7 @@ export type Mutation = {
   dismissSession: Session;
   editChannelMessage: Message;
   editChatMessage: Message;
+  forkBranch: Branch;
   joinChannel: Channel;
   leaveChannel: Channel;
   leaveChat: Chat;
@@ -610,6 +611,12 @@ export type MutationEditChannelMessageArgs = {
 export type MutationEditChatMessageArgs = {
   html: Scalars['String']['input'];
   messageId: Scalars['ID']['input'];
+};
+
+
+export type MutationForkBranchArgs = {
+  label?: InputMaybe<Scalars['String']['input']>;
+  turnId: Scalars['ID']['input'];
 };
 
 
@@ -1939,6 +1946,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   dismissSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationDismissSessionArgs, 'id'>>;
   editChannelMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationEditChannelMessageArgs, 'html' | 'messageId'>>;
   editChatMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationEditChatMessageArgs, 'html' | 'messageId'>>;
+  forkBranch?: Resolver<ResolversTypes['Branch'], ParentType, ContextType, RequireFields<MutationForkBranchArgs, 'turnId'>>;
   joinChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationJoinChannelArgs, 'channelId'>>;
   leaveChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationLeaveChannelArgs, 'channelId'>>;
   leaveChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationLeaveChatArgs, 'chatId'>>;

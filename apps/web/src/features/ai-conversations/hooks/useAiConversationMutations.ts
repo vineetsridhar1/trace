@@ -4,6 +4,7 @@ import type { AiConversationVisibility } from "@trace/gql";
 import { client } from "../../../lib/urql";
 import { useEntityStore, type AiBranchEntity, type AiTurnEntity } from "../../../stores/entity";
 import { useAuthStore } from "../../../stores/auth";
+import { useAiConversationUIStore } from "../store/ai-conversation-ui";
 
 // ── Mutation documents ─────────────────────────────────────────
 
@@ -27,6 +28,29 @@ const UPDATE_AI_CONVERSATION_TITLE_MUTATION = gql`
   mutation UpdateAiConversationTitle($conversationId: ID!, $title: String!) {
     updateAiConversationTitle(conversationId: $conversationId, title: $title) {
       id
+    }
+  }
+`;
+
+const FORK_BRANCH_MUTATION = gql`
+  mutation ForkBranch($turnId: ID!, $label: String) {
+    forkBranch(turnId: $turnId, label: $label) {
+      id
+      conversation {
+        id
+      }
+      parentBranch {
+        id
+      }
+      forkTurn {
+        id
+      }
+      label
+      depth
+      createdBy {
+        id
+      }
+      createdAt
     }
   }
 `;
@@ -139,4 +163,85 @@ export function useUpdateAiConversationTitle() {
       console.error("Failed to update conversation title:", result.error.message);
     }
   }, []);
+}
+
+/**
+ * Fork a new branch from a turn. On success, switches the active branch
+ * to the newly created branch so the UI immediately reflects the fork.
+ */
+export function useForkBranch() {
+  return useCallback(
+    async (params: { turnId: string; label?: string }): Promise<string | null> => {
+      const result = await client
+        .mutation(FORK_BRANCH_MUTATION, {
+          turnId: params.turnId,
+          label: params.label ?? null,
+        })
+        .toPromise();
+
+      if (result.error) {
+        console.error("Failed to fork branch:", result.error.message);
+        return null;
+      }
+
+      const data = result.data?.forkBranch as
+        | {
+            id: string;
+            conversation: { id: string };
+            parentBranch: { id: string } | null;
+            forkTurn: { id: string } | null;
+            label: string | null;
+            depth: number;
+            createdBy: { id: string };
+            createdAt: string;
+          }
+        | undefined;
+
+      if (!data) return null;
+
+      // Optimistically upsert the new branch into the store
+      const { upsert, patch } = useEntityStore.getState();
+      upsert("aiBranches", data.id, {
+        id: data.id,
+        conversationId: data.conversation.id,
+        parentBranchId: data.parentBranch?.id ?? null,
+        forkTurnId: data.forkTurn?.id ?? null,
+        label: data.label,
+        depth: data.depth,
+        turnIds: [],
+        childBranchIds: [],
+        turnCount: 0,
+        createdById: data.createdBy.id,
+        createdAt: data.createdAt,
+      } as AiBranchEntity);
+
+      // Add to parent branch's childBranchIds
+      if (data.parentBranch?.id) {
+        const parentBranch = useEntityStore.getState().aiBranches[data.parentBranch.id];
+        if (parentBranch && !parentBranch.childBranchIds.includes(data.id)) {
+          patch("aiBranches", data.parentBranch.id, {
+            childBranchIds: [...parentBranch.childBranchIds, data.id],
+          } as Partial<AiBranchEntity>);
+        }
+      }
+
+      // Increment branchCount on fork turn
+      if (data.forkTurn?.id) {
+        const forkTurn = useEntityStore.getState().aiTurns[data.forkTurn.id];
+        if (forkTurn) {
+          patch("aiTurns", data.forkTurn.id, {
+            branchCount: forkTurn.branchCount + 1,
+          } as Partial<AiTurnEntity>);
+        }
+      }
+
+      // Switch to the new branch
+      useAiConversationUIStore
+        .getState()
+        .setActiveBranch(data.conversation.id, data.id);
+
+      return data.id;
+    },
+    [],
+  );
 }

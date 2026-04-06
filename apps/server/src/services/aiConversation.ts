@@ -320,6 +320,103 @@ export class AiConversationService {
   }
 
   /**
+   * Creates a new branch forking from an existing turn.
+   * The new branch inherits context from the parent branch up to the fork turn.
+   */
+  async forkBranch(
+    input: { turnId: string; label?: string },
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    // Load the turn and its branch to determine the parent
+    const forkTurn = await prisma.aiTurn.findUniqueOrThrow({
+      where: { id: input.turnId },
+      include: {
+        branch: {
+          include: { conversation: true },
+        },
+      },
+    });
+
+    const parentBranch = forkTurn.branch;
+    const conversation = parentBranch.conversation;
+
+    // Verify access: user must belong to org and have conversation access
+    await prisma.orgMember.findUniqueOrThrow({
+      where: {
+        userId_organizationId: {
+          userId: actorId,
+          organizationId: conversation.organizationId,
+        },
+      },
+    });
+
+    if (conversation.visibility === "PRIVATE" && conversation.createdById !== actorId) {
+      throw new Error("Conversation not found");
+    }
+
+    // Compute depth
+    const parentDepth = await this.getBranchDepth(parentBranch.id);
+
+    // Create the new branch
+    const newBranch = await prisma.aiBranch.create({
+      data: {
+        conversationId: conversation.id,
+        parentBranchId: parentBranch.id,
+        forkTurnId: input.turnId,
+        label: input.label ?? null,
+        createdById: actorId,
+      },
+    });
+
+    // Update conversation updatedAt
+    await prisma.aiConversation.update({
+      where: { id: conversation.id },
+      data: { updatedAt: new Date() },
+    });
+
+    // Emit branch created event
+    const organizationId = conversation.organizationId;
+    await eventService.create({
+      organizationId,
+      scopeType: "ai_conversation",
+      scopeId: conversation.id,
+      eventType: "ai_branch_created",
+      payload: {
+        branchId: newBranch.id,
+        conversationId: conversation.id,
+        parentBranchId: parentBranch.id,
+        forkTurnId: input.turnId,
+        label: newBranch.label,
+        createdById: actorId,
+        depth: parentDepth + 1,
+      },
+      actorType,
+      actorId,
+    });
+
+    // Publish to conversation subscription topic
+    pubsub.publish(topics.conversationEvents(conversation.id), {
+      conversationEvents: {
+        conversationId: conversation.id,
+        type: "ai_branch_created",
+        payload: {
+          branchId: newBranch.id,
+          conversationId: conversation.id,
+          parentBranchId: parentBranch.id,
+          forkTurnId: input.turnId,
+          label: newBranch.label,
+          createdById: actorId,
+          depth: parentDepth + 1,
+        },
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    return newBranch;
+  }
+
+  /**
    * Returns a branch with its turns ordered by creation time.
    * Enforces access control through the parent conversation.
    */

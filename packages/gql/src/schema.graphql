@@ -830,6 +830,7 @@ type Mutation {
   createAiConversation(organizationId: ID!, input: CreateAiConversationInput!): AiConversation!
   sendTurn(branchId: ID!, content: String!, clientMutationId: String): Turn!
   updateAiConversationTitle(conversationId: ID!, title: String!): AiConversation!
+  forkBranch(turnId: ID!, label: String): Branch!
 }
 
 # --- Subscriptions ---
