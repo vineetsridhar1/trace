@@ -1,4 +1,4 @@
-import type { AiConversationVisibility, Prisma } from "@prisma/client";
+import type { AgentObservability, AiConversationVisibility, Prisma } from "@prisma/client";
 import type { ActorType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { pubsub, topics } from "../lib/pubsub.js";
@@ -312,6 +312,58 @@ export class AiConversationService {
         conversationId: input.conversationId,
         type: "ai_conversation_title_updated",
         payload: { title: input.title, updatedAt: updated.updatedAt.toISOString() },
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Updates agent observability level for a conversation.
+   * Only the conversation creator can change this setting.
+   */
+  async updateAgentObservability(input: {
+    conversationId: string;
+    level: AgentObservability;
+    userId: string;
+    actorType: ActorType;
+  }) {
+    const conversation = await prisma.aiConversation.findUniqueOrThrow({
+      where: { id: input.conversationId },
+    });
+
+    if (conversation.createdById !== input.userId) {
+      throw new Error("Only the conversation creator can update agent observability");
+    }
+
+    const updated = await prisma.aiConversation.update({
+      where: { id: input.conversationId },
+      data: { agentObservability: input.level },
+    });
+
+    await eventService.create({
+      organizationId: conversation.organizationId,
+      scopeType: "ai_conversation",
+      scopeId: input.conversationId,
+      eventType: "ai_conversation_agent_observability_changed",
+      payload: {
+        conversationId: input.conversationId,
+        agentObservability: input.level,
+        updatedAt: updated.updatedAt.toISOString(),
+      },
+      actorType: input.actorType,
+      actorId: input.userId,
+    });
+
+    pubsub.publish(topics.conversationEvents(input.conversationId), {
+      conversationEvents: {
+        conversationId: input.conversationId,
+        type: "ai_conversation_agent_observability_changed",
+        payload: {
+          agentObservability: input.level,
+          updatedAt: updated.updatedAt.toISOString(),
+        },
         timestamp: new Date().toISOString(),
       },
     });

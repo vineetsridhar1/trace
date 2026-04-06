@@ -1,3 +1,6 @@
+// Components
+export { AgentObservabilitySettings } from "./components/AgentObservabilitySettings";
+
 // Store
 export { useAiConversationUIStore } from "./store/ai-conversation-ui";
 
@@ -36,6 +39,7 @@ export {
   useCreateAiConversation,
   useSendTurn,
   useUpdateAiConversationTitle,
+  useUpdateAgentObservability,
 } from "./hooks/useAiConversationMutations";
 
 // Utils

@@ -18,6 +18,7 @@ const AI_CONVERSATIONS_QUERY = gql`
       id
       title
       visibility
+      agentObservability
       branchCount
       createdBy {
         id
@@ -37,6 +38,7 @@ const AI_CONVERSATION_QUERY = gql`
       id
       title
       visibility
+      agentObservability
       branchCount
       createdBy {
         id
@@ -112,6 +114,7 @@ interface RawConversation {
   id: string;
   title: string | null;
   visibility: string;
+  agentObservability?: string;
   branchCount: number;
   createdBy: { id: string };
   rootBranch: { id: string };
@@ -152,6 +155,7 @@ function hydrateConversation(raw: RawConversation): void {
     id: raw.id,
     title: raw.title,
     visibility: raw.visibility,
+    agentObservability: raw.agentObservability ?? existing?.agentObservability ?? "OFF",
     branchCount: raw.branchCount,
     createdById: raw.createdBy.id,
     rootBranchId: raw.rootBranch.id,
