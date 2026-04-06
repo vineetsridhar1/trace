@@ -1,4 +1,4 @@
-import type { AgentObservability, AiConversationVisibility } from "@trace/gql";
+import type { AiConversationVisibility } from "@trace/gql";
 import type { JsonObject } from "@trace/shared";
 import {
   useEntityStore,
@@ -150,10 +150,8 @@ export function processAiConversationEvent({
           id: conversationId,
           title: (payload.title as string | undefined) ?? null,
           visibility: (payload.visibility as AiConversationVisibility) ?? "PRIVATE",
-          agentObservability:
-            (payload.agentObservability as AgentObservability) ??
-            existing?.agentObservability ??
-            "OFF",
+          modelId: (payload.modelId as string | undefined) ?? null,
+          systemPrompt: (payload.systemPrompt as string | undefined) ?? null,
           createdById: payload.createdById as string,
           rootBranchId,
           branchIds,
@@ -176,23 +174,30 @@ export function processAiConversationEvent({
       break;
     }
 
+    case "ai_conversation_updated": {
+      const conversationId = resolveConversationId(payload, fallbackConversationId);
+      if (conversationId) {
+        const updates: Partial<AiConversationEntity> = {
+          updatedAt: (payload.updatedAt as string) ?? timestamp,
+        };
+        if (payload.title !== undefined) updates.title = payload.title as string | null;
+        if (payload.modelId !== undefined) updates.modelId = payload.modelId as string | null;
+        if (payload.systemPrompt !== undefined)
+          updates.systemPrompt = payload.systemPrompt as string | null;
+        if (payload.visibility !== undefined)
+          updates.visibility = payload.visibility as AiConversationVisibility;
+
+        patch("aiConversations", conversationId, updates);
+      }
+      break;
+    }
+
     case "ai_conversation_visibility_changed": {
       const conversationId = resolveConversationId(payload, fallbackConversationId);
       if (conversationId) {
         patch("aiConversations", conversationId, {
           visibility: payload.visibility as AiConversationVisibility,
           updatedAt: timestamp,
-        } as Partial<AiConversationEntity>);
-      }
-      break;
-    }
-
-    case "ai_conversation_agent_observability_changed": {
-      const conversationId = resolveConversationId(payload, fallbackConversationId);
-      if (conversationId) {
-        patch("aiConversations", conversationId, {
-          agentObservability: payload.agentObservability as AgentObservability,
-          updatedAt: (payload.updatedAt as string) ?? timestamp,
         } as Partial<AiConversationEntity>);
       }
       break;

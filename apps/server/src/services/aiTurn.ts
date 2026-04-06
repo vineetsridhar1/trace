@@ -38,8 +38,6 @@ export class AiTurnService {
     actorType: ActorType,
     actorId: string,
   ): Promise<{ userTurn: AiTurn; assistantTurn: AiTurn }> {
-    const model = input.model ?? DEFAULT_MODEL;
-
     // Load the branch and verify access to the conversation
     const branch = await prisma.aiBranch.findUniqueOrThrow({
       where: { id: input.branchId },
@@ -47,6 +45,10 @@ export class AiTurnService {
         conversation: true,
       },
     });
+
+    // Use explicit model > conversation model > default
+    const model = input.model ?? branch.conversation.modelId ?? DEFAULT_MODEL;
+    const systemPrompt = branch.conversation.systemPrompt ?? undefined;
 
     // Verify user belongs to org
     await prisma.orgMember.findUniqueOrThrow({
@@ -125,6 +127,7 @@ export class AiTurnService {
         userId: actorId,
         model,
         messages,
+        system: systemPrompt,
       });
 
       // Extract text content from response
@@ -244,13 +247,15 @@ export class AiTurnService {
     LLMStreamEvent | { type: "user_turn_created"; turn: AiTurn },
     AiTurn | undefined
   > {
-    const model = input.model ?? DEFAULT_MODEL;
-
     // Load the branch and verify access
     const branch = await prisma.aiBranch.findUniqueOrThrow({
       where: { id: input.branchId },
       include: { conversation: true },
     });
+
+    // Use explicit model > conversation model > default
+    const model = input.model ?? branch.conversation.modelId ?? DEFAULT_MODEL;
+    const systemPrompt = branch.conversation.systemPrompt ?? undefined;
 
     await prisma.orgMember.findUniqueOrThrow({
       where: {
@@ -327,6 +332,7 @@ export class AiTurnService {
         userId: actorId,
         model,
         messages,
+        system: systemPrompt,
       })) {
         if (event.type === "text_delta") {
           fullText += event.text;

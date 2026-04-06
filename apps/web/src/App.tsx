@@ -19,6 +19,8 @@ import { Button } from "./components/ui/button";
 import { useOrgEvents } from "./hooks/useOrgEvents";
 import { useHistorySync } from "./hooks/useHistorySync";
 import { useVisibilityRefresh } from "./hooks/useVisibilityRefresh";
+import { useNewConversationShortcut } from "./features/ai-conversations";
+import { AiConversationView } from "./features/ai-conversations/components/AiConversationView";
 import { useIsMobile } from "./hooks/use-mobile";
 import { Toaster } from "./components/ui/sonner";
 import { InstallBanner } from "./components/InstallBanner";
@@ -58,6 +60,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   useOrgEvents();
   useHistorySync();
   useVisibilityRefresh();
+  useNewConversationShortcut();
   const activePage = useUIStore((s: UIState) => s.activePage);
   const activeChatId = useUIStore((s: UIState) => s.activeChatId);
   const activeAiConversationId = useUIStore((s: UIState) => s.activeAiConversationId);
@@ -133,7 +136,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
                 ) : activePage === "tickets" ? (
                   <TicketsView />
                 ) : activeAiConversationId ? (
-                  <ConversationView conversationId={activeAiConversationId} />
+                  <AiConversationView conversationId={activeAiConversationId} />
                 ) : activePage === "ai-conversations" ? (
                   <ConversationListContainer />
                 ) : activeChatId ? (

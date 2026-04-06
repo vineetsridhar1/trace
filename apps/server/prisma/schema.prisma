@@ -863,6 +863,8 @@ model AiConversation {
   visibility          AiConversationVisibility @default(PRIVATE)
   agentObservability  AgentObservability       @default(OFF)
   rootBranchId        String?
+  modelId             String?
+  systemPrompt        String?
 
   branches AiBranch[]
 

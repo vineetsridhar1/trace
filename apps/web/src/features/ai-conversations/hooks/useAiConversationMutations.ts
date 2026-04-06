@@ -32,6 +32,14 @@ const UPDATE_AI_CONVERSATION_TITLE_MUTATION = gql`
   }
 `;
 
+const UPDATE_AI_CONVERSATION_MUTATION = gql`
+  mutation UpdateAiConversation($conversationId: ID!, $input: UpdateAiConversationInput!) {
+    updateAiConversation(conversationId: $conversationId, input: $input) {
+      id
+    }
+  }
+`;
+
 const UPDATE_AGENT_OBSERVABILITY_MUTATION = gql`
   mutation UpdateAgentObservability($conversationId: ID!, $level: AgentObservability!) {
     updateAgentObservability(conversationId: $conversationId, level: $level) {
@@ -79,7 +87,12 @@ export function useCreateAiConversation() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
 
   return useCallback(
-    async (input: { title?: string; visibility?: AiConversationVisibility }) => {
+    async (input: {
+      title?: string;
+      visibility?: AiConversationVisibility;
+      modelId?: string;
+      systemPrompt?: string;
+    }) => {
       if (!activeOrgId) return null;
 
       const result = await client
@@ -182,6 +195,30 @@ export function useUpdateAiConversationTitle() {
   }, []);
 }
 
+/** Fire-and-forget: updates conversation fields; event stream handles store update */
+export function useUpdateAiConversation() {
+  return useCallback(
+    async (params: {
+      conversationId: string;
+      input: {
+        title?: string;
+        modelId?: string | null;
+        systemPrompt?: string | null;
+        visibility?: AiConversationVisibility;
+      };
+    }) => {
+      const result = await client
+        .mutation(UPDATE_AI_CONVERSATION_MUTATION, params)
+        .toPromise();
+
+      if (result.error) {
+        console.error("Failed to update conversation:", result.error.message);
+      }
+    },
+    [],
+  );
+}
+
 /** Fire-and-forget: updates agent observability level; event stream handles store update */
 export function useUpdateAgentObservability() {
   return useCallback(
@@ -232,7 +269,6 @@ export function useForkBranch() {
 
       if (!data) return null;
 
-      // Optimistically upsert the new branch into the store
       const { upsert, patch } = useEntityStore.getState();
       upsert("aiBranches", data.id, {
         id: data.id,
@@ -248,7 +284,6 @@ export function useForkBranch() {
         createdAt: data.createdAt,
       } as AiBranchEntity);
 
-      // Add to parent branch's childBranchIds
       if (data.parentBranch?.id) {
         const parentBranch = useEntityStore.getState().aiBranches[data.parentBranch.id];
         if (parentBranch && !parentBranch.childBranchIds.includes(data.id)) {
@@ -258,7 +293,6 @@ export function useForkBranch() {
         }
       }
 
-      // Increment branchCount on fork turn
       if (data.forkTurn?.id) {
         const forkTurn = useEntityStore.getState().aiTurns[data.forkTurn.id];
         if (forkTurn) {
@@ -268,7 +302,6 @@ export function useForkBranch() {
         }
       }
 
-      // Switch to the new branch
       useAiConversationUIStore
         .getState()
         .setActiveBranch(data.conversation.id, data.id);

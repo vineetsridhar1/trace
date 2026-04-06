@@ -1,5 +1,10 @@
 import type { Context } from "../context.js";
-import type { AgentObservability, AiConversationVisibility, CreateAiConversationInput } from "@trace/gql";
+import type {
+  AgentObservability,
+  AiConversationVisibility,
+  CreateAiConversationInput,
+  UpdateAiConversationInput,
+} from "@trace/gql";
 import { aiConversationService } from "../services/aiConversation.js";
 import { aiTurnService } from "../services/aiTurn.js";
 import { pubsub, topics } from "../lib/pubsub.js";
@@ -42,6 +47,8 @@ export const aiConversationMutations = {
         organizationId: args.organizationId,
         title: args.input.title ?? undefined,
         visibility: args.input.visibility ?? undefined,
+        modelId: args.input.modelId ?? undefined,
+        systemPrompt: args.input.systemPrompt ?? undefined,
       },
       ctx.actorType,
       ctx.userId,
@@ -85,6 +92,24 @@ export const aiConversationMutations = {
   ) => {
     return aiConversationService.forkBranch(
       { turnId: args.turnId, label: args.label ?? undefined },
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
+
+  updateAiConversation: (
+    _: unknown,
+    args: { conversationId: string; input: UpdateAiConversationInput },
+    ctx: Context,
+  ) => {
+    return aiConversationService.updateConversation(
+      {
+        conversationId: args.conversationId,
+        title: args.input.title ?? undefined,
+        modelId: args.input.modelId,
+        systemPrompt: args.input.systemPrompt,
+        visibility: args.input.visibility ?? undefined,
+      },
       ctx.actorType,
       ctx.userId,
     );

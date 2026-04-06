@@ -701,6 +701,8 @@ type AiConversation {
   title: String
   visibility: AiConversationVisibility!
   agentObservability: AgentObservability!
+  modelId: String
+  systemPrompt: String
   createdBy: User!
   rootBranch: Branch!
   branches: [Branch!]!
@@ -887,6 +889,15 @@ input UpdateAgentSettingsInput {
 input CreateAiConversationInput {
   title: String
   visibility: AiConversationVisibility
+  modelId: String
+  systemPrompt: String
+}
+
+input UpdateAiConversationInput {
+  title: String
+  modelId: String
+  systemPrompt: String
+  visibility: AiConversationVisibility
 }
 
 # --- Queries ---
@@ -1052,6 +1063,7 @@ type Mutation {
   forkBranch(turnId: ID!, label: String): Branch!
   updateAgentObservability(conversationId: ID!, level: AgentObservability!): AiConversation!
   labelBranch(branchId: ID!, label: String!): Branch!
+  updateAiConversation(conversationId: ID!, input: UpdateAiConversationInput!): AiConversation!
 }
 
 # --- Subscriptions ---
