@@ -73,9 +73,8 @@ export type AiConversation = {
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
   id: Scalars['ID']['output'];
-  modelId?: Maybe<Scalars['String']['output']>;
+  linkedEntities: Array<AiConversationLinkedEntity>;
   rootBranch: Branch;
-  systemPrompt?: Maybe<Scalars['String']['output']>;
   title?: Maybe<Scalars['String']['output']>;
   updatedAt: Scalars['DateTime']['output'];
   visibility: AiConversationVisibility;
@@ -87,6 +86,16 @@ export type AiConversationEvent = {
   payload: Scalars['JSON']['output'];
   timestamp: Scalars['DateTime']['output'];
   type: Scalars['String']['output'];
+};
+
+export type AiConversationLinkedEntity = {
+  __typename?: 'AiConversationLinkedEntity';
+  conversationId: Scalars['ID']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  createdById: Scalars['ID']['output'];
+  entityId: Scalars['ID']['output'];
+  entityType: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
 };
 
 export type AiConversationVisibility =
@@ -114,7 +123,6 @@ export type AutonomyMode =
 export type Branch = {
   __typename?: 'Branch';
   childBranches: Array<Branch>;
-  contextHealth: ContextHealth;
   conversation: AiConversation;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
@@ -122,7 +130,6 @@ export type Branch = {
   forkTurn?: Maybe<Turn>;
   id: Scalars['ID']['output'];
   label?: Maybe<Scalars['String']['output']>;
-  latestSummary?: Maybe<BranchSummary>;
   parentBranch?: Maybe<Branch>;
   turnCount: Scalars['Int']['output'];
   turns: Array<Turn>;
@@ -134,16 +141,6 @@ export type BranchDiffFile = {
   deletions: Scalars['Int']['output'];
   path: Scalars['String']['output'];
   status: Scalars['String']['output'];
-};
-
-export type BranchSummary = {
-  __typename?: 'BranchSummary';
-  branchId: Scalars['ID']['output'];
-  content: Scalars['String']['output'];
-  createdAt: Scalars['DateTime']['output'];
-  id: Scalars['ID']['output'];
-  summarizedTurnCount: Scalars['Int']['output'];
-  summarizedUpToTurnId: Scalars['ID']['output'];
 };
 
 export type Channel = {
@@ -218,21 +215,13 @@ export type CodingTool =
   | 'codex'
   | 'custom';
 
-export type ContextHealth = {
-  __typename?: 'ContextHealth';
-  budgetTotal: Scalars['Int']['output'];
-  percentage: Scalars['Float']['output'];
-  tokenUsage: Scalars['Int']['output'];
-};
-
 export type CostBudget = {
   __typename?: 'CostBudget';
   dailyLimitCents: Scalars['Int']['output'];
 };
 
 export type CreateAiConversationInput = {
-  modelId?: InputMaybe<Scalars['String']['input']>;
-  systemPrompt?: InputMaybe<Scalars['String']['input']>;
+  agentObservability?: InputMaybe<AgentObservability>;
   title?: InputMaybe<Scalars['String']['input']>;
   visibility?: InputMaybe<AiConversationVisibility>;
 };
@@ -313,6 +302,9 @@ export type EventType =
   | 'ai_branch_created'
   | 'ai_branch_labeled'
   | 'ai_conversation_created'
+  | 'ai_conversation_entity_linked'
+  | 'ai_conversation_entity_unlinked'
+  | 'ai_conversation_observability_changed'
   | 'ai_conversation_title_updated'
   | 'ai_conversation_visibility_changed'
   | 'ai_turn_created'
@@ -469,6 +461,7 @@ export type Mutation = {
   labelBranch: Branch;
   leaveChannel: Channel;
   leaveChat: Chat;
+  linkConversationEntity: AiConversationLinkedEntity;
   linkEntityToProject: Project;
   linkTicket: Ticket;
   moveChannel: Channel;
@@ -490,18 +483,16 @@ export type Mutation = {
   setApiToken: ApiTokenStatus;
   startSession: Session;
   subscribe: Participant;
-  summarizeBranch: BranchSummary;
   terminateSession: Session;
   unassignTicket: Ticket;
+  unlinkConversationEntity: Scalars['Boolean']['output'];
   unlinkTicket: Ticket;
   unmuteScope: Participant;
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
-  updateAgentObservability: AiConversation;
   updateAgentSettings: AgentIdentity;
-  updateAiConversation: AiConversation;
+  updateAiConversationObservability: AiConversation;
   updateAiConversationTitle: AiConversation;
-  updateAiConversationVisibility: AiConversation;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateRepo: Repo;
@@ -646,6 +637,7 @@ export type MutationEditChatMessageArgs = {
 
 
 export type MutationForkBranchArgs = {
+  branchId: Scalars['ID']['input'];
   label?: InputMaybe<Scalars['String']['input']>;
   turnId: Scalars['ID']['input'];
 };
@@ -669,6 +661,13 @@ export type MutationLeaveChannelArgs = {
 
 export type MutationLeaveChatArgs = {
   chatId: Scalars['ID']['input'];
+};
+
+
+export type MutationLinkConversationEntityArgs = {
+  conversationId: Scalars['ID']['input'];
+  entityId: Scalars['ID']['input'];
+  entityType: Scalars['String']['input'];
 };
 
 
@@ -800,11 +799,6 @@ export type MutationSubscribeArgs = {
 };
 
 
-export type MutationSummarizeBranchArgs = {
-  branchId: Scalars['ID']['input'];
-};
-
-
 export type MutationTerminateSessionArgs = {
   id: Scalars['ID']['input'];
 };
@@ -813,6 +807,13 @@ export type MutationTerminateSessionArgs = {
 export type MutationUnassignTicketArgs = {
   ticketId: Scalars['ID']['input'];
   userId: Scalars['ID']['input'];
+};
+
+
+export type MutationUnlinkConversationEntityArgs = {
+  conversationId: Scalars['ID']['input'];
+  entityId: Scalars['ID']['input'];
+  entityType: Scalars['String']['input'];
 };
 
 
@@ -840,33 +841,21 @@ export type MutationUnsubscribeArgs = {
 };
 
 
-export type MutationUpdateAgentObservabilityArgs = {
-  conversationId: Scalars['ID']['input'];
-  level: AgentObservability;
-};
-
-
 export type MutationUpdateAgentSettingsArgs = {
   input: UpdateAgentSettingsInput;
   organizationId: Scalars['ID']['input'];
 };
 
 
-export type MutationUpdateAiConversationArgs = {
+export type MutationUpdateAiConversationObservabilityArgs = {
+  agentObservability: AgentObservability;
   conversationId: Scalars['ID']['input'];
-  input: UpdateAiConversationInput;
 };
 
 
 export type MutationUpdateAiConversationTitleArgs = {
   conversationId: Scalars['ID']['input'];
   title: Scalars['String']['input'];
-};
-
-
-export type MutationUpdateAiConversationVisibilityArgs = {
-  conversationId: Scalars['ID']['input'];
-  visibility: AiConversationVisibility;
 };
 
 
@@ -973,7 +962,6 @@ export type Query = {
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   branch?: Maybe<Branch>;
-  branchSummary?: Maybe<BranchSummary>;
   channel?: Maybe<Channel>;
   channelGroups: Array<ChannelGroup>;
   channelMessages: Array<Message>;
@@ -981,7 +969,6 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
-  contextHealth: ContextHealth;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
   myApiTokens: Array<ApiTokenStatus>;
@@ -1041,11 +1028,6 @@ export type QueryBranchArgs = {
 };
 
 
-export type QueryBranchSummaryArgs = {
-  branchId: Scalars['ID']['input'];
-};
-
-
 export type QueryChannelArgs = {
   id: Scalars['ID']['input'];
 };
@@ -1081,11 +1063,6 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars['DateTime']['input']>;
   chatId: Scalars['ID']['input'];
   limit?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type QueryContextHealthArgs = {
-  branchId: Scalars['ID']['input'];
 };
 
 
@@ -1514,7 +1491,6 @@ export type Turn = {
   id: Scalars['ID']['output'];
   parentTurn?: Maybe<Turn>;
   role: TurnRole;
-  summarized: Scalars['Boolean']['output'];
 };
 
 export type TurnRole =
@@ -1527,13 +1503,6 @@ export type UpdateAgentSettingsInput = {
   name?: InputMaybe<Scalars['String']['input']>;
   soulFile?: InputMaybe<Scalars['String']['input']>;
   status?: InputMaybe<OrgAgentStatus>;
-};
-
-export type UpdateAiConversationInput = {
-  modelId?: InputMaybe<Scalars['String']['input']>;
-  systemPrompt?: InputMaybe<Scalars['String']['input']>;
-  title?: InputMaybe<Scalars['String']['input']>;
-  visibility?: InputMaybe<AiConversationVisibility>;
 };
 
 export type UpdateChannelGroupInput = {

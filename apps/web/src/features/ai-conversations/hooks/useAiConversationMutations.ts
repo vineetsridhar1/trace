@@ -4,7 +4,6 @@ import type { AgentObservability, AiConversationVisibility } from "@trace/gql";
 import { client } from "../../../lib/urql";
 import { useEntityStore, type AiBranchEntity, type AiTurnEntity } from "../../../stores/entity";
 import { useAuthStore } from "../../../stores/auth";
-import { useAiConversationUIStore } from "../store/ai-conversation-ui";
 
 // ── Mutation documents ─────────────────────────────────────────
 
@@ -32,30 +31,9 @@ const UPDATE_AI_CONVERSATION_TITLE_MUTATION = gql`
   }
 `;
 
-const SUMMARIZE_BRANCH_MUTATION = gql`
-  mutation SummarizeBranch($branchId: ID!) {
-    summarizeBranch(branchId: $branchId) {
-      id
-      branchId
-      content
-      summarizedTurnCount
-      summarizedUpToTurnId
-      createdAt
-    }
-  }
-`;
-
-const UPDATE_AI_CONVERSATION_MUTATION = gql`
-  mutation UpdateAiConversation($conversationId: ID!, $input: UpdateAiConversationInput!) {
-    updateAiConversation(conversationId: $conversationId, input: $input) {
-      id
-    }
-  }
-`;
-
-const UPDATE_AGENT_OBSERVABILITY_MUTATION = gql`
-  mutation UpdateAgentObservability($conversationId: ID!, $level: AgentObservability!) {
-    updateAgentObservability(conversationId: $conversationId, level: $level) {
+const UPDATE_AI_CONVERSATION_OBSERVABILITY_MUTATION = gql`
+  mutation UpdateAiConversationObservability($conversationId: ID!, $agentObservability: AgentObservability!) {
+    updateAiConversationObservability(conversationId: $conversationId, agentObservability: $agentObservability) {
       id
     }
   }
@@ -65,31 +43,29 @@ const LABEL_BRANCH_MUTATION = gql`
   mutation LabelBranch($branchId: ID!, $label: String!) {
     labelBranch(branchId: $branchId, label: $label) {
       id
-      label
     }
   }
 `;
 
 const FORK_BRANCH_MUTATION = gql`
-  mutation ForkBranch($turnId: ID!, $label: String) {
-    forkBranch(turnId: $turnId, label: $label) {
+  mutation ForkBranch($branchId: ID!, $turnId: ID!, $label: String) {
+    forkBranch(branchId: $branchId, turnId: $turnId, label: $label) {
       id
-      conversation { id }
-      parentBranch { id }
-      forkTurn { id }
-      label
-      depth
-      createdBy { id }
-      createdAt
     }
   }
 `;
 
-const UPDATE_AI_CONVERSATION_VISIBILITY_MUTATION = gql`
-  mutation UpdateAiConversationVisibility($conversationId: ID!, $visibility: AiConversationVisibility!) {
-    updateAiConversationVisibility(conversationId: $conversationId, visibility: $visibility) {
+const LINK_CONVERSATION_ENTITY_MUTATION = gql`
+  mutation LinkConversationEntity($conversationId: ID!, $entityType: String!, $entityId: ID!) {
+    linkConversationEntity(conversationId: $conversationId, entityType: $entityType, entityId: $entityId) {
       id
     }
+  }
+`;
+
+const UNLINK_CONVERSATION_ENTITY_MUTATION = gql`
+  mutation UnlinkConversationEntity($conversationId: ID!, $entityType: String!, $entityId: ID!) {
+    unlinkConversationEntity(conversationId: $conversationId, entityType: $entityType, entityId: $entityId)
   }
 `;
 
@@ -100,7 +76,11 @@ export function useCreateAiConversation() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
 
   return useCallback(
-    async (input: { title?: string; visibility?: AiConversationVisibility }) => {
+    async (input: {
+      title?: string;
+      visibility?: AiConversationVisibility;
+      agentObservability?: AgentObservability;
+    }) => {
       if (!activeOrgId) return null;
 
       const result = await client
@@ -203,107 +183,23 @@ export function useUpdateAiConversationTitle() {
   }, []);
 }
 
-/** Fire-and-forget: triggers branch summarization; event stream handles store update */
-export function useSummarizeBranch() {
-  return useCallback(async (params: { branchId: string }) => {
-    const result = await client.mutation(SUMMARIZE_BRANCH_MUTATION, params).toPromise();
-
-    if (result.error) {
-      console.error("Failed to summarize branch:", result.error.message);
-      return null;
-    }
-
-    return result.data?.summarizeBranch?.id as string | undefined;
-  }, []);
-}
-
-/** Fire-and-forget: updates conversation fields; event stream handles store update */
-export function useUpdateAiConversation() {
+/** Fire-and-forget: updates conversation observability level */
+export function useUpdateAiConversationObservability() {
   return useCallback(
-    async (params: {
-      conversationId: string;
-      input: {
-        title?: string;
-        modelId?: string | null;
-        systemPrompt?: string | null;
-        visibility?: AiConversationVisibility;
-      };
-    }) => {
+    async (params: { conversationId: string; agentObservability: AgentObservability }) => {
       const result = await client
-        .mutation(UPDATE_AI_CONVERSATION_MUTATION, params)
+        .mutation(UPDATE_AI_CONVERSATION_OBSERVABILITY_MUTATION, params)
         .toPromise();
 
       if (result.error) {
-        console.error("Failed to update conversation:", result.error.message);
+        console.error("Failed to update conversation observability:", result.error.message);
       }
     },
     [],
   );
 }
 
-/** Fire-and-forget: updates agent observability level; event stream handles store update */
-export function useUpdateAgentObservability() {
-  return useCallback(
-    async (params: { conversationId: string; level: AgentObservability }) => {
-      const result = await client
-        .mutation(UPDATE_AGENT_OBSERVABILITY_MUTATION, params)
-        .toPromise();
-
-      if (result.error) {
-        console.error("Failed to update agent observability:", result.error.message);
-      }
-    },
-    [],
-  );
-}
-
-export function useForkBranch() {
-  return useCallback(
-    async (params: { turnId: string; label?: string }): Promise<string | null> => {
-      const result = await client
-        .mutation(FORK_BRANCH_MUTATION, { turnId: params.turnId, label: params.label ?? null })
-        .toPromise();
-
-      if (result.error) {
-        console.error("Failed to fork branch:", result.error.message);
-        return null;
-      }
-
-      const data = result.data?.forkBranch as
-        | { id: string; conversation: { id: string }; parentBranch: { id: string } | null; forkTurn: { id: string } | null; label: string | null; depth: number; createdBy: { id: string }; createdAt: string }
-        | undefined;
-
-      if (!data) return null;
-
-      const { upsert, patch } = useEntityStore.getState();
-      upsert("aiBranches", data.id, {
-        id: data.id, conversationId: data.conversation.id, parentBranchId: data.parentBranch?.id ?? null,
-        forkTurnId: data.forkTurn?.id ?? null, label: data.label, depth: data.depth,
-        turnIds: [], childBranchIds: [], turnCount: 0, createdById: data.createdBy.id, createdAt: data.createdAt,
-      } as AiBranchEntity);
-
-      if (data.parentBranch?.id) {
-        const parentBranch = useEntityStore.getState().aiBranches[data.parentBranch.id];
-        if (parentBranch && !parentBranch.childBranchIds.includes(data.id)) {
-          patch("aiBranches", data.parentBranch.id, { childBranchIds: [...parentBranch.childBranchIds, data.id] } as Partial<AiBranchEntity>);
-        }
-      }
-
-      if (data.forkTurn?.id) {
-        const forkTurn = useEntityStore.getState().aiTurns[data.forkTurn.id];
-        if (forkTurn) {
-          patch("aiTurns", data.forkTurn.id, { branchCount: forkTurn.branchCount + 1 } as Partial<AiTurnEntity>);
-        }
-      }
-
-      useAiConversationUIStore.getState().setActiveBranch(data.conversation.id, data.id);
-      return data.id;
-    },
-    [],
-  );
-}
-
-/** Fire-and-forget: labels a branch; event stream handles store update */
+/** Fire-and-forget: labels a branch */
 export function useLabelBranch() {
   return useCallback(async (params: { branchId: string; label: string }) => {
     const result = await client.mutation(LABEL_BRANCH_MUTATION, params).toPromise();
@@ -314,16 +210,45 @@ export function useLabelBranch() {
   }, []);
 }
 
-/** Fire-and-forget: updates conversation visibility; event stream handles store update */
-export function useUpdateAiConversationVisibility() {
+/** Fire-and-forget: forks a branch at a given turn */
+export function useForkBranch() {
   return useCallback(
-    async (params: { conversationId: string; visibility: AiConversationVisibility }) => {
-      const result = await client
-        .mutation(UPDATE_AI_CONVERSATION_VISIBILITY_MUTATION, params)
-        .toPromise();
+    async (params: { branchId: string; turnId: string; label?: string }) => {
+      const result = await client.mutation(FORK_BRANCH_MUTATION, params).toPromise();
 
       if (result.error) {
-        console.error("Failed to update conversation visibility:", result.error.message);
+        console.error("Failed to fork branch:", result.error.message);
+        return null;
+      }
+
+      return result.data?.forkBranch?.id as string | undefined;
+    },
+    [],
+  );
+}
+
+/** Fire-and-forget: links an entity to a conversation */
+export function useLinkConversationEntity() {
+  return useCallback(
+    async (params: { conversationId: string; entityType: string; entityId: string }) => {
+      const result = await client.mutation(LINK_CONVERSATION_ENTITY_MUTATION, params).toPromise();
+
+      if (result.error) {
+        console.error("Failed to link conversation entity:", result.error.message);
+      }
+    },
+    [],
+  );
+}
+
+/** Fire-and-forget: unlinks an entity from a conversation */
+export function useUnlinkConversationEntity() {
+  return useCallback(
+    async (params: { conversationId: string; entityType: string; entityId: string }) => {
+      const result = await client.mutation(UNLINK_CONVERSATION_ENTITY_MUTATION, params).toPromise();
+
+      if (result.error) {
+        console.error("Failed to unlink conversation entity:", result.error.message);
       }
     },
     [],

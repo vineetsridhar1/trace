@@ -1,10 +1,9 @@
-import type { AiConversationVisibility } from "@trace/gql";
+import type { AgentObservability, AiConversationVisibility } from "@trace/gql";
 import type { JsonObject } from "@trace/shared";
 import {
   useEntityStore,
   type AiConversationEntity,
   type AiBranchEntity,
-  type AiBranchSummaryEntity,
   type AiTurnEntity,
 } from "../../../stores/entity";
 
@@ -151,12 +150,12 @@ export function processAiConversationEvent({
           id: conversationId,
           title: (payload.title as string | undefined) ?? null,
           visibility: (payload.visibility as AiConversationVisibility) ?? "PRIVATE",
-          modelId: (payload.modelId as string | undefined) ?? null,
-          systemPrompt: (payload.systemPrompt as string | undefined) ?? null,
+          agentObservability: (payload.agentObservability as AgentObservability) ?? existing?.agentObservability ?? "OFF",
           createdById: payload.createdById as string,
           rootBranchId,
           branchIds,
           branchCount: existing?.branchCount ?? branchIds.length,
+          linkedEntities: existing?.linkedEntities ?? [],
           createdAt: timestamp,
           updatedAt: (payload.updatedAt as string) ?? timestamp,
         } as AiConversationEntity);
@@ -171,24 +170,6 @@ export function processAiConversationEvent({
           title: payload.title as string,
           updatedAt: (payload.updatedAt as string) ?? timestamp,
         } as Partial<AiConversationEntity>);
-      }
-      break;
-    }
-
-    case "ai_conversation_updated": {
-      const conversationId = resolveConversationId(payload, fallbackConversationId);
-      if (conversationId) {
-        const updates: Partial<AiConversationEntity> = {
-          updatedAt: (payload.updatedAt as string) ?? timestamp,
-        };
-        if (payload.title !== undefined) updates.title = payload.title as string | null;
-        if (payload.modelId !== undefined) updates.modelId = payload.modelId as string | null;
-        if (payload.systemPrompt !== undefined)
-          updates.systemPrompt = payload.systemPrompt as string | null;
-        if (payload.visibility !== undefined)
-          updates.visibility = payload.visibility as AiConversationVisibility;
-
-        patch("aiConversations", conversationId, updates);
       }
       break;
     }
@@ -270,38 +251,59 @@ export function processAiConversationEvent({
       break;
     }
 
-    case "ai_branch_summary_updated": {
-      const summaryId = payload.summaryId as string | undefined;
-      const branchId = payload.branchId as string | undefined;
-      if (summaryId && branchId) {
-        upsert("aiBranchSummaries", summaryId, {
-          id: summaryId,
-          branchId,
-          content: payload.content as string,
-          summarizedTurnCount: payload.summarizedTurnCount as number,
-          summarizedUpToTurnId: payload.summarizedUpToTurnId as string,
-          createdAt: (payload.createdAt as string) ?? timestamp,
-        } as AiBranchSummaryEntity);
+    case "ai_conversation_observability_changed": {
+      const conversationId = resolveConversationId(payload, fallbackConversationId);
+      if (conversationId) {
+        patch("aiConversations", conversationId, {
+          agentObservability: payload.agentObservability as AgentObservability,
+          updatedAt: (payload.updatedAt as string) ?? timestamp,
+        } as Partial<AiConversationEntity>);
+      }
+      break;
+    }
 
-        // Mark summarized turns in the store
-        const branch = useEntityStore.getState().aiBranches[branchId];
-        if (branch) {
-          const upToTurnId = payload.summarizedUpToTurnId as string;
-          let found = false;
-          for (const turnId of branch.turnIds) {
-            const turn = useEntityStore.getState().aiTurns[turnId];
-            if (turn && !turn.summarized) {
-              patch("aiTurns", turnId, { summarized: true } as Partial<AiTurnEntity>);
-            }
-            if (turnId === upToTurnId) {
-              found = true;
-              break;
-            }
+    case "ai_conversation_entity_linked": {
+      const conversationId = resolveConversationId(payload, fallbackConversationId);
+      if (conversationId) {
+        const existing = useEntityStore.getState().aiConversations[conversationId];
+        if (existing) {
+          const linkedEntity = {
+            id: payload.linkedEntityId as string,
+            conversationId,
+            entityType: payload.entityType as string,
+            entityId: payload.entityId as string,
+            createdById: payload.createdById as string,
+            createdAt: timestamp,
+          };
+          const currentLinks = existing.linkedEntities ?? [];
+          const alreadyLinked = currentLinks.some(
+            (l) => l.entityType === linkedEntity.entityType && l.entityId === linkedEntity.entityId,
+          );
+          if (!alreadyLinked) {
+            patch("aiConversations", conversationId, {
+              linkedEntities: [...currentLinks, linkedEntity],
+            } as Partial<AiConversationEntity>);
           }
-          // If we didn't find the upToTurnId, mark all turns from inherited context
-          if (!found) {
-            // The turn may be in ancestor branches — just update what we can
-          }
+        }
+      }
+      break;
+    }
+
+    case "ai_conversation_entity_unlinked": {
+      const conversationId = resolveConversationId(payload, fallbackConversationId);
+      if (conversationId) {
+        const existing = useEntityStore.getState().aiConversations[conversationId];
+        if (existing) {
+          const currentLinks = existing.linkedEntities ?? [];
+          patch("aiConversations", conversationId, {
+            linkedEntities: currentLinks.filter(
+              (l) =>
+                !(
+                  l.entityType === (payload.entityType as string) &&
+                  l.entityId === (payload.entityId as string)
+                ),
+            ),
+          } as Partial<AiConversationEntity>);
         }
       }
       break;

@@ -3,12 +3,11 @@ import type {
   AgentObservability,
   AiConversationVisibility,
   CreateAiConversationInput,
-  UpdateAiConversationInput,
 } from "@trace/gql";
 import { aiConversationService } from "../services/aiConversation.js";
 import { aiTurnService } from "../services/aiTurn.js";
-import { aiBranchSummaryService } from "../services/aiBranchSummary.js";
 import { pubsub, topics } from "../lib/pubsub.js";
+import { prisma } from "../lib/db.js";
 
 export const aiConversationQueries = {
   aiConversations: (
@@ -30,21 +29,6 @@ export const aiConversationQueries = {
   branch: (_: unknown, args: { id: string }, ctx: Context) => {
     return aiConversationService.getBranch(args.id, ctx.userId);
   },
-
-  branchAncestors: async (_: unknown, args: { branchId: string }, ctx: Context) => {
-    await aiConversationService.assertBranchAccess(args.branchId, ctx.userId);
-    return aiConversationService.getBranchAncestors(args.branchId);
-  },
-
-  branchSummary: async (_: unknown, args: { branchId: string }, ctx: Context) => {
-    await aiConversationService.assertBranchAccess(args.branchId, ctx.userId);
-    return aiBranchSummaryService.getLatestSummary(args.branchId);
-  },
-
-  contextHealth: async (_: unknown, args: { branchId: string }, ctx: Context) => {
-    await aiConversationService.assertBranchAccess(args.branchId, ctx.userId);
-    return aiBranchSummaryService.getContextHealth({ branchId: args.branchId });
-  },
 };
 
 export const aiConversationMutations = {
@@ -58,8 +42,11 @@ export const aiConversationMutations = {
         organizationId: args.organizationId,
         title: args.input.title ?? undefined,
         visibility: args.input.visibility ?? undefined,
-        modelId: args.input.modelId ?? undefined,
-        systemPrompt: args.input.systemPrompt ?? undefined,
+        agentObservability: (args.input as Record<string, unknown>).agentObservability as
+          | "OFF"
+          | "SUGGEST"
+          | "PARTICIPATE"
+          | undefined,
       },
       ctx.actorType,
       ctx.userId,
@@ -96,31 +83,13 @@ export const aiConversationMutations = {
     );
   },
 
-  forkBranch: (
+  updateAiConversationObservability: (
     _: unknown,
-    args: { turnId: string; label?: string | null },
+    args: { conversationId: string; agentObservability: AgentObservability },
     ctx: Context,
   ) => {
-    return aiConversationService.forkBranch(
-      { turnId: args.turnId, label: args.label ?? undefined },
-      ctx.actorType,
-      ctx.userId,
-    );
-  },
-
-  updateAiConversation: (
-    _: unknown,
-    args: { conversationId: string; input: UpdateAiConversationInput },
-    ctx: Context,
-  ) => {
-    return aiConversationService.updateConversation(
-      {
-        conversationId: args.conversationId,
-        title: args.input.title ?? undefined,
-        modelId: args.input.modelId,
-        systemPrompt: args.input.systemPrompt,
-        visibility: args.input.visibility ?? undefined,
-      },
+    return aiConversationService.updateObservability(
+      { conversationId: args.conversationId, agentObservability: args.agentObservability as "OFF" | "SUGGEST" | "PARTICIPATE" },
       ctx.actorType,
       ctx.userId,
     );
@@ -138,37 +107,37 @@ export const aiConversationMutations = {
     );
   },
 
-  updateAgentObservability: (
+  forkBranch: (
     _: unknown,
-    args: { conversationId: string; level: AgentObservability },
+    args: { branchId: string; turnId: string; label?: string | null },
     ctx: Context,
   ) => {
-    return aiConversationService.updateAgentObservability({
-      conversationId: args.conversationId,
-      level: args.level,
-      userId: ctx.userId,
-      actorType: ctx.actorType,
-    });
+    return aiConversationService.forkBranch(
+      { branchId: args.branchId, turnId: args.turnId, label: args.label ?? undefined },
+      ctx.actorType,
+      ctx.userId,
+    );
   },
 
-  summarizeBranch: async (_: unknown, args: { branchId: string }, ctx: Context) => {
-    const branch = await aiConversationService.assertBranchAccess(args.branchId, ctx.userId);
-    return aiBranchSummaryService.summarizeBranch({
-      branchId: args.branchId,
-      organizationId: branch.conversation.organizationId,
-      userId: ctx.userId,
-      actorType: ctx.actorType,
-      actorId: ctx.userId,
-    });
-  },
-
-  updateAiConversationVisibility: (
+  linkConversationEntity: (
     _: unknown,
-    args: { conversationId: string; visibility: AiConversationVisibility },
+    args: { conversationId: string; entityType: string; entityId: string },
     ctx: Context,
   ) => {
-    return aiConversationService.updateVisibility(
-      { conversationId: args.conversationId, visibility: args.visibility },
+    return aiConversationService.linkEntity(
+      { conversationId: args.conversationId, entityType: args.entityType, entityId: args.entityId },
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
+
+  unlinkConversationEntity: (
+    _: unknown,
+    args: { conversationId: string; entityType: string; entityId: string },
+    ctx: Context,
+  ) => {
+    return aiConversationService.unlinkEntity(
+      { conversationId: args.conversationId, entityType: args.entityType, entityId: args.entityId },
       ctx.actorType,
       ctx.userId,
     );
@@ -204,46 +173,78 @@ export const aiConversationTypeResolvers = {
     },
 
     rootBranch: (conversation: { rootBranchId: string | null; id: string }) => {
-      return aiConversationService.getRootBranch(conversation.id, conversation.rootBranchId);
+      if (!conversation.rootBranchId) {
+        return prisma.aiBranch.findFirst({
+          where: { conversationId: conversation.id, parentBranchId: null },
+        });
+      }
+      return prisma.aiBranch.findUniqueOrThrow({
+        where: { id: conversation.rootBranchId },
+      });
     },
 
-    branches: (conversation: { id: string }) => aiConversationService.getBranches(conversation.id),
+    branches: (conversation: { id: string }) => {
+      return prisma.aiBranch.findMany({
+        where: { conversationId: conversation.id },
+      });
+    },
 
-    branchCount: (conversation: { id: string }) =>
-      aiConversationService.countConversationBranches(conversation.id),
+    branchCount: (conversation: { id: string }) => {
+      return prisma.aiBranch.count({
+        where: { conversationId: conversation.id },
+      });
+    },
+
+    linkedEntities: (conversation: { id: string }) => {
+      return prisma.aiConversationLinkedEntity.findMany({
+        where: { conversationId: conversation.id },
+        orderBy: { createdAt: "asc" },
+      });
+    },
   },
 
   Branch: {
-    conversation: (branch: { conversationId: string }, _args: unknown, ctx: Context) => {
-      return ctx.conversationLoader.load(branch.conversationId);
+    conversation: (branch: { conversationId: string }) => {
+      return prisma.aiConversation.findUniqueOrThrow({
+        where: { id: branch.conversationId },
+      });
     },
 
-    parentBranch: (branch: { parentBranchId: string | null }, _args: unknown, ctx: Context) => {
+    parentBranch: (branch: { parentBranchId: string | null }) => {
       if (!branch.parentBranchId) return null;
-      return ctx.branchLoader.load(branch.parentBranchId);
+      return prisma.aiBranch.findUnique({
+        where: { id: branch.parentBranchId },
+      });
     },
 
-    forkTurn: (branch: { forkTurnId?: string | null }, _args: unknown, ctx: Context) => {
+    forkTurn: (branch: { forkTurnId?: string | null }) => {
       if (!branch.forkTurnId) return null;
-      return ctx.turnLoader.load(branch.forkTurnId);
+      return prisma.aiTurn.findUnique({
+        where: { id: branch.forkTurnId },
+      });
     },
 
-    turns: (branch: { id: string }) => aiTurnService.getTurns(branch.id),
+    turns: (branch: { id: string }) => {
+      return prisma.aiTurn.findMany({
+        where: { branchId: branch.id },
+        orderBy: { createdAt: "asc" },
+      });
+    },
 
-    childBranches: (branch: { id: string }) => aiConversationService.getChildBranches(branch.id),
+    childBranches: (branch: { id: string }) => {
+      return prisma.aiBranch.findMany({
+        where: { parentBranchId: branch.id },
+      });
+    },
 
     depth: (branch: { id: string }) => {
       return aiConversationService.getBranchDepth(branch.id);
     },
 
-    turnCount: (branch: { id: string }) => aiConversationService.countBranchTurns(branch.id),
-
-    latestSummary: (branch: { id: string }) => {
-      return aiBranchSummaryService.getLatestSummary(branch.id);
-    },
-
-    contextHealth: (branch: { id: string }) => {
-      return aiBranchSummaryService.getContextHealth({ branchId: branch.id });
+    turnCount: (branch: { id: string }) => {
+      return prisma.aiTurn.count({
+        where: { branchId: branch.id },
+      });
     },
 
     createdBy: async (branch: { createdById: string }, _args: unknown, ctx: Context) => {
@@ -254,17 +255,29 @@ export const aiConversationTypeResolvers = {
   },
 
   Turn: {
-    branch: (turn: { branchId: string }, _args: unknown, ctx: Context) => {
-      return ctx.branchLoader.load(turn.branchId);
+    branch: (turn: { branchId: string }) => {
+      return prisma.aiBranch.findUniqueOrThrow({
+        where: { id: turn.branchId },
+      });
     },
 
-    parentTurn: (turn: { parentTurnId?: string | null }, _args: unknown, ctx: Context) => {
+    parentTurn: (turn: { parentTurnId?: string | null }) => {
       if (!turn.parentTurnId) return null;
-      return ctx.turnLoader.load(turn.parentTurnId);
+      return prisma.aiTurn.findUnique({
+        where: { id: turn.parentTurnId },
+      });
     },
 
-    branchCount: (turn: { id: string }) => aiConversationService.countTurnBranches(turn.id),
+    branchCount: (turn: { id: string }) => {
+      return prisma.aiBranch.count({
+        where: { forkTurnId: turn.id },
+      });
+    },
 
-    childBranches: (turn: { id: string }) => aiConversationService.getTurnChildBranches(turn.id),
+    childBranches: (turn: { id: string }) => {
+      return prisma.aiBranch.findMany({
+        where: { forkTurnId: turn.id },
+      });
+    },
   },
 };

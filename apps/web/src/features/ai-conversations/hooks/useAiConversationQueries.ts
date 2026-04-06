@@ -5,7 +5,6 @@ import {
   useEntityStore,
   type AiConversationEntity,
   type AiBranchEntity,
-  type AiBranchSummaryEntity,
   type AiTurnEntity,
 } from "../../../stores/entity";
 import { useAuthStore } from "../../../stores/auth";
@@ -19,12 +18,10 @@ const AI_CONVERSATIONS_QUERY = gql`
       id
       title
       visibility
-      modelId
-      systemPrompt
+      agentObservability
       branchCount
       createdBy {
         id
-        name
       }
       rootBranch {
         id
@@ -41,14 +38,21 @@ const AI_CONVERSATION_QUERY = gql`
       id
       title
       visibility
-      modelId
-      systemPrompt
+      agentObservability
       branchCount
       createdBy {
         id
       }
       rootBranch {
         id
+      }
+      linkedEntities {
+        id
+        conversationId
+        entityType
+        entityId
+        createdById
+        createdAt
       }
       branches {
         id
@@ -98,24 +102,10 @@ const BRANCH_TIMELINE_QUERY = gql`
       conversation {
         id
       }
-      latestSummary {
-        id
-        branchId
-        content
-        summarizedTurnCount
-        summarizedUpToTurnId
-        createdAt
-      }
-      contextHealth {
-        tokenUsage
-        budgetTotal
-        percentage
-      }
       turns {
         id
         role
         content
-        summarized
         parentTurn {
           id
         }
@@ -126,28 +116,27 @@ const BRANCH_TIMELINE_QUERY = gql`
   }
 `;
 
-const CONTEXT_HEALTH_QUERY = gql`
-  query ContextHealth($branchId: ID!) {
-    contextHealth(branchId: $branchId) {
-      tokenUsage
-      budgetTotal
-      percentage
-    }
-  }
-`;
-
 // ── Hydration helpers ──────────────────────────────────────────
+
+interface RawLinkedEntity {
+  id: string;
+  conversationId: string;
+  entityType: string;
+  entityId: string;
+  createdById: string;
+  createdAt: string;
+}
 
 interface RawConversation {
   id: string;
   title: string | null;
   visibility: string;
-  modelId: string | null;
-  systemPrompt: string | null;
+  agentObservability?: string;
   branchCount: number;
-  createdBy: { id: string; name?: string };
+  createdBy: { id: string };
   rootBranch: { id: string };
   branches?: RawBranch[];
+  linkedEntities?: RawLinkedEntity[];
   createdAt: string;
   updatedAt: string;
 }
@@ -164,37 +153,19 @@ interface RawBranch {
   createdAt: string;
   conversation?: { id: string };
   turns?: RawTurn[];
-  latestSummary?: RawBranchSummary | null;
-  contextHealth?: RawContextHealth;
 }
 
 interface RawTurn {
   id: string;
   role: "USER" | "ASSISTANT";
   content: string;
-  summarized: boolean;
   parentTurn: { id: string } | null;
   branchCount: number;
   createdAt: string;
 }
 
-interface RawBranchSummary {
-  id: string;
-  branchId: string;
-  content: string;
-  summarizedTurnCount: number;
-  summarizedUpToTurnId: string;
-  createdAt: string;
-}
-
-interface RawContextHealth {
-  tokenUsage: number;
-  budgetTotal: number;
-  percentage: number;
-}
-
 function hydrateConversation(raw: RawConversation): void {
-  const { upsert, patch } = useEntityStore.getState();
+  const { upsert } = useEntityStore.getState();
   const existing = useEntityStore.getState().aiConversations[raw.id];
 
   upsert("aiConversations", raw.id, {
@@ -202,23 +173,15 @@ function hydrateConversation(raw: RawConversation): void {
     id: raw.id,
     title: raw.title,
     visibility: raw.visibility,
-    modelId: raw.modelId,
-    systemPrompt: raw.systemPrompt,
+    agentObservability: raw.agentObservability ?? existing?.agentObservability ?? "OFF",
     branchCount: raw.branchCount,
     createdById: raw.createdBy.id,
     rootBranchId: raw.rootBranch.id,
     branchIds: raw.branches?.map((b) => b.id) ?? existing?.branchIds ?? [raw.rootBranch.id],
+    linkedEntities: raw.linkedEntities ?? existing?.linkedEntities ?? [],
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
   } as AiConversationEntity);
-
-  // Hydrate the creator user name if available (for shared conversations)
-  if (raw.createdBy.name) {
-    const existingUser = useEntityStore.getState().users[raw.createdBy.id];
-    if (existingUser) {
-      patch("users", raw.createdBy.id, { name: raw.createdBy.name });
-    }
-  }
 
   if (raw.branches) {
     for (const branch of raw.branches) {
@@ -251,10 +214,6 @@ function hydrateBranch(raw: RawBranch, conversationId?: string): void {
       hydrateTurn(turn, raw.id);
     }
   }
-
-  if (raw.latestSummary) {
-    hydrateBranchSummary(raw.latestSummary);
-  }
 }
 
 function hydrateTurn(raw: RawTurn, branchId: string): void {
@@ -265,24 +224,10 @@ function hydrateTurn(raw: RawTurn, branchId: string): void {
     branchId,
     role: raw.role,
     content: raw.content,
-    summarized: raw.summarized ?? false,
     parentTurnId: raw.parentTurn?.id ?? null,
     branchCount: raw.branchCount,
     createdAt: raw.createdAt,
   } as AiTurnEntity);
-}
-
-function hydrateBranchSummary(raw: RawBranchSummary): void {
-  const { upsert } = useEntityStore.getState();
-
-  upsert("aiBranchSummaries", raw.id, {
-    id: raw.id,
-    branchId: raw.branchId,
-    content: raw.content,
-    summarizedTurnCount: raw.summarizedTurnCount,
-    summarizedUpToTurnId: raw.summarizedUpToTurnId,
-    createdAt: raw.createdAt,
-  } as AiBranchSummaryEntity);
 }
 
 async function fetchBranchWithAncestors(
@@ -403,34 +348,4 @@ export function useBranchTimelineQuery(branchId: string) {
   }, [fetchTimeline]);
 
   return { loading, error, refetch: fetchTimeline };
-}
-
-export interface ContextHealthData {
-  tokenUsage: number;
-  budgetTotal: number;
-  percentage: number;
-}
-
-/** Fetches context health for a branch */
-export function useContextHealthQuery(branchId: string) {
-  const [data, setData] = useState<ContextHealthData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const fetchHealth = useCallback(async () => {
-    if (!branchId) return;
-    setLoading(true);
-
-    const result = await client.query(CONTEXT_HEALTH_QUERY, { branchId }).toPromise();
-
-    if (result.data?.contextHealth) {
-      setData(result.data.contextHealth as ContextHealthData);
-    }
-    setLoading(false);
-  }, [branchId]);
-
-  useEffect(() => {
-    fetchHealth();
-  }, [fetchHealth]);
-
-  return { data, loading, refetch: fetchHealth };
 }
