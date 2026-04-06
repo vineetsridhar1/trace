@@ -436,6 +436,7 @@ export type Mutation = {
   editChannelMessage: Message;
   editChatMessage: Message;
   joinChannel: Channel;
+  labelBranch: Branch;
   leaveChannel: Channel;
   leaveChat: Chat;
   linkEntityToProject: Project;
@@ -612,6 +613,12 @@ export type MutationEditChatMessageArgs = {
 
 export type MutationJoinChannelArgs = {
   channelId: Scalars['ID']['input'];
+};
+
+
+export type MutationLabelBranchArgs = {
+  branchId: Scalars['ID']['input'];
+  label: Scalars['String']['input'];
 };
 
 

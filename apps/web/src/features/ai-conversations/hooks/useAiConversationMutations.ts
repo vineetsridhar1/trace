@@ -31,6 +31,15 @@ const UPDATE_AI_CONVERSATION_TITLE_MUTATION = gql`
   }
 `;
 
+const LABEL_BRANCH_MUTATION = gql`
+  mutation LabelBranch($branchId: ID!, $label: String!) {
+    labelBranch(branchId: $branchId, label: $label) {
+      id
+      label
+    }
+  }
+`;
+
 // ── Mutation hooks ─────────────────────────────────────────────
 
 /** Fire-and-forget: creates a conversation; event stream handles store update */
@@ -137,6 +146,17 @@ export function useUpdateAiConversationTitle() {
 
     if (result.error) {
       console.error("Failed to update conversation title:", result.error.message);
+    }
+  }, []);
+}
+
+/** Fire-and-forget: labels a branch; event stream handles store update */
+export function useLabelBranch() {
+  return useCallback(async (params: { branchId: string; label: string }) => {
+    const result = await client.mutation(LABEL_BRANCH_MUTATION, params).toPromise();
+
+    if (result.error) {
+      console.error("Failed to label branch:", result.error.message);
     }
   }, []);
 }

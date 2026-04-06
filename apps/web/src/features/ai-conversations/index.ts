@@ -36,7 +36,12 @@ export {
   useCreateAiConversation,
   useSendTurn,
   useUpdateAiConversationTitle,
+  useLabelBranch,
 } from "./hooks/useAiConversationMutations";
+
+// Components
+export { EditableBranchLabel } from "./components/EditableBranchLabel";
 
 // Utils
 export { processAiConversationEvent } from "./utils/processAiConversationEvent";
+export { getBranchDisplayLabel, truncateAtWord } from "./utils/branchLabel";

@@ -73,6 +73,18 @@ export const aiConversationMutations = {
       ctx.userId,
     );
   },
+
+  labelBranch: (
+    _: unknown,
+    args: { branchId: string; label: string },
+    ctx: Context,
+  ) => {
+    return aiConversationService.labelBranch(
+      { branchId: args.branchId, label: args.label },
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
 };
 
 export const aiConversationSubscriptions = {
