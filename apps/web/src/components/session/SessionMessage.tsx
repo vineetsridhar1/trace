@@ -10,6 +10,7 @@ import { ToolResultRow } from "./messages/ToolResultRow";
 import { SubagentRow } from "./messages/SubagentRow";
 import { CompletionRow } from "./messages/CompletionRow";
 import { SystemBadge } from "./messages/SystemBadge";
+import { MovedFromBadge } from "./messages/MovedFromBadge";
 import { GitCheckpointChips } from "./messages/GitCheckpointChips";
 import { serializeUnknown } from "./messages/utils";
 import type { AgentToolResult } from "./groupReadGlob";
@@ -137,18 +138,29 @@ export const SessionMessage = memo(function SessionMessage({
   if (!eventType || !timestamp) return null;
 
   switch (eventType) {
-    case "session_started":
-      return typeof payload?.prompt === "string" ? (
-        <UserBubble
-          text={payload.prompt}
-          timestamp={timestamp}
-          actorId={actor?.id}
-          actorName={actor?.name}
-          footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
-        />
-      ) : (
-        <SystemBadge text="Session started" />
+    case "session_started": {
+      const movedFromSessionId = typeof payload?.movedFromSessionId === "string"
+        ? payload.movedFromSessionId
+        : undefined;
+      return (
+        <>
+          {movedFromSessionId && (
+            <MovedFromBadge sourceSessionId={movedFromSessionId} />
+          )}
+          {typeof payload?.prompt === "string" ? (
+            <UserBubble
+              text={payload.prompt}
+              timestamp={timestamp}
+              actorId={actor?.id}
+              actorName={actor?.name}
+              footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
+            />
+          ) : (
+            <SystemBadge text="Session started" />
+          )}
+        </>
       );
+    }
 
     case "session_output":
       return payload ? renderSessionOutput(payload, timestamp, completedAgentTools) : null;

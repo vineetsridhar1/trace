@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
   ArrowLeft,
+  ArrowRightLeft,
   History,
   WifiOff,
   Loader2,
@@ -81,6 +82,7 @@ export function SessionHeader({
     return () => clearTimeout(timer);
   }, [disconnected]);
 
+  const movedToSessionId = useEntityField("sessions", sessionId, "_movedToSessionId") as string | undefined;
   const runtimeLabel = connection?.runtimeLabel as string | undefined;
   const isCloud = hosting === "cloud";
   const runtimeDisplayLabel = isCloud ? "Cloud" : (runtimeLabel ?? null);
@@ -138,7 +140,12 @@ export function SessionHeader({
       )}
 
       {disconnected ? (
-        pastGracePeriod ? (
+        movedToSessionId ? (
+          <span className="flex shrink-0 items-center gap-1.5 text-xs text-blue-400">
+            <ArrowRightLeft size={12} />
+            Moved
+          </span>
+        ) : pastGracePeriod ? (
           <span className="flex shrink-0 items-center gap-1.5 text-xs text-destructive">
             <WifiOff size={12} />
             Connection Lost

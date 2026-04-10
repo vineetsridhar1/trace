@@ -8,6 +8,7 @@ import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
 import { isDisconnected, canSendMessage } from "./sessionStatus";
 import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
+import { SessionMovedPanel } from "./SessionMovedPanel";
 import { getModelLabel } from "./modelOptions";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
 import { cn } from "../../lib/utils";
@@ -34,6 +35,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     | boolean
     | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
+  const movedToSessionId = useEntityField("sessions", sessionId, "_movedToSessionId") as string | undefined;
   const [hasContent, setHasContent] = useState(false);
   const [mode, setMode] = useState<"code" | "plan" | "ask">("code");
   const editorRef = useRef<ChatEditorHandle>(null);
@@ -101,6 +103,11 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
       throw error;
     }
   }, [sessionId, mode, canSend]);
+
+  // Show moved panel when session was rehomed to a new session
+  if (movedToSessionId) {
+    return <SessionMovedPanel newSessionId={movedToSessionId} />;
+  }
 
   // Show recovery panel when disconnected — but not for not_started sessions
   if (disconnected && !isNotStarted) {
