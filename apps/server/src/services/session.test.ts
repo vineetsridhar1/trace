@@ -1366,6 +1366,38 @@ describe("SessionService", () => {
         "terminate",
       );
       expect(terminalRelayMock.destroyAllForSession).toHaveBeenCalledWith("session-1");
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-1" },
+          data: expect.objectContaining({
+            agentStatus: "stopped",
+            connection: expect.objectContaining({
+              state: "disconnected",
+              retryCount: 0,
+              canRetry: false,
+              canMove: false,
+              movedToSessionId: "session-2",
+            }),
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scopeId: "session-1",
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "session_rehomed",
+            newSessionId: "session-2",
+            connection: expect.objectContaining({
+              state: "disconnected",
+              retryCount: 0,
+              canRetry: false,
+              canMove: false,
+              movedToSessionId: "session-2",
+            }),
+          }),
+        }),
+      );
     });
 
     it("rejects moving a merged session", async () => {
@@ -1519,6 +1551,38 @@ describe("SessionService", () => {
         "terminate",
       );
       expect(terminalRelayMock.destroyAllForSession).toHaveBeenCalledWith("session-1");
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-1" },
+          data: expect.objectContaining({
+            agentStatus: "stopped",
+            connection: expect.objectContaining({
+              state: "disconnected",
+              retryCount: 0,
+              canRetry: false,
+              canMove: false,
+              movedToSessionId: "session-3",
+            }),
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scopeId: "session-1",
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "session_rehomed",
+            newSessionId: "session-3",
+            connection: expect.objectContaining({
+              state: "disconnected",
+              retryCount: 0,
+              canRetry: false,
+              canMove: false,
+              movedToSessionId: "session-3",
+            }),
+          }),
+        }),
+      );
     });
 
     it("rejects moving a merged session to cloud", async () => {

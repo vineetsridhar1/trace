@@ -1432,6 +1432,7 @@ export type SessionConnection = {
   lastDeliveryFailureAt?: Maybe<Scalars['DateTime']['output']>;
   lastError?: Maybe<Scalars['String']['output']>;
   lastSeen?: Maybe<Scalars['DateTime']['output']>;
+  movedToSessionId?: Maybe<Scalars['ID']['output']>;
   retryCount: Scalars['Int']['output'];
   runtimeInstanceId?: Maybe<Scalars['String']['output']>;
   runtimeLabel?: Maybe<Scalars['String']['output']>;
@@ -2533,6 +2534,7 @@ export type SessionConnectionResolvers<ContextType = Context, ParentType extends
   lastDeliveryFailureAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
   lastError?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   lastSeen?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
+  movedToSessionId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
   retryCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   runtimeInstanceId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   runtimeLabel?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
@@ -2722,4 +2724,3 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Turn?: TurnResolvers<ContextType>;
   User?: UserResolvers<ContextType>;
 }>;
-

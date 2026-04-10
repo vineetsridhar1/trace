@@ -1431,6 +1431,7 @@ export type SessionConnection = {
   lastDeliveryFailureAt?: Maybe<Scalars['DateTime']['output']>;
   lastError?: Maybe<Scalars['String']['output']>;
   lastSeen?: Maybe<Scalars['DateTime']['output']>;
+  movedToSessionId?: Maybe<Scalars['ID']['output']>;
   retryCount: Scalars['Int']['output'];
   runtimeInstanceId?: Maybe<Scalars['String']['output']>;
   runtimeLabel?: Maybe<Scalars['String']['output']>;
