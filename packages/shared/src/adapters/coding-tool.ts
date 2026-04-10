@@ -115,7 +115,12 @@ export interface ErrorEvent {
   message: string;
 }
 
-export type ToolOutput = AssistantEvent | ResultEvent | ErrorEvent;
+export interface CompactionEvent {
+  type: "compaction";
+  summary?: string;
+}
+
+export type ToolOutput = AssistantEvent | ResultEvent | ErrorEvent | CompactionEvent;
 
 export type OutputCallback = (data: ToolOutput) => void;
 

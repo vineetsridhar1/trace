@@ -6,7 +6,7 @@ import type { CodingToolAdapter, RunOptions, ToolOutput, MessageBlock } from "./
 import { parseQuestion } from "./coding-tool.js";
 
 /** Types we drop entirely — not relevant to the frontend */
-const SKIP_TYPES = new Set(["system", "rate_limit_event", "stderr"]);
+const SKIP_TYPES = new Set(["rate_limit_event", "stderr"]);
 
 /**
  * Adapter for running Claude Code CLI sessions.
@@ -130,10 +130,30 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     const type = data.type as string | undefined;
     if (!type || SKIP_TYPES.has(type)) return;
 
+    // System events — most are internal housekeeping, but compaction is
+    // user-visible. Forward it, drop the rest.
+    if (type === "system") {
+      const subtype = data.subtype as string | undefined;
+      if (subtype === "conversation_compressed" || subtype === "compact") {
+        const summary = typeof data.summary === "string" ? data.summary : undefined;
+        onOutput({ type: "compaction", summary });
+      }
+      return;
+    }
+
     // Claude Code's "assistant" events carry message.content[] with
     // text/tool_use/tool_result blocks — extract and forward.
     if (type === "assistant") {
       const message = data.message as Record<string, unknown> | undefined;
+
+      // Detect context compaction — context_management is non-null when
+      // Claude Code compressed the conversation history.
+      const ctxMgmt = message?.context_management as Record<string, unknown> | null | undefined;
+      if (ctxMgmt) {
+        const summary = typeof ctxMgmt.summary === "string" ? ctxMgmt.summary : undefined;
+        onOutput({ type: "compaction", summary });
+      }
+
       const content = message?.content;
       if (Array.isArray(content)) {
         // Track plan file writes and detect ExitPlanMode before normalizing

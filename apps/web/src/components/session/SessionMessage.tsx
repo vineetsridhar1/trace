@@ -113,6 +113,11 @@ function renderSessionOutput(
     return <CompletionRow timestamp={ts} result={str(payload.message, "Error")} isUserStop />;
   }
 
+  if (type === "compaction") {
+    const summary = typeof payload.summary === "string" ? payload.summary : null;
+    return <SystemBadge text={summary ? `Context compacted: ${summary}` : "Context compacted"} />;
+  }
+
   return null;
 }
 
