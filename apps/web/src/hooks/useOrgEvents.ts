@@ -635,11 +635,6 @@ export function useOrgEvents() {
           }
 
           if (payload.type === "session_rehomed" && typeof payload.newSessionId === "string") {
-            // Track which session this was moved to so the UI can show a link
-            batch.patch("sessions", event.scopeId, {
-              _movedToSessionId: payload.newSessionId,
-            } as Partial<SessionEntity>);
-
             const activeSessionId = useUIStore.getState().activeSessionId;
             if (activeSessionId === event.scopeId) {
               useUIStore.getState().setActiveSessionId(payload.newSessionId);

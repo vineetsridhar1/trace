@@ -51,6 +51,7 @@ const SESSION_DETAIL_QUERY = gql`
         retryCount
         canRetry
         canMove
+        movedToSessionId
       }
       createdBy {
         id

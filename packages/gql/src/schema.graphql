@@ -649,6 +649,7 @@ type SessionConnection {
   retryCount: Int!
   canRetry: Boolean!
   canMove: Boolean!
+  movedToSessionId: ID
 }
 
 type ApiTokenStatus {

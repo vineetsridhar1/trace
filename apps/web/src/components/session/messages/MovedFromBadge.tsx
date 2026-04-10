@@ -1,4 +1,4 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useEntityField } from "../../../stores/entity";
 import { useUIStore } from "../../../stores/ui";
 
@@ -14,7 +14,7 @@ export function MovedFromBadge({ sourceSessionId }: { sourceSessionId: string })
         onClick={() => setActiveSessionId(sourceSessionId)}
         className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground bg-surface-deep px-3 py-1 rounded-full hover:text-foreground hover:bg-surface-elevated transition-colors"
       >
-        <ArrowRight size={10} className="rotate-180" />
+        <ArrowLeft size={10} />
         Continued from {sourceName ?? "previous session"}
       </button>
     </div>

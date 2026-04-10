@@ -23,7 +23,7 @@ export function SessionMovedPanel({ newSessionId }: { newSessionId: string }) {
           className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground hover:bg-surface-elevated transition-colors"
         >
           <ArrowRight size={12} />
-          {newSessionName ?? "Go to new session"}
+          {newSessionName || "Go to new session"}
         </button>
       </div>
     </div>

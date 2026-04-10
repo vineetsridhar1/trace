@@ -24,8 +24,6 @@ export type SessionEntity = Session & {
   _lastUserMessageAt?: string;
   _sortTimestamp?: string;
   _optimistic?: boolean;
-  /** Set when a session has been moved to a new session (rehomed) */
-  _movedToSessionId?: string;
 };
 
 export type SessionGroupEntity = SessionGroup & {

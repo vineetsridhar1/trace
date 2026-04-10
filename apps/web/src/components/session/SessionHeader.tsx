@@ -82,7 +82,7 @@ export function SessionHeader({
     return () => clearTimeout(timer);
   }, [disconnected]);
 
-  const movedToSessionId = useEntityField("sessions", sessionId, "_movedToSessionId") as string | undefined;
+  const movedToSessionId = (connection?.movedToSessionId as string | undefined) ?? undefined;
   const runtimeLabel = connection?.runtimeLabel as string | undefined;
   const isCloud = hosting === "cloud";
   const runtimeDisplayLabel = isCloud ? "Cloud" : (runtimeLabel ?? null);

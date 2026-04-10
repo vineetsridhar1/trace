@@ -50,6 +50,7 @@ export type SessionConnectionData = {
   retryCount: number;
   canRetry: boolean;
   canMove: boolean;
+  movedToSessionId?: string;
   [key: string]: unknown;
 };
 
@@ -2878,10 +2879,11 @@ export class SessionService {
     sessionId: string;
     hosting: "cloud" | "local";
     organizationId: string;
+    newSessionId: string;
     actorType: ActorType;
     actorId: string;
   }) {
-    const { sessionId, hosting, organizationId, actorType, actorId } = params;
+    const { sessionId, hosting, organizationId, newSessionId, actorType, actorId } = params;
 
     terminalRelay.destroyAllForSession(sessionId);
 
@@ -2908,6 +2910,14 @@ export class SessionService {
       data: {
         agentStatus: "stopped",
         ...(clearedSessionStatus ? { sessionStatus: clearedSessionStatus } : {}),
+        connection: connJson(
+          defaultConnection({
+            state: "disconnected",
+            canRetry: false,
+            canMove: false,
+            movedToSessionId: newSessionId,
+          }),
+        ),
       },
       select: { sessionStatus: true, sessionGroupId: true },
     });
@@ -3093,6 +3103,7 @@ export class SessionService {
           canRetry: false,
           canMove: false,
           retryCount: 0,
+          movedToSessionId: childSession.id,
         },
       },
       actorType,
@@ -3103,6 +3114,7 @@ export class SessionService {
       sessionId,
       hosting: session.hosting as "cloud" | "local",
       organizationId: session.organizationId,
+      newSessionId: childSession.id,
       actorType,
       actorId,
     });
@@ -3248,6 +3260,7 @@ export class SessionService {
           canRetry: false,
           canMove: false,
           retryCount: 0,
+          movedToSessionId: childSession.id,
         },
       },
       actorType,
@@ -3258,6 +3271,7 @@ export class SessionService {
       sessionId,
       hosting: session.hosting as "cloud" | "local",
       organizationId: session.organizationId,
+      newSessionId: childSession.id,
       actorType,
       actorId,
     });
