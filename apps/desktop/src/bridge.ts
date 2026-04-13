@@ -62,6 +62,19 @@ function isPendingInputOutput(output: ToolOutput): boolean {
   );
 }
 
+function getPendingInputToolUseId(output: ToolOutput): string | null {
+  if (output.type !== "assistant") return null;
+  for (const block of output.message.content) {
+    if (
+      (block.type === "question" || block.type === "plan") &&
+      typeof block.toolUseId === "string"
+    ) {
+      return block.toolUseId;
+    }
+  }
+  return null;
+}
+
 export type BridgeConnectionStatus = "connecting" | "connected" | "disconnected";
 
 export class BridgeClient implements IBridgeClient {
@@ -91,6 +104,7 @@ export class BridgeClient implements IBridgeClient {
     string,
     Map<string, { trigger: import("@trace/shared").GitCheckpointTrigger; command: string }>
   >();
+  private pendingInputToolUseIds = new Map<string, string>();
   private sessionRunSequence = new Map<string, number>();
   private activeRuns = new Map<string, number>();
   private terminalManager: TerminalManager;
@@ -181,6 +195,7 @@ export class BridgeClient implements IBridgeClient {
     this.ws?.close();
     this.ws = null;
     this.setStatus("disconnected");
+    this.pendingInputToolUseIds.clear();
   }
 
   /**
@@ -403,6 +418,10 @@ export class BridgeClient implements IBridgeClient {
     }
     if (tool) this.sessionTools.set(sessionId, tool);
 
+    const priorPendingToolUseId = this.pendingInputToolUseIds.get(sessionId) ?? null;
+    let hasForwardedOutput = false;
+    let endedOnPending = false;
+
     const runId = this.startRun(sessionId);
     adapter.abort();
 
@@ -413,6 +432,29 @@ export class BridgeClient implements IBridgeClient {
       cwd: workdir,
       onOutput: (output) => {
         if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
+
+        const maybeReportToolSessionId = () => {
+          if (adapter.getSessionId) {
+            const sid = adapter.getSessionId();
+            if (sid && sid !== this.reportedToolSessionIds.get(sessionId)) {
+              this.reportedToolSessionIds.set(sessionId, sid);
+              this.send({ type: "tool_session_id", sessionId, toolSessionId: sid });
+            }
+          }
+        };
+
+        const pendingToolUseId = getPendingInputToolUseId(output);
+        const isReplayOfPriorPending =
+          !hasForwardedOutput &&
+          priorPendingToolUseId !== null &&
+          pendingToolUseId === priorPendingToolUseId;
+
+        if (isReplayOfPriorPending) {
+          maybeReportToolSessionId();
+          return;
+        }
+
+        hasForwardedOutput = true;
         this.send({ type: "session_output", sessionId, data: output });
 
         // Phase 1: collect tool_use blocks whose command is a git commit/push
@@ -440,17 +482,15 @@ export class BridgeClient implements IBridgeClient {
               );
             });
         }
-        // When the adapter discovers its tool session ID, report it to the server
-        // so it can be passed back on retry/resume
-        if (adapter.getSessionId) {
-          const sid = adapter.getSessionId();
-          if (sid && sid !== this.reportedToolSessionIds.get(sessionId)) {
-            this.reportedToolSessionIds.set(sessionId, sid);
-            this.send({ type: "tool_session_id", sessionId, toolSessionId: sid });
-          }
-        }
+        maybeReportToolSessionId();
 
         if (isPendingInputOutput(output)) {
+          endedOnPending = true;
+          if (pendingToolUseId) {
+            this.pendingInputToolUseIds.set(sessionId, pendingToolUseId);
+          } else {
+            this.pendingInputToolUseIds.delete(sessionId);
+          }
           this.finishRun(sessionId, runId);
           this.send({ type: "session_complete", sessionId });
           activeAdapter.abort();
@@ -458,6 +498,9 @@ export class BridgeClient implements IBridgeClient {
       },
       onComplete: () => {
         if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
+        if (!endedOnPending && priorPendingToolUseId) {
+          this.pendingInputToolUseIds.delete(sessionId);
+        }
         this.finishRun(sessionId, runId);
         this.send({ type: "session_complete", sessionId });
       },
@@ -632,6 +675,7 @@ export class BridgeClient implements IBridgeClient {
         }
         this.sessionTools.delete(cmd.sessionId);
         this.reportedToolSessionIds.delete(cmd.sessionId);
+        this.pendingInputToolUseIds.delete(cmd.sessionId);
         this.sessionRunSequence.delete(cmd.sessionId);
         const wasReadOnly = this.readOnlySessions.has(cmd.sessionId);
         this.readOnlySessions.delete(cmd.sessionId);

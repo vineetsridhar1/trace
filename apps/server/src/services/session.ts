@@ -1689,11 +1689,6 @@ export class SessionService {
     });
     if (!session) return;
 
-    if (pendingInfo?.toolUseId) {
-      const isReplay = await this.hasRecordedPendingToolUse(sessionId, pendingInfo.toolUseId);
-      if (isReplay) return;
-    }
-
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
@@ -3497,25 +3492,6 @@ export class SessionService {
   }
 
   // ─── Helpers ───
-
-  private async hasRecordedPendingToolUse(sessionId: string, toolUseId: string): Promise<boolean> {
-    const recentEvents = await prisma.event.findMany({
-      where: {
-        scopeId: sessionId,
-        scopeType: "session",
-        eventType: "session_output",
-      },
-      orderBy: { timestamp: "desc" },
-      take: 50,
-      select: { payload: true },
-    });
-
-    return recentEvents.some((evt: { payload: Prisma.JsonValue }) => {
-      const payload = evt.payload;
-      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
-      return extractPendingInputInfo(payload as Record<string, unknown>)?.toolUseId === toolUseId;
-    });
-  }
 
   /**
    * Extract plan/question data from a session_output payload and create an inbox item.

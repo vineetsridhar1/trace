@@ -21,6 +21,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   private cwd: string | null = null;
   private resultEmitted = false;
   private lastPlanFilePath: string | null = null;
+  private processGeneration = 0;
 
   run({ prompt, cwd, onOutput, onComplete, interactionMode, model, toolSessionId }: RunOptions) {
     this.cwd = cwd;
@@ -47,20 +48,26 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       args.push("--resume", this.claudeSessionId);
     }
 
-    this.process = spawn("claude", args, {
+    const processGeneration = ++this.processGeneration;
+    const child = spawn("claude", args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env },
       detached: true,
     });
+    this.process = child;
 
     // Track process exit code so readline close handler can emit a fallback result
     let exitCode: number | null = null;
     let rlClosed = false;
     let processClosed = false;
 
+    const isCurrentProcess = () =>
+      this.processGeneration === processGeneration && this.process === child;
+
     const maybeFinish = () => {
       if (!rlClosed || !processClosed) return;
+      if (!isCurrentProcess()) return;
       if (!this.resultEmitted) {
         onOutput({
           type: "result",
@@ -71,12 +78,13 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       this.process = null;
     };
 
-    if (this.process.stdout) {
+    if (child.stdout) {
       // Prevent unhandled 'error' events on the pipe from crashing the process
       // when abort() kills the child (the pipe can emit ECONNRESET/EPIPE).
-      this.process.stdout.on("error", () => {});
-      const rl = createInterface({ input: this.process.stdout });
+      child.stdout.on("error", () => {});
+      const rl = createInterface({ input: child.stdout });
       rl.on("line", (line) => {
+        if (!isCurrentProcess()) return;
         if (!line.trim()) return;
         try {
           const parsed = JSON.parse(line);
@@ -102,16 +110,18 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     }
 
     const stderrChunks: string[] = [];
-    if (this.process.stderr) {
-      this.process.stderr.on("error", () => {});
-      const rl = createInterface({ input: this.process.stderr });
+    if (child.stderr) {
+      child.stderr.on("error", () => {});
+      const rl = createInterface({ input: child.stderr });
       rl.on("line", (line) => {
+        if (!isCurrentProcess()) return;
         stderrChunks.push(line);
       });
     }
 
-    this.process.on("close", (code) => {
+    child.on("close", (code: number | null) => {
       exitCode = code;
+      if (!isCurrentProcess()) return;
       if (code !== 0 && code !== null && stderrChunks.length > 0) {
         onOutput({ type: "error", message: stderrChunks.join("\n") });
       }
@@ -119,7 +129,8 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       maybeFinish();
     });
 
-    this.process.on("error", (err) => {
+    child.on("error", (err: Error) => {
+      if (!isCurrentProcess()) return;
       onOutput({ type: "error", message: err.message });
       onComplete();
       this.process = null;

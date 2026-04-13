@@ -1036,7 +1036,7 @@ describe("SessionService", () => {
       });
     });
 
-    it("ignores replayed pending questions with the same tool_use id", async () => {
+    it("records repeated pending questions even when the tool_use id matches", async () => {
       const data = {
         type: "assistant",
         message: {
@@ -1058,12 +1058,39 @@ describe("SessionService", () => {
         sessionStatus: "in_progress",
         sessionGroupId: "group-1",
       });
-      prismaMock.event.findMany.mockResolvedValueOnce([{ payload: data }]);
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup(),
+        sessions: [{ agentStatus: "done", sessionStatus: "needs_input" }],
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        createdById: "user-1",
+        name: "Implement dashboard filters",
+      });
 
       await service.recordOutput("session-1", data as Record<string, unknown>);
 
-      expect(eventServiceMock.create).not.toHaveBeenCalled();
-      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: data,
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "question_pending",
+            sessionStatus: "needs_input",
+          }),
+        }),
+      );
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: { id: "session-1", agentStatus: "active" },
+        data: { sessionStatus: "needs_input" },
+      });
     });
   });
 
