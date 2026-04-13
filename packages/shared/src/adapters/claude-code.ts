@@ -32,9 +32,8 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       this.claudeSessionId = toolSessionId;
     }
 
-    const permissionFlag = interactionMode === "plan"
-      ? "--permission-mode"
-      : "--dangerously-skip-permissions";
+    const permissionFlag =
+      interactionMode === "plan" ? "--permission-mode" : "--dangerously-skip-permissions";
     const args = ["-p", prompt, "--output-format", "stream-json", "--verbose"];
     if (model) {
       args.push("--model", model);
@@ -63,7 +62,10 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     const maybeFinish = () => {
       if (!rlClosed || !processClosed) return;
       if (!this.resultEmitted) {
-        onOutput({ type: "result", subtype: exitCode === 0 || exitCode === null ? "success" : "error" });
+        onOutput({
+          type: "result",
+          subtype: exitCode === 0 || exitCode === null ? "success" : "error",
+        });
       }
       onComplete();
       this.process = null;
@@ -138,6 +140,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       if (Array.isArray(content)) {
         // Track plan file writes and detect ExitPlanMode before normalizing
         let hasExitPlanMode = false;
+        let exitPlanModeToolUseId: string | undefined;
         for (const block of content as Record<string, unknown>[]) {
           if (block.type === "tool_use") {
             const name = String(block.name ?? "");
@@ -150,6 +153,9 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
             }
             if (name === "ExitPlanMode") {
               hasExitPlanMode = true;
+              if (typeof block.id === "string") {
+                exitPlanModeToolUseId = block.id;
+              }
             }
           }
         }
@@ -173,6 +179,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
             type: "plan" as const,
             content: planContent,
             filePath: this.lastPlanFilePath,
+            ...(exitPlanModeToolUseId ? { toolUseId: exitPlanModeToolUseId } : {}),
           });
           this.lastPlanFilePath = null;
         }
@@ -184,6 +191,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
             normalized.push({
               type: "question" as const,
               questions: questions.map(parseQuestion),
+              ...(typeof block.id === "string" ? { toolUseId: block.id } : {}),
             });
             continue;
           }
@@ -244,7 +252,11 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   abort() {
     if (this.process) {
       // Kill the entire process group (negative PID) since we spawn detached
-      try { process.kill(-this.process.pid!, "SIGTERM"); } catch { /* already dead */ }
+      try {
+        process.kill(-this.process.pid!, "SIGTERM");
+      } catch {
+        /* already dead */
+      }
       this.process = null;
     }
   }

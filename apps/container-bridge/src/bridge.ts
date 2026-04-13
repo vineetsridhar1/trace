@@ -4,8 +4,28 @@ import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter, GitCheckpointBridgePayload, GitCheckpointTrigger } from "@trace/shared";
-import { extractGitToolUsePending, extractGitToolResultTrigger, parseBranchOutput, handleListFiles, handleReadFile, handleBranchDiff, handleFileAtRef, handleListSkills, GIT_SHOW_ARGS, GIT_DIFF_TREE_ARGS, parseGitShowOutput } from "@trace/shared";
+import type {
+  BridgeClient as IBridgeClient,
+  BridgeCommand,
+  BridgeMessage,
+  CodingToolAdapter,
+  GitCheckpointBridgePayload,
+  GitCheckpointTrigger,
+  ToolOutput,
+} from "@trace/shared";
+import {
+  extractGitToolUsePending,
+  extractGitToolResultTrigger,
+  parseBranchOutput,
+  handleListFiles,
+  handleReadFile,
+  handleBranchDiff,
+  handleFileAtRef,
+  handleListSkills,
+  GIT_SHOW_ARGS,
+  GIT_DIFF_TREE_ARGS,
+  parseGitShowOutput,
+} from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { ensureRepo, createWorktree, removeWorktree, getRepoPath } from "./workspace.js";
@@ -24,6 +44,13 @@ async function inspectGitCheckpoint(
     execFileAsync("git", [...GIT_DIFF_TREE_ARGS], { cwd, maxBuffer: 5 * 1024 * 1024 }),
   ]);
   return parseGitShowOutput(showStdout, diffStdout, trigger, command, new Date().toISOString());
+}
+
+function isPendingInputOutput(output: ToolOutput): boolean {
+  return (
+    output.type === "assistant" &&
+    output.message.content.some((block) => block.type === "question" || block.type === "plan")
+  );
 }
 
 /**
@@ -47,7 +74,12 @@ export class ContainerBridge implements IBridgeClient {
   /** Sessions running in read-only mode (no worktree, using bare repo path) */
   private readOnlySessions = new Set<string>();
   /** Phase-1 git detection: sessionId → Map<toolUseId → {trigger, command}> */
-  private pendingGitToolUses = new Map<string, Map<string, { trigger: import("@trace/shared").GitCheckpointTrigger; command: string }>>();
+  private pendingGitToolUses = new Map<
+    string,
+    Map<string, { trigger: import("@trace/shared").GitCheckpointTrigger; command: string }>
+  >();
+  private sessionRunSequence = new Map<string, number>();
+  private activeRuns = new Map<string, number>();
   private terminalManager: TerminalManager;
   private gitExec: GitExecFn = (args, cwd) =>
     new Promise((resolve, reject) => {
@@ -125,7 +157,8 @@ export class ContainerBridge implements IBridgeClient {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    for (const adapter of this.adapters.values()) {
+    for (const [sessionId, adapter] of this.adapters.entries()) {
+      this.cancelRun(sessionId);
       adapter.abort();
     }
     this.adapters.clear();
@@ -156,7 +189,9 @@ export class ContainerBridge implements IBridgeClient {
 
     // Exponential backoff: 3s, 6s, 12s, ... capped at 30s
     const delay = Math.min(3000 * 2 ** (this.consecutiveFailures - 1), 30_000);
-    console.log(`[container-bridge] reconnecting in ${Math.round(delay / 1000)}s (attempt ${this.consecutiveFailures}/${ContainerBridge.MAX_RECONNECT_FAILURES})...`);
+    console.log(
+      `[container-bridge] reconnecting in ${Math.round(delay / 1000)}s (attempt ${this.consecutiveFailures}/${ContainerBridge.MAX_RECONNECT_FAILURES})...`,
+    );
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
@@ -182,7 +217,9 @@ export class ContainerBridge implements IBridgeClient {
       }
       const idleMs = Date.now() - this.lastActivity;
       if (idleMs >= ContainerBridge.IDLE_TIMEOUT_MS) {
-        console.log(`[container-bridge] idle for ${Math.round(idleMs / 1000)}s with no active work, exiting`);
+        console.log(
+          `[container-bridge] idle for ${Math.round(idleMs / 1000)}s with no active work, exiting`,
+        );
         this.disconnect();
         process.exit(0);
       }
@@ -201,6 +238,27 @@ export class ContainerBridge implements IBridgeClient {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
+  }
+
+  private startRun(sessionId: string): number {
+    const runId = (this.sessionRunSequence.get(sessionId) ?? 0) + 1;
+    this.sessionRunSequence.set(sessionId, runId);
+    this.activeRuns.set(sessionId, runId);
+    return runId;
+  }
+
+  private finishRun(sessionId: string, runId: number): void {
+    if (this.activeRuns.get(sessionId) === runId) {
+      this.activeRuns.delete(sessionId);
+    }
+  }
+
+  private cancelRun(sessionId: string): void {
+    this.activeRuns.delete(sessionId);
+  }
+
+  private isCurrentRun(sessionId: string, adapter: CodingToolAdapter, runId: number): boolean {
+    return this.adapters.get(sessionId) === adapter && this.activeRuns.get(sessionId) === runId;
   }
 
   private createAdapter(tool?: string): CodingToolAdapter {
@@ -229,14 +287,28 @@ export class ContainerBridge implements IBridgeClient {
           toolSessionId: cmd.toolSessionId,
         }).catch((err) => {
           console.error(`[container-bridge] runPrompt failed for ${cmd.sessionId}:`, err);
-          this.send({ type: "session_output", sessionId: cmd.sessionId, data: { type: "error", message: err instanceof Error ? err.message : String(err) } });
+          this.send({
+            type: "session_output",
+            sessionId: cmd.sessionId,
+            data: { type: "error", message: err instanceof Error ? err.message : String(err) },
+          });
           this.send({ type: "session_complete", sessionId: cmd.sessionId });
         });
         break;
       }
 
       case "prepare": {
-        const { sessionId, sessionGroupId, slug, repoId, repoRemoteUrl, defaultBranch, branch, checkpointSha, readOnly } = cmd;
+        const {
+          sessionId,
+          sessionGroupId,
+          slug,
+          repoId,
+          repoRemoteUrl,
+          defaultBranch,
+          branch,
+          checkpointSha,
+          readOnly,
+        } = cmd;
 
         (async () => {
           try {
@@ -282,7 +354,8 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "upgrade_workspace": {
-        const { sessionId, sessionGroupId, slug, repoId, repoRemoteUrl, defaultBranch, branch } = cmd;
+        const { sessionId, sessionGroupId, slug, repoId, repoRemoteUrl, defaultBranch, branch } =
+          cmd;
 
         (async () => {
           try {
@@ -309,13 +382,19 @@ export class ContainerBridge implements IBridgeClient {
 
       case "terminate": {
         const adapter = this.adapters.get(cmd.sessionId);
-        if (adapter) adapter.abort();
+        if (adapter) {
+          this.cancelRun(cmd.sessionId);
+          adapter.abort();
+        }
         break;
       }
 
       case "pause": {
         const adapter = this.adapters.get(cmd.sessionId);
-        if (adapter) adapter.abort();
+        if (adapter) {
+          this.cancelRun(cmd.sessionId);
+          adapter.abort();
+        }
         break;
       }
 
@@ -327,11 +406,13 @@ export class ContainerBridge implements IBridgeClient {
       case "delete": {
         const adapter = this.adapters.get(cmd.sessionId);
         if (adapter) {
+          this.cancelRun(cmd.sessionId);
           adapter.abort();
           this.adapters.delete(cmd.sessionId);
         }
         this.sessionTools.delete(cmd.sessionId);
         this.reportedToolSessionIds.delete(cmd.sessionId);
+        this.sessionRunSequence.delete(cmd.sessionId);
         const wasReadOnly = this.readOnlySessions.has(cmd.sessionId);
         this.readOnlySessions.delete(cmd.sessionId);
         this.sessionWorkdirs.delete(cmd.sessionId);
@@ -341,7 +422,10 @@ export class ContainerBridge implements IBridgeClient {
         // Clean up worktree for this session only — skip for read-only sessions (no worktree to remove)
         if (cmd.workdir && cmd.repoId && !wasReadOnly) {
           removeWorktree(cmd.repoId, cmd.workdir).catch((err: Error) => {
-            console.warn(`[container-bridge] failed to remove worktree ${cmd.workdir}:`, err.message);
+            console.warn(
+              `[container-bridge] failed to remove worktree ${cmd.workdir}:`,
+              err.message,
+            );
           });
         }
         break;
@@ -356,23 +440,35 @@ export class ContainerBridge implements IBridgeClient {
           break;
         }
 
-        execFile("git", ["branch", "-a", "--format=%(refname:short)"], { cwd: repoPath }, (err, stdout) => {
-          if (err) {
-            this.send({ type: "branches_result", requestId, branches: [], error: err.message });
-            return;
-          }
-          this.send({ type: "branches_result", requestId, branches: parseBranchOutput(stdout) });
-        });
+        execFile(
+          "git",
+          ["branch", "-a", "--format=%(refname:short)"],
+          { cwd: repoPath },
+          (err, stdout) => {
+            if (err) {
+              this.send({ type: "branches_result", requestId, branches: [], error: err.message });
+              return;
+            }
+            this.send({ type: "branches_result", requestId, branches: parseBranchOutput(stdout) });
+          },
+        );
         break;
       }
 
       case "list_files": {
         handleListFiles(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
-          gitLsFiles: (cwd, cb) => execFile("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
-            if (err) return cb(err, []);
-            cb(null, stdout.split("\n").filter(Boolean));
-          }),
-          fs, path,
+          gitLsFiles: (cwd, cb) =>
+            execFile(
+              "git",
+              ["ls-files", "--cached", "--others", "--exclude-standard"],
+              { cwd, maxBuffer: 5 * 1024 * 1024 },
+              (err, stdout) => {
+                if (err) return cb(err, []);
+                cb(null, stdout.split("\n").filter(Boolean));
+              },
+            ),
+          fs,
+          path,
         });
         break;
       }
@@ -395,7 +491,8 @@ export class ContainerBridge implements IBridgeClient {
       case "list_skills": {
         void handleListSkills(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
           userSkillsDir: null,
-          fs, path,
+          fs,
+          path,
         });
         break;
       }
@@ -427,7 +524,15 @@ export class ContainerBridge implements IBridgeClient {
     }
   }
 
-  private async runPrompt({ sessionId, prompt, cwd, tool, model, interactionMode, toolSessionId }: {
+  private async runPrompt({
+    sessionId,
+    prompt,
+    cwd,
+    tool,
+    model,
+    interactionMode,
+    toolSessionId,
+  }: {
     sessionId: string;
     prompt: string;
     cwd: string;
@@ -456,12 +561,15 @@ export class ContainerBridge implements IBridgeClient {
     }
     this.sessionTools.set(sessionId, resolvedTool);
 
+    const runId = this.startRun(sessionId);
+    adapter.abort();
+
     const activeAdapter = adapter;
     adapter.run({
       prompt,
       cwd,
       onOutput: (output) => {
-        if (this.adapters.get(sessionId) !== activeAdapter) return;
+        if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
         this.send({ type: "session_output", sessionId, data: output });
 
         // Phase 1: collect tool_use blocks whose command is a git commit/push
@@ -479,7 +587,7 @@ export class ContainerBridge implements IBridgeClient {
           if (gitTrigger.toolUseId) sessionPending.delete(gitTrigger.toolUseId);
           inspectGitCheckpoint(cwd, gitTrigger.trigger, gitTrigger.command)
             .then((checkpoint) => {
-              if (this.adapters.get(sessionId) !== activeAdapter) return;
+              if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
               this.send({ type: "git_checkpoint", sessionId, checkpoint });
             })
             .catch((err: Error) => {
@@ -496,9 +604,16 @@ export class ContainerBridge implements IBridgeClient {
             this.send({ type: "tool_session_id", sessionId, toolSessionId: sid });
           }
         }
+
+        if (isPendingInputOutput(output)) {
+          this.finishRun(sessionId, runId);
+          this.send({ type: "session_complete", sessionId });
+          activeAdapter.abort();
+        }
       },
       onComplete: () => {
-        if (this.adapters.get(sessionId) !== activeAdapter) return;
+        if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
+        this.finishRun(sessionId, runId);
         this.send({ type: "session_complete", sessionId });
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,

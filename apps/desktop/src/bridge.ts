@@ -12,8 +12,21 @@ import type {
   GitCheckpointBridgePayload,
   GitCheckpointContext,
   GitCheckpointTrigger,
+  ToolOutput,
 } from "@trace/shared";
-import { extractGitToolUsePending, extractGitToolResultTrigger, parseBranchOutput, handleListFiles, handleReadFile, handleBranchDiff, handleFileAtRef, handleListSkills, GIT_SHOW_ARGS, GIT_DIFF_TREE_ARGS, parseGitShowOutput } from "@trace/shared";
+import {
+  extractGitToolUsePending,
+  extractGitToolResultTrigger,
+  parseBranchOutput,
+  handleListFiles,
+  handleReadFile,
+  handleBranchDiff,
+  handleFileAtRef,
+  handleListSkills,
+  GIT_SHOW_ARGS,
+  GIT_DIFF_TREE_ARGS,
+  parseGitShowOutput,
+} from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
@@ -42,6 +55,13 @@ async function inspectGitCheckpoint(
   return parseGitShowOutput(showStdout, diffStdout, trigger, command, new Date().toISOString());
 }
 
+function isPendingInputOutput(output: ToolOutput): boolean {
+  return (
+    output.type === "assistant" &&
+    output.message.content.some((block) => block.type === "question" || block.type === "plan")
+  );
+}
+
 export type BridgeConnectionStatus = "connecting" | "connected" | "disconnected";
 
 export class BridgeClient implements IBridgeClient {
@@ -60,11 +80,19 @@ export class BridgeClient implements IBridgeClient {
   /** Maps sessionId → workdir so terminals can spawn in the correct directory */
   private sessionWorkdirs = new Map<string, string>();
   /** Coalesces concurrent createWorktree calls for the same worktree key (sessionGroupId or sessionId) */
-  private pendingWorktrees = new Map<string, Promise<{ workdir: string; branch: string; slug: string }>>();
+  private pendingWorktrees = new Map<
+    string,
+    Promise<{ workdir: string; branch: string; slug: string }>
+  >();
   /** Sessions running in read-only mode (no worktree, using user's repo checkout) */
   private readOnlySessions = new Set<string>();
   /** Phase-1 git detection: sessionId → Map<toolUseId → {trigger, command}> */
-  private pendingGitToolUses = new Map<string, Map<string, { trigger: import("@trace/shared").GitCheckpointTrigger; command: string }>>();
+  private pendingGitToolUses = new Map<
+    string,
+    Map<string, { trigger: import("@trace/shared").GitCheckpointTrigger; command: string }>
+  >();
+  private sessionRunSequence = new Map<string, number>();
+  private activeRuns = new Map<string, number>();
   private terminalManager: TerminalManager;
 
   private gitExec: GitExecFn = (args, cwd) =>
@@ -91,7 +119,10 @@ export class BridgeClient implements IBridgeClient {
   connect() {
     this.cancelPendingReconnect();
     this.setStatus("connecting");
-    runtimeDebug("desktop bridge connecting", { serverUrl: this.serverUrl, instanceId: this.instanceId });
+    runtimeDebug("desktop bridge connecting", {
+      serverUrl: this.serverUrl,
+      instanceId: this.instanceId,
+    });
     this.ws = new WebSocket(`${this.serverUrl}/bridge`);
 
     this.ws.on("open", () => {
@@ -124,7 +155,10 @@ export class BridgeClient implements IBridgeClient {
 
     this.ws.on("error", (err) => {
       console.error("[bridge] error:", err.message);
-      runtimeDebug("desktop bridge websocket error", { instanceId: this.instanceId, error: err.message });
+      runtimeDebug("desktop bridge websocket error", {
+        instanceId: this.instanceId,
+        error: err.message,
+      });
     });
   }
 
@@ -139,7 +173,8 @@ export class BridgeClient implements IBridgeClient {
     this.stopHeartbeat();
     this.stopHookQueueDrain();
     this.terminalManager.destroyAll();
-    for (const adapter of this.adapters.values()) {
+    for (const [sessionId, adapter] of this.adapters.entries()) {
+      this.cancelRun(sessionId);
       adapter.abort();
     }
     this.adapters.clear();
@@ -192,6 +227,27 @@ export class BridgeClient implements IBridgeClient {
     };
   }
 
+  private startRun(sessionId: string): number {
+    const runId = (this.sessionRunSequence.get(sessionId) ?? 0) + 1;
+    this.sessionRunSequence.set(sessionId, runId);
+    this.activeRuns.set(sessionId, runId);
+    return runId;
+  }
+
+  private finishRun(sessionId: string, runId: number) {
+    if (this.activeRuns.get(sessionId) === runId) {
+      this.activeRuns.delete(sessionId);
+    }
+  }
+
+  private cancelRun(sessionId: string) {
+    this.activeRuns.delete(sessionId);
+  }
+
+  private isCurrentRun(sessionId: string, adapter: CodingToolAdapter, runId: number): boolean {
+    return this.adapters.get(sessionId) === adapter && this.activeRuns.get(sessionId) === runId;
+  }
+
   private sendRuntimeHello() {
     // Announce identity — the server restores session bindings from the DB
     // using our stable instanceId, so we don't need to report session lists.
@@ -229,7 +285,11 @@ export class BridgeClient implements IBridgeClient {
 
   private setStatus(status: BridgeConnectionStatus) {
     if (this.status === status) return;
-    runtimeDebug("desktop bridge status changed", { instanceId: this.instanceId, from: this.status, to: status });
+    runtimeDebug("desktop bridge status changed", {
+      instanceId: this.instanceId,
+      from: this.status,
+      to: status,
+    });
     this.status = status;
     for (const listener of this.statusListeners) {
       listener(status);
@@ -311,7 +371,9 @@ export class BridgeClient implements IBridgeClient {
     checkpointContext?: GitCheckpointContext | null;
   }) {
     if (!cwd) {
-      console.warn(`[bridge] No cwd provided for session ${sessionId}, falling back to home directory (${os.homedir()})`);
+      console.warn(
+        `[bridge] No cwd provided for session ${sessionId}, falling back to home directory (${os.homedir()})`,
+      );
     }
     const workdir = cwd ?? os.homedir();
 
@@ -341,14 +403,16 @@ export class BridgeClient implements IBridgeClient {
     }
     if (tool) this.sessionTools.set(sessionId, tool);
 
-    // Capture reference so stale callbacks from an aborted adapter
-    // (e.g. after a tool switch) are silently dropped.
+    const runId = this.startRun(sessionId);
+    adapter.abort();
+
+    // Capture adapter/run identity so callbacks from older runs are dropped.
     const activeAdapter = adapter;
     adapter.run({
       prompt,
       cwd: workdir,
       onOutput: (output) => {
-        if (this.adapters.get(sessionId) !== activeAdapter) return;
+        if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
         this.send({ type: "session_output", sessionId, data: output });
 
         // Phase 1: collect tool_use blocks whose command is a git commit/push
@@ -366,11 +430,14 @@ export class BridgeClient implements IBridgeClient {
           if (gitTrigger.toolUseId) sessionPending.delete(gitTrigger.toolUseId);
           inspectGitCheckpoint(workdir, gitTrigger.trigger, gitTrigger.command)
             .then((checkpoint) => {
-              if (this.adapters.get(sessionId) !== activeAdapter) return;
+              if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
               this.send({ type: "git_checkpoint", sessionId, checkpoint });
             })
             .catch((err: Error) => {
-              console.warn(`[bridge] failed to inspect git checkpoint for ${sessionId}:`, err.message);
+              console.warn(
+                `[bridge] failed to inspect git checkpoint for ${sessionId}:`,
+                err.message,
+              );
             });
         }
         // When the adapter discovers its tool session ID, report it to the server
@@ -382,9 +449,16 @@ export class BridgeClient implements IBridgeClient {
             this.send({ type: "tool_session_id", sessionId, toolSessionId: sid });
           }
         }
+
+        if (isPendingInputOutput(output)) {
+          this.finishRun(sessionId, runId);
+          this.send({ type: "session_complete", sessionId });
+          activeAdapter.abort();
+        }
       },
       onComplete: () => {
-        if (this.adapters.get(sessionId) !== activeAdapter) return;
+        if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
+        this.finishRun(sessionId, runId);
         this.send({ type: "session_complete", sessionId });
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
@@ -422,7 +496,17 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "prepare": {
-        const { sessionId, sessionGroupId, slug, repoId, repoName, defaultBranch, branch, checkpointSha, readOnly } = cmd;
+        const {
+          sessionId,
+          sessionGroupId,
+          slug,
+          repoId,
+          repoName,
+          defaultBranch,
+          branch,
+          checkpointSha,
+          readOnly,
+        } = cmd;
         const repoConfig = getRepoConfig(repoId);
         const repoPath = repoConfig?.path;
 
@@ -464,7 +548,13 @@ export class BridgeClient implements IBridgeClient {
         worktreePromise
           .then(({ workdir, branch: worktreeBranch, slug: worktreeSlug }) => {
             this.sessionWorkdirs.set(sessionId, workdir);
-            this.send({ type: "workspace_ready", sessionId, workdir, branch: worktreeBranch, slug: worktreeSlug });
+            this.send({
+              type: "workspace_ready",
+              sessionId,
+              workdir,
+              branch: worktreeBranch,
+              slug: worktreeSlug,
+            });
           })
           .catch((err: Error) => {
             this.send({ type: "workspace_failed", sessionId, error: err.message });
@@ -498,7 +588,13 @@ export class BridgeClient implements IBridgeClient {
           .then(({ workdir, branch: worktreeBranch, slug: worktreeSlug }) => {
             this.sessionWorkdirs.set(sessionId, workdir);
             this.readOnlySessions.delete(sessionId);
-            this.send({ type: "workspace_ready", sessionId, workdir, branch: worktreeBranch, slug: worktreeSlug });
+            this.send({
+              type: "workspace_ready",
+              sessionId,
+              workdir,
+              branch: worktreeBranch,
+              slug: worktreeSlug,
+            });
           })
           .catch((err: Error) => {
             this.send({ type: "workspace_failed", sessionId, error: err.message });
@@ -510,6 +606,7 @@ export class BridgeClient implements IBridgeClient {
         if (adapter) {
           // Abort the running process but keep the adapter so it retains
           // the Claude Code session ID for --resume on subsequent messages.
+          this.cancelRun(cmd.sessionId);
           adapter.abort();
         }
         break;
@@ -517,6 +614,7 @@ export class BridgeClient implements IBridgeClient {
       case "pause": {
         const pauseAdapter = this.adapters.get(cmd.sessionId);
         if (pauseAdapter) {
+          this.cancelRun(cmd.sessionId);
           pauseAdapter.abort();
         }
         break;
@@ -528,11 +626,13 @@ export class BridgeClient implements IBridgeClient {
       case "delete": {
         const deleteAdapter = this.adapters.get(cmd.sessionId);
         if (deleteAdapter) {
+          this.cancelRun(cmd.sessionId);
           deleteAdapter.abort();
           this.adapters.delete(cmd.sessionId);
         }
         this.sessionTools.delete(cmd.sessionId);
         this.reportedToolSessionIds.delete(cmd.sessionId);
+        this.sessionRunSequence.delete(cmd.sessionId);
         const wasReadOnly = this.readOnlySessions.has(cmd.sessionId);
         this.readOnlySessions.delete(cmd.sessionId);
         this.sessionWorkdirs.delete(cmd.sessionId);
@@ -559,22 +659,34 @@ export class BridgeClient implements IBridgeClient {
           break;
         }
 
-        execFile("git", ["branch", "-a", "--format=%(refname:short)"], { cwd: repoPath }, (err, stdout) => {
-          if (err) {
-            this.send({ type: "branches_result", requestId, branches: [], error: err.message });
-            return;
-          }
-          this.send({ type: "branches_result", requestId, branches: parseBranchOutput(stdout) });
-        });
+        execFile(
+          "git",
+          ["branch", "-a", "--format=%(refname:short)"],
+          { cwd: repoPath },
+          (err, stdout) => {
+            if (err) {
+              this.send({ type: "branches_result", requestId, branches: [], error: err.message });
+              return;
+            }
+            this.send({ type: "branches_result", requestId, branches: parseBranchOutput(stdout) });
+          },
+        );
         break;
       }
       case "list_files": {
         handleListFiles(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
-          gitLsFiles: (cwd, cb) => execFile("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
-            if (err) return cb(err, []);
-            cb(null, stdout.split("\n").filter(Boolean));
-          }),
-          fs, path,
+          gitLsFiles: (cwd, cb) =>
+            execFile(
+              "git",
+              ["ls-files", "--cached", "--others", "--exclude-standard"],
+              { cwd, maxBuffer: 5 * 1024 * 1024 },
+              (err, stdout) => {
+                if (err) return cb(err, []);
+                cb(null, stdout.split("\n").filter(Boolean));
+              },
+            ),
+          fs,
+          path,
         });
         break;
       }
@@ -593,7 +705,8 @@ export class BridgeClient implements IBridgeClient {
       case "list_skills": {
         void handleListSkills(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
           userSkillsDir: path.join(os.homedir(), ".claude", "skills"),
-          fs, path,
+          fs,
+          path,
         });
         break;
       }
