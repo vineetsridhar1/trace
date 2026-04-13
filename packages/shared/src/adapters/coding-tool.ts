@@ -40,15 +40,22 @@ export interface Question {
 export interface QuestionBlock {
   type: "question";
   questions: Question[];
+  toolUseId?: string;
 }
 
 export interface PlanBlock {
   type: "plan";
   content: string;
   filePath?: string;
+  toolUseId?: string;
 }
 
-export type MessageBlock = ContentBlock | ToolUseBlock | ToolResultBlock | QuestionBlock | PlanBlock;
+export type MessageBlock =
+  | ContentBlock
+  | ToolUseBlock
+  | ToolResultBlock
+  | QuestionBlock
+  | PlanBlock;
 
 /**
  * Check whether a session_output payload contains a PlanBlock.
@@ -82,17 +89,19 @@ export function hasQuestionBlock(data: Record<string, unknown>): boolean {
 
 /** Parse a raw unknown value into a Question, with safe defaults */
 export function parseQuestion(raw: unknown): Question {
-  const r = (raw != null && typeof raw === "object" && !Array.isArray(raw))
-    ? raw as Record<string, unknown>
-    : {} as Record<string, unknown>;
+  const r =
+    raw != null && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : ({} as Record<string, unknown>);
   return {
     question: String(r.question ?? ""),
     header: String(r.header ?? ""),
     options: Array.isArray(r.options)
       ? r.options.map((o: unknown) => {
-          const opt = (o != null && typeof o === "object" && !Array.isArray(o))
-            ? o as Record<string, unknown>
-            : {} as Record<string, unknown>;
+          const opt =
+            o != null && typeof o === "object" && !Array.isArray(o)
+              ? (o as Record<string, unknown>)
+              : ({} as Record<string, unknown>);
           return { label: String(opt.label ?? ""), description: String(opt.description ?? "") };
         })
       : [],

@@ -977,6 +977,121 @@ describe("SessionService", () => {
         (data.message as { content: Array<{ text?: string }> }).content[0].text ?? "",
       ).not.toContain("<trace-branch>");
     });
+
+    it("records the first pending question for a tool_use id", async () => {
+      const data = {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "question",
+              toolUseId: "toolu_pending_1",
+              questions: [
+                { header: "Choice", question: "Pick one", options: [], multiSelect: false },
+              ],
+            },
+          ],
+        },
+      };
+
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        organizationId: "org-1",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        sessionGroupId: "group-1",
+      });
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup(),
+        sessions: [{ agentStatus: "done", sessionStatus: "needs_input" }],
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        createdById: "user-1",
+        name: "Implement dashboard filters",
+      });
+
+      await service.recordOutput("session-1", data as Record<string, unknown>);
+
+      expect(eventServiceMock.create).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: data,
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "question_pending",
+            sessionStatus: "needs_input",
+          }),
+        }),
+      );
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: { id: "session-1", agentStatus: "active" },
+        data: { sessionStatus: "needs_input" },
+      });
+    });
+
+    it("records repeated pending questions even when the tool_use id matches", async () => {
+      const data = {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "question",
+              toolUseId: "toolu_pending_1",
+              questions: [
+                { header: "Choice", question: "Pick one", options: [], multiSelect: false },
+              ],
+            },
+          ],
+        },
+      };
+
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        organizationId: "org-1",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        sessionGroupId: "group-1",
+      });
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup(),
+        sessions: [{ agentStatus: "done", sessionStatus: "needs_input" }],
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        createdById: "user-1",
+        name: "Implement dashboard filters",
+      });
+
+      await service.recordOutput("session-1", data as Record<string, unknown>);
+
+      expect(eventServiceMock.create).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: data,
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "question_pending",
+            sessionStatus: "needs_input",
+          }),
+        }),
+      );
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: { id: "session-1", agentStatus: "active" },
+        data: { sessionStatus: "needs_input" },
+      });
+    });
   });
 
   describe("complete", () => {
@@ -1201,8 +1316,12 @@ describe("SessionService", () => {
       );
       prismaMock.channel.findUnique.mockResolvedValueOnce({ setupScript: "pnpm install" });
       prismaMock.sessionGroup.update
-        .mockResolvedValueOnce(makeSessionGroup({ workdir: "/tmp/trace/workspace", setupStatus: "running" }))
-        .mockResolvedValueOnce(makeSessionGroup({ workdir: "/tmp/trace/workspace", setupStatus: "completed" }));
+        .mockResolvedValueOnce(
+          makeSessionGroup({ workdir: "/tmp/trace/workspace", setupStatus: "running" }),
+        )
+        .mockResolvedValueOnce(
+          makeSessionGroup({ workdir: "/tmp/trace/workspace", setupStatus: "completed" }),
+        );
       prismaMock.session.updateMany.mockResolvedValue({ count: 1 });
 
       await service.workspaceReady("session-1", "/tmp/trace/workspace");
@@ -1249,8 +1368,12 @@ describe("SessionService", () => {
         sessions: [{ id: "session-1", hosting: "cloud", createdById: "user-1" }],
       });
       prismaMock.sessionGroup.update
-        .mockResolvedValueOnce(makeSessionGroup({ workdir: "/tmp/trace/workspace", setupStatus: "running" }))
-        .mockResolvedValueOnce(makeSessionGroup({ workdir: "/tmp/trace/workspace", setupStatus: "completed" }));
+        .mockResolvedValueOnce(
+          makeSessionGroup({ workdir: "/tmp/trace/workspace", setupStatus: "running" }),
+        )
+        .mockResolvedValueOnce(
+          makeSessionGroup({ workdir: "/tmp/trace/workspace", setupStatus: "completed" }),
+        );
 
       await service.retrySessionGroupSetup("group-1", "org-1", "user", "user-1");
 

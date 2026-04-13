@@ -39,6 +39,50 @@ type SessionStartMetadata = {
   restoreCheckpointSha: string | null;
 };
 
+type PendingInputInfo = {
+  kind: "question" | "plan";
+  toolUseId: string | null;
+};
+
+function getAssistantBlocks(data: Record<string, unknown>): Record<string, unknown>[] | null {
+  if (data.type !== "assistant") return null;
+  const message = data.message;
+  if (!message || typeof message !== "object" || Array.isArray(message)) return null;
+  const content = (message as Record<string, unknown>).content;
+  if (!Array.isArray(content)) return null;
+
+  return content.filter((block): block is Record<string, unknown> => {
+    return block != null && typeof block === "object" && !Array.isArray(block);
+  });
+}
+
+function extractPendingInputInfo(data: Record<string, unknown>): PendingInputInfo | null {
+  const blocks = getAssistantBlocks(data);
+  if (!blocks) return null;
+
+  const questionBlock = blocks.find((block) => block.type === "question");
+  if (questionBlock) {
+    return {
+      kind: "question",
+      toolUseId:
+        typeof questionBlock.toolUseId === "string" && questionBlock.toolUseId.trim()
+          ? questionBlock.toolUseId
+          : null,
+    };
+  }
+
+  const planBlock = blocks.find((block) => block.type === "plan");
+  if (!planBlock) return null;
+
+  return {
+    kind: "plan",
+    toolUseId:
+      typeof planBlock.toolUseId === "string" && planBlock.toolUseId.trim()
+        ? planBlock.toolUseId
+        : null,
+  };
+}
+
 /** Shape of Session.connection JSON stored in the DB */
 export type SessionConnectionData = {
   state: "connected" | "degraded" | "disconnected";
@@ -901,7 +945,8 @@ export class SessionService {
       }
       return null;
     })();
-    const sourceProjectIds = sourceSession?.projects.map((project: { projectId: string }) => project.projectId) ?? [];
+    const sourceProjectIds =
+      sourceSession?.projects.map((project: { projectId: string }) => project.projectId) ?? [];
     const sourceTicketLinks = sourceSessionId
       ? await prisma.ticketLink.findMany({
           where: { entityType: "session", entityId: sourceSessionId },
@@ -1631,6 +1676,7 @@ export class SessionService {
     // Extract and strip <trace-title> and <trace-branch> tags from assistant text before persisting
     const extractedTitle = this.extractAndStripTitle(data);
     const extractedBranch = this.extractAndStripBranch(data);
+    const pendingInfo = extractPendingInputInfo(data);
 
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
@@ -1664,9 +1710,9 @@ export class SessionService {
     }
 
     // If this output contains a QuestionBlock or PlanBlock, transition to needs_input immediately.
-    // Claude Code hangs waiting for stdin when AskUserQuestion/ExitPlanMode fires, so complete()
-    // never runs — we detect it here instead.
-    const needsInput = hasQuestionBlock(data) || hasPlanBlock(data);
+    // This keeps the UI responsive even before session_complete is processed, and acts as a
+    // safety net for adapters that exit or pause around pending-input tool calls.
+    const needsInput = pendingInfo !== null || hasQuestionBlock(data) || hasPlanBlock(data);
     if (session.agentStatus === "active" && needsInput) {
       // Use agentStatus in the where clause to make this idempotent — if two
       // recordOutput calls race, only the first one that sees "active" wins.
@@ -1682,7 +1728,7 @@ export class SessionService {
         // Emit as session_output with a status patch — matches the workspace_ready pattern.
         // The frontend's sessionPatchFromOutput picks up the sessionStatus field.
         // Questions take precedence — they need immediate user interaction
-        const pendingType = hasQuestionBlock(data) ? "question_pending" : "plan_pending";
+        const pendingType = pendingInfo?.kind === "plan" ? "plan_pending" : "question_pending";
         await eventService.create({
           organizationId: session.organizationId,
           scopeType: "session",
@@ -2192,27 +2238,29 @@ export class SessionService {
 
   async workspaceReady(sessionId: string, workdir: string, branch?: string, slug?: string) {
     // Read and clear pendingRun atomically in a transaction to prevent double-delivery
-    const [session, pendingRun] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const prev = await tx.session.findUniqueOrThrow({
-        where: { id: sessionId },
-        select: { pendingRun: true, agentStatus: true, sessionStatus: true },
-      });
+    const [session, pendingRun] = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        const prev = await tx.session.findUniqueOrThrow({
+          where: { id: sessionId },
+          select: { pendingRun: true, agentStatus: true, sessionStatus: true },
+        });
 
-      const updated = await tx.session.update({
-        where: { id: sessionId },
-        data: {
-          agentStatus: getIdleAgentStatus(prev.agentStatus),
-          sessionStatus: getIdleSessionStatus(prev.sessionStatus),
-          workdir,
-          ...(branch && { branch }),
-          pendingRun: Prisma.DbNull,
-          readOnlyWorkspace: false,
-        },
-        include: SESSION_INCLUDE,
-      });
+        const updated = await tx.session.update({
+          where: { id: sessionId },
+          data: {
+            agentStatus: getIdleAgentStatus(prev.agentStatus),
+            sessionStatus: getIdleSessionStatus(prev.sessionStatus),
+            workdir,
+            ...(branch && { branch }),
+            pendingRun: Prisma.DbNull,
+            readOnlyWorkspace: false,
+          },
+          include: SESSION_INCLUDE,
+        });
 
-      return [updated, prev.pendingRun] as const;
-    });
+        return [updated, prev.pendingRun] as const;
+      },
+    );
     const setupScript = await this.getChannelSetupScript(session.channelId);
     const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
       workdir,
@@ -3666,7 +3714,9 @@ export class SessionService {
     return buildSessionGroupSnapshot(summary, sessions);
   }
 
-  private async getChannelSetupScript(channelId: string | null | undefined): Promise<string | null> {
+  private async getChannelSetupScript(
+    channelId: string | null | undefined,
+  ): Promise<string | null> {
     if (!channelId) return null;
     const channel = await prisma.channel.findUnique({
       where: { id: channelId },

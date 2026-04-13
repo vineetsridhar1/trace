@@ -16,6 +16,7 @@ export class CodexAdapter implements CodingToolAdapter {
   private resultEmitted = false;
   private interactionMode: "code" | "plan" | "ask" | undefined;
   private lastTextContent: string | null = null;
+  private processGeneration = 0;
 
   run({ prompt, cwd, onOutput, onComplete, model, toolSessionId, interactionMode }: RunOptions) {
     this.cwd = cwd;
@@ -28,25 +29,38 @@ export class CodexAdapter implements CodingToolAdapter {
     }
 
     const args = this.threadId
-      ? ["exec", "resume", this.threadId, "--json", "--dangerously-bypass-approvals-and-sandbox", prompt]
+      ? [
+          "exec",
+          "resume",
+          this.threadId,
+          "--json",
+          "--dangerously-bypass-approvals-and-sandbox",
+          prompt,
+        ]
       : ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", prompt];
     if (model) {
       args.push("--model", model);
     }
 
-    this.process = spawn("codex", args, {
+    const processGeneration = ++this.processGeneration;
+    const child = spawn("codex", args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env },
       detached: true,
     });
+    this.process = child;
 
-    if (this.process.stdout) {
+    const isCurrentProcess = () =>
+      this.processGeneration === processGeneration && this.process === child;
+
+    if (child.stdout) {
       // Prevent unhandled 'error' events on the pipe from crashing the process
       // when abort() kills the child (the pipe can emit ECONNRESET/EPIPE).
-      this.process.stdout.on("error", () => {});
-      const rl = createInterface({ input: this.process.stdout });
+      child.stdout.on("error", () => {});
+      const rl = createInterface({ input: child.stdout });
       rl.on("line", (line) => {
+        if (!isCurrentProcess()) return;
         if (!line.trim()) return;
         try {
           const parsed = JSON.parse(line);
@@ -58,18 +72,24 @@ export class CodexAdapter implements CodingToolAdapter {
     }
 
     const stderrChunks: string[] = [];
-    if (this.process.stderr) {
-      this.process.stderr.on("error", () => {});
-      const rl = createInterface({ input: this.process.stderr });
+    if (child.stderr) {
+      child.stderr.on("error", () => {});
+      const rl = createInterface({ input: child.stderr });
       rl.on("line", (line) => {
+        if (!isCurrentProcess()) return;
         stderrChunks.push(line);
       });
     }
 
-    this.process.on("close", (code) => {
+    child.on("close", (code: number | null) => {
+      if (!isCurrentProcess()) return;
       // If in plan mode and exited cleanly with text, wrap as PlanBlock.
       // Codex doesn't write plan files to disk, so filePath is omitted.
-      if (this.interactionMode === "plan" && (code === 0 || code === null) && this.lastTextContent) {
+      if (
+        this.interactionMode === "plan" &&
+        (code === 0 || code === null) &&
+        this.lastTextContent
+      ) {
         onOutput({
           type: "assistant",
           message: { content: [{ type: "plan", content: this.lastTextContent }] },
@@ -86,7 +106,8 @@ export class CodexAdapter implements CodingToolAdapter {
       this.process = null;
     });
 
-    this.process.on("error", (err) => {
+    child.on("error", (err: Error) => {
+      if (!isCurrentProcess()) return;
       onOutput({ type: "error", message: err.message });
       onComplete();
       this.process = null;
@@ -158,7 +179,11 @@ export class CodexAdapter implements CodingToolAdapter {
   abort() {
     if (this.process) {
       // Kill the entire process group (negative PID) since we spawn detached
-      try { process.kill(-this.process.pid!, "SIGTERM"); } catch { /* already dead */ }
+      try {
+        process.kill(-this.process.pid!, "SIGTERM");
+      } catch {
+        /* already dead */
+      }
       this.process = null;
     }
   }

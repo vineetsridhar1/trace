@@ -21,6 +21,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   private cwd: string | null = null;
   private resultEmitted = false;
   private lastPlanFilePath: string | null = null;
+  private processGeneration = 0;
 
   run({ prompt, cwd, onOutput, onComplete, interactionMode, model, toolSessionId }: RunOptions) {
     this.cwd = cwd;
@@ -32,9 +33,8 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       this.claudeSessionId = toolSessionId;
     }
 
-    const permissionFlag = interactionMode === "plan"
-      ? "--permission-mode"
-      : "--dangerously-skip-permissions";
+    const permissionFlag =
+      interactionMode === "plan" ? "--permission-mode" : "--dangerously-skip-permissions";
     const args = ["-p", prompt, "--output-format", "stream-json", "--verbose"];
     if (model) {
       args.push("--model", model);
@@ -48,33 +48,43 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       args.push("--resume", this.claudeSessionId);
     }
 
-    this.process = spawn("claude", args, {
+    const processGeneration = ++this.processGeneration;
+    const child = spawn("claude", args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env },
       detached: true,
     });
+    this.process = child;
 
     // Track process exit code so readline close handler can emit a fallback result
     let exitCode: number | null = null;
     let rlClosed = false;
     let processClosed = false;
 
+    const isCurrentProcess = () =>
+      this.processGeneration === processGeneration && this.process === child;
+
     const maybeFinish = () => {
       if (!rlClosed || !processClosed) return;
+      if (!isCurrentProcess()) return;
       if (!this.resultEmitted) {
-        onOutput({ type: "result", subtype: exitCode === 0 || exitCode === null ? "success" : "error" });
+        onOutput({
+          type: "result",
+          subtype: exitCode === 0 || exitCode === null ? "success" : "error",
+        });
       }
       onComplete();
       this.process = null;
     };
 
-    if (this.process.stdout) {
+    if (child.stdout) {
       // Prevent unhandled 'error' events on the pipe from crashing the process
       // when abort() kills the child (the pipe can emit ECONNRESET/EPIPE).
-      this.process.stdout.on("error", () => {});
-      const rl = createInterface({ input: this.process.stdout });
+      child.stdout.on("error", () => {});
+      const rl = createInterface({ input: child.stdout });
       rl.on("line", (line) => {
+        if (!isCurrentProcess()) return;
         if (!line.trim()) return;
         try {
           const parsed = JSON.parse(line);
@@ -100,16 +110,18 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     }
 
     const stderrChunks: string[] = [];
-    if (this.process.stderr) {
-      this.process.stderr.on("error", () => {});
-      const rl = createInterface({ input: this.process.stderr });
+    if (child.stderr) {
+      child.stderr.on("error", () => {});
+      const rl = createInterface({ input: child.stderr });
       rl.on("line", (line) => {
+        if (!isCurrentProcess()) return;
         stderrChunks.push(line);
       });
     }
 
-    this.process.on("close", (code) => {
+    child.on("close", (code: number | null) => {
       exitCode = code;
+      if (!isCurrentProcess()) return;
       if (code !== 0 && code !== null && stderrChunks.length > 0) {
         onOutput({ type: "error", message: stderrChunks.join("\n") });
       }
@@ -117,7 +129,8 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       maybeFinish();
     });
 
-    this.process.on("error", (err) => {
+    child.on("error", (err: Error) => {
+      if (!isCurrentProcess()) return;
       onOutput({ type: "error", message: err.message });
       onComplete();
       this.process = null;
@@ -138,6 +151,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       if (Array.isArray(content)) {
         // Track plan file writes and detect ExitPlanMode before normalizing
         let hasExitPlanMode = false;
+        let exitPlanModeToolUseId: string | undefined;
         for (const block of content as Record<string, unknown>[]) {
           if (block.type === "tool_use") {
             const name = String(block.name ?? "");
@@ -150,6 +164,9 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
             }
             if (name === "ExitPlanMode") {
               hasExitPlanMode = true;
+              if (typeof block.id === "string") {
+                exitPlanModeToolUseId = block.id;
+              }
             }
           }
         }
@@ -173,6 +190,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
             type: "plan" as const,
             content: planContent,
             filePath: this.lastPlanFilePath,
+            ...(exitPlanModeToolUseId ? { toolUseId: exitPlanModeToolUseId } : {}),
           });
           this.lastPlanFilePath = null;
         }
@@ -184,6 +202,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
             normalized.push({
               type: "question" as const,
               questions: questions.map(parseQuestion),
+              ...(typeof block.id === "string" ? { toolUseId: block.id } : {}),
             });
             continue;
           }
@@ -244,7 +263,11 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   abort() {
     if (this.process) {
       // Kill the entire process group (negative PID) since we spawn detached
-      try { process.kill(-this.process.pid!, "SIGTERM"); } catch { /* already dead */ }
+      try {
+        process.kill(-this.process.pid!, "SIGTERM");
+      } catch {
+        /* already dead */
+      }
       this.process = null;
     }
   }
