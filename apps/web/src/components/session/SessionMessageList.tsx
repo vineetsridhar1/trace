@@ -21,8 +21,6 @@ export interface SessionMessageListProps {
   onScrollComplete?: () => void;
 }
 
-const sizeCache = new Map<string, number>();
-
 export function SessionMessageList({
   nodes,
   gitCheckpoints,
@@ -43,6 +41,7 @@ export function SessionMessageList({
   const hasScrolledInitiallyRef = useRef(false);
   const isScrollingUpRef = useRef(false);
   const lastScrollTopRef = useRef(0);
+  const sizeCacheRef = useRef(new Map<string, number>());
 
   const gitCheckpointsByPromptEventId = useMemo(() => {
     const byPromptEventId = new Map<string, GitCheckpoint[]>();
@@ -68,15 +67,14 @@ export function SessionMessageList({
   const virtualizer = useVirtualizer({
     count: nodes.length,
     getScrollElement: () => scrollContainerRef.current,
-    estimateSize: (index: number) => sizeCache.get(String(getItemKey(index))) ?? 80,
+    estimateSize: (index: number) => sizeCacheRef.current.get(getItemKey(index)) ?? 80,
     overscan: 20,
     getItemKey,
     measureElement: (element: Element) => {
       const height = element.getBoundingClientRect().height;
       const index = element.getAttribute("data-index");
       if (index != null) {
-        const key = String(getItemKey(Number(index)));
-        sizeCache.set(key, height);
+        sizeCacheRef.current.set(getItemKey(Number(index)), height);
       }
       return height;
     },
@@ -105,19 +103,23 @@ export function SessionMessageList({
   // virtual height changes, which shifts content and causes visible jumps.
   // We detect the height delta and compensate by adjusting scrollTop.
   const prevTotalSizeRef = useRef(0);
+  const prevNodeCountForCorrectionRef = useRef(nodes.length);
   useLayoutEffect(() => {
     const container = scrollContainerRef.current;
     if (!container || !hasScrolledInitiallyRef.current) return;
-    // Skip when load-older snapshot will handle the correction
     if (scrollSnapshotRef.current) return;
 
     const totalSize = virtualizer.getTotalSize();
     const prevTotal = prevTotalSizeRef.current;
     prevTotalSizeRef.current = totalSize;
 
+    const nodeCountChanged = nodes.length !== prevNodeCountForCorrectionRef.current;
+    prevNodeCountForCorrectionRef.current = nodes.length;
+    if (nodeCountChanged) return;
+
     if (prevTotal > 0 && isScrollingUpRef.current) {
       const delta = totalSize - prevTotal;
-      if (delta !== 0 && Math.abs(delta) < 2000) {
+      if (delta !== 0) {
         container.scrollTop += delta;
       }
     }
