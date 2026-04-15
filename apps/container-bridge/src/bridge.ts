@@ -164,8 +164,8 @@ export class ContainerBridge implements IBridgeClient {
       }
     });
 
-    this.ws.on("close", () => {
-      console.log("[container-bridge] disconnected");
+    this.ws.on("close", (code: number, reason: Buffer) => {
+      console.log(`[container-bridge] disconnected (code=${code}, reason=${reason.toString() || "none"})`);
       this.stopHeartbeat();
       this.scheduleReconnect();
     });

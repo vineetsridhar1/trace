@@ -8,8 +8,13 @@ import { terminalRelay } from "./terminal-relay.js";
 /** Grace period before marking sessions disconnected — allows fast reconnects */
 const DISCONNECT_GRACE_MS = 10_000;
 
-/** Interval between server→client pings to keep the WebSocket alive through proxies (e.g. Render). */
+/** Interval between server→client pings to keep the WebSocket alive through proxies. */
 const PING_INTERVAL_MS = 20_000;
+
+/** How many consecutive missed pongs before terminating the connection.
+ *  With a 20s ping interval, 3 missed pongs = 60s tolerance — enough for
+ *  cross-cloud paths (AWS ↔ Fly.io) with occasional network hiccups. */
+const MAX_MISSED_PONGS = 3;
 
 export function handleBridgeConnection(ws: WebSocket) {
   // Default runtime ID; replaced if the bridge sends runtime_hello
@@ -22,21 +27,31 @@ export function handleBridgeConnection(ws: WebSocket) {
   sessionRouter.registerBridge(runtimeId, ws);
   registered = true;
 
-  // Keep-alive: periodically ping the client to prevent idle timeout
-  // from reverse proxies (Render closes idle WebSockets after ~55-60s).
-  let pongReceived = true;
+  // Keep-alive: periodically ping the client to prevent idle timeout from
+  // reverse proxies and to detect dead connections. Allow multiple missed
+  // pongs before terminating — the cross-cloud path (server on AWS, bridge
+  // on Fly.io via Caddy reverse proxy) can have transient delays.
+  let missedPongs = 0;
   const pingInterval = setInterval(() => {
-    if (!pongReceived) {
+    missedPongs++;
+    if (missedPongs > MAX_MISSED_PONGS) {
+      runtimeDebug("bridge ping timeout, terminating", {
+        runtimeId,
+        missedPongs,
+        maxAllowed: MAX_MISSED_PONGS,
+      });
       clearInterval(pingInterval);
       ws.terminate();
       return;
     }
-    pongReceived = false;
+    if (missedPongs > 1) {
+      runtimeDebug("bridge pong delayed", { runtimeId, missedPongs });
+    }
     ws.ping();
   }, PING_INTERVAL_MS);
 
   ws.on("pong", () => {
-    pongReceived = true;
+    missedPongs = 0;
   });
 
   // Serialize event creation per session to preserve ordering
@@ -235,9 +250,14 @@ export function handleBridgeConnection(ws: WebSocket) {
     runtimeDebug("bridge websocket error", { runtimeId, error: err.message });
   });
 
-  ws.on("close", () => {
+  ws.on("close", (code: number, reason: Buffer) => {
     clearInterval(pingInterval);
-    runtimeDebug("bridge websocket closed, grace period starting", { runtimeId, graceMs: DISCONNECT_GRACE_MS });
+    runtimeDebug("bridge websocket closed, grace period starting", {
+      runtimeId,
+      code,
+      reason: reason.toString() || undefined,
+      graceMs: DISCONNECT_GRACE_MS,
+    });
     const closedRuntimeId = runtimeId;
     const affectedSessions = sessionRouter.unregisterRuntime(closedRuntimeId, ws);
     runtimeDebug("bridge close affected sessions", { runtimeId: closedRuntimeId, affectedSessions });

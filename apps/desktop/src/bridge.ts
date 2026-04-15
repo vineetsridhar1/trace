@@ -169,11 +169,11 @@ export class BridgeClient implements IBridgeClient {
       }
     });
 
-    this.ws.on("close", () => {
-      console.log("[bridge] disconnected, reconnecting in 3s...");
+    this.ws.on("close", (code: number, reason: Buffer) => {
+      console.log(`[bridge] disconnected (code=${code}, reason=${reason.toString() || "none"}), reconnecting in 3s...`);
       this.stopHeartbeat();
       this.stopHookQueueDrain();
-      runtimeDebug("desktop bridge websocket closed", { instanceId: this.instanceId });
+      runtimeDebug("desktop bridge websocket closed", { instanceId: this.instanceId, code, reason: reason.toString() || undefined });
       this.setStatus("disconnected");
       this.scheduleReconnect(3000);
     });
