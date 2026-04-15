@@ -84,8 +84,16 @@ router.get("/uploads/url", async (req: Request, res: Response) => {
     return res.status(401).json({ error: "Invalid token" });
   }
 
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
+  if (!user) {
+    return res.status(401).json({ error: "User not found" });
+  }
+
   const key = req.query.key as string | undefined;
-  if (!key || !key.startsWith("uploads/")) {
+  if (!key || !key.startsWith("uploads/") || key.includes("..")) {
     return res.status(400).json({ error: "Invalid key" });
   }
 

@@ -24,6 +24,8 @@ import {
   handleBranchDiff,
   handleFileAtRef,
   handleListSkills,
+  downloadImagesToTempFiles,
+  cleanupTempImages,
   GIT_SHOW_ARGS,
   GIT_DIFF_TREE_ARGS,
   parseGitShowOutput,
@@ -464,19 +466,9 @@ export class BridgeClient implements IBridgeClient {
     // Download attached images to temp files
     let imagePaths: string[] | undefined;
     if (imageUrls?.length) {
-      const tmpDir = path.join(os.tmpdir(), "trace-images");
-      await fs.promises.mkdir(tmpDir, { recursive: true });
-      imagePaths = await Promise.all(
-        imageUrls.map(async (url) => {
-          const ext = url.match(/\.(png|jpg|jpeg|gif|webp|svg)/i)?.[1] ?? "png";
-          const filePath = path.join(tmpDir, `${crypto.randomUUID()}.${ext}`);
-          const res = await fetch(url);
-          if (!res.ok) throw new Error(`Failed to download image: ${res.status}`);
-          const buffer = Buffer.from(await res.arrayBuffer());
-          await fs.promises.writeFile(filePath, buffer);
-          return filePath;
-        }),
-      );
+      imagePaths = await downloadImagesToTempFiles(imageUrls, {
+        fs, path, tmpdir: os.tmpdir, randomUUID: crypto.randomUUID,
+      });
     }
 
     const runId = this.startRun(sessionId);
@@ -561,11 +553,7 @@ export class BridgeClient implements IBridgeClient {
         }
         this.finishRun(sessionId, runId);
         this.send({ type: "session_complete", sessionId });
-        if (imagePaths) {
-          for (const p of imagePaths) {
-            fs.promises.unlink(p).catch(() => {});
-          }
-        }
+        if (imagePaths) cleanupTempImages(imagePaths, fs);
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
       model,

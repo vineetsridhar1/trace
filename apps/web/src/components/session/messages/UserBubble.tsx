@@ -7,14 +7,16 @@ import { ImageLightbox } from "../ImageLightbox";
 import { getAuthHeaders } from "../../../stores/auth";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
+const presignedUrlCache = new Map<string, string>();
 
 function ImageThumbnail({ imageKey, previewUrl }: { imageKey: string; previewUrl?: string }) {
-  const [src, setSrc] = useState<string | null>(previewUrl ?? null);
+  const cached = presignedUrlCache.get(imageKey);
+  const [src, setSrc] = useState<string | null>(previewUrl ?? cached ?? null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const layoutId = `msg-img-${imageKey}`;
 
   useEffect(() => {
-    if (previewUrl) return;
+    if (previewUrl || cached) return;
     let cancelled = false;
     fetch(`${API_URL}/uploads/url?key=${encodeURIComponent(imageKey)}`, {
       credentials: "include",
@@ -22,11 +24,14 @@ function ImageThumbnail({ imageKey, previewUrl }: { imageKey: string; previewUrl
     })
       .then((res) => res.json())
       .then((data: { url?: string }) => {
-        if (!cancelled && data.url) setSrc(data.url);
+        if (!cancelled && data.url) {
+          presignedUrlCache.set(imageKey, data.url);
+          setSrc(data.url);
+        }
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [imageKey, previewUrl]);
+  }, [imageKey, previewUrl, cached]);
 
   if (!src) {
     return (
