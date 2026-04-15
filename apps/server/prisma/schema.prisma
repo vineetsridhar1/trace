@@ -561,7 +561,8 @@ model Session {
   sessionStatus  SessionStatus @default(in_progress)
   tool           CodingTool
   model          String?
-  toolChangedAt  DateTime?
+  toolChangedAt      DateTime?
+  lastUserMessageAt  DateTime?
   hosting        HostingMode
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])

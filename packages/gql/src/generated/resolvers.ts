@@ -1423,6 +1423,7 @@ export type Session = {
   updatedAt: Scalars['DateTime']['output'];
   workdir?: Maybe<Scalars['String']['output']>;
   worktreeDeleted: Scalars['Boolean']['output'];
+  lastUserMessageAt?: Maybe<Scalars['DateTime']['output']>;
 };
 
 export type SessionConnection = {
@@ -2524,6 +2525,7 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   workdir?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   worktreeDeleted?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  lastUserMessageAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 

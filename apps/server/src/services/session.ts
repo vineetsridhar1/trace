@@ -293,6 +293,7 @@ function serializeSession(session: {
   sessionGroup: unknown;
   connection: Prisma.JsonValue | null;
   worktreeDeleted?: boolean;
+  lastUserMessageAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -320,6 +321,7 @@ function serializeSession(session: {
     sessionGroup: session.sessionGroup ?? null,
     connection: session.connection,
     worktreeDeleted: session.worktreeDeleted ?? false,
+    lastUserMessageAt: session.lastUserMessageAt ?? null,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
   };
@@ -1063,6 +1065,7 @@ export class SessionService {
           channelId: resolvedChannelId,
           sessionGroupId: sessionGroup.id,
           connection: sessionGroup.connection ?? initialConnection,
+          lastUserMessageAt: input.prompt ? new Date() : undefined,
           worktreeDeleted: sessionGroup.worktreeDeleted,
           readOnlyWorkspace,
           ...(projectIds.length > 0 && {
@@ -2016,6 +2019,13 @@ export class SessionService {
         branch: true,
       },
     });
+
+    if (actorType === "user") {
+      await prisma.session.update({
+        where: { id: sessionId },
+        data: { lastUserMessageAt: new Date() },
+      });
+    }
 
     if (session.worktreeDeleted) {
       throw new Error("Cannot send messages: session worktree has been deleted");

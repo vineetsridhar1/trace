@@ -43,6 +43,7 @@ const SESSION_DETAIL_QUERY = gql`
       workdir
       prUrl
       worktreeDeleted
+      lastUserMessageAt
       connection {
         state
         runtimeInstanceId
@@ -210,29 +211,11 @@ export function SessionDetailView({
               existingGroup ? { ...existingGroup, ...sessionGroup } : sessionGroup,
             );
           }
-          const merged = existing ? { ...existing, ...fetchedSession } : fetchedSession;
-          upsert("sessions", sessionId, merged);
-
-          // If _lastUserMessageAt wasn't set yet (e.g. events arrived before session detail),
-          // derive it from already-fetched scoped events
-          if (!merged._lastUserMessageAt) {
-            const scopeKey = eventScopeKey("session", sessionId);
-            const bucket = useEntityStore.getState().eventsByScope[scopeKey];
-            if (bucket) {
-              const scopedEvents = Object.values(bucket);
-              scopedEvents.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-              for (let i = scopedEvents.length - 1; i >= 0; i--) {
-                const ev = scopedEvents[i];
-                if (ev.eventType === "message_sent" && ev.actor?.type === "user") {
-                  const current = useEntityStore.getState().sessions[sessionId];
-                  if (current) {
-                    upsert("sessions", sessionId, { ...current, _lastUserMessageAt: ev.timestamp });
-                  }
-                  break;
-                }
-              }
-            }
-          }
+          upsert(
+            "sessions",
+            sessionId,
+            existing ? { ...existing, ...fetchedSession } : fetchedSession,
+          );
         }
       });
   }, [sessionId]);

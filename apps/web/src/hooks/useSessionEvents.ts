@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { gql } from "@urql/core";
 import type { Event } from "@trace/gql";
 import { client } from "../lib/urql";
-import { useScopedEventIds, eventScopeKey, useEntityStore } from "../stores/entity";
+import { useScopedEventIds, eventScopeKey } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { HIDDEN_SESSION_PAYLOAD_TYPES } from "../lib/session-event-filters";
 import {
@@ -100,24 +100,6 @@ export function useSessionEvents(sessionId: string) {
     if (result.data?.events) {
       const events = result.data.events as Array<Event & { id: string }>;
       upsertFetchedSessionEventsWithOptimisticResolution(sessionId, events);
-
-      // Derive _lastUserMessageAt from fetched events so the timer
-      // shows correct elapsed time when navigating to an active session
-      let lastUserMsg: string | undefined;
-      for (let i = events.length - 1; i >= 0; i--) {
-        const ev = events[i];
-        if (ev.eventType === "message_sent" && ev.actor?.type === "user") {
-          lastUserMsg = ev.timestamp;
-          break;
-        }
-      }
-      if (lastUserMsg) {
-        const { sessions, upsert } = useEntityStore.getState();
-        const session = sessions[sessionId];
-        if (session) {
-          upsert("sessions", sessionId, { ...session, _lastUserMessageAt: lastUserMsg });
-        }
-      }
 
       if (events.length < PAGE_SIZE) {
         setHasOlder(false);

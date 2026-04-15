@@ -1420,6 +1420,7 @@ export type Session = {
   updatedAt: Scalars['DateTime']['output'];
   workdir?: Maybe<Scalars['String']['output']>;
   worktreeDeleted: Scalars['Boolean']['output'];
+  lastUserMessageAt?: Maybe<Scalars['DateTime']['output']>;
 };
 
 export type SessionConnection = {
