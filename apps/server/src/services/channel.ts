@@ -50,10 +50,6 @@ export class ChannelService {
   }
 
   async create(input: CreateChannelInput, actorType: ActorType, actorId: string) {
-    if (actorType === "user") {
-      throw new AuthorizationError("Users cannot create channels directly");
-    }
-
     const [channel, _event] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.orgMember.findUniqueOrThrow({
         where: { userId_organizationId: { userId: actorId, organizationId: input.organizationId } },

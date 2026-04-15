@@ -1,7 +1,9 @@
 gettrace.org, www.gettrace.org {
 	encode zstd gzip
 
-	@backend path /auth* /graphql* /uploads* /webhooks/github* /ws* /bridge* /terminal* /health
+	@backend {
+		path /auth* /graphql* /uploads* /webhooks/github* /ws* /bridge* /terminal* /health
+	}
 	reverse_proxy @backend backend:4000
 
 	reverse_proxy web:3000

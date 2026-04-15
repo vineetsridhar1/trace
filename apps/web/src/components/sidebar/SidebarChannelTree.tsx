@@ -26,6 +26,7 @@ export interface SidebarChannelTreeProps {
   channelsById: Record<string, Channel>;
   channelsLoading: boolean;
   groupIds: string[];
+  onAddChannel: (groupId: string) => void;
   onChannelClick: (id: string) => void;
   onDragActiveChange?: (active: boolean) => void;
   topLevelItems: TopLevelItem[];
@@ -40,6 +41,7 @@ export function SidebarChannelTree({
   channelsById,
   channelsLoading,
   groupIds,
+  onAddChannel,
   onChannelClick,
   onDragActiveChange,
   topLevelItems,
@@ -110,6 +112,7 @@ export function SidebarChannelTree({
                   id={item.id}
                   channelIds={currentGroupChannels[item.id] ?? []}
                   activeChannelId={activeChannelId}
+                  onAddChannel={onAddChannel}
                   onChannelClick={onChannelClick}
                   onDeleteGroup={(groupId) =>
                     client.mutation(DELETE_GROUP_MUTATION, { id: groupId }).toPromise()

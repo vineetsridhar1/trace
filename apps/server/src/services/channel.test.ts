@@ -40,25 +40,6 @@ describe("ChannelService", () => {
     vi.clearAllMocks();
   });
 
-  it("rejects channel creation by a user before touching the database", async () => {
-    const service = new ChannelService();
-
-    await expect(
-      service.create(
-        {
-          organizationId: "org-1",
-          name: "general",
-          type: "text",
-        } as any,
-        "user",
-        "user-1",
-      ),
-    ).rejects.toThrow("Users cannot create channels directly");
-
-    expect(prismaMock.orgMember.findUniqueOrThrow).not.toHaveBeenCalled();
-    expect(prismaMock.channel.create).not.toHaveBeenCalled();
-  });
-
   it("rejects channel creation when the actor is not an org member", async () => {
     prismaMock.orgMember.findUniqueOrThrow.mockRejectedValueOnce(new Error("Not found"));
 
@@ -71,8 +52,8 @@ describe("ChannelService", () => {
           name: "general",
           type: "text",
         } as any,
-        "agent",
-        "agent-1",
+        "user",
+        "user-1",
       ),
     ).rejects.toThrow("Not found");
 
@@ -94,18 +75,18 @@ describe("ChannelService", () => {
           name: "backend",
           type: "coding",
         },
-        "agent",
-        "agent-1",
+        "user",
+        "user-1",
       ),
     ).rejects.toThrow("repoId is required for coding channels");
 
     expect(prismaMock.channel.create).not.toHaveBeenCalled();
   });
 
-  it("adds the AI user as a default member when creating a channel", async () => {
+  it("allows a user org member to create a channel and adds the AI user as a default member", async () => {
     const createdAt = new Date("2026-04-02T00:00:00.000Z");
     prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
-      userId: "agent-1",
+      userId: "user-1",
       organizationId: "org-1",
     });
     prismaMock.channel.create.mockResolvedValueOnce({
@@ -122,11 +103,11 @@ describe("ChannelService", () => {
       userId: TRACE_AI_USER_ID,
     });
     prismaMock.channelMember.findMany.mockResolvedValueOnce([
-      { channelId: "channel-1", userId: "agent-1", joinedAt: createdAt, leftAt: null },
+      { channelId: "channel-1", userId: "user-1", joinedAt: createdAt, leftAt: null },
       { channelId: "channel-1", userId: TRACE_AI_USER_ID, joinedAt: createdAt, leftAt: null },
     ]);
     prismaMock.user.findMany.mockResolvedValueOnce([
-      { id: "agent-1", name: "Trace AI Worker", avatarUrl: null },
+      { id: "user-1", name: "User One", avatarUrl: null },
       { id: TRACE_AI_USER_ID, name: "Trace AI", avatarUrl: null },
     ]);
 
@@ -138,13 +119,13 @@ describe("ChannelService", () => {
         type: "text",
         position: 0,
       } as any,
-      "agent",
-      "agent-1",
+      "user",
+      "user-1",
     );
 
     expect(channel).toEqual(expect.objectContaining({ id: "channel-1", name: "general" }));
     expect(prismaMock.channelMember.create).toHaveBeenNthCalledWith(1, {
-      data: { channelId: "channel-1", userId: "agent-1" },
+      data: { channelId: "channel-1", userId: "user-1" },
     });
     expect(prismaMock.channelMember.create).toHaveBeenNthCalledWith(2, {
       data: { channelId: "channel-1", userId: TRACE_AI_USER_ID },
@@ -156,7 +137,7 @@ describe("ChannelService", () => {
             id: "channel-1",
             members: [
               {
-                user: { id: "agent-1", name: "Trace AI Worker", avatarUrl: null },
+                user: { id: "user-1", name: "User One", avatarUrl: null },
                 joinedAt: createdAt.toISOString(),
               },
               {

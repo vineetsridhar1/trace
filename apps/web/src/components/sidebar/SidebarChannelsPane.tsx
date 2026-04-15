@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Channel, ChannelGroup } from "@trace/gql";
 import type { TopLevelItem } from "../../hooks/useSidebarData";
 import { BrowseChannelsDialog } from "./BrowseChannelsDialog";
-import { CreateChannelGroupDialog } from "./CreateChannelGroupDialog";
+import { CreateChannelDialog } from "./CreateChannelDialog";
 import { InboxButton } from "./InboxButton";
 import { TicketsButton } from "./TicketsButton";
 import { OrgSwitcher } from "./OrgSwitcher";
@@ -35,7 +35,8 @@ export function SidebarChannelsPane({
   onDragActiveChange,
   topLevelItems,
 }: SidebarChannelsPaneProps) {
-  const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createForGroupId, setCreateForGroupId] = useState<string | null>(null);
 
   return (
     <section className="flex h-full min-w-full max-w-full shrink-0 snap-start snap-always flex-col overflow-hidden">
@@ -55,9 +56,14 @@ export function SidebarChannelsPane({
           </span>
           <div className="flex items-center gap-0.5">
             <BrowseChannelsDialog />
-            <CreateChannelGroupDialog
-              open={createGroupDialogOpen}
-              onOpenChange={setCreateGroupDialogOpen}
+            <CreateChannelDialog
+              open={createDialogOpen}
+              onOpenChange={setCreateDialogOpen}
+              defaultGroupId={createForGroupId}
+              onTriggerClick={() => {
+                setCreateForGroupId(null);
+                setCreateDialogOpen(true);
+              }}
             />
           </div>
         </div>
@@ -71,6 +77,10 @@ export function SidebarChannelsPane({
           channelsById={channelsById}
           channelsLoading={channelsLoading}
           groupIds={groupIds}
+          onAddChannel={(groupId: string) => {
+            setCreateForGroupId(groupId);
+            setCreateDialogOpen(true);
+          }}
           onChannelClick={onChannelClick}
           onDragActiveChange={onDragActiveChange}
           topLevelItems={topLevelItems}

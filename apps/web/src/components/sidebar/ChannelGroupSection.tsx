@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { ChevronRight, Trash2 } from "lucide-react";
+import { ChevronRight, Plus, Trash2 } from "lucide-react";
 import { useSortable, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
@@ -25,6 +25,7 @@ export interface ChannelGroupSectionProps {
   id: string;
   channelIds: string[];
   activeChannelId: string | null;
+  onAddChannel: (groupId: string) => void;
   onChannelClick: (id: string) => void;
   onDeleteGroup: (groupId: string) => void;
 }
@@ -33,6 +34,7 @@ export function ChannelGroupSection({
   id,
   channelIds,
   activeChannelId,
+  onAddChannel,
   onChannelClick,
   onDeleteGroup,
 }: ChannelGroupSectionProps) {
@@ -110,6 +112,13 @@ export function ChannelGroupSection({
           className="flex items-center gap-0.5 opacity-0 group-hover/group-header:opacity-100 transition-opacity"
           onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
         >
+          <button
+            className="flex items-center justify-center rounded-md p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+            title="Add channel to group"
+            onClick={() => onAddChannel(id)}
+          >
+            <Plus size={14} />
+          </button>
           <button
             className="flex items-center justify-center rounded-md p-0.5 text-muted-foreground transition-colors hover:text-destructive"
             title="Delete group"
