@@ -8,12 +8,15 @@ const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID!;
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET!;
 const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
 const WEB_URL = process.env.TRACE_WEB_URL || `http://localhost:${3000 + Number(process.env.TRACE_PORT || 0)}`;
+const SERVER_PUBLIC_URL = process.env.TRACE_SERVER_PUBLIC_URL || WEB_URL;
+const GITHUB_CALLBACK_URL = `${SERVER_PUBLIC_URL.replace(/\/$/, "")}/auth/github/callback`;
 
 // Redirect to GitHub OAuth
 router.get("/auth/github", (req: Request, res: Response) => {
   const origin = req.query.origin as string | undefined;
   const params = new URLSearchParams({
     client_id: GITHUB_CLIENT_ID,
+    redirect_uri: GITHUB_CALLBACK_URL,
     scope: "read:user user:email",
   });
   if (origin) {
@@ -41,6 +44,7 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
         client_id: GITHUB_CLIENT_ID,
         client_secret: GITHUB_CLIENT_SECRET,
         code,
+        redirect_uri: GITHUB_CALLBACK_URL,
       }),
     });
     const tokenData = (await tokenRes.json()) as { access_token?: string; error?: string };

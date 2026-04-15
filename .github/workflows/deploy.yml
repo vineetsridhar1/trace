@@ -43,7 +43,7 @@ jobs:
           context: .
           push: true
           build-args: |
-            VITE_API_URL=${{ secrets.VITE_API_URL }}
+            VITE_API_URL=
             VITE_AG_GRID_LICENSE_KEY=${{ secrets.VITE_AG_GRID_LICENSE_KEY }}
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
