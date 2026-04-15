@@ -346,6 +346,7 @@ type Session {
   connection: SessionConnection
   prUrl: String
   worktreeDeleted: Boolean!
+  lastUserMessageAt: DateTime
   createdAt: DateTime!
   updatedAt: DateTime!
 }

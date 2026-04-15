@@ -293,6 +293,7 @@ function serializeSession(session: {
   sessionGroup: unknown;
   connection: Prisma.JsonValue | null;
   worktreeDeleted?: boolean;
+  lastUserMessageAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -320,6 +321,7 @@ function serializeSession(session: {
     sessionGroup: session.sessionGroup ?? null,
     connection: session.connection,
     worktreeDeleted: session.worktreeDeleted ?? false,
+    lastUserMessageAt: session.lastUserMessageAt ?? null,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
   };
@@ -1063,6 +1065,7 @@ export class SessionService {
           channelId: resolvedChannelId,
           sessionGroupId: sessionGroup.id,
           connection: sessionGroup.connection ?? initialConnection,
+          lastUserMessageAt: input.prompt ? new Date() : undefined,
           worktreeDeleted: sessionGroup.worktreeDeleted,
           readOnlyWorkspace,
           ...(projectIds.length > 0 && {
@@ -2035,6 +2038,7 @@ export class SessionService {
               interactionMode: interactionMode ?? null,
               checkpointContext: null,
             } as unknown as Prisma.InputJsonValue,
+            ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
           },
         });
 
@@ -2074,7 +2078,12 @@ export class SessionService {
         interactionMode: interactionMode ?? null,
         checkpointContext: null,
       };
-      await this.triggerWorkspaceUpgrade(sessionId, session, pendingCommand);
+      await this.triggerWorkspaceUpgrade(
+        sessionId,
+        session,
+        pendingCommand,
+        actorType === "user" ? { lastUserMessageAt: new Date() } : undefined,
+      );
       // Record the message event so it appears in the UI
       const event = await eventService.create({
         organizationId: session.organizationId,
@@ -2143,12 +2152,16 @@ export class SessionService {
     });
 
     if (deliveryResult !== "delivered") {
-      await this.storePendingCommand(sessionId, {
-        type: "send",
-        prompt,
-        interactionMode: interactionMode ?? null,
-        checkpointContext,
-      });
+      await this.storePendingCommand(
+        sessionId,
+        {
+          type: "send",
+          prompt,
+          interactionMode: interactionMode ?? null,
+          checkpointContext,
+        },
+        actorType === "user" ? { lastUserMessageAt: new Date() } : undefined,
+      );
       await this.persistConnectionFailure(
         sessionId,
         session.organizationId,
@@ -2190,6 +2203,7 @@ export class SessionService {
           }),
         }),
         pendingRun: Prisma.DbNull,
+        ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
       },
       include: SESSION_INCLUDE,
     });
@@ -3031,6 +3045,7 @@ export class SessionService {
             prompt: bootstrapPrompt,
             interactionMode: null,
           } satisfies PendingSessionCommand,
+          lastUserMessageAt: session.lastUserMessageAt ?? undefined,
           connection: connJson(
             defaultConnection({
               runtimeInstanceId,
@@ -3202,6 +3217,7 @@ export class SessionService {
             prompt: bootstrapPrompt,
             interactionMode: null,
           } satisfies PendingSessionCommand,
+          lastUserMessageAt: session.lastUserMessageAt ?? undefined,
           connection: connJson(defaultConnection()),
           ...(session.projects.length > 0 && {
             projects: {
@@ -3836,8 +3852,9 @@ export class SessionService {
       branch: string | null;
     },
     pendingCommand: PendingSessionCommand,
+    extraData?: Partial<Prisma.SessionUpdateInput>,
   ) {
-    await this.storePendingCommand(sessionId, pendingCommand);
+    await this.storePendingCommand(sessionId, pendingCommand, extraData);
 
     const repo = session.repo;
     if (!repo) return;
@@ -3864,10 +3881,14 @@ export class SessionService {
     }
   }
 
-  private async storePendingCommand(sessionId: string, pending: PendingSessionCommand) {
+  private async storePendingCommand(
+    sessionId: string,
+    pending: PendingSessionCommand,
+    extraData?: Partial<Prisma.SessionUpdateInput>,
+  ) {
     await prisma.session.update({
       where: { id: sessionId },
-      data: { pendingRun: pending as unknown as Prisma.InputJsonValue },
+      data: { pendingRun: pending as unknown as Prisma.InputJsonValue, ...extraData },
     });
   }
 

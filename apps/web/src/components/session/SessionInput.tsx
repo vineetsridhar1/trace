@@ -44,7 +44,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     !isOptimistic && (isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted));
   const displayModel = model ? getModelLabel(model) : "Claude Code";
 
-  const _lastUserMessageAt = useEntityField("sessions", sessionId, "_lastUserMessageAt") as string | undefined;
+  const _lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as string | undefined;
   const lastUserMessageAt = isActive ? _lastUserMessageAt : undefined;
 
   const slashCommands = useSlashCommands(sessionId);

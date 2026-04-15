@@ -442,7 +442,6 @@ export function useOrgEvents() {
             batch.upsert("sessions", session.id, {
               ...(existingSession ? { ...existingSession, ...session } : session),
               _sortTimestamp: (session.updatedAt as string | undefined) ?? event.timestamp,
-              _lastUserMessageAt: event.timestamp,
             } as unknown as SessionEntity);
 
             // Auto-navigate to continuation sessions
@@ -705,10 +704,11 @@ export function useOrgEvents() {
           payload
         ) {
           const preview = extractMessagePreview(event.eventType, payload);
+          const isUserMessage = event.eventType === "message_sent" && event.actor?.type === "user";
           const updates: Partial<SessionEntity> = {
             updatedAt: event.timestamp,
             _lastMessageAt: event.timestamp,
-            ...(event.eventType === "message_sent" ? { _lastUserMessageAt: event.timestamp } : {}),
+            ...(isUserMessage ? { lastUserMessageAt: event.timestamp } : {}),
           };
           // Bump sort for user messages and assistant text messages (not tool calls)
           const bumpActivitySort =
