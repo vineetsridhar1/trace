@@ -17,6 +17,7 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { StickyTodoList, extractLatestTodos } from "./StickyTodoList";
 import { buildSessionNodes } from "./groupReadGlob";
 import { isTerminalStatus } from "./sessionStatus";
+import { QueuedMessagesList } from "./QueuedMessagesList";
 import { Skeleton } from "../ui/skeleton";
 import { client } from "../../lib/urql";
 import {
@@ -114,6 +115,14 @@ const SESSION_DETAIL_QUERY = gql`
       }
       channel {
         id
+      }
+      queuedMessages {
+        id
+        sessionId
+        text
+        interactionMode
+        position
+        createdAt
       }
       createdAt
       updatedAt
@@ -219,6 +228,22 @@ export function SessionDetailView({
             sessionId,
             existing ? { ...existing, ...fetchedSession } : fetchedSession,
           );
+
+          const queuedMessages = (fetchedSession as Record<string, unknown>).queuedMessages as
+            | Array<{ id: string; sessionId: string; text: string; interactionMode?: string; position: number; createdAt: string }>
+            | undefined;
+          if (queuedMessages && queuedMessages.length > 0) {
+            const store = useEntityStore.getState();
+            const qmTable = { ...store.queuedMessages };
+            const idx = { ...store._queuedMessageIdsBySession };
+            const ids: string[] = [];
+            for (const qm of queuedMessages) {
+              qmTable[qm.id] = qm as unknown as import("@trace/gql").QueuedMessage;
+              ids.push(qm.id);
+            }
+            idx[sessionId] = ids;
+            useEntityStore.setState({ queuedMessages: qmTable, _queuedMessageIdsBySession: idx });
+          }
         }
       });
   }, [sessionId]);
@@ -395,6 +420,7 @@ export function SessionDetailView({
             {agentStatus === "active" && latestTodos && (
               <StickyTodoList todos={latestTodos} />
             )}
+            <QueuedMessagesList sessionId={sessionId} />
             <SessionInput sessionId={sessionId} onStop={handleStop} />
           </>
         )}

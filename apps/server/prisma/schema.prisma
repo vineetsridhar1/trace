@@ -221,6 +221,10 @@ enum EventType {
   chat_member_added
   chat_member_removed
   chat_renamed
+  queued_message_added
+  queued_message_removed
+  queued_messages_cleared
+  queued_messages_drained
 }
 
 model Organization {
@@ -410,6 +414,7 @@ model User {
   cloudMachines     CloudMachine[]
   aiConversations   AiConversation[] @relation("AiConversationCreator")
   aiBranches        AiBranch[]       @relation("AiBranchCreator")
+  queuedMessages    QueuedMessage[]  @relation("QueuedMessageCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -585,7 +590,8 @@ model Session {
   worktreeDeleted Boolean      @default(false)
   readOnlyWorkspace Boolean    @default(false)
 
-  projects SessionProject[]
+  projects        SessionProject[]
+  queuedMessages  QueuedMessage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -593,6 +599,21 @@ model Session {
   @@index([sessionGroupId, updatedAt])
   @@index([organizationId, agentStatus])
   @@index([channelId, updatedAt])
+}
+
+model QueuedMessage {
+  id              String   @id @default(uuid())
+  sessionId       String
+  session         Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  text            String
+  interactionMode String?
+  position        Int
+  createdById     String
+  createdBy       User     @relation("QueuedMessageCreator", fields: [createdById], references: [id])
+  organizationId  String
+  createdAt       DateTime @default(now())
+
+  @@index([sessionId, position])
 }
 
 model SessionProject {

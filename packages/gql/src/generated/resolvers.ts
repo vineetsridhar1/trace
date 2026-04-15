@@ -409,6 +409,10 @@ export type EventType =
   | 'message_deleted'
   | 'message_edited'
   | 'message_sent'
+  | 'queued_message_added'
+  | 'queued_message_removed'
+  | 'queued_messages_cleared'
+  | 'queued_messages_drained'
   | 'repo_created'
   | 'repo_updated'
   | 'session_deleted'
@@ -569,6 +573,7 @@ export type Mutation = {
   addOrgMember: OrgMember;
   archiveSessionGroup: SessionGroup;
   assignTicket: Ticket;
+  clearQueuedMessages: Scalars['Boolean']['output'];
   commentOnTicket: Event;
   createAiConversation: AiConversation;
   createChannel: Channel;
@@ -601,8 +606,10 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  queueSessionMessage: QueuedMessage;
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars['Boolean']['output'];
+  removeQueuedMessage: Scalars['Boolean']['output'];
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
@@ -664,6 +671,11 @@ export type MutationArchiveSessionGroupArgs = {
 export type MutationAssignTicketArgs = {
   ticketId: Scalars['ID']['input'];
   userId: Scalars['ID']['input'];
+};
+
+
+export type MutationClearQueuedMessagesArgs = {
+  sessionId: Scalars['ID']['input'];
 };
 
 
@@ -841,6 +853,13 @@ export type MutationMuteScopeArgs = {
 };
 
 
+export type MutationQueueSessionMessageArgs = {
+  interactionMode?: InputMaybe<Scalars['String']['input']>;
+  sessionId: Scalars['ID']['input'];
+  text: Scalars['String']['input'];
+};
+
+
 export type MutationRegisterRepoWebhookArgs = {
   repoId: Scalars['ID']['input'];
 };
@@ -849,6 +868,11 @@ export type MutationRegisterRepoWebhookArgs = {
 export type MutationRemoveOrgMemberArgs = {
   organizationId: Scalars['ID']['input'];
   userId: Scalars['ID']['input'];
+};
+
+
+export type MutationRemoveQueuedMessageArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -1434,6 +1458,16 @@ export type QueryTicketsArgs = {
   organizationId: Scalars['ID']['input'];
 };
 
+export type QueuedMessage = {
+  __typename?: 'QueuedMessage';
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  interactionMode?: Maybe<Scalars['String']['output']>;
+  position: Scalars['Int']['output'];
+  sessionId: Scalars['ID']['output'];
+  text: Scalars['String']['output'];
+};
+
 export type ReorderChannelGroupsInput = {
   groupIds: Array<Scalars['ID']['input']>;
   organizationId: Scalars['ID']['input'];
@@ -1485,6 +1519,7 @@ export type Session = {
   name: Scalars['String']['output'];
   prUrl?: Maybe<Scalars['String']['output']>;
   projects: Array<Project>;
+  queuedMessages: Array<QueuedMessage>;
   repo?: Maybe<Repo>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupId?: Maybe<Scalars['ID']['output']>;
@@ -1970,6 +2005,7 @@ export type ResolversTypes = ResolversObject<{
   Priority: Priority;
   Project: ResolverTypeWrapper<Project>;
   Query: ResolverTypeWrapper<{}>;
+  QueuedMessage: ResolverTypeWrapper<QueuedMessage>;
   ReorderChannelGroupsInput: ReorderChannelGroupsInput;
   ReorderChannelsInput: ReorderChannelsInput;
   Repo: ResolverTypeWrapper<Repo>;
@@ -2063,6 +2099,7 @@ export type ResolversParentTypes = ResolversObject<{
   PortEndpoint: PortEndpoint;
   Project: Project;
   Query: {};
+  QueuedMessage: QueuedMessage;
   ReorderChannelGroupsInput: ReorderChannelGroupsInput;
   ReorderChannelsInput: ReorderChannelsInput;
   Repo: Repo;
@@ -2425,6 +2462,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   addOrgMember?: Resolver<ResolversTypes['OrgMember'], ParentType, ContextType, RequireFields<MutationAddOrgMemberArgs, 'organizationId' | 'userId'>>;
   archiveSessionGroup?: Resolver<ResolversTypes['SessionGroup'], ParentType, ContextType, RequireFields<MutationArchiveSessionGroupArgs, 'id'>>;
   assignTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationAssignTicketArgs, 'ticketId' | 'userId'>>;
+  clearQueuedMessages?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationClearQueuedMessagesArgs, 'sessionId'>>;
   commentOnTicket?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationCommentOnTicketArgs, 'text' | 'ticketId'>>;
   createAiConversation?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType, RequireFields<MutationCreateAiConversationArgs, 'input' | 'organizationId'>>;
   createChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationCreateChannelArgs, 'input'>>;
@@ -2457,8 +2495,10 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   moveSessionToCloud?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationMoveSessionToCloudArgs, 'sessionId'>>;
   moveSessionToRuntime?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationMoveSessionToRuntimeArgs, 'runtimeInstanceId' | 'sessionId'>>;
   muteScope?: Resolver<ResolversTypes['Participant'], ParentType, ContextType, RequireFields<MutationMuteScopeArgs, 'scopeId' | 'scopeType'>>;
+  queueSessionMessage?: Resolver<ResolversTypes['QueuedMessage'], ParentType, ContextType, RequireFields<MutationQueueSessionMessageArgs, 'sessionId' | 'text'>>;
   registerRepoWebhook?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationRegisterRepoWebhookArgs, 'repoId'>>;
   removeOrgMember?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationRemoveOrgMemberArgs, 'organizationId' | 'userId'>>;
+  removeQueuedMessage?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationRemoveQueuedMessageArgs, 'id'>>;
   renameChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationRenameChatArgs, 'chatId' | 'name'>>;
   reorderChannelGroups?: Resolver<Array<ResolversTypes['ChannelGroup']>, ParentType, ContextType, RequireFields<MutationReorderChannelGroupsArgs, 'input'>>;
   reorderChannels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<MutationReorderChannelsArgs, 'input'>>;
@@ -2599,6 +2639,16 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   tickets?: Resolver<Array<ResolversTypes['Ticket']>, ParentType, ContextType, RequireFields<QueryTicketsArgs, 'organizationId'>>;
 }>;
 
+export type QueuedMessageResolvers<ContextType = Context, ParentType extends ResolversParentTypes['QueuedMessage'] = ResolversParentTypes['QueuedMessage']> = ResolversObject<{
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  interactionMode?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  position?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  sessionId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  text?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type RepoResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Repo'] = ResolversParentTypes['Repo']> = ResolversObject<{
   defaultBranch?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
@@ -2627,6 +2677,7 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   prUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   projects?: Resolver<Array<ResolversTypes['Project']>, ParentType, ContextType>;
+  queuedMessages?: Resolver<Array<ResolversTypes['QueuedMessage']>, ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes['Repo']>, ParentType, ContextType>;
   sessionGroup?: Resolver<Maybe<ResolversTypes['SessionGroup']>, ParentType, ContextType>;
   sessionGroupId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
@@ -2822,6 +2873,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   PortEndpoint?: PortEndpointResolvers<ContextType>;
   Project?: ProjectResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
+  QueuedMessage?: QueuedMessageResolvers<ContextType>;
   Repo?: RepoResolvers<ContextType>;
   Session?: SessionResolvers<ContextType>;
   SessionConnection?: SessionConnectionResolvers<ContextType>;

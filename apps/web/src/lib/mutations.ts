@@ -37,6 +37,39 @@ export const SEND_SESSION_MESSAGE_MUTATION = gql`
   }
 `;
 
+export const QUEUE_SESSION_MESSAGE_MUTATION = gql`
+  mutation QueueSessionMessage(
+    $sessionId: ID!
+    $text: String!
+    $interactionMode: String
+  ) {
+    queueSessionMessage(
+      sessionId: $sessionId
+      text: $text
+      interactionMode: $interactionMode
+    ) {
+      id
+      sessionId
+      text
+      interactionMode
+      position
+      createdAt
+    }
+  }
+`;
+
+export const REMOVE_QUEUED_MESSAGE_MUTATION = gql`
+  mutation RemoveQueuedMessage($id: ID!) {
+    removeQueuedMessage(id: $id)
+  }
+`;
+
+export const CLEAR_QUEUED_MESSAGES_MUTATION = gql`
+  mutation ClearQueuedMessages($sessionId: ID!) {
+    clearQueuedMessages(sessionId: $sessionId)
+  }
+`;
+
 export const TERMINATE_SESSION_MUTATION = gql`
   mutation TerminateSession($id: ID!) {
     terminateSession(id: $id) {

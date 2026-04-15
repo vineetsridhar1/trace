@@ -182,3 +182,13 @@ export function canSendMessage(
   if (isDisconnected(connection)) return false;
   return true;
 }
+
+/** Check if a session can queue messages (agent is actively working) */
+export function canQueueMessage(
+  agentStatus: string | undefined,
+  worktreeDeleted?: boolean,
+): boolean {
+  if (!agentStatus) return false;
+  if (worktreeDeleted) return false;
+  return agentStatus === "active";
+}

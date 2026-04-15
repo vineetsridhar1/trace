@@ -14,6 +14,7 @@ import type {
   Event,
   InboxItem,
   Message,
+  QueuedMessage,
 } from "@trace/gql";
 
 /** Client-side session entity with extra fields not in the GQL schema */
@@ -42,6 +43,7 @@ export type EntityTableMap = {
   tickets: Ticket;
   inboxItems: InboxItem;
   messages: Message;
+  queuedMessages: QueuedMessage;
 };
 
 export type EntityType = keyof EntityTableMap;
@@ -81,6 +83,8 @@ export type EntityState = Tables & {
   _messageIdsByScope: MessageIdsByScope;
   /** Reverse index: parentId (tool_use_id) → event IDs that are children of that parent */
   _eventIdsByParentId: Record<string, string[]>;
+  /** Reverse index: sessionId → queued message IDs */
+  _queuedMessageIdsBySession: Record<string, string[]>;
 } & EntityActions;
 
 type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
@@ -98,10 +102,12 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   tickets: {},
   inboxItems: {},
   messages: {},
+  queuedMessages: {},
   eventsByScope: {},
   _sessionIdsByGroup: {},
   _messageIdsByScope: {},
   _eventIdsByParentId: {},
+  _queuedMessageIdsBySession: {},
 
   upsert: <T extends EntityType>(entityType: T, id: string, data: EntityTableMap[T]) =>
     set((state: EntityState) => {
@@ -304,6 +310,7 @@ export class StoreBatchWriter {
   private _sessionIdsByGroup: Record<string, string[]>;
   private _messageIdsByScope: MessageIdsByScope;
   private _eventIdsByParentId: Record<string, string[]>;
+  private _queuedMessageIdsBySession: Record<string, string[]>;
   private dirty = new Set<string>();
 
   constructor() {
@@ -318,6 +325,7 @@ export class StoreBatchWriter {
     this._sessionIdsByGroup = s._sessionIdsByGroup;
     this._messageIdsByScope = s._messageIdsByScope;
     this._eventIdsByParentId = s._eventIdsByParentId;
+    this._queuedMessageIdsBySession = s._queuedMessageIdsBySession;
   }
 
   /** Read the current (possibly batched) value of an entity */
@@ -424,6 +432,8 @@ export class StoreBatchWriter {
         update._messageIdsByScope = this._messageIdsByScope;
       } else if (key === "_eventIdsByParentId") {
         update._eventIdsByParentId = this._eventIdsByParentId;
+      } else if (key === "_queuedMessageIdsBySession") {
+        update._queuedMessageIdsBySession = this._queuedMessageIdsBySession;
       } else {
         update[key] = (this.tables as Record<string, unknown>)[key];
       }
@@ -489,6 +499,49 @@ export class StoreBatchWriter {
     }
   }
 
+  upsertQueuedMessage(sessionId: string, id: string, data: QueuedMessage): void {
+    const table = this.ensureTable("queuedMessages");
+    table[id] = data;
+    this.dirty.add("queuedMessages");
+    this.ensureQueuedMessageIndex();
+    const arr = this._queuedMessageIdsBySession[sessionId] ?? [];
+    if (!arr.includes(id)) {
+      this._queuedMessageIdsBySession[sessionId] = [...arr, id];
+    }
+    this.dirty.add("_queuedMessageIdsBySession");
+  }
+
+  removeQueuedMessage(sessionId: string, id: string): void {
+    const table = this.ensureTable("queuedMessages");
+    delete table[id];
+    this.dirty.add("queuedMessages");
+    this.ensureQueuedMessageIndex();
+    const arr = this._queuedMessageIdsBySession[sessionId];
+    if (arr) {
+      this._queuedMessageIdsBySession[sessionId] = arr.filter((x) => x !== id);
+      this.dirty.add("_queuedMessageIdsBySession");
+    }
+  }
+
+  clearQueuedMessagesForSession(sessionId: string): void {
+    const ids = this._queuedMessageIdsBySession[sessionId];
+    if (!ids || ids.length === 0) return;
+    const table = this.ensureTable("queuedMessages");
+    for (const id of ids) {
+      delete table[id];
+    }
+    this.dirty.add("queuedMessages");
+    this.ensureQueuedMessageIndex();
+    this._queuedMessageIdsBySession[sessionId] = [];
+    this.dirty.add("_queuedMessageIdsBySession");
+  }
+
+  private ensureQueuedMessageIndex(): void {
+    if (this._queuedMessageIdsBySession === useEntityStore.getState()._queuedMessageIdsBySession) {
+      this._queuedMessageIdsBySession = { ...this._queuedMessageIdsBySession };
+    }
+  }
+
   private updateMessageScopeIndex(
     id: string,
     previousScopeKey: string | null,
@@ -534,6 +587,7 @@ const ENTITY_KEYS: EntityType[] = [
   "tickets",
   "inboxItems",
   "messages",
+  "queuedMessages",
 ];
 
 function getMessageEntityScopeKey(
@@ -738,6 +792,21 @@ export function useScopedEventField<F extends keyof Event>(
     const bucket = state.eventsByScope[scopeKey];
     return bucket?.[id]?.[field];
   });
+}
+
+/** Subscribe to queued message IDs for a session, sorted by position */
+export function useQueuedMessageIdsForSession(sessionId: string): string[] {
+  return useEntityStore(
+    useShallow((state: EntityState) => {
+      const ids = state._queuedMessageIdsBySession[sessionId];
+      if (!ids || ids.length === 0) return EMPTY_IDS;
+      return [...ids].sort((a, b) => {
+        const qa = state.queuedMessages[a];
+        const qb = state.queuedMessages[b];
+        return (qa?.position ?? 0) - (qb?.position ?? 0);
+      });
+    }),
+  );
 }
 
 const EMPTY_IDS: string[] = [];

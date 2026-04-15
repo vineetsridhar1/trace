@@ -2104,6 +2104,12 @@ export class SessionService {
         });
       }
     }
+
+    if (newSessionStatus !== "needs_input") {
+      setImmediate(() => {
+        void this.drainOneQueuedMessage(id);
+      });
+    }
   }
 
   async sendMessage({
@@ -2417,6 +2423,148 @@ export class SessionService {
     });
 
     return event;
+  }
+
+  async queueMessage({
+    sessionId,
+    text,
+    actorId,
+    interactionMode,
+    organizationId,
+  }: {
+    sessionId: string;
+    text: string;
+    actorId: string;
+    interactionMode?: string;
+    organizationId: string;
+  }) {
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { worktreeDeleted: true },
+    });
+    if (session.worktreeDeleted) {
+      throw new Error("Cannot queue messages: session worktree has been deleted");
+    }
+
+    const queuedMessage = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const maxPos = await tx.queuedMessage.aggregate({
+        where: { sessionId },
+        _max: { position: true },
+      });
+      const nextPosition = (maxPos._max.position ?? -1) + 1;
+
+      return tx.queuedMessage.create({
+        data: {
+          sessionId,
+          text,
+          interactionMode: interactionMode ?? null,
+          position: nextPosition,
+          createdById: actorId,
+          organizationId,
+        },
+      });
+    });
+
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "queued_message_added",
+      payload: {
+        sessionId,
+        queuedMessage: {
+          id: queuedMessage.id,
+          sessionId: queuedMessage.sessionId,
+          text: queuedMessage.text,
+          interactionMode: queuedMessage.interactionMode,
+          position: queuedMessage.position,
+          createdAt: queuedMessage.createdAt.toISOString(),
+        },
+      },
+      actorType: "user",
+      actorId,
+    });
+
+    return queuedMessage;
+  }
+
+  async removeQueuedMessage(id: string, actorId: string) {
+    const queuedMessage = await prisma.queuedMessage.delete({
+      where: { id },
+      select: { sessionId: true, organizationId: true },
+    });
+
+    await eventService.create({
+      organizationId: queuedMessage.organizationId,
+      scopeType: "session",
+      scopeId: queuedMessage.sessionId,
+      eventType: "queued_message_removed",
+      payload: { sessionId: queuedMessage.sessionId, queuedMessageId: id },
+      actorType: "user",
+      actorId,
+    });
+
+    return true;
+  }
+
+  async clearQueuedMessages(sessionId: string, actorId: string) {
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { organizationId: true },
+    });
+
+    await prisma.queuedMessage.deleteMany({ where: { sessionId } });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "queued_messages_cleared",
+      payload: { sessionId },
+      actorType: "user",
+      actorId,
+    });
+
+    return true;
+  }
+
+  private async drainOneQueuedMessage(sessionId: string) {
+    const popped = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const first = await tx.queuedMessage.findFirst({
+        where: { sessionId },
+        orderBy: { position: "asc" },
+      });
+      if (!first) return null;
+      await tx.queuedMessage.delete({ where: { id: first.id } });
+      return first;
+    });
+
+    if (!popped) return false;
+
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { organizationId: true },
+    });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "queued_messages_drained",
+      payload: { sessionId, queuedMessageId: popped.id },
+      actorType: "system",
+      actorId: "system",
+    });
+
+    await this.sendMessage({
+      sessionId,
+      text: popped.text,
+      actorType: "user",
+      actorId: popped.createdById,
+      interactionMode: popped.interactionMode ?? undefined,
+    });
+
+    return true;
   }
 
   async workspaceReady(sessionId: string, workdir: string, branch?: string, slug?: string) {

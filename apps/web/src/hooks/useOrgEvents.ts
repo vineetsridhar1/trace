@@ -358,6 +358,38 @@ export function useOrgEvents() {
           }
         }
 
+        // Queued message events
+        if (event.eventType === "queued_message_added" && payload) {
+          const qm = asJsonObject(payload.queuedMessage);
+          if (qm && typeof qm.id === "string" && typeof qm.sessionId === "string") {
+            batch.upsertQueuedMessage(
+              qm.sessionId as string,
+              qm.id as string,
+              qm as unknown as import("@trace/gql").QueuedMessage,
+            );
+          }
+        }
+        if (event.eventType === "queued_message_removed" && payload) {
+          const qmId = payload.queuedMessageId as string | undefined;
+          const sid = payload.sessionId as string | undefined;
+          if (qmId && sid) {
+            batch.removeQueuedMessage(sid, qmId);
+          }
+        }
+        if (event.eventType === "queued_messages_cleared" && payload) {
+          const sid = payload.sessionId as string | undefined;
+          if (sid) {
+            batch.clearQueuedMessagesForSession(sid);
+          }
+        }
+        if (event.eventType === "queued_messages_drained" && payload) {
+          const qmId = payload.queuedMessageId as string | undefined;
+          const sid = payload.sessionId as string | undefined;
+          if (qmId && sid) {
+            batch.removeQueuedMessage(sid, qmId);
+          }
+        }
+
         // New channel — upsert directly from payload
         if (event.eventType === "channel_created" && payload) {
           const channel = asJsonObject(payload.channel);

@@ -351,6 +351,25 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
+  queueSessionMessage: (
+    _: unknown,
+    args: { sessionId: string; text: string; interactionMode?: string | null },
+    ctx: Context,
+  ) => {
+    return sessionService.queueMessage({
+      sessionId: args.sessionId,
+      text: args.text,
+      actorId: ctx.userId,
+      interactionMode: args.interactionMode ?? undefined,
+      organizationId: requireOrgContext(ctx),
+    });
+  },
+  removeQueuedMessage: (_: unknown, args: { id: string }, ctx: Context) => {
+    return sessionService.removeQueuedMessage(args.id, ctx.userId);
+  },
+  clearQueuedMessages: (_: unknown, args: { sessionId: string }, ctx: Context) => {
+    return sessionService.clearQueuedMessages(args.sessionId, ctx.userId);
+  },
 };
 
 export const sessionTypeResolvers = {
@@ -390,6 +409,12 @@ export const sessionTypeResolvers = {
       ctx.sessionTicketsLoader.load(session.id),
     gitCheckpoints: async (session: { id: string }) => {
       return sessionService.listGitCheckpointsForSession(session.id);
+    },
+    queuedMessages: async (session: { id: string }) => {
+      return prisma.queuedMessage.findMany({
+        where: { sessionId: session.id },
+        orderBy: { position: "asc" },
+      });
     },
   },
   GitCheckpoint: {
