@@ -1,8 +1,17 @@
 gettrace.org, www.gettrace.org {
 	encode zstd gzip
 
+	# WebSocket endpoints — flush immediately and skip compression to avoid
+	# buffering control frames (ping/pong) that keep connections alive.
+	@websocket {
+		path /ws* /bridge* /terminal*
+	}
+	reverse_proxy @websocket backend:4000 {
+		flush_interval -1
+	}
+
 	@backend {
-		path /auth* /graphql* /uploads* /webhooks/github* /ws* /bridge* /terminal* /health
+		path /auth* /graphql* /uploads* /webhooks/github* /health
 	}
 	reverse_proxy @backend backend:4000
 

@@ -268,8 +268,10 @@ export class SessionRouter {
   /** Cloud adapter instance, initialized once CloudMachineService is available */
   private cloudAdapter: SessionAdapter | null = null;
 
-  /** Heartbeat timeout in ms — if no heartbeat in this window, runtime is considered stale */
-  static HEARTBEAT_TIMEOUT_MS = 30_000;
+  /** Heartbeat timeout in ms — if no heartbeat in this window, runtime is considered stale.
+   *  Must exceed the bridge ping tolerance (MAX_MISSED_PONGS × PING_INTERVAL = 60s)
+   *  so the ping mechanism has a chance to detect and handle dead connections first. */
+  static HEARTBEAT_TIMEOUT_MS = 70_000;
 
   /** Inject the CloudMachineService to create the cloud adapter. Call once at startup. */
   setCloudMachineService(service: CloudMachineService): void {
