@@ -39,6 +39,9 @@ export function SessionMessageList({
   const scrollSnapshotRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const isNearBottomRef = useRef(true);
   const hasScrolledInitiallyRef = useRef(false);
+  const isScrollingUpRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
+  const sizeCacheRef = useRef(new Map<string, number>());
 
   const gitCheckpointsByPromptEventId = useMemo(() => {
     const byPromptEventId = new Map<string, GitCheckpoint[]>();
@@ -53,25 +56,39 @@ export function SessionMessageList({
     return byPromptEventId;
   }, [gitCheckpoints]);
 
-  const virtualizer = useVirtualizer({
-    count: nodes.length,
-    getScrollElement: () => scrollContainerRef.current,
-    estimateSize: () => 80,
-    overscan: 10,
-    getItemKey: (index: number) => {
+  const getItemKey = useCallback(
+    (index: number) => {
       const node = nodes[index];
       return node.kind === "readglob-group" ? `rg:${node.items[0].id}` : node.id;
     },
-    measureElement: (element: Element) => element.getBoundingClientRect().height,
+    [nodes],
+  );
+
+  const virtualizer = useVirtualizer({
+    count: nodes.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: (index: number) => sizeCacheRef.current.get(getItemKey(index)) ?? 80,
+    overscan: 20,
+    getItemKey,
+    measureElement: (element: Element) => {
+      const height = element.getBoundingClientRect().height;
+      const index = element.getAttribute("data-index");
+      if (index != null) {
+        sizeCacheRef.current.set(getItemKey(Number(index)), height);
+      }
+      return height;
+    },
   });
 
-  // Track whether the user is near the bottom via scroll events
+  // Track whether the user is near the bottom and scroll direction
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
     const distanceFromBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight;
     isNearBottomRef.current = distanceFromBottom < 100;
+    isScrollingUpRef.current = container.scrollTop < lastScrollTopRef.current;
+    lastScrollTopRef.current = container.scrollTop;
   }, []);
 
   useEffect(() => {
@@ -80,6 +97,33 @@ export function SessionMessageList({
     container.addEventListener("scroll", handleScroll, { passive: true });
     return () => container.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
+
+  // Correct scroll position when measurements change during upward scroll.
+  // When items above the viewport are measured for the first time, the total
+  // virtual height changes, which shifts content and causes visible jumps.
+  // We detect the height delta and compensate by adjusting scrollTop.
+  const prevTotalSizeRef = useRef(0);
+  const prevNodeCountForCorrectionRef = useRef(nodes.length);
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || !hasScrolledInitiallyRef.current) return;
+    if (scrollSnapshotRef.current) return;
+
+    const totalSize = virtualizer.getTotalSize();
+    const prevTotal = prevTotalSizeRef.current;
+    prevTotalSizeRef.current = totalSize;
+
+    const nodeCountChanged = nodes.length !== prevNodeCountForCorrectionRef.current;
+    prevNodeCountForCorrectionRef.current = nodes.length;
+    if (nodeCountChanged) return;
+
+    if (prevTotal > 0 && isScrollingUpRef.current) {
+      const delta = totalSize - prevTotal;
+      if (delta !== 0) {
+        container.scrollTop += delta;
+      }
+    }
+  });
 
   // Capture scroll position when older messages start loading
   useEffect(() => {
