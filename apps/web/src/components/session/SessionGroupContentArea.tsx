@@ -3,24 +3,11 @@ import { SessionDetailView } from "./SessionDetailView";
 import { TerminalInstance } from "./TerminalInstance";
 import type { OpenFileTab } from "./GroupTabStrip";
 
-function lazyWithReload<T extends Record<string, unknown>>(
-  factory: () => Promise<T>,
-): Promise<T> {
-  return factory().catch((err: unknown) => {
-    const alreadyReloaded = sessionStorage.getItem("chunk-reload");
-    if (!alreadyReloaded) {
-      sessionStorage.setItem("chunk-reload", "1");
-      window.location.reload();
-    }
-    throw err;
-  });
-}
-
 const MonacoFileViewer = lazy(() =>
-  lazyWithReload(() => import("./MonacoFileViewer")).then((m) => ({ default: m.MonacoFileViewer })),
+  import("./MonacoFileViewer").then((m) => ({ default: m.MonacoFileViewer })),
 );
 const MonacoDiffViewer = lazy(() =>
-  lazyWithReload(() => import("./MonacoDiffViewer")).then((m) => ({ default: m.MonacoDiffViewer })),
+  import("./MonacoDiffViewer").then((m) => ({ default: m.MonacoDiffViewer })),
 );
 
 interface SessionGroupContentAreaProps {
