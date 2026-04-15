@@ -23,6 +23,7 @@ import { createQuickSession } from "../../lib/create-quick-session";
 import { useUIStore } from "../../stores/ui";
 import { ImageAttachmentBar, type ImageAttachment } from "./ImageAttachmentBar";
 import { uploadImage } from "../../lib/upload";
+import { useAuthStore } from "../../stores/auth";
 
 const MAX_IMAGES = 5;
 
@@ -62,32 +63,30 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   }, []);
 
   const handleImagePaste = useCallback((files: File[]) => {
-    setImages((prev) => {
-      const remaining = MAX_IMAGES - prev.length;
-      if (remaining <= 0) return prev;
-      const newImages: ImageAttachment[] = files.slice(0, remaining).map((file) => ({
-        id: crypto.randomUUID(),
-        file,
-        previewUrl: URL.createObjectURL(file),
-        s3Key: null,
-        uploading: true,
-      }));
-      // Start uploads
-      for (const img of newImages) {
-        uploadImage(img.file)
-          .then((key) => {
-            setImages((curr) =>
-              curr.map((i) => (i.id === img.id ? { ...i, s3Key: key, uploading: false } : i)),
-            );
-          })
-          .catch(() => {
-            toast.error("Failed to upload image");
-            setImages((curr) => curr.filter((i) => i.id !== img.id));
-          });
-      }
-      return [...prev, ...newImages];
-    });
-  }, []);
+    const remaining = MAX_IMAGES - images.length;
+    if (remaining <= 0) return;
+    const newImages: ImageAttachment[] = files.slice(0, remaining).map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      previewUrl: URL.createObjectURL(file),
+      s3Key: null,
+      uploading: true,
+    }));
+    setImages((prev) => [...prev, ...newImages]);
+    const orgId = useAuthStore.getState().activeOrgId;
+    for (const img of newImages) {
+      uploadImage(img.file, orgId ?? undefined)
+        .then((key) => {
+          setImages((curr) =>
+            curr.map((i) => (i.id === img.id ? { ...i, s3Key: key, uploading: false } : i)),
+          );
+        })
+        .catch(() => {
+          toast.error("Failed to upload image");
+          setImages((curr) => curr.filter((i) => i.id !== img.id));
+        });
+    }
+  }, [images.length]);
 
   const handleRemoveImage = useCallback((id: string) => {
     setImages((prev) => {

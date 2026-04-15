@@ -2111,6 +2111,14 @@ export class SessionService {
     interactionMode?: string;
     clientMutationId?: string;
   }) {
+    if (imageKeys?.length) {
+      for (const key of imageKeys) {
+        if (typeof key !== "string" || !key.startsWith("uploads/") || key.includes("..")) {
+          throw new Error("Invalid image key");
+        }
+      }
+    }
+
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
       select: {

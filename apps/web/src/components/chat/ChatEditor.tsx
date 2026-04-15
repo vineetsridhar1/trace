@@ -80,13 +80,13 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
   const onSlashCommandSelectRef = useRef(onSlashCommandSelect);
   const onShiftTabRef = useRef(onShiftTab);
   const onChangeRef = useRef(onChange);
+  const onImagePasteRef = useRef(onImagePaste);
 
   membersRef.current = mentionableUsers;
   currentUserIdRef.current = currentUserId;
   slashCommandsRef.current = slashCommands;
   onSlashCommandSelectRef.current = onSlashCommandSelect;
   onShiftTabRef.current = onShiftTab;
-  const onImagePasteRef = useRef(onImagePaste);
   onChangeRef.current = onChange;
   onImagePasteRef.current = onImagePaste;
 

@@ -33,13 +33,16 @@ export function ImageLightbox({
     <AnimatePresence>
       {open && (
         <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-label={alt ?? "Image viewer"}
           className="fixed inset-0 z-50 flex items-center justify-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
         >
-          <div className="absolute inset-0 bg-black/80" onClick={onClose} />
+          <div className="absolute inset-0 bg-black/80" onClick={onClose} aria-hidden="true" />
           <button
             onClick={onClose}
             className="absolute top-4 right-4 z-10 rounded-full bg-black/50 p-2 text-white transition-colors hover:bg-black/70"

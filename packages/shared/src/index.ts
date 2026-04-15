@@ -64,6 +64,7 @@ export type {
   BridgeLinkedCheckoutActionResultPayload,
   BridgeLinkedCheckoutStatusResult,
   BridgeLinkedCheckoutActionResult,
+  ImageDownloadDeps,
 } from "./bridge.js";
 export {
   parseBranchOutput,

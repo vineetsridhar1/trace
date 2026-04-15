@@ -7,10 +7,31 @@ import { ImageLightbox } from "../ImageLightbox";
 import { getAuthHeaders } from "../../../stores/auth";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
-const presignedUrlCache = new Map<string, string>();
+
+const CACHE_MAX_SIZE = 100;
+const CACHE_TTL_MS = 50 * 60 * 1000;
+const presignedUrlCache = new Map<string, { url: string; ts: number }>();
+
+function getCachedUrl(key: string): string | undefined {
+  const entry = presignedUrlCache.get(key);
+  if (!entry) return undefined;
+  if (Date.now() - entry.ts > CACHE_TTL_MS) {
+    presignedUrlCache.delete(key);
+    return undefined;
+  }
+  return entry.url;
+}
+
+function setCachedUrl(key: string, url: string) {
+  if (presignedUrlCache.size >= CACHE_MAX_SIZE) {
+    const oldest = presignedUrlCache.keys().next().value;
+    if (oldest) presignedUrlCache.delete(oldest);
+  }
+  presignedUrlCache.set(key, { url, ts: Date.now() });
+}
 
 function ImageThumbnail({ imageKey, previewUrl }: { imageKey: string; previewUrl?: string }) {
-  const cached = presignedUrlCache.get(imageKey);
+  const cached = getCachedUrl(imageKey);
   const [src, setSrc] = useState<string | null>(previewUrl ?? cached ?? null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const layoutId = `msg-img-${imageKey}`;
@@ -25,11 +46,11 @@ function ImageThumbnail({ imageKey, previewUrl }: { imageKey: string; previewUrl
       .then((res) => res.json())
       .then((data: { url?: string }) => {
         if (!cancelled && data.url) {
-          presignedUrlCache.set(imageKey, data.url);
+          setCachedUrl(imageKey, data.url);
           setSrc(data.url);
         }
       })
-      .catch(() => {});
+      .catch((err) => { console.warn("Failed to load image URL:", err); });
     return () => { cancelled = true; };
   }, [imageKey, previewUrl, cached]);
 

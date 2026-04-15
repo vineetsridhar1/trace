@@ -962,14 +962,16 @@ function extractMarkdownSummary(content: string): string | undefined {
  * Download images from presigned URLs to temp files.
  * Shared between container and desktop bridges.
  */
+export interface ImageDownloadDeps {
+  fs: { promises: { mkdir: (p: string, opts: { recursive: boolean }) => Promise<unknown>; writeFile: (p: string, data: Buffer) => Promise<void>; unlink: (p: string) => Promise<void> } };
+  path: { join: (...p: string[]) => string };
+  tmpdir: () => string;
+  randomUUID: () => string;
+}
+
 export async function downloadImagesToTempFiles(
   imageUrls: string[],
-  deps: {
-    fs: { promises: { mkdir: (p: string, opts: { recursive: boolean }) => Promise<unknown>; writeFile: (p: string, data: Buffer) => Promise<void>; unlink: (p: string) => Promise<void> } };
-    path: { join: (...p: string[]) => string };
-    tmpdir: () => string;
-    randomUUID: () => string;
-  },
+  deps: ImageDownloadDeps,
 ): Promise<string[]> {
   const tmpDir = deps.path.join(deps.tmpdir(), "trace-images");
   await deps.fs.promises.mkdir(tmpDir, { recursive: true });
