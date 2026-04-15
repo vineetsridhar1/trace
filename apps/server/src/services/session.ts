@@ -116,6 +116,7 @@ type PendingSessionCommand =
       prompt: string;
       interactionMode?: string | null;
       checkpointContext?: GitCheckpointContext | null;
+      imageKeys?: string[] | null;
     };
 
 type GroupWorkspaceStatePatch = {
@@ -2151,6 +2152,7 @@ export class SessionService {
               prompt: text,
               interactionMode: interactionMode ?? null,
               checkpointContext: null,
+              ...(imageKeys?.length ? { imageKeys } : {}),
             } as unknown as Prisma.InputJsonValue,
             lastMessageAt: new Date(),
             ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
@@ -2192,6 +2194,7 @@ export class SessionService {
         prompt: text,
         interactionMode: interactionMode ?? null,
         checkpointContext: null,
+        ...(imageKeys?.length ? { imageKeys } : {}),
       };
       await this.triggerWorkspaceUpgrade(
         sessionId,
@@ -2288,6 +2291,7 @@ export class SessionService {
           prompt,
           interactionMode: interactionMode ?? null,
           checkpointContext,
+          ...(imageKeys?.length ? { imageKeys } : {}),
         },
         { lastMessageAt: new Date(), ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}) },
       );
@@ -4064,6 +4068,7 @@ export class SessionService {
         interactionMode:
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
+        imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
       };
     }
     if (pending.type === "run" || pending.type == null) {
@@ -4185,6 +4190,12 @@ export class SessionService {
         : null;
     const checkpointContext = pending.checkpointContext ?? fallbackCheckpointContext;
 
+    // Generate presigned GET URLs for any attached images in the pending command
+    let imageUrls: string[] | undefined;
+    if (pending.type === "send" && pending.imageKeys?.length) {
+      imageUrls = await Promise.all(pending.imageKeys.map((key) => getPresignedGetUrl(key)));
+    }
+
     const command = {
       type: pending.type,
       sessionId,
@@ -4195,6 +4206,7 @@ export class SessionService {
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
       checkpointContext: checkpointContext ?? undefined,
+      imageUrls,
     } satisfies {
       type: "run" | "send";
       sessionId: string;
@@ -4205,6 +4217,7 @@ export class SessionService {
       cwd?: string;
       toolSessionId?: string;
       checkpointContext?: GitCheckpointContext;
+      imageUrls?: string[];
     };
 
     const conn = this.parseConnection(session.connection);
