@@ -4195,16 +4195,21 @@ export class SessionService {
       data: { archivedAt: new Date() },
     });
 
-    // Unload worktree and terminals
-    const sessionGroup = await this.syncGroupWorkspaceState(groupId, {
-      workdir: null,
-      worktreeDeleted: true,
-    });
-
+    // Unload worktree and terminals — fullyUnloadSession must run first so it
+    // can read the current workdir from the DB and send it to the bridge for
+    // worktree cleanup. It also calls syncGroupWorkspaceState internally to
+    // null out workdir/worktreeDeleted after sending the delete command.
     const latestSessionId = group.sessions[0]?.id;
     if (latestSessionId) {
       await this.fullyUnloadSession(latestSessionId, true);
+    } else {
+      await this.syncGroupWorkspaceState(groupId, {
+        workdir: null,
+        worktreeDeleted: true,
+      });
     }
+
+    const sessionGroup = await this.loadSessionGroupSnapshot(groupId);
 
     await eventService.create({
       organizationId,
