@@ -56,10 +56,11 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Copy production compose file to EC2
+      - name: Copy production deploy files to EC2
         run: |
-          scp -i ~/.ssh/id_ed25519 deploy/docker-compose.ec2.yml \
-            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/trace/docker-compose.ec2.yml"
+          ssh -i ~/.ssh/id_ed25519 "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" "mkdir -p ~/trace"
+          scp -i ~/.ssh/id_ed25519 deploy/docker-compose.ec2.yml deploy/Caddyfile \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/trace/"
 
       - name: Deploy on EC2
         env:
