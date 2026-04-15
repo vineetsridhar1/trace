@@ -6,6 +6,9 @@ function createClient(name: string): Redis {
   const client = new Redis(REDIS_URL, {
     maxRetriesPerRequest: null, // required for blocking reads (XREAD)
     lazyConnect: true,
+    // ElastiCache Serverless accepts TCP connections but does not complete the
+    // default INFO-based ready check reliably, which leaves startup hanging.
+    enableReadyCheck: false,
     connectionName: name,
   });
 
