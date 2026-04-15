@@ -4,7 +4,7 @@ import { prisma } from "../lib/db.js";
 import { apiTokenService } from "./api-token.js";
 import { eventService } from "./event.js";
 
-const WEBHOOK_BASE_URL = process.env.WEBHOOK_BASE_URL ?? "https://trace-rgsa.onrender.com";
+const WEBHOOK_BASE_URL = process.env.WEBHOOK_BASE_URL ?? "https://gettrace.org";
 
 /** Extract owner/repo from a GitHub remote URL (HTTPS or SSH). */
 function parseGitHubRepo(remoteUrl: string): { owner: string; repo: string } | null {
@@ -78,23 +78,26 @@ export class WebhookService {
         },
       });
 
-      await eventService.create({
-        organizationId: repo.organizationId,
-        scopeType: "system",
-        scopeId: repo.id,
-        eventType: "repo_updated",
-        payload: {
-          repo: {
-            id: repo.id,
-            name: repo.name,
-            remoteUrl: repo.remoteUrl,
-            defaultBranch: repo.defaultBranch,
-            webhookActive: true,
+      await eventService.create(
+        {
+          organizationId: repo.organizationId,
+          scopeType: "system",
+          scopeId: repo.id,
+          eventType: "repo_updated",
+          payload: {
+            repo: {
+              id: repo.id,
+              name: repo.name,
+              remoteUrl: repo.remoteUrl,
+              defaultBranch: repo.defaultBranch,
+              webhookActive: true,
+            },
           },
+          actorType: "user",
+          actorId: userId,
         },
-        actorType: "user",
-        actorId: userId,
-      }, tx);
+        tx,
+      );
 
       return repo;
     });
@@ -150,23 +153,26 @@ export class WebhookService {
         },
       });
 
-      await eventService.create({
-        organizationId: repo.organizationId,
-        scopeType: "system",
-        scopeId: repo.id,
-        eventType: "repo_updated",
-        payload: {
-          repo: {
-            id: repo.id,
-            name: repo.name,
-            remoteUrl: repo.remoteUrl,
-            defaultBranch: repo.defaultBranch,
-            webhookActive: false,
+      await eventService.create(
+        {
+          organizationId: repo.organizationId,
+          scopeType: "system",
+          scopeId: repo.id,
+          eventType: "repo_updated",
+          payload: {
+            repo: {
+              id: repo.id,
+              name: repo.name,
+              remoteUrl: repo.remoteUrl,
+              defaultBranch: repo.defaultBranch,
+              webhookActive: false,
+            },
           },
+          actorType: "user",
+          actorId: userId,
         },
-        actorType: "user",
-        actorId: userId,
-      }, tx);
+        tx,
+      );
 
       return repo;
     });
