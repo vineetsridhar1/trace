@@ -133,22 +133,43 @@ export function useSessionEvents(sessionId: string) {
   // Subscribe to session-scoped events for full payloads.
   // The org-wide subscription trims session_output payloads to metadata only;
   // this subscription delivers full content for the session being viewed.
+  //
+  // If the subscription errors (e.g. during a WebSocket reconnect race),
+  // graphql-ws permanently terminates it. Incrementing subRetry re-runs the
+  // effect to create a fresh subscription.
+  const [subRetry, setSubRetry] = useState(0);
   useEffect(() => {
     if (!activeOrgId) return;
+
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     const subscription = client
       .subscription(SESSION_EVENTS_SUBSCRIPTION, {
         sessionId,
         organizationId: activeOrgId,
       })
-      .subscribe((result: { data?: Record<string, unknown> }) => {
+      .subscribe((result: { data?: Record<string, unknown>; error?: unknown }) => {
+        if (result.error) {
+          console.warn("[sessionEvents] subscription error, will retry:", result.error);
+          if (!retryTimer) {
+            retryTimer = setTimeout(() => {
+              retryTimer = null;
+              fetchEvents();
+              setSubRetry((n) => n + 1);
+            }, 3_000);
+          }
+          return;
+        }
         if (!result.data?.sessionEvents) return;
         const event = result.data.sessionEvents as Event & { id: string };
         upsertSessionEventWithOptimisticResolution(sessionId, event);
       });
 
-    return () => subscription.unsubscribe();
-  }, [activeOrgId, sessionId]);
+    return () => {
+      if (retryTimer) clearTimeout(retryTimer);
+      subscription.unsubscribe();
+    };
+  }, [activeOrgId, sessionId, subRetry, fetchEvents]);
 
   // Load an older page of events (called when user scrolls to top)
   const fetchOlderEvents = useCallback(async () => {
