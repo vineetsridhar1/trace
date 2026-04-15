@@ -6,6 +6,8 @@ import { App } from "./App";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import "./index.css";
 
+sessionStorage.removeItem("chunk-reload");
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <AppErrorBoundary>
