@@ -69,6 +69,7 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
             "cd ~/trace && \
             aws ecr get-login-password --region '${AWS_REGION}' | docker login --username AWS --password-stdin '${ECR_REGISTRY}' && \
+            docker compose -f docker-compose.ec2.yml down --remove-orphans && \
             docker system prune -af && \
             IMAGE_TAG='${GITHUB_SHA}' ECR_REGISTRY='${ECR_REGISTRY}' docker compose -f docker-compose.ec2.yml pull && \
             IMAGE_TAG='${GITHUB_SHA}' ECR_REGISTRY='${ECR_REGISTRY}' docker compose -f docker-compose.ec2.yml up -d --wait"
