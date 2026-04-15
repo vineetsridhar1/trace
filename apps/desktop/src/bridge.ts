@@ -147,6 +147,17 @@ export class BridgeClient implements IBridgeClient {
       this.startHeartbeat();
       this.startHookQueueDrain();
       void this.flushQueuedGitHookCheckpoints();
+
+      // Re-send session_complete for sessions whose processes finished while
+      // the WebSocket was down. send() silently drops messages when the socket
+      // is closed, so session_complete can be permanently lost. The server's
+      // complete() is idempotent (checks agentStatus === "active"), so
+      // duplicates are harmless.
+      for (const [sessionId] of this.adapters) {
+        if (!this.activeRuns.has(sessionId)) {
+          this.send({ type: "session_complete", sessionId });
+        }
+      }
     });
 
     this.ws.on("message", (data) => {
