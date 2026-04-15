@@ -4,7 +4,7 @@ import { client } from "../../lib/urql";
 import { REMOVE_QUEUED_MESSAGE_MUTATION, CLEAR_QUEUED_MESSAGES_MUTATION } from "../../lib/mutations";
 import { toast } from "sonner";
 
-function QueuedMessageItem({ id, sessionId }: { id: string; sessionId: string }) {
+function QueuedMessageItem({ id }: { id: string }) {
   const text = useEntityField("queuedMessages", id, "text") as string | undefined;
 
   const handleRemove = () => {
@@ -60,7 +60,7 @@ export function QueuedMessagesList({ sessionId }: { sessionId: string }) {
       </div>
       <div className="flex flex-col gap-1">
         {ids.map((id) => (
-          <QueuedMessageItem key={id} id={id} sessionId={sessionId} />
+          <QueuedMessageItem key={id} id={id} />
         ))}
       </div>
     </div>

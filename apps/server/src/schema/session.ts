@@ -365,10 +365,10 @@ export const sessionMutations = {
     });
   },
   removeQueuedMessage: (_: unknown, args: { id: string }, ctx: Context) => {
-    return sessionService.removeQueuedMessage(args.id, ctx.userId);
+    return sessionService.removeQueuedMessage(args.id, ctx.userId, requireOrgContext(ctx));
   },
   clearQueuedMessages: (_: unknown, args: { sessionId: string }, ctx: Context) => {
-    return sessionService.clearQueuedMessages(args.sessionId, ctx.userId);
+    return sessionService.clearQueuedMessages(args.sessionId, ctx.userId, requireOrgContext(ctx));
   },
 };
 

@@ -211,39 +211,45 @@ export function SessionDetailView({
       .toPromise()
       .then((result: { data?: Record<string, unknown> }) => {
         if (result.data?.session) {
-          const { upsert, sessions } = useEntityStore.getState();
-          const existing = sessions[sessionId];
+          const state = useEntityStore.getState();
           const fetchedSession = result.data.session as SessionEntity;
+          const existing = state.sessions[sessionId];
+          const update: Record<string, unknown> = {};
+
+          // Session group
           const sessionGroup = (fetchedSession as Record<string, unknown>).sessionGroup as SessionGroupEntity | undefined;
           if (sessionGroup?.id) {
-            const existingGroup = useEntityStore.getState().sessionGroups[sessionGroup.id];
-            upsert(
-              "sessionGroups",
-              sessionGroup.id,
-              existingGroup ? { ...existingGroup, ...sessionGroup } : sessionGroup,
-            );
+            const existingGroup = state.sessionGroups[sessionGroup.id];
+            update.sessionGroups = {
+              ...state.sessionGroups,
+              [sessionGroup.id]: existingGroup ? { ...existingGroup, ...sessionGroup } : sessionGroup,
+            };
           }
-          upsert(
-            "sessions",
-            sessionId,
-            existing ? { ...existing, ...fetchedSession } : fetchedSession,
-          );
 
+          // Session
+          update.sessions = {
+            ...state.sessions,
+            [sessionId]: existing ? { ...existing, ...fetchedSession } : fetchedSession,
+          };
+
+          // Queued messages
           const queuedMessages = (fetchedSession as Record<string, unknown>).queuedMessages as
             | Array<{ id: string; sessionId: string; text: string; interactionMode?: string; position: number; createdAt: string }>
             | undefined;
           if (queuedMessages && queuedMessages.length > 0) {
-            const store = useEntityStore.getState();
-            const qmTable = { ...store.queuedMessages };
-            const idx = { ...store._queuedMessageIdsBySession };
+            const qmTable = { ...state.queuedMessages };
+            const idx = { ...state._queuedMessageIdsBySession };
             const ids: string[] = [];
             for (const qm of queuedMessages) {
               qmTable[qm.id] = qm as unknown as import("@trace/gql").QueuedMessage;
               ids.push(qm.id);
             }
             idx[sessionId] = ids;
-            useEntityStore.setState({ queuedMessages: qmTable, _queuedMessageIdsBySession: idx });
+            update.queuedMessages = qmTable;
+            update._queuedMessageIdsBySession = idx;
           }
+
+          useEntityStore.setState(update);
         }
       });
   }, [sessionId]);

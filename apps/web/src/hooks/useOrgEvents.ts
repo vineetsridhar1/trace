@@ -27,6 +27,7 @@ import type {
   InboxItem,
   GitCheckpoint,
   SessionStatus,
+  QueuedMessage,
 } from "@trace/gql";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
@@ -365,7 +366,7 @@ export function useOrgEvents() {
             batch.upsertQueuedMessage(
               qm.sessionId as string,
               qm.id as string,
-              qm as unknown as import("@trace/gql").QueuedMessage,
+              qm as unknown as QueuedMessage,
             );
           }
         }
