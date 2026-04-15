@@ -62,6 +62,34 @@ async function main() {
 
   // GraphQL subscriptions
   const wsServer = new WebSocketServer({ noServer: true });
+
+  // Keep-alive: ping each subscription WebSocket every 30s to prevent idle
+  // timeouts from reverse proxies and network middleboxes (NAT, firewalls).
+  // The bridge and terminal WebSocket servers already do this; the GQL
+  // subscription server was missing it, causing silent disconnects after
+  // ~60-120s of inactivity.
+  const GQL_WS_PING_INTERVAL_MS = 30_000;
+  wsServer.on("connection", (ws: WebSocket) => {
+    let pongReceived = true;
+    const pingTimer = setInterval(() => {
+      if (!pongReceived) {
+        clearInterval(pingTimer);
+        ws.terminate();
+        return;
+      }
+      pongReceived = false;
+      ws.ping();
+    }, GQL_WS_PING_INTERVAL_MS);
+
+    ws.on("pong", () => {
+      pongReceived = true;
+    });
+
+    ws.on("close", () => {
+      clearInterval(pingTimer);
+    });
+  });
+
   const wsServerCleanup = useServer(
     {
       schema,

@@ -4,6 +4,7 @@ import type { Event } from "@trace/gql";
 import { client } from "../lib/urql";
 import { useScopedEventIds, eventScopeKey } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
+import { useConnectionStore } from "../stores/connection";
 import { HIDDEN_SESSION_PAYLOAD_TYPES } from "../lib/session-event-filters";
 import {
   upsertFetchedSessionEventsWithOptimisticResolution,
@@ -115,6 +116,19 @@ export function useSessionEvents(sessionId: string) {
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents]);
+
+  // Re-fetch events after WebSocket reconnect to fill any gap from the disconnect.
+  const connected = useConnectionStore((s) => s.connected);
+  const wasConnectedRef = useRef(false);
+  useEffect(() => {
+    if (connected && wasConnectedRef.current === false) {
+      // Transition from disconnected → connected: catch up on missed events
+      if (!loading) {
+        fetchEvents();
+      }
+    }
+    wasConnectedRef.current = connected;
+  }, [connected, loading, fetchEvents]);
 
   // Subscribe to session-scoped events for full payloads.
   // The org-wide subscription trims session_output payloads to metadata only;
