@@ -297,16 +297,15 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
         )}
       </div>
 
-      {isActive ? (
+      {isActive && (
         <AiLoadingIndicator model={displayModel} startedAt={lastUserMessageAt} />
-      ) : (
-        <SessionInputOptions
-          sessionId={sessionId}
-          mode={mode}
-          onModeChange={cycleMode}
-          isActive={isActive}
-        />
       )}
+      <SessionInputOptions
+        sessionId={sessionId}
+        mode={mode}
+        onModeChange={cycleMode}
+        isActive={isActive}
+      />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { gql } from "@urql/core";
-import type { GitCheckpoint } from "@trace/gql";
+import type { GitCheckpoint, QueuedMessage } from "@trace/gql";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import { useEntityStore, useEntityField, useScopedEvents, eventScopeKey, type SessionEntity, type SessionGroupEntity } from "../../stores/entity";
 import { EventScopeContext } from "./EventScopeContext";
@@ -241,7 +241,7 @@ export function SessionDetailView({
             const idx = { ...state._queuedMessageIdsBySession };
             const ids: string[] = [];
             for (const qm of queuedMessages) {
-              qmTable[qm.id] = qm as unknown as import("@trace/gql").QueuedMessage;
+              qmTable[qm.id] = qm as unknown as QueuedMessage;
               ids.push(qm.id);
             }
             idx[sessionId] = ids;

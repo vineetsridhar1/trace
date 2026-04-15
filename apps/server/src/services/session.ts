@@ -2563,16 +2563,6 @@ export class SessionService {
 
     if (!popped) return false;
 
-    await eventService.create({
-      organizationId: current.organizationId,
-      scopeType: "session",
-      scopeId: sessionId,
-      eventType: "queued_messages_drained",
-      payload: { sessionId, queuedMessageId: popped.id },
-      actorType: "system",
-      actorId: "system",
-    });
-
     try {
       await this.sendMessage({
         sessionId,
@@ -2597,6 +2587,16 @@ export class SessionService {
       console.error(`[session:${sessionId}] Failed to drain queued message ${popped.id}:`, error);
       return false;
     }
+
+    await eventService.create({
+      organizationId: current.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "queued_messages_drained",
+      payload: { sessionId, queuedMessageId: popped.id },
+      actorType: "system",
+      actorId: "system",
+    });
 
     return true;
   }
