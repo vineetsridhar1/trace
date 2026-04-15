@@ -194,6 +194,7 @@ export interface OptimisticSessionIds {
 export function optimisticallyInsertSessionMessage(
   sessionId: string,
   text: string,
+  options?: { imageKeys?: string[]; imagePreviewUrls?: string[] },
 ): OptimisticSessionIds {
   const user = useAuthStore.getState().user;
   const now = new Date().toISOString();
@@ -206,7 +207,12 @@ export function optimisticallyInsertSessionMessage(
     scopeType: "session",
     scopeId: sessionId,
     eventType: "message_sent",
-    payload: { text, clientMutationId } as JsonObject,
+    payload: {
+      text,
+      clientMutationId,
+      ...(options?.imageKeys?.length ? { imageKeys: options.imageKeys } : {}),
+      ...(options?.imagePreviewUrls?.length ? { imagePreviewUrls: options.imagePreviewUrls } : {}),
+    } as JsonObject,
     actor: {
       type: "user",
       id: user?.id ?? "",

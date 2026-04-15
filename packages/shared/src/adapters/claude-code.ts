@@ -23,7 +23,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   private lastPlanFilePath: string | null = null;
   private processGeneration = 0;
 
-  run({ prompt, cwd, onOutput, onComplete, interactionMode, model, toolSessionId }: RunOptions) {
+  run({ prompt, cwd, onOutput, onComplete, interactionMode, model, toolSessionId, imagePaths }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
     this.lastPlanFilePath = null;
@@ -43,6 +43,9 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       args.push(permissionFlag, "plan");
     } else {
       args.push(permissionFlag);
+    }
+    if (imagePaths && imagePaths.length > 0) {
+      args.push("--images", ...imagePaths);
     }
     if (this.claudeSessionId) {
       args.push("--resume", this.claudeSessionId);

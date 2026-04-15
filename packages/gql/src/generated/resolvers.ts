@@ -917,6 +917,7 @@ export type MutationSendMessageArgs = {
 
 export type MutationSendSessionMessageArgs = {
   clientMutationId?: InputMaybe<Scalars['String']['input']>;
+  imageKeys?: InputMaybe<Array<Scalars['String']['input']>>;
   interactionMode?: InputMaybe<Scalars['String']['input']>;
   sessionId: Scalars['ID']['input'];
   text: Scalars['String']['input'];

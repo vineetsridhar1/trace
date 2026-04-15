@@ -3,6 +3,7 @@ import os from "os";
 import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
+import crypto from "crypto";
 import { promisify } from "util";
 import type {
   BridgeClient as IBridgeClient,
@@ -411,6 +412,7 @@ export class BridgeClient implements IBridgeClient {
     interactionMode,
     toolSessionId,
     checkpointContext,
+    imageUrls,
   }: {
     sessionId: string;
     prompt: string;
@@ -420,6 +422,7 @@ export class BridgeClient implements IBridgeClient {
     interactionMode?: string;
     toolSessionId?: string;
     checkpointContext?: GitCheckpointContext | null;
+    imageUrls?: string[];
   }) {
     if (!cwd) {
       console.warn(
@@ -458,6 +461,24 @@ export class BridgeClient implements IBridgeClient {
     let hasForwardedOutput = false;
     let endedOnPending = false;
 
+    // Download attached images to temp files
+    let imagePaths: string[] | undefined;
+    if (imageUrls?.length) {
+      const tmpDir = path.join(os.tmpdir(), "trace-images");
+      await fs.promises.mkdir(tmpDir, { recursive: true });
+      imagePaths = await Promise.all(
+        imageUrls.map(async (url) => {
+          const ext = url.match(/\.(png|jpg|jpeg|gif|webp|svg)/i)?.[1] ?? "png";
+          const filePath = path.join(tmpDir, `${crypto.randomUUID()}.${ext}`);
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`Failed to download image: ${res.status}`);
+          const buffer = Buffer.from(await res.arrayBuffer());
+          await fs.promises.writeFile(filePath, buffer);
+          return filePath;
+        }),
+      );
+    }
+
     const runId = this.startRun(sessionId);
     adapter.abort();
 
@@ -466,6 +487,7 @@ export class BridgeClient implements IBridgeClient {
     adapter.run({
       prompt,
       cwd: workdir,
+      imagePaths,
       onOutput: (output) => {
         if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
 
@@ -539,6 +561,11 @@ export class BridgeClient implements IBridgeClient {
         }
         this.finishRun(sessionId, runId);
         this.send({ type: "session_complete", sessionId });
+        if (imagePaths) {
+          for (const p of imagePaths) {
+            fs.promises.unlink(p).catch(() => {});
+          }
+        }
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
       model,
@@ -558,6 +585,7 @@ export class BridgeClient implements IBridgeClient {
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
           checkpointContext: cmd.checkpointContext,
+          imageUrls: cmd.imageUrls,
         });
         break;
       }
@@ -571,6 +599,7 @@ export class BridgeClient implements IBridgeClient {
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
           checkpointContext: cmd.checkpointContext,
+          imageUrls: cmd.imageUrls,
         });
         break;
       }

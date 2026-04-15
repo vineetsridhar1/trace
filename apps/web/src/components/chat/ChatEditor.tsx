@@ -53,6 +53,7 @@ interface ChatEditorProps {
   onSlashCommandSelect?: (cmd: SlashCommandItem) => void;
   onShiftTab?: () => void;
   onChange?: (text: string) => void;
+  onImagePaste?: (files: File[]) => void;
 }
 
 export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function ChatEditor(
@@ -67,6 +68,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     onSlashCommandSelect,
     onShiftTab,
     onChange,
+    onImagePaste,
   }: ChatEditorProps,
   ref: React.ForwardedRef<ChatEditorHandle>,
 ) {
@@ -84,7 +86,9 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
   slashCommandsRef.current = slashCommands;
   onSlashCommandSelectRef.current = onSlashCommandSelect;
   onShiftTabRef.current = onShiftTab;
+  const onImagePasteRef = useRef(onImagePaste);
   onChangeRef.current = onChange;
+  onImagePasteRef.current = onImagePaste;
 
   useEffect(() => {
     setValue(initialHtml);
@@ -259,6 +263,16 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     [clearEditor, submit],
   );
 
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const files = Array.from(e.clipboardData.files).filter((f) =>
+      f.type.startsWith("image/"),
+    );
+    if (files.length > 0 && onImagePasteRef.current) {
+      e.preventDefault();
+      onImagePasteRef.current(files);
+    }
+  }, []);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey) {
@@ -289,7 +303,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
   );
 
   return (
-    <div className="chat-editor" onKeyDown={handleKeyDown}>
+    <div className="chat-editor" onKeyDown={handleKeyDown} onPaste={handlePaste}>
       <ReactQuill
         ref={quillRef}
         theme="bubble"

@@ -17,6 +17,7 @@ import { sessionRouter, type DeliveryResult } from "../lib/session-router.js";
 import { inboxService } from "./inbox.js";
 import { runtimeDebug } from "../lib/runtime-debug.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
+import { getPresignedGetUrl } from "../lib/s3.js";
 import {
   deriveSessionGroupStatus,
   type SessionGroupStatus as DerivedSessionGroupStatus,
@@ -2095,6 +2096,7 @@ export class SessionService {
   async sendMessage({
     sessionId,
     text,
+    imageKeys,
     actorType,
     actorId,
     interactionMode,
@@ -2102,6 +2104,7 @@ export class SessionService {
   }: {
     sessionId: string;
     text: string;
+    imageKeys?: string[];
     actorType: ActorType;
     actorId: string;
     interactionMode?: string;
@@ -2173,7 +2176,7 @@ export class SessionService {
           scopeType: "session",
           scopeId: sessionId,
           eventType: "message_sent",
-          payload: { text, ...(clientMutationId ? { clientMutationId } : {}) },
+          payload: { text, ...(imageKeys?.length ? { imageKeys } : {}), ...(clientMutationId ? { clientMutationId } : {}) },
           actorType,
           actorId,
         });
@@ -2202,7 +2205,7 @@ export class SessionService {
         scopeType: "session",
         scopeId: sessionId,
         eventType: "message_sent",
-        payload: { text, ...(clientMutationId ? { clientMutationId } : {}) },
+        payload: { text, ...(imageKeys?.length ? { imageKeys } : {}), ...(clientMutationId ? { clientMutationId } : {}) },
         actorType,
         actorId,
       });
@@ -2250,6 +2253,12 @@ export class SessionService {
       ? ({ checkpointContextId: checkpointContext.checkpointContextId } as Prisma.InputJsonValue)
       : undefined;
 
+    // Generate presigned GET URLs for attached images
+    let imageUrls: string[] | undefined;
+    if (imageKeys?.length) {
+      imageUrls = await Promise.all(imageKeys.map((key) => getPresignedGetUrl(key)));
+    }
+
     // Attempt delivery before marking active. Pinning to the session's home
     // runtime prevents silent bridge hijack when the home is offline and a
     // different bridge (e.g. Laptop B) is now the only connected runtime.
@@ -2266,6 +2275,7 @@ export class SessionService {
         cwd: session.workdir ?? undefined,
         toolSessionId: session.toolSessionId ?? undefined,
         checkpointContext,
+        imageUrls,
       },
       { expectedHomeRuntimeId: conn.runtimeInstanceId },
     );
@@ -2295,6 +2305,7 @@ export class SessionService {
         eventType: "message_sent",
         payload: {
           text,
+          ...(imageKeys?.length ? { imageKeys } : {}),
           deliveryFailed: true,
           ...(clientMutationId ? { clientMutationId } : {}),
         },
@@ -2362,7 +2373,7 @@ export class SessionService {
       scopeType: "session",
       scopeId: sessionId,
       eventType: "message_sent",
-      payload: { text, ...(clientMutationId ? { clientMutationId } : {}) },
+      payload: { text, ...(imageKeys?.length ? { imageKeys } : {}), ...(clientMutationId ? { clientMutationId } : {}) },
       metadata: checkpointMetadata,
       actorType,
       actorId,

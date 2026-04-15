@@ -1004,6 +1004,7 @@ type Mutation {
   sendSessionMessage(
     sessionId: ID!
     text: String!
+    imageKeys: [String!]
     interactionMode: String
     clientMutationId: String
   ): Event!

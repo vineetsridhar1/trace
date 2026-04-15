@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { prisma } from "../lib/db.js";
 import { getRequestToken, verifyToken } from "../lib/auth.js";
-import { S3_BUCKET, s3 } from "../lib/s3.js";
+import { S3_BUCKET, s3, getPresignedGetUrl } from "../lib/s3.js";
 
 const router: RouterType = Router();
 const MAX_FILENAME_LENGTH = 100;
@@ -71,6 +71,26 @@ router.post("/uploads/presign", async (req: Request, res: Response) => {
   const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 300 });
 
   return res.json({ uploadUrl, key });
+});
+
+router.get("/uploads/url", async (req: Request, res: Response) => {
+  const token = getRequestToken(req);
+  if (!token) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  const userId = verifyToken(token);
+  if (!userId) {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+
+  const key = req.query.key as string | undefined;
+  if (!key || !key.startsWith("uploads/")) {
+    return res.status(400).json({ error: "Invalid key" });
+  }
+
+  const url = await getPresignedGetUrl(key);
+  return res.json({ url });
 });
 
 export { router as uploadRouter };
