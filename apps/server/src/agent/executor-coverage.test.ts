@@ -73,9 +73,6 @@ type MockedServices = ServiceContainer & {
   summaryService: {
     upsert: MockFn;
   };
-  memoryService: {
-    search: MockFn;
-  };
 };
 
 type ExecutionCase = {
@@ -162,9 +159,6 @@ function createServices(): MockedServices {
     summaryService: {
       upsert: vi.fn().mockResolvedValue(result("summary.update")),
     },
-    memoryService: {
-      search: vi.fn().mockResolvedValue([result("memory.search")]),
-    },
   } as unknown as MockedServices;
 }
 
@@ -221,7 +215,6 @@ function getAllMocks(services: MockedServices): MockFn[] {
     services.organizationService.listRepos,
     services.eventService.query,
     services.summaryService.upsert,
-    services.memoryService.search,
   ];
 }
 
@@ -669,22 +662,6 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
         organizationId: "org-1",
         actorType: "agent",
         actorId: "agent-1",
-      });
-    },
-  },
-  {
-    actionType: "memory.search",
-    args: { query: "auth refactor decision" },
-    assertCall: (services) => {
-      expect(services.memoryService.search).toHaveBeenCalledWith({
-        organizationId: "org-1",
-        query: "auth refactor decision",
-        subjectType: undefined,
-        kind: undefined,
-        limit: undefined,
-        scopeType: undefined,
-        scopeId: undefined,
-        isDm: undefined,
       });
     },
   },

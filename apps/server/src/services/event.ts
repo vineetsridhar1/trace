@@ -58,8 +58,6 @@ const scopeTopicMap: Record<string, (id: string) => string> = {
   channel: topics.channelEvents,
   chat: topics.chatEvents,
   ticket: topics.ticketEvents,
-  // "ai_conversation" scope uses custom subscription shapes (AiConversationEvent, Turn),
-  // so services publish to conversation/branch topics directly instead of via this map.
   // "system" scope has no entity-level topic — events are broadcast on the org topic only
 };
 

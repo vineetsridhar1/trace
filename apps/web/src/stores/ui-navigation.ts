@@ -9,13 +9,10 @@ export function buildPath(
   sessionId: string | null,
   page: ActivePage = "main",
   chatId: string | null = null,
-  aiConversationId: string | null = null,
 ): string {
   if (page === "settings") return "/settings";
   if (page === "inbox") return "/inbox";
   if (page === "tickets") return "/tickets";
-  if (page === "ai-conversations" && aiConversationId) return `/conversations/${aiConversationId}`;
-  if (page === "ai-conversations") return "/conversations";
   if (chatId) return `/dm/${chatId}`;
   if (channelId && sessionGroupId && sessionId) {
     return `/c/${channelId}/g/${sessionGroupId}/s/${sessionId}`;
@@ -34,11 +31,10 @@ export function pushNav(
   page: ActivePage = "main",
   chatId: string | null = null,
   channelSubPage: ChannelSubPage = null,
-  aiConversationId: string | null = null,
 ): void {
-  const path = buildPath(channelId, sessionGroupId, sessionId, page, chatId, aiConversationId);
+  const path = buildPath(channelId, sessionGroupId, sessionId, page, chatId);
   history.pushState(
-    { channelId, sessionGroupId, sessionId, page, chatId, aiConversationId, channelSubPage },
+    { channelId, sessionGroupId, sessionId, page, chatId, channelSubPage },
     "",
     path,
   );
@@ -51,11 +47,10 @@ export function replaceNav(
   page: ActivePage = "main",
   chatId: string | null = null,
   channelSubPage: ChannelSubPage = null,
-  aiConversationId: string | null = null,
 ): void {
-  const path = buildPath(channelId, sessionGroupId, sessionId, page, chatId, aiConversationId);
+  const path = buildPath(channelId, sessionGroupId, sessionId, page, chatId);
   history.replaceState(
-    { channelId, sessionGroupId, sessionId, page, chatId, aiConversationId, channelSubPage },
+    { channelId, sessionGroupId, sessionId, page, chatId, channelSubPage },
     "",
     path,
   );

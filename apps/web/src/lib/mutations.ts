@@ -59,16 +59,6 @@ export const RETRY_SESSION_CONNECTION_MUTATION = gql`
   }
 `;
 
-export const RETRY_SESSION_GROUP_SETUP_MUTATION = gql`
-  mutation RetrySessionGroupSetup($id: ID!) {
-    retrySessionGroupSetup(id: $id) {
-      id
-      setupStatus
-      setupError
-    }
-  }
-`;
-
 export const MOVE_SESSION_TO_RUNTIME_MUTATION = gql`
   mutation MoveSessionToRuntime($sessionId: ID!, $runtimeInstanceId: ID!) {
     moveSessionToRuntime(sessionId: $sessionId, runtimeInstanceId: $runtimeInstanceId) {
@@ -304,18 +294,6 @@ export const DELETE_CHANNEL_MESSAGE_MUTATION = gql`
   mutation DeleteChannelMessage($messageId: ID!) {
     deleteChannelMessage(messageId: $messageId) {
       id
-    }
-  }
-`;
-
-export const UPDATE_CHANNEL_MUTATION = gql`
-  mutation UpdateChannel($id: ID!, $input: UpdateChannelInput!) {
-    updateChannel(id: $id, input: $input) {
-      id
-      name
-      baseBranch
-      setupScript
-      runScripts
     }
   }
 `;

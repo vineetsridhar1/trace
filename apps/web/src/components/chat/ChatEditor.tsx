@@ -43,7 +43,7 @@ export interface ChatEditorHandle {
 }
 
 interface ChatEditorProps {
-  onSubmit: (html: string, text: string) => void | Promise<void>;
+  onSubmit: (html: string) => void | Promise<void>;
   placeholder?: string;
   disabled?: boolean;
   initialHtml?: string;
@@ -223,20 +223,11 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     const text = editor.getText().trim();
     if (!text) return false;
 
-    // Clear input immediately so it feels instant — the optimistic message
-    // is already in the store by the time onSubmit returns synchronously.
-    clearEditor();
-
     try {
-      await Promise.resolve(onSubmit(html, text));
+      await Promise.resolve(onSubmit(html));
+      clearEditor();
       return true;
     } catch {
-      // Restore editor content on failure so the user can retry.
-      // Only use the Quill imperative path — handleChange will propagate to setValue.
-      const ed = quillRef.current?.getEditor();
-      if (ed) {
-        ed.clipboard.dangerouslyPasteHTML(html);
-      }
       return false;
     }
   }, [clearEditor, disabled, onSubmit]);

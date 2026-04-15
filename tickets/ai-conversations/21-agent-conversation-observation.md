@@ -36,7 +36,7 @@ Wire AI Conversations into the ambient agent's event stream with opt-in observab
 - 05 (Event Stream Integration)
   <!-- Ticket 05 creates: Event types and emission for all conversation mutations, org-wide event stream -->
 - 06 (Zustand Store & Entity Integration)
-  <!-- Ticket 06 creates: AiConversationEntity in stores/entity.ts and event handlers in useOrgEvents.ts. To add agentObservability: (1) add field to AiConversationEntity type, (2) add ai_conversation_agent_observability_changed case in useOrgEvents.ts AI conversation event handlers block, (3) add same case in useConversationEventsSubscription switch. Consider extracting shared event handlers into features/ai-conversations/utils/ to avoid duplicating logic between org events and scoped subscription. -->
+  <!-- Ticket 06 creates: the store/event pipeline that must also handle agent observability changes -->
 
 ## Completion requirements
 

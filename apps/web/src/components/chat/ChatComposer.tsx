@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useState, useCallback } from "react";
 import { Send } from "lucide-react";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
@@ -27,12 +27,17 @@ const SEND_CHAT_MESSAGE = gql`
 `;
 
 export function ChatComposer({ chatId, parentId }: { chatId: string; parentId?: string }) {
+  const [sending, setSending] = useState(false);
   const editorRef = useRef<ChatEditorHandle>(null);
   const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
   const mentionableUsers = useOrgMembers();
 
   const handleSubmit = useCallback(
-    async (html: string, _text: string) => {
+    async (html: string) => {
+      if (sending) return;
+
+      setSending(true);
+
       // Insert optimistic message so it appears instantly
       const {
         messageId: tempMessageId,
@@ -64,11 +69,12 @@ export function ChatComposer({ chatId, parentId }: { chatId: string; parentId?: 
         removeOptimisticChatMessage(chatId, tempMessageId, tempEventId);
         console.error("Failed to send chat message", error);
         toast.error(error instanceof Error ? error.message : "Failed to send message");
-        // Re-throw so ChatEditor.submit() catches it and restores the editor content
         throw error;
+      } finally {
+        setSending(false);
       }
     },
-    [chatId, parentId],
+    [chatId, parentId, sending],
   );
 
   return (
@@ -78,6 +84,7 @@ export function ChatComposer({ chatId, parentId }: { chatId: string; parentId?: 
           ref={editorRef}
           onSubmit={handleSubmit}
           placeholder={parentId ? "Reply..." : "Type a message..."}
+          disabled={sending}
           mentionableUsers={mentionableUsers}
           currentUserId={currentUserId}
         />
@@ -86,6 +93,7 @@ export function ChatComposer({ chatId, parentId }: { chatId: string; parentId?: 
         type="button"
         size="icon"
         variant="ghost"
+        disabled={sending}
         aria-label="Send message"
         onClick={() => void editorRef.current?.submit()}
       >

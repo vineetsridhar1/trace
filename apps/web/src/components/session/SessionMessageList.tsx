@@ -142,13 +142,9 @@ export function SessionMessageList({
 
     if (nodes.length <= prevCount) return;
 
-    // Only auto-scroll if the user was near the bottom (within 100px).
-    // Use rAF so the virtualizer measures the new item before we scroll —
-    // without this, scrollToIndex may snap because the target size is unknown.
+    // Only auto-scroll if the user was near the bottom (within 100px)
     if (isNearBottomRef.current) {
-      requestAnimationFrame(() => {
-        virtualizer.scrollToIndex(nodes.length - 1, { align: "end", behavior: "smooth" });
-      });
+      virtualizer.scrollToIndex(nodes.length - 1, { align: "end", behavior: "smooth" });
     }
   }, [nodes.length, virtualizer]);
 

@@ -38,7 +38,6 @@ vi.mock("../lib/terminal-relay.js", () => ({
   terminalRelay: {
     destroyAllForSession: vi.fn(),
     destroyAllForSessionGroup: vi.fn(),
-    executeCommand: vi.fn().mockResolvedValue(0),
   },
 }));
 
@@ -83,8 +82,6 @@ function makeSessionGroup(overrides: Record<string, unknown> = {}) {
     connection: { state: "connected", retryCount: 0, canRetry: true, canMove: true },
     prUrl: null,
     worktreeDeleted: false,
-    setupStatus: "idle",
-    setupError: null,
     channel: { id: "channel-1", name: "Backend" },
     repo: {
       id: "repo-1",
@@ -178,7 +175,6 @@ describe("SessionService", () => {
       type: "coding",
       sessionGroups: [],
     });
-    prismaMock.channel.findUnique.mockResolvedValue(null);
     prismaMock.gitCheckpoint.findUnique.mockResolvedValue(null);
   });
 
@@ -1181,99 +1177,6 @@ describe("SessionService", () => {
             workdir: "/tmp/trace/workspace",
             agentStatus: "not_started",
             sessionStatus: "in_progress",
-          }),
-        }),
-      );
-    });
-
-    it("runs the setup script and persists completed setup state", async () => {
-      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
-        pendingRun: null,
-        agentStatus: "not_started",
-        sessionStatus: "in_progress",
-      });
-      prismaMock.session.update.mockResolvedValueOnce(
-        makeSession({
-          agentStatus: "not_started",
-          sessionStatus: "in_progress",
-          workdir: "/tmp/trace/workspace",
-        }),
-      );
-      prismaMock.channel.findUnique.mockResolvedValueOnce({ setupScript: "pnpm install" });
-      prismaMock.sessionGroup.update
-        .mockResolvedValueOnce(makeSessionGroup({ workdir: "/tmp/trace/workspace", setupStatus: "running" }))
-        .mockResolvedValueOnce(makeSessionGroup({ workdir: "/tmp/trace/workspace", setupStatus: "completed" }));
-      prismaMock.session.updateMany.mockResolvedValue({ count: 1 });
-
-      await service.workspaceReady("session-1", "/tmp/trace/workspace");
-
-      expect(terminalRelayMock.executeCommand).toHaveBeenCalledWith(
-        "session-1",
-        "group-1",
-        "pnpm install",
-        "/tmp/trace/workspace",
-      );
-      expect(prismaMock.sessionGroup.update).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({
-          data: expect.objectContaining({ setupStatus: "running", setupError: null }),
-        }),
-      );
-      expect(prismaMock.sessionGroup.update).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({
-          data: expect.objectContaining({ setupStatus: "completed", setupError: null }),
-        }),
-      );
-      expect(eventServiceMock.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          eventType: "session_output",
-          payload: expect.objectContaining({
-            type: "setup_script_completed",
-            success: true,
-            exitCode: 0,
-          }),
-        }),
-      );
-    });
-  });
-
-  describe("retrySessionGroupSetup", () => {
-    it("reruns the setup script for an existing workspace", async () => {
-      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
-        id: "group-1",
-        workdir: "/tmp/trace/workspace",
-        worktreeDeleted: false,
-        setupStatus: "failed",
-        channel: { setupScript: "pnpm install" },
-        sessions: [{ id: "session-1", hosting: "cloud", createdById: "user-1" }],
-      });
-      prismaMock.sessionGroup.update
-        .mockResolvedValueOnce(makeSessionGroup({ workdir: "/tmp/trace/workspace", setupStatus: "running" }))
-        .mockResolvedValueOnce(makeSessionGroup({ workdir: "/tmp/trace/workspace", setupStatus: "completed" }));
-
-      await service.retrySessionGroupSetup("group-1", "org-1", "user", "user-1");
-
-      expect(eventServiceMock.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          eventType: "session_output",
-          payload: expect.objectContaining({ type: "setup_script_started" }),
-          actorType: "user",
-          actorId: "user-1",
-        }),
-      );
-      expect(terminalRelayMock.executeCommand).toHaveBeenCalledWith(
-        "session-1",
-        "group-1",
-        "pnpm install",
-        "/tmp/trace/workspace",
-      );
-      expect(eventServiceMock.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          eventType: "session_output",
-          payload: expect.objectContaining({
-            type: "setup_script_completed",
-            success: true,
           }),
         }),
       );

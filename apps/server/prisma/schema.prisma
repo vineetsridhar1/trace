@@ -71,7 +71,6 @@ enum ScopeType {
   session
   ticket
   system
-  ai_conversation
 }
 
 enum ActorType {
@@ -192,6 +191,7 @@ enum EventType {
   channel_member_removed
   channel_group_created
   channel_group_updated
+  channel_deleted
   channel_group_deleted
   member_joined
   member_left
@@ -200,6 +200,7 @@ enum EventType {
   session_pr_opened
   session_pr_merged
   session_pr_closed
+  session_group_archived
   ticket_assigned
   ticket_unassigned
   ticket_linked
@@ -208,12 +209,6 @@ enum EventType {
   chat_member_added
   chat_member_removed
   chat_renamed
-  ai_conversation_created
-  ai_conversation_title_updated
-  ai_conversation_visibility_changed
-  ai_branch_created
-  ai_branch_labeled
-  ai_turn_created
 }
 
 model Organization {
@@ -293,11 +288,37 @@ model AgentExecutionLog {
   inboxItemId           String?
   latencyMs             Int
 
+  llmCalls  AgentLlmCall[]
+
   createdAt DateTime @default(now())
 
   @@index([organizationId, createdAt])
   @@index([triggerEventId])
   @@index([organizationId, agentId, status])
+}
+
+model AgentLlmCall {
+  id                 String             @id @default(uuid())
+  executionLogId     String
+  executionLog       AgentExecutionLog  @relation(fields: [executionLogId], references: [id], onDelete: Cascade)
+  turnNumber         Int
+  model              String
+  provider           String
+  systemPrompt       String?            @db.Text
+  messages           Json
+  tools              Json               @default("[]")
+  maxTokens          Int?
+  temperature        Float?
+  responseContent    Json
+  stopReason         String
+  inputTokens        Int
+  outputTokens       Int
+  estimatedCostCents Float
+  latencyMs          Int
+  createdAt          DateTime           @default(now())
+
+  @@index([executionLogId, turnNumber])
+  @@index([createdAt])
 }
 
 model ProcessedAgentEvent {
@@ -406,6 +427,7 @@ model Project {
   organization   Organization @relation(fields: [organizationId], references: [id])
   repoId         String?
   repo           Repo?        @relation(fields: [repoId], references: [id])
+  aiMode         AutonomyMode?
 
   channels       ChannelProject[]
   sessions       SessionProject[]
@@ -442,6 +464,8 @@ model Channel {
   group          ChannelGroup? @relation(fields: [groupId], references: [id])
   repoId         String?
   repo           Repo?         @relation(fields: [repoId], references: [id])
+  baseBranch     String?
+  aiMode         AutonomyMode?
 
   projects ChannelProject[]
   sessionGroups SessionGroup[]
@@ -475,6 +499,7 @@ model ChannelMember {
 
   @@id([channelId, userId])
   @@index([userId])
+  @@index([channelId, leftAt])
 }
 
 model SessionGroup {
@@ -486,11 +511,13 @@ model SessionGroup {
   channel        Channel?     @relation(fields: [channelId], references: [id])
   repoId         String?
   repo           Repo?        @relation(fields: [repoId], references: [id])
+  slug           String?
   branch         String?
   workdir        String?
   connection     Json?
   prUrl          String?
   worktreeDeleted Boolean     @default(false)
+  archivedAt      DateTime?
 
   sessions Session[]
   gitCheckpoints GitCheckpoint[]
@@ -530,6 +557,7 @@ model Session {
   connection      Json?
   prUrl           String?
   worktreeDeleted Boolean      @default(false)
+  readOnlyWorkspace Boolean    @default(false)
 
   projects SessionProject[]
 
@@ -537,6 +565,8 @@ model Session {
   updatedAt DateTime @updatedAt
 
   @@index([sessionGroupId, updatedAt])
+  @@index([organizationId, agentStatus])
+  @@index([channelId, updatedAt])
 }
 
 model SessionProject {
@@ -562,6 +592,7 @@ model Ticket {
   originEventId  String?
   channelId      String?
   channel        Channel?     @relation(fields: [channelId], references: [id])
+  aiMode         AutonomyMode?
 
   projects  TicketProject[]
   assignees TicketAssignee[]
@@ -569,6 +600,8 @@ model Ticket {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status, priority])
 }
 
 model TicketProject {
@@ -634,6 +667,7 @@ model Event {
 
   @@index([organizationId, scopeType, scopeId])
   @@index([organizationId, eventType])
+  @@index([organizationId, timestamp])
   @@index([parentId])
 }
 
@@ -710,6 +744,7 @@ model Chat {
   dmKey          String?      @unique
   createdById    String
   createdBy      User         @relation("ChatCreator", fields: [createdById], references: [id])
+  aiMode         AutonomyMode?
 
   members ChatMember[]
   messages Message[]
@@ -739,6 +774,7 @@ model Message {
 
   @@index([chatId, createdAt])
   @@index([channelId, createdAt])
+  @@index([channelId, deletedAt])
   @@index([parentMessageId, createdAt])
 }
 
@@ -776,9 +812,6 @@ model AiConversation {
   visibility     AiConversationVisibility @default(PRIVATE)
   rootBranchId   String?
 
-  forkedFromConversationId String?
-  forkedFromBranchId       String?
-
   branches AiBranch[]
 
   createdAt DateTime @default(now())
@@ -806,6 +839,7 @@ model AiBranch {
   createdAt DateTime @default(now())
 
   @@index([conversationId])
+  @@index([conversationId, createdAt])
   @@index([parentBranchId])
 }
 

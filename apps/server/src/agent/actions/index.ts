@@ -16,7 +16,6 @@ import { projectActions, projectDispatchers } from "./project.actions.js";
 import { readActions, readDispatchers } from "./read.actions.js";
 import { inboxActions, inboxDispatchers } from "./inbox.actions.js";
 import { systemActions, systemDispatchers } from "./system.actions.js";
-import { memoryActions, memoryDispatchers } from "./memory.actions.js";
 
 // ---------------------------------------------------------------------------
 // Aggregate all actions
@@ -31,7 +30,6 @@ const allActions: AgentActionRegistration[] = [
   ...readActions,
   ...inboxActions,
   ...systemActions,
-  ...memoryActions,
 ];
 
 // ---------------------------------------------------------------------------
@@ -77,7 +75,6 @@ const dispatchRegistry = new Map<string, ActionDispatcher>([
   ...Object.entries(readDispatchers),
   ...Object.entries(inboxDispatchers),
   ...Object.entries(systemDispatchers),
-  ...Object.entries(memoryDispatchers),
 ]);
 
 // ---------------------------------------------------------------------------

@@ -9,7 +9,6 @@ export interface TerminalEntry {
   sessionGroupId: string;
   status: TerminalStatus;
   customName?: string;
-  initialCommand?: string;
 }
 
 interface TerminalState {
@@ -19,7 +18,6 @@ interface TerminalState {
     sessionId: string,
     sessionGroupId: string,
     status?: TerminalStatus,
-    opts?: { customName?: string; initialCommand?: string },
   ) => void;
   setTerminalStatus: (id: string, status: TerminalStatus) => void;
   renameTerminal: (id: string, name: string) => void;
@@ -31,18 +29,11 @@ type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
 export const useTerminalStore = create<TerminalState>((set: SetState<TerminalState>) => ({
   terminals: {},
 
-  addTerminal: (id: string, sessionId: string, sessionGroupId: string, status?: TerminalStatus, opts?: { customName?: string; initialCommand?: string }) =>
+  addTerminal: (id: string, sessionId: string, sessionGroupId: string, status?: TerminalStatus) =>
     set((state: TerminalState) => ({
       terminals: {
         ...state.terminals,
-        [id]: {
-          id,
-          sessionId,
-          sessionGroupId,
-          status: status ?? "connecting",
-          customName: opts?.customName,
-          initialCommand: opts?.initialCommand,
-        },
+        [id]: { id, sessionId, sessionGroupId, status: status ?? "connecting" },
       },
     })),
 

@@ -23,7 +23,6 @@ import type { AgentEvent } from "./router.js";
 import type { OrgAgentSettings } from "../services/agent-identity.js";
 import { resolveSoulFile } from "./soul-file-resolver.js";
 import { resolveAutonomyMode, type AutonomyScopeType } from "../services/scope-autonomy.js";
-import { memoryService } from "../services/memory.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,42 +44,6 @@ export interface ContextSummary {
   structuredData: Record<string, unknown>;
   fresh: boolean;
   eventCount: number;
-}
-
-/** A derived memory included in the context packet. */
-export interface ContextMemory {
-  kind: string;
-  subjectType: string;
-  subjectId: string;
-  content: string;
-  confidence: number;
-}
-
-/** Canonical decision-oriented facts derived from noisy raw context. */
-export interface DecisionContext {
-  triggerType: string;
-  scopeType: string;
-  autonomyMode: string;
-  isMention: boolean;
-  canonicalState: string[];
-  constraints: string[];
-}
-
-/** Compact event adapter for planner-friendly recent context. */
-export interface RecentSignal {
-  timestamp: string;
-  actor: string;
-  kind: string;
-  text: string;
-  sourceEventId: string;
-}
-
-/** Compact entity rendering for scope + relevant entities. */
-export interface EntitySnapshot {
-  type: string;
-  id: string;
-  label: string;
-  facts: string[];
 }
 
 /** Actor information resolved from user IDs in the batch. */
@@ -119,23 +82,11 @@ export interface AgentContextPacket {
   /** Entities found via targeted search and link traversal. */
   relevantEntities: ContextEntity[];
 
-  /** Canonical decision-oriented facts derived from the current context. */
-  decisionContext: DecisionContext;
-
-  /** Compact snapshots for the scope entity and nearby relevant entities. */
-  entitySnapshots: EntitySnapshot[];
-
   /** Additional recent events in the same scope beyond the batch. */
   recentEvents: AgentEvent[];
 
   /** Rolling summaries for the scope and relevant entities. */
   summaries: ContextSummary[];
-
-  /** Derived memories relevant to this context. */
-  memories: ContextMemory[];
-
-  /** Normalized high-signal events for planner reasoning. */
-  recentSignals: RecentSignal[];
 
   /** Actors involved in the batch events. */
   actors: ContextActor[];
@@ -182,12 +133,8 @@ export interface TokenBudgetConfig {
     scopeEntity: number;
     eventBatch: number;
     relevantEntities: number;
-    decisionContext: number;
-    entitySnapshots: number;
     summaries: number;
-    memories: number;
     recentEvents: number;
-    recentSignals: number;
     actors: number;
   };
 }
@@ -196,19 +143,15 @@ export interface TokenBudgetConfig {
 export const TIER2_TOKEN_BUDGET: TokenBudgetConfig = {
   total: 60_000,
   sections: {
-    triggerEvent: 1_500,
+    triggerEvent: 2_000,
     actionSchema: 4_000,
     soulFile: 2_000,
-    scopeEntity: 3_000,
-    eventBatch: 6_000,
-    relevantEntities: 8_000,
-    decisionContext: 2_000,
-    entitySnapshots: 4_000,
-    summaries: 8_000,
-    memories: 4_000,
-    recentEvents: 4_000,
-    recentSignals: 3_500,
-    actors: 1_500,
+    scopeEntity: 4_000,
+    eventBatch: 10_000,
+    relevantEntities: 12_000,
+    summaries: 10_000,
+    recentEvents: 8_000,
+    actors: 2_000,
   },
 };
 
@@ -216,18 +159,14 @@ export const TIER2_TOKEN_BUDGET: TokenBudgetConfig = {
 export const TIER3_TOKEN_BUDGET: TokenBudgetConfig = {
   total: 100_000,
   sections: {
-    triggerEvent: 2_000,
+    triggerEvent: 3_000,
     actionSchema: 5_000,
     soulFile: 3_000,
-    scopeEntity: 5_000,
-    eventBatch: 10_000,
-    relevantEntities: 14_000,
-    decisionContext: 2_500,
-    entitySnapshots: 5_000,
-    summaries: 16_000,
-    memories: 8_000,
-    recentEvents: 6_000,
-    recentSignals: 4_000,
+    scopeEntity: 6_000,
+    eventBatch: 18_000,
+    relevantEntities: 22_000,
+    summaries: 18_000,
+    recentEvents: 14_000,
     actors: 3_000,
   },
 };
@@ -749,355 +688,6 @@ function truncateEntities(entities: ContextEntity[], budget: number): ContextEnt
 }
 
 // ---------------------------------------------------------------------------
-// Compact context derivation
-// ---------------------------------------------------------------------------
-
-const TERMINAL_SESSION_EVENTS = new Set([
-  "session_terminated",
-  "session_pr_opened",
-  "session_pr_merged",
-  "session_pr_closed",
-]);
-
-const SIGNAL_LIMIT = 8;
-
-function truncateText(text: string, max = 160): string {
-  const normalized = text.replace(/\s+/g, " ").trim();
-  if (normalized.length <= max) return normalized;
-  return `${normalized.slice(0, max - 3)}...`;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
-}
-
-function stringifyScalar(value: unknown): string | null {
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  return null;
-}
-
-function pushFact(facts: string[], label: string, value: unknown): void {
-  const rendered = stringifyScalar(value);
-  if (!rendered) return;
-  facts.push(`${label}: ${truncateText(rendered, 80)}`);
-}
-
-function humanizeEventType(eventType: string): string {
-  return eventType.replace(/_/g, " ");
-}
-
-function extractPrimaryText(payload: Record<string, unknown>): string | null {
-  const candidate =
-    stringifyScalar(payload.text) ??
-    stringifyScalar(payload.title) ??
-    stringifyScalar(payload.content) ??
-    stringifyScalar(payload.description);
-
-  return candidate ? truncateText(candidate) : null;
-}
-
-function buildEntitySnapshot(
-  entity: ContextEntity,
-): EntitySnapshot {
-  const data = entity.data;
-  const label =
-    stringifyScalar(data.title) ??
-    stringifyScalar(data.name) ??
-    stringifyScalar(data.id) ??
-    entity.id;
-  const facts: string[] = [];
-
-  switch (entity.type) {
-    case "chat":
-      pushFact(facts, "chat_type", data.type);
-      pushFact(facts, "name", data.name);
-      pushFact(facts, "members", data.memberCount);
-      break;
-    case "channel":
-      pushFact(facts, "name", data.name);
-      pushFact(facts, "type", data.type);
-      break;
-    case "ticket":
-      pushFact(facts, "status", data.status);
-      pushFact(facts, "priority", data.priority);
-      if (Array.isArray(data.labels) && data.labels.length > 0) {
-        facts.push(`labels: ${(data.labels as unknown[]).map((l) => String(l)).join(", ")}`);
-      }
-      if (Array.isArray(data.assignees) && data.assignees.length > 0) {
-        const assignees = (data.assignees as Array<Record<string, unknown>>)
-          .map((a) => stringifyScalar(a.name) ?? stringifyScalar(a.id))
-          .filter((v): v is string => !!v);
-        if (assignees.length > 0) facts.push(`assignees: ${assignees.join(", ")}`);
-      }
-      break;
-    case "session": {
-      pushFact(facts, "tool", data.tool);
-      pushFact(facts, "agent_status", data.agentStatus);
-      pushFact(facts, "session_status", data.sessionStatus);
-      const linkedTickets = Array.isArray(data.linkedTickets) ? data.linkedTickets.length : 0;
-      facts.push(`linked_tickets: ${linkedTickets}`);
-      const repo = asRecord(data.repo);
-      if (repo) pushFact(facts, "repo", repo.name ?? repo.id);
-      const channel = asRecord(data.channel);
-      if (channel) pushFact(facts, "channel", channel.name ?? channel.id);
-      break;
-    }
-    case "repo":
-      pushFact(facts, "remote", data.remoteUrl);
-      break;
-    case "project":
-      pushFact(facts, "name", data.name);
-      break;
-    default: {
-      for (const [key, value] of Object.entries(data)) {
-        if (key === "id" || key === "title" || key === "name") continue;
-        if (facts.length >= 4) break;
-        pushFact(facts, key, value);
-      }
-      break;
-    }
-  }
-
-  return {
-    type: entity.type,
-    id: entity.id,
-    label: truncateText(label, 100),
-    facts,
-  };
-}
-
-function truncateSnapshotsToFit(snapshots: EntitySnapshot[], budget: number): EntitySnapshot[] {
-  const result: EntitySnapshot[] = [];
-  let used = 0;
-
-  for (const snapshot of snapshots) {
-    const tokens = estimateObjectTokens(snapshot);
-    if (used + tokens > budget) continue;
-    used += tokens;
-    result.push(snapshot);
-  }
-
-  return result;
-}
-
-function deriveDecisionContext(input: {
-  scopeType: string;
-  scopeId: string;
-  triggerEvent: AgentEvent;
-  scopeEntity: ContextEntity | null;
-  autonomyMode: string;
-  isMention: boolean;
-}): DecisionContext {
-  const canonicalState: string[] = [];
-  const constraints: string[] = [];
-  const { scopeType, scopeId, triggerEvent, scopeEntity, autonomyMode, isMention } = input;
-  const scopeData = scopeEntity?.data ?? {};
-
-  if (autonomyMode === "observe") {
-    constraints.push("Observe mode: prefer summary updates or ignore.");
-  } else if (autonomyMode === "suggest") {
-    constraints.push("Suggest mode: prefer proposals over direct execution.");
-  }
-
-  if (isMention) {
-    constraints.push("The agent was directly mentioned and should treat this as an explicit request.");
-  }
-
-  if (scopeType === "chat") {
-    const chatType = stringifyScalar(scopeData.type);
-    if (chatType) canonicalState.push(`chat_type: ${chatType}`);
-    if (chatType === "dm") {
-      constraints.push("This is a DM scope; reply expectations are higher than in shared scopes.");
-    }
-  }
-
-  if (scopeType === "ticket") {
-    pushFact(canonicalState, "ticket_status", scopeData.status);
-    pushFact(canonicalState, "ticket_priority", scopeData.priority);
-  }
-
-  if (scopeType === "session") {
-    const sessionGroup = asRecord(triggerEvent.payload.sessionGroup);
-    const repo = asRecord(scopeData.repo) ?? asRecord(sessionGroup?.repo);
-    const channel = asRecord(scopeData.channel) ?? asRecord(sessionGroup?.channel);
-    const linkedTickets = Array.isArray(scopeData.linkedTickets)
-      ? (scopeData.linkedTickets as Array<Record<string, unknown>>)
-      : [];
-
-    if (TERMINAL_SESSION_EVENTS.has(triggerEvent.eventType)) {
-      canonicalState.push("session_completed: true");
-    }
-
-    if (triggerEvent.eventType === "session_terminated") {
-      const failed = triggerEvent.payload.status === "failed" || triggerEvent.payload.agentStatus === "failed";
-      canonicalState.push(`session_outcome: ${failed ? "failed" : "completed"}`);
-    }
-
-    pushFact(canonicalState, "agent_status", scopeData.agentStatus ?? triggerEvent.payload.agentStatus);
-    pushFact(canonicalState, "repo", repo?.name ?? repo?.id);
-    pushFact(canonicalState, "branch", sessionGroup?.branch);
-    pushFact(canonicalState, "pr_url", sessionGroup?.prUrl);
-    pushFact(canonicalState, "channel", channel?.name ?? channel?.id);
-
-    if (linkedTickets.length > 0) {
-      const linkedIds = linkedTickets
-        .map((ticket) => stringifyScalar(ticket.id))
-        .filter((value): value is string => !!value);
-      canonicalState.push(`linked_ticket_ids: ${linkedIds.join(", ")}`);
-    } else {
-      canonicalState.push("linked_ticket_ids: none");
-      constraints.push("No linked tickets are present, so ticket.addComment is not applicable.");
-    }
-  }
-
-  if (scopeType === "channel") {
-    pushFact(canonicalState, "channel", scopeData.name ?? scopeId);
-  }
-
-  return {
-    triggerType: triggerEvent.eventType,
-    scopeType,
-    autonomyMode,
-    isMention,
-    canonicalState,
-    constraints,
-  };
-}
-
-function toRecentSignal(event: AgentEvent, agentId: string): RecentSignal | null {
-  if (event.eventType === "session_output") return null;
-
-  const text = extractPrimaryText(event.payload);
-  const actor = event.actorType === "system" ? "system" : `${event.actorType}:${event.actorId}`;
-
-  if (event.eventType === "message_sent" && event.actorType === "user" && text) {
-    const mentions = event.payload.mentions;
-    const mentioned = Array.isArray(mentions) &&
-      mentions.some((m) => asRecord(m)?.userId === agentId);
-
-    return {
-      timestamp: event.timestamp,
-      actor,
-      kind: mentioned ? "mention" : "message",
-      text: mentioned ? `mentioned the agent: ${text}` : text,
-      sourceEventId: event.id,
-    };
-  }
-
-  if (event.eventType === "session_terminated") {
-    const sessionGroup = asRecord(event.payload.sessionGroup);
-    const prUrl = stringifyScalar(sessionGroup?.prUrl);
-    const failed = event.payload.status === "failed" || event.payload.agentStatus === "failed";
-    const reason = stringifyScalar(event.payload.reason);
-    const parts = [failed ? "session failed" : "session completed"];
-    if (reason && reason !== "bridge_complete") parts.push(`reason=${reason}`);
-    if (prUrl) parts.push(`pr=${prUrl}`);
-
-    return {
-      timestamp: event.timestamp,
-      actor,
-      kind: failed ? "session_failed" : "session_completed",
-      text: parts.join(" | "),
-      sourceEventId: event.id,
-    };
-  }
-
-  if (event.eventType === "session_pr_opened") {
-    const prUrl = stringifyScalar(event.payload.prUrl) ??
-      stringifyScalar(asRecord(event.payload.sessionGroup)?.prUrl);
-
-    return {
-      timestamp: event.timestamp,
-      actor,
-      kind: "session_pr_opened",
-      text: prUrl ? `session opened PR ${prUrl}` : "session opened a pull request",
-      sourceEventId: event.id,
-    };
-  }
-
-  if (event.eventType === "ticket_updated") {
-    const changes: string[] = [];
-    if (stringifyScalar(event.payload.status)) changes.push(`status=${event.payload.status}`);
-    if (stringifyScalar(event.payload.priority)) changes.push(`priority=${event.payload.priority}`);
-    if (stringifyScalar(event.payload.title)) changes.push(`title=${truncateText(String(event.payload.title), 80)}`);
-
-    return {
-      timestamp: event.timestamp,
-      actor,
-      kind: "ticket_updated",
-      text: changes.length > 0 ? `ticket updated | ${changes.join(" | ")}` : "ticket updated",
-      sourceEventId: event.id,
-    };
-  }
-
-  if (event.eventType === "session_pr_merged" || event.eventType === "session_pr_closed") {
-    return {
-      timestamp: event.timestamp,
-      actor,
-      kind: event.eventType,
-      text: humanizeEventType(event.eventType),
-      sourceEventId: event.id,
-    };
-  }
-
-  if (event.eventType === "ticket_created" && text) {
-    return {
-      timestamp: event.timestamp,
-      actor,
-      kind: "ticket_created",
-      text: `ticket created: ${text}`,
-      sourceEventId: event.id,
-    };
-  }
-
-  if (event.eventType === "ticket_commented" && text) {
-    return {
-      timestamp: event.timestamp,
-      actor,
-      kind: "ticket_commented",
-      text: `ticket comment: ${text}`,
-      sourceEventId: event.id,
-    };
-  }
-
-  return null;
-}
-
-function buildRecentSignals(input: {
-  eventBatch: AgentEvent[];
-  recentEvents: AgentEvent[];
-  agentId: string;
-  tokenBudget: number;
-}): RecentSignal[] {
-  const combined = [...input.eventBatch, ...input.recentEvents].sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-  );
-  const signals: RecentSignal[] = [];
-  const seen = new Set<string>();
-  let used = 0;
-
-  for (const event of combined) {
-    const signal = toRecentSignal(event, input.agentId);
-    if (!signal) continue;
-
-    const dedupeKey = `${signal.kind}:${signal.actor}:${signal.text}`;
-    if (seen.has(dedupeKey)) continue;
-
-    const tokens = estimateObjectTokens(signal);
-    if (used + tokens > input.tokenBudget) continue;
-
-    seen.add(dedupeKey);
-    used += tokens;
-    signals.push(signal);
-
-    if (signals.length >= SIGNAL_LIMIT) break;
-  }
-
-  return signals;
-}
-
-// ---------------------------------------------------------------------------
 // Recent events beyond the batch
 // ---------------------------------------------------------------------------
 
@@ -1370,27 +960,6 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
       : scopeEntity ? null : undefined,
   });
 
-  // --- 6c. Canonical decision context + compact entity snapshots ---
-  const decisionContext = deriveDecisionContext({
-    scopeType,
-    scopeId,
-    triggerEvent,
-    scopeEntity,
-    autonomyMode: effectiveAutonomyMode,
-    isMention: isTriggerMention(triggerEvent, agentSettings.agentId),
-  });
-  recordSection("decisionContext", estimateObjectTokens(decisionContext));
-
-  const entitySnapshotCandidates: EntitySnapshot[] = [
-    ...(scopeEntity ? [buildEntitySnapshot(scopeEntity)] : []),
-    ...relevantEntities.map((entity) => buildEntitySnapshot(entity)),
-  ];
-  const entitySnapshots = truncateSnapshotsToFit(
-    entitySnapshotCandidates,
-    budget.sections.entitySnapshots,
-  );
-  recordSection("entitySnapshots", estimateObjectTokens(entitySnapshots));
-
   // --- 7. Summaries ---
   //    Privacy guard (ticket #17): DM summaries are never generated automatically.
   //    They are only produced on explicit user request. Group chat summaries are
@@ -1406,50 +975,6 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
       });
   recordSection("summaries", estimateObjectTokens(summaries));
 
-  // --- 7b. Derived memories ---
-  // Try hybrid search (semantic + recency) first, fall back to recency-only.
-  const relevantSubjects = extractSubjects(events, relevantEntities, scopeEntity);
-  let memories: ContextMemory[] = [];
-  if (budget.sections.memories > 0) {
-    try {
-      // Build query text from trigger event for semantic search
-      const triggerText = triggerEvent.payload.text ??
-        triggerEvent.payload.title ??
-        triggerEvent.payload.content ??
-        JSON.stringify(triggerEvent.payload).slice(0, 200);
-
-      const rawMemories = await memoryService.hybridSearch({
-        organizationId,
-        scopeType: scopeType as PrismaScopeType,
-        scopeId,
-        isDm: isDmScope,
-        queryText: String(triggerText),
-        relevantSubjects,
-        tokenBudget: budget.sections.memories,
-      }).catch(() =>
-        // Fall back to recency-only if hybrid search fails (e.g., no embeddings)
-        memoryService.fetchForContext({
-          organizationId,
-          scopeType: scopeType as PrismaScopeType,
-          scopeId,
-          isDm: isDmScope,
-          relevantSubjects,
-          tokenBudget: budget.sections.memories,
-        }),
-      );
-      memories = rawMemories.map((m) => ({
-        kind: m.kind,
-        subjectType: m.subjectType,
-        subjectId: m.subjectId,
-        content: m.content,
-        confidence: m.confidence,
-      }));
-    } catch {
-      // Non-critical — agent works without memories
-    }
-  }
-  recordSection("memories", estimateObjectTokens(memories));
-
   // --- 8. Recent events beyond the batch ---
   const batchIds = new Set(events.map((e) => e.id));
   const recentEvents = await fetchRecentEvents({
@@ -1462,15 +987,6 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
   // Truncate to fit budget
   const recentTruncated = truncateEventsToFit(recentEvents, budget.sections.recentEvents);
   recordSection("recentEvents", estimateObjectTokens(recentTruncated));
-
-  // --- 8b. Normalized recent signals ---
-  const recentSignals = buildRecentSignals({
-    eventBatch,
-    recentEvents: recentTruncated,
-    agentId: agentSettings.agentId,
-    tokenBudget: budget.sections.recentSignals,
-  });
-  recordSection("recentSignals", estimateObjectTokens(recentSignals));
 
   // --- 9. Actors ---
   const actors = await resolveActors([...events, ...recentTruncated]);
@@ -1488,12 +1004,8 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
     soulFile,
     scopeEntity,
     relevantEntities,
-    decisionContext,
-    entitySnapshots,
     recentEvents: recentTruncated,
     summaries,
-    memories,
-    recentSignals,
     actors,
     permissions: {
       autonomyMode: effectiveAutonomyMode,
@@ -1556,44 +1068,4 @@ function truncateEventsToFit(events: AgentEvent[], budget: number): AgentEvent[]
   }
 
   return result;
-}
-
-/**
- * Extract subject identifiers from events and entities for memory retrieval.
- * Returns a list of { type, id } pairs representing entities that memories
- * might be about.
- */
-function extractSubjects(
-  events: AgentEvent[],
-  relevantEntities: ContextEntity[],
-  scopeEntity: ContextEntity | null,
-): Array<{ type: string; id: string }> {
-  const seen = new Set<string>();
-  const subjects: Array<{ type: string; id: string }> = [];
-
-  function add(type: string, id: string): void {
-    const key = `${type}:${id}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    subjects.push({ type, id });
-  }
-
-  // Scope entity
-  if (scopeEntity) {
-    add(scopeEntity.type, scopeEntity.id);
-  }
-
-  // Relevant entities
-  for (const entity of relevantEntities) {
-    add(entity.type, entity.id);
-  }
-
-  // Actors from events
-  for (const event of events) {
-    if (event.actorId) {
-      add(event.actorType === "agent" ? "agent" : "user", event.actorId);
-    }
-  }
-
-  return subjects;
 }

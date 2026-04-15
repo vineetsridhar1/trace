@@ -13,7 +13,6 @@ import type { SessionService, StartSessionServiceInput } from "../../services/se
 import type { InboxService } from "../../services/inbox.js";
 import type { OrganizationService } from "../../services/organization.js";
 import type { EventService } from "../../services/event.js";
-import type { MemoryService } from "../../services/memory.js";
 
 // ---------------------------------------------------------------------------
 // Risk, scope, and parameter types (moved from action-registry.ts)
@@ -69,8 +68,6 @@ export interface ServiceContainer {
   eventService: EventService;
   /** Forward reference — created in ticket #09 (Entity Summaries). */
   summaryService?: { upsert(input: Record<string, unknown>): Promise<unknown> };
-  /** Memory service for searching derived memories. */
-  memoryService?: MemoryService;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,10 +79,6 @@ export interface AgentContext {
   agentId: string;
   /** The event that triggered this action — used for idempotency. */
   triggerEventId: string;
-  /** Scope context for privacy-aware actions like memory.search. */
-  scopeType?: string;
-  scopeId?: string;
-  isDm?: boolean;
 }
 
 // ---------------------------------------------------------------------------

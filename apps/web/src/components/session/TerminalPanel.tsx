@@ -113,7 +113,7 @@ export function TerminalPanel({
               onClick={() => setActiveTerminalId(terminal.id)}
               className="flex items-center gap-1.5 px-2 py-0.5"
             >
-              <span>{terminal.customName ?? `Terminal ${index + 1}`}</span>
+              <span>Terminal {index + 1}</span>
               {terminal.status === "exited" && (
                 <span className="text-[10px] text-muted-foreground">(exited)</span>
               )}

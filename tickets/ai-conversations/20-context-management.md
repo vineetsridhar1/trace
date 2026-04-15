@@ -60,7 +60,7 @@ Implement the context management system to handle long conversations and deep br
 - 03 (Turn Service & LLM Integration)
   <!-- Ticket 03 creates: LLM adapter integration, which summarization reuses for summary generation -->
 - 06 (Zustand Store & Entity Integration)
-  <!-- Ticket 06 creates: useBranchTimeline(branchId) returning TimelineEntry[] union type (inherited-turn | fork-separator | local-turn). To add summary nodes, extend the TimelineEntry union in useAiConversationSelectors.ts with a `summary` variant and update collectInheritedTurns() to insert summaries. The event processing pipeline in useOrgEvents.ts handles ai_conversation/ai_branch/ai_turn events — extend with branch_summary_updated. -->
+  <!-- Ticket 06 creates: the branch timeline selector, store pipeline, and viewport subscriptions that summary nodes plug into -->
 - 08 (Conversation View & Turn Rendering)
   <!-- Ticket 08 creates: the conversation header and virtualized timeline that will host summary nodes and context health -->
 - 10 (Branch Forking Service & Context Assembly)

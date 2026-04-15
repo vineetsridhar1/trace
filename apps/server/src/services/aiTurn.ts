@@ -1,11 +1,13 @@
 import type { AiTurn, Prisma } from "@prisma/client";
 import type { ActorType } from "@trace/gql";
-import type { LLMAssistantContentBlock, LLMMessage, LLMStreamEvent } from "@trace/shared";
+import type {
+  LLMAssistantContentBlock,
+  LLMMessage,
+  LLMStreamEvent,
+} from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { aiService } from "./ai.js";
 import { pubsub, topics } from "../lib/pubsub.js";
-import { eventService } from "./event.js";
-import { aiBranchSummaryService } from "./aiBranchSummary.js";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 
@@ -19,7 +21,6 @@ export class AiTurnService {
       branchId: string;
       content: string;
       model?: string;
-      clientMutationId?: string;
     },
     actorType: ActorType,
     actorId: string,
@@ -44,13 +45,12 @@ export class AiTurnService {
       },
     });
 
-    // Only the conversation creator can send turns (even for ORG-visible conversations)
-    if (branch.conversation.createdById !== actorId) {
-      throw new Error(
-        branch.conversation.visibility === "PRIVATE"
-          ? "Conversation not found"
-          : "Only the conversation creator can send messages",
-      );
+    // Verify access: private conversations only accessible to creator
+    if (
+      branch.conversation.visibility === "PRIVATE" &&
+      branch.conversation.createdById !== actorId
+    ) {
+      throw new Error("Conversation not found");
     }
 
     // Get the last turn in the branch to set parentTurnId
@@ -69,10 +69,13 @@ export class AiTurnService {
       },
     });
 
-    // Assemble context with budget-aware context builder
-    const { messages } = await aiBranchSummaryService.buildContextWithBudget({
-      branchId: input.branchId,
+    // Assemble context: all turns in the branch in chronological order
+    const turns = await prisma.aiTurn.findMany({
+      where: { branchId: input.branchId },
+      orderBy: { createdAt: "asc" },
     });
+
+    const messages = this.turnsToMessages(turns);
 
     // Call LLM
     let assistantContent: string;
@@ -86,8 +89,13 @@ export class AiTurnService {
 
       // Extract text content from response
       assistantContent = response.content
-        .filter((block: LLMAssistantContentBlock) => block.type === "text")
-        .map((block: LLMAssistantContentBlock) => (block.type === "text" ? block.text : ""))
+        .filter(
+          (block: LLMAssistantContentBlock) => block.type === "text",
+        )
+        .map(
+          (block: LLMAssistantContentBlock) =>
+            block.type === "text" ? block.text : "",
+        )
         .join("");
     } catch (error) {
       // On LLM failure, delete the user turn so we don't leave orphans
@@ -96,103 +104,33 @@ export class AiTurnService {
     }
 
     // Create assistant turn and update conversation.updatedAt atomically
-    const assistantTurn = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const turn = await tx.aiTurn.create({
-        data: {
-          branchId: input.branchId,
-          role: "ASSISTANT",
-          content: assistantContent,
-          parentTurnId: userTurn.id,
-        },
-      });
+    const assistantTurn = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        const turn = await tx.aiTurn.create({
+          data: {
+            branchId: input.branchId,
+            role: "ASSISTANT",
+            content: assistantContent,
+            parentTurnId: userTurn.id,
+          },
+        });
 
-      await tx.aiConversation.update({
-        where: { id: branch.conversationId },
-        data: { updatedAt: new Date() },
-      });
+        await tx.aiConversation.update({
+          where: { id: branch.conversationId },
+          data: { updatedAt: new Date() },
+        });
 
-      return turn;
-    });
-
-    // Persist turn events and broadcast to org-wide stream
-    const organizationId = branch.conversation.organizationId;
-    const conversationId = branch.conversationId;
-
-    await eventService.create({
-      organizationId,
-      scopeType: "ai_conversation",
-      scopeId: conversationId,
-      eventType: "ai_turn_created",
-      payload: {
-        turnId: userTurn.id,
-        branchId: input.branchId,
-        conversationId,
-        role: userTurn.role,
-        content: userTurn.content,
-        parentTurnId: userTurn.parentTurnId,
-        createdAt: userTurn.createdAt.toISOString(),
-        ...(input.clientMutationId ? { clientMutationId: input.clientMutationId } : {}),
+        return turn;
       },
-      actorType,
-      actorId,
-    });
+    );
 
-    await eventService.create({
-      organizationId,
-      scopeType: "ai_conversation",
-      scopeId: conversationId,
-      eventType: "ai_turn_created",
-      payload: {
-        turnId: assistantTurn.id,
-        branchId: input.branchId,
-        conversationId,
-        role: assistantTurn.role,
-        content: assistantTurn.content,
-        parentTurnId: assistantTurn.parentTurnId,
-        createdAt: assistantTurn.createdAt.toISOString(),
-      },
-      actorType,
-      actorId,
-    });
-
-    // Publish to branchTurns subscription topic
+    // Publish turn events for subscriptions
     pubsub.publish(topics.branchTurns(input.branchId), {
       branchTurns: userTurn,
     });
     pubsub.publish(topics.branchTurns(input.branchId), {
       branchTurns: assistantTurn,
     });
-
-    // Publish to conversation-level subscription
-    pubsub.publish(topics.conversationEvents(conversationId), {
-      conversationEvents: {
-        conversationId,
-        type: "ai_turn_created",
-        payload: {
-          turnId: assistantTurn.id,
-          branchId: input.branchId,
-          conversationId,
-          role: assistantTurn.role,
-          content: assistantTurn.content,
-          parentTurnId: assistantTurn.parentTurnId,
-          createdAt: assistantTurn.createdAt.toISOString(),
-        },
-        timestamp: new Date().toISOString(),
-      },
-    });
-
-    // Trigger auto-summarization in the background (non-blocking)
-    aiBranchSummaryService
-      .maybeAutoSummarize({
-        branchId: input.branchId,
-        organizationId,
-        userId: actorId,
-        actorType,
-        actorId,
-      })
-      .catch((err) => {
-        console.error("[aiTurn] auto-summarize failed:", err);
-      });
 
     return { userTurn, assistantTurn };
   }
@@ -231,13 +169,11 @@ export class AiTurnService {
       },
     });
 
-    // Only the conversation creator can send turns (even for ORG-visible conversations)
-    if (branch.conversation.createdById !== actorId) {
-      throw new Error(
-        branch.conversation.visibility === "PRIVATE"
-          ? "Conversation not found"
-          : "Only the conversation creator can send messages",
-      );
+    if (
+      branch.conversation.visibility === "PRIVATE" &&
+      branch.conversation.createdById !== actorId
+    ) {
+      throw new Error("Conversation not found");
     }
 
     const lastTurn = await prisma.aiTurn.findFirst({
@@ -256,10 +192,12 @@ export class AiTurnService {
 
     yield { type: "user_turn_created" as const, turn: userTurn };
 
-    // Assemble context with budget-aware context builder
-    const { messages } = await aiBranchSummaryService.buildContextWithBudget({
-      branchId: input.branchId,
+    // Assemble context
+    const turns = await prisma.aiTurn.findMany({
+      where: { branchId: input.branchId },
+      orderBy: { createdAt: "asc" },
     });
+    const messages = this.turnsToMessages(turns);
 
     // Stream from LLM
     let fullText = "";
@@ -288,102 +226,25 @@ export class AiTurnService {
     }
 
     // Create assistant turn
-    const assistantTurn = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const turn = await tx.aiTurn.create({
-        data: {
-          branchId: input.branchId,
-          role: "ASSISTANT",
-          content: fullText,
-          parentTurnId: userTurn.id,
-        },
-      });
+    const assistantTurn = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        const turn = await tx.aiTurn.create({
+          data: {
+            branchId: input.branchId,
+            role: "ASSISTANT",
+            content: fullText,
+            parentTurnId: userTurn.id,
+          },
+        });
 
-      await tx.aiConversation.update({
-        where: { id: branch.conversationId },
-        data: { updatedAt: new Date() },
-      });
+        await tx.aiConversation.update({
+          where: { id: branch.conversationId },
+          data: { updatedAt: new Date() },
+        });
 
-      return turn;
-    });
-
-    // Persist turn events and broadcast to org-wide stream
-    const organizationId = branch.conversation.organizationId;
-    const conversationId = branch.conversationId;
-
-    await eventService.create({
-      organizationId,
-      scopeType: "ai_conversation",
-      scopeId: conversationId,
-      eventType: "ai_turn_created",
-      payload: {
-        turnId: userTurn.id,
-        branchId: input.branchId,
-        conversationId,
-        role: userTurn.role,
-        content: userTurn.content,
-        parentTurnId: userTurn.parentTurnId,
-        createdAt: userTurn.createdAt.toISOString(),
+        return turn;
       },
-      actorType,
-      actorId,
-    });
-
-    await eventService.create({
-      organizationId,
-      scopeType: "ai_conversation",
-      scopeId: conversationId,
-      eventType: "ai_turn_created",
-      payload: {
-        turnId: assistantTurn.id,
-        branchId: input.branchId,
-        conversationId,
-        role: assistantTurn.role,
-        content: assistantTurn.content,
-        parentTurnId: assistantTurn.parentTurnId,
-        createdAt: assistantTurn.createdAt.toISOString(),
-      },
-      actorType,
-      actorId,
-    });
-
-    // Publish to branchTurns subscription topic
-    pubsub.publish(topics.branchTurns(input.branchId), {
-      branchTurns: userTurn,
-    });
-    pubsub.publish(topics.branchTurns(input.branchId), {
-      branchTurns: assistantTurn,
-    });
-
-    // Publish to conversation-level subscription
-    pubsub.publish(topics.conversationEvents(conversationId), {
-      conversationEvents: {
-        conversationId,
-        type: "ai_turn_created",
-        payload: {
-          turnId: assistantTurn.id,
-          branchId: input.branchId,
-          conversationId,
-          role: assistantTurn.role,
-          content: assistantTurn.content,
-          parentTurnId: assistantTurn.parentTurnId,
-          createdAt: assistantTurn.createdAt.toISOString(),
-        },
-        timestamp: new Date().toISOString(),
-      },
-    });
-
-    // Trigger auto-summarization in the background (non-blocking)
-    aiBranchSummaryService
-      .maybeAutoSummarize({
-        branchId: input.branchId,
-        organizationId,
-        userId: actorId,
-        actorType,
-        actorId,
-      })
-      .catch((err) => {
-        console.error("[aiTurn] auto-summarize failed:", err);
-      });
+    );
 
     return assistantTurn;
   }

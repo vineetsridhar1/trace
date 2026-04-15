@@ -8,7 +8,6 @@ function parseNavFromPath(path: string): {
   sessionGroupId: string | null;
   sessionId: string | null;
   chatId: string | null;
-  aiConversationId: string | null;
   page: ActivePage;
   channelSubPage: ChannelSubPage;
 } {
@@ -18,7 +17,6 @@ function parseNavFromPath(path: string): {
       sessionGroupId: null,
       sessionId: null,
       chatId: null,
-      aiConversationId: null,
       page: "settings",
       channelSubPage: null,
     };
@@ -29,7 +27,6 @@ function parseNavFromPath(path: string): {
       sessionGroupId: null,
       sessionId: null,
       chatId: null,
-      aiConversationId: null,
       page: "inbox",
       channelSubPage: null,
     };
@@ -40,32 +37,7 @@ function parseNavFromPath(path: string): {
       sessionGroupId: null,
       sessionId: null,
       chatId: null,
-      aiConversationId: null,
       page: "tickets",
-      channelSubPage: null,
-    };
-  }
-
-  const conversationDetailMatch = path.match(/^\/conversations\/([^/]+)/);
-  if (conversationDetailMatch) {
-    return {
-      channelId: null,
-      sessionGroupId: null,
-      sessionId: null,
-      chatId: null,
-      aiConversationId: conversationDetailMatch[1],
-      page: "ai-conversations",
-      channelSubPage: null,
-    };
-  }
-  if (path.startsWith("/conversations")) {
-    return {
-      channelId: null,
-      sessionGroupId: null,
-      sessionId: null,
-      chatId: null,
-      aiConversationId: null,
-      page: "ai-conversations",
       channelSubPage: null,
     };
   }
@@ -77,7 +49,6 @@ function parseNavFromPath(path: string): {
       sessionGroupId: null,
       sessionId: null,
       chatId: chatMatch[1],
-      aiConversationId: null,
       page: "main",
       channelSubPage: null,
     };
@@ -90,7 +61,6 @@ function parseNavFromPath(path: string): {
       sessionGroupId: channelGroupSessionMatch[2],
       sessionId: channelGroupSessionMatch[3],
       chatId: null,
-      aiConversationId: null,
       page: "main",
       channelSubPage: null,
     };
@@ -103,7 +73,6 @@ function parseNavFromPath(path: string): {
       sessionGroupId: channelGroupMatch[2],
       sessionId: null,
       chatId: null,
-      aiConversationId: null,
       page: "main",
       channelSubPage: null,
     };
@@ -116,7 +85,6 @@ function parseNavFromPath(path: string): {
       sessionGroupId: groupSessionMatch[1],
       sessionId: groupSessionMatch[2],
       chatId: null,
-      aiConversationId: null,
       page: "main",
       channelSubPage: null,
     };
@@ -129,7 +97,6 @@ function parseNavFromPath(path: string): {
       sessionGroupId: groupMatch[1],
       sessionId: null,
       chatId: null,
-      aiConversationId: null,
       page: "main",
       channelSubPage: null,
     };
@@ -142,7 +109,6 @@ function parseNavFromPath(path: string): {
       sessionGroupId: null,
       sessionId: null,
       chatId: null,
-      aiConversationId: null,
       page: "main",
       channelSubPage: null,
     };
@@ -153,14 +119,13 @@ function parseNavFromPath(path: string): {
     sessionGroupId: null,
     sessionId: null,
     chatId: null,
-    aiConversationId: null,
     page: "main",
     channelSubPage: null,
   };
 }
 
 export function useHistorySync() {
-  const restoreNav = useUIStore((s: { _restoreNav: (channelId: string | null, sessionGroupId: string | null, sessionId: string | null, page?: ActivePage, chatId?: string | null, channelSubPage?: ChannelSubPage, aiConversationId?: string | null) => void }) => s._restoreNav);
+  const restoreNav = useUIStore((s: { _restoreNav: (channelId: string | null, sessionGroupId: string | null, sessionId: string | null, page?: ActivePage, chatId?: string | null, channelSubPage?: ChannelSubPage) => void }) => s._restoreNav);
 
   useEffect(() => {
     const parsedNav = parseNavFromPath(window.location.pathname);
@@ -168,25 +133,23 @@ export function useHistorySync() {
       parsedNav.sessionGroupId,
       parsedNav.sessionId,
     );
-    const { channelId, sessionGroupId, sessionId, chatId, aiConversationId, page } = initialRedirect ?? parsedNav;
-    const isSpecialPage = page === "settings" || page === "inbox" || page === "tickets" || page === "ai-conversations";
+    const { channelId, sessionGroupId, sessionId, chatId, page } = initialRedirect ?? parsedNav;
     const initialChat =
-      (isSpecialPage || channelId)
+      page === "settings" || page === "inbox" || page === "tickets" || channelId
         ? null
         : (chatId ?? localStorage.getItem("trace:activeChatId"));
     const initialChannel =
-      (isSpecialPage || initialChat)
+      page === "settings" || page === "inbox" || page === "tickets" || initialChat
         ? null
         : (channelId ?? localStorage.getItem("trace:activeChannelId"));
     const initialSessionGroupId =
-      (isSpecialPage || initialChat)
+      page === "settings" || page === "inbox" || page === "tickets" || initialChat
         ? null
         : (sessionGroupId ?? localStorage.getItem("trace:activeSessionGroupId"));
     const initialSessionId =
-      (isSpecialPage || initialChat)
+      page === "settings" || page === "inbox" || page === "tickets" || initialChat
         ? null
         : (sessionId ?? localStorage.getItem("trace:activeSessionId"));
-    const initialAiConversationId = page === "ai-conversations" ? aiConversationId : null;
 
     const path = buildPath(
       initialChannel,
@@ -194,7 +157,6 @@ export function useHistorySync() {
       initialSessionId,
       page,
       initialChat,
-      initialAiConversationId,
     );
 
     history.replaceState(
@@ -204,14 +166,13 @@ export function useHistorySync() {
         sessionId: initialSessionId,
         page,
         chatId: initialChat,
-        aiConversationId: initialAiConversationId,
         channelSubPage: null,
       },
       "",
       path,
     );
 
-    restoreNav(initialChannel, initialSessionGroupId, initialSessionId, page, initialChat, null, initialAiConversationId);
+    restoreNav(initialChannel, initialSessionGroupId, initialSessionId, page, initialChat, null);
 
     function onPopState(e: PopStateEvent) {
       const state = e.state as {
@@ -219,7 +180,6 @@ export function useHistorySync() {
         sessionGroupId: string | null;
         sessionId: string | null;
         chatId?: string | null;
-        aiConversationId?: string | null;
         page?: ActivePage;
         channelSubPage?: ChannelSubPage;
       } | null;
@@ -256,7 +216,6 @@ export function useHistorySync() {
           state.page,
           state.chatId,
           state.channelSubPage,
-          state.aiConversationId,
         );
         return;
       }
@@ -282,7 +241,6 @@ export function useHistorySync() {
           redirect.page,
           redirect.chatId,
           redirect.channelSubPage,
-          redirect.aiConversationId,
         );
         return;
       }
@@ -293,7 +251,6 @@ export function useHistorySync() {
         nav.page,
         nav.chatId,
         nav.channelSubPage,
-        nav.aiConversationId,
       );
     }
 

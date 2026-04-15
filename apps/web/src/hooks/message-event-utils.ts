@@ -1,6 +1,6 @@
 import type { Actor, Event, Message } from "@trace/gql";
 import { asJsonObject, isJsonObject } from "@trace/shared";
-import { useEntityStore, eventScopeKey, messageScopeKey } from "../stores/entity";
+import { useEntityStore, eventScopeKey } from "../stores/entity";
 import { takePendingOptimisticChat } from "../lib/optimistic-message";
 
 type MessageScope =
@@ -93,48 +93,22 @@ export function upsertScopedMessageFromEvent(event: Event, scope: MessageScope) 
     if (scope.scopeType === "chat") {
       const pending = takePendingOptimisticChat(scope.scopeId, event);
       if (pending) {
-        // Atomic reconciliation: remove optimistic message, insert real message,
-        // and clean up the optimistic scoped event in a single setState to avoid
-        // intermediate renders that cause scroll glitches.
-        const eventSK = eventScopeKey("chat", scope.scopeId);
-        const msgSK = messageScopeKey("chat", scope.scopeId);
-        useEntityStore.setState((state) => {
-          // Remove optimistic message, add real message
-          const { [pending.tempMessageId]: _removed, ...restMessages } = state.messages;
-          const realMessage = buildScopedMessage(
-            scope,
-            event,
-            payload,
-            restMessages[messageId] as Message | undefined,
-          );
-          restMessages[messageId] = realMessage;
+        // Use store methods so _messageIdsByScope stays in sync
+        const store = useEntityStore.getState();
+        store.remove("messages", pending.tempMessageId);
+        store.upsert("messages", messageId, buildScopedMessage(scope, event, payload, store.messages[messageId] as Message | undefined));
 
-          // Update _messageIdsByScope: swap temp ID for real ID
-          let nextMsgIndex = state._messageIdsByScope;
-          const scopeIds = nextMsgIndex[msgSK];
-          if (scopeIds) {
-            const filtered = scopeIds.filter((id: string) => id !== pending.tempMessageId);
-            if (!filtered.includes(messageId)) {
-              filtered.push(messageId);
-            }
-            nextMsgIndex = { ...nextMsgIndex, [msgSK]: filtered };
-          } else {
-            nextMsgIndex = { ...nextMsgIndex, [msgSK]: [messageId] };
-          }
-
-          // Clean up optimistic scoped event
-          let nextEventsByScope = state.eventsByScope;
-          const bucket = nextEventsByScope[eventSK];
+        // Clean up the optimistic scoped event
+        const scopeKey = eventScopeKey("chat", scope.scopeId);
+        useEntityStore.setState((state: { eventsByScope: Record<string, Record<string, Event>> }) => {
+          const bucket = state.eventsByScope[scopeKey];
           if (bucket && bucket[pending.tempEventId]) {
-            const { [pending.tempEventId]: _evt, ...restBucket } = bucket;
-            nextEventsByScope = { ...nextEventsByScope, [eventSK]: restBucket };
+            const { [pending.tempEventId]: _, ...restBucket } = bucket;
+            return {
+              eventsByScope: { ...state.eventsByScope, [scopeKey]: restBucket },
+            };
           }
-
-          return {
-            messages: restMessages,
-            _messageIdsByScope: nextMsgIndex,
-            eventsByScope: nextEventsByScope,
-          };
+          return {};
         });
       } else {
         upsert("messages", messageId, nextMessage);

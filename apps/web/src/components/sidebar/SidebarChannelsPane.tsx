@@ -3,7 +3,6 @@ import type { Channel, ChannelGroup } from "@trace/gql";
 import type { TopLevelItem } from "../../hooks/useSidebarData";
 import { BrowseChannelsDialog } from "./BrowseChannelsDialog";
 import { CreateChannelGroupDialog } from "./CreateChannelGroupDialog";
-import { AiConversationsButton } from "./AiConversationsButton";
 import { InboxButton } from "./InboxButton";
 import { TicketsButton } from "./TicketsButton";
 import { OrgSwitcher } from "./OrgSwitcher";
@@ -48,7 +47,6 @@ export function SidebarChannelsPane({
         <div className="space-y-0.5 pt-0.5 pb-1">
           <InboxButton />
           <TicketsButton />
-          <AiConversationsButton />
         </div>
 
         <div className="mb-1 flex items-center justify-between px-2">

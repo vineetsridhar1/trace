@@ -1,13 +1,12 @@
 import type { Event, Message } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
 import type { JsonObject } from "@trace/shared";
-import { useEntityStore, eventScopeKey, messageScopeKey } from "../stores/entity";
+import { useEntityStore, eventScopeKey } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 
 type EntityStoreState = {
   messages: Record<string, Message>;
   eventsByScope: Record<string, Record<string, Event>>;
-  _messageIdsByScope: Record<string, string[]>;
 };
 
 const OPTIMISTIC_PREFIX = "optimistic:";
@@ -392,33 +391,18 @@ export function removeOptimisticChatMessage(
     (entry) => entry.tempMessageId === tempMessageId && entry.tempEventId === tempEventId,
   );
 
-  // Atomic removal: delete message entity, update _messageIdsByScope index,
-  // and clean up scoped event in a single setState.
-  const eventSK = eventScopeKey("chat", chatId);
-  const msgSK = messageScopeKey("chat", chatId);
+  // Use store.remove so _messageIdsByScope index stays in sync
+  useEntityStore.getState().remove("messages", tempMessageId);
+
+  const scopeKey = eventScopeKey("chat", chatId);
   useEntityStore.setState((state: EntityStoreState) => {
-    const { [tempMessageId]: _removed, ...restMessages } = state.messages;
-
-    // Update _messageIdsByScope index
-    let nextMsgIndex = state._messageIdsByScope;
-    const scopeIds = nextMsgIndex[msgSK];
-    if (scopeIds?.includes(tempMessageId)) {
-      const filtered = scopeIds.filter((id: string) => id !== tempMessageId);
-      nextMsgIndex = { ...nextMsgIndex, [msgSK]: filtered };
+    const bucket = state.eventsByScope[scopeKey];
+    if (!bucket || !bucket[tempEventId]) {
+      return {};
     }
-
-    // Clean up scoped event
-    let nextEventsByScope = state.eventsByScope;
-    const bucket = nextEventsByScope[eventSK];
-    if (bucket?.[tempEventId]) {
-      const { [tempEventId]: _evt, ...rest } = bucket;
-      nextEventsByScope = { ...nextEventsByScope, [eventSK]: rest };
-    }
-
+    const { [tempEventId]: _, ...rest } = bucket;
     return {
-      messages: restMessages,
-      _messageIdsByScope: nextMsgIndex,
-      eventsByScope: nextEventsByScope,
+      eventsByScope: { ...state.eventsByScope, [scopeKey]: rest },
     };
   });
 }
@@ -451,40 +435,22 @@ export function upsertFetchedChatMessagesWithOptimisticResolution(
     (entry) => !!entry.expectedRealMessageId && realMessageIds.has(entry.expectedRealMessageId),
   );
 
+  // Use upsertMany so the _messageIdsByScope index is updated correctly.
+  // This ensures messages appear in useMessageIdsForScope selectors.
+  useEntityStore.getState().upsertMany("messages", messages);
+
   if (matched.length === 0) {
-    // No optimistic entries to reconcile — just upsert the real messages
-    useEntityStore.getState().upsertMany("messages", messages);
     return;
   }
 
-  // Atomic reconciliation: upsert real messages, remove optimistic messages,
-  // update _messageIdsByScope, and clean up scoped events in a single setState.
-  const msgSK = messageScopeKey("chat", chatId);
+  // Clean up optimistic message entities via store.remove so the index stays in sync
+  const store = useEntityStore.getState();
+  for (const entry of matched) {
+    store.remove("messages", entry.tempMessageId);
+  }
+
+  // Clean up optimistic scoped events
   useEntityStore.setState((state: EntityStoreState) => {
-    // Start with current messages, add all real messages
-    const nextMessages = { ...state.messages };
-    for (const message of messages) {
-      nextMessages[message.id] = message;
-    }
-
-    // Remove optimistic message entities
-    for (const entry of matched) {
-      delete nextMessages[entry.tempMessageId];
-    }
-
-    // Update _messageIdsByScope: remove optimistic IDs, add real IDs
-    let nextMsgIndex = { ...state._messageIdsByScope };
-    const scopeIds = [...(nextMsgIndex[msgSK] ?? [])];
-    const tempIds = new Set(matched.map((e) => e.tempMessageId));
-    const filtered = scopeIds.filter((id: string) => !tempIds.has(id));
-    for (const message of messages) {
-      if (!filtered.includes(message.id)) {
-        filtered.push(message.id);
-      }
-    }
-    nextMsgIndex[msgSK] = filtered;
-
-    // Clean up optimistic scoped events
     let nextEventsByScope = state.eventsByScope;
     let bucket = state.eventsByScope[scopeKey];
     let bucketChanged = false;
@@ -501,10 +467,10 @@ export function upsertFetchedChatMessagesWithOptimisticResolution(
       }
     }
 
-    return {
-      messages: nextMessages,
-      _messageIdsByScope: nextMsgIndex,
-      ...(bucketChanged ? { eventsByScope: nextEventsByScope } : {}),
-    };
+    if (!bucketChanged) {
+      return {};
+    }
+
+    return { eventsByScope: nextEventsByScope };
   });
 }

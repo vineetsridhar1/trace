@@ -50,7 +50,7 @@ Implement the core branching logic: creating a new branch from any turn and asse
 - 04 (GraphQL Schema & Resolvers)
   <!-- Ticket 04 creates: ai-conversation.ts resolver module with queries (aiConversations, aiConversation, branch), mutations (createAiConversation, sendTurn, updateAiConversationTitle), subscriptions (branchTurns, conversationEvents), and type resolvers for AiConversation/Branch/Turn. Extend this module with the forkBranch mutation. Branch type resolvers for depth, turnCount, childBranches, parentBranch, forkTurn are already wired. -->
 - 05 (Event Stream Integration)
-  <!-- Ticket 05 creates: ai_branch_created EventType registered in Prisma and GraphQL enums. Events created via eventService.create() with scopeType "ai_conversation" and scopeId = conversationId. Use this same pattern when emitting ai_branch_created from forkBranch. Also publish to topics.conversationEvents(conversationId) with AiConversationEvent shape for the subscription. -->
+  <!-- Ticket 05 creates: branch.created event registration and scoped conversation subscriptions -->
 
 ## Completion requirements
 

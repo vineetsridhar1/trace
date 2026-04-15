@@ -27,10 +27,6 @@ export interface WriteExecutionLogInput {
   status: ExecutionStatus;
   inboxItemId?: string;
   latencyMs: number;
-  /** Structured context packet snapshot for replay evals. */
-  replayPacket?: Record<string, unknown>;
-  /** Prompt block versions used in this execution. */
-  promptVersions?: Record<string, number>;
 }
 
 export interface QueryExecutionLogsInput {
@@ -68,12 +64,6 @@ export class ExecutionLoggingService {
         status: input.status,
         inboxItemId: input.inboxItemId,
         latencyMs: input.latencyMs,
-        replayPacket: input.replayPacket
-          ? (input.replayPacket as Prisma.InputJsonValue)
-          : undefined,
-        promptVersions: input.promptVersions
-          ? (input.promptVersions as unknown as Prisma.InputJsonValue)
-          : undefined,
       },
     });
   }

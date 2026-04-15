@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, GitBranch, Bot, SlidersHorizontal, Bell, Key, Users, Code } from "lucide-react";
+import { ArrowLeft, GitBranch, Bot, SlidersHorizontal, Bell, Key, Users } from "lucide-react";
 import { useUIStore } from "../../stores/ui";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
@@ -10,7 +10,6 @@ import { SessionDefaultsSection } from "./SessionDefaultsSection";
 import { NotificationsSection } from "./NotificationsSection";
 import { ApiTokensSection } from "./ApiTokensSection";
 import { MembersSection } from "./MembersSection";
-import { ChannelsSection } from "./ChannelsSection";
 
 type SettingsTab =
   | "repositories"
@@ -18,8 +17,7 @@ type SettingsTab =
   | "session-defaults"
   | "notifications"
   | "api-keys"
-  | "members"
-  | "channels";
+  | "members";
 
 const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
   { id: "repositories", label: "Repositories", icon: GitBranch },
@@ -28,14 +26,13 @@ const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
   { id: "session-defaults", label: "Session Defaults", icon: SlidersHorizontal },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "api-keys", label: "API Keys", icon: Key },
-  { id: "channels", label: "Channels", icon: Code },
 ];
 
 export function SettingsPage() {
   const setActivePage = useUIStore((s) => s.setActivePage);
   const [activeTab, setActiveTab] = useState<SettingsTab>("repositories");
   const contentWidthClass =
-    activeTab === "members" || activeTab === "repositories" || activeTab === "channels"
+    activeTab === "members" || activeTab === "repositories"
       ? "mx-auto max-w-5xl"
       : "mx-auto max-w-2xl";
 
@@ -84,7 +81,6 @@ export function SettingsPage() {
             {activeTab === "session-defaults" && <SessionDefaultsSection />}
             {activeTab === "notifications" && <NotificationsSection />}
             {activeTab === "api-keys" && <ApiTokensSection />}
-            {activeTab === "channels" && <ChannelsSection />}
           </div>
         </div>
       </div>

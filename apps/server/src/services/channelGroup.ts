@@ -136,7 +136,7 @@ export class ChannelGroupService {
         scopeType: "system",
         scopeId: channel.organizationId,
         eventType: "channel_updated",
-        payload: { channel: { id: channel.id, name: channel.name, type: channel.type, position: channel.position, groupId: channel.groupId, baseBranch: channel.baseBranch, setupScript: channel.setupScript, runScripts: channel.runScripts } },
+        payload: { channel: { id: channel.id, name: channel.name, type: channel.type, position: channel.position, groupId: channel.groupId, baseBranch: channel.baseBranch } },
         actorType,
         actorId,
       }, tx);
