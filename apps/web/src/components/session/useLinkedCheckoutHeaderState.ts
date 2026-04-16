@@ -1,6 +1,4 @@
-import { type ReactNode } from "react";
 import { toast } from "sonner";
-import { Button } from "../ui/button";
 import {
   restoreLinkedCheckout,
   setLinkedCheckoutAutoSync,
@@ -8,22 +6,31 @@ import {
   useLinkedCheckoutStatus,
 } from "../../stores/linked-checkout";
 
-interface UseLinkedCheckoutHeaderUIProps {
+interface UseLinkedCheckoutHeaderStateProps {
   repoId: string | null | undefined;
   groupBranch: string | null | undefined;
   sessionGroupId: string;
 }
 
-interface LinkedCheckoutHeaderSlots {
-  subtitle: ReactNode | null;
-  actions: ReactNode | null;
+export interface LinkedCheckoutHeaderState {
+  isAttachedToThisGroup: boolean;
+  isAttachedElsewhere: boolean;
+  pending: boolean;
+  autoSyncEnabled: boolean;
+  summaryBranch: string | null | undefined;
+  syncedCommitSha: string | null;
+  lastSyncError: string | null | undefined;
+  canShowControls: boolean;
+  onSync: () => Promise<void>;
+  onRestore: () => Promise<void>;
+  onToggleAutoSync: () => Promise<void>;
 }
 
-export function useLinkedCheckoutHeaderUI({
+export function useLinkedCheckoutHeaderState({
   repoId,
   groupBranch,
   sessionGroupId,
-}: UseLinkedCheckoutHeaderUIProps): LinkedCheckoutHeaderSlots {
+}: UseLinkedCheckoutHeaderStateProps): LinkedCheckoutHeaderState {
   const { status, pending, hasDesktopApi } = useLinkedCheckoutStatus(repoId ?? null);
 
   const isAttachedToThisGroup = status?.attachedSessionGroupId === sessionGroupId;
@@ -34,7 +41,7 @@ export function useLinkedCheckoutHeaderUI({
   const summaryBranch =
     isAttachedToThisGroup && groupBranch ? groupBranch : status?.targetBranch;
 
-  const handleSync = async () => {
+  const onSync = async () => {
     if (!repoId || !groupBranch || pending) return;
 
     try {
@@ -63,7 +70,7 @@ export function useLinkedCheckoutHeaderUI({
     }
   };
 
-  const handleRestore = async () => {
+  const onRestore = async () => {
     if (!repoId || pending) return;
 
     try {
@@ -83,7 +90,7 @@ export function useLinkedCheckoutHeaderUI({
     }
   };
 
-  const handleToggleAutoSync = async () => {
+  const onToggleAutoSync = async () => {
     if (!repoId || !status || pending) return;
 
     const nextEnabled = !status.autoSyncEnabled;
@@ -105,55 +112,17 @@ export function useLinkedCheckoutHeaderUI({
     }
   };
 
-  const subtitle =
-    isAttachedToThisGroup && summaryBranch ? (
-      <p className="mt-0.5 truncate text-xs text-muted-foreground">
-        Root checkout following {summaryBranch}
-        {syncedCommitSha ? ` at ${syncedCommitSha.slice(0, 7)}` : ""}
-        {status?.autoSyncEnabled ? "" : " (auto-sync paused)"}
-      </p>
-    ) : isAttachedElsewhere ? (
-      <p className="mt-0.5 truncate text-xs text-muted-foreground">
-        Root checkout is attached to another Trace session.
-      </p>
-    ) : null;
-
-  const errorLine =
-    isAttachedToThisGroup && status?.lastSyncError ? (
-      <p className="mt-0.5 truncate text-xs text-destructive">{status.lastSyncError}</p>
-    ) : null;
-
-  const actions = canShowControls ? (
-    <>
-      <Button
-        variant={isAttachedToThisGroup ? "secondary" : "outline"}
-        size="sm"
-        onClick={handleSync}
-        disabled={pending}
-      >
-        {pending ? "Syncing..." : "Sync To Root Checkout"}
-      </Button>
-
-      {isAttachedToThisGroup && (
-        <>
-          <Button variant="ghost" size="sm" onClick={handleToggleAutoSync} disabled={pending}>
-            {status?.autoSyncEnabled ? "Pause Auto-Sync" : "Resume Auto-Sync"}
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleRestore} disabled={pending}>
-            Restore My Checkout
-          </Button>
-        </>
-      )}
-    </>
-  ) : null;
-
   return {
-    subtitle: subtitle || errorLine ? (
-      <>
-        {subtitle}
-        {errorLine}
-      </>
-    ) : null,
-    actions,
+    isAttachedToThisGroup,
+    isAttachedElsewhere,
+    pending,
+    autoSyncEnabled: !!status?.autoSyncEnabled,
+    summaryBranch,
+    syncedCommitSha,
+    lastSyncError: status?.lastSyncError,
+    canShowControls,
+    onSync,
+    onRestore,
+    onToggleAutoSync,
   };
 }
