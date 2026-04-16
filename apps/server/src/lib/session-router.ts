@@ -470,6 +470,13 @@ export class SessionRouter {
     return this.runtimes.get(runtimeId);
   }
 
+  /** True when the given runtime is registered and its websocket is open. */
+  isRuntimeAvailable(runtimeId: string): boolean {
+    const runtime = this.runtimes.get(runtimeId);
+    if (!runtime) return false;
+    return runtime.ws.readyState === runtime.ws.OPEN;
+  }
+
   /** Send a command to the runtime that owns this session, returning a typed delivery result. */
   send(sessionId: string, command: SessionCommand): DeliveryResult {
     let runtimeId = this.sessionRuntime.get(sessionId);

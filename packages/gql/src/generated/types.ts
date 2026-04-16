@@ -1406,6 +1406,7 @@ export type Session = {
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars['ID']['output'];
+  lastUserMessageAt?: Maybe<Scalars['DateTime']['output']>;
   model?: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
   prUrl?: Maybe<Scalars['String']['output']>;
@@ -1420,7 +1421,6 @@ export type Session = {
   updatedAt: Scalars['DateTime']['output'];
   workdir?: Maybe<Scalars['String']['output']>;
   worktreeDeleted: Scalars['Boolean']['output'];
-  lastUserMessageAt?: Maybe<Scalars['DateTime']['output']>;
 };
 
 export type SessionConnection = {

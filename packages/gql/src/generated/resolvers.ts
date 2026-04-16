@@ -1409,6 +1409,7 @@ export type Session = {
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars['ID']['output'];
+  lastUserMessageAt?: Maybe<Scalars['DateTime']['output']>;
   model?: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
   prUrl?: Maybe<Scalars['String']['output']>;
@@ -1423,7 +1424,6 @@ export type Session = {
   updatedAt: Scalars['DateTime']['output'];
   workdir?: Maybe<Scalars['String']['output']>;
   worktreeDeleted: Scalars['Boolean']['output'];
-  lastUserMessageAt?: Maybe<Scalars['DateTime']['output']>;
 };
 
 export type SessionConnection = {
@@ -2511,6 +2511,7 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   gitCheckpoints?: Resolver<Array<ResolversTypes['GitCheckpoint']>, ParentType, ContextType>;
   hosting?: Resolver<ResolversTypes['HostingMode'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  lastUserMessageAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
   model?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   prUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
@@ -2525,7 +2526,6 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   workdir?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   worktreeDeleted?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
-  lastUserMessageAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 

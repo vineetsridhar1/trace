@@ -1290,7 +1290,13 @@ export class SessionService {
       checkpointContext,
     };
 
-    const deliveryResult = sessionRouter.send(id, command);
+    // Guard against silent bridge hijack — see guardHomeRuntime for details.
+    const conn = this.parseConnection(session.connection);
+    const homeStatus = this.guardHomeRuntime(id, conn);
+    const deliveryResult: DeliveryResult =
+      homeStatus === "unavailable"
+        ? "runtime_disconnected"
+        : sessionRouter.send(id, command);
 
     if (deliveryResult !== "delivered") {
       await this.storePendingCommand(id, {
@@ -2138,18 +2144,25 @@ export class SessionService {
       ? ({ checkpointContextId: checkpointContext.checkpointContextId } as Prisma.InputJsonValue)
       : undefined;
 
-    // Attempt delivery before marking active
-    const deliveryResult = sessionRouter.send(sessionId, {
-      type: "send",
-      sessionId,
-      prompt,
-      tool: session.tool,
-      model: session.model ?? undefined,
-      interactionMode,
-      cwd: session.workdir ?? undefined,
-      toolSessionId: session.toolSessionId ?? undefined,
-      checkpointContext,
-    });
+    // Attempt delivery before marking active. Guard against silent bridge
+    // hijack when the session's home runtime (e.g. Laptop A) is offline and a
+    // different bridge (Laptop B) is now the only connected runtime.
+    const conn = this.parseConnection(session.connection);
+    const homeStatus = this.guardHomeRuntime(sessionId, conn);
+    const deliveryResult: DeliveryResult =
+      homeStatus === "unavailable"
+        ? "runtime_disconnected"
+        : sessionRouter.send(sessionId, {
+            type: "send",
+            sessionId,
+            prompt,
+            tool: session.tool,
+            model: session.model ?? undefined,
+            interactionMode,
+            cwd: session.workdir ?? undefined,
+            toolSessionId: session.toolSessionId ?? undefined,
+            checkpointContext,
+          });
 
     if (deliveryResult !== "delivered") {
       await this.storePendingCommand(
@@ -3559,6 +3572,37 @@ export class SessionService {
   private parseConnection(raw: unknown): SessionConnectionData {
     if (!raw || typeof raw !== "object") return defaultConnection();
     return defaultConnection(raw as Partial<SessionConnectionData>);
+  }
+
+  /**
+   * Guard against silent bridge hijack.
+   *
+   * A session's `connection.runtimeInstanceId` is its persistent home bridge.
+   * When that bridge disconnects (e.g. the user closes the laptop it's running
+   * on) we must NOT let `sessionRouter.send()` auto-bind to whatever default
+   * runtime happens to be connected now — doing so dispatches the command to a
+   * bridge that doesn't have the workspace, which causes the adapter to fail
+   * immediately and the user to see "Run ended" after every message.
+   *
+   * Instead, return `"runtime_disconnected"` so the caller persists the
+   * disconnected state and stores the command as `pendingRun`. The frontend's
+   * SessionRecoveryPanel auto-retries via `retryConnection`, which binds the
+   * session to a new runtime, re-prepares the workspace, and replays the
+   * pending command.
+   *
+   * When the home runtime IS connected, re-bind the in-memory session→runtime
+   * mapping to it so `sessionRouter.send()` uses the correct runtime instead of
+   * a stale (possibly hijacked) binding.
+   */
+  private guardHomeRuntime(
+    sessionId: string,
+    conn: SessionConnectionData,
+  ): "unavailable" | "ok" {
+    const homeRuntimeId = conn.runtimeInstanceId;
+    if (!homeRuntimeId) return "ok";
+    if (!sessionRouter.isRuntimeAvailable(homeRuntimeId)) return "unavailable";
+    sessionRouter.bindSession(sessionId, homeRuntimeId);
+    return "ok";
   }
 
   private async resolvePromptEventIdForCheckpoint(
