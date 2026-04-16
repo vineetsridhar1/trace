@@ -8,8 +8,24 @@ interface Props {
 export function LinkedCheckoutActions({ state }: Props) {
   if (!state.canShowControls) return null;
 
-  const { isAttachedToThisGroup, pending, autoSyncEnabled, onSync, onRestore, onToggleAutoSync } =
-    state;
+  const {
+    isAttachedToThisGroup,
+    pending,
+    autoSyncEnabled,
+    requiresRepoLink,
+    onLinkRepo,
+    onSync,
+    onRestore,
+    onToggleAutoSync,
+  } = state;
+
+  if (requiresRepoLink) {
+    return (
+      <Button variant="outline" size="sm" onClick={onLinkRepo} disabled={pending}>
+        {pending ? "Linking..." : "Link Local Checkout"}
+      </Button>
+    );
+  }
 
   return (
     <>
@@ -19,7 +35,7 @@ export function LinkedCheckoutActions({ state }: Props) {
         onClick={onSync}
         disabled={pending}
       >
-        {pending ? "Syncing..." : "Sync To Root Checkout"}
+        {pending ? "Syncing..." : "Sync To Main Worktree"}
       </Button>
 
       {isAttachedToThisGroup && (
