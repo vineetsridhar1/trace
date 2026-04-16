@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { Loader2, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
 import { Button } from "../ui/button";
 import type { LinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
 
@@ -5,7 +7,11 @@ interface Props {
   state: LinkedCheckoutHeaderState;
 }
 
+type PendingAction = "link" | "sync" | "restore" | "toggle-auto-sync" | null;
+
 export function LinkedCheckoutActions({ state }: Props) {
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+
   if (!state.canShowControls) return null;
 
   const {
@@ -19,10 +25,26 @@ export function LinkedCheckoutActions({ state }: Props) {
     onToggleAutoSync,
   } = state;
 
+  const runAction = async (action: Exclude<PendingAction, null>, fn: () => Promise<void>) => {
+    if (pending) return;
+
+    setPendingAction(action);
+    try {
+      await fn();
+    } finally {
+      setPendingAction((current) => (current === action ? null : current));
+    }
+  };
+
   if (requiresRepoLink) {
     return (
-      <Button variant="outline" size="sm" onClick={onLinkRepo} disabled={pending}>
-        {pending ? "Linking..." : "Link Local Checkout"}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => void runAction("link", onLinkRepo)}
+        disabled={pending}
+      >
+        {pendingAction === "link" ? "Linking..." : "Link Local Checkout"}
       </Button>
     );
   }
@@ -31,20 +53,53 @@ export function LinkedCheckoutActions({ state }: Props) {
     <>
       <Button
         variant={isAttachedToThisGroup ? "secondary" : "outline"}
-        size="sm"
-        onClick={onSync}
+        size="icon"
+        className="rounded-md"
+        onClick={() => void runAction("sync", onSync)}
         disabled={pending}
+        aria-label={isAttachedToThisGroup ? "Sync main worktree now" : "Sync to main worktree"}
+        title={isAttachedToThisGroup ? "Sync main worktree now" : "Sync to main worktree"}
       >
-        {pending ? "Syncing..." : "Sync To Main Worktree"}
+        {pendingAction === "sync" ? (
+          <Loader2 size={14} className="animate-spin" />
+        ) : (
+          <RefreshCw size={14} />
+        )}
       </Button>
 
       {isAttachedToThisGroup && (
         <>
-          <Button variant="ghost" size="sm" onClick={onToggleAutoSync} disabled={pending}>
-            {autoSyncEnabled ? "Pause Auto-Sync" : "Resume Auto-Sync"}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="rounded-md"
+            onClick={() => void runAction("toggle-auto-sync", onToggleAutoSync)}
+            disabled={pending}
+            aria-label={autoSyncEnabled ? "Pause auto-sync" : "Resume auto-sync"}
+            title={autoSyncEnabled ? "Pause auto-sync" : "Resume auto-sync"}
+          >
+            {pendingAction === "toggle-auto-sync" ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : autoSyncEnabled ? (
+              <Pause size={14} />
+            ) : (
+              <Play size={14} />
+            )}
           </Button>
-          <Button variant="outline" size="sm" onClick={onRestore} disabled={pending}>
-            Restore My Checkout
+          <Button
+            variant="outline"
+            size="icon"
+            className="rounded-md"
+            onClick={() => void runAction("restore", onRestore)}
+            disabled={pending}
+            aria-label="Restore main worktree"
+            title="Restore main worktree"
+          >
+            {pendingAction === "restore" ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <RotateCcw size={14} />
+            )}
           </Button>
         </>
       )}

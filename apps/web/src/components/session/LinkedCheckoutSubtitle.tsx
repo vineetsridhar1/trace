@@ -5,8 +5,9 @@ interface Props {
 }
 
 export function LinkedCheckoutSubtitle({ state }: Props) {
+  if (!state.hasDesktopApi) return null;
+
   const {
-    requiresDesktop,
     requiresRepoLink,
     isAttachedToThisGroup,
     isAttachedElsewhere,
@@ -17,21 +18,14 @@ export function LinkedCheckoutSubtitle({ state }: Props) {
   } = state;
 
   const hasStatusLine =
-    requiresDesktop ||
-    requiresRepoLink ||
-    (isAttachedToThisGroup && summaryBranch) ||
-    isAttachedElsewhere;
+    requiresRepoLink || (isAttachedToThisGroup && summaryBranch) || isAttachedElsewhere;
   const hasErrorLine = isAttachedToThisGroup && !!lastSyncError;
 
   if (!hasStatusLine && !hasErrorLine) return null;
 
   return (
     <>
-      {requiresDesktop ? (
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          Open Trace Desktop to sync this session group into your main worktree.
-        </p>
-      ) : requiresRepoLink ? (
+      {requiresRepoLink ? (
         <p className="mt-0.5 truncate text-xs text-muted-foreground">
           Link a local checkout to sync this session group into your main worktree.
         </p>
