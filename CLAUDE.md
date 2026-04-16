@@ -97,6 +97,15 @@ apps/desktop/        — Electron shell + bridge client
 
 ## Code Quality
 
+### Approach
+
+- **Think before coding.** State assumptions explicitly. If multiple interpretations exist, present them — don't pick silently. If something is unclear, stop and ask. Push back when a simpler approach exists.
+- **Minimum code that solves the problem.** No features beyond what was asked. No abstractions for single-use code. No speculative "flexibility." If 200 lines could be 50, rewrite it.
+- **Surgical changes only.** Don't "improve" adjacent code, comments, or formatting. Don't refactor things that aren't broken. Match existing style. Every changed line should trace directly to the request. Remove only orphans YOUR changes created — leave pre-existing dead code alone (mention it, don't delete it).
+- **Define success criteria, then loop.** Transform tasks into verifiable goals ("add validation" → "write tests for invalid inputs, make them pass"). For multi-step tasks, state a brief plan with verification checks at each step.
+
+### Rules
+
 - **No duplicated type definitions.** Enums and types that exist in `schema.graphql` come from `@trace/gql` codegen. Do not redefine them elsewhere.
 - **No business logic in resolvers.** Resolvers call services. Period.
 - **No direct event creation by clients or agents.** Events come from the service layer only.
