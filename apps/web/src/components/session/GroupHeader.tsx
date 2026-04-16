@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Circle,
   GitPullRequest,
@@ -13,10 +13,15 @@ import { cn } from "../../lib/utils";
 import { sessionStatusColor, sessionStatusLabel } from "./sessionStatus";
 import { SessionHistory } from "./SessionHistory";
 import { useRunScripts } from "../../hooks/useRunScripts";
+import { useLinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
+import { LinkedCheckoutSubtitle } from "./LinkedCheckoutSubtitle";
+import { LinkedCheckoutActions } from "./LinkedCheckoutActions";
 
 interface GroupHeaderProps {
   groupName: string | undefined;
   sessionGroupId: string;
+  repoId?: string | null;
+  groupBranch?: string | null;
   selectedSessionStatus: string;
   selectedSessionId: string | null;
   groupPrUrl: string | null | undefined;
@@ -31,6 +36,8 @@ interface GroupHeaderProps {
 export function GroupHeader({
   groupName,
   sessionGroupId,
+  repoId,
+  groupBranch,
   selectedSessionStatus,
   selectedSessionId,
   groupPrUrl,
@@ -44,6 +51,7 @@ export function GroupHeader({
   const [showHistory, setShowHistory] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
   const { hasRunScripts, canRun, handleRun } = useRunScripts(sessionGroupId, selectedSessionId);
+  const linkedCheckout = useLinkedCheckoutHeaderState({ repoId, groupBranch, sessionGroupId });
 
   useEffect(() => {
     if (!showHistory) return;
@@ -91,7 +99,10 @@ export function GroupHeader({
         <h2 className="truncate text-sm font-semibold text-foreground">
           {groupName ?? "Session Group"}
         </h2>
+        <LinkedCheckoutSubtitle state={linkedCheckout} />
       </div>
+
+      <LinkedCheckoutActions state={linkedCheckout} />
 
       {hasRunScripts && (
         <button

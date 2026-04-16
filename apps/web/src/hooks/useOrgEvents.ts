@@ -6,6 +6,11 @@ import { useEntityStore, eventScopeKey, StoreBatchWriter } from "../stores/entit
 import type { SessionEntity, SessionGroupEntity } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore, navigateToSession } from "../stores/ui";
+import {
+  ensureLinkedCheckoutStatus,
+  getLinkedCheckoutStatusSnapshot,
+  scheduleAutoSyncLinkedCheckout,
+} from "../stores/linked-checkout";
 import { getSessionChannelId } from "../lib/session-group";
 import { notifyForEvent } from "../notifications/handlers";
 import { takePendingOptimisticSession } from "../lib/optimistic-message";
@@ -206,6 +211,38 @@ function extractGitCheckpointRewrite(
   };
 }
 
+async function maybeAutoSyncLinkedCheckout(checkpoint: GitCheckpoint): Promise<void> {
+  if (
+    typeof window === "undefined" ||
+    typeof window.trace?.getLinkedCheckoutStatus !== "function" ||
+    typeof window.trace?.syncLinkedCheckout !== "function"
+  ) {
+    return;
+  }
+
+  const currentStatus =
+    getLinkedCheckoutStatusSnapshot(checkpoint.repoId) ??
+    (await ensureLinkedCheckoutStatus(checkpoint.repoId));
+
+  if (!currentStatus?.isAttached) return;
+  if (currentStatus.attachedSessionGroupId !== checkpoint.sessionGroupId) return;
+  if (!currentStatus.autoSyncEnabled) return;
+  if (currentStatus.lastSyncedCommitSha === checkpoint.commitSha) return;
+
+  const sessionGroup = useEntityStore.getState().sessionGroups[checkpoint.sessionGroupId];
+  const branch = typeof sessionGroup?.branch === "string" ? sessionGroup.branch : null;
+  if (!branch) return;
+
+  scheduleAutoSyncLinkedCheckout({
+    repoId: checkpoint.repoId,
+    sessionGroupId: checkpoint.sessionGroupId,
+    branch,
+    commitSha: checkpoint.commitSha,
+    autoSyncEnabled: currentStatus.autoSyncEnabled,
+    source: "auto",
+  });
+}
+
 /** Extract a human-readable preview from a normalized message payload */
 function extractMessagePreview(eventType: EventType, payload: JsonObject): string | null {
   if (eventType === "message_sent") {
@@ -248,6 +285,7 @@ export function useOrgEvents() {
         const event = result.data.orgEvents as Event;
         const batch = new StoreBatchWriter();
         const payload = asJsonObject(event.payload);
+        let checkpointForAutoSync: GitCheckpoint | null = null;
 
         const upsertSessionGroupFromPayload = (bumpSort = false) => {
           const sessionFromPayload = asJsonObject(payload?.session);
@@ -642,6 +680,7 @@ export function useOrgEvents() {
 
           const checkpoint = extractGitCheckpoint(payload);
           if (checkpoint) {
+            checkpointForAutoSync = checkpoint;
             const existingSession = batch.get("sessions", event.scopeId);
             if (existingSession) {
               batch.patch("sessions", event.scopeId, {
@@ -665,6 +704,7 @@ export function useOrgEvents() {
 
           const rewrite = extractGitCheckpointRewrite(payload);
           if (rewrite) {
+            checkpointForAutoSync = rewrite.checkpoint;
             const existingSession = batch.get("sessions", event.scopeId);
             if (existingSession) {
               batch.patch("sessions", event.scopeId, {
@@ -751,6 +791,12 @@ export function useOrgEvents() {
 
         // Fire notification handlers after all store patches are applied
         notifyForEvent(event);
+
+        if (checkpointForAutoSync) {
+          // Fire-and-forget: the sync loop is idempotent and coalesced per-repo
+          // in the store; errors surface as toasts from within maybeAutoSync.
+          void maybeAutoSyncLinkedCheckout(checkpointForAutoSync);
+        }
       });
 
     return () => subscription.unsubscribe();

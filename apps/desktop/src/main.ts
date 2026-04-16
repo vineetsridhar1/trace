@@ -4,7 +4,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { BridgeClient, type BridgeConnectionStatus } from "./bridge.js";
 import {
-  getRepoConfig as getStoredRepoConfig,
+  getRepoConfig,
   getRepoPath,
   saveRepoPath,
   setRepoGitHooksEnabled,
@@ -15,6 +15,12 @@ import {
   installOrRepairRepoHooks,
 } from "./repo-hooks.js";
 import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
+import {
+  getLinkedCheckoutStatus,
+  restoreLinkedCheckout,
+  setLinkedCheckoutAutoSync,
+  syncLinkedCheckout,
+} from "./linked-checkout.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -102,13 +108,10 @@ ipcMain.handle("get-git-info", async (_event, folderPath: string) => {
   }
 });
 
-ipcMain.handle("save-repo-path", (_event, repoId: string, localPath: string) => {
-  const repoConfig = saveRepoPath(repoId, localPath);
+ipcMain.handle("save-repo-path", async (_event, repoId: string, localPath: string) => {
+  const repoConfig = await saveRepoPath(repoId, localPath);
   if (repoConfig.gitHooksEnabled) {
-    return installOrRepairRepoHooks(localPath).then(() => {
-      bridge.send({ type: "repo_linked", repoId });
-      return repoConfig;
-    });
+    await installOrRepairRepoHooks(localPath);
   }
   // Notify the server that this bridge now has this repo registered
   bridge.send({ type: "repo_linked", repoId });
@@ -120,11 +123,11 @@ ipcMain.handle("get-repo-path", (_event, repoId: string) => {
 });
 
 ipcMain.handle("get-repo-config", (_event, repoId: string) => {
-  return getStoredRepoConfig(repoId);
+  return getRepoConfig(repoId);
 });
 
 ipcMain.handle("set-repo-git-hooks-enabled", async (_event, repoId: string, enabled: boolean) => {
-  const repoConfig = setRepoGitHooksEnabled(repoId, enabled);
+  const repoConfig = await setRepoGitHooksEnabled(repoId, enabled);
   if (!repoConfig) {
     return { config: null, status: null };
   }
@@ -140,15 +143,41 @@ ipcMain.handle("set-repo-git-hooks-enabled", async (_event, repoId: string, enab
 });
 
 ipcMain.handle("get-repo-git-hook-status", async (_event, repoId: string) => {
-  const repoConfig = getStoredRepoConfig(repoId);
+  const repoConfig = getRepoConfig(repoId);
   if (!repoConfig) return null;
   return getRepoHookStatus(repoConfig.path);
 });
 
 ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: string) => {
-  const repoConfig = getStoredRepoConfig(repoId);
+  const repoConfig = getRepoConfig(repoId);
   if (!repoConfig) return null;
   return installOrRepairRepoHooks(repoConfig.path);
+});
+
+ipcMain.handle(
+  "sync-linked-checkout",
+  async (
+    _event,
+    input: {
+      repoId: string;
+      sessionGroupId: string;
+      branch: string;
+      commitSha?: string | null;
+      autoSyncEnabled?: boolean;
+    },
+  ) => syncLinkedCheckout(input),
+);
+
+ipcMain.handle("restore-linked-checkout", async (_event, repoId: string) => {
+  return restoreLinkedCheckout(repoId);
+});
+
+ipcMain.handle("get-linked-checkout-status", async (_event, repoId: string) => {
+  return getLinkedCheckoutStatus(repoId);
+});
+
+ipcMain.handle("set-linked-checkout-auto-sync", async (_event, repoId: string, enabled: boolean) => {
+  return setLinkedCheckoutAutoSync(repoId, enabled);
 });
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());

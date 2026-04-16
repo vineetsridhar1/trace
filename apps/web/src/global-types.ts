@@ -16,6 +16,45 @@ declare global {
   type DesktopRepoConfig = {
     path: string;
     gitHooksEnabled: boolean;
+    linkedCheckout?: {
+      sessionGroupId: string;
+      targetBranch: string;
+      autoSyncEnabled: boolean;
+      originalBranch: string | null;
+      originalCommitSha: string;
+      lastSyncedCommitSha: string | null;
+      lastSyncError: string | null;
+      lastSyncAt: string | null;
+    } | null;
+  };
+
+  type DesktopLinkedCheckoutStatus = {
+    repoId: string;
+    repoPath: string | null;
+    isAttached: boolean;
+    attachedSessionGroupId: string | null;
+    targetBranch: string | null;
+    autoSyncEnabled: boolean;
+    currentBranch: string | null;
+    currentCommitSha: string | null;
+    lastSyncedCommitSha: string | null;
+    lastSyncError: string | null;
+    restoreBranch: string | null;
+    restoreCommitSha: string | null;
+  };
+
+  type DesktopLinkedCheckoutActionResult = {
+    ok: boolean;
+    status: DesktopLinkedCheckoutStatus;
+    error: string | null;
+  };
+
+  type DesktopLinkedCheckoutSyncInput = {
+    repoId: string;
+    sessionGroupId: string;
+    branch: string;
+    commitSha?: string | null;
+    autoSyncEnabled?: boolean;
   };
 
   type DesktopRepoGitHookStatus = {
@@ -51,6 +90,15 @@ declare global {
     saveRepoPath: (repoId: string, localPath: string) => Promise<DesktopRepoConfig>;
     getRepoPath: (repoId: string) => Promise<string | null>;
     getRepoConfig: (repoId: string) => Promise<DesktopRepoConfig | null>;
+    getLinkedCheckoutStatus: (repoId: string) => Promise<DesktopLinkedCheckoutStatus>;
+    syncLinkedCheckout: (
+      input: DesktopLinkedCheckoutSyncInput,
+    ) => Promise<DesktopLinkedCheckoutActionResult>;
+    restoreLinkedCheckout: (repoId: string) => Promise<DesktopLinkedCheckoutActionResult>;
+    setLinkedCheckoutAutoSync: (
+      repoId: string,
+      enabled: boolean,
+    ) => Promise<DesktopLinkedCheckoutActionResult>;
     setRepoGitHooksEnabled: (
       repoId: string,
       enabled: boolean,
