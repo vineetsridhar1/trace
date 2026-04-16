@@ -143,20 +143,43 @@ export function SessionGroupDetailView({
     "worktreeDeleted",
   ) as boolean | undefined;
 
-  const activeSessionGroupId = useUIStore((s: { activeSessionGroupId: string | null }) => s.activeSessionGroupId);
+  const activeSessionGroupId = useUIStore(
+    (s: { activeSessionGroupId: string | null }) => s.activeSessionGroupId,
+  );
   const activeSessionId = useUIStore((s: { activeSessionId: string | null }) => s.activeSessionId);
-  const activeTerminalId = useUIStore((s: { activeTerminalId: string | null }) => s.activeTerminalId);
-  const setActiveSessionId = useUIStore((s: { setActiveSessionId: (id: string | null) => void }) => s.setActiveSessionId);
-  const setActiveTerminalId = useUIStore((s: { setActiveTerminalId: (id: string | null) => void }) => s.setActiveTerminalId);
-  const openTabIds = useUIStore((s: { openSessionTabsByGroup: Record<string, string[]> }) => s.openSessionTabsByGroup[sessionGroupId]);
-  const openSessionTab = useUIStore((s: { openSessionTab: (groupId: string, sessionId: string) => void }) => s.openSessionTab);
-  const closeSessionTab = useUIStore((s: { closeSessionTab: (groupId: string, sessionId: string) => void }) => s.closeSessionTab);
-  const initSessionTabs = useUIStore((s: { initSessionTabs: (groupId: string, sessionIds: string[]) => void }) => s.initSessionTabs);
-  const toggleFullscreen = useDetailPanelStore((s: { toggleFullscreen: () => void }) => s.toggleFullscreen);
+  const activeTerminalId = useUIStore(
+    (s: { activeTerminalId: string | null }) => s.activeTerminalId,
+  );
+  const setActiveSessionId = useUIStore(
+    (s: { setActiveSessionId: (id: string | null) => void }) => s.setActiveSessionId,
+  );
+  const setActiveTerminalId = useUIStore(
+    (s: { setActiveTerminalId: (id: string | null) => void }) => s.setActiveTerminalId,
+  );
+  const openTabIds = useUIStore(
+    (s: { openSessionTabsByGroup: Record<string, string[]> }) =>
+      s.openSessionTabsByGroup[sessionGroupId],
+  );
+  const openSessionTab = useUIStore(
+    (s: { openSessionTab: (groupId: string, sessionId: string) => void }) => s.openSessionTab,
+  );
+  const closeSessionTab = useUIStore(
+    (s: { closeSessionTab: (groupId: string, sessionId: string) => void }) => s.closeSessionTab,
+  );
+  const initSessionTabs = useUIStore(
+    (s: { initSessionTabs: (groupId: string, sessionIds: string[]) => void }) => s.initSessionTabs,
+  );
+  const toggleFullscreen = useDetailPanelStore(
+    (s: { toggleFullscreen: () => void }) => s.toggleFullscreen,
+  );
   const isFullscreen = useDetailPanelStore((s: { isFullscreen: boolean }) => s.isFullscreen);
   const currentUserId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
-  const upsert = useEntityStore((s: { upsert: ReturnType<typeof useEntityStore.getState>["upsert"] }) => s.upsert);
-  const upsertMany = useEntityStore((s: { upsertMany: ReturnType<typeof useEntityStore.getState>["upsertMany"] }) => s.upsertMany);
+  const upsert = useEntityStore(
+    (s: { upsert: ReturnType<typeof useEntityStore.getState>["upsert"] }) => s.upsert,
+  );
+  const upsertMany = useEntityStore(
+    (s: { upsertMany: ReturnType<typeof useEntityStore.getState>["upsertMany"] }) => s.upsertMany,
+  );
   const terminals = useSessionGroupTerminals(sessionGroupId);
 
   const [showSidebar, setShowSidebar] = useState(false);
@@ -164,7 +187,9 @@ export function SessionGroupDetailView({
   const [highlightCheckpointId, setHighlightCheckpointId] = useState<string | null>(null);
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
-  const renameTerminal = useTerminalStore((s: { renameTerminal: (id: string, name: string) => void }) => s.renameTerminal);
+  const renameTerminal = useTerminalStore(
+    (s: { renameTerminal: (id: string, name: string) => void }) => s.renameTerminal,
+  );
 
   const { groupSessions, selectedSession, sessionTabs, sessionsByRecency } =
     useSessionGroupSessions(sessionGroupId, openTabIds, activeSessionId);
@@ -191,14 +216,18 @@ export function SessionGroupDetailView({
       .toPromise()
       .then((result: { data?: Record<string, unknown> }) => {
         if (!result.data?.sessionGroup) return;
-        const fetchedGroup = result.data.sessionGroup as SessionGroupEntity & { sessions?: unknown[] };
+        const fetchedGroup = result.data.sessionGroup as SessionGroupEntity & {
+          sessions?: unknown[];
+        };
         const existingGroup = useEntityStore.getState().sessionGroups[fetchedGroup.id];
         upsert(
           "sessionGroups",
           fetchedGroup.id,
           existingGroup ? { ...existingGroup, ...fetchedGroup } : fetchedGroup,
         );
-        const fetchedSessions = fetchedGroup.sessions as Array<Record<string, unknown> & { id: string }> | undefined;
+        const fetchedSessions = fetchedGroup.sessions as
+          | Array<Record<string, unknown> & { id: string }>
+          | undefined;
         if (Array.isArray(fetchedSessions)) {
           const existingSessions = useEntityStore.getState().sessions;
           upsertMany(
@@ -216,9 +245,16 @@ export function SessionGroupDetailView({
   useEffect(() => {
     if (activeSessionGroupId !== sessionGroupId) return;
     if (sessionsByRecency.length === 0) return;
-    if (activeSessionId && sessionsByRecency.some((s: SessionEntity) => s.id === activeSessionId)) return;
+    if (activeSessionId && sessionsByRecency.some((s: SessionEntity) => s.id === activeSessionId))
+      return;
     setActiveSessionId(sessionsByRecency[0].id);
-  }, [activeSessionGroupId, activeSessionId, sessionGroupId, sessionsByRecency, setActiveSessionId]);
+  }, [
+    activeSessionGroupId,
+    activeSessionId,
+    sessionGroupId,
+    sessionsByRecency,
+    setActiveSessionId,
+  ]);
 
   // Initialize open tabs with the most recent session
   useEffect(() => {
@@ -239,9 +275,9 @@ export function SessionGroupDetailView({
     const firstSessionId = groupSessions[0]?.id;
     if (!firstSessionId) return;
 
-    const existingGroupTerminals = (Object.values(useTerminalStore.getState().terminals) as Array<{ sessionGroupId: string }>).filter(
-      (t) => t.sessionGroupId === sessionGroupId,
-    );
+    const existingGroupTerminals = (
+      Object.values(useTerminalStore.getState().terminals) as Array<{ sessionGroupId: string }>
+    ).filter((t) => t.sessionGroupId === sessionGroupId);
     if (existingGroupTerminals.length > 0) return;
 
     client
@@ -277,6 +313,9 @@ export function SessionGroupDetailView({
         groupArchivedAt ?? null,
       )
     : "in_progress";
+  const linkedCheckoutRepoId =
+    groupRepo?.id ?? (selectedSession?.repo as { id: string } | null | undefined)?.id ?? null;
+  const linkedCheckoutBranch = groupBranch ?? selectedSession?.branch ?? null;
 
   const terminalAllowed = (() => {
     if (!selectedSession) return false;
@@ -360,7 +399,15 @@ export function SessionGroupDetailView({
       openSessionTab(sessionGroupId, newSessionId);
       setActiveSessionId(newSessionId);
     }
-  }, [groupSessions, groupBranch, groupRepo, openSessionTab, selectedSession, sessionGroupId, setActiveSessionId]);
+  }, [
+    groupSessions,
+    groupBranch,
+    groupRepo,
+    openSessionTab,
+    selectedSession,
+    sessionGroupId,
+    setActiveSessionId,
+  ]);
 
   const handleSelectSession = useCallback(
     (sessionId: string) => {
@@ -383,8 +430,8 @@ export function SessionGroupDetailView({
           <GroupHeader
             groupName={groupName as string | undefined}
             sessionGroupId={sessionGroupId}
-            repoId={groupRepo?.id ?? null}
-            groupBranch={groupBranch ?? null}
+            repoId={linkedCheckoutRepoId}
+            groupBranch={linkedCheckoutBranch}
             selectedSessionStatus={selectedSessionStatus}
             selectedSessionId={selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)}
             groupPrUrl={groupPrUrl}
