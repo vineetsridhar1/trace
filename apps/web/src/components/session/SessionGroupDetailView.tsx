@@ -383,6 +383,8 @@ export function SessionGroupDetailView({
           <GroupHeader
             groupName={groupName as string | undefined}
             sessionGroupId={sessionGroupId}
+            repoId={groupRepo?.id ?? null}
+            groupBranch={groupBranch ?? null}
             selectedSessionStatus={selectedSessionStatus}
             selectedSessionId={selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)}
             groupPrUrl={groupPrUrl}

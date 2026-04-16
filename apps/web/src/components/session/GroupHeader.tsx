@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Circle,
   GitPullRequest,
@@ -9,14 +9,24 @@ import {
   Play,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "../../lib/utils";
 import { sessionStatusColor, sessionStatusLabel } from "./sessionStatus";
 import { SessionHistory } from "./SessionHistory";
 import { useRunScripts } from "../../hooks/useRunScripts";
+import { Button } from "../ui/button";
+import {
+  restoreLinkedCheckout,
+  setLinkedCheckoutAutoSync,
+  syncLinkedCheckout,
+  useLinkedCheckoutStatus,
+} from "../../stores/linked-checkout";
 
 interface GroupHeaderProps {
   groupName: string | undefined;
   sessionGroupId: string;
+  repoId?: string | null;
+  groupBranch?: string | null;
   selectedSessionStatus: string;
   selectedSessionId: string | null;
   groupPrUrl: string | null | undefined;
@@ -31,6 +41,8 @@ interface GroupHeaderProps {
 export function GroupHeader({
   groupName,
   sessionGroupId,
+  repoId,
+  groupBranch,
   selectedSessionStatus,
   selectedSessionId,
   groupPrUrl,
@@ -44,6 +56,8 @@ export function GroupHeader({
   const [showHistory, setShowHistory] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
   const { hasRunScripts, canRun, handleRun } = useRunScripts(sessionGroupId, selectedSessionId);
+  const { status: linkedCheckoutStatus, pending: linkedCheckoutPending, isDesktopAvailable } =
+    useLinkedCheckoutStatus(repoId ?? null);
 
   useEffect(() => {
     if (!showHistory) return;
@@ -69,6 +83,86 @@ export function GroupHeader({
   }, [showHistory]);
 
   const label = sessionStatusLabel[selectedSessionStatus] ?? selectedSessionStatus;
+  const isAttachedToThisGroup = linkedCheckoutStatus?.attachedSessionGroupId === sessionGroupId;
+  const isAttachedElsewhere = !!linkedCheckoutStatus?.isAttached && !isAttachedToThisGroup;
+  const repoLinked = !!linkedCheckoutStatus?.repoPath;
+  const canShowLinkedCheckoutControls =
+    isDesktopAvailable && !!repoId && !!groupBranch && repoLinked;
+  const syncedCommitSha =
+    linkedCheckoutStatus?.lastSyncedCommitSha ?? linkedCheckoutStatus?.currentCommitSha ?? null;
+  const linkedCheckoutSummaryBranch =
+    isAttachedToThisGroup && groupBranch ? groupBranch : linkedCheckoutStatus?.targetBranch;
+
+  const handleSyncToRootCheckout = async () => {
+    if (!repoId || !groupBranch || linkedCheckoutPending) return;
+
+    try {
+      const result = await syncLinkedCheckout({
+        repoId,
+        sessionGroupId,
+        branch: groupBranch,
+        autoSyncEnabled: true,
+        source: "manual",
+      });
+
+      if (!result.ok) {
+        toast.error("Failed to sync root checkout", {
+          description: result.error ?? "Unknown error",
+        });
+        return;
+      }
+
+      toast.success("Root checkout synced", {
+        description: `Now following ${groupBranch}.`,
+      });
+    } catch (error) {
+      toast.error("Failed to sync root checkout", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const handleRestoreCheckout = async () => {
+    if (!repoId || linkedCheckoutPending) return;
+
+    try {
+      const result = await restoreLinkedCheckout(repoId);
+      if (!result.ok) {
+        toast.error("Failed to restore root checkout", {
+          description: result.error ?? "Unknown error",
+        });
+        return;
+      }
+
+      toast.success("Root checkout restored");
+    } catch (error) {
+      toast.error("Failed to restore root checkout", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const handleToggleAutoSync = async () => {
+    if (!repoId || !linkedCheckoutStatus || linkedCheckoutPending) return;
+
+    const nextEnabled = !linkedCheckoutStatus.autoSyncEnabled;
+
+    try {
+      const result = await setLinkedCheckoutAutoSync(repoId, nextEnabled);
+      if (!result.ok) {
+        toast.error("Failed to update auto-sync", {
+          description: result.error ?? "Unknown error",
+        });
+        return;
+      }
+
+      toast.success(nextEnabled ? "Auto-sync enabled" : "Auto-sync paused");
+    } catch (error) {
+      toast.error("Failed to update auto-sync", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
 
   return (
     <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2">
@@ -91,7 +185,58 @@ export function GroupHeader({
         <h2 className="truncate text-sm font-semibold text-foreground">
           {groupName ?? "Session Group"}
         </h2>
+        {isAttachedToThisGroup && linkedCheckoutSummaryBranch && (
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            Root checkout following {linkedCheckoutSummaryBranch}
+            {syncedCommitSha ? ` at ${syncedCommitSha.slice(0, 7)}` : ""}
+            {linkedCheckoutStatus?.autoSyncEnabled ? "" : " (auto-sync paused)"}
+          </p>
+        )}
+        {isAttachedElsewhere && (
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            Root checkout is attached to another Trace session.
+          </p>
+        )}
+        {isAttachedToThisGroup && linkedCheckoutStatus?.lastSyncError && (
+          <p className="mt-0.5 truncate text-xs text-destructive">
+            {linkedCheckoutStatus.lastSyncError}
+          </p>
+        )}
       </div>
+
+      {canShowLinkedCheckoutControls && (
+        <>
+          <Button
+            variant={isAttachedToThisGroup ? "secondary" : "outline"}
+            size="sm"
+            onClick={handleSyncToRootCheckout}
+            disabled={linkedCheckoutPending}
+          >
+            {linkedCheckoutPending ? "Syncing..." : "Sync To Root Checkout"}
+          </Button>
+
+          {isAttachedToThisGroup && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleToggleAutoSync}
+                disabled={linkedCheckoutPending}
+              >
+                {linkedCheckoutStatus?.autoSyncEnabled ? "Pause Auto-Sync" : "Resume Auto-Sync"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRestoreCheckout}
+                disabled={linkedCheckoutPending}
+              >
+                Restore My Checkout
+              </Button>
+            </>
+          )}
+        </>
+      )}
 
       {hasRunScripts && (
         <button
