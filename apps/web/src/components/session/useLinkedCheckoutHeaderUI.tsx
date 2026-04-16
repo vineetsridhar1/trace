@@ -24,12 +24,12 @@ export function useLinkedCheckoutHeaderUI({
   groupBranch,
   sessionGroupId,
 }: UseLinkedCheckoutHeaderUIProps): LinkedCheckoutHeaderSlots {
-  const { status, pending, isDesktopAvailable } = useLinkedCheckoutStatus(repoId ?? null);
+  const { status, pending, hasDesktopApi } = useLinkedCheckoutStatus(repoId ?? null);
 
   const isAttachedToThisGroup = status?.attachedSessionGroupId === sessionGroupId;
   const isAttachedElsewhere = !!status?.isAttached && !isAttachedToThisGroup;
   const repoLinked = !!status?.repoPath;
-  const canShowControls = isDesktopAvailable && !!repoId && !!groupBranch && repoLinked;
+  const canShowControls = hasDesktopApi && !!repoId && !!groupBranch && repoLinked;
   const syncedCommitSha = status?.lastSyncedCommitSha ?? status?.currentCommitSha ?? null;
   const summaryBranch =
     isAttachedToThisGroup && groupBranch ? groupBranch : status?.targetBranch;

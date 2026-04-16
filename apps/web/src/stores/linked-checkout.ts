@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { toast } from "sonner";
 import { create } from "zustand";
 
 export type LinkedCheckoutSyncSource = "manual" | "auto";
@@ -11,19 +12,27 @@ interface LinkedCheckoutState {
   statusByRepoId: Record<string, DesktopLinkedCheckoutStatus | null | undefined>;
   pendingByRepoId: Record<string, boolean>;
   queuedSyncByRepoId: Record<string, LinkedCheckoutSyncRequest | null>;
+  inFlightSyncByRepoId: Record<
+    string,
+    Promise<DesktopLinkedCheckoutActionResult> | null | undefined
+  >;
   setStatus: (repoId: string, status: DesktopLinkedCheckoutStatus | null) => void;
   setPending: (repoId: string, pending: boolean) => void;
   replaceQueuedSync: (repoId: string, request: LinkedCheckoutSyncRequest | null) => void;
   takeQueuedSync: (repoId: string) => LinkedCheckoutSyncRequest | null;
+  getInFlightSync: (
+    repoId: string,
+  ) => Promise<DesktopLinkedCheckoutActionResult> | null | undefined;
+  setInFlightSync: (
+    repoId: string,
+    promise: Promise<DesktopLinkedCheckoutActionResult> | null,
+  ) => void;
 }
 
-// Per-tab coalescing: collapses rapid-fire sync requests into a single in-flight
-// IPC call plus at most one queued follow-up. The desktop bridge enforces the
-// real cross-tab/process mutex via its per-repo lock — this Map is just an
-// optimization to avoid spamming IPC from one tab.
-const syncPromises = new Map<string, Promise<DesktopLinkedCheckoutActionResult>>();
-
-function isBridgeAvailable(): boolean {
+// This gate is about the local Electron IPC surface, not the desktop/server
+// websocket bridge. IPC availability is effectively fixed for the lifetime of
+// a renderer, so a static capability check is the right signal here.
+function hasLinkedCheckoutDesktopApi(): boolean {
   return (
     typeof window !== "undefined" &&
     typeof window.trace?.getLinkedCheckoutStatus === "function" &&
@@ -58,6 +67,7 @@ export const useLinkedCheckoutStore = create<LinkedCheckoutState>((set, get) => 
   statusByRepoId: {},
   pendingByRepoId: {},
   queuedSyncByRepoId: {},
+  inFlightSyncByRepoId: {},
 
   setStatus: (repoId, status) =>
     set((state) => ({
@@ -93,6 +103,16 @@ export const useLinkedCheckoutStore = create<LinkedCheckoutState>((set, get) => 
     }));
     return queued;
   },
+
+  getInFlightSync: (repoId) => get().inFlightSyncByRepoId[repoId],
+
+  setInFlightSync: (repoId, promise) =>
+    set((state) => ({
+      inFlightSyncByRepoId: {
+        ...state.inFlightSyncByRepoId,
+        [repoId]: promise,
+      },
+    })),
 }));
 
 export function isLinkedCheckoutPending(repoId: string | null | undefined): boolean {
@@ -110,7 +130,7 @@ export function getLinkedCheckoutStatusSnapshot(
 export async function refreshLinkedCheckoutStatus(
   repoId: string,
 ): Promise<DesktopLinkedCheckoutStatus | null> {
-  if (!isBridgeAvailable()) {
+  if (!hasLinkedCheckoutDesktopApi()) {
     useLinkedCheckoutStore.getState().setStatus(repoId, null);
     return null;
   }
@@ -146,7 +166,7 @@ async function runSyncLoop(
   };
 
   try {
-    if (!isBridgeAvailable()) {
+    if (!hasLinkedCheckoutDesktopApi()) {
       throw bridgeUnavailableError();
     }
 
@@ -159,6 +179,10 @@ async function runSyncLoop(
         autoSyncEnabled: nextRequest.autoSyncEnabled,
       });
       useLinkedCheckoutStore.getState().setStatus(repoId, lastResult.status);
+      if (!lastResult.ok) {
+        useLinkedCheckoutStore.getState().replaceQueuedSync(repoId, null);
+        break;
+      }
       nextRequest = useLinkedCheckoutStore.getState().takeQueuedSync(repoId);
     }
   } catch (error) {
@@ -181,17 +205,37 @@ async function runSyncLoop(
 export async function syncLinkedCheckout(
   request: LinkedCheckoutSyncRequest,
 ): Promise<DesktopLinkedCheckoutActionResult> {
-  const existingPromise = syncPromises.get(request.repoId);
+  const existingPromise = useLinkedCheckoutStore.getState().getInFlightSync(request.repoId);
   if (existingPromise) {
     useLinkedCheckoutStore.getState().replaceQueuedSync(request.repoId, request);
     return existingPromise;
   }
 
   const promise = runSyncLoop(request).finally(() => {
-    syncPromises.delete(request.repoId);
+    useLinkedCheckoutStore.getState().setInFlightSync(request.repoId, null);
   });
-  syncPromises.set(request.repoId, promise);
+  useLinkedCheckoutStore.getState().setInFlightSync(request.repoId, promise);
   return promise;
+}
+
+export function scheduleAutoSyncLinkedCheckout(request: LinkedCheckoutSyncRequest): void {
+  const existingPromise = useLinkedCheckoutStore.getState().getInFlightSync(request.repoId);
+  if (existingPromise) {
+    useLinkedCheckoutStore.getState().replaceQueuedSync(request.repoId, request);
+    return;
+  }
+
+  void syncLinkedCheckout(request).then((result) => {
+    if (!result.ok && result.error) {
+      toast.error("Auto-sync paused", {
+        description: result.error,
+      });
+    }
+  }).catch((error) => {
+    toast.error("Auto-sync paused", {
+      description: error instanceof Error ? error.message : String(error),
+    });
+  });
 }
 
 export async function restoreLinkedCheckout(
@@ -201,7 +245,7 @@ export async function restoreLinkedCheckout(
     throw new Error("A root checkout sync is already in progress.");
   }
 
-  if (!isBridgeAvailable()) {
+  if (!hasLinkedCheckoutDesktopApi()) {
     throw bridgeUnavailableError();
   }
 
@@ -223,7 +267,7 @@ export async function setLinkedCheckoutAutoSync(
     throw new Error("A root checkout sync is already in progress.");
   }
 
-  if (!isBridgeAvailable()) {
+  if (!hasLinkedCheckoutDesktopApi()) {
     throw bridgeUnavailableError();
   }
 
@@ -251,6 +295,6 @@ export function useLinkedCheckoutStatus(repoId: string | null | undefined) {
   return {
     status: status ?? null,
     pending,
-    isDesktopAvailable: isBridgeAvailable(),
+    hasDesktopApi: hasLinkedCheckoutDesktopApi(),
   };
 }

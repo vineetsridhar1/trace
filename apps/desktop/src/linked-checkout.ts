@@ -18,15 +18,21 @@ const repoLocks = new Map<string, Promise<unknown>>();
 function withRepoLock<T>(repoId: string, fn: () => Promise<T>): Promise<T> {
   const previous = repoLocks.get(repoId) ?? Promise.resolve();
   const next = previous.then(fn, fn);
-  repoLocks.set(
-    repoId,
-    next.catch(() => undefined),
-  );
-  return next;
+  const settled = next.catch(() => undefined);
+  repoLocks.set(repoId, settled);
+  return next.finally(() => {
+    if (repoLocks.get(repoId) === settled) {
+      repoLocks.delete(repoId);
+    }
+  });
+}
+
+function isSafeGitRef(ref: string): boolean {
+  return !!ref && !ref.startsWith("-") && !ref.includes("..") && !/[\x00-\x1f\x7f\s]/.test(ref);
 }
 
 function assertSafeGitRef(ref: string): void {
-  if (!ref || ref.startsWith("-") || ref.includes("..") || /[\x00-\x1f\x7f\s]/.test(ref)) {
+  if (!isSafeGitRef(ref)) {
     throw new Error(`Unsafe git ref: ${ref}`);
   }
 }
@@ -112,6 +118,12 @@ async function refExists(repoPath: string, ref: string): Promise<boolean> {
     () => true,
     () => false,
   );
+}
+
+async function resolveRefCommitSha(repoPath: string, ref: string): Promise<string | null> {
+  if (!isSafeGitRef(ref)) return null;
+  if (!(await refExists(repoPath, ref))) return null;
+  return runGit(repoPath, ["rev-parse", `${ref}^{commit}`]);
 }
 
 async function resolveTargetCommitSha(
@@ -297,7 +309,15 @@ export function restoreLinkedCheckout(
         );
       }
 
-      if (attachment.originalBranch && (await refExists(repoPath, attachment.originalBranch))) {
+      const originalBranchCommitSha = attachment.originalBranch
+        ? await resolveRefCommitSha(repoPath, attachment.originalBranch)
+        : null;
+
+      if (
+        attachment.originalBranch &&
+        originalBranchCommitSha &&
+        originalBranchCommitSha === attachment.originalCommitSha
+      ) {
         await runGit(repoPath, ["switch", attachment.originalBranch]);
       } else {
         assertValidCommitSha(attachment.originalCommitSha);

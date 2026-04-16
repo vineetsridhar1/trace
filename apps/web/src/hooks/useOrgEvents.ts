@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { gql } from "@urql/core";
-import { toast } from "sonner";
 import { asJsonObject, type JsonObject } from "@trace/shared";
 import { client } from "../lib/urql";
 import { useEntityStore, eventScopeKey, StoreBatchWriter } from "../stores/entity";
@@ -10,7 +9,7 @@ import { useUIStore, navigateToSession } from "../stores/ui";
 import {
   ensureLinkedCheckoutStatus,
   getLinkedCheckoutStatusSnapshot,
-  syncLinkedCheckout,
+  scheduleAutoSyncLinkedCheckout,
 } from "../stores/linked-checkout";
 import { getSessionChannelId } from "../lib/session-group";
 import { notifyForEvent } from "../notifications/handlers";
@@ -234,7 +233,7 @@ async function maybeAutoSyncLinkedCheckout(checkpoint: GitCheckpoint): Promise<v
   const branch = typeof sessionGroup?.branch === "string" ? sessionGroup.branch : null;
   if (!branch) return;
 
-  const result = await syncLinkedCheckout({
+  scheduleAutoSyncLinkedCheckout({
     repoId: checkpoint.repoId,
     sessionGroupId: checkpoint.sessionGroupId,
     branch,
@@ -242,12 +241,6 @@ async function maybeAutoSyncLinkedCheckout(checkpoint: GitCheckpoint): Promise<v
     autoSyncEnabled: currentStatus.autoSyncEnabled,
     source: "auto",
   });
-
-  if (!result.ok && result.error) {
-    toast.error("Auto-sync paused", {
-      description: result.error,
-    });
-  }
 }
 
 /** Extract a human-readable preview from a normalized message payload */
