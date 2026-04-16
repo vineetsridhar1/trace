@@ -1428,6 +1428,12 @@ export type Session = {
 
 export type SessionConnection = {
   __typename?: 'SessionConnection';
+  /**
+   * When false, the frontend should not auto-retry the connection — only manual
+   * Retry/Move can unblock. Used for non-transient failures like the home bridge
+   * being offline, where repeated retries produce noise without progress.
+   */
+  autoRetryable?: Maybe<Scalars['Boolean']['output']>;
   canMove: Scalars['Boolean']['output'];
   canRetry: Scalars['Boolean']['output'];
   lastDeliveryFailureAt?: Maybe<Scalars['DateTime']['output']>;
@@ -2530,6 +2536,7 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
 }>;
 
 export type SessionConnectionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['SessionConnection'] = ResolversParentTypes['SessionConnection']> = ResolversObject<{
+  autoRetryable?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
   canMove?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   canRetry?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   lastDeliveryFailureAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;

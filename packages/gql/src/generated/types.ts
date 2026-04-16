@@ -1425,6 +1425,12 @@ export type Session = {
 
 export type SessionConnection = {
   __typename?: 'SessionConnection';
+  /**
+   * When false, the frontend should not auto-retry the connection — only manual
+   * Retry/Move can unblock. Used for non-transient failures like the home bridge
+   * being offline, where repeated retries produce noise without progress.
+   */
+  autoRetryable?: Maybe<Scalars['Boolean']['output']>;
   canMove: Scalars['Boolean']['output'];
   canRetry: Scalars['Boolean']['output'];
   lastDeliveryFailureAt?: Maybe<Scalars['DateTime']['output']>;

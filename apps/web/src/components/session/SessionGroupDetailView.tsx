@@ -59,6 +59,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         retryCount
         canRetry
         canMove
+        autoRetryable
       }
       channel {
         id
@@ -86,6 +87,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
           retryCount
           canRetry
           canMove
+          autoRetryable
         }
         createdBy {
           id

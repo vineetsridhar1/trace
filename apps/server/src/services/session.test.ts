@@ -1259,12 +1259,68 @@ describe("SessionService", () => {
   });
 
   describe("sendMessage", () => {
-    it("refuses silent handoff when the session's home bridge is offline", async () => {
-      // Scenario: session was running on Laptop A (runtime-a). User closed
-      // Laptop A, opened Laptop B (runtime-b). Laptop A is no longer in the
-      // runtime registry. Sending a message must NOT auto-bind to Laptop B —
-      // that would start a fresh run on a bridge that has no workspace, which
-      // ends immediately and surfaces "Run ended" after every message.
+    it("pins delivery to the session's home runtime via expectedHomeRuntimeId", async () => {
+      // Scenario: session was running on Laptop A (runtime-a). sendMessage must
+      // pass runtime-a as expectedHomeRuntimeId so sessionRouter.send cannot
+      // auto-bind to any other connected bridge.
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        workdir: "/tmp/worktree",
+        toolSessionId: "tool-sess-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
+      prismaMock.session.update.mockResolvedValue(session);
+      sessionRouterMock.send.mockReturnValue("delivered");
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "runtime-a",
+        label: "Laptop A",
+      });
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "hello",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({ type: "send", sessionId: "session-1" }),
+        { expectedHomeRuntimeId: "runtime-a" },
+      );
+      // Post-delivery: session transitions to active and records the send
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-1" },
+          data: expect.objectContaining({
+            agentStatus: "active",
+            sessionStatus: "in_progress",
+          }),
+        }),
+      );
+      const resumedCalls = eventServiceMock.create.mock.calls.filter(
+        (call: unknown[]) => {
+          const arg = call[0] as { eventType?: string } | undefined;
+          return arg?.eventType === "session_resumed";
+        },
+      );
+      expect(resumedCalls.length).toBe(1);
+    });
+
+    it("treats delivery as disconnected when the home runtime is unavailable", async () => {
+      // sessionRouter.send returns "runtime_disconnected" when the expected
+      // home runtime isn't currently registered. sendMessage must queue the
+      // message as pendingRun, persist the failure with autoRetryable: false,
+      // and emit a connection_lost event.
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
         makeSession({
           agentStatus: "done",
@@ -1287,15 +1343,14 @@ describe("SessionService", () => {
         connection: {
           state: "disconnected",
           runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
           retryCount: 0,
           canRetry: true,
           canMove: true,
         },
         sessionGroupId: "group-1",
       });
-      sessionRouterMock.isRuntimeAvailable.mockImplementation(
-        (id: string) => id !== "runtime-a",
-      );
+      sessionRouterMock.send.mockReturnValue("runtime_disconnected");
 
       await service.sendMessage({
         sessionId: "session-1",
@@ -1304,8 +1359,11 @@ describe("SessionService", () => {
         actorId: "user-1",
       });
 
-      expect(sessionRouterMock.isRuntimeAvailable).toHaveBeenCalledWith("runtime-a");
-      expect(sessionRouterMock.send).not.toHaveBeenCalled();
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({ type: "send" }),
+        { expectedHomeRuntimeId: "runtime-a" },
+      );
       expect(prismaMock.session.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: "session-1" },
@@ -1317,6 +1375,21 @@ describe("SessionService", () => {
           }),
         }),
       );
+      // persistConnectionFailure must mark this as non-auto-retryable because
+      // the home bridge is the cause — only Move/home-return can unblock.
+      const connectionWrites = prismaMock.session.update.mock.calls.filter(
+        (call: unknown[]) => {
+          const arg = call[0] as { data?: { connection?: { autoRetryable?: boolean } } } | undefined;
+          return arg?.data?.connection !== undefined;
+        },
+      );
+      expect(connectionWrites.length).toBeGreaterThan(0);
+      const lastConn = connectionWrites[connectionWrites.length - 1][0].data.connection as {
+        autoRetryable?: boolean;
+        lastError?: string;
+      };
+      expect(lastConn.autoRetryable).toBe(false);
+      expect(lastConn.lastError).toContain("Laptop A");
       const connectionLostCalls = eventServiceMock.create.mock.calls.filter(
         (call: unknown[]) => {
           const arg = call[0] as { payload?: { type?: string } } | undefined;
@@ -1324,39 +1397,6 @@ describe("SessionService", () => {
         },
       );
       expect(connectionLostCalls.length).toBeGreaterThan(0);
-    });
-
-    it("delivers when the session's home bridge is available", async () => {
-      const session = makeSession({
-        agentStatus: "done",
-        sessionStatus: "in_progress",
-        workdir: "/tmp/worktree",
-        toolSessionId: "tool-sess-1",
-        connection: {
-          state: "connected",
-          runtimeInstanceId: "runtime-a",
-          runtimeLabel: "Laptop A",
-          retryCount: 0,
-          canRetry: true,
-          canMove: true,
-        },
-      });
-      prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
-      prismaMock.session.update.mockResolvedValue(session);
-      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
-
-      await service.sendMessage({
-        sessionId: "session-1",
-        text: "hello",
-        actorType: "user",
-        actorId: "user-1",
-      });
-
-      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "runtime-a");
-      expect(sessionRouterMock.send).toHaveBeenCalledWith(
-        "session-1",
-        expect.objectContaining({ type: "send", sessionId: "session-1" }),
-      );
     });
   });
 
@@ -1406,12 +1446,19 @@ describe("SessionService", () => {
       expect(sessionRouterMock.send).not.toHaveBeenCalled();
       const recoveryFailedCalls = eventServiceMock.create.mock.calls.filter(
         (call: unknown[]) => {
-          const arg = call[0] as { payload?: { type?: string; reason?: string } } | undefined;
+          const arg = call[0] as { payload?: { type?: string; reason?: string; connection?: { autoRetryable?: boolean } } } | undefined;
           return arg?.payload?.type === "recovery_failed";
         },
       );
       expect(recoveryFailedCalls.length).toBe(1);
-      expect(recoveryFailedCalls[0][0].payload.reason).toBe("home_runtime_offline");
+      const failurePayload = recoveryFailedCalls[0][0].payload as {
+        reason: string;
+        connection: { autoRetryable?: boolean; lastError?: string };
+      };
+      expect(failurePayload.reason).toBe("home_runtime_offline");
+      // Non-transient failure — frontend must stop auto-retrying.
+      expect(failurePayload.connection.autoRetryable).toBe(false);
+      expect(failurePayload.connection.lastError).toContain("Laptop A");
     });
   });
 

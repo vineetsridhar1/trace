@@ -51,6 +51,7 @@ const SESSION_GROUPS_QUERY = gql`
           retryCount
           canRetry
           canMove
+          autoRetryable
         }
         createdBy {
           id

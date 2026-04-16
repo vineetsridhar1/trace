@@ -650,6 +650,12 @@ type SessionConnection {
   retryCount: Int!
   canRetry: Boolean!
   canMove: Boolean!
+  """
+  When false, the frontend should not auto-retry the connection — only manual
+  Retry/Move can unblock. Used for non-transient failures like the home bridge
+  being offline, where repeated retries produce noise without progress.
+  """
+  autoRetryable: Boolean
 }
 
 type ApiTokenStatus {

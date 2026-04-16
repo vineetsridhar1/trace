@@ -48,7 +48,7 @@ const FILTERED_SESSION_GROUPS_QUERY = gql`
         prUrl
         worktreeDeleted
         sessionGroupId
-        connection { state runtimeInstanceId runtimeLabel lastError retryCount canRetry canMove }
+        connection { state runtimeInstanceId runtimeLabel lastError retryCount canRetry canMove autoRetryable }
         createdBy { id name avatarUrl }
         repo { id name }
         channel { id }

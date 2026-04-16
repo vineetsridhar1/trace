@@ -94,6 +94,12 @@ export type SessionConnectionData = {
   retryCount: number;
   canRetry: boolean;
   canMove: boolean;
+  /**
+   * When false, the frontend should not auto-retry — only manual Retry/Move
+   * can unblock. Used for non-transient failures (e.g. home bridge offline)
+   * where repeated background retries produce noise without progress.
+   */
+  autoRetryable?: boolean;
   [key: string]: unknown;
 };
 
@@ -1290,13 +1296,10 @@ export class SessionService {
       checkpointContext,
     };
 
-    // Guard against silent bridge hijack — see guardHomeRuntime for details.
     const conn = this.parseConnection(session.connection);
-    const homeStatus = this.guardHomeRuntime(id, conn);
-    const deliveryResult: DeliveryResult =
-      homeStatus === "unavailable"
-        ? "runtime_disconnected"
-        : sessionRouter.send(id, command);
+    const deliveryResult = sessionRouter.send(id, command, {
+      expectedHomeRuntimeId: conn.runtimeInstanceId,
+    });
 
     if (deliveryResult !== "delivered") {
       await this.storePendingCommand(id, {
@@ -1320,6 +1323,7 @@ export class SessionService {
         connection: this.mergeConnection(session.connection, {
           state: "connected",
           lastSeen: new Date().toISOString(),
+          autoRetryable: true,
           ...(boundRuntime && {
             runtimeInstanceId: boundRuntime.id,
             runtimeLabel: boundRuntime.label,
@@ -2144,25 +2148,25 @@ export class SessionService {
       ? ({ checkpointContextId: checkpointContext.checkpointContextId } as Prisma.InputJsonValue)
       : undefined;
 
-    // Attempt delivery before marking active. Guard against silent bridge
-    // hijack when the session's home runtime (e.g. Laptop A) is offline and a
-    // different bridge (Laptop B) is now the only connected runtime.
+    // Attempt delivery before marking active. Pinning to the session's home
+    // runtime prevents silent bridge hijack when the home is offline and a
+    // different bridge (e.g. Laptop B) is now the only connected runtime.
     const conn = this.parseConnection(session.connection);
-    const homeStatus = this.guardHomeRuntime(sessionId, conn);
-    const deliveryResult: DeliveryResult =
-      homeStatus === "unavailable"
-        ? "runtime_disconnected"
-        : sessionRouter.send(sessionId, {
-            type: "send",
-            sessionId,
-            prompt,
-            tool: session.tool,
-            model: session.model ?? undefined,
-            interactionMode,
-            cwd: session.workdir ?? undefined,
-            toolSessionId: session.toolSessionId ?? undefined,
-            checkpointContext,
-          });
+    const deliveryResult = sessionRouter.send(
+      sessionId,
+      {
+        type: "send",
+        sessionId,
+        prompt,
+        tool: session.tool,
+        model: session.model ?? undefined,
+        interactionMode,
+        cwd: session.workdir ?? undefined,
+        toolSessionId: session.toolSessionId ?? undefined,
+        checkpointContext,
+      },
+      { expectedHomeRuntimeId: conn.runtimeInstanceId },
+    );
 
     if (deliveryResult !== "delivered") {
       await this.storePendingCommand(
@@ -2210,6 +2214,7 @@ export class SessionService {
         connection: this.mergeConnection(session.connection, {
           state: "connected",
           lastSeen: new Date().toISOString(),
+          autoRetryable: true,
           ...(boundRuntime && {
             runtimeInstanceId: boundRuntime.id,
             runtimeLabel: boundRuntime.label,
@@ -2535,6 +2540,7 @@ export class SessionService {
       lastError: undefined,
       canRetry: true,
       canMove: true,
+      autoRetryable: true,
     };
 
     // Preserve agent/session status — only update connection state.
@@ -2779,7 +2785,9 @@ export class SessionService {
     if (!runtime) {
       const failureReason = homeRuntimeId ? "home_runtime_offline" : "no_runtime";
       const failureMessage = homeRuntimeId
-        ? `${conn.runtimeLabel ?? "Original bridge"} is offline — use Move to continue on another bridge`
+        ? conn.runtimeLabel
+          ? `${conn.runtimeLabel} is offline — use Move to continue on another bridge`
+          : "The original bridge is offline — use Move to continue on another bridge"
         : "No runtime available";
       const failedConn: SessionConnectionData = {
         ...conn,
@@ -2789,6 +2797,9 @@ export class SessionService {
         lastDeliveryFailureAt: new Date().toISOString(),
         canRetry: true,
         canMove: true,
+        // home_runtime_offline is non-transient — stop the auto-retry loop.
+        // The user must either bring the home bridge back online or Move.
+        autoRetryable: failureReason !== "home_runtime_offline",
       };
       await prisma.session.update({
         where: { id: sessionId },
@@ -2824,19 +2835,24 @@ export class SessionService {
 
     if (session.repo) {
       const startMeta = await getSessionStartMetadata(sessionId);
-      // Re-run workspace preparation
-      const prepResult = sessionRouter.send(sessionId, {
-        type: "prepare",
+      // Re-run workspace preparation — pin delivery to the runtime we just
+      // resolved (the home bridge) so no other bridge can intercept.
+      const prepResult = sessionRouter.send(
         sessionId,
-        sessionGroupId: session.sessionGroupId ?? undefined,
-        slug: session.sessionGroup?.slug ?? undefined,
-        repoId: session.repo.id,
-        repoName: session.repo.name,
-        repoRemoteUrl: session.repo.remoteUrl,
-        defaultBranch: session.repo.defaultBranch,
-        branch: session.branch ?? undefined,
-        checkpointSha: startMeta.restoreCheckpointSha ?? undefined,
-      });
+        {
+          type: "prepare",
+          sessionId,
+          sessionGroupId: session.sessionGroupId ?? undefined,
+          slug: session.sessionGroup?.slug ?? undefined,
+          repoId: session.repo.id,
+          repoName: session.repo.name,
+          repoRemoteUrl: session.repo.remoteUrl,
+          defaultBranch: session.repo.defaultBranch,
+          branch: session.branch ?? undefined,
+          checkpointSha: startMeta.restoreCheckpointSha ?? undefined,
+        },
+        { expectedHomeRuntimeId: runtime.id },
+      );
 
       if (prepResult !== "delivered") {
         await this.persistConnectionFailure(
@@ -2860,6 +2876,7 @@ export class SessionService {
         lastSeen: new Date().toISOString(),
         lastError: undefined,
         retryCount: 0,
+        autoRetryable: true,
       };
 
       // Preserve agent/session status — only update connection state.
@@ -3584,37 +3601,6 @@ export class SessionService {
     return defaultConnection(raw as Partial<SessionConnectionData>);
   }
 
-  /**
-   * Guard against silent bridge hijack.
-   *
-   * A session's `connection.runtimeInstanceId` is its persistent home bridge.
-   * When that bridge disconnects (e.g. the user closes the laptop it's running
-   * on) we must NOT let `sessionRouter.send()` auto-bind to whatever default
-   * runtime happens to be connected now — doing so dispatches the command to a
-   * bridge that doesn't have the workspace, which causes the adapter to fail
-   * immediately and the user to see "Run ended" after every message.
-   *
-   * Instead, return `"runtime_disconnected"` so the caller persists the
-   * disconnected state and stores the command as `pendingRun`. The frontend's
-   * SessionRecoveryPanel auto-retries via `retryConnection`, which binds the
-   * session to a new runtime, re-prepares the workspace, and replays the
-   * pending command.
-   *
-   * When the home runtime IS connected, re-bind the in-memory session→runtime
-   * mapping to it so `sessionRouter.send()` uses the correct runtime instead of
-   * a stale (possibly hijacked) binding.
-   */
-  private guardHomeRuntime(
-    sessionId: string,
-    conn: SessionConnectionData,
-  ): "unavailable" | "ok" {
-    const homeRuntimeId = conn.runtimeInstanceId;
-    if (!homeRuntimeId) return "ok";
-    if (!sessionRouter.isRuntimeAvailable(homeRuntimeId)) return "unavailable";
-    sessionRouter.bindSession(sessionId, homeRuntimeId);
-    return "ok";
-  }
-
   private async resolvePromptEventIdForCheckpoint(
     sessionId: string,
     checkpoint: GitCheckpointBridgePayload,
@@ -3904,6 +3890,7 @@ export class SessionService {
       sessionGroup?: { slug: string | null } | null;
       repo: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
       branch: string | null;
+      connection: unknown;
     },
     pendingCommand: PendingSessionCommand,
     extraData?: Partial<Prisma.SessionUpdateInput>,
@@ -3913,17 +3900,22 @@ export class SessionService {
     const repo = session.repo;
     if (!repo) return;
 
-    const deliveryResult = sessionRouter.send(sessionId, {
-      type: "upgrade_workspace",
+    const conn = this.parseConnection(session.connection);
+    const deliveryResult = sessionRouter.send(
       sessionId,
-      sessionGroupId: session.sessionGroupId ?? undefined,
-      slug: session.sessionGroup?.slug ?? undefined,
-      repoId: repo.id,
-      repoName: repo.name,
-      repoRemoteUrl: repo.remoteUrl,
-      defaultBranch: repo.defaultBranch,
-      branch: session.branch ?? undefined,
-    });
+      {
+        type: "upgrade_workspace",
+        sessionId,
+        sessionGroupId: session.sessionGroupId ?? undefined,
+        slug: session.sessionGroup?.slug ?? undefined,
+        repoId: repo.id,
+        repoName: repo.name,
+        repoRemoteUrl: repo.remoteUrl,
+        defaultBranch: repo.defaultBranch,
+        branch: session.branch ?? undefined,
+      },
+      { expectedHomeRuntimeId: conn.runtimeInstanceId },
+    );
 
     if (deliveryResult !== "delivered") {
       await this.persistConnectionFailure(
@@ -4015,7 +4007,10 @@ export class SessionService {
       checkpointContext?: GitCheckpointContext;
     };
 
-    const deliveryResult = sessionRouter.send(sessionId, command);
+    const conn = this.parseConnection(session.connection);
+    const deliveryResult = sessionRouter.send(sessionId, command, {
+      expectedHomeRuntimeId: conn.runtimeInstanceId,
+    });
     if (deliveryResult !== "delivered") {
       return deliveryResult;
     }
@@ -4031,6 +4026,7 @@ export class SessionService {
           state: "connected",
           lastSeen: new Date().toISOString(),
           lastError: undefined,
+          autoRetryable: true,
           ...(boundRuntime && {
             runtimeInstanceId: boundRuntime.id,
             runtimeLabel: boundRuntime.label,
@@ -4070,14 +4066,22 @@ export class SessionService {
     if (session && isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) return;
     const conn = this.parseConnection(session?.connection);
 
+    const homeOffline = deliveryResult === "runtime_disconnected" && !!conn.runtimeInstanceId;
+    const lastError = homeOffline
+      ? conn.runtimeLabel
+        ? `${conn.runtimeLabel} is offline — use Move to continue on another bridge`
+        : "The original bridge is offline — use Move to continue on another bridge"
+      : `${operation}: ${deliveryResult}`;
     const updated: SessionConnectionData = {
       ...conn,
       state: "disconnected",
-      lastError: `${operation}: ${deliveryResult}`,
+      lastError,
       lastDeliveryFailureAt: new Date().toISOString(),
       retryCount: conn.retryCount + 1,
       canRetry: true,
       canMove: true,
+      // Don't spin the auto-retry loop for a non-transient failure.
+      autoRetryable: !homeOffline,
     };
 
     await prisma.session.update({
