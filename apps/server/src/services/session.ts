@@ -17,7 +17,7 @@ import { sessionRouter, type DeliveryResult } from "../lib/session-router.js";
 import { inboxService } from "./inbox.js";
 import { runtimeDebug } from "../lib/runtime-debug.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
-import { getPresignedGetUrl } from "../lib/s3.js";
+import { storage } from "../lib/storage/index.js";
 import {
   deriveSessionGroupStatus,
   type SessionGroupStatus as DerivedSessionGroupStatus,
@@ -2267,7 +2267,7 @@ export class SessionService {
     // Generate presigned GET URLs for attached images
     let imageUrls: string[] | undefined;
     if (imageKeys?.length) {
-      imageUrls = await Promise.all(imageKeys.map((key) => getPresignedGetUrl(key)));
+      imageUrls = await Promise.all(imageKeys.map((key) => storage.getGetUrl(key)));
     }
 
     // Attempt delivery before marking active. Pinning to the session's home
@@ -4201,7 +4201,7 @@ export class SessionService {
     // Generate presigned GET URLs for any attached images in the pending command
     let imageUrls: string[] | undefined;
     if (pending.type === "send" && pending.imageKeys?.length) {
-      imageUrls = await Promise.all(pending.imageKeys.map((key) => getPresignedGetUrl(key)));
+      imageUrls = await Promise.all(pending.imageKeys.map((key) => storage.getGetUrl(key)));
     }
 
     const command = {

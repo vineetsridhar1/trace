@@ -1,10 +1,8 @@
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { prisma } from "../lib/db.js";
 import { getRequestToken, verifyToken } from "../lib/auth.js";
-import { S3_BUCKET, s3, getPresignedGetUrl } from "../lib/s3.js";
+import { storage } from "../lib/storage/index.js";
 
 const router: RouterType = Router();
 const MAX_FILENAME_LENGTH = 100;
@@ -76,12 +74,7 @@ router.post("/uploads/presign", async (req: Request, res: Response) => {
 
   const sanitizedFilename = sanitizeFilename(filename);
   const key = `uploads/${organizationId}/${randomUUID()}-${sanitizedFilename}`;
-  const command = new PutObjectCommand({
-    Bucket: S3_BUCKET,
-    Key: key,
-    ContentType: contentType,
-  });
-  const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 300 });
+  const uploadUrl = await storage.getPutUrl(key, contentType);
 
   return res.json({ uploadUrl, key });
 });
@@ -123,7 +116,7 @@ router.get("/uploads/url", async (req: Request, res: Response) => {
     }
   }
 
-  const url = await getPresignedGetUrl(key);
+  const url = await storage.getGetUrl(key);
   return res.json({ url });
 });
 

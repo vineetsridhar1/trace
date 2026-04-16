@@ -11,6 +11,7 @@ apps/web/.env
 .turbo/
 coverage/
 .DS_Store
+tmp/
 
 # TypeScript build artifacts accidentally emitted into source dirs
 **/src/**/*.js

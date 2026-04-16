@@ -16,6 +16,7 @@ import { resolvers } from "./schema/resolvers.js";
 import type { Context } from "./context.js";
 import { authRouter } from "./routes/auth.js";
 import { uploadRouter } from "./routes/upload.js";
+import { localStorageRouter } from "./lib/storage/index.js";
 import webhookRouter from "./routes/webhook.js";
 import { buildContext, buildWsContext } from "./lib/auth.js";
 import { handleBridgeConnection } from "./lib/bridge-handler.js";
@@ -54,6 +55,9 @@ async function main() {
   );
   // Webhook route needs raw body for signature verification — register before express.json()
   app.use("/webhooks/github", express.raw({ type: "application/json" }), webhookRouter);
+
+  // Local storage PUT accepts raw body — register BEFORE express.json()
+  if (localStorageRouter) app.use(localStorageRouter);
 
   app.use(express.json());
   app.use(cookieParser());
