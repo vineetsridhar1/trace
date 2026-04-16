@@ -1702,6 +1702,9 @@ export class SessionService {
     });
     if (!session) return;
 
+    const parentToolUseId =
+      typeof data.parentToolUseId === "string" ? data.parentToolUseId : undefined;
+
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
@@ -1710,6 +1713,7 @@ export class SessionService {
       payload: data as unknown as Prisma.InputJsonValue,
       actorType: "system",
       actorId: "system",
+      ...(parentToolUseId ? { parentId: parentToolUseId } : {}),
     });
 
     // If we found a title tag, update the session name

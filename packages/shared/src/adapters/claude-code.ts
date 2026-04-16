@@ -143,6 +143,9 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     const type = data.type as string | undefined;
     if (!type || SKIP_TYPES.has(type)) return;
 
+    const parentToolUseId =
+      typeof data.parent_tool_use_id === "string" ? data.parent_tool_use_id : undefined;
+
     // Claude Code's "assistant" events carry message.content[] with
     // text/tool_use/tool_result blocks — extract and forward.
     if (type === "assistant") {
@@ -236,7 +239,11 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
           // Fallback for unknown block types — treat as text
           normalized.push({ type: "text", text: "" });
         }
-        onOutput({ type: "assistant", message: { content: normalized } });
+        onOutput({
+          type: "assistant",
+          message: { content: normalized },
+          ...(parentToolUseId ? { parentToolUseId } : {}),
+        });
       }
       return;
     }

@@ -660,6 +660,32 @@ export function useMessageIdsForScope(
   );
 }
 
+/** Subscribe to event IDs whose parentId matches the given value, sorted by timestamp.
+ *  Used by SubagentRow to surface nested child events belonging to a specific tool_use. */
+export function useScopedEventIdsByParentId(
+  scopeKey: string,
+  parentId: string | null | undefined,
+): string[] {
+  return useEntityStore(
+    useShallow((state: EntityState) => {
+      if (!parentId) return EMPTY_IDS;
+      const bucket = state.eventsByScope[scopeKey];
+      if (!bucket) return EMPTY_IDS;
+      const matches: Array<readonly [string, Event]> = [];
+      for (const [id, event] of Object.entries(bucket)) {
+        if (event.parentId === parentId) matches.push([id, event] as const);
+      }
+      matches.sort(([, a], [, b]) => {
+        const ta = a.timestamp ?? "";
+        const tb = b.timestamp ?? "";
+        if (ta === tb) return 0;
+        return ta < tb ? -1 : 1;
+      });
+      return matches.map(([id]) => id);
+    }),
+  );
+}
+
 /** Subscribe to the full scoped event bucket (e.g. for passing to buildSessionNodes).
  *  NOTE: Do NOT wrap this with useShallow — the raw bucket reference is stable
  *  (only replaced when this scope's events change) and downstream useMemo deps

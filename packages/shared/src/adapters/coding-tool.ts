@@ -112,6 +112,8 @@ export function parseQuestion(raw: unknown): Question {
 export interface AssistantEvent {
   type: "assistant";
   message: { content: MessageBlock[] };
+  /** Set when this message was produced inside a subagent, pointing to the spawning tool_use id. */
+  parentToolUseId?: string;
 }
 
 export interface ResultEvent {

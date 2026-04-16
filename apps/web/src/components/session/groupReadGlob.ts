@@ -181,6 +181,28 @@ export function buildSessionNodes(
     bucket = [];
   };
 
+  // First pass: collect agent/task tool_result blocks from ALL events (including children).
+  // A subagent that spawns its own subagent will carry the inner agent's tool_result on a
+  // child event — we still need it in the map so the nested SubagentRow can render "done".
+  for (const id of eventIds) {
+    const event = events[id];
+    if (!event || event.eventType !== "session_output") continue;
+    const payload = asJsonObject(event.payload);
+    if (payload?.type !== "assistant") continue;
+    const msg = asJsonObject(payload.message);
+    const blocks = msg?.content;
+    if (!Array.isArray(blocks)) continue;
+    for (const raw of blocks) {
+      const block = asJsonObject(raw);
+      if (!block || block.type !== "tool_result") continue;
+      const name = typeof block.name === "string" ? block.name.toLowerCase() : "";
+      if (!AGENT_NAMES.has(name)) continue;
+      if (typeof block.tool_use_id === "string") {
+        completedAgentTools.set(block.tool_use_id, { content: block.content });
+      }
+    }
+  }
+
   for (let index = 0; index < eventIds.length; index++) {
     const id = eventIds[index];
     const event: Event | undefined = events[id];
@@ -199,25 +221,13 @@ export function buildSessionNodes(
       continue;
     }
 
+    // Subagent child events render nested inside their parent's SubagentRow — never as top-level nodes.
+    if (event.parentId) {
+      continue;
+    }
+
     if (event.eventType === "session_output") {
       const payload = asJsonObject(event.payload);
-
-      // Collect agent/task tool_result blocks for cross-event matching
-      if (payload?.type === "assistant") {
-        const msg = asJsonObject(payload.message);
-        const blocks = msg?.content;
-        if (Array.isArray(blocks)) {
-          for (const raw of blocks) {
-            const block = asJsonObject(raw);
-            if (!block || block.type !== "tool_result") continue;
-            const name = typeof block.name === "string" ? block.name.toLowerCase() : "";
-            if (!AGENT_NAMES.has(name)) continue;
-            if (typeof block.tool_use_id === "string") {
-              completedAgentTools.set(block.tool_use_id, { content: block.content });
-            }
-          }
-        }
-      }
       const commandStart = extractCommandStart(payload, event.timestamp, id);
       if (commandStart) {
         const nextId = eventIds[index + 1];
