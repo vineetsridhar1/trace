@@ -2765,17 +2765,27 @@ export class SessionService {
       actorId,
     });
 
-    // Try to find a runtime to bind to
-    const runtime = conn.runtimeInstanceId
-      ? (sessionRouter.getRuntimeForSession(sessionId) ?? sessionRouter.getDefaultRuntime())
+    // Retry only reconnects to the session's original home bridge. If the
+    // home bridge isn't currently available, retry fails — the user must
+    // explicitly Move to continue on a different bridge. This avoids silent
+    // handoff to an arbitrary connected runtime.
+    const homeRuntimeId = conn.runtimeInstanceId;
+    const runtime = homeRuntimeId
+      ? sessionRouter.isRuntimeAvailable(homeRuntimeId)
+        ? sessionRouter.getRuntime(homeRuntimeId)
+        : undefined
       : sessionRouter.getDefaultRuntime();
 
     if (!runtime) {
+      const failureReason = homeRuntimeId ? "home_runtime_offline" : "no_runtime";
+      const failureMessage = homeRuntimeId
+        ? `${conn.runtimeLabel ?? "Original bridge"} is offline — use Move to continue on another bridge`
+        : "No runtime available";
       const failedConn: SessionConnectionData = {
         ...conn,
         state: "disconnected",
         retryCount: conn.retryCount + 1,
-        lastError: "No runtime available",
+        lastError: failureMessage,
         lastDeliveryFailureAt: new Date().toISOString(),
         canRetry: true,
         canMove: true,
@@ -2795,7 +2805,7 @@ export class SessionService {
         eventType: "session_output",
         payload: {
           type: "recovery_failed",
-          reason: "no_runtime",
+          reason: failureReason,
           connection: connJson(failedConn),
           ...(sessionGroup ? { sessionGroup } : {}),
         },

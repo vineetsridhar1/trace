@@ -1360,6 +1360,61 @@ describe("SessionService", () => {
     });
   });
 
+  describe("retryConnection", () => {
+    it("fails without picking a different bridge when the home runtime is offline", async () => {
+      // Laptop A is the home bridge; Laptop B is also connected. Auto-retry
+      // must not silently hand off to Laptop B — the user must explicitly Move.
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "done",
+          sessionStatus: "in_progress",
+          connection: {
+            state: "disconnected",
+            runtimeInstanceId: "runtime-a",
+            runtimeLabel: "Laptop A",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(
+        makeSession({
+          connection: {
+            state: "disconnected",
+            runtimeInstanceId: "runtime-a",
+            runtimeLabel: "Laptop A",
+            retryCount: 1,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      sessionRouterMock.isRuntimeAvailable.mockImplementation(
+        (id: string) => id !== "runtime-a",
+      );
+      sessionRouterMock.getRuntime.mockImplementation((id: string) =>
+        id === "runtime-a" ? null : { id, label: id, ws: { readyState: 1, OPEN: 1 } },
+      );
+      sessionRouterMock.getDefaultRuntime = vi
+        .fn()
+        .mockReturnValue({ id: "runtime-b", label: "Laptop B", ws: { readyState: 1, OPEN: 1 } });
+
+      await service.retryConnection("session-1", "org-1", "user", "user-1");
+
+      expect(sessionRouterMock.bindSession).not.toHaveBeenCalled();
+      expect(sessionRouterMock.send).not.toHaveBeenCalled();
+      const recoveryFailedCalls = eventServiceMock.create.mock.calls.filter(
+        (call: unknown[]) => {
+          const arg = call[0] as { payload?: { type?: string; reason?: string } } | undefined;
+          return arg?.payload?.type === "recovery_failed";
+        },
+      );
+      expect(recoveryFailedCalls.length).toBe(1);
+      expect(recoveryFailedCalls[0][0].payload.reason).toBe("home_runtime_offline");
+    });
+  });
+
   describe("workspaceReady", () => {
     it("keeps a session in_progress while a queued command is waiting for delivery", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
