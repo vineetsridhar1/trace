@@ -10,6 +10,27 @@ import {
 const execFileAsync = promisify(execFile);
 const GIT_MAX_BUFFER = 5 * 1024 * 1024;
 
+// Per-repo mutex: serialize git and config mutations for a single root checkout
+// so concurrent sync/restore/auto-sync calls can't race on `.git/index.lock` or
+// produce interleaved config writes.
+const repoLocks = new Map<string, Promise<unknown>>();
+
+function withRepoLock<T>(repoId: string, fn: () => Promise<T>): Promise<T> {
+  const previous = repoLocks.get(repoId) ?? Promise.resolve();
+  const next = previous.then(fn, fn);
+  repoLocks.set(
+    repoId,
+    next.catch(() => undefined),
+  );
+  return next;
+}
+
+function assertSafeGitRef(ref: string): void {
+  if (!ref || ref.startsWith("-") || ref.includes("..") || /[\x00-\x1f\x7f\s]/.test(ref)) {
+    throw new Error(`Unsafe git ref: ${ref}`);
+  }
+}
+
 type GitExecError = Error & {
   stderr?: string;
   stdout?: string;
@@ -83,6 +104,7 @@ async function hasTrackedChanges(repoPath: string): Promise<boolean> {
 }
 
 async function refExists(repoPath: string, ref: string): Promise<boolean> {
+  assertSafeGitRef(ref);
   return execFileAsync("git", ["rev-parse", "--verify", `${ref}^{commit}`], {
     cwd: repoPath,
     maxBuffer: GIT_MAX_BUFFER,
@@ -103,6 +125,7 @@ async function resolveTargetCommitSha(
     return commitSha;
   }
 
+  assertSafeGitRef(branch);
   return runGit(repoPath, ["rev-parse", `${branch}^{commit}`]);
 }
 
@@ -183,12 +206,12 @@ async function actionResult(
   };
 }
 
-function pauseExistingAttachment(repoId: string, error: string): void {
+async function pauseExistingAttachment(repoId: string, error: string): Promise<void> {
   const repoConfig = getRepoConfig(repoId);
   const attachment = repoConfig?.linkedCheckout;
   if (!attachment) return;
 
-  setRepoLinkedCheckout(repoId, {
+  await setRepoLinkedCheckout(repoId, {
     ...attachment,
     autoSyncEnabled: false,
     lastSyncError: error,
@@ -199,110 +222,116 @@ export async function getLinkedCheckoutStatus(repoId: string): Promise<LinkedChe
   return readStatus(repoId);
 }
 
-export async function syncLinkedCheckout(
+export function syncLinkedCheckout(
   input: SyncLinkedCheckoutInput,
 ): Promise<LinkedCheckoutActionResult> {
-  const repoConfig = getRepoConfig(input.repoId);
-  const repoPath = repoConfig?.path;
+  return withRepoLock(input.repoId, async () => {
+    const repoConfig = getRepoConfig(input.repoId);
+    const repoPath = repoConfig?.path;
 
-  if (!repoPath) {
-    return actionResult(
-      input.repoId,
-      false,
-      "Link this repo to a local checkout in Trace Desktop before syncing.",
-    );
-  }
-
-  try {
-    if (await hasTrackedChanges(repoPath)) {
-      throw new Error(
-        "Root checkout has tracked changes. Commit, stash, or discard them before syncing.",
+    if (!repoPath) {
+      return actionResult(
+        input.repoId,
+        false,
+        "Link this repo to a local checkout in Trace Desktop before syncing.",
       );
     }
 
-    const existingAttachment = getRepoConfig(input.repoId)?.linkedCheckout ?? null;
-    const restorePoint = existingAttachment ?? (await captureRestorePoint(repoPath));
-    const targetCommitSha = await resolveTargetCommitSha(repoPath, input.branch, input.commitSha);
+    try {
+      if (await hasTrackedChanges(repoPath)) {
+        throw new Error(
+          "Root checkout has tracked changes. Commit, stash, or discard them before syncing.",
+        );
+      }
 
-    await switchToDetachedCommit(repoPath, targetCommitSha);
+      const existingAttachment = getRepoConfig(input.repoId)?.linkedCheckout ?? null;
+      const restorePoint = existingAttachment ?? (await captureRestorePoint(repoPath));
+      const targetCommitSha = await resolveTargetCommitSha(repoPath, input.branch, input.commitSha);
 
-    setRepoLinkedCheckout(input.repoId, {
-      sessionGroupId: input.sessionGroupId,
-      targetBranch: input.branch,
-      autoSyncEnabled: input.autoSyncEnabled ?? true,
-      originalBranch: restorePoint.originalBranch,
-      originalCommitSha: restorePoint.originalCommitSha,
-      lastSyncedCommitSha: targetCommitSha,
-      lastSyncError: null,
-      lastSyncAt: new Date().toISOString(),
-    });
+      await switchToDetachedCommit(repoPath, targetCommitSha);
 
-    return actionResult(input.repoId, true);
-  } catch (error) {
-    const message = formatGitError(error);
-    pauseExistingAttachment(input.repoId, message);
-    return actionResult(input.repoId, false, message);
-  }
+      await setRepoLinkedCheckout(input.repoId, {
+        sessionGroupId: input.sessionGroupId,
+        targetBranch: input.branch,
+        autoSyncEnabled: input.autoSyncEnabled ?? true,
+        originalBranch: restorePoint.originalBranch,
+        originalCommitSha: restorePoint.originalCommitSha,
+        lastSyncedCommitSha: targetCommitSha,
+        lastSyncError: null,
+        lastSyncAt: new Date().toISOString(),
+      });
+
+      return actionResult(input.repoId, true);
+    } catch (error) {
+      const message = formatGitError(error);
+      await pauseExistingAttachment(input.repoId, message);
+      return actionResult(input.repoId, false, message);
+    }
+  });
 }
 
-export async function restoreLinkedCheckout(
+export function restoreLinkedCheckout(
   repoId: string,
 ): Promise<LinkedCheckoutActionResult> {
-  const repoConfig = getRepoConfig(repoId);
-  const repoPath = repoConfig?.path;
-  const attachment = repoConfig?.linkedCheckout;
+  return withRepoLock(repoId, async () => {
+    const repoConfig = getRepoConfig(repoId);
+    const repoPath = repoConfig?.path;
+    const attachment = repoConfig?.linkedCheckout;
 
-  if (!repoPath) {
-    return actionResult(
-      repoId,
-      false,
-      "Link this repo to a local checkout in Trace Desktop before restoring.",
-    );
-  }
-
-  if (!attachment) {
-    return actionResult(repoId, false, "Root checkout is not attached to a Trace session.");
-  }
-
-  try {
-    if (await hasTrackedChanges(repoPath)) {
-      throw new Error(
-        "Root checkout has tracked changes. Commit, stash, or discard them before restoring.",
+    if (!repoPath) {
+      return actionResult(
+        repoId,
+        false,
+        "Link this repo to a local checkout in Trace Desktop before restoring.",
       );
     }
 
-    if (attachment.originalBranch && (await refExists(repoPath, attachment.originalBranch))) {
-      await runGit(repoPath, ["switch", attachment.originalBranch]);
-    } else {
-      assertValidCommitSha(attachment.originalCommitSha);
-      await switchToDetachedCommit(repoPath, attachment.originalCommitSha);
+    if (!attachment) {
+      return actionResult(repoId, false, "Root checkout is not attached to a Trace session.");
     }
 
-    setRepoLinkedCheckout(repoId, null);
-    return actionResult(repoId, true);
-  } catch (error) {
-    const message = formatGitError(error);
-    pauseExistingAttachment(repoId, message);
-    return actionResult(repoId, false, message);
-  }
+    try {
+      if (await hasTrackedChanges(repoPath)) {
+        throw new Error(
+          "Root checkout has tracked changes. Commit, stash, or discard them before restoring.",
+        );
+      }
+
+      if (attachment.originalBranch && (await refExists(repoPath, attachment.originalBranch))) {
+        await runGit(repoPath, ["switch", attachment.originalBranch]);
+      } else {
+        assertValidCommitSha(attachment.originalCommitSha);
+        await switchToDetachedCommit(repoPath, attachment.originalCommitSha);
+      }
+
+      await setRepoLinkedCheckout(repoId, null);
+      return actionResult(repoId, true);
+    } catch (error) {
+      const message = formatGitError(error);
+      await pauseExistingAttachment(repoId, message);
+      return actionResult(repoId, false, message);
+    }
+  });
 }
 
-export async function setLinkedCheckoutAutoSync(
+export function setLinkedCheckoutAutoSync(
   repoId: string,
   enabled: boolean,
 ): Promise<LinkedCheckoutActionResult> {
-  const repoConfig = getRepoConfig(repoId);
-  const attachment = repoConfig?.linkedCheckout;
+  return withRepoLock(repoId, async () => {
+    const repoConfig = getRepoConfig(repoId);
+    const attachment = repoConfig?.linkedCheckout;
 
-  if (!attachment) {
-    return actionResult(repoId, false, "Root checkout is not attached to a Trace session.");
-  }
+    if (!attachment) {
+      return actionResult(repoId, false, "Root checkout is not attached to a Trace session.");
+    }
 
-  setRepoLinkedCheckout(repoId, {
-    ...attachment,
-    autoSyncEnabled: enabled,
-    lastSyncError: null,
+    await setRepoLinkedCheckout(repoId, {
+      ...attachment,
+      autoSyncEnabled: enabled,
+      lastSyncError: null,
+    });
+
+    return actionResult(repoId, true);
   });
-
-  return actionResult(repoId, true);
 }

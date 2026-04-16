@@ -116,10 +116,27 @@ export function readConfig(): RepoPathConfig {
   }
 }
 
-export function writeConfig(config: RepoPathConfig): void {
+function writeConfigAtomic(config: RepoPathConfig): void {
   const configPath = getConfigPath();
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
+  const tmpPath = `${configPath}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tmpPath, JSON.stringify(config, null, 2), "utf-8");
+  fs.renameSync(tmpPath, configPath);
+}
+
+// Serializes all mutations through a single promise chain so read-modify-write
+// sequences from concurrent IPC handlers cannot interleave and clobber each other.
+let mutationChain: Promise<unknown> = Promise.resolve();
+
+function mutate<T>(fn: (config: RepoPathConfig) => T): Promise<T> {
+  const next = mutationChain.then(() => {
+    const config = readConfig();
+    const result = fn(config);
+    writeConfigAtomic(config);
+    return result;
+  });
+  mutationChain = next.catch(() => undefined);
+  return next;
 }
 
 export function getRepoConfig(repoId: string): LocalRepoConfig | null {
@@ -130,53 +147,47 @@ export function getRepoPath(repoId: string): string | null {
   return getRepoConfig(repoId)?.path ?? null;
 }
 
-export function saveRepoPath(repoId: string, localPath: string): LocalRepoConfig {
-  const config = readConfig();
-  const current = config.repos[repoId];
-  const preserveLinkedCheckout = current?.path === localPath ? current.linkedCheckout : null;
+export function saveRepoPath(repoId: string, localPath: string): Promise<LocalRepoConfig> {
+  return mutate((config) => {
+    const current = config.repos[repoId];
+    const preserveLinkedCheckout = current?.path === localPath ? current.linkedCheckout : null;
 
-  config.repos[repoId] = {
-    path: localPath,
-    gitHooksEnabled: current?.gitHooksEnabled ?? false,
-    linkedCheckout: preserveLinkedCheckout ?? null,
-  };
-
-  writeConfig(config);
-  return config.repos[repoId];
+    const next: LocalRepoConfig = {
+      path: localPath,
+      gitHooksEnabled: current?.gitHooksEnabled ?? false,
+      linkedCheckout: preserveLinkedCheckout ?? null,
+    };
+    config.repos[repoId] = next;
+    return next;
+  });
 }
 
 export function setRepoGitHooksEnabled(
   repoId: string,
   gitHooksEnabled: boolean,
-): LocalRepoConfig | null {
-  const config = readConfig();
-  const current = config.repos[repoId];
-  if (!current) return null;
+): Promise<LocalRepoConfig | null> {
+  return mutate((config) => {
+    const current = config.repos[repoId];
+    if (!current) return null;
 
-  config.repos[repoId] = {
-    ...current,
-    gitHooksEnabled,
-  };
-
-  writeConfig(config);
-  return config.repos[repoId];
+    const next: LocalRepoConfig = { ...current, gitHooksEnabled };
+    config.repos[repoId] = next;
+    return next;
+  });
 }
 
 export function setRepoLinkedCheckout(
   repoId: string,
   linkedCheckout: LinkedCheckoutConfig | null,
-): LocalRepoConfig | null {
-  const config = readConfig();
-  const current = config.repos[repoId];
-  if (!current) return null;
+): Promise<LocalRepoConfig | null> {
+  return mutate((config) => {
+    const current = config.repos[repoId];
+    if (!current) return null;
 
-  config.repos[repoId] = {
-    ...current,
-    linkedCheckout,
-  };
-
-  writeConfig(config);
-  return config.repos[repoId];
+    const next: LocalRepoConfig = { ...current, linkedCheckout };
+    config.repos[repoId] = next;
+    return next;
+  });
 }
 
 /** Directory for persistent bridge state (instance ID). */

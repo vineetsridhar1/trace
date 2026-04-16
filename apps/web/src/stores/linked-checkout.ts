@@ -17,6 +17,10 @@ interface LinkedCheckoutState {
   takeQueuedSync: (repoId: string) => LinkedCheckoutSyncRequest | null;
 }
 
+// Per-tab coalescing: collapses rapid-fire sync requests into a single in-flight
+// IPC call plus at most one queued follow-up. The desktop bridge enforces the
+// real cross-tab/process mutex via its per-repo lock — this Map is just an
+// optimization to avoid spamming IPC from one tab.
 const syncPromises = new Map<string, Promise<DesktopLinkedCheckoutActionResult>>();
 
 function isBridgeAvailable(): boolean {

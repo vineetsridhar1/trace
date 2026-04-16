@@ -800,6 +800,8 @@ export function useOrgEvents() {
         notifyForEvent(event);
 
         if (checkpointForAutoSync) {
+          // Fire-and-forget: the sync loop is idempotent and coalesced per-repo
+          // in the store; errors surface as toasts from within maybeAutoSync.
           void maybeAutoSyncLinkedCheckout(checkpointForAutoSync);
         }
       });

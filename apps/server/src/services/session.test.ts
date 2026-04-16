@@ -63,11 +63,20 @@ import { eventService } from "./event.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { SessionService, isFullyUnloadedSession } from "./session.js";
+import type { StartSessionServiceInput } from "./session.js";
 
-const prismaMock = prisma as any;
-const eventServiceMock = eventService as any;
-const sessionRouterMock = sessionRouter as any;
-const terminalRelayMock = terminalRelay as any;
+type MockedDeep<T> = {
+  [K in keyof T]: T[K] extends (...args: infer A) => infer R
+    ? ReturnType<typeof vi.fn<(...args: A) => R>>
+    : T[K] extends object
+      ? MockedDeep<T[K]>
+      : T[K];
+};
+
+const prismaMock = prisma as unknown as MockedDeep<typeof prisma>;
+const eventServiceMock = eventService as unknown as MockedDeep<typeof eventService>;
+const sessionRouterMock = sessionRouter as unknown as MockedDeep<typeof sessionRouter>;
+const terminalRelayMock = terminalRelay as unknown as MockedDeep<typeof terminalRelay>;
 
 function makeSessionGroup(overrides: Record<string, unknown> = {}) {
   return {
@@ -290,7 +299,7 @@ describe("SessionService", () => {
         tool: "claude_code",
         channelId: "channel-1",
         prompt: "Implement dashboard filters",
-      } as any);
+      } as unknown as StartSessionServiceInput);
 
       expect(result).toEqual(session);
       expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith({
@@ -341,7 +350,7 @@ describe("SessionService", () => {
           tool: "claude_code",
           channelId: "channel-1",
           repoId: "repo-2",
-        } as any),
+        } as unknown as StartSessionServiceInput),
       ).rejects.toThrow("Coding channel sessions must use the channel's linked repo");
 
       expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
@@ -372,7 +381,7 @@ describe("SessionService", () => {
           tool: "claude_code",
           channelId: "channel-1",
           runtimeInstanceId: "runtime-1",
-        } as any),
+        } as unknown as StartSessionServiceInput),
       ).rejects.toThrow("Selected runtime does not have this repo linked");
 
       expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
@@ -424,7 +433,7 @@ describe("SessionService", () => {
         tool: "claude_code",
         sessionGroupId: "group-1",
         sourceSessionId: "source-1",
-      } as any);
+      } as unknown as StartSessionServiceInput);
 
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -482,7 +491,7 @@ describe("SessionService", () => {
         createdById: "user-1",
         tool: "claude_code",
         sessionGroupId: "group-1",
-      } as any);
+      } as unknown as StartSessionServiceInput);
 
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -561,7 +570,7 @@ describe("SessionService", () => {
         hosting: "cloud",
         restoreCheckpointId: "checkpoint-1",
         prompt: "restore session",
-      } as any);
+      } as unknown as StartSessionServiceInput);
 
       expect(result.id).toBe("session-restored");
       expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith({
