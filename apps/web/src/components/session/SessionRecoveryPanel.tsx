@@ -28,6 +28,7 @@ export function SessionRecoveryPanel({
   const lastError = (connection?.lastError as string) ?? undefined;
   const canRetry = (connection?.canRetry as boolean | undefined) ?? true;
   const canMove = (connection?.canMove as boolean | undefined) ?? true;
+  const autoRetryable = (connection?.autoRetryable as boolean | undefined) ?? true;
 
   const doRetry = useCallback(async () => {
     setRetrying(true);
@@ -41,6 +42,7 @@ export function SessionRecoveryPanel({
   // Auto-retry with exponential backoff
   useEffect(() => {
     if (!canRetry) return;
+    if (!autoRetryable) return;
     if (autoRetryCount >= MAX_AUTO_RETRIES) return;
 
     let cancelled = false;
@@ -65,7 +67,7 @@ export function SessionRecoveryPanel({
         autoRetryTimer.current = null;
       }
     };
-  }, [canRetry, autoRetryCount, doRetry]);
+  }, [canRetry, autoRetryable, autoRetryCount, doRetry]);
 
   // Reset auto-retry count when sessionId changes (navigated to different session)
   useEffect(() => {
@@ -83,8 +85,9 @@ export function SessionRecoveryPanel({
     await doRetry();
   }, [doRetry]);
 
-  const autoRetrying = canRetry && autoRetryCount < MAX_AUTO_RETRIES;
-  const autoRetriesExhausted = canRetry && autoRetryCount >= MAX_AUTO_RETRIES;
+  const autoRetrying = canRetry && autoRetryable && autoRetryCount < MAX_AUTO_RETRIES;
+  const autoRetriesExhausted =
+    canRetry && autoRetryable && autoRetryCount >= MAX_AUTO_RETRIES;
 
   return (
     <div className="shrink-0 border-t border-border px-4 py-3">

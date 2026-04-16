@@ -52,6 +52,7 @@ const SESSION_DETAIL_QUERY = gql`
         retryCount
         canRetry
         canMove
+        autoRetryable
       }
       createdBy {
         id
@@ -92,6 +93,7 @@ const SESSION_DETAIL_QUERY = gql`
           retryCount
           canRetry
           canMove
+          autoRetryable
         }
         createdAt
         updatedAt

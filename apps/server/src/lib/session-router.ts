@@ -470,12 +470,43 @@ export class SessionRouter {
     return this.runtimes.get(runtimeId);
   }
 
-  /** Send a command to the runtime that owns this session, returning a typed delivery result. */
-  send(sessionId: string, command: SessionCommand): DeliveryResult {
+  /** True when the given runtime is registered and its websocket is open. */
+  isRuntimeAvailable(runtimeId: string): boolean {
+    const runtime = this.runtimes.get(runtimeId);
+    if (!runtime) return false;
+    return runtime.ws.readyState === runtime.ws.OPEN;
+  }
+
+  /**
+   * Send a command to the runtime that owns this session, returning a typed
+   * delivery result.
+   *
+   * `expectedHomeRuntimeId` pins delivery to the session's persistent home
+   * bridge. Callers that hold a session with `connection.runtimeInstanceId` set
+   * MUST pass it — otherwise a disconnected home bridge silently falls through
+   * to auto-bind and the command runs on the wrong machine (which has no
+   * workspace, no tool session, and fails immediately). When the expected home
+   * isn't currently available, returns `runtime_disconnected` without
+   * attempting delivery so the recovery flow handles handoff.
+   */
+  send(
+    sessionId: string,
+    command: SessionCommand,
+    options?: { expectedHomeRuntimeId?: string },
+  ): DeliveryResult {
+    const expectedHomeId = options?.expectedHomeRuntimeId;
+    if (expectedHomeId) {
+      if (!this.isRuntimeAvailable(expectedHomeId)) return "runtime_disconnected";
+      // Force the in-memory binding to match the persisted home so we never
+      // dispatch to a stale (possibly hijacked) runtime.
+      this.bindSession(sessionId, expectedHomeId);
+    }
+
     let runtimeId = this.sessionRuntime.get(sessionId);
     const requiredTool = "tool" in command && typeof command.tool === "string" ? command.tool : undefined;
 
-    // Auto-bind to a default runtime if not yet bound
+    // Auto-bind to a default runtime if not yet bound. Only reachable when no
+    // expectedHomeId was passed (new sessions without a home yet).
     if (!runtimeId) {
       const runtime = this.getDefaultRuntime(requiredTool);
       if (!runtime) return "no_runtime";

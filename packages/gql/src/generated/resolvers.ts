@@ -1409,6 +1409,7 @@ export type Session = {
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars['ID']['output'];
+  lastUserMessageAt?: Maybe<Scalars['DateTime']['output']>;
   model?: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
   prUrl?: Maybe<Scalars['String']['output']>;
@@ -1423,11 +1424,16 @@ export type Session = {
   updatedAt: Scalars['DateTime']['output'];
   workdir?: Maybe<Scalars['String']['output']>;
   worktreeDeleted: Scalars['Boolean']['output'];
-  lastUserMessageAt?: Maybe<Scalars['DateTime']['output']>;
 };
 
 export type SessionConnection = {
   __typename?: 'SessionConnection';
+  /**
+   * When false, the frontend should not auto-retry the connection — only manual
+   * Retry/Move can unblock. Used for non-transient failures like the home bridge
+   * being offline, where repeated retries produce noise without progress.
+   */
+  autoRetryable?: Maybe<Scalars['Boolean']['output']>;
   canMove: Scalars['Boolean']['output'];
   canRetry: Scalars['Boolean']['output'];
   lastDeliveryFailureAt?: Maybe<Scalars['DateTime']['output']>;
@@ -2511,6 +2517,7 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   gitCheckpoints?: Resolver<Array<ResolversTypes['GitCheckpoint']>, ParentType, ContextType>;
   hosting?: Resolver<ResolversTypes['HostingMode'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  lastUserMessageAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
   model?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   prUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
@@ -2525,11 +2532,11 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   workdir?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   worktreeDeleted?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
-  lastUserMessageAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
 export type SessionConnectionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['SessionConnection'] = ResolversParentTypes['SessionConnection']> = ResolversObject<{
+  autoRetryable?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
   canMove?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   canRetry?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   lastDeliveryFailureAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;

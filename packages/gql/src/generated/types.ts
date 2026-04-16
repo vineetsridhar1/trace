@@ -1406,6 +1406,7 @@ export type Session = {
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars['ID']['output'];
+  lastUserMessageAt?: Maybe<Scalars['DateTime']['output']>;
   model?: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
   prUrl?: Maybe<Scalars['String']['output']>;
@@ -1420,11 +1421,16 @@ export type Session = {
   updatedAt: Scalars['DateTime']['output'];
   workdir?: Maybe<Scalars['String']['output']>;
   worktreeDeleted: Scalars['Boolean']['output'];
-  lastUserMessageAt?: Maybe<Scalars['DateTime']['output']>;
 };
 
 export type SessionConnection = {
   __typename?: 'SessionConnection';
+  /**
+   * When false, the frontend should not auto-retry the connection — only manual
+   * Retry/Move can unblock. Used for non-transient failures like the home bridge
+   * being offline, where repeated retries produce noise without progress.
+   */
+  autoRetryable?: Maybe<Scalars['Boolean']['output']>;
   canMove: Scalars['Boolean']['output'];
   canRetry: Scalars['Boolean']['output'];
   lastDeliveryFailureAt?: Maybe<Scalars['DateTime']['output']>;
