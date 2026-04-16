@@ -248,6 +248,36 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       return;
     }
 
+    // Claude Code's "user" events carry tool_result blocks produced by the
+    // environment in response to the model's tool_use calls. Subagent tool
+    // outputs always arrive this way. Normalize into the shared schema so
+    // they render with the same ToolResultRow as inline assistant results.
+    if (type === "user") {
+      const message = data.message as Record<string, unknown> | undefined;
+      const content = message?.content;
+      if (Array.isArray(content)) {
+        const normalized: MessageBlock[] = [];
+        for (const block of content as Record<string, unknown>[]) {
+          if (block.type !== "tool_result") continue;
+          normalized.push({
+            type: "tool_result",
+            ...(typeof block.tool_use_id === "string" ? { tool_use_id: block.tool_use_id } : {}),
+            name: String(block.name ?? ""),
+            content: block.content as string | Record<string, unknown> | undefined,
+            ...(block.is_error === true ? { is_error: true } : {}),
+          });
+        }
+        if (normalized.length > 0) {
+          onOutput({
+            type: "assistant",
+            message: { content: normalized },
+            ...(parentToolUseId ? { parentToolUseId } : {}),
+          });
+        }
+      }
+      return;
+    }
+
     if (type === "result") {
       const isError = data.is_error === true || data.subtype === "error";
       this.resultEmitted = true;
