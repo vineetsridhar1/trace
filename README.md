@@ -24,7 +24,8 @@ Web / Desktop / Electron  →  GraphQL  →  Service Layer  ←  Agent Runtime
 apps/
 ├── server/        Apollo + Express, service layer, Prisma, WebSocket endpoints
 ├── web/           React + Vite + urql + Zustand, Tailwind CSS, shadcn/ui
-└── desktop/       Electron shell + bridge client for local sessions
+├── desktop/       Electron shell + bridge client for local sessions
+└── container-bridge/ Remote bridge process for cloud-hosted coding sessions
 
 packages/
 ├── gql/           GraphQL schema, codegen, generated TypeScript types
@@ -48,6 +49,7 @@ packages/
 | Node.js     | >= 22   |
 | pnpm        | >= 10   |
 | PostgreSQL  | >= 14   |
+| Redis       | >= 7    |
 
 ## Getting Started
 
@@ -69,6 +71,7 @@ Edit `apps/server/.env` with your values:
 ```env
 # Required
 DATABASE_URL="postgresql://user:password@localhost:5432/trace"
+REDIS_URL="redis://localhost:6379"
 GITHUB_CLIENT_ID="your-github-oauth-app-id"
 GITHUB_CLIENT_SECRET="your-github-oauth-app-secret"
 
@@ -105,16 +108,19 @@ pnpm codegen       # Prisma generate + GraphQL codegen + build types package
 ### 5. Run the development servers
 
 ```bash
-pnpm dev           # Start all apps in parallel
+pnpm dev           # Start all workspace dev processes, including the web app, API server, agent worker, desktop app, and bridge watchers
 ```
 
 Or run them individually:
 
 ```bash
 pnpm dev:server    # Apollo server on http://localhost:4000
+pnpm dev:agent     # Background agent worker (required for session processing)
 pnpm dev:web       # Vite dev server on http://localhost:3000 (proxies API to :4000)
 pnpm dev:desktop   # Electron app (loads web from :3000)
 ```
+
+`pnpm dev` is the easiest local setup because it starts both server-side processes: the HTTP/WebSocket API (`pnpm dev:server`) and the background agent worker (`pnpm dev:agent`). The worker depends on Redis and handles async session orchestration.
 
 Open [http://localhost:3000](http://localhost:3000) and sign in with GitHub.
 
@@ -181,9 +187,13 @@ All entities are scoped to an **Organization** and are flat peers — no nesting
 ## Available Scripts
 
 ```bash
-pnpm dev              # Run all apps in parallel
+pnpm dev              # Run all workspace dev processes
+pnpm dev:agent        # Run the background agent worker
 pnpm build            # Build all packages
 pnpm lint             # Typecheck all apps
+pnpm test             # Run tests in workspaces that define them
+pnpm test:server      # Run the server unit test suite
+pnpm test:coverage    # Run coverage in workspaces that define it
 pnpm lint:eslint      # Run ESLint
 pnpm format           # Format with Prettier
 pnpm format:check     # Check formatting
