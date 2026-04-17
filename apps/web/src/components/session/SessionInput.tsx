@@ -179,6 +179,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
         MODE_CONFIG[mode as InteractionMode].containerBorder,
       )}
     >
+      <ImageAttachmentBar images={images} onRemove={handleRemoveImage} />
       <div className="flex items-center gap-2">
         {!isNotStarted && (
           <Tooltip>
@@ -207,7 +208,6 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
             MODE_CONFIG[mode as InteractionMode].inputBorder,
           )}
         >
-          <ImageAttachmentBar images={images} onRemove={handleRemoveImage} />
           <div className="session-editor">
             <ChatEditor
               ref={editorRef}

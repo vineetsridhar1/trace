@@ -94,6 +94,27 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     setValue(initialHtml);
   }, [initialHtml]);
 
+  // Intercept paste at the DOM level BEFORE Quill's clipboard module runs.
+  // Quill registers its handler on the editor root during initialization,
+  // so we attach ours with { capture: true } to fire first.
+  useEffect(() => {
+    const editor = quillRef.current?.getEditor();
+    const root = editor?.root;
+    if (!root) return;
+    const handler = (e: ClipboardEvent) => {
+      const files = Array.from(e.clipboardData?.files ?? []).filter((f) =>
+        f.type.startsWith("image/"),
+      );
+      if (files.length > 0 && onImagePasteRef.current) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        onImagePasteRef.current(files);
+      }
+    };
+    root.addEventListener("paste", handler, { capture: true });
+    return () => root.removeEventListener("paste", handler, { capture: true });
+  }, []);
+
   const enableSlashCommands = slashCommands !== undefined;
 
   const clearEditor = useCallback(() => {
@@ -263,16 +284,6 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     [clearEditor, submit],
   );
 
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
-    const files = Array.from(e.clipboardData.files).filter((f) =>
-      f.type.startsWith("image/"),
-    );
-    if (files.length > 0 && onImagePasteRef.current) {
-      e.preventDefault();
-      onImagePasteRef.current(files);
-    }
-  }, []);
-
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey) {
@@ -303,7 +314,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
   );
 
   return (
-    <div className="chat-editor" onKeyDown={handleKeyDown} onPaste={handlePaste}>
+    <div className="chat-editor" onKeyDown={handleKeyDown}>
       <ReactQuill
         ref={quillRef}
         theme="bubble"
