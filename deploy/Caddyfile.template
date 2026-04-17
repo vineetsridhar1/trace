@@ -1,12 +1,15 @@
+# Managed on the EC2 host by deploy/ec2-deploy.sh.
 gettrace.org, www.gettrace.org {
 	encode zstd gzip
 
 	@backend path /auth* /graphql* /uploads* /webhooks/github* /ws* /bridge* /terminal* /health
 
 	handle @backend {
-		reverse_proxy backend:4000
+		reverse_proxy __BACKEND_UPSTREAM__ {
+			stream_close_delay 30s
+		}
 	}
 	handle {
-		reverse_proxy web:3000
+		reverse_proxy __WEB_UPSTREAM__
 	}
 }

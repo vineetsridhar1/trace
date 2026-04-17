@@ -37,6 +37,10 @@ async function main() {
   const schema = makeExecutableSchema({ typeDefs, resolvers });
   const PORT = Number(process.env.PORT) || 4000 + Number(process.env.TRACE_PORT || 0);
   let startupReady = false;
+  let shuttingDown = false;
+  let apolloStarted = false;
+  let drainPromise: Promise<void> | null = null;
+  let apollo: ApolloServer<Context> | null = null;
 
   app.get("/health", (_req: express.Request, res: express.Response) => {
     res.json({ status: "ok", ready: startupReady });
@@ -65,7 +69,10 @@ async function main() {
   const wsServerCleanup = useServer(
     {
       schema,
-      onConnect: async (ctx: { connectionParams?: Readonly<Record<string, unknown>>; extra: Record<string, unknown> & { request?: { headers: { cookie?: string } } } }) => {
+      onConnect: async (ctx: {
+        connectionParams?: Readonly<Record<string, unknown>>;
+        extra: Record<string, unknown> & { request?: { headers: { cookie?: string } } };
+      }) => {
         try {
           const context = await buildWsContext(
             ctx.connectionParams as Record<string, unknown> | undefined,
@@ -115,6 +122,35 @@ async function main() {
     }
   }, 5_000);
 
+  const drainServerResources = async (): Promise<void> => {
+    if (!drainPromise) {
+      drainPromise = (async () => {
+        await wsServerCleanup.dispose();
+        clearInterval(staleRuntimeMonitor);
+        bridgeWss.close();
+        terminalWss.close();
+        await disconnectRedis();
+      })();
+    }
+
+    return drainPromise;
+  };
+
+  const closeHttpServer = async (): Promise<void> => {
+    if (!httpServer.listening) return;
+
+    await new Promise<void>((resolve, reject) => {
+      httpServer.close((error?: Error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+  };
+
   // Route WebSocket upgrades by path
   httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const { pathname } = new URL(req.url ?? "", "http://localhost");
@@ -150,7 +186,7 @@ async function main() {
   });
 
   // Apollo Server
-  const apollo = new ApolloServer<Context>({
+  apollo = new ApolloServer<Context>({
     schema,
     plugins: [
       ApolloServerPluginDrainHttpServer({ httpServer }),
@@ -158,11 +194,7 @@ async function main() {
         async serverWillStart() {
           return {
             async drainServer() {
-              await wsServerCleanup.dispose();
-              clearInterval(staleRuntimeMonitor);
-              bridgeWss.close();
-              terminalWss.close();
-              await disconnectRedis();
+              await drainServerResources();
             },
           };
         },
@@ -170,7 +202,45 @@ async function main() {
     ],
   });
 
+  const shutdown = async (signal: string): Promise<void> => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    startupReady = false;
+    console.log(`[server] received ${signal}, shutting down gracefully...`);
+
+    const forceExitTimer = setTimeout(() => {
+      console.error("[server] graceful shutdown timed out, forcing exit");
+      process.exit(1);
+    }, 30_000);
+    forceExitTimer.unref();
+
+    try {
+      if (apolloStarted && apollo) {
+        await apollo.stop();
+      } else {
+        await closeHttpServer();
+        await drainServerResources();
+      }
+
+      clearTimeout(forceExitTimer);
+      console.log("[server] shutdown complete");
+      process.exit(0);
+    } catch (error) {
+      clearTimeout(forceExitTimer);
+      console.error("[server] graceful shutdown failed:", error);
+      process.exit(1);
+    }
+  };
+
+  process.on("SIGTERM", () => {
+    void shutdown("SIGTERM");
+  });
+  process.on("SIGINT", () => {
+    void shutdown("SIGINT");
+  });
+
   await apollo.start();
+  apolloStarted = true;
   app.use("/graphql", expressMiddleware(apollo, { context: buildContext }));
 
   await new Promise<void>((resolve) => {

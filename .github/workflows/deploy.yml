@@ -48,15 +48,13 @@ jobs:
       - name: Copy production deploy files to EC2
         run: |
           ssh -i ~/.ssh/id_ed25519 "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" "mkdir -p ~/trace"
-          scp -i ~/.ssh/id_ed25519 deploy/docker-compose.ec2.yml deploy/Caddyfile \
+          scp -i ~/.ssh/id_ed25519 deploy/docker-compose.ec2.yml deploy/Caddyfile.template deploy/ec2-deploy.sh \
             "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/trace/"
 
-      - name: Prepare EC2 for image upload
+      - name: Prune unused images before upload
         run: |
           ssh -i ~/.ssh/id_ed25519 "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
-            "cd ~/trace && \
-            docker compose -f docker-compose.ec2.yml down --remove-orphans || true && \
-            docker system prune -af || true"
+            "docker image prune -af || true"
 
       - name: Transfer image to EC2
         run: |
@@ -69,5 +67,6 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_ed25519 "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
             "cd ~/trace && \
+            chmod +x ./ec2-deploy.sh && \
             docker tag '${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}' '${ECR_REGISTRY}/${ECR_REPOSITORY}:latest' && \
-            IMAGE_TAG='${GITHUB_SHA}' ECR_REGISTRY='${ECR_REGISTRY}' docker compose -f docker-compose.ec2.yml up -d --wait"
+            IMAGE_TAG='${GITHUB_SHA}' ECR_REGISTRY='${ECR_REGISTRY}' ./ec2-deploy.sh"
