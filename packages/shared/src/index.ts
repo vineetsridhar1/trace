@@ -64,6 +64,7 @@ export type {
   BridgeLinkedCheckoutActionResultPayload,
   BridgeLinkedCheckoutStatusResult,
   BridgeLinkedCheckoutActionResult,
+  ImageDownloadDeps,
 } from "./bridge.js";
 export {
   parseBranchOutput,
@@ -73,6 +74,8 @@ export {
   handleBranchDiff,
   handleFileAtRef,
   handleListSkills,
+  downloadImagesToTempFiles,
+  cleanupTempImages,
 } from "./bridge.js";
 export type { GitExecFn } from "./bridge.js";
 export type { BuiltinSlashCommand } from "./slash-commands.js";

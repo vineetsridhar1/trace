@@ -53,6 +53,7 @@ interface ChatEditorProps {
   onSlashCommandSelect?: (cmd: SlashCommandItem) => void;
   onShiftTab?: () => void;
   onChange?: (text: string) => void;
+  onImagePaste?: (files: File[]) => void;
 }
 
 export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function ChatEditor(
@@ -67,6 +68,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     onSlashCommandSelect,
     onShiftTab,
     onChange,
+    onImagePaste,
   }: ChatEditorProps,
   ref: React.ForwardedRef<ChatEditorHandle>,
 ) {
@@ -78,6 +80,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
   const onSlashCommandSelectRef = useRef(onSlashCommandSelect);
   const onShiftTabRef = useRef(onShiftTab);
   const onChangeRef = useRef(onChange);
+  const onImagePasteRef = useRef(onImagePaste);
 
   membersRef.current = mentionableUsers;
   currentUserIdRef.current = currentUserId;
@@ -85,10 +88,32 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
   onSlashCommandSelectRef.current = onSlashCommandSelect;
   onShiftTabRef.current = onShiftTab;
   onChangeRef.current = onChange;
+  onImagePasteRef.current = onImagePaste;
 
   useEffect(() => {
     setValue(initialHtml);
   }, [initialHtml]);
+
+  // Intercept paste at the DOM level BEFORE Quill's clipboard module runs.
+  // Quill registers its handler on the editor root during initialization,
+  // so we attach ours with { capture: true } to fire first.
+  useEffect(() => {
+    const editor = quillRef.current?.getEditor();
+    const root = editor?.root;
+    if (!root) return;
+    const handler = (e: ClipboardEvent) => {
+      const files = Array.from(e.clipboardData?.files ?? []).filter((f) =>
+        f.type.startsWith("image/"),
+      );
+      if (files.length > 0 && onImagePasteRef.current) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        onImagePasteRef.current(files);
+      }
+    };
+    root.addEventListener("paste", handler, { capture: true });
+    return () => root.removeEventListener("paste", handler, { capture: true });
+  }, []);
 
   const enableSlashCommands = slashCommands !== undefined;
 

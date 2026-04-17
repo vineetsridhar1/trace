@@ -16,6 +16,11 @@ import type { AgentToolResult } from "./groupReadGlob";
 
 const AGENT_NAMES = new Set(["agent", "task"]);
 
+function asStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.every((v) => typeof v === "string") ? value : undefined;
+}
+
 /** Safely read a string from an unknown value, returning fallback if not a string */
 function str(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
@@ -158,6 +163,7 @@ export const SessionMessage = memo(function SessionMessage({
           timestamp={timestamp}
           actorId={actor?.id}
           actorName={actor?.name}
+          imageKeys={asStringArray(payload?.imageKeys)}
           footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       ) : (
@@ -182,6 +188,7 @@ export const SessionMessage = memo(function SessionMessage({
           timestamp={timestamp}
           actorId={actor?.id}
           actorName={actor?.name}
+          imageKeys={asStringArray(payload?.imageKeys)}
           footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       );

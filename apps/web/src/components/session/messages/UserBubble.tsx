@@ -1,20 +1,76 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { Image as ImageIcon } from "lucide-react";
 import { formatTime } from "./utils";
 import { stripPromptWrapping } from "../interactionModes";
 import { useAuthStore } from "../../../stores/auth";
 import { Markdown } from "../../ui/Markdown";
+import { ImageLightbox } from "../ImageLightbox";
+import { getAuthHeaders } from "../../../stores/auth";
+
+const API_URL = import.meta.env.VITE_API_URL ?? "";
+
+function ImageChip({ imageKey, label }: { imageKey: string; label: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  const handleClick = async () => {
+    if (src) {
+      setLightboxOpen(true);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/uploads/url?key=${encodeURIComponent(imageKey)}`, {
+        credentials: "include",
+        headers: getAuthHeaders(),
+      });
+      const data = (await res.json()) as { url?: string };
+      if (data.url) {
+        setSrc(data.url);
+        setLightboxOpen(true);
+      }
+    } catch (err) {
+      console.warn("Failed to load image URL:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        onClick={() => void handleClick()}
+        className="inline-flex items-center gap-1.5 rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs text-white transition-colors hover:bg-white/20 cursor-pointer"
+      >
+        <ImageIcon size={12} />
+        {loading ? "Loading…" : label}
+      </button>
+      {src && (
+        <ImageLightbox
+          src={src}
+          alt={label}
+          open={lightboxOpen}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
+    </>
+  );
+}
 
 export function UserBubble({
   text,
   timestamp,
   actorId,
   actorName,
+  imageKeys,
   footer,
 }: {
   text: string;
   timestamp: string;
   actorId?: string;
   actorName?: string | null;
+  imageKeys?: string[];
   footer?: ReactNode;
 }) {
   const currentUserId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
@@ -30,6 +86,13 @@ export function UserBubble({
             <span className="text-xs font-semibold text-accent">{displayName}</span>
             <span className="text-[10px] text-muted-foreground">{formatTime(timestamp)}</span>
           </div>
+          {imageKeys && imageKeys.length > 0 && (
+            <div className="mb-1.5 flex gap-1.5 flex-wrap">
+              {imageKeys.map((key, i) => (
+                <ImageChip key={key} imageKey={key} label={`Image ${i + 1}`} />
+              ))}
+            </div>
+          )}
           <div className="text-sm leading-relaxed break-words">
             <Markdown>{displayText}</Markdown>
           </div>

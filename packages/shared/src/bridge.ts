@@ -17,6 +17,7 @@ export interface BridgeRunCommand {
   interactionMode?: string;
   toolSessionId?: string;
   checkpointContext?: GitCheckpointContext | null;
+  imageUrls?: string[];
 }
 
 export interface BridgeSendCommand {
@@ -29,6 +30,7 @@ export interface BridgeSendCommand {
   interactionMode?: string;
   toolSessionId?: string;
   checkpointContext?: GitCheckpointContext | null;
+  imageUrls?: string[];
 }
 
 export interface BridgePrepareCommand {
@@ -952,6 +954,57 @@ function extractMarkdownSummary(content: string): string | undefined {
   if (lines.length === 0) return undefined;
 
   return lines[0];
+}
+
+// --- Shared image download helper ---
+
+/**
+ * Download images from presigned URLs to temp files.
+ * Shared between container and desktop bridges.
+ */
+export interface ImageDownloadDeps {
+  fs: { promises: { mkdir: (p: string, opts: { recursive: boolean }) => Promise<unknown>; writeFile: (p: string, data: Buffer) => Promise<void>; unlink: (p: string) => Promise<void> } };
+  path: { join: (...p: string[]) => string };
+  tmpdir: () => string;
+  randomUUID: () => string;
+}
+
+export async function downloadImagesToTempFiles(
+  imageUrls: string[],
+  deps: ImageDownloadDeps,
+): Promise<string[]> {
+  const tmpDir = deps.path.join(deps.tmpdir(), "trace-images");
+  await deps.fs.promises.mkdir(tmpDir, { recursive: true });
+  return Promise.all(
+    imageUrls.map(async (url) => {
+      let ext = "png";
+      try {
+        const pathname = new URL(url).pathname;
+        const match = pathname.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i);
+        if (match) ext = match[1];
+      } catch {
+        // Fall back to default extension
+      }
+      const filePath = deps.path.join(tmpDir, `${deps.randomUUID()}.${ext}`);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Failed to download image: ${res.status}`);
+      const buffer = Buffer.from(await res.arrayBuffer());
+      await deps.fs.promises.writeFile(filePath, buffer);
+      return filePath;
+    }),
+  );
+}
+
+/**
+ * Clean up temp image files. Errors are silently ignored.
+ */
+export function cleanupTempImages(
+  imagePaths: string[],
+  fs: { promises: { unlink: (p: string) => Promise<void> } },
+): void {
+  for (const p of imagePaths) {
+    fs.promises.unlink(p).catch(() => {});
+  }
 }
 
 // --- Bridge client interface ---

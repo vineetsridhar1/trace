@@ -507,29 +507,6 @@ export type InboxItemType =
   | 'session_suggestion'
   | 'ticket_suggestion';
 
-export type LinkedCheckoutActionResult = {
-  __typename?: 'LinkedCheckoutActionResult';
-  error?: Maybe<Scalars['String']['output']>;
-  ok: Scalars['Boolean']['output'];
-  status: LinkedCheckoutStatus;
-};
-
-export type LinkedCheckoutStatus = {
-  __typename?: 'LinkedCheckoutStatus';
-  attachedSessionGroupId?: Maybe<Scalars['ID']['output']>;
-  autoSyncEnabled: Scalars['Boolean']['output'];
-  currentBranch?: Maybe<Scalars['String']['output']>;
-  currentCommitSha?: Maybe<Scalars['String']['output']>;
-  isAttached: Scalars['Boolean']['output'];
-  lastSyncError?: Maybe<Scalars['String']['output']>;
-  lastSyncedCommitSha?: Maybe<Scalars['String']['output']>;
-  repoId: Scalars['ID']['output'];
-  repoPath?: Maybe<Scalars['String']['output']>;
-  restoreBranch?: Maybe<Scalars['String']['output']>;
-  restoreCommitSha?: Maybe<Scalars['String']['output']>;
-  targetBranch?: Maybe<Scalars['String']['output']>;
-};
-
 export type Message = {
   __typename?: 'Message';
   actor: Actor;
@@ -592,7 +569,6 @@ export type Mutation = {
   leaveChannel: Channel;
   leaveChat: Chat;
   linkEntityToProject: Project;
-  linkLinkedCheckoutRepo: LinkedCheckoutActionResult;
   linkTicket: Ticket;
   moveChannel: Channel;
   moveSessionToCloud: Session;
@@ -603,7 +579,6 @@ export type Mutation = {
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
-  restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
   runSession: Session;
@@ -613,10 +588,8 @@ export type Mutation = {
   sendSessionMessage: Event;
   sendTurn: Turn;
   setApiToken: ApiTokenStatus;
-  setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   startSession: Session;
   subscribe: Participant;
-  syncLinkedCheckout: LinkedCheckoutActionResult;
   terminateSession: Session;
   unassignTicket: Ticket;
   unlinkTicket: Ticket;
@@ -802,13 +775,6 @@ export type MutationLinkEntityToProjectArgs = {
 };
 
 
-export type MutationLinkLinkedCheckoutRepoArgs = {
-  localPath: Scalars['String']['input'];
-  repoId: Scalars['ID']['input'];
-  sessionGroupId: Scalars['ID']['input'];
-};
-
-
 export type MutationLinkTicketArgs = {
   entityId: Scalars['ID']['input'];
   entityType: EntityType;
@@ -865,12 +831,6 @@ export type MutationReorderChannelsArgs = {
 };
 
 
-export type MutationRestoreLinkedCheckoutArgs = {
-  repoId: Scalars['ID']['input'];
-  sessionGroupId: Scalars['ID']['input'];
-};
-
-
 export type MutationRetrySessionConnectionArgs = {
   sessionId: Scalars['ID']['input'];
 };
@@ -914,6 +874,7 @@ export type MutationSendMessageArgs = {
 
 export type MutationSendSessionMessageArgs = {
   clientMutationId?: InputMaybe<Scalars['String']['input']>;
+  imageKeys?: InputMaybe<Array<Scalars['String']['input']>>;
   interactionMode?: InputMaybe<Scalars['String']['input']>;
   sessionId: Scalars['ID']['input'];
   text: Scalars['String']['input'];
@@ -931,13 +892,6 @@ export type MutationSetApiTokenArgs = {
 };
 
 
-export type MutationSetLinkedCheckoutAutoSyncArgs = {
-  enabled: Scalars['Boolean']['input'];
-  repoId: Scalars['ID']['input'];
-  sessionGroupId: Scalars['ID']['input'];
-};
-
-
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
@@ -946,15 +900,6 @@ export type MutationStartSessionArgs = {
 export type MutationSubscribeArgs = {
   scopeId: Scalars['ID']['input'];
   scopeType: Scalars['String']['input'];
-};
-
-
-export type MutationSyncLinkedCheckoutArgs = {
-  autoSyncEnabled?: InputMaybe<Scalars['Boolean']['input']>;
-  branch: Scalars['String']['input'];
-  commitSha?: InputMaybe<Scalars['String']['input']>;
-  repoId: Scalars['ID']['input'];
-  sessionGroupId: Scalars['ID']['input'];
 };
 
 
@@ -1139,7 +1084,6 @@ export type Query = {
   chats: Array<Chat>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
-  linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
@@ -1281,12 +1225,6 @@ export type QueryEventsArgs = {
 export type QueryInboxItemsArgs = {
   organizationId: Scalars['ID']['input'];
   status?: InputMaybe<InboxItemStatus>;
-};
-
-
-export type QueryLinkedCheckoutStatusArgs = {
-  repoId: Scalars['ID']['input'];
-  sessionGroupId: Scalars['ID']['input'];
 };
 
 
@@ -1469,7 +1407,6 @@ export type Session = {
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars['ID']['output'];
-  lastMessageAt?: Maybe<Scalars['DateTime']['output']>;
   lastUserMessageAt?: Maybe<Scalars['DateTime']['output']>;
   model?: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
@@ -1489,12 +1426,6 @@ export type Session = {
 
 export type SessionConnection = {
   __typename?: 'SessionConnection';
-  /**
-   * When false, the frontend should not auto-retry the connection — only manual
-   * Retry/Move can unblock. Used for non-transient failures like the home bridge
-   * being offline, where repeated retries produce noise without progress.
-   */
-  autoRetryable?: Maybe<Scalars['Boolean']['output']>;
   canMove: Scalars['Boolean']['output'];
   canRetry: Scalars['Boolean']['output'];
   lastDeliveryFailureAt?: Maybe<Scalars['DateTime']['output']>;

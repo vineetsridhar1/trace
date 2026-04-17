@@ -17,6 +17,7 @@ import { sessionRouter, type DeliveryResult } from "../lib/session-router.js";
 import { inboxService } from "./inbox.js";
 import { runtimeDebug } from "../lib/runtime-debug.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
+import { storage } from "../lib/storage/index.js";
 import {
   deriveSessionGroupStatus,
   type SessionGroupStatus as DerivedSessionGroupStatus,
@@ -115,6 +116,7 @@ type PendingSessionCommand =
       prompt: string;
       interactionMode?: string | null;
       checkpointContext?: GitCheckpointContext | null;
+      imageKeys?: string[] | null;
     };
 
 type GroupWorkspaceStatePatch = {
@@ -2095,6 +2097,7 @@ export class SessionService {
   async sendMessage({
     sessionId,
     text,
+    imageKeys,
     actorType,
     actorId,
     interactionMode,
@@ -2102,11 +2105,20 @@ export class SessionService {
   }: {
     sessionId: string;
     text: string;
+    imageKeys?: string[];
     actorType: ActorType;
     actorId: string;
     interactionMode?: string;
     clientMutationId?: string;
   }) {
+    if (imageKeys?.length) {
+      for (const key of imageKeys) {
+        if (typeof key !== "string" || !key.startsWith("uploads/") || key.includes("..")) {
+          throw new Error("Invalid image key");
+        }
+      }
+    }
+
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
       select: {
@@ -2148,6 +2160,7 @@ export class SessionService {
               prompt: text,
               interactionMode: interactionMode ?? null,
               checkpointContext: null,
+              ...(imageKeys?.length ? { imageKeys } : {}),
             } as unknown as Prisma.InputJsonValue,
             lastMessageAt: new Date(),
             ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
@@ -2173,7 +2186,7 @@ export class SessionService {
           scopeType: "session",
           scopeId: sessionId,
           eventType: "message_sent",
-          payload: { text, ...(clientMutationId ? { clientMutationId } : {}) },
+          payload: { text, ...(imageKeys?.length ? { imageKeys } : {}), ...(clientMutationId ? { clientMutationId } : {}) },
           actorType,
           actorId,
         });
@@ -2189,6 +2202,7 @@ export class SessionService {
         prompt: text,
         interactionMode: interactionMode ?? null,
         checkpointContext: null,
+        ...(imageKeys?.length ? { imageKeys } : {}),
       };
       await this.triggerWorkspaceUpgrade(
         sessionId,
@@ -2202,7 +2216,7 @@ export class SessionService {
         scopeType: "session",
         scopeId: sessionId,
         eventType: "message_sent",
-        payload: { text, ...(clientMutationId ? { clientMutationId } : {}) },
+        payload: { text, ...(imageKeys?.length ? { imageKeys } : {}), ...(clientMutationId ? { clientMutationId } : {}) },
         actorType,
         actorId,
       });
@@ -2250,6 +2264,13 @@ export class SessionService {
       ? ({ checkpointContextId: checkpointContext.checkpointContextId } as Prisma.InputJsonValue)
       : undefined;
 
+    // Generate presigned GET URLs for attached images
+    let imageUrls: string[] | undefined;
+    if (imageKeys?.length) {
+      imageUrls = await Promise.all(imageKeys.map((key) => storage.getGetUrl(key)));
+      runtimeDebug(`Generated ${imageUrls.length} image URLs for ${sessionId}`);
+    }
+
     // Attempt delivery before marking active. Pinning to the session's home
     // runtime prevents silent bridge hijack when the home is offline and a
     // different bridge (e.g. Laptop B) is now the only connected runtime.
@@ -2266,6 +2287,7 @@ export class SessionService {
         cwd: session.workdir ?? undefined,
         toolSessionId: session.toolSessionId ?? undefined,
         checkpointContext,
+        imageUrls,
       },
       { expectedHomeRuntimeId: conn.runtimeInstanceId },
     );
@@ -2278,6 +2300,7 @@ export class SessionService {
           prompt,
           interactionMode: interactionMode ?? null,
           checkpointContext,
+          ...(imageKeys?.length ? { imageKeys } : {}),
         },
         { lastMessageAt: new Date(), ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}) },
       );
@@ -2295,6 +2318,7 @@ export class SessionService {
         eventType: "message_sent",
         payload: {
           text,
+          ...(imageKeys?.length ? { imageKeys } : {}),
           deliveryFailed: true,
           ...(clientMutationId ? { clientMutationId } : {}),
         },
@@ -2362,7 +2386,7 @@ export class SessionService {
       scopeType: "session",
       scopeId: sessionId,
       eventType: "message_sent",
-      payload: { text, ...(clientMutationId ? { clientMutationId } : {}) },
+      payload: { text, ...(imageKeys?.length ? { imageKeys } : {}), ...(clientMutationId ? { clientMutationId } : {}) },
       metadata: checkpointMetadata,
       actorType,
       actorId,
@@ -4053,6 +4077,7 @@ export class SessionService {
         interactionMode:
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
+        imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
       };
     }
     if (pending.type === "run" || pending.type == null) {
@@ -4174,6 +4199,12 @@ export class SessionService {
         : null;
     const checkpointContext = pending.checkpointContext ?? fallbackCheckpointContext;
 
+    // Generate presigned GET URLs for any attached images in the pending command
+    let imageUrls: string[] | undefined;
+    if (pending.type === "send" && pending.imageKeys?.length) {
+      imageUrls = await Promise.all(pending.imageKeys.map((key) => storage.getGetUrl(key)));
+    }
+
     const command = {
       type: pending.type,
       sessionId,
@@ -4184,6 +4215,7 @@ export class SessionService {
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
       checkpointContext: checkpointContext ?? undefined,
+      imageUrls,
     } satisfies {
       type: "run" | "send";
       sessionId: string;
@@ -4194,6 +4226,7 @@ export class SessionService {
       cwd?: string;
       toolSessionId?: string;
       checkpointContext?: GitCheckpointContext;
+      imageUrls?: string[];
     };
 
     const conn = this.parseConnection(session.connection);

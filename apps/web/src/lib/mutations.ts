@@ -21,12 +21,14 @@ export const SEND_SESSION_MESSAGE_MUTATION = gql`
   mutation SendSessionMessage(
     $sessionId: ID!
     $text: String!
+    $imageKeys: [String!]
     $interactionMode: String
     $clientMutationId: String
   ) {
     sendSessionMessage(
       sessionId: $sessionId
       text: $text
+      imageKeys: $imageKeys
       interactionMode: $interactionMode
       clientMutationId: $clientMutationId
     ) {

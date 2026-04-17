@@ -230,6 +230,7 @@ export const sessionMutations = {
     args: {
       sessionId: string;
       text: string;
+      imageKeys?: string[] | null;
       interactionMode?: string | null;
       clientMutationId?: string | null;
     },
@@ -238,6 +239,7 @@ export const sessionMutations = {
     return sessionService.sendMessage({
       sessionId: args.sessionId,
       text: args.text,
+      imageKeys: args.imageKeys ?? undefined,
       actorType: ctx.actorType,
       actorId: ctx.userId,
       interactionMode: args.interactionMode ?? undefined,
