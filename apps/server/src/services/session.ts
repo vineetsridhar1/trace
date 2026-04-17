@@ -2268,6 +2268,7 @@ export class SessionService {
     let imageUrls: string[] | undefined;
     if (imageKeys?.length) {
       imageUrls = await Promise.all(imageKeys.map((key) => storage.getGetUrl(key)));
+      runtimeDebug(`Generated ${imageUrls.length} image URLs for ${sessionId}`);
     }
 
     // Attempt delivery before marking active. Pinning to the session's home
