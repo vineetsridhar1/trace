@@ -18,7 +18,7 @@ function getSessionMessageTimestamp(session: SessionEntity | undefined): string 
     session?._lastMessageAt
     ?? session?.lastMessageAt
     ?? session?.lastUserMessageAt
-    ?? session?.createdAt
+    ?? undefined
   );
 }
 
@@ -111,13 +111,15 @@ export function useSessionGroupRows(
         }
 
         const latestSession = groupSessions[0];
-        const latestMessageSession = [...groupSessions].sort((a: SessionEntity, b: SessionEntity) => {
-          const aMessage = getSessionMessageTimestamp(a) ?? "";
-          const bMessage = getSessionMessageTimestamp(b) ?? "";
-          const diff = new Date(bMessage).getTime() - new Date(aMessage).getTime();
-          if (diff !== 0) return diff;
-          return a.id.localeCompare(b.id);
-        })[0];
+        const latestMessageSession = groupSessions
+          .filter((session: SessionEntity) => !!getSessionMessageTimestamp(session))
+          .sort((a: SessionEntity, b: SessionEntity) => {
+            const aMessage = getSessionMessageTimestamp(a) ?? "";
+            const bMessage = getSessionMessageTimestamp(b) ?? "";
+            const diff = new Date(bMessage).getTime() - new Date(aMessage).getTime();
+            if (diff !== 0) return diff;
+            return a.id.localeCompare(b.id);
+          })[0];
         const createdBySession = [...groupSessions].sort(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         )[0];
