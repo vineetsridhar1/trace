@@ -1409,6 +1409,7 @@ export type Session = {
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars['ID']['output'];
+  lastMessageAt?: Maybe<Scalars['DateTime']['output']>;
   lastUserMessageAt?: Maybe<Scalars['DateTime']['output']>;
   model?: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
@@ -2517,6 +2518,7 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   gitCheckpoints?: Resolver<Array<ResolversTypes['GitCheckpoint']>, ParentType, ContextType>;
   hosting?: Resolver<ResolversTypes['HostingMode'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  lastMessageAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
   lastUserMessageAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
   model?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;

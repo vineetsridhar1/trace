@@ -43,6 +43,7 @@ const SESSION_GROUPS_QUERY = gql`
         prUrl
         worktreeDeleted
         sessionGroupId
+        lastMessageAt
         connection {
           state
           runtimeInstanceId
@@ -92,11 +93,11 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
         "sessionGroups",
         groups.map((group) => ({
           ...group,
-          // Cold-start approximation: server sorts by updatedAt, so use that
-          // as the initial _sortTimestamp. Real-time events will refine this
-          // to only reflect meaningful activity (status changes, messages).
+          // Cold-start approximation: seed sort order from the newest known
+          // conversational message and only fall back to generic timestamps.
           _sortTimestamp:
-            group.sessions?.[0]?.updatedAt
+            group.sessions?.[0]?.lastMessageAt
+            ?? group.sessions?.[0]?.updatedAt
             ?? group.updatedAt,
         })) as Array<SessionGroupEntity & { id: string }>,
       );

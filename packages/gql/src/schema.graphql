@@ -347,6 +347,7 @@ type Session {
   prUrl: String
   worktreeDeleted: Boolean!
   lastUserMessageAt: DateTime
+  lastMessageAt: DateTime
   createdAt: DateTime!
   updatedAt: DateTime!
 }

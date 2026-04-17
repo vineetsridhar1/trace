@@ -44,6 +44,7 @@ const SESSION_DETAIL_QUERY = gql`
       prUrl
       worktreeDeleted
       lastUserMessageAt
+      lastMessageAt
       connection {
         state
         runtimeInstanceId

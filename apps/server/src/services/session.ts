@@ -275,7 +275,11 @@ type SessionGroupSnapshot = SessionGroupSummary & {
 };
 
 /** A session row with the fields needed by both SessionGroupStatusSource and sortSessionsByRecency. */
-type SessionWithTimestamps = SessionGroupStatusSource & { updatedAt: Date; createdAt: Date };
+type SessionWithTimestamps = SessionGroupStatusSource & {
+  updatedAt: Date;
+  createdAt: Date;
+  lastMessageAt?: Date | null;
+};
 
 const INVALID_FILE_PATH_ERROR = "Invalid file path";
 const LOCAL_FILE_ACCESS_DENIED_ERROR =
@@ -300,6 +304,7 @@ function serializeSession(session: {
   connection: Prisma.JsonValue | null;
   worktreeDeleted?: boolean;
   lastUserMessageAt?: Date | null;
+  lastMessageAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -328,6 +333,7 @@ function serializeSession(session: {
     connection: session.connection,
     worktreeDeleted: session.worktreeDeleted ?? false,
     lastUserMessageAt: session.lastUserMessageAt ?? null,
+    lastMessageAt: session.lastMessageAt ?? session.lastUserMessageAt ?? null,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
   };
@@ -369,13 +375,101 @@ function sortSessionsByRecency<
   T extends {
     updatedAt: Date;
     createdAt: Date;
+    lastMessageAt?: Date | null;
   },
 >(sessions: T[]): T[] {
   return [...sessions].sort((a, b) => {
+    const aRecency = (a.lastMessageAt ?? a.updatedAt).getTime();
+    const bRecency = (b.lastMessageAt ?? b.updatedAt).getTime();
+    const recencyDiff = bRecency - aRecency;
+    if (recencyDiff !== 0) return recencyDiff;
     const updatedDiff = b.updatedAt.getTime() - a.updatedAt.getTime();
     if (updatedDiff !== 0) return updatedDiff;
     return b.createdAt.getTime() - a.createdAt.getTime();
   });
+}
+
+type SessionLastMessageSource = {
+  id: string;
+  lastUserMessageAt?: Date | null;
+};
+
+function getLastMessageAt(
+  lastUserMessageAt: Date | null | undefined,
+  lastAssistantMessageAt: Date | null | undefined,
+): Date | null {
+  if (lastUserMessageAt && lastAssistantMessageAt) {
+    return lastUserMessageAt.getTime() >= lastAssistantMessageAt.getTime()
+      ? lastUserMessageAt
+      : lastAssistantMessageAt;
+  }
+
+  return lastUserMessageAt ?? lastAssistantMessageAt ?? null;
+}
+
+async function getLastAssistantMessageAtBySessionId(
+  sessionIds: string[],
+): Promise<Map<string, Date>> {
+  if (sessionIds.length === 0) return new Map();
+
+  const rows = await prisma.event.groupBy({
+    by: ["scopeId"],
+    where: {
+      scopeType: "session",
+      scopeId: { in: sessionIds },
+      eventType: "session_output",
+      payload: { path: ["type"], equals: "assistant" },
+    },
+    _max: { timestamp: true },
+  });
+
+  const lastAssistantMessageAtBySessionId = new Map<string, Date>();
+  for (const row of rows) {
+    if (row._max.timestamp) {
+      lastAssistantMessageAtBySessionId.set(row.scopeId, row._max.timestamp);
+    }
+  }
+
+  return lastAssistantMessageAtBySessionId;
+}
+
+async function attachLastMessageAt<T extends SessionLastMessageSource>(
+  sessions: T[],
+): Promise<Array<T & { lastMessageAt: Date | null }>> {
+  if (sessions.length === 0) return [];
+
+  const lastAssistantMessageAtBySessionId = await getLastAssistantMessageAtBySessionId(
+    sessions.map((session) => session.id),
+  );
+
+  return sessions.map((session) => ({
+    ...session,
+    lastMessageAt: getLastMessageAt(
+      session.lastUserMessageAt ?? null,
+      lastAssistantMessageAtBySessionId.get(session.id) ?? null,
+    ),
+  }));
+}
+
+async function attachLastMessageAtToGroups<
+  T extends {
+    sessions: SessionLastMessageSource[];
+  },
+>(
+  groups: T[],
+): Promise<Array<T & { sessions: Array<T["sessions"][number] & { lastMessageAt: Date | null }> }>> {
+  if (groups.length === 0) return [];
+
+  const sessionsWithLastMessageAt = await attachLastMessageAt(groups.flatMap((group) => group.sessions));
+  const sessionsById = new Map(sessionsWithLastMessageAt.map((session) => [session.id, session]));
+
+  return groups.map((group) => ({
+    ...group,
+    sessions: group.sessions.map((session) => {
+      const hydrated = sessionsById.get(session.id);
+      return hydrated ?? { ...session, lastMessageAt: null };
+    }),
+  }));
 }
 
 function buildSessionGroupSnapshot(
@@ -674,10 +768,14 @@ export class SessionService {
     });
 
     type SessionGroupWithSessions = SessionGroupSummary & {
-      sessions: SessionWithTimestamps[];
+      sessions: Array<SessionWithTimestamps & SessionLastMessageSource>;
     };
 
-    const mapped = (groups as SessionGroupWithSessions[]).map((group) => {
+    const groupsWithLastMessageAt = await attachLastMessageAtToGroups(
+      groups as SessionGroupWithSessions[],
+    );
+
+    const mapped = groupsWithLastMessageAt.map((group) => {
       const sessions = sortSessionsByRecency<SessionWithTimestamps>(group.sessions);
       return {
         ...buildSessionGroupSnapshot(group, sessions),
@@ -699,8 +797,8 @@ export class SessionService {
     return filtered.sort((a: MappedGroup, b: MappedGroup) => {
       const aLatest = a.sessions[0];
       const bLatest = b.sessions[0];
-      const aTs = aLatest?.updatedAt ?? a.updatedAt;
-      const bTs = bLatest?.updatedAt ?? b.updatedAt;
+      const aTs = aLatest?.lastMessageAt ?? aLatest?.updatedAt ?? a.updatedAt;
+      const bTs = bLatest?.lastMessageAt ?? bLatest?.updatedAt ?? b.updatedAt;
       return bTs.getTime() - aTs.getTime();
     });
   }
@@ -712,9 +810,12 @@ export class SessionService {
     });
 
     if (!group) return null;
-    const typedGroup = group as SessionGroupSummary & {
-      sessions: SessionWithTimestamps[];
-    };
+    const [typedGroup] = await attachLastMessageAtToGroups([
+      group as SessionGroupSummary & {
+        sessions: Array<SessionWithTimestamps & SessionLastMessageSource>;
+      },
+    ]);
+    if (!typedGroup) return null;
     const sessions = sortSessionsByRecency<SessionWithTimestamps>(typedGroup.sessions);
     return {
       ...buildSessionGroupSnapshot(typedGroup, sessions),
@@ -730,11 +831,12 @@ export class SessionService {
   }
 
   async getGroupSessions(sessionGroupId: string) {
-    return prisma.session.findMany({
+    const sessions = await prisma.session.findMany({
       where: { sessionGroupId },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       include: SESSION_INCLUDE,
     });
+    return attachLastMessageAt(sessions);
   }
 
   async list(
@@ -751,25 +853,30 @@ export class SessionService {
     if (filters?.tool) where.tool = filters.tool;
     if (filters?.repoId) where.repoId = filters.repoId;
     if (filters?.channelId) where.channelId = filters.channelId;
-    return prisma.session.findMany({
+    const sessions = await prisma.session.findMany({
       where,
       orderBy: { updatedAt: "desc" },
       include: SESSION_INCLUDE,
     });
+    return attachLastMessageAt(sessions);
   }
 
   async get(id: string) {
-    return prisma.session.findUnique({ where: { id }, include: SESSION_INCLUDE });
+    const session = await prisma.session.findUnique({ where: { id }, include: SESSION_INCLUDE });
+    if (!session) return null;
+    const [sessionWithLastMessageAt] = await attachLastMessageAt([session]);
+    return sessionWithLastMessageAt ?? null;
   }
 
   async listByUser(organizationId: string, userId: string, agentStatus?: string | null) {
     const where: Record<string, unknown> = { organizationId, createdById: userId };
     if (agentStatus) where.agentStatus = agentStatus;
-    return prisma.session.findMany({
+    const sessions = await prisma.session.findMany({
       where,
       orderBy: { updatedAt: "desc" },
       include: SESSION_INCLUDE,
     });
+    return attachLastMessageAt(sessions);
   }
 
   async listGitCheckpointsForSession(sessionId: string) {
