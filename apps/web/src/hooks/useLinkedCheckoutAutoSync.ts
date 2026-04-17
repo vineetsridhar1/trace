@@ -42,6 +42,9 @@ type LinkedCheckoutAutoSyncQueryData = {
   } | null;
 };
 
+// Inverse of `getStoreKey()` in stores/linked-checkout.ts (`${runtimeInstanceId}:${repoId}`).
+// Splits on the first colon, which assumes runtimeInstanceId never contains one
+// (true today: UUIDs from local bridges, `cloud-machine-<id>` from Fly).
 function parseLinkedCheckoutStoreKey(
   key: string,
 ): { runtimeInstanceId: string; repoId: string } | null {
@@ -59,12 +62,14 @@ function parseLinkedCheckoutStoreKey(
 export function useLinkedCheckoutAutoSync() {
   const currentUserId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id ?? null);
   const refreshTick = useUIStore((s: UIState) => s.refreshTick);
-  const statusByKey = useLinkedCheckoutStore((state) => state.statusByKey);
   const fetchesByGroupRef = useRef(
     new Map<string, Promise<LinkedCheckoutAutoSyncQueryData | null>>(),
   );
   const reconcileInFlightRef = useRef(false);
 
+  // Reconcile reads `statusByKey` via getState() inside the closure, so the
+  // effect intentionally does NOT depend on it — otherwise the 15s interval
+  // would be torn down and recreated on every linked-checkout state change.
   useEffect(() => {
     if (!currentUserId) return;
 
@@ -199,5 +204,5 @@ export function useLinkedCheckoutAutoSync() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [currentUserId, refreshTick, statusByKey]);
+  }, [currentUserId, refreshTick]);
 }

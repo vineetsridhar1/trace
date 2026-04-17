@@ -2155,6 +2155,18 @@ export class SessionService {
       },
     });
 
+    // Image keys are scoped to an organization (`uploads/{orgId}/...`).
+    // Reject keys whose org segment doesn't match the session's org so a
+    // multi-org user can't smuggle another org's image into this session.
+    if (imageKeys?.length) {
+      for (const key of imageKeys) {
+        const orgSegment = key.split("/")[1];
+        if (orgSegment !== session.organizationId) {
+          throw new Error("Image key does not belong to this organization");
+        }
+      }
+    }
+
     if (session.worktreeDeleted) {
       throw new Error("Cannot send messages: session worktree has been deleted");
     }

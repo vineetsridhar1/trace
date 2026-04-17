@@ -300,11 +300,9 @@ async function runSyncLoop(
   }
 
   let nextRequest: LinkedCheckoutSyncRequest | null = initialRequest;
-  let lastResult: DesktopLinkedCheckoutActionResult = {
-    ok: false,
-    error: "No sync was executed.",
-    status: emptyStatus(initialRequest.repoId),
-  };
+  // The loop always runs at least once because nextRequest starts as
+  // initialRequest, so this default is only assigned to satisfy the type checker.
+  let lastResult!: DesktopLinkedCheckoutActionResult;
 
   try {
     while (nextRequest) {

@@ -115,7 +115,10 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
       throw new Error("Images still uploading");
     }
 
-    const imageKeys = images.map((img) => img.s3Key).filter((k): k is string => k !== null);
+    // After the stillUploading guard, every non-null s3Key represents a
+    // completed upload. Anything still null at this point is treated as a
+    // failed upload and silently dropped.
+    const imageKeys = images.flatMap((img) => (img.s3Key ? [img.s3Key] : []));
     const imagePreviewUrls = images.map((img) => img.previewUrl);
     const wrappedText = !text ? "" : text.startsWith("/") ? text : wrapPrompt(mode, text);
 

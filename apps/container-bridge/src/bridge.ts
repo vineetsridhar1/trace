@@ -606,6 +606,17 @@ export class ContainerBridge implements IBridgeClient {
       finalPrompt = `${refs}\n\n${prompt}`;
     }
 
+    // Single owner of temp-image lifetime so we don't leak files when the
+    // adapter ends via the pending-input branch (which doesn't always fire
+    // onComplete).
+    let imagesCleanedUp = false;
+    const cleanupImages = () => {
+      if (imagePaths && !imagesCleanedUp) {
+        imagesCleanedUp = true;
+        cleanupTempImages(imagePaths, fs);
+      }
+    };
+
     const runId = this.startRun(sessionId);
     adapter.abort();
 
@@ -613,7 +624,6 @@ export class ContainerBridge implements IBridgeClient {
     adapter.run({
       prompt: finalPrompt,
       cwd,
-      imagePaths,
       onOutput: (output) => {
         if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
 
@@ -678,6 +688,7 @@ export class ContainerBridge implements IBridgeClient {
           this.finishRun(sessionId, runId);
           this.send({ type: "session_complete", sessionId });
           activeAdapter.abort();
+          cleanupImages();
         }
       },
       onComplete: () => {
@@ -687,7 +698,7 @@ export class ContainerBridge implements IBridgeClient {
         }
         this.finishRun(sessionId, runId);
         this.send({ type: "session_complete", sessionId });
-        if (imagePaths) cleanupTempImages(imagePaths, fs);
+        cleanupImages();
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
       model,

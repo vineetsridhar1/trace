@@ -466,12 +466,12 @@ export class BridgeClient implements IBridgeClient {
     // Download attached images to temp files
     let imagePaths: string[] | undefined;
     if (imageUrls?.length) {
-      console.log(`[bridge] Downloading ${imageUrls.length} images for ${sessionId}:`, imageUrls);
+      runtimeDebug("downloading session images", { sessionId, count: imageUrls.length });
       try {
         imagePaths = await downloadImagesToTempFiles(imageUrls, {
           fs, path, tmpdir: os.tmpdir, randomUUID: crypto.randomUUID,
         });
-        console.log(`[bridge] Downloaded images to:`, imagePaths);
+        runtimeDebug("downloaded session images", { sessionId, count: imagePaths.length });
       } catch (err) {
         console.error(`[bridge] Failed to download images for ${sessionId}:`, err);
       }
@@ -484,6 +484,17 @@ export class BridgeClient implements IBridgeClient {
       finalPrompt = `${refs}\n\n${prompt}`;
     }
 
+    // Single owner of temp-image lifetime so we don't leak files when the
+    // adapter ends via the pending-input branch (which doesn't always fire
+    // onComplete).
+    let imagesCleanedUp = false;
+    const cleanupImages = () => {
+      if (imagePaths && !imagesCleanedUp) {
+        imagesCleanedUp = true;
+        cleanupTempImages(imagePaths, fs);
+      }
+    };
+
     const runId = this.startRun(sessionId);
     adapter.abort();
 
@@ -492,7 +503,6 @@ export class BridgeClient implements IBridgeClient {
     adapter.run({
       prompt: finalPrompt,
       cwd: workdir,
-      imagePaths,
       onOutput: (output) => {
         if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
 
@@ -557,6 +567,7 @@ export class BridgeClient implements IBridgeClient {
           this.finishRun(sessionId, runId);
           this.send({ type: "session_complete", sessionId });
           activeAdapter.abort();
+          cleanupImages();
         }
       },
       onComplete: () => {
@@ -566,7 +577,7 @@ export class BridgeClient implements IBridgeClient {
         }
         this.finishRun(sessionId, runId);
         this.send({ type: "session_complete", sessionId });
-        if (imagePaths) cleanupTempImages(imagePaths, fs);
+        cleanupImages();
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
       model,

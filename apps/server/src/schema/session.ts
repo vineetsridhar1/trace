@@ -3,7 +3,7 @@ import type { AgentStatus, CodingTool, SessionFilters, StartSessionInput } from 
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
 import { sessionRouter } from "../lib/session-router.js";
-import { BUILTIN_SLASH_COMMANDS } from "@trace/shared";
+import { BUILTIN_SLASH_COMMANDS, type BridgeSkillInfo } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { AuthenticationError } from "../lib/errors.js";
 import { pubsub, topics } from "../lib/pubsub.js";
@@ -128,8 +128,7 @@ export const sessionQueries = {
     const runtime = sessionRouter.getRuntimeForSession(args.sessionId);
 
     // Try to get skills from bridge
-    type SkillResult = Array<{ name: string; description: string; source: "user" | "project" }>;
-    let skills: SkillResult = [];
+    let skills: BridgeSkillInfo[] = [];
     if (runtime) {
       try {
         const includeUserSkills = session.hosting !== "local" || session.createdById === ctx.userId;
@@ -141,10 +140,6 @@ export const sessionQueries = {
       } catch {
         skills = [];
       }
-    }
-
-    if (session.tool !== "claude_code") {
-      return [];
     }
 
     // Merge built-in commands with bridge skills
