@@ -8,21 +8,10 @@ contextBridge.exposeInMainWorld("trace", {
   },
   pickFolder: () => ipcRenderer.invoke("pick-folder"),
   getGitInfo: (folderPath: string) => ipcRenderer.invoke("get-git-info", folderPath),
-  saveRepoPath: (repoId: string, localPath: string) => ipcRenderer.invoke("save-repo-path", repoId, localPath),
+  saveRepoPath: (repoId: string, localPath: string) =>
+    ipcRenderer.invoke("save-repo-path", repoId, localPath),
   getRepoPath: (repoId: string) => ipcRenderer.invoke("get-repo-path", repoId),
   getRepoConfig: (repoId: string) => ipcRenderer.invoke("get-repo-config", repoId),
-  getLinkedCheckoutStatus: (repoId: string) =>
-    ipcRenderer.invoke("get-linked-checkout-status", repoId),
-  syncLinkedCheckout: (input: {
-    repoId: string;
-    sessionGroupId: string;
-    branch: string;
-    commitSha?: string | null;
-    autoSyncEnabled?: boolean;
-  }) => ipcRenderer.invoke("sync-linked-checkout", input),
-  restoreLinkedCheckout: (repoId: string) => ipcRenderer.invoke("restore-linked-checkout", repoId),
-  setLinkedCheckoutAutoSync: (repoId: string, enabled: boolean) =>
-    ipcRenderer.invoke("set-linked-checkout-auto-sync", repoId, enabled),
   setRepoGitHooksEnabled: (repoId: string, enabled: boolean) =>
     ipcRenderer.invoke("set-repo-git-hooks-enabled", repoId, enabled),
   getRepoGitHookStatus: (repoId: string) => ipcRenderer.invoke("get-repo-git-hook-status", repoId),

@@ -14,6 +14,7 @@ import {
 import { getSessionChannelId } from "../lib/session-group";
 import { notifyForEvent } from "../notifications/handlers";
 import { takePendingOptimisticSession } from "../lib/optimistic-message";
+import { getLinkedCheckoutGroupAccess } from "../lib/linked-checkout-access";
 import type {
   AgentStatus,
   Event,
@@ -212,17 +213,18 @@ function extractGitCheckpointRewrite(
 }
 
 async function maybeAutoSyncLinkedCheckout(checkpoint: GitCheckpoint): Promise<void> {
-  if (
-    typeof window === "undefined" ||
-    typeof window.trace?.getLinkedCheckoutStatus !== "function" ||
-    typeof window.trace?.syncLinkedCheckout !== "function"
-  ) {
+  const access = getLinkedCheckoutGroupAccess(checkpoint.sessionGroupId);
+  if (!access.allowed || !access.runtimeInstanceId) {
     return;
   }
 
   const currentStatus =
-    getLinkedCheckoutStatusSnapshot(checkpoint.repoId) ??
-    (await ensureLinkedCheckoutStatus(checkpoint.repoId));
+    getLinkedCheckoutStatusSnapshot(checkpoint.repoId, access.runtimeInstanceId) ??
+    (await ensureLinkedCheckoutStatus(
+      checkpoint.repoId,
+      checkpoint.sessionGroupId,
+      access.runtimeInstanceId,
+    ));
 
   if (!currentStatus?.isAttached) return;
   if (currentStatus.attachedSessionGroupId !== checkpoint.sessionGroupId) return;
@@ -236,6 +238,7 @@ async function maybeAutoSyncLinkedCheckout(checkpoint: GitCheckpoint): Promise<v
   scheduleAutoSyncLinkedCheckout({
     repoId: checkpoint.repoId,
     sessionGroupId: checkpoint.sessionGroupId,
+    runtimeInstanceId: access.runtimeInstanceId,
     branch,
     commitSha: checkpoint.commitSha,
     autoSyncEnabled: currentStatus.autoSyncEnabled,

@@ -22,6 +22,8 @@ interface GroupHeaderProps {
   sessionGroupId: string;
   repoId?: string | null;
   groupBranch?: string | null;
+  linkedCheckoutRuntimeInstanceId?: string | null;
+  canManageLinkedCheckout: boolean;
   selectedSessionStatus: string;
   selectedSessionId: string | null;
   groupPrUrl: string | null | undefined;
@@ -38,6 +40,8 @@ export function GroupHeader({
   sessionGroupId,
   repoId,
   groupBranch,
+  linkedCheckoutRuntimeInstanceId,
+  canManageLinkedCheckout,
   selectedSessionStatus,
   selectedSessionId,
   groupPrUrl,
@@ -51,7 +55,13 @@ export function GroupHeader({
   const [showHistory, setShowHistory] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
   const { hasRunScripts, canRun, handleRun } = useRunScripts(sessionGroupId, selectedSessionId);
-  const linkedCheckout = useLinkedCheckoutHeaderState({ repoId, groupBranch, sessionGroupId });
+  const linkedCheckout = useLinkedCheckoutHeaderState({
+    repoId,
+    groupBranch,
+    runtimeInstanceId: linkedCheckoutRuntimeInstanceId,
+    sessionGroupId,
+    enabled: canManageLinkedCheckout,
+  });
 
   useEffect(() => {
     if (!showHistory) return;
@@ -89,7 +99,12 @@ export function GroupHeader({
       </button>
 
       {selectedSessionId && (
-        <span className={cn("flex shrink-0 items-center gap-1.5 text-xs", sessionStatusColor[selectedSessionStatus])}>
+        <span
+          className={cn(
+            "flex shrink-0 items-center gap-1.5 text-xs",
+            sessionStatusColor[selectedSessionStatus],
+          )}
+        >
           <Circle size={6} className="fill-current" />
           {label}
         </span>
@@ -118,7 +133,7 @@ export function GroupHeader({
       <button
         onClick={onToggleSidebar}
         className={cn(
-          "flex h-8 w-8 items-center justify-center rounded-md transition-colors",
+          "hidden h-8 w-8 items-center justify-center rounded-md transition-colors sm:flex",
           showSidebar
             ? "bg-surface-elevated text-foreground"
             : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
@@ -158,7 +173,7 @@ export function GroupHeader({
       {panelMode && (
         <button
           onClick={onToggleFullscreen}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
+          className="hidden h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground sm:flex"
           title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
         >
           {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}

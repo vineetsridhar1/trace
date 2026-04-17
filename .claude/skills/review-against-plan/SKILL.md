@@ -20,13 +20,13 @@ You are acting as a **senior staff engineer and technical program manager** perf
 
 The user provides a **project folder path** as the first argument (e.g., `tickets/ai-agent`). This folder contains:
 
-- A **plan file** — look for `plan.md`, `*.plan.md`, or any markdown file with "plan" in the name. If none exists, look for a top-level plan file referenced in the folder's README.
+- A **plan file** — look for `PLAN.md`, `plan.md`, `*.plan.md`, or any markdown file with "plan" in the name. If none exists, look for a top-level plan file referenced in the folder's README.
 - A **ticket index** — look for `README.md` in the project folder. This contains the ticket list and dependency graph.
 - **Ticket files** — all other `.md` files in the folder are individual tickets.
 
 If no project folder is provided, check if the argument looks like a ticket file path and derive the project folder from its parent directory. If no argument at all, ask the user which project folder to use.
 
-Also check for a **plan file at the repo root** (e.g., `ai-plan.md`, `plan.md`) that may be the canonical plan for this project folder. Read the project folder's README to determine which plan file is authoritative.
+Also check for a **plan file at the repo root** (e.g., `PLAN.md`, `ai-plan.md`, `plan.md`) that may be the canonical plan for this project folder. Read the project folder's README to determine which plan file is authoritative.
 
 ### 1b: Read Project Context
 

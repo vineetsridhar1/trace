@@ -1,5 +1,9 @@
 import type { WebSocket } from "ws";
 import { randomUUID } from "crypto";
+import type {
+  BridgeLinkedCheckoutStatus,
+  BridgeLinkedCheckoutActionResultPayload,
+} from "@trace/shared";
 import { sessionRouter } from "./session-router.js";
 import { sessionService } from "../services/session.js";
 import { runtimeDebug } from "./runtime-debug.js";
@@ -101,12 +105,16 @@ export function handleBridgeConnection(ws: WebSocket) {
         if (Array.isArray(msg.activeTerminals) && msg.activeTerminals.length > 0) {
           const activeTerminals = (msg.activeTerminals as unknown[]).filter(
             (t): t is { terminalId: string; sessionId: string } =>
-              typeof t === "object" && t !== null &&
+              typeof t === "object" &&
+              t !== null &&
               typeof (t as Record<string, unknown>).terminalId === "string" &&
               typeof (t as Record<string, unknown>).sessionId === "string",
           );
           if (activeTerminals.length > 0) {
-            runtimeDebug("restoring terminals from bridge", { runtimeId, count: activeTerminals.length });
+            runtimeDebug("restoring terminals from bridge", {
+              runtimeId,
+              count: activeTerminals.length,
+            });
             terminalRelay.restoreTerminals(activeTerminals).catch((err) => {
               console.error("[bridge] error restoring terminals:", err);
             });
@@ -125,8 +133,30 @@ export function handleBridgeConnection(ws: WebSocket) {
         return;
       }
 
-      if (msg.type === "branches_result" && typeof msg.requestId === "string" && Array.isArray(msg.branches)) {
-        const branches = (msg.branches as unknown[]).filter((b): b is string => typeof b === "string");
+      if (msg.type === "linked_checkout_status_result" && typeof msg.requestId === "string") {
+        sessionRouter.resolveLinkedCheckoutStatusRequest(
+          msg.requestId,
+          msg.status as BridgeLinkedCheckoutStatus,
+        );
+        return;
+      }
+
+      if (msg.type === "linked_checkout_action_result" && typeof msg.requestId === "string") {
+        sessionRouter.resolveLinkedCheckoutActionRequest(
+          msg.requestId,
+          msg.result as BridgeLinkedCheckoutActionResultPayload,
+        );
+        return;
+      }
+
+      if (
+        msg.type === "branches_result" &&
+        typeof msg.requestId === "string" &&
+        Array.isArray(msg.branches)
+      ) {
+        const branches = (msg.branches as unknown[]).filter(
+          (b): b is string => typeof b === "string",
+        );
         sessionRouter.resolveBranchRequest(
           msg.requestId,
           branches,
@@ -135,7 +165,11 @@ export function handleBridgeConnection(ws: WebSocket) {
         return;
       }
 
-      if (msg.type === "files_result" && typeof msg.requestId === "string" && Array.isArray(msg.files)) {
+      if (
+        msg.type === "files_result" &&
+        typeof msg.requestId === "string" &&
+        Array.isArray(msg.files)
+      ) {
         const files = (msg.files as unknown[]).filter((f): f is string => typeof f === "string");
         sessionRouter.resolveFileRequest(
           msg.requestId,
@@ -155,7 +189,14 @@ export function handleBridgeConnection(ws: WebSocket) {
       }
 
       if (msg.type === "branch_diff_result" && typeof msg.requestId === "string") {
-        const files = Array.isArray(msg.files) ? (msg.files as Array<{ path: string; status: string; additions: number; deletions: number }>) : [];
+        const files = Array.isArray(msg.files)
+          ? (msg.files as Array<{
+              path: string;
+              status: string;
+              additions: number;
+              deletions: number;
+            }>)
+          : [];
         sessionRouter.resolveBranchDiffRequest(
           msg.requestId,
           files,
@@ -176,16 +217,28 @@ export function handleBridgeConnection(ws: WebSocket) {
       if (msg.type === "skills_result" && typeof msg.requestId === "string") {
         sessionRouter.resolveSkillsRequest(
           msg.requestId,
-          Array.isArray(msg.skills) ? msg.skills as Array<{ name: string; description: string; source: "user" | "project" }> : [],
+          Array.isArray(msg.skills)
+            ? (msg.skills as Array<{
+                name: string;
+                description: string;
+                source: "user" | "project";
+              }>)
+            : [],
           typeof msg.error === "string" ? msg.error : undefined,
         );
         return;
       }
 
       // Terminal messages — relay directly to frontend, no event store
-      if (msg.type === "terminal_ready" || msg.type === "terminal_output" ||
-          msg.type === "terminal_exit" || msg.type === "terminal_error") {
-        terminalRelay.relayFromBridge(msg as { type: string; terminalId: string; [key: string]: unknown });
+      if (
+        msg.type === "terminal_ready" ||
+        msg.type === "terminal_output" ||
+        msg.type === "terminal_exit" ||
+        msg.type === "terminal_error"
+      ) {
+        terminalRelay.relayFromBridge(
+          msg as { type: string; terminalId: string; [key: string]: unknown },
+        );
         return;
       }
 
@@ -202,11 +255,19 @@ export function handleBridgeConnection(ws: WebSocket) {
         });
       } else if (msg.type === "workspace_ready" && msg.sessionId) {
         enqueueEvent(msg.sessionId, async () => {
-          await sessionService.workspaceReady(msg.sessionId, msg.workdir as string, msg.branch as string | undefined, msg.slug as string | undefined);
+          await sessionService.workspaceReady(
+            msg.sessionId,
+            msg.workdir as string,
+            msg.branch as string | undefined,
+            msg.slug as string | undefined,
+          );
         });
       } else if (msg.type === "workspace_failed" && msg.sessionId) {
         enqueueEvent(msg.sessionId, async () => {
-          await sessionService.workspaceFailed(msg.sessionId, (msg.error as string) ?? "Unknown error");
+          await sessionService.workspaceFailed(
+            msg.sessionId,
+            (msg.error as string) ?? "Unknown error",
+          );
         });
       } else if (msg.type === "register_session" && msg.sessionId) {
         runtimeDebug("received register_session", { runtimeId, sessionId: msg.sessionId });
@@ -220,10 +281,7 @@ export function handleBridgeConnection(ws: WebSocket) {
         });
       } else if (msg.type === "git_checkpoint" && msg.sessionId && msg.checkpoint) {
         enqueueEvent(msg.sessionId, async () => {
-          await sessionService.recordGitCheckpoint(
-            msg.sessionId as string,
-            msg.checkpoint,
-          );
+          await sessionService.recordGitCheckpoint(msg.sessionId as string, msg.checkpoint);
         });
       }
     } catch (err) {
@@ -237,10 +295,16 @@ export function handleBridgeConnection(ws: WebSocket) {
 
   ws.on("close", () => {
     clearInterval(pingInterval);
-    runtimeDebug("bridge websocket closed, grace period starting", { runtimeId, graceMs: DISCONNECT_GRACE_MS });
+    runtimeDebug("bridge websocket closed, grace period starting", {
+      runtimeId,
+      graceMs: DISCONNECT_GRACE_MS,
+    });
     const closedRuntimeId = runtimeId;
     const affectedSessions = sessionRouter.unregisterRuntime(closedRuntimeId, ws);
-    runtimeDebug("bridge close affected sessions", { runtimeId: closedRuntimeId, affectedSessions });
+    runtimeDebug("bridge close affected sessions", {
+      runtimeId: closedRuntimeId,
+      affectedSessions,
+    });
 
     // Wait a grace period before marking sessions disconnected — if the bridge
     // reconnects quickly (e.g. brief network blip), restoreSessionsForRuntime
@@ -259,7 +323,11 @@ export function handleBridgeConnection(ws: WebSocket) {
         }
 
         enqueueEvent(sessionId, async () => {
-          await sessionService.markConnectionLost(sessionId, "runtime_disconnected", closedRuntimeId);
+          await sessionService.markConnectionLost(
+            sessionId,
+            "runtime_disconnected",
+            closedRuntimeId,
+          );
         });
       }
     }, DISCONNECT_GRACE_MS);

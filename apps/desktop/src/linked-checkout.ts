@@ -1,11 +1,17 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { assertValidCommitSha } from "@trace/shared";
+import {
+  assertValidCommitSha,
+  type BridgeLinkedCheckoutActionResultPayload,
+  type BridgeLinkedCheckoutStatus,
+} from "@trace/shared";
 import {
   getRepoConfig,
+  saveRepoPath,
   setRepoLinkedCheckout,
   type LinkedCheckoutConfig,
 } from "./config.js";
+import { installOrRepairRepoHooks } from "./repo-hooks.js";
 
 const execFileAsync = promisify(execFile);
 const GIT_MAX_BUFFER = 5 * 1024 * 1024;
@@ -42,26 +48,9 @@ type GitExecError = Error & {
   stdout?: string;
 };
 
-export interface LinkedCheckoutStatus {
-  repoId: string;
-  repoPath: string | null;
-  isAttached: boolean;
-  attachedSessionGroupId: string | null;
-  targetBranch: string | null;
-  autoSyncEnabled: boolean;
-  currentBranch: string | null;
-  currentCommitSha: string | null;
-  lastSyncedCommitSha: string | null;
-  lastSyncError: string | null;
-  restoreBranch: string | null;
-  restoreCommitSha: string | null;
-}
+export type LinkedCheckoutStatus = BridgeLinkedCheckoutStatus;
 
-export interface LinkedCheckoutActionResult {
-  ok: boolean;
-  status: LinkedCheckoutStatus;
-  error: string | null;
-}
+export type LinkedCheckoutActionResult = BridgeLinkedCheckoutActionResultPayload;
 
 export interface SyncLinkedCheckoutInput {
   repoId: string;
@@ -234,6 +223,23 @@ export async function getLinkedCheckoutStatus(repoId: string): Promise<LinkedChe
   return readStatus(repoId);
 }
 
+export function linkLinkedCheckoutRepo(
+  repoId: string,
+  localPath: string,
+): Promise<LinkedCheckoutActionResult> {
+  return withRepoLock(repoId, async () => {
+    try {
+      const repoConfig = await saveRepoPath(repoId, localPath);
+      if (repoConfig.gitHooksEnabled) {
+        await installOrRepairRepoHooks(localPath);
+      }
+      return actionResult(repoId, true);
+    } catch (error) {
+      return actionResult(repoId, false, formatGitError(error));
+    }
+  });
+}
+
 export function syncLinkedCheckout(
   input: SyncLinkedCheckoutInput,
 ): Promise<LinkedCheckoutActionResult> {
@@ -282,9 +288,7 @@ export function syncLinkedCheckout(
   });
 }
 
-export function restoreLinkedCheckout(
-  repoId: string,
-): Promise<LinkedCheckoutActionResult> {
+export function restoreLinkedCheckout(repoId: string): Promise<LinkedCheckoutActionResult> {
   return withRepoLock(repoId, async () => {
     const repoConfig = getRepoConfig(repoId);
     const repoPath = repoConfig?.path;

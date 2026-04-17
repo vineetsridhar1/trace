@@ -134,6 +134,42 @@ export interface BridgeListSkillsCommand {
   includeProjectSkills?: boolean;
 }
 
+export interface BridgeLinkedCheckoutStatusCommand {
+  type: "linked_checkout_status";
+  requestId: string;
+  repoId: string;
+}
+
+export interface BridgeLinkLinkedCheckoutRepoCommand {
+  type: "linked_checkout_link_repo";
+  requestId: string;
+  repoId: string;
+  localPath: string;
+}
+
+export interface BridgeSyncLinkedCheckoutCommand {
+  type: "linked_checkout_sync";
+  requestId: string;
+  repoId: string;
+  sessionGroupId: string;
+  branch: string;
+  commitSha?: string | null;
+  autoSyncEnabled?: boolean;
+}
+
+export interface BridgeRestoreLinkedCheckoutCommand {
+  type: "linked_checkout_restore";
+  requestId: string;
+  repoId: string;
+}
+
+export interface BridgeSetLinkedCheckoutAutoSyncCommand {
+  type: "linked_checkout_set_auto_sync";
+  requestId: string;
+  repoId: string;
+  enabled: boolean;
+}
+
 // --- Terminal commands (Server → Bridge) ---
 
 export interface BridgeTerminalCreateCommand {
@@ -178,6 +214,11 @@ export type BridgeCommand =
   | BridgeBranchDiffCommand
   | BridgeFileAtRefCommand
   | BridgeListSkillsCommand
+  | BridgeLinkedCheckoutStatusCommand
+  | BridgeLinkLinkedCheckoutRepoCommand
+  | BridgeSyncLinkedCheckoutCommand
+  | BridgeRestoreLinkedCheckoutCommand
+  | BridgeSetLinkedCheckoutAutoSyncCommand
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
   | BridgeTerminalResizeCommand
@@ -249,6 +290,40 @@ export interface BridgeGitCheckpoint {
 export interface BridgeRepoLinked {
   type: "repo_linked";
   repoId: string;
+}
+
+export interface BridgeLinkedCheckoutStatus {
+  repoId: string;
+  repoPath: string | null;
+  isAttached: boolean;
+  attachedSessionGroupId: string | null;
+  targetBranch: string | null;
+  autoSyncEnabled: boolean;
+  currentBranch: string | null;
+  currentCommitSha: string | null;
+  lastSyncedCommitSha: string | null;
+  lastSyncError: string | null;
+  restoreBranch: string | null;
+  restoreCommitSha: string | null;
+}
+
+export interface BridgeLinkedCheckoutActionResultPayload {
+  ok: boolean;
+  status: BridgeLinkedCheckoutStatus;
+  error: string | null;
+}
+
+export interface BridgeLinkedCheckoutStatusResult {
+  type: "linked_checkout_status_result";
+  requestId: string;
+  status: BridgeLinkedCheckoutStatus;
+}
+
+export interface BridgeLinkedCheckoutActionResult {
+  type: "linked_checkout_action_result";
+  requestId: string;
+  action: "link_repo" | "sync" | "restore" | "set_auto_sync";
+  result: BridgeLinkedCheckoutActionResultPayload;
 }
 
 export interface BridgeBranchesResult {
@@ -342,6 +417,8 @@ export type BridgeMessage =
   | BridgeToolSessionId
   | BridgeGitCheckpoint
   | BridgeRepoLinked
+  | BridgeLinkedCheckoutStatusResult
+  | BridgeLinkedCheckoutActionResult
   | BridgeBranchesResult
   | BridgeFilesResult
   | BridgeFileContentResult
@@ -367,7 +444,17 @@ export function parseBranchOutput(stdout: string): string[] {
 }
 
 /** Directories to skip when walking a filesystem tree. */
-export const WALK_IGNORE = new Set(["node_modules", ".git", "dist", ".next", "__pycache__", ".venv", "vendor", ".cache", "coverage"]);
+export const WALK_IGNORE = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  ".next",
+  "__pycache__",
+  ".venv",
+  "vendor",
+  ".cache",
+  "coverage",
+]);
 export const MAX_FILE_VIEW_BYTES = 512 * 1024;
 const BINARY_DETECTION_SAMPLE_BYTES = 8 * 1024;
 
@@ -379,7 +466,14 @@ export async function walkDir(
   root: string,
   dir: string,
   maxDepth: number,
-  fsModule: { promises: { readdir: (p: string, opts: { withFileTypes: true }) => Promise<Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>> } },
+  fsModule: {
+    promises: {
+      readdir: (
+        p: string,
+        opts: { withFileTypes: true },
+      ) => Promise<Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>>;
+    };
+  },
   pathModule: { join: (...p: string[]) => string; relative: (from: string, to: string) => string },
 ): Promise<string[]> {
   if (maxDepth <= 0) return [];
@@ -402,10 +496,7 @@ export async function walkDir(
 
 /** Minimal fs/path interfaces needed by the shared file handlers (Node compatible). */
 export interface BridgeFsLike {
-  readFile: (
-    path: string,
-    cb: (err: NodeJS.ErrnoException | null, data: Buffer) => void,
-  ) => void;
+  readFile: (path: string, cb: (err: NodeJS.ErrnoException | null, data: Buffer) => void) => void;
   promises: {
     readdir: (
       p: string,
@@ -422,10 +513,7 @@ export interface BridgePathLike {
   sep: string;
 }
 /** Callback-based git ls-files runner, injected by bridges to avoid Node child_process type issues. */
-export type GitLsFilesFn = (
-  cwd: string,
-  cb: (err: Error | null, files: string[]) => void,
-) => void;
+export type GitLsFilesFn = (cwd: string, cb: (err: Error | null, files: string[]) => void) => void;
 
 function isPathInsideRoot(root: string, target: string, pathModule: BridgePathLike): boolean {
   return target === root || target.startsWith(root + pathModule.sep);
@@ -435,9 +523,7 @@ function hasInvalidRelativePathSegments(relativePath: string): boolean {
   if (!relativePath || relativePath.startsWith("/") || relativePath.includes("\\")) {
     return true;
   }
-  return relativePath
-    .split("/")
-    .some((part) => part.length === 0 || part === "." || part === "..");
+  return relativePath.split("/").some((part) => part.length === 0 || part === "." || part === "..");
 }
 
 function isLikelyBinaryFile(buffer: Buffer): boolean {
@@ -467,7 +553,12 @@ export function handleListFiles(
   const { requestId, sessionId, workdirHint } = cmd;
   const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
   if (!workdir) {
-    send({ type: "files_result", requestId, files: [], error: `No workdir known for session ${sessionId}` });
+    send({
+      type: "files_result",
+      requestId,
+      files: [],
+      error: `No workdir known for session ${sessionId}`,
+    });
     return;
   }
   deps.gitLsFiles(workdir, (err, files) => {
@@ -495,7 +586,12 @@ export function handleReadFile(
   const { requestId, sessionId, relativePath, workdirHint } = cmd;
   const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
   if (!workdir) {
-    send({ type: "file_content_result", requestId, content: "", error: `No workdir known for session ${sessionId}` });
+    send({
+      type: "file_content_result",
+      requestId,
+      content: "",
+      error: `No workdir known for session ${sessionId}`,
+    });
     return;
   }
   const normalizedWorkdir = deps.path.resolve(workdir);
@@ -512,7 +608,12 @@ export function handleReadFile(
       const realWorkdir = await deps.fs.promises.realpath(normalizedWorkdir);
       const realPath = await deps.fs.promises.realpath(fullPath);
       if (!isPathInsideRoot(realWorkdir, realPath, deps.path)) {
-        send({ type: "file_content_result", requestId, content: "", error: "Path traversal denied" });
+        send({
+          type: "file_content_result",
+          requestId,
+          content: "",
+          error: "Path traversal denied",
+        });
         return;
       }
 
@@ -561,10 +662,7 @@ export function handleReadFile(
 // --- Shared branch diff / file-at-ref handlers ---
 
 /** Callback-based git command runner, injected by bridges. */
-export type GitExecFn = (
-  args: string[],
-  cwd: string,
-) => Promise<string>;
+export type GitExecFn = (args: string[], cwd: string) => Promise<string>;
 
 /** Reject refs that could be interpreted as git flags or contain dangerous patterns. */
 function hasInvalidGitRef(ref: string): boolean {
@@ -593,7 +691,12 @@ export async function handleBranchDiff(
   const { requestId, sessionId, baseBranch, workdirHint } = cmd;
   const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
   if (!workdir) {
-    send({ type: "branch_diff_result", requestId, files: [], error: `No workdir known for session ${sessionId}` });
+    send({
+      type: "branch_diff_result",
+      requestId,
+      files: [],
+      error: `No workdir known for session ${sessionId}`,
+    });
     return;
   }
 
@@ -657,7 +760,12 @@ export async function handleFileAtRef(
   const { requestId, sessionId, filePath, ref, workdirHint } = cmd;
   const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
   if (!workdir) {
-    send({ type: "file_at_ref_result", requestId, content: "", error: `No workdir known for session ${sessionId}` });
+    send({
+      type: "file_at_ref_result",
+      requestId,
+      content: "",
+      error: `No workdir known for session ${sessionId}`,
+    });
     return;
   }
 
@@ -784,7 +892,12 @@ export async function handleListSkills(
     }
     send({ type: "skills_result", requestId, skills });
   } catch (err) {
-    send({ type: "skills_result", requestId, skills: [], error: err instanceof Error ? err.message : "Failed to list skills" });
+    send({
+      type: "skills_result",
+      requestId,
+      skills: [],
+      error: err instanceof Error ? err.message : "Failed to list skills",
+    });
   }
 }
 
@@ -827,9 +940,7 @@ function parseFrontmatterBoolean(value: string | undefined): boolean | undefined
 }
 
 function extractMarkdownSummary(content: string): string | undefined {
-  const body = content
-    .replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "")
-    .trim();
+  const body = content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "").trim();
   if (!body) return undefined;
 
   const lines = body

@@ -91,6 +91,20 @@ export const sessionQueries = {
       ctx.userId,
     );
   },
+  linkedCheckoutStatus: (
+    _: unknown,
+    args: { sessionGroupId: string; repoId: string },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const orgId = requireOrgContext(ctx);
+    return sessionService.getLinkedCheckoutStatus(
+      args.sessionGroupId,
+      args.repoId,
+      orgId,
+      ctx.userId,
+    );
+  },
   sessionSlashCommands: async (_: unknown, args: { sessionId: string }, ctx: Context) => {
     if (!ctx.userId) throw new AuthenticationError();
 
@@ -115,15 +129,11 @@ export const sessionQueries = {
     if (runtime) {
       try {
         const includeUserSkills = session.hosting !== "local" || session.createdById === ctx.userId;
-        skills = await sessionRouter.listSkills(
-          runtime.id,
-          args.sessionId,
-          {
-            workdirHint: session.workdir ?? undefined,
-            includeUserSkills,
-            includeProjectSkills: true,
-          },
-        );
+        skills = await sessionRouter.listSkills(runtime.id, args.sessionId, {
+          workdirHint: session.workdir ?? undefined,
+          includeUserSkills,
+          includeProjectSkills: true,
+        });
       } catch {
         skills = [];
       }
@@ -134,10 +144,16 @@ export const sessionQueries = {
     }
 
     // Merge built-in commands with bridge skills
-    const commands: Array<{ name: string; description: string; source: string; category: string }> = [];
+    const commands: Array<{ name: string; description: string; source: string; category: string }> =
+      [];
 
     for (const cmd of BUILTIN_SLASH_COMMANDS) {
-      commands.push({ name: cmd.name, description: cmd.description, source: "builtin", category: cmd.category });
+      commands.push({
+        name: cmd.name,
+        description: cmd.description,
+        source: "builtin",
+        category: cmd.category,
+      });
     }
 
     // Add bridge skills
@@ -265,24 +281,104 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
+  linkLinkedCheckoutRepo: (
+    _: unknown,
+    args: { sessionGroupId: string; repoId: string; localPath: string },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const orgId = requireOrgContext(ctx);
+    return sessionService.linkLinkedCheckoutRepo(
+      args.sessionGroupId,
+      args.repoId,
+      args.localPath,
+      orgId,
+      ctx.userId,
+    );
+  },
+  syncLinkedCheckout: (
+    _: unknown,
+    args: {
+      sessionGroupId: string;
+      repoId: string;
+      branch: string;
+      commitSha?: string | null;
+      autoSyncEnabled?: boolean | null;
+    },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const orgId = requireOrgContext(ctx);
+    return sessionService.syncLinkedCheckout(
+      args.sessionGroupId,
+      args.repoId,
+      args.branch,
+      orgId,
+      ctx.userId,
+      {
+        commitSha: args.commitSha ?? undefined,
+        autoSyncEnabled: args.autoSyncEnabled ?? undefined,
+      },
+    );
+  },
+  restoreLinkedCheckout: (
+    _: unknown,
+    args: { sessionGroupId: string; repoId: string },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const orgId = requireOrgContext(ctx);
+    return sessionService.restoreLinkedCheckout(
+      args.sessionGroupId,
+      args.repoId,
+      orgId,
+      ctx.userId,
+    );
+  },
+  setLinkedCheckoutAutoSync: (
+    _: unknown,
+    args: { sessionGroupId: string; repoId: string; enabled: boolean },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const orgId = requireOrgContext(ctx);
+    return sessionService.setLinkedCheckoutAutoSync(
+      args.sessionGroupId,
+      args.repoId,
+      args.enabled,
+      orgId,
+      ctx.userId,
+    );
+  },
 };
 
 export const sessionTypeResolvers = {
   SessionGroup: {
-    status: async (group: {
-      id: string;
-      prUrl?: string | null;
-      archivedAt?: string | Date | null;
-      sessions?: SessionGroupStatusSource[];
-    }, _args: unknown, ctx: Context) => {
+    status: async (
+      group: {
+        id: string;
+        prUrl?: string | null;
+        archivedAt?: string | Date | null;
+        sessions?: SessionGroupStatusSource[];
+      },
+      _args: unknown,
+      ctx: Context,
+    ) => {
       const sessions = Array.isArray(group.sessions)
         ? group.sessions
-        : ((await ctx.sessionGroupLoader.load(group.id)) as { sessions?: SessionGroupStatusSource[] } | null)?.sessions ?? [];
+        : ((
+            (await ctx.sessionGroupLoader.load(group.id)) as {
+              sessions?: SessionGroupStatusSource[];
+            } | null
+          )?.sessions ?? []);
       return deriveSessionGroupStatus(sessions, group.prUrl ?? null, group.archivedAt ?? null);
     },
     sessions: async (group: { id: string; sessions?: unknown[] }, _args: unknown, ctx: Context) => {
       if (Array.isArray(group.sessions)) return group.sessions;
-      return ((await ctx.sessionGroupLoader.load(group.id)) as { sessions?: unknown[] } | null)?.sessions ?? [];
+      return (
+        ((await ctx.sessionGroupLoader.load(group.id)) as { sessions?: unknown[] } | null)
+          ?.sessions ?? []
+      );
     },
     gitCheckpoints: async (group: { id: string }) => {
       return sessionService.listGitCheckpointsForGroup(group.id);

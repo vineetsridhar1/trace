@@ -53,10 +53,27 @@ export type {
   BridgeTerminalResizeCommand,
   BridgeTerminalDestroyCommand,
   BridgeListSkillsCommand,
+  BridgeLinkedCheckoutStatusCommand,
+  BridgeLinkLinkedCheckoutRepoCommand,
+  BridgeSyncLinkedCheckoutCommand,
+  BridgeRestoreLinkedCheckoutCommand,
+  BridgeSetLinkedCheckoutAutoSyncCommand,
   BridgeSkillInfo,
   BridgeSkillsResult,
+  BridgeLinkedCheckoutStatus,
+  BridgeLinkedCheckoutActionResultPayload,
+  BridgeLinkedCheckoutStatusResult,
+  BridgeLinkedCheckoutActionResult,
 } from "./bridge.js";
-export { parseBranchOutput, walkDir, handleListFiles, handleReadFile, handleBranchDiff, handleFileAtRef, handleListSkills } from "./bridge.js";
+export {
+  parseBranchOutput,
+  walkDir,
+  handleListFiles,
+  handleReadFile,
+  handleBranchDiff,
+  handleFileAtRef,
+  handleListSkills,
+} from "./bridge.js";
 export type { GitExecFn } from "./bridge.js";
 export type { BuiltinSlashCommand } from "./slash-commands.js";
 export { BUILTIN_SLASH_COMMANDS } from "./slash-commands.js";

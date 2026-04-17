@@ -653,6 +653,84 @@ export class SessionService {
     throw new Error("No connected runtime available for this session group");
   }
 
+  private getConnectionRuntimeInstanceId(connection: unknown): string | null {
+    if (!connection || typeof connection !== "object" || Array.isArray(connection)) {
+      return null;
+    }
+
+    const runtimeInstanceId = (connection as { runtimeInstanceId?: unknown }).runtimeInstanceId;
+    return typeof runtimeInstanceId === "string" && runtimeInstanceId.trim()
+      ? runtimeInstanceId
+      : null;
+  }
+
+  private async resolveLinkedCheckoutRuntime(
+    sessionGroupId: string,
+    repoId: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<string> {
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: sessionGroupId, organizationId },
+      select: {
+        id: true,
+        repoId: true,
+        connection: true,
+        sessions: {
+          select: {
+            id: true,
+            repoId: true,
+            hosting: true,
+            createdById: true,
+            connection: true,
+          },
+        },
+      },
+    });
+    if (!group) throw new Error("Session group not found");
+
+    const repoMatchesGroup =
+      group.repoId === repoId || group.sessions.some((session) => session.repoId === repoId);
+    if (!repoMatchesGroup) {
+      throw new Error("Session group is not associated with this repo");
+    }
+
+    // Linked checkout is tied to the session group's shared workspace runtime,
+    // not whichever child session happens to be selected in the UI.
+    const runtimeId = this.getConnectionRuntimeInstanceId(group.connection);
+
+    if (!runtimeId) {
+      throw new Error(
+        "Linked checkout is only available on session groups backed by a local runtime.",
+      );
+    }
+
+    const ownsRuntime = group.sessions.some((session) => {
+      if (session.hosting !== "local" || session.createdById !== userId) return false;
+      return this.getConnectionRuntimeInstanceId(session.connection) === runtimeId;
+    });
+    if (!ownsRuntime) {
+      throw new Error(
+        "Linked checkout is only available on session groups backed by your local runtime.",
+      );
+    }
+
+    const runtime = sessionRouter.getRuntime(runtimeId);
+    if (!runtime || runtime.hostingMode !== "local" || runtime.ws.readyState !== runtime.ws.OPEN) {
+      throw new Error("No connected local runtime available for this session group");
+    }
+
+    return runtimeId;
+  }
+
+  private async assertRepoExists(repoId: string, organizationId: string): Promise<void> {
+    const repo = await prisma.repo.findFirst({
+      where: { id: repoId, organizationId },
+      select: { id: true },
+    });
+    if (!repo) throw new Error("Repo not found");
+  }
+
   async listGroups(
     channelId: string,
     organizationId: string,
@@ -3420,14 +3498,100 @@ export class SessionService {
     organizationId: string,
     runtimeInstanceId?: string,
   ): Promise<string[]> {
-    const repo = await prisma.repo.findFirst({
-      where: { id: repoId, organizationId },
-      select: { id: true },
-    });
-    if (!repo) throw new Error("Repo not found");
+    await this.assertRepoExists(repoId, organizationId);
     const runtimeId = runtimeInstanceId ?? sessionRouter.getRuntimeForRepo(repoId)?.id;
     if (!runtimeId) throw new Error("No connected runtime available for this repo");
     return sessionRouter.listBranches(runtimeId, repoId);
+  }
+
+  async getLinkedCheckoutStatus(
+    sessionGroupId: string,
+    repoId: string,
+    organizationId: string,
+    userId: string,
+  ) {
+    await this.assertRepoExists(repoId, organizationId);
+    const runtimeId = await this.resolveLinkedCheckoutRuntime(
+      sessionGroupId,
+      repoId,
+      organizationId,
+      userId,
+    );
+    return sessionRouter.getLinkedCheckoutStatus(runtimeId, repoId);
+  }
+
+  async linkLinkedCheckoutRepo(
+    sessionGroupId: string,
+    repoId: string,
+    localPath: string,
+    organizationId: string,
+    userId: string,
+  ) {
+    await this.assertRepoExists(repoId, organizationId);
+    const runtimeId = await this.resolveLinkedCheckoutRuntime(
+      sessionGroupId,
+      repoId,
+      organizationId,
+      userId,
+    );
+    return sessionRouter.linkLinkedCheckoutRepo(runtimeId, repoId, localPath);
+  }
+
+  async syncLinkedCheckout(
+    sessionGroupId: string,
+    repoId: string,
+    branch: string,
+    organizationId: string,
+    userId: string,
+    options?: { commitSha?: string | null; autoSyncEnabled?: boolean },
+  ) {
+    await this.assertRepoExists(repoId, organizationId);
+    const runtimeId = await this.resolveLinkedCheckoutRuntime(
+      sessionGroupId,
+      repoId,
+      organizationId,
+      userId,
+    );
+    return sessionRouter.syncLinkedCheckout(runtimeId, {
+      repoId,
+      sessionGroupId,
+      branch,
+      commitSha: options?.commitSha,
+      autoSyncEnabled: options?.autoSyncEnabled,
+    });
+  }
+
+  async restoreLinkedCheckout(
+    sessionGroupId: string,
+    repoId: string,
+    organizationId: string,
+    userId: string,
+  ) {
+    await this.assertRepoExists(repoId, organizationId);
+    const runtimeId = await this.resolveLinkedCheckoutRuntime(
+      sessionGroupId,
+      repoId,
+      organizationId,
+      userId,
+    );
+    return sessionRouter.restoreLinkedCheckout(runtimeId, repoId);
+  }
+
+  async setLinkedCheckoutAutoSync(
+    sessionGroupId: string,
+    repoId: string,
+    enabled: boolean,
+    organizationId: string,
+    userId: string,
+  ) {
+    await this.assertRepoExists(repoId, organizationId);
+    const runtimeId = await this.resolveLinkedCheckoutRuntime(
+      sessionGroupId,
+      repoId,
+      organizationId,
+      userId,
+    );
+    return sessionRouter.setLinkedCheckoutAutoSync(runtimeId, repoId, enabled);
   }
 
   /** List files in a session group's working directory by delegating to the bridge runtime. */

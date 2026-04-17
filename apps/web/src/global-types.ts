@@ -11,7 +11,12 @@ declare global {
   }
 
   type DesktopBridgeConnectionStatus = "connecting" | "connected" | "disconnected";
-  type DesktopGitHookState = "not_installed" | "trace_managed" | "custom_present" | "chained" | "error";
+  type DesktopGitHookState =
+    | "not_installed"
+    | "trace_managed"
+    | "custom_present"
+    | "chained"
+    | "error";
 
   type DesktopRepoConfig = {
     path: string;
@@ -90,15 +95,6 @@ declare global {
     saveRepoPath: (repoId: string, localPath: string) => Promise<DesktopRepoConfig>;
     getRepoPath: (repoId: string) => Promise<string | null>;
     getRepoConfig: (repoId: string) => Promise<DesktopRepoConfig | null>;
-    getLinkedCheckoutStatus: (repoId: string) => Promise<DesktopLinkedCheckoutStatus>;
-    syncLinkedCheckout: (
-      input: DesktopLinkedCheckoutSyncInput,
-    ) => Promise<DesktopLinkedCheckoutActionResult>;
-    restoreLinkedCheckout: (repoId: string) => Promise<DesktopLinkedCheckoutActionResult>;
-    setLinkedCheckoutAutoSync: (
-      repoId: string,
-      enabled: boolean,
-    ) => Promise<DesktopLinkedCheckoutActionResult>;
     setRepoGitHooksEnabled: (
       repoId: string,
       enabled: boolean,
