@@ -1,9 +1,9 @@
 import path from "path";
-import os from "os";
+import { fileURLToPath } from "url";
 import {
   createDbctlClient,
-  createDefaultDbctlRoot,
   createDefaultDbctlSocketPath,
+  ensureDbctlDaemonRunning,
 } from "@trace/dbctl-core";
 import type { DbctlRequest, DbctlRuntimeKind } from "@trace/dbctl-protocol";
 
@@ -29,6 +29,15 @@ async function main(): Promise<void> {
 
   const socketPath =
     process.env.TRACE_DBCTL_SOCKET_PATH ?? createDefaultDbctlSocketPath(runtime);
+  const daemonScriptPath = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "../../dbctl-daemon/dist/index.js",
+  );
+  await ensureDbctlDaemonRunning({
+    daemonScriptPath,
+    runtime,
+    socketPath,
+  });
   const client = createDbctlClient(socketPath);
 
   let request: DbctlRequest;

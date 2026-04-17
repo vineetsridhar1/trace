@@ -23,7 +23,7 @@ export async function runDbctlDaemon(options: RunDbctlDaemonOptions): Promise<vo
   const service = new DbctlService({ rootDir: options.rootDir });
 
   await new Promise<void>((resolve, reject) => {
-    const server = net.createServer((socket) => {
+    const server = net.createServer({ allowHalfOpen: true }, (socket) => {
       let buffer = "";
       socket.setEncoding("utf-8");
       socket.on("data", (chunk) => {
@@ -44,7 +44,12 @@ export async function runDbctlDaemon(options: RunDbctlDaemonOptions): Promise<vo
             error: error instanceof Error ? error.message : String(error),
           };
         }
-        socket.end(JSON.stringify(response));
+        if (!socket.destroyed && socket.writable) {
+          socket.end(JSON.stringify(response));
+        }
+      });
+      socket.on("error", () => {
+        // The client may disconnect mid-request; treat that as a dropped request.
       });
     });
 

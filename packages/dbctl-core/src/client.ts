@@ -25,6 +25,51 @@ export async function waitForDbctlSocket(socketPath: string, timeoutMs = 10_000)
   throw new Error(`Timed out waiting for dbctl socket at ${socketPath}`);
 }
 
+async function probeDbctlSocket(socketPath: string): Promise<boolean> {
+  if (!fs.existsSync(socketPath)) {
+    return false;
+  }
+
+  return new Promise((resolve) => {
+    const socket = net.createConnection(socketPath);
+    let buffer = "";
+    let settled = false;
+
+    const finish = (healthy: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(healthy);
+    };
+
+    socket.setEncoding("utf-8");
+    socket.on("connect", () => {
+      socket.end(
+        JSON.stringify({
+          kind: "status",
+          worktreePath: "__dbctl_healthcheck__",
+        } satisfies DbctlRequest),
+      );
+    });
+    socket.on("data", (chunk) => {
+      buffer += chunk;
+    });
+    socket.on("end", () => {
+      if (!buffer.trim()) {
+        finish(false);
+        return;
+      }
+      try {
+        finish(isDbctlResponse(JSON.parse(buffer)));
+      } catch {
+        finish(false);
+      }
+    });
+    socket.on("error", () => {
+      finish(false);
+    });
+  });
+}
+
 export async function ensureDbctlDaemonRunning(options: {
   daemonScriptPath: string;
   runtime: DbctlRuntimeKind;
@@ -32,9 +77,10 @@ export async function ensureDbctlDaemonRunning(options: {
   rootDir?: string;
 }): Promise<string> {
   const socketPath = options.socketPath ?? createDefaultDbctlSocketPath(options.runtime);
-  if (fs.existsSync(socketPath)) {
+  if (await probeDbctlSocket(socketPath)) {
     return socketPath;
   }
+  fs.rmSync(socketPath, { force: true });
 
   const rootDir = options.rootDir ?? createDefaultDbctlRoot(options.runtime);
   fs.mkdirSync(path.dirname(socketPath), { recursive: true });
@@ -76,6 +122,10 @@ export function createDbctlClient(socketPath: string) {
         });
         socket.on("end", () => {
           try {
+            if (!buffer.trim()) {
+              reject(new Error("dbctl daemon closed the socket without returning a response"));
+              return;
+            }
             const response = JSON.parse(buffer);
             if (!isDbctlResponse(response)) {
               reject(new Error("Invalid dbctl response"));

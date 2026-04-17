@@ -77,6 +77,10 @@ export function FileExplorer({
     });
   }, []);
 
+  const handleCollapseAll = useCallback(() => {
+    setExpandedPaths(new Set());
+  }, []);
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -114,13 +118,25 @@ export function FileExplorer({
         <span className="text-[11px] font-semibold uppercase tracking-wider text-[#bbbbbb]">
           Explorer
         </span>
-        <button
-          onClick={fetchFiles}
-          className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground"
-          title="Refresh"
-        >
-          <RefreshCw size={12} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleCollapseAll}
+            disabled={expandedPaths.size === 0}
+            className="rounded px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:cursor-default disabled:opacity-40"
+            title="Collapse all folders"
+          >
+            Collapse all
+          </button>
+          <button
+            type="button"
+            onClick={fetchFiles}
+            className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+            title="Refresh"
+          >
+            <RefreshCw size={12} />
+          </button>
+        </div>
       </div>
       <div className="native-scrollbar min-h-0 flex-1 overflow-y-auto py-0.5">
         {tree.map((node: FileTreeNode) => (

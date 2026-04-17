@@ -8,6 +8,77 @@ const execFileAsync = promisify(execFile);
 
 const REPOS_DIR = "/repos";
 const WORKSPACES_DIR = "/workspaces";
+const MIRRORED_ENV_FILES = [
+  ".env",
+  ".env.local",
+  ".env.development",
+  ".env.development.local",
+  ".env.test",
+  ".env.test.local",
+  ".env.production",
+  ".env.production.local",
+];
+const WORKTREE_SYNC_IGNORE = new Set([
+  ".git",
+  "dist",
+  "build",
+  ".next",
+  ".turbo",
+  ".cache",
+  "__pycache__",
+  ".venv",
+]);
+
+function syncRootEnvFiles(sourceRepoPath: string, targetPath: string): void {
+  for (const fileName of MIRRORED_ENV_FILES) {
+    const sourcePath = `${sourceRepoPath}/${fileName}`;
+    const destinationPath = `${targetPath}/${fileName}`;
+    if (!fs.existsSync(sourcePath) || fs.existsSync(destinationPath)) {
+      continue;
+    }
+    fs.copyFileSync(sourcePath, destinationPath);
+  }
+}
+
+function collectNodeModulesDirs(rootPath: string, currentPath = rootPath, acc: string[] = []): string[] {
+  for (const entry of fs.readdirSync(currentPath, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    if (WORKTREE_SYNC_IGNORE.has(entry.name)) continue;
+
+    const fullPath = `${currentPath}/${entry.name}`;
+    const relativePath = fullPath.slice(rootPath.length + 1);
+
+    if (entry.name === "node_modules") {
+      acc.push(relativePath);
+      continue;
+    }
+
+    collectNodeModulesDirs(rootPath, fullPath, acc);
+  }
+
+  return acc;
+}
+
+function symlinkDirectory(sourcePath: string, destinationPath: string): void {
+  fs.mkdirSync(destinationPath.slice(0, destinationPath.lastIndexOf("/")), { recursive: true });
+  fs.symlinkSync(sourcePath, destinationPath, process.platform === "win32" ? "junction" : "dir");
+}
+
+function syncWorkspaceDependencies(sourceRepoPath: string, targetPath: string): void {
+  for (const relativePath of collectNodeModulesDirs(sourceRepoPath)) {
+    const sourcePath = `${sourceRepoPath}/${relativePath}`;
+    const destinationPath = `${targetPath}/${relativePath}`;
+    if (!fs.existsSync(sourcePath) || fs.existsSync(destinationPath)) {
+      continue;
+    }
+    symlinkDirectory(sourcePath, destinationPath);
+  }
+}
+
+function syncWorktreeArtifacts(sourceRepoPath: string, targetPath: string): void {
+  syncRootEnvFiles(sourceRepoPath, targetPath);
+  syncWorkspaceDependencies(sourceRepoPath, targetPath);
+}
 
 /** Get the local path for a repo by ID. Returns undefined if not cloned yet. */
 export function getRepoPath(repoId: string): string | undefined {
@@ -73,6 +144,7 @@ export async function createWorktree({
 
   // If worktree already exists, reuse it
   if (fs.existsSync(worktreePath)) {
+    syncWorktreeArtifacts(repoPath, worktreePath);
     return { workdir: worktreePath, slug: worktreeSlug };
   }
 
@@ -104,6 +176,8 @@ export async function createWorktree({
   } else {
     await execFileAsync("git", ["worktree", "add", "-b", branchName, worktreePath, baseRef], { cwd: repoPath });
   }
+
+  syncWorktreeArtifacts(repoPath, worktreePath);
 
   return { workdir: worktreePath, slug: worktreeSlug };
 }

@@ -12,7 +12,7 @@ import type {
   SessionDatabaseInfo,
   SessionDatabaseStatus,
 } from "@trace/dbctl-protocol";
-import { detectDatabaseProject, hashProjectInputs } from "./detect.js";
+import { detectDatabaseProject, hashProjectInputs, type ResolvedCommand } from "./detect.js";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_PORT_START = 55432;
@@ -238,13 +238,12 @@ function createEnv(databaseName: string, port: number): Record<string, string> {
 }
 
 async function runCommand(
-  command: string,
-  args: string[],
-  cwd: string,
+  resolvedCommand: ResolvedCommand,
+  fallbackCwd: string,
   env: Record<string, string>,
 ): Promise<void> {
-  await execFileAsync(command, args, {
-    cwd,
+  await execFileAsync(resolvedCommand.command, resolvedCommand.args, {
+    cwd: resolvedCommand.cwd ?? fallbackCwd,
     env: { ...process.env, ...env },
     maxBuffer: 10 * 1024 * 1024,
   });
@@ -353,15 +352,13 @@ async function buildBaseIfNeeded(args: {
 
       const env = createEnv(args.databaseName, args.instancePort);
       await runCommand(
-        detected.migrationCommand.command,
-        detected.migrationCommand.args,
+        detected.migrationCommand,
         args.worktreePath,
         env,
       );
       if (detected.seedCommand) {
         await runCommand(
-          detected.seedCommand.command,
-          detected.seedCommand.args,
+          detected.seedCommand,
           args.worktreePath,
           env,
         );

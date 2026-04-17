@@ -21,6 +21,7 @@ const WALK_IGNORE = new Set([
 export interface ResolvedCommand {
   command: string;
   args: string[];
+  cwd?: string;
 }
 
 export interface DetectedDatabaseProject {
@@ -41,6 +42,44 @@ type PackageManifest = {
   devDependencies?: Record<string, string>;
   prisma?: { seed?: string };
 };
+
+const JS_LOCKFILES = [
+  "pnpm-lock.yaml",
+  "package-lock.json",
+  "yarn.lock",
+  "bun.lock",
+  "bun.lockb",
+  "pnpm-workspace.yaml",
+] as const;
+const MAKEFILE_NAMES = ["Makefile", "makefile", "GNUmakefile"] as const;
+const MIGRATION_SCRIPT_NAMES = [
+  "db:migrate",
+  "migrate",
+  "migrate:db",
+  "database:migrate",
+  "db:prepare",
+] as const;
+const SEED_SCRIPT_NAMES = [
+  "db:seed",
+  "seed:db",
+  "seed",
+  "database:seed",
+] as const;
+const MIGRATION_TARGET_NAMES = [
+  "db-migrate",
+  "db_migrate",
+  "migrate-db",
+  "migrate_db",
+  "migrate",
+  "db-prepare",
+] as const;
+const SEED_TARGET_NAMES = [
+  "db-seed",
+  "db_seed",
+  "seed-db",
+  "seed_db",
+  "seed",
+] as const;
 
 function fileExists(targetPath: string): boolean {
   try {
@@ -73,6 +112,100 @@ function findFirstExisting(root: string, relativePaths: string[]): string | null
   for (const relativePath of relativePaths) {
     const fullPath = path.join(root, relativePath);
     if (fileExists(fullPath)) return fullPath;
+  }
+  return null;
+}
+
+function findFilesByName(root: string, fileNames: readonly string[]): string[] {
+  const wanted = new Set(fileNames);
+  const results: string[] = [];
+
+  function walk(currentPath: string): void {
+    const entries = fs.readdirSync(currentPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(currentPath, entry.name);
+      const relative = path.relative(root, fullPath);
+      if ([...WALK_IGNORE].some((ignored) => relative === ignored || relative.startsWith(`${ignored}${path.sep}`))) {
+        continue;
+      }
+      if (entry.isDirectory()) {
+        walk(fullPath);
+        continue;
+      }
+      if (entry.isFile() && wanted.has(entry.name)) {
+        results.push(relative);
+      }
+    }
+  }
+
+  walk(root);
+  return results.sort((left, right) => {
+    const depthDelta = left.split(path.sep).length - right.split(path.sep).length;
+    return depthDelta === 0 ? left.localeCompare(right) : depthDelta;
+  });
+}
+
+function findNearestAncestorFile(
+  root: string,
+  startDir: string,
+  fileNames: readonly string[],
+): string | null {
+  let current = startDir;
+  while (true) {
+    for (const fileName of fileNames) {
+      const candidate = path.join(current, fileName);
+      if (fileExists(candidate)) {
+        return candidate;
+      }
+    }
+    if (current === root) return null;
+    const parent = path.dirname(current);
+    if (parent === current || !parent.startsWith(root)) return null;
+    current = parent;
+  }
+}
+
+function findNearestPackageRoot(root: string, startDir: string): string | null {
+  const manifestPath = findNearestAncestorFile(root, startDir, ["package.json"]);
+  return manifestPath ? path.dirname(manifestPath) : null;
+}
+
+function findAncestorLockfiles(root: string, startDir: string): string[] {
+  const results: string[] = [];
+  let current = startDir;
+  while (true) {
+    for (const fileName of JS_LOCKFILES) {
+      const candidate = path.join(current, fileName);
+      if (fileExists(candidate)) {
+        results.push(path.relative(root, candidate));
+      }
+    }
+    if (current === root) break;
+    const parent = path.dirname(current);
+    if (parent === current || !parent.startsWith(root)) break;
+    current = parent;
+  }
+  return [...new Set(results)].sort();
+}
+
+function readMakeTargets(root: string): Set<string> {
+  const makefilePath = findFirstExisting(root, [...MAKEFILE_NAMES]);
+  if (!makefilePath) return new Set();
+  const text = readText(makefilePath) ?? "";
+  const targets = new Set<string>();
+  for (const line of text.split("\n")) {
+    const match = line.match(/^([A-Za-z0-9_.-]+)\s*:/);
+    if (!match) continue;
+    if (match[1].includes("%")) continue;
+    targets.add(match[1]);
+  }
+  return targets;
+}
+
+function selectMakeTarget(root: string, names: readonly string[]): string | null {
+  const targets = readMakeTargets(root);
+  for (const name of names) {
+    if (targets.has(name)) return name;
   }
   return null;
 }
@@ -116,11 +249,17 @@ function readPostgresVersion(root: string): string {
 }
 
 function pickJsPackageManager(root: string): "pnpm" | "npm" | "yarn" | "bun" {
-  if (fileExists(path.join(root, "pnpm-lock.yaml"))) return "pnpm";
-  if (fileExists(path.join(root, "package-lock.json"))) return "npm";
-  if (fileExists(path.join(root, "yarn.lock"))) return "yarn";
-  if (fileExists(path.join(root, "bun.lockb")) || fileExists(path.join(root, "bun.lock"))) {
-    return "bun";
+  let current = root;
+  while (true) {
+    if (fileExists(path.join(current, "pnpm-lock.yaml"))) return "pnpm";
+    if (fileExists(path.join(current, "package-lock.json"))) return "npm";
+    if (fileExists(path.join(current, "yarn.lock"))) return "yarn";
+    if (fileExists(path.join(current, "bun.lockb")) || fileExists(path.join(current, "bun.lock"))) {
+      return "bun";
+    }
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
   }
   return "npm";
 }
@@ -129,13 +268,13 @@ function createJsRunCommand(root: string, scriptName: string): ResolvedCommand {
   const manager = pickJsPackageManager(root);
   switch (manager) {
     case "pnpm":
-      return { command: "pnpm", args: ["run", scriptName] };
+      return { command: "pnpm", args: ["run", scriptName], cwd: root };
     case "yarn":
-      return { command: "yarn", args: [scriptName] };
+      return { command: "yarn", args: [scriptName], cwd: root };
     case "bun":
-      return { command: "bun", args: ["run", scriptName] };
+      return { command: "bun", args: ["run", scriptName], cwd: root };
     default:
-      return { command: "npm", args: ["run", scriptName] };
+      return { command: "npm", args: ["run", scriptName], cwd: root };
   }
 }
 
@@ -143,27 +282,27 @@ function createJsExecCommand(root: string, args: string[]): ResolvedCommand {
   const manager = pickJsPackageManager(root);
   switch (manager) {
     case "pnpm":
-      return { command: "pnpm", args: ["exec", ...args] };
+      return { command: "pnpm", args: ["exec", ...args], cwd: root };
     case "yarn":
-      return { command: "yarn", args: ["exec", ...args] };
+      return { command: "yarn", args: ["exec", ...args], cwd: root };
     case "bun":
-      return { command: "bun", args: ["x", ...args] };
+      return { command: "bun", args: ["x", ...args], cwd: root };
     default:
-      return { command: "npx", args };
+      return { command: "npx", args, cwd: root };
   }
 }
 
 function createPythonCommand(root: string, args: string[]): ResolvedCommand {
   if (fileExists(path.join(root, "uv.lock"))) {
-    return { command: "uv", args: ["run", ...args] };
+    return { command: "uv", args: ["run", ...args], cwd: root };
   }
   if (fileExists(path.join(root, "poetry.lock"))) {
-    return { command: "poetry", args: ["run", ...args] };
+    return { command: "poetry", args: ["run", ...args], cwd: root };
   }
   if (fileExists(path.join(root, ".venv", "bin", "python"))) {
-    return { command: path.join(root, ".venv", "bin", "python"), args };
+    return { command: path.join(root, ".venv", "bin", "python"), args, cwd: root };
   }
-  return { command: "python3", args };
+  return { command: "python3", args, cwd: root };
 }
 
 function createRubyCommand(args: string[]): ResolvedCommand {
@@ -172,16 +311,16 @@ function createRubyCommand(args: string[]): ResolvedCommand {
 
 function createJavaCommand(root: string, gradleTask: string, mavenGoal: string): ResolvedCommand | null {
   if (fileExists(path.join(root, "gradlew"))) {
-    return { command: "./gradlew", args: [gradleTask] };
+    return { command: "./gradlew", args: [gradleTask], cwd: root };
   }
   if (fileExists(path.join(root, "mvnw"))) {
-    return { command: "./mvnw", args: [mavenGoal] };
+    return { command: "./mvnw", args: [mavenGoal], cwd: root };
   }
   if (fileExists(path.join(root, "build.gradle")) || fileExists(path.join(root, "build.gradle.kts"))) {
-    return { command: "gradle", args: [gradleTask] };
+    return { command: "gradle", args: [gradleTask], cwd: root };
   }
   if (fileExists(path.join(root, "pom.xml"))) {
-    return { command: "mvn", args: [mavenGoal] };
+    return { command: "mvn", args: [mavenGoal], cwd: root };
   }
   return null;
 }
@@ -190,12 +329,21 @@ function createDotnetEfCommand(root: string, projectFile: string): ResolvedComma
   return {
     command: "dotnet",
     args: ["ef", "database", "update", "--project", path.relative(root, projectFile)],
+    cwd: root,
+  };
+}
+
+function createMakeCommand(root: string, target: string): ResolvedCommand {
+  return {
+    command: "make",
+    args: [target],
+    cwd: root,
   };
 }
 
 function selectScript(
   manifest: PackageManifest | null,
-  names: string[],
+  names: readonly string[],
 ): string | null {
   for (const name of names) {
     if (manifest?.scripts?.[name]) return name;
@@ -203,119 +351,229 @@ function selectScript(
   return null;
 }
 
+function selectScriptByCommand(
+  manifest: PackageManifest | null,
+  names: readonly string[],
+  commandPatterns: RegExp[],
+): string | null {
+  const exact = selectScript(manifest, names);
+  if (exact) return exact;
+
+  for (const [name, script] of Object.entries(manifest?.scripts ?? {})) {
+    if (!/(db|migrat|seed|drizzle|prisma|sequelize)/i.test(name)) continue;
+    if (commandPatterns.some((pattern) => pattern.test(script))) {
+      return name;
+    }
+  }
+  return null;
+}
+
+function relativePathsFromAbsolute(root: string, absolutePaths: string[]): string[] {
+  return [...new Set(
+    absolutePaths
+      .filter((absolutePath) => absolutePath.startsWith(root) && fileExists(absolutePath))
+      .map((absolutePath) => path.relative(root, absolutePath)),
+  )].sort();
+}
+
 function hasDependency(manifest: PackageManifest | null, name: string): boolean {
   return Boolean(manifest?.dependencies?.[name] || manifest?.devDependencies?.[name]);
 }
 
-function detectPrisma(root: string, manifest: PackageManifest | null): DetectedDatabaseProject | null {
-  const schemaPath = path.join(root, "prisma", "schema.prisma");
-  const schema = readText(schemaPath);
-  if (!schema || !/provider\s*=\s*"postgresql"/.test(schema)) return null;
+function detectPrisma(root: string, _manifest: PackageManifest | null): DetectedDatabaseProject | null {
+  const schemaPaths = findFilesByName(root, ["schema.prisma"]).filter((relativePath) =>
+    relativePath.endsWith(path.join("prisma", "schema.prisma")),
+  );
+  for (const schemaRelativePath of schemaPaths) {
+    const schemaPath = path.join(root, schemaRelativePath);
+    const schema = readText(schemaPath);
+    if (!schema || !/provider\s*=\s*"postgresql"/.test(schema)) continue;
 
-  const migrateScript = selectScript(manifest, ["db:migrate", "migrate"]);
-  const seedScript = selectScript(manifest, ["db:seed", "seed:db", "seed"]);
-  const migrationCommand = migrateScript
-    ? createJsRunCommand(root, migrateScript)
-    : createJsExecCommand(root, ["prisma", "migrate", "deploy"]);
-  const seedCommand = seedScript
-    ? createJsRunCommand(root, seedScript)
-    : manifest?.prisma?.seed
-      ? createJsExecCommand(root, ["prisma", "db", "seed"])
-      : null;
+    const commandRoot = findNearestPackageRoot(root, path.dirname(schemaPath)) ?? root;
+    const commandManifest = readJson<PackageManifest>(path.join(commandRoot, "package.json"));
+    const migrateScript = selectScriptByCommand(
+      commandManifest,
+      MIGRATION_SCRIPT_NAMES,
+      [/prisma\s+migrate/i],
+    );
+    const seedScript = selectScriptByCommand(
+      commandManifest,
+      SEED_SCRIPT_NAMES,
+      [/prisma\s+db\s+seed/i, /prisma.*seed/i],
+    );
+    const makeMigrationTarget = selectMakeTarget(commandRoot, MIGRATION_TARGET_NAMES);
+    const makeSeedTarget = selectMakeTarget(commandRoot, SEED_TARGET_NAMES);
+    const migrationCommand = migrateScript
+      ? createJsRunCommand(commandRoot, migrateScript)
+      : makeMigrationTarget
+        ? createMakeCommand(commandRoot, makeMigrationTarget)
+        : createJsExecCommand(commandRoot, ["prisma", "migrate", "deploy"]);
+    const seedCommand = seedScript
+      ? createJsRunCommand(commandRoot, seedScript)
+      : makeSeedTarget
+        ? createMakeCommand(commandRoot, makeSeedTarget)
+        : commandManifest?.prisma?.seed
+          ? createJsExecCommand(commandRoot, ["prisma", "db", "seed"])
+          : null;
 
-  return {
-    supported: true,
-    framework: "prisma",
-    projectRoot: root,
-    migrationCommand,
-    seedCommand,
-    fingerprintPaths: listMatchingFiles(root, ["package.json", "pnpm-lock.yaml", "package-lock.json", "yarn.lock", "bun.lock", "bun.lockb", "prisma/schema.prisma", "prisma/migrations"]),
-    baselineSeedPaths: listMatchingFiles(root, ["package.json", "prisma/seed.ts", "prisma/seed.js", "prisma/seed.mjs", "prisma/seed.cjs"]),
-    postgresVersion: readPostgresVersion(root),
-  };
+    return {
+      supported: true,
+      framework: "prisma",
+      projectRoot: root,
+      migrationCommand,
+      seedCommand,
+      fingerprintPaths: listMatchingFiles(root, [
+        ...relativePathsFromAbsolute(root, [path.join(commandRoot, "package.json")]),
+        ...findAncestorLockfiles(root, commandRoot),
+        schemaRelativePath,
+        path.join(path.dirname(schemaRelativePath), "migrations"),
+      ]),
+      baselineSeedPaths: listMatchingFiles(root, [
+        ...relativePathsFromAbsolute(root, [path.join(commandRoot, "package.json")]),
+        path.join(path.dirname(schemaRelativePath), "seed.ts"),
+        path.join(path.dirname(schemaRelativePath), "seed.js"),
+        path.join(path.dirname(schemaRelativePath), "seed.mjs"),
+        path.join(path.dirname(schemaRelativePath), "seed.cjs"),
+      ]),
+      postgresVersion: readPostgresVersion(root),
+    };
+  }
+  return null;
 }
 
-function detectDrizzle(root: string, manifest: PackageManifest | null): DetectedDatabaseProject | null {
-  const configPath = findFirstExisting(root, [
+function detectDrizzle(root: string, _manifest: PackageManifest | null): DetectedDatabaseProject | null {
+  const configPaths = findFilesByName(root, [
     "drizzle.config.ts",
     "drizzle.config.js",
     "drizzle.config.mts",
     "drizzle.config.cts",
   ]);
-  if (!configPath) return null;
+  if (configPaths.length === 0) return null;
 
-  const migrateScript = selectScript(manifest, ["db:migrate", "migrate"]);
-  const seedScript = selectScript(manifest, ["db:seed", "seed:db", "seed"]);
+  for (const configRelativePath of configPaths) {
+    const configDir = path.dirname(path.join(root, configRelativePath));
+    const commandRoot = findNearestPackageRoot(root, configDir) ?? configDir;
+    const commandManifest = readJson<PackageManifest>(path.join(commandRoot, "package.json"));
+    const migrateScript = selectScriptByCommand(
+      commandManifest,
+      MIGRATION_SCRIPT_NAMES,
+      [/drizzle-kit\s+migrate/i, /turbo\s+run\s+db:migrate/i],
+    );
+    const seedScript = selectScriptByCommand(
+      commandManifest,
+      SEED_SCRIPT_NAMES,
+      [/db:seed/i, /seed/i],
+    );
+    const makeMigrationTarget = selectMakeTarget(commandRoot, MIGRATION_TARGET_NAMES);
+    const makeSeedTarget = selectMakeTarget(commandRoot, SEED_TARGET_NAMES);
 
-  return {
-    supported: true,
-    framework: "drizzle",
-    projectRoot: root,
-    migrationCommand: migrateScript
-      ? createJsRunCommand(root, migrateScript)
-      : createJsExecCommand(root, ["drizzle-kit", "migrate"]),
-    seedCommand: seedScript ? createJsRunCommand(root, seedScript) : null,
-    fingerprintPaths: listMatchingFiles(root, [
-      path.relative(root, configPath),
-      "drizzle",
-      "package.json",
-      "pnpm-lock.yaml",
-      "package-lock.json",
-      "yarn.lock",
-      "bun.lock",
-      "bun.lockb",
-    ]),
-    baselineSeedPaths: listMatchingFiles(root, ["package.json", "scripts", "db/seed"]),
-    postgresVersion: readPostgresVersion(root),
-  };
+    return {
+      supported: true,
+      framework: "drizzle",
+      projectRoot: root,
+      migrationCommand: migrateScript
+        ? createJsRunCommand(commandRoot, migrateScript)
+        : makeMigrationTarget
+          ? createMakeCommand(commandRoot, makeMigrationTarget)
+          : createJsExecCommand(commandRoot, ["drizzle-kit", "migrate"]),
+      seedCommand: seedScript
+        ? createJsRunCommand(commandRoot, seedScript)
+        : makeSeedTarget
+          ? createMakeCommand(commandRoot, makeSeedTarget)
+          : null,
+      fingerprintPaths: listMatchingFiles(root, [
+        configRelativePath,
+        "drizzle",
+        path.join(path.dirname(configRelativePath), "drizzle"),
+        ...relativePathsFromAbsolute(root, [path.join(commandRoot, "package.json")]),
+        ...findAncestorLockfiles(root, commandRoot),
+      ]),
+      baselineSeedPaths: listMatchingFiles(root, [
+        ...relativePathsFromAbsolute(root, [path.join(commandRoot, "package.json")]),
+        "scripts",
+        "db/seed",
+        path.join(path.relative(root, commandRoot), "scripts"),
+        path.join(path.relative(root, commandRoot), "db/seed"),
+      ]),
+      postgresVersion: readPostgresVersion(root),
+    };
+  }
+
+  return null;
 }
 
 function detectSequelize(root: string, manifest: PackageManifest | null): DetectedDatabaseProject | null {
-  const hasSequelize =
-    hasDependency(manifest, "sequelize") || hasDependency(manifest, "sequelize-cli");
-  const configPath = findFirstExisting(root, [
+  const configPaths = findFilesByName(root, [
     ".sequelizerc",
     "config/config.js",
     "config/config.cjs",
     "config/config.ts",
     "config/config.json",
   ]);
-  if (!hasSequelize && !configPath) return null;
-
-  const configText = configPath ? readText(configPath) ?? "" : JSON.stringify(manifest ?? {});
-  if (!/postgres|postgresql|pg/.test(configText) && !hasDependency(manifest, "pg")) {
-    return null;
-  }
-
-  const migrateScript = selectScript(manifest, ["db:migrate", "migrate"]);
-  const seedScript = selectScript(manifest, ["db:seed", "seed:db", "seed"]);
-
-  return {
-    supported: true,
-    framework: "sequelize",
-    projectRoot: root,
-    migrationCommand: migrateScript
-      ? createJsRunCommand(root, migrateScript)
-      : createJsExecCommand(root, ["sequelize-cli", "db:migrate"]),
-    seedCommand: seedScript
-      ? createJsRunCommand(root, seedScript)
-      : fileExists(path.join(root, "seeders"))
-        ? createJsExecCommand(root, ["sequelize-cli", "db:seed:all"])
-        : null,
-    fingerprintPaths: listMatchingFiles(root, [
-      "package.json",
-      "pnpm-lock.yaml",
-      "package-lock.json",
-      "yarn.lock",
-      "bun.lock",
-      "bun.lockb",
-      "migrations",
-      "config",
+  const packageJsonPaths = findFilesByName(root, ["package.json"]);
+  for (const packageJsonRelativePath of packageJsonPaths) {
+    const commandRoot = path.dirname(path.join(root, packageJsonRelativePath));
+    const commandManifest = readJson<PackageManifest>(path.join(root, packageJsonRelativePath));
+    const hasSequelize =
+      hasDependency(commandManifest, "sequelize") || hasDependency(commandManifest, "sequelize-cli");
+    const configPath = findFirstExisting(commandRoot, [
       ".sequelizerc",
-    ]),
-    baselineSeedPaths: listMatchingFiles(root, ["package.json", "seeders"]),
-    postgresVersion: readPostgresVersion(root),
-  };
+      "config/config.js",
+      "config/config.cjs",
+      "config/config.ts",
+      "config/config.json",
+    ]);
+    if (!hasSequelize && !configPath && configPaths.length === 0) continue;
+
+    const configText = configPath ? readText(configPath) ?? "" : JSON.stringify(commandManifest ?? {});
+    if (!/postgres|postgresql|pg/.test(configText) && !hasDependency(commandManifest, "pg")) {
+      continue;
+    }
+
+    const migrateScript = selectScriptByCommand(
+      commandManifest,
+      MIGRATION_SCRIPT_NAMES,
+      [/sequelize-cli\s+db:migrate/i],
+    );
+    const seedScript = selectScriptByCommand(
+      commandManifest,
+      SEED_SCRIPT_NAMES,
+      [/sequelize-cli\s+db:seed:all/i, /seed/i],
+    );
+    const makeMigrationTarget = selectMakeTarget(commandRoot, MIGRATION_TARGET_NAMES);
+    const makeSeedTarget = selectMakeTarget(commandRoot, SEED_TARGET_NAMES);
+
+    return {
+      supported: true,
+      framework: "sequelize",
+      projectRoot: root,
+      migrationCommand: migrateScript
+        ? createJsRunCommand(commandRoot, migrateScript)
+        : makeMigrationTarget
+          ? createMakeCommand(commandRoot, makeMigrationTarget)
+          : createJsExecCommand(commandRoot, ["sequelize-cli", "db:migrate"]),
+      seedCommand: seedScript
+        ? createJsRunCommand(commandRoot, seedScript)
+        : makeSeedTarget
+          ? createMakeCommand(commandRoot, makeSeedTarget)
+          : fileExists(path.join(commandRoot, "seeders"))
+            ? createJsExecCommand(commandRoot, ["sequelize-cli", "db:seed:all"])
+            : null,
+      fingerprintPaths: listMatchingFiles(root, [
+        packageJsonRelativePath,
+        ...findAncestorLockfiles(root, commandRoot),
+        path.join(path.relative(root, commandRoot), "migrations"),
+        path.join(path.relative(root, commandRoot), "config"),
+        path.join(path.relative(root, commandRoot), ".sequelizerc"),
+      ]),
+      baselineSeedPaths: listMatchingFiles(root, [
+        packageJsonRelativePath,
+        path.join(path.relative(root, commandRoot), "seeders"),
+      ]),
+      postgresVersion: readPostgresVersion(root),
+    };
+  }
+  return null;
 }
 
 function detectRails(root: string): DetectedDatabaseProject | null {
