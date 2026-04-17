@@ -14,7 +14,7 @@ architectural drift, and keeps the codebase maintainable at scale.
 ## Step 1: Gather Context
 
 1. Read `CLAUDE.md` at the project root to understand architecture rules and design principles
-2. Read `plan.md` at the project root (if it exists) to understand the intended implementation plan
+2. Read `PLAN.md` at the project root (if it exists) to understand the intended implementation plan
 3. Determine the current branch and base branch:
    ```
    git branch --show-current
@@ -32,7 +32,7 @@ architectural drift, and keeps the codebase maintainable at scale.
 
 ## Step 2: Review Against Plan
 
-If `plan.md` exists, evaluate:
+If `PLAN.md` exists, evaluate:
 
 - **Completeness**: Are all planned items implemented? Flag anything missing
 - **Scope creep**: Is there work done that wasn't in the plan? Flag additions that weren't planned
@@ -146,7 +146,7 @@ Call out 2-3 things the author did particularly well. Good reviews aren't only n
 
 ### Plan Alignment
 
-Summary of how well the implementation matches plan.md. Note any gaps or deviations.
+Summary of how well the implementation matches PLAN.md. Note any gaps or deviations.
 
 ### Architecture Alignment
 
@@ -156,7 +156,7 @@ Summary of how well the code follows CLAUDE.md principles. Note any drift.
 
 Only if the review reveals **drastic findings** that affect the project going forward:
 
-- **Update `plan.md`**: If the plan is missing steps that this PR revealed are necessary,
+- **Update `PLAN.md`**: If the plan is missing steps that this PR revealed are necessary,
   or if planned items turned out to be infeasible and the plan needs adjustment
 - **Update `CLAUDE.md`**: If the review uncovered a recurring pattern that should become
   a project rule, or if an existing rule is unclear and led to a violation
