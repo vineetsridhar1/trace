@@ -11,7 +11,7 @@ import { prisma } from "../lib/db.js";
  * sessions with flaky runtimes trigger endless summary refreshes that produce
  * the same output and waste LLM calls.
  */
-const IGNORED_PAYLOAD_TYPES = ["connection_lost", "connection_restored"];
+const IGNORED_PAYLOAD_TYPES = ["connection_lost", "connection_restored", "database_status"];
 
 function buildIgnoredEventFilters(): Prisma.EventWhereInput[] {
   return IGNORED_PAYLOAD_TYPES.map((type) => ({

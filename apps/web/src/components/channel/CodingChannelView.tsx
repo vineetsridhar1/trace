@@ -26,6 +26,16 @@ const SESSION_GROUPS_QUERY = gql`
       archivedAt
       setupStatus
       setupError
+      database {
+        enabled
+        status
+        framework
+        databaseName
+        port
+        lastError
+        canReset
+        updatedAt
+      }
       channel {
         id
       }
@@ -52,6 +62,16 @@ const SESSION_GROUPS_QUERY = gql`
           canRetry
           canMove
           autoRetryable
+        }
+        database {
+          enabled
+          status
+          framework
+          databaseName
+          port
+          lastError
+          canReset
+          updatedAt
         }
         createdBy {
           id
@@ -87,10 +107,13 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
     if (result.data?.sessionGroups) {
       const groups = result.data.sessionGroups as Array<SessionGroup & { id: string }>;
       const flattenedSessions = groups.flatMap((group) => group.sessions ?? []);
+      const existingGroups = useEntityStore.getState().sessionGroups;
+      const existingSessions = useEntityStore.getState().sessions;
 
       upsertMany(
         "sessionGroups",
         groups.map((group) => ({
+          ...(existingGroups[group.id] ?? {}),
           ...group,
           // Cold-start approximation: server sorts by updatedAt, so use that
           // as the initial _sortTimestamp. Real-time events will refine this
@@ -100,7 +123,13 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
             ?? group.updatedAt,
         })) as Array<SessionGroupEntity & { id: string }>,
       );
-      upsertMany("sessions", flattenedSessions as Array<SessionEntity & { id: string }>);
+      upsertMany(
+        "sessions",
+        flattenedSessions.map((session) => ({
+          ...(existingSessions[session.id] ?? {}),
+          ...session,
+        })) as Array<SessionEntity & { id: string }>,
+      );
     }
 
     setLoading(false);

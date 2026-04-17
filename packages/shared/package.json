@@ -38,6 +38,9 @@
     "dev": "pnpm build && (tsc -b --watch & tsc -p tsconfig.cjs.json --watch & wait)",
     "lint": "tsc -b"
   },
+  "dependencies": {
+    "@trace/dbctl-protocol": "workspace:*"
+  },
   "peerDependencies": {
     "node-pty": "^1.1.0"
   },

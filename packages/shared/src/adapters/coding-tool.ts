@@ -133,6 +133,7 @@ export interface RunOptions {
   cwd: string;
   onOutput: OutputCallback;
   onComplete: () => void;
+  env?: Record<string, string>;
   interactionMode?: "code" | "plan" | "ask";
   model?: string;
   /** Tool-specific session ID for resuming (e.g. Claude Code's --resume flag) */

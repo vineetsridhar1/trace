@@ -117,7 +117,11 @@ function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEntity> | u
       ...(payload.agentStatus && { agentStatus: payload.agentStatus as AgentStatus }),
       ...(payload.sessionStatus && { sessionStatus: payload.sessionStatus as SessionStatus }),
       workdir: payload.workdir,
+      ...(payload.database && { database: payload.database as SessionEntity["database"] }),
     };
+  }
+  if (payload.type === "database_status" && payload.database) {
+    return { database: payload.database as SessionEntity["database"] };
   }
   // LLM-generated title update
   if (payload.type === "title_generated" && typeof payload.name === "string") {

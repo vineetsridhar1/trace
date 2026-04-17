@@ -2,13 +2,13 @@ import type WebSocket from "ws";
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import type { CloudMachineService } from "./cloud-machine-service.js";
-import type { BridgeTerminalCreateCommand, BridgeTerminalInputCommand, BridgeTerminalResizeCommand, BridgeTerminalDestroyCommand, BridgeListFilesCommand, BridgeReadFileCommand, BridgeBranchDiffCommand, BridgeFileAtRefCommand, BridgeBranchDiffFile, BridgeListSkillsCommand, BridgeSkillInfo } from "@trace/shared";
+import type { BridgeTerminalCreateCommand, BridgeTerminalInputCommand, BridgeTerminalResizeCommand, BridgeTerminalDestroyCommand, BridgeListFilesCommand, BridgeReadFileCommand, BridgeBranchDiffCommand, BridgeFileAtRefCommand, BridgeBranchDiffFile, BridgeListSkillsCommand, BridgeSkillInfo, BridgeDatabaseResetCommand } from "@trace/shared";
 import { prisma } from "./db.js";
 import { apiTokenService } from "../services/api-token.js";
 import { runtimeDebug } from "./runtime-debug.js";
 
 interface BaseSessionCommand {
-  type: "run" | "terminate" | "pause" | "resume" | "send" | "prepare" | "delete" | "list_branches" | "upgrade_workspace";
+  type: "run" | "terminate" | "pause" | "resume" | "send" | "prepare" | "delete" | "list_branches" | "upgrade_workspace" | "database_reset";
   sessionId: string;
   prompt?: string;
   [key: string]: unknown;
@@ -16,6 +16,7 @@ interface BaseSessionCommand {
 
 export type SessionCommand =
   | BaseSessionCommand
+  | BridgeDatabaseResetCommand
   | BridgeListFilesCommand
   | BridgeReadFileCommand
   | BridgeBranchDiffCommand

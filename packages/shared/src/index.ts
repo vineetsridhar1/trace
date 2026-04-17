@@ -1,4 +1,9 @@
 export type {
+  DbctlFramework,
+  SessionDatabaseInfo,
+  SessionDatabaseStatus,
+} from "@trace/dbctl-protocol";
+export type {
   CodingToolAdapter,
   OutputCallback,
   RunOptions,
@@ -27,6 +32,7 @@ export type {
   BridgePauseCommand,
   BridgeResumeCommand,
   BridgeDeleteCommand,
+  BridgeDatabaseResetCommand,
   BridgeListBranchesCommand,
   BridgeRuntimeHello,
   BridgeRuntimeHeartbeat,

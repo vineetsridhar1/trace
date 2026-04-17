@@ -38,6 +38,7 @@ export interface EventQueryOpts {
 const ORG_RELEVANT_OUTPUT_SUBTYPES = new Set([
   "workspace_ready",
   "workspace_failed",
+  "database_status",
   "title_generated",
   "question_pending",
   "plan_pending",
@@ -159,6 +160,7 @@ export class EventService {
     if (p.branch !== undefined) trimmed.branch = p.branch;
     if (p.workdir !== undefined) trimmed.workdir = p.workdir;
     if (p.connection !== undefined) trimmed.connection = p.connection;
+    if (p.database !== undefined) trimmed.database = p.database;
     if (p.newSessionId !== undefined) trimmed.newSessionId = p.newSessionId;
 
     // Git checkpoint metadata (keep id + sessionGroupId, drop file diffs)

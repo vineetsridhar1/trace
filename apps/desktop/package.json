@@ -4,13 +4,14 @@
   "version": "0.0.1",
   "main": "dist/main.js",
   "scripts": {
-    "dev": "pnpm --filter @trace/shared build && tsc -b && electron-forge start",
-    "build": "pnpm --filter @trace/shared build && tsc -b",
+    "dev": "pnpm --filter @trace/shared build && pnpm --filter @trace/dbctl-core build && pnpm --filter @trace/dbctl-daemon build && tsc -b && electron-forge start",
+    "build": "pnpm --filter @trace/shared build && pnpm --filter @trace/dbctl-core build && pnpm --filter @trace/dbctl-daemon build && tsc -b",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "lint": "tsc -b"
   },
   "dependencies": {
+    "@trace/dbctl-core": "workspace:*",
     "@trace/shared": "workspace:*",
     "node-pty": "^1.1.0",
     "ws": "^8.18.0"

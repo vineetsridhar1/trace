@@ -11,6 +11,7 @@ import type {
   CodingToolAdapter,
   GitCheckpointBridgePayload,
   GitCheckpointTrigger,
+  SessionDatabaseInfo,
   ToolOutput,
 } from "@trace/shared";
 import {
@@ -27,12 +28,32 @@ import {
   parseGitShowOutput,
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
+import { createDbctlClient, createDefaultDbctlSocketPath } from "@trace/dbctl-core";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { ensureRepo, createWorktree, removeWorktree, getRepoPath } from "./workspace.js";
 import { ensureToolReady } from "./tool-auth.js";
 import { TerminalManager } from "@trace/shared/adapters";
 
 const execFileAsync = promisify(execFile);
+
+function createDisabledDatabase(): SessionDatabaseInfo {
+  return {
+    enabled: false,
+    status: "disabled",
+    canReset: false,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function createFailedDatabase(error: string): SessionDatabaseInfo {
+  return {
+    enabled: true,
+    status: "failed",
+    lastError: error,
+    canReset: true,
+    updatedAt: new Date().toISOString(),
+  };
+}
 
 async function inspectGitCheckpoint(
   cwd: string,
@@ -82,6 +103,8 @@ export class ContainerBridge implements IBridgeClient {
   /** Max consecutive connection failures before the process exits, allowing the machine to stop. */
   private static MAX_RECONNECT_FAILURES = 20;
   private sessionWorkdirs = new Map<string, string>();
+  private databaseEnvByWorkdir = new Map<string, Record<string, string>>();
+  private databaseInfoByWorkdir = new Map<string, SessionDatabaseInfo>();
   /** Coalesces concurrent createWorktree calls for the same worktree key (sessionGroupId or sessionId) */
   private pendingWorktrees = new Map<string, Promise<{ workdir: string; slug: string }>>();
   /** Sessions running in read-only mode (no worktree, using bare repo path) */
@@ -287,6 +310,89 @@ export class ContainerBridge implements IBridgeClient {
     }
   }
 
+  private getDatabaseEnv(sessionId: string, cwd?: string): Record<string, string> | undefined {
+    const workdir = this.sessionWorkdirs.get(sessionId) ?? cwd;
+    return workdir ? this.databaseEnvByWorkdir.get(workdir) : undefined;
+  }
+
+  private setDatabaseState(
+    workdir: string,
+    database: SessionDatabaseInfo,
+    env?: Record<string, string>,
+  ): void {
+    this.databaseInfoByWorkdir.set(workdir, database);
+    if (database.status === "ready" && env) {
+      this.databaseEnvByWorkdir.set(workdir, env);
+      return;
+    }
+    this.databaseEnvByWorkdir.delete(workdir);
+  }
+
+  private async ensureManagedDatabase(options: {
+    workdir: string;
+    repoId: string;
+    repoRoot: string;
+  }): Promise<SessionDatabaseInfo> {
+    const client = createDbctlClient(
+      process.env.TRACE_DBCTL_SOCKET_PATH ?? createDefaultDbctlSocketPath("cloud"),
+    );
+    const response = await client.send({
+      kind: "ensure",
+      runtime: "cloud",
+      worktreePath: options.workdir,
+      repoId: options.repoId,
+      repoRoot: options.repoRoot,
+    });
+    if (!response.ok) {
+      throw new Error(response.error);
+    }
+    this.setDatabaseState(options.workdir, response.database, response.env);
+    return response.database;
+  }
+
+  private async resetManagedDatabase(sessionId: string): Promise<SessionDatabaseInfo> {
+    const workdir = this.sessionWorkdirs.get(sessionId);
+    if (!workdir) {
+      return createFailedDatabase("Workspace is not ready yet");
+    }
+
+    try {
+      const client = createDbctlClient(
+        process.env.TRACE_DBCTL_SOCKET_PATH ?? createDefaultDbctlSocketPath("cloud"),
+      );
+      const response = await client.send({
+        kind: "reset",
+        runtime: "cloud",
+        worktreePath: workdir,
+      });
+      if (!response.ok) {
+        throw new Error(response.error);
+      }
+      this.setDatabaseState(workdir, response.database, response.env);
+      return response.database;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const database = createFailedDatabase(message);
+      this.setDatabaseState(workdir, database);
+      return database;
+    }
+  }
+
+  private async destroyManagedDatabase(workdir: string): Promise<void> {
+    try {
+      const client = createDbctlClient(
+        process.env.TRACE_DBCTL_SOCKET_PATH ?? createDefaultDbctlSocketPath("cloud"),
+      );
+      await client.send({ kind: "destroy", worktreePath: workdir });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[container-bridge] failed to destroy managed database for ${workdir}:`, message);
+    } finally {
+      this.databaseEnvByWorkdir.delete(workdir);
+      this.databaseInfoByWorkdir.delete(workdir);
+    }
+  }
+
   private handleCommand(cmd: BridgeCommand): void {
     this.touchActivity();
     switch (cmd.type) {
@@ -336,7 +442,12 @@ export class ContainerBridge implements IBridgeClient {
               this.sessionWorkdirs.set(sessionId, workdir);
               this.readOnlySessions.add(sessionId);
               this.send({ type: "register_session", sessionId });
-              this.send({ type: "workspace_ready", sessionId, workdir });
+              this.send({
+                type: "workspace_ready",
+                sessionId,
+                workdir,
+                database: createDisabledDatabase(),
+              });
             } else {
               // Coalesce concurrent createWorktree calls for the same group
               const worktreeKey = slug ?? sessionGroupId ?? sessionId;
@@ -356,8 +467,26 @@ export class ContainerBridge implements IBridgeClient {
               }
               const { workdir, slug: worktreeSlug } = await worktreePromise;
               this.sessionWorkdirs.set(sessionId, workdir);
+              let database: SessionDatabaseInfo;
+              try {
+                database = await this.ensureManagedDatabase({
+                  workdir,
+                  repoId,
+                  repoRoot: getRepoPath(repoId) ?? workdir,
+                });
+              } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                database = createFailedDatabase(message);
+                this.setDatabaseState(workdir, database);
+              }
               this.send({ type: "register_session", sessionId });
-              this.send({ type: "workspace_ready", sessionId, workdir, slug: worktreeSlug });
+              this.send({
+                type: "workspace_ready",
+                sessionId,
+                workdir,
+                slug: worktreeSlug,
+                database,
+              });
             }
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
@@ -385,7 +514,25 @@ export class ContainerBridge implements IBridgeClient {
             });
             this.sessionWorkdirs.set(sessionId, workdir);
             this.readOnlySessions.delete(sessionId);
-            this.send({ type: "workspace_ready", sessionId, workdir, slug: worktreeSlug });
+            let database: SessionDatabaseInfo;
+            try {
+              database = await this.ensureManagedDatabase({
+                workdir,
+                repoId,
+                repoRoot: getRepoPath(repoId) ?? workdir,
+              });
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              database = createFailedDatabase(message);
+              this.setDatabaseState(workdir, database);
+            }
+            this.send({
+              type: "workspace_ready",
+              sessionId,
+              workdir,
+              slug: worktreeSlug,
+              database,
+            });
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             console.error(`[container-bridge] workspace upgrade failed for ${sessionId}:`, message);
@@ -418,6 +565,20 @@ export class ContainerBridge implements IBridgeClient {
         break;
       }
 
+      case "database_reset": {
+        void this.resetManagedDatabase(cmd.sessionId).then((database) => {
+          this.send({
+            type: "session_output",
+            sessionId: cmd.sessionId,
+            data: {
+              type: "database_status",
+              database,
+            },
+          });
+        });
+        break;
+      }
+
       case "delete": {
         const adapter = this.adapters.get(cmd.sessionId);
         if (adapter) {
@@ -431,9 +592,13 @@ export class ContainerBridge implements IBridgeClient {
         this.sessionRunSequence.delete(cmd.sessionId);
         const wasReadOnly = this.readOnlySessions.has(cmd.sessionId);
         this.readOnlySessions.delete(cmd.sessionId);
+        const workdir = this.sessionWorkdirs.get(cmd.sessionId) ?? cmd.workdir;
         this.sessionWorkdirs.delete(cmd.sessionId);
         this.pendingGitToolUses.delete(cmd.sessionId);
         this.terminalManager.destroyForSession(cmd.sessionId);
+        if (workdir && !wasReadOnly) {
+          void this.destroyManagedDatabase(workdir);
+        }
 
         // Clean up worktree for this session only — skip for read-only sessions (no worktree to remove)
         if (cmd.workdir && cmd.repoId && !wasReadOnly) {
@@ -517,7 +682,14 @@ export class ContainerBridge implements IBridgeClient {
         const { terminalId, sessionId, cols, rows, cwd } = cmd;
         const workdir = cwd || this.sessionWorkdirs.get(sessionId) || os.homedir();
         try {
-          this.terminalManager.create(terminalId, sessionId, workdir, cols, rows);
+          this.terminalManager.create(
+            terminalId,
+            sessionId,
+            workdir,
+            cols,
+            rows,
+            this.databaseEnvByWorkdir.get(workdir),
+          );
           this.send({ type: "terminal_ready", terminalId });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -580,6 +752,7 @@ export class ContainerBridge implements IBridgeClient {
     const priorPendingToolUseId = this.pendingInputToolUseIds.get(sessionId) ?? null;
     let hasForwardedOutput = false;
     let endedOnPending = false;
+    const env = this.getDatabaseEnv(sessionId, cwd);
 
     const runId = this.startRun(sessionId);
     adapter.abort();
@@ -665,6 +838,7 @@ export class ContainerBridge implements IBridgeClient {
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
       model,
       toolSessionId,
+      env,
     });
   }
 }

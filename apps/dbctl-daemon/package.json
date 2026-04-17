@@ -1,0 +1,19 @@
+{
+  "name": "@trace/dbctl-daemon",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "lint": "tsc -b"
+  },
+  "dependencies": {
+    "@trace/dbctl-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "typescript": "^5.7.0"
+  }
+}

@@ -35,6 +35,12 @@ export const SEND_SESSION_MESSAGE_MUTATION = gql`
   }
 `;
 
+export const RESET_SESSION_DATABASE_MUTATION = gql`
+  mutation ResetSessionDatabase($sessionId: ID!) {
+    resetSessionDatabase(sessionId: $sessionId)
+  }
+`;
+
 export const TERMINATE_SESSION_MUTATION = gql`
   mutation TerminateSession($id: ID!) {
     terminateSession(id: $id) {

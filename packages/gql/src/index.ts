@@ -24,6 +24,7 @@ export type {
   RepoResolvers,
   SessionResolvers,
   SessionConnectionResolvers,
+  SessionDatabaseResolvers,
   SessionEndpointsResolvers,
   SubscriptionResolvers,
   TerminalEndpointResolvers,

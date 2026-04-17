@@ -120,6 +120,7 @@ type PendingSessionCommand =
 type GroupWorkspaceStatePatch = {
   workdir?: string | null;
   connection?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | null;
+  database?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | null;
   prUrl?: string | null;
   worktreeDeleted?: boolean;
   repoId?: string | null;
@@ -150,6 +151,14 @@ function getIdleAgentStatus(agentStatus?: AgentStatus | null): AgentStatus {
 /** Cast connection data to Prisma-compatible JSON */
 function connJson(data: SessionConnectionData): Prisma.InputJsonValue {
   return data as unknown as Prisma.InputJsonValue;
+}
+
+function isDatabaseReadyForSetup(
+  database: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!database || typeof database.enabled !== "boolean") return true;
+  if (!database.enabled) return true;
+  return database.status === "ready" || database.status === "disabled";
 }
 
 function shortCommitSha(commitSha: string): string {
@@ -238,6 +247,7 @@ const SESSION_GROUP_SUMMARY_SELECT = {
   branch: true,
   workdir: true,
   connection: true,
+  database: true,
   prUrl: true,
   worktreeDeleted: true,
   archivedAt: true,
@@ -298,6 +308,7 @@ function serializeSession(session: {
   channelId?: string | null;
   sessionGroup: unknown;
   connection: Prisma.JsonValue | null;
+  database?: Prisma.JsonValue | null;
   worktreeDeleted?: boolean;
   lastUserMessageAt?: Date | null;
   createdAt: Date;
@@ -326,6 +337,7 @@ function serializeSession(session: {
         : null,
     sessionGroup: session.sessionGroup ?? null,
     connection: session.connection,
+    database: session.database ?? null,
     worktreeDeleted: session.worktreeDeleted ?? false,
     lastUserMessageAt: session.lastUserMessageAt ?? null,
     createdAt: session.createdAt,
@@ -1690,6 +1702,7 @@ export class SessionService {
     const extractedTitle = this.extractAndStripTitle(data);
     const extractedBranch = this.extractAndStripBranch(data);
     const pendingInfo = extractPendingInputInfo(data);
+    let outputData = data;
 
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
@@ -1702,12 +1715,28 @@ export class SessionService {
     });
     if (!session) return;
 
+    if (outputData.type === "database_status" && session.sessionGroupId) {
+      const rawDatabase =
+        outputData.database &&
+        typeof outputData.database === "object" &&
+        !Array.isArray(outputData.database)
+          ? (outputData.database as Record<string, unknown>)
+          : null;
+      const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
+        database: rawDatabase as Prisma.InputJsonValue | null,
+      });
+      outputData = {
+        ...outputData,
+        ...(sessionGroup ? { sessionGroup } : {}),
+      };
+    }
+
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_output",
-      payload: data as unknown as Prisma.InputJsonValue,
+      payload: outputData as unknown as Prisma.InputJsonValue,
       actorType: "system",
       actorId: "system",
     });
@@ -1725,7 +1754,8 @@ export class SessionService {
     // If this output contains a QuestionBlock or PlanBlock, transition to needs_input immediately.
     // This keeps the UI responsive even before session_complete is processed, and acts as a
     // safety net for adapters that exit or pause around pending-input tool calls.
-    const needsInput = pendingInfo !== null || hasQuestionBlock(data) || hasPlanBlock(data);
+    const needsInput =
+      pendingInfo !== null || hasQuestionBlock(outputData) || hasPlanBlock(outputData);
     if (session.agentStatus === "active" && needsInput) {
       // Use agentStatus in the where clause to make this idempotent — if two
       // recordOutput calls race, only the first one that sees "active" wins.
@@ -1767,7 +1797,7 @@ export class SessionService {
           userId: fullSession.createdById,
           sessionName: fullSession.name,
           sessionId,
-          data,
+          data: outputData,
         });
       }
     }
@@ -2268,7 +2298,13 @@ export class SessionService {
     return event;
   }
 
-  async workspaceReady(sessionId: string, workdir: string, branch?: string, slug?: string) {
+  async workspaceReady(
+    sessionId: string,
+    workdir: string,
+    branch?: string,
+    slug?: string,
+    database?: Record<string, unknown>,
+  ) {
     // Read and clear pendingRun atomically in a transaction to prevent double-delivery
     const [session, pendingRun] = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
@@ -2294,14 +2330,16 @@ export class SessionService {
       },
     );
     const setupScript = await this.getChannelSetupScript(session.channelId);
+    const runSetupScript = Boolean(setupScript) && isDatabaseReadyForSetup(database);
     const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
       workdir,
       connection: session.connection as Prisma.InputJsonValue,
+      ...(database ? { database: database as Prisma.InputJsonValue } : {}),
       worktreeDeleted: false,
       repoId: session.repoId ?? null,
       ...(branch !== undefined ? { branch } : {}),
       ...(slug !== undefined ? { slug } : {}),
-      setupStatus: setupScript ? "running" : "idle",
+      setupStatus: runSetupScript ? "running" : "idle",
       setupError: null,
     });
 
@@ -2315,13 +2353,14 @@ export class SessionService {
         workdir,
         agentStatus: session.agentStatus,
         sessionStatus: session.sessionStatus,
+        ...(database ? { database } : {}),
         ...(sessionGroup ? { sessionGroup } : {}),
-      },
+      } as Prisma.InputJsonValue,
       actorType: "system",
       actorId: "system",
     });
 
-    if (setupScript) {
+    if (setupScript && runSetupScript) {
       await this.executeSetupScript({
         sessionId,
         sessionGroupId: session.sessionGroupId ?? null,
@@ -2360,6 +2399,7 @@ export class SessionService {
     const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
       workdir: null,
       connection: session.connection as Prisma.InputJsonValue,
+      database: null,
       worktreeDeleted: true,
     });
 
@@ -2741,6 +2781,103 @@ export class SessionService {
     }
 
     return persisted;
+  }
+
+  async resetSessionDatabase(
+    sessionId: string,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<boolean> {
+    const session = await prisma.session.findFirstOrThrow({
+      where: { id: sessionId, organizationId },
+      select: {
+        id: true,
+        organizationId: true,
+        sessionGroupId: true,
+        workdir: true,
+        readOnlyWorkspace: true,
+        connection: true,
+        sessionGroup: {
+          select: {
+            workdir: true,
+          },
+        },
+      },
+    });
+
+    if (session.readOnlyWorkspace) {
+      throw new Error("Managed databases are unavailable until the workspace is writable");
+    }
+
+    const workdir = session.workdir ?? session.sessionGroup?.workdir ?? null;
+    if (!workdir) {
+      throw new Error("Cannot reset database before the workspace is ready");
+    }
+
+    const preparingDatabase = {
+      enabled: true,
+      status: "preparing",
+      canReset: false,
+      updatedAt: new Date().toISOString(),
+    } as Prisma.InputJsonValue;
+
+    const preparingGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
+      database: preparingDatabase,
+    });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: {
+        type: "database_status",
+        database: preparingDatabase,
+        ...(preparingGroup ? { sessionGroup: preparingGroup } : {}),
+      } as Prisma.InputJsonValue,
+      actorType,
+      actorId,
+    });
+
+    const conn = this.parseConnection(session.connection);
+    const deliveryResult = sessionRouter.send(
+      sessionId,
+      { type: "database_reset", sessionId },
+      { expectedHomeRuntimeId: conn.runtimeInstanceId },
+    );
+
+    if (deliveryResult === "delivered") {
+      return true;
+    }
+
+    const failedDatabase = {
+      enabled: true,
+      status: "failed",
+      canReset: true,
+      lastError: `database_reset: ${deliveryResult}`,
+      updatedAt: new Date().toISOString(),
+    } as Prisma.InputJsonValue;
+
+    const failedGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
+      database: failedDatabase,
+    });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: {
+        type: "database_status",
+        database: failedDatabase,
+        ...(failedGroup ? { sessionGroup: failedGroup } : {}),
+      } as Prisma.InputJsonValue,
+      actorType: "system",
+      actorId: "system",
+    });
+
+    return false;
   }
 
   async retryConnection(
@@ -3695,6 +3832,12 @@ export class SessionService {
       groupData.connection = connectionValue;
       // Do NOT mirror connection to sessions — each session keeps its own connection state.
       // Only the group's connection represents the shared workspace runtime state.
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, "database")) {
+      const databaseValue = patch.database ?? Prisma.DbNull;
+      groupData.database = databaseValue;
+      sessionData.database = databaseValue;
     }
 
     if (Object.prototype.hasOwnProperty.call(patch, "prUrl")) {

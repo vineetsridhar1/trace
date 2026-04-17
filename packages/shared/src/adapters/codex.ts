@@ -18,7 +18,16 @@ export class CodexAdapter implements CodingToolAdapter {
   private lastTextContent: string | null = null;
   private processGeneration = 0;
 
-  run({ prompt, cwd, onOutput, onComplete, model, toolSessionId, interactionMode }: RunOptions) {
+  run({
+    prompt,
+    cwd,
+    onOutput,
+    onComplete,
+    model,
+    toolSessionId,
+    interactionMode,
+    env,
+  }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
     this.interactionMode = interactionMode;
@@ -46,7 +55,7 @@ export class CodexAdapter implements CodingToolAdapter {
     const child = spawn("codex", args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
+      env: { ...process.env, ...env },
       detached: true,
     });
     this.process = child;

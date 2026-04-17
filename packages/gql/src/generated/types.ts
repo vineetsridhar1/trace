@@ -579,6 +579,7 @@ export type Mutation = {
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
+  resetSessionDatabase: Scalars['Boolean']['output'];
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
   runSession: Session;
@@ -828,6 +829,11 @@ export type MutationReorderChannelGroupsArgs = {
 
 export type MutationReorderChannelsArgs = {
   input: ReorderChannelsInput;
+};
+
+
+export type MutationResetSessionDatabaseArgs = {
+  sessionId: Scalars['ID']['input'];
 };
 
 
@@ -1402,6 +1408,7 @@ export type Session = {
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
+  database?: Maybe<SessionDatabase>;
   endpoints?: Maybe<SessionEndpoints>;
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
@@ -1447,6 +1454,25 @@ export type SessionConnectionState =
   | 'degraded'
   | 'disconnected';
 
+export type SessionDatabase = {
+  __typename?: 'SessionDatabase';
+  canReset?: Maybe<Scalars['Boolean']['output']>;
+  databaseName?: Maybe<Scalars['String']['output']>;
+  enabled: Scalars['Boolean']['output'];
+  framework?: Maybe<Scalars['String']['output']>;
+  lastError?: Maybe<Scalars['String']['output']>;
+  port?: Maybe<Scalars['Int']['output']>;
+  status: SessionDatabaseStatus;
+  updatedAt?: Maybe<Scalars['DateTime']['output']>;
+};
+
+export type SessionDatabaseStatus =
+  | 'disabled'
+  | 'failed'
+  | 'preparing'
+  | 'ready'
+  | 'recovering';
+
 export type SessionEndpoints = {
   __typename?: 'SessionEndpoints';
   ports: Array<PortEndpoint>;
@@ -1467,6 +1493,7 @@ export type SessionGroup = {
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars['DateTime']['output'];
+  database?: Maybe<SessionDatabase>;
   gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];

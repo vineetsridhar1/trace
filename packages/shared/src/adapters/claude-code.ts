@@ -23,7 +23,16 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   private lastPlanFilePath: string | null = null;
   private processGeneration = 0;
 
-  run({ prompt, cwd, onOutput, onComplete, interactionMode, model, toolSessionId }: RunOptions) {
+  run({
+    prompt,
+    cwd,
+    onOutput,
+    onComplete,
+    interactionMode,
+    model,
+    toolSessionId,
+    env,
+  }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
     this.lastPlanFilePath = null;
@@ -52,7 +61,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     const child = spawn("claude", args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
+      env: { ...process.env, ...env },
       detached: true,
     });
     this.process = child;

@@ -29,6 +29,12 @@ const portOffset = Number(process.env.TRACE_PORT || 0);
 const serverUrl = process.env.TRACE_SERVER_URL ?? `http://localhost:${4000 + portOffset}`;
 const bridge = new BridgeClient(serverUrl);
 
+function loadDbctlCore(): Promise<typeof import("@trace/dbctl-core")> {
+  return Function("specifier", "return import(specifier)")(
+    "@trace/dbctl-core",
+  ) as Promise<typeof import("@trace/dbctl-core")>;
+}
+
 function publishBridgeStatus(status: BridgeConnectionStatus) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send("bridge-status", status);
@@ -182,11 +188,21 @@ ipcMain.handle("set-linked-checkout-auto-sync", async (_event, repoId: string, e
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   ensureHookRunnerEntrypoint({
     electronBinaryPath: process.execPath,
     runnerScriptPath: path.join(__dirname, "hook-runner.js"),
   });
+  try {
+    const { ensureDbctlDaemonRunning } = await loadDbctlCore();
+    await ensureDbctlDaemonRunning({
+      daemonScriptPath: path.resolve(__dirname, "../../dbctl-daemon/dist/index.js"),
+      runtime: "local",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn("[main] dbctl daemon startup failed:", message);
+  }
   bridge.onStatusChange((status) => {
     publishBridgeStatus(status);
   });

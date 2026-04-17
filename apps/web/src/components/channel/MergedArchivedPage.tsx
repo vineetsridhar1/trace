@@ -33,6 +33,16 @@ const FILTERED_SESSION_GROUPS_QUERY = gql`
       archivedAt
       setupStatus
       setupError
+      database {
+        enabled
+        status
+        framework
+        databaseName
+        port
+        lastError
+        canReset
+        updatedAt
+      }
       channel { id }
       createdAt
       updatedAt
@@ -49,6 +59,16 @@ const FILTERED_SESSION_GROUPS_QUERY = gql`
         worktreeDeleted
         sessionGroupId
         connection { state runtimeInstanceId runtimeLabel lastError retryCount canRetry canMove autoRetryable }
+        database {
+          enabled
+          status
+          framework
+          databaseName
+          port
+          lastError
+          canReset
+          updatedAt
+        }
         createdBy { id name avatarUrl }
         repo { id name }
         channel { id }
@@ -118,15 +138,24 @@ function TabTable({
     if (result.data?.sessionGroups) {
       const groups = result.data.sessionGroups as Array<SessionGroup & { id: string }>;
       const flattenedSessions = groups.flatMap((group) => group.sessions ?? []);
+      const existingGroups = useEntityStore.getState().sessionGroups;
+      const existingSessions = useEntityStore.getState().sessions;
 
       upsertMany(
         "sessionGroups",
         groups.map((group) => ({
+          ...(existingGroups[group.id] ?? {}),
           ...group,
           _sortTimestamp: group.sessions?.[0]?.updatedAt ?? group.updatedAt,
         })) as Array<SessionGroupEntity & { id: string }>,
       );
-      upsertMany("sessions", flattenedSessions as Array<SessionEntity & { id: string }>);
+      upsertMany(
+        "sessions",
+        flattenedSessions.map((session) => ({
+          ...(existingSessions[session.id] ?? {}),
+          ...session,
+        })) as Array<SessionEntity & { id: string }>,
+      );
     }
     setLoading(false);
     setLoadedKey(queryKey);

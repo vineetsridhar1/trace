@@ -1,5 +1,8 @@
 import fs from "fs";
+import path from "path";
 import { execFileSync } from "child_process";
+import { fileURLToPath } from "url";
+import { ensureDbctlDaemonRunning } from "@trace/dbctl-core";
 import { ContainerBridge } from "./bridge.js";
 import { loginAvailableTools } from "./tool-auth.js";
 
@@ -53,6 +56,10 @@ function requireEnv(name: string): string {
 }
 
 async function main(): Promise<void> {
+  const daemonScriptPath = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "../../dbctl-daemon/dist/index.js",
+  );
   const bridgeUrl = requireEnv("TRACE_BRIDGE_URL");
   const bridgeToken = requireEnv("BRIDGE_TOKEN");
   const machineId = requireEnv("CLOUD_MACHINE_ID");
@@ -69,6 +76,16 @@ async function main(): Promise<void> {
 
   // Pre-authenticate whatever tools we have credentials for.
   await loginAvailableTools();
+
+  try {
+    await ensureDbctlDaemonRunning({
+      daemonScriptPath,
+      runtime: "cloud",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn("[container-bridge] dbctl daemon startup failed:", message);
+  }
 
   // Connect to server — sessions register dynamically via prepare commands
   const bridge = new ContainerBridge(bridgeUrl, bridgeToken, machineId, tool);

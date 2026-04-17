@@ -228,6 +228,14 @@ export const sessionMutations = {
       clientMutationId: args.clientMutationId ?? undefined,
     });
   },
+  resetSessionDatabase: (_: unknown, args: { sessionId: string }, ctx: Context) => {
+    return sessionService.resetSessionDatabase(
+      args.sessionId,
+      requireOrgContext(ctx),
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
   retrySessionConnection: (_: unknown, args: { sessionId: string }, ctx: Context) => {
     return sessionService.retryConnection(
       args.sessionId,

@@ -537,6 +537,7 @@ model SessionGroup {
   branch         String?
   workdir        String?
   connection     Json?
+  database       Json?
   prUrl          String?
   worktreeDeleted Boolean     @default(false)
   archivedAt      DateTime?
@@ -580,6 +581,7 @@ model Session {
   pendingRun      Json?
   endpoints       Json?
   connection      Json?
+  database        Json?
   prUrl           String?
   worktreeDeleted Boolean      @default(false)
   readOnlyWorkspace Boolean    @default(false)

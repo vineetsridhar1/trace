@@ -4,6 +4,7 @@
  */
 
 import type { GitCheckpointBridgePayload, GitCheckpointContext } from "./git-checkpoint.js";
+import type { SessionDatabaseInfo } from "@trace/dbctl-protocol";
 
 // --- Server → Bridge commands ---
 
@@ -81,6 +82,11 @@ export interface BridgeDeleteCommand {
   sessionId: string;
   workdir?: string;
   repoId?: string;
+}
+
+export interface BridgeDatabaseResetCommand {
+  type: "database_reset";
+  sessionId: string;
 }
 
 export interface BridgeListBranchesCommand {
@@ -172,6 +178,7 @@ export type BridgeCommand =
   | BridgePauseCommand
   | BridgeResumeCommand
   | BridgeDeleteCommand
+  | BridgeDatabaseResetCommand
   | BridgeListBranchesCommand
   | BridgeListFilesCommand
   | BridgeReadFileCommand
@@ -225,6 +232,7 @@ export interface BridgeWorkspaceReady {
   branch?: string;
   /** Animal slug used for this worktree (reported back so the server can store it). */
   slug?: string;
+  database?: SessionDatabaseInfo;
 }
 
 export interface BridgeWorkspaceFailed {

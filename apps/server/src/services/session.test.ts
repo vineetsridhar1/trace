@@ -91,6 +91,7 @@ function makeSessionGroup(overrides: Record<string, unknown> = {}) {
     branch: "main",
     workdir: null,
     connection: { state: "connected", retryCount: 0, canRetry: true, canMove: true },
+    database: null,
     prUrl: null,
     worktreeDeleted: false,
     setupStatus: "idle",
@@ -132,6 +133,7 @@ function makeSession(overrides: Record<string, unknown> = {}) {
     worktreeDeleted: false,
     prUrl: null,
     connection: { state: "connected", retryCount: 0, canRetry: true, canMove: true },
+    database: null,
     createdBy: { id: "user-1", name: "Test User", avatarUrl: null },
     repo: {
       id: "repo-1",
@@ -1103,6 +1105,54 @@ describe("SessionService", () => {
         data: { sessionStatus: "needs_input" },
       });
     });
+
+    it("syncs database status into the session group snapshot", async () => {
+      const database = {
+        enabled: true,
+        status: "ready",
+        framework: "prisma",
+        databaseName: "trace_group_1",
+        port: 55432,
+        canReset: true,
+        updatedAt: "2026-04-16T15:00:00.000Z",
+      };
+
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        organizationId: "org-1",
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        sessionGroupId: "group-1",
+      });
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(makeSessionGroup({ database }));
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup({ database }),
+        sessions: [{ agentStatus: "done", sessionStatus: "in_progress" }],
+      });
+
+      await service.recordOutput("session-1", {
+        type: "database_status",
+        database,
+      });
+
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: { sessionGroupId: "group-1" },
+        data: { database },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "database_status",
+            database,
+            sessionGroup: expect.objectContaining({
+              id: "group-1",
+              database,
+            }),
+          }),
+        }),
+      );
+    });
   });
 
   describe("complete", () => {
@@ -1567,6 +1617,215 @@ describe("SessionService", () => {
             success: true,
             exitCode: 0,
           }),
+        }),
+      );
+    });
+
+    it("skips the setup script while the managed database is not ready", async () => {
+      const failedDatabase = {
+        enabled: true,
+        status: "failed",
+        lastError: "reflinks unavailable",
+        canReset: true,
+        updatedAt: "2026-04-16T15:30:00.000Z",
+      };
+
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        pendingRun: null,
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
+      });
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          workdir: "/tmp/trace/workspace",
+          database: failedDatabase,
+        }),
+      );
+      prismaMock.channel.findUnique.mockResolvedValueOnce({ setupScript: "pnpm install" });
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({
+          workdir: "/tmp/trace/workspace",
+          setupStatus: "idle",
+          database: failedDatabase,
+        }),
+      );
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      await service.workspaceReady(
+        "session-1",
+        "/tmp/trace/workspace",
+        undefined,
+        undefined,
+        failedDatabase,
+      );
+
+      expect(terminalRelayMock.executeCommand).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            setupStatus: "idle",
+            setupError: null,
+            database: failedDatabase,
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "workspace_ready",
+            database: failedDatabase,
+          }),
+        }),
+      );
+    });
+  });
+
+  describe("resetSessionDatabase", () => {
+    it("marks the database preparing and routes a reset command to the owning runtime", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        workdir: "/tmp/trace/workspace",
+        readOnlyWorkspace: false,
+        connection: { runtimeInstanceId: "runtime-1" },
+        sessionGroup: { workdir: "/tmp/trace/workspace" },
+      });
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({
+          database: {
+            enabled: true,
+            status: "preparing",
+            canReset: false,
+          },
+        }),
+      );
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup({
+          database: {
+            enabled: true,
+            status: "preparing",
+            canReset: false,
+          },
+        }),
+        sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
+      });
+
+      await expect(
+        service.resetSessionDatabase("session-1", "org-1", "user", "user-1"),
+      ).resolves.toBe(true);
+
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: { sessionGroupId: "group-1" },
+        data: {
+          database: expect.objectContaining({
+            enabled: true,
+            status: "preparing",
+            canReset: false,
+          }),
+        },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "database_status",
+            database: expect.objectContaining({
+              enabled: true,
+              status: "preparing",
+              canReset: false,
+            }),
+          }),
+          actorType: "user",
+          actorId: "user-1",
+        }),
+      );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        { type: "database_reset", sessionId: "session-1" },
+        { expectedHomeRuntimeId: "runtime-1" },
+      );
+    });
+
+    it("surfaces a failed database reset when the bridge command cannot be delivered", async () => {
+      sessionRouterMock.send.mockReturnValueOnce("runtime_not_found");
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        workdir: "/tmp/trace/workspace",
+        readOnlyWorkspace: false,
+        connection: { runtimeInstanceId: "runtime-1" },
+        sessionGroup: { workdir: "/tmp/trace/workspace" },
+      });
+      prismaMock.sessionGroup.update
+        .mockResolvedValueOnce(
+          makeSessionGroup({
+            database: {
+              enabled: true,
+              status: "preparing",
+              canReset: false,
+            },
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeSessionGroup({
+            database: {
+              enabled: true,
+              status: "failed",
+              canReset: true,
+              lastError: "database_reset: runtime_not_found",
+            },
+          }),
+        );
+      prismaMock.session.updateMany
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 1 });
+      prismaMock.sessionGroup.findUnique
+        .mockResolvedValueOnce({
+          ...makeSessionGroup({
+            database: {
+              enabled: true,
+              status: "preparing",
+              canReset: false,
+            },
+          }),
+          sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
+        })
+        .mockResolvedValueOnce({
+          ...makeSessionGroup({
+            database: {
+              enabled: true,
+              status: "failed",
+              canReset: true,
+              lastError: "database_reset: runtime_not_found",
+            },
+          }),
+          sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
+        });
+
+      await expect(
+        service.resetSessionDatabase("session-1", "org-1", "user", "user-1"),
+      ).resolves.toBe(false);
+
+      expect(eventServiceMock.create).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "database_status",
+            database: expect.objectContaining({
+              enabled: true,
+              status: "failed",
+              canReset: true,
+              lastError: "database_reset: runtime_not_found",
+            }),
+          }),
+          actorType: "system",
+          actorId: "system",
         }),
       );
     });

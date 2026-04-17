@@ -60,6 +60,14 @@ enum SessionConnectionState {
   disconnected
 }
 
+enum SessionDatabaseStatus {
+  disabled
+  preparing
+  ready
+  recovering
+  failed
+}
+
 enum DeliveryResult {
   delivered
   no_runtime
@@ -314,6 +322,7 @@ type SessionGroup {
   sessions: [Session!]!
   workdir: String
   connection: SessionConnection
+  database: SessionDatabase
   prUrl: String
   worktreeDeleted: Boolean!
   archivedAt: DateTime
@@ -344,6 +353,7 @@ type Session {
   tickets: [Ticket!]!
   endpoints: SessionEndpoints
   connection: SessionConnection
+  database: SessionDatabase
   prUrl: String
   worktreeDeleted: Boolean!
   lastUserMessageAt: DateTime
@@ -656,6 +666,17 @@ type SessionConnection {
   being offline, where repeated retries produce noise without progress.
   """
   autoRetryable: Boolean
+}
+
+type SessionDatabase {
+  enabled: Boolean!
+  status: SessionDatabaseStatus!
+  framework: String
+  databaseName: String
+  port: Int
+  lastError: String
+  canReset: Boolean
+  updatedAt: DateTime
 }
 
 type ApiTokenStatus {
@@ -984,6 +1005,7 @@ type Mutation {
     interactionMode: String
     clientMutationId: String
   ): Event!
+  resetSessionDatabase(sessionId: ID!): Boolean!
   retrySessionConnection(sessionId: ID!): Session!
   retrySessionGroupSetup(id: ID!): SessionGroup!
   moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!

@@ -582,6 +582,7 @@ export type Mutation = {
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
+  resetSessionDatabase: Scalars['Boolean']['output'];
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
   runSession: Session;
@@ -831,6 +832,11 @@ export type MutationReorderChannelGroupsArgs = {
 
 export type MutationReorderChannelsArgs = {
   input: ReorderChannelsInput;
+};
+
+
+export type MutationResetSessionDatabaseArgs = {
+  sessionId: Scalars['ID']['input'];
 };
 
 
@@ -1405,6 +1411,7 @@ export type Session = {
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
+  database?: Maybe<SessionDatabase>;
   endpoints?: Maybe<SessionEndpoints>;
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
@@ -1450,6 +1457,25 @@ export type SessionConnectionState =
   | 'degraded'
   | 'disconnected';
 
+export type SessionDatabase = {
+  __typename?: 'SessionDatabase';
+  canReset?: Maybe<Scalars['Boolean']['output']>;
+  databaseName?: Maybe<Scalars['String']['output']>;
+  enabled: Scalars['Boolean']['output'];
+  framework?: Maybe<Scalars['String']['output']>;
+  lastError?: Maybe<Scalars['String']['output']>;
+  port?: Maybe<Scalars['Int']['output']>;
+  status: SessionDatabaseStatus;
+  updatedAt?: Maybe<Scalars['DateTime']['output']>;
+};
+
+export type SessionDatabaseStatus =
+  | 'disabled'
+  | 'failed'
+  | 'preparing'
+  | 'ready'
+  | 'recovering';
+
 export type SessionEndpoints = {
   __typename?: 'SessionEndpoints';
   ports: Array<PortEndpoint>;
@@ -1470,6 +1496,7 @@ export type SessionGroup = {
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars['DateTime']['output'];
+  database?: Maybe<SessionDatabase>;
   gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
@@ -1905,6 +1932,8 @@ export type ResolversTypes = ResolversObject<{
   Session: ResolverTypeWrapper<Session>;
   SessionConnection: ResolverTypeWrapper<SessionConnection>;
   SessionConnectionState: SessionConnectionState;
+  SessionDatabase: ResolverTypeWrapper<SessionDatabase>;
+  SessionDatabaseStatus: SessionDatabaseStatus;
   SessionEndpoints: ResolverTypeWrapper<SessionEndpoints>;
   SessionFilters: SessionFilters;
   SessionGroup: ResolverTypeWrapper<SessionGroup>;
@@ -1994,6 +2023,7 @@ export type ResolversParentTypes = ResolversObject<{
   ScopeInput: ScopeInput;
   Session: Session;
   SessionConnection: SessionConnection;
+  SessionDatabase: SessionDatabase;
   SessionEndpoints: SessionEndpoints;
   SessionFilters: SessionFilters;
   SessionGroup: SessionGroup;
@@ -2363,6 +2393,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   renameChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationRenameChatArgs, 'chatId' | 'name'>>;
   reorderChannelGroups?: Resolver<Array<ResolversTypes['ChannelGroup']>, ParentType, ContextType, RequireFields<MutationReorderChannelGroupsArgs, 'input'>>;
   reorderChannels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<MutationReorderChannelsArgs, 'input'>>;
+  resetSessionDatabase?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationResetSessionDatabaseArgs, 'sessionId'>>;
   retrySessionConnection?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRetrySessionConnectionArgs, 'sessionId'>>;
   retrySessionGroupSetup?: Resolver<ResolversTypes['SessionGroup'], ParentType, ContextType, RequireFields<MutationRetrySessionGroupSetupArgs, 'id'>>;
   runSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRunSessionArgs, 'id'>>;
@@ -2513,6 +2544,7 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   connection?: Resolver<Maybe<ResolversTypes['SessionConnection']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   createdBy?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
+  database?: Resolver<Maybe<ResolversTypes['SessionDatabase']>, ParentType, ContextType>;
   endpoints?: Resolver<Maybe<ResolversTypes['SessionEndpoints']>, ParentType, ContextType>;
   gitCheckpoints?: Resolver<Array<ResolversTypes['GitCheckpoint']>, ParentType, ContextType>;
   hosting?: Resolver<ResolversTypes['HostingMode'], ParentType, ContextType>;
@@ -2549,6 +2581,18 @@ export type SessionConnectionResolvers<ContextType = Context, ParentType extends
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type SessionDatabaseResolvers<ContextType = Context, ParentType extends ResolversParentTypes['SessionDatabase'] = ResolversParentTypes['SessionDatabase']> = ResolversObject<{
+  canReset?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
+  databaseName?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  enabled?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  framework?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  lastError?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  port?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
+  status?: Resolver<ResolversTypes['SessionDatabaseStatus'], ParentType, ContextType>;
+  updatedAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type SessionEndpointsResolvers<ContextType = Context, ParentType extends ResolversParentTypes['SessionEndpoints'] = ResolversParentTypes['SessionEndpoints']> = ResolversObject<{
   ports?: Resolver<Array<ResolversTypes['PortEndpoint']>, ParentType, ContextType>;
   terminals?: Resolver<Array<ResolversTypes['TerminalEndpoint']>, ParentType, ContextType>;
@@ -2561,6 +2605,7 @@ export type SessionGroupResolvers<ContextType = Context, ParentType extends Reso
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType>;
   connection?: Resolver<Maybe<ResolversTypes['SessionConnection']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  database?: Resolver<Maybe<ResolversTypes['SessionDatabase']>, ParentType, ContextType>;
   gitCheckpoints?: Resolver<Array<ResolversTypes['GitCheckpoint']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -2718,6 +2763,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Repo?: RepoResolvers<ContextType>;
   Session?: SessionResolvers<ContextType>;
   SessionConnection?: SessionConnectionResolvers<ContextType>;
+  SessionDatabase?: SessionDatabaseResolvers<ContextType>;
   SessionEndpoints?: SessionEndpointsResolvers<ContextType>;
   SessionGroup?: SessionGroupResolvers<ContextType>;
   SessionRuntimeInstance?: SessionRuntimeInstanceResolvers<ContextType>;

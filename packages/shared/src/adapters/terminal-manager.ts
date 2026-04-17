@@ -27,7 +27,14 @@ export class TerminalManager {
       ?? (os.platform() === "win32" ? "powershell.exe" : "/bin/bash");
   }
 
-  create(terminalId: string, sessionId: string, cwd: string, cols: number, rows: number): void {
+  create(
+    terminalId: string,
+    sessionId: string,
+    cwd: string,
+    cols: number,
+    rows: number,
+    env?: Record<string, string>,
+  ): void {
     if (this.terminals.has(terminalId)) {
       this.destroy(terminalId);
     }
@@ -50,7 +57,7 @@ export class TerminalManager {
       cols,
       rows,
       cwd: safeCwd,
-      env: process.env as Record<string, string>,
+      env: { ...(process.env as Record<string, string>), ...(env ?? {}) },
     });
 
     terminal.onData((data) => {

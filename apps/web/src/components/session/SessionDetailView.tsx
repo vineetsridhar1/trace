@@ -21,6 +21,7 @@ import { Skeleton } from "../ui/skeleton";
 import { client } from "../../lib/urql";
 import {
   DISMISS_SESSION_MUTATION,
+  RESET_SESSION_DATABASE_MUTATION,
   RETRY_SESSION_GROUP_SETUP_MUTATION,
   SEND_SESSION_MESSAGE_MUTATION,
 } from "../../lib/mutations";
@@ -53,6 +54,16 @@ const SESSION_DETAIL_QUERY = gql`
         canRetry
         canMove
         autoRetryable
+      }
+      database {
+        enabled
+        status
+        framework
+        databaseName
+        port
+        lastError
+        canReset
+        updatedAt
       }
       createdBy {
         id
@@ -94,6 +105,16 @@ const SESSION_DETAIL_QUERY = gql`
           canRetry
           canMove
           autoRetryable
+        }
+        database {
+          enabled
+          status
+          framework
+          databaseName
+          port
+          lastError
+          canReset
+          updatedAt
         }
         createdAt
         updatedAt
@@ -150,6 +171,10 @@ export function SessionDetailView({
     | Record<string, unknown>
     | null
     | undefined;
+  const database = useEntityField("sessions", sessionId, "database") as
+    | Record<string, unknown>
+    | null
+    | undefined;
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as boolean | undefined;
   const isCloud = hosting === "cloud";
   const isLocalOwner = hosting === "local" && createdBy?.id === currentUserId;
@@ -186,6 +211,7 @@ export function SessionDetailView({
   const showTerminalPanel = useUIStore((s: UIState) => s.showTerminalPanel);
   const setShowTerminalPanel = useUIStore((s: UIState) => s.setShowTerminalPanel);
   const [retryingSetup, setRetryingSetup] = useState(false);
+  const [resettingDatabase, setResettingDatabase] = useState(false);
 
   // Reset terminal panel when switching sessions
   useEffect(() => {
@@ -193,6 +219,9 @@ export function SessionDetailView({
   }, [sessionId, setShowTerminalPanel]);
 
   const canAccessTerminal = (isCloud || isLocalOwner) && isConnected && !isTerminalStatus(agentStatus, sessionStatus) && !worktreeDeleted && !setupBlocking;
+  const databaseStatus = typeof database?.status === "string" ? database.status : null;
+  const databaseError = typeof database?.lastError === "string" ? database.lastError : null;
+  const canResetDatabase = database?.canReset === true && !resettingDatabase;
 
   // Fetch full session detail — merge to avoid wiping fields set by events
   useEffect(() => {
@@ -277,6 +306,16 @@ export function SessionDetailView({
     await client.mutation(DISMISS_SESSION_MUTATION, { id: sessionId }).toPromise();
   }, [sessionId]);
 
+  const handleResetDatabase = useCallback(async () => {
+    if (!canResetDatabase) return;
+    setResettingDatabase(true);
+    try {
+      await client.mutation(RESET_SESSION_DATABASE_MUTATION, { sessionId }).toPromise();
+    } finally {
+      setResettingDatabase(false);
+    }
+  }, [canResetDatabase, sessionId]);
+
   return (
     <EventScopeContext.Provider value={scopeKey}>
       <div className="flex h-full flex-col overflow-hidden">
@@ -359,6 +398,34 @@ export function SessionDetailView({
               >
                 {retryingSetup ? "Retrying..." : "Retry"}
               </button>
+            </div>
+          )}
+
+          {!hideHeader && (databaseStatus === "failed" || databaseStatus === "recovering" || databaseStatus === "preparing") && (
+            <div className="flex items-center gap-2 border-t border-border bg-surface-deep px-4 py-2">
+              {databaseStatus === "preparing" ? (
+                <Loader2 size={14} className="animate-spin text-muted-foreground" />
+              ) : (
+                <AlertCircle size={14} className="text-destructive" />
+              )}
+              <span className="text-xs text-muted-foreground">
+                {databaseStatus === "preparing"
+                  ? "Resetting managed database..."
+                  : databaseStatus === "recovering"
+                    ? "Managed database is recovering."
+                    : `Managed database failed${databaseError ? `: ${databaseError}` : ""}`}
+              </span>
+              {canResetDatabase && (
+                <button
+                  type="button"
+                  className="ml-2 text-xs text-foreground underline"
+                  onClick={() => {
+                    void handleResetDatabase();
+                  }}
+                >
+                  {resettingDatabase ? "Resetting..." : "Reset database"}
+                </button>
+              )}
             </div>
           )}
 

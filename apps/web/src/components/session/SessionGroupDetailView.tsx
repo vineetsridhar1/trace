@@ -61,6 +61,16 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         canMove
         autoRetryable
       }
+      database {
+        enabled
+        status
+        framework
+        databaseName
+        port
+        lastError
+        canReset
+        updatedAt
+      }
       channel {
         id
       }
@@ -88,6 +98,16 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
           canRetry
           canMove
           autoRetryable
+        }
+        database {
+          enabled
+          status
+          framework
+          databaseName
+          port
+          lastError
+          canReset
+          updatedAt
         }
         createdBy {
           id
