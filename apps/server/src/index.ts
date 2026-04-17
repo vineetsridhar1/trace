@@ -65,7 +65,10 @@ async function main() {
   const wsServerCleanup = useServer(
     {
       schema,
-      onConnect: async (ctx: { connectionParams?: Readonly<Record<string, unknown>>; extra: Record<string, unknown> & { request?: { headers: { cookie?: string } } } }) => {
+      onConnect: async (ctx: {
+        connectionParams?: Readonly<Record<string, unknown>>;
+        extra: Record<string, unknown> & { request?: { headers: { cookie?: string } } };
+      }) => {
         try {
           const context = await buildWsContext(
             ctx.connectionParams as Record<string, unknown> | undefined,
