@@ -4,15 +4,57 @@ import { prisma } from "../lib/db.js";
 
 const router: RouterType = Router();
 
-const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID!;
-const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET!;
+const portOffset = Number(process.env.TRACE_PORT || 0);
+const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID;
+const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
 const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
-const WEB_URL = process.env.TRACE_WEB_URL || `http://localhost:${3000 + Number(process.env.TRACE_PORT || 0)}`;
-const SERVER_PUBLIC_URL = process.env.TRACE_SERVER_PUBLIC_URL || WEB_URL;
+const WEB_URL = process.env.TRACE_WEB_URL || `http://localhost:${3000 + portOffset}`;
+const SERVER_PUBLIC_URL =
+  process.env.TRACE_SERVER_PUBLIC_URL || `http://localhost:${4000 + portOffset}`;
 const GITHUB_CALLBACK_URL = `${SERVER_PUBLIC_URL.replace(/\/$/, "")}/auth/github/callback`;
+
+function sendPopupMessagePage(
+  res: Response,
+  origin: string,
+  payload: Record<string, unknown>,
+  fallbackMessage?: string,
+  status = 200,
+) {
+  const serializedPayload = JSON.stringify(payload);
+  const serializedOrigin = JSON.stringify(origin);
+  const serializedFallbackMessage = JSON.stringify(
+    fallbackMessage ?? "Authentication failed",
+  );
+
+  return res.status(status).send(`<!DOCTYPE html><html><body><script>
+    const payload = ${serializedPayload};
+    const origin = ${serializedOrigin};
+    if (window.opener) {
+      window.opener.postMessage(payload, origin);
+      window.close();
+    } else {
+      document.body.textContent = ${serializedFallbackMessage};
+    }
+  </script></body></html>`);
+}
 
 // Redirect to GitHub OAuth
 router.get("/auth/github", (req: Request, res: Response) => {
+  if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET) {
+    const origin = (req.query.origin as string) || WEB_URL;
+    return sendPopupMessagePage(
+      res,
+      origin,
+      {
+        type: "auth:error",
+        error:
+          "GitHub OAuth is not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in .env.",
+      },
+      "GitHub OAuth is not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in .env.",
+      500,
+    );
+  }
+
   const origin = req.query.origin as string | undefined;
   const params = new URLSearchParams({
     client_id: GITHUB_CLIENT_ID,
@@ -29,10 +71,23 @@ router.get("/auth/github", (req: Request, res: Response) => {
 router.get("/auth/github/callback", async (req: Request, res: Response) => {
   const { code } = req.query;
   if (!code || typeof code !== "string") {
-    return res.status(400).json({ error: "Missing code parameter" });
+    const origin = (req.query.state as string) || WEB_URL;
+    return sendPopupMessagePage(
+      res,
+      origin,
+      { type: "auth:error", error: "Missing code parameter" },
+      "Authentication failed: missing code parameter.",
+      400,
+    );
   }
 
   try {
+    if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET) {
+      throw new Error(
+        "GitHub OAuth is not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in .env.",
+      );
+    }
+
     // Exchange code for access token
     const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
       method: "POST",
@@ -50,7 +105,7 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
     const tokenData = (await tokenRes.json()) as { access_token?: string; error?: string };
 
     if (!tokenData.access_token) {
-      return res.status(400).json({ error: "Failed to get access token" });
+      throw new Error(tokenData.error || "Failed to get access token");
     }
 
     // Fetch GitHub user profile
@@ -131,25 +186,23 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
     const redirectOrigin = (req.query.state as string) || WEB_URL;
 
     // Signal the opener window and close the popup
-    res.send(`<!DOCTYPE html><html><body><script>
-      if (window.opener) {
-        window.opener.postMessage({ type: "auth:success", token: "${token}" }, "${redirectOrigin}");
-        window.close();
-      } else {
-        window.location.href = "${redirectOrigin}";
-      }
-    </script></body></html>`);
+    return sendPopupMessagePage(
+      res,
+      redirectOrigin,
+      { type: "auth:success", token },
+      "Authentication succeeded.",
+    );
   } catch (err) {
     console.error("GitHub OAuth error:", err);
     const errorOrigin = (req.query.state as string) || WEB_URL;
-    res.send(`<!DOCTYPE html><html><body><script>
-      if (window.opener) {
-        window.opener.postMessage({ type: "auth:error" }, "${errorOrigin}");
-        window.close();
-      } else {
-        document.body.textContent = "Authentication failed";
-      }
-    </script></body></html>`);
+    const message = err instanceof Error ? err.message : "Authentication failed";
+    return sendPopupMessagePage(
+      res,
+      errorOrigin,
+      { type: "auth:error", error: message },
+      `Authentication failed: ${message}`,
+      500,
+    );
   }
 });
 

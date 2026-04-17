@@ -169,14 +169,22 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
 function LoginPage() {
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
   const setToken = useAuthStore((s: AuthState) => s.setToken);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     function onMessage(e: MessageEvent) {
       if (e.data?.type === "auth:success") {
+        setAuthError(null);
         if (e.data.token) {
           setToken(e.data.token);
         }
         fetchMe();
+      } else if (e.data?.type === "auth:error") {
+        setAuthError(
+          typeof e.data.error === "string" && e.data.error.trim()
+            ? e.data.error
+            : "GitHub sign-in failed",
+        );
       }
     }
     window.addEventListener("message", onMessage);
@@ -184,6 +192,7 @@ function LoginPage() {
   }, [fetchMe, setToken]);
 
   function openGithubLogin() {
+    setAuthError(null);
     const w = 500;
     const h = 700;
     const left = window.screenX + (window.innerWidth - w) / 2;
@@ -209,6 +218,7 @@ function LoginPage() {
           </svg>
           Sign in with GitHub
         </Button>
+        {authError && <p className="max-w-sm text-center text-sm text-destructive">{authError}</p>}
       </div>
     </div>
   );

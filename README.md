@@ -61,10 +61,10 @@ pnpm install
 ### 2. Set up environment variables
 
 ```bash
-cp .env.example apps/server/.env
+cp .env.example .env
 ```
 
-Edit `apps/server/.env` with your values:
+Edit `.env` with your values:
 
 ```env
 # Required
@@ -76,6 +76,7 @@ GITHUB_CLIENT_SECRET="your-github-oauth-app-secret"
 PORT=4000
 JWT_SECRET="trace-dev-secret"
 TRACE_WEB_URL="http://localhost:3000"
+TRACE_SERVER_PUBLIC_URL="http://localhost:4000"
 CORS_ALLOWED_ORIGINS=""                # Comma-separated origins for cross-origin deployments
 ```
 
