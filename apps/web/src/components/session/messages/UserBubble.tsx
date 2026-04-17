@@ -1,4 +1,5 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { Image as ImageIcon } from "lucide-react";
 import { formatTime } from "./utils";
 import { stripPromptWrapping } from "../interactionModes";
 import { useAuthStore } from "../../../stores/auth";
@@ -8,73 +9,51 @@ import { getAuthHeaders } from "../../../stores/auth";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 
-const CACHE_MAX_SIZE = 100;
-const CACHE_TTL_MS = 50 * 60 * 1000;
-const presignedUrlCache = new Map<string, { url: string; ts: number }>();
-
-function getCachedUrl(key: string): string | undefined {
-  const entry = presignedUrlCache.get(key);
-  if (!entry) return undefined;
-  if (Date.now() - entry.ts > CACHE_TTL_MS) {
-    presignedUrlCache.delete(key);
-    return undefined;
-  }
-  return entry.url;
-}
-
-function setCachedUrl(key: string, url: string) {
-  if (presignedUrlCache.size >= CACHE_MAX_SIZE) {
-    const oldest = presignedUrlCache.keys().next().value;
-    if (oldest) presignedUrlCache.delete(oldest);
-  }
-  presignedUrlCache.set(key, { url, ts: Date.now() });
-}
-
-function ImageThumbnail({ imageKey, previewUrl }: { imageKey: string; previewUrl?: string }) {
-  const cached = getCachedUrl(imageKey);
-  const [src, setSrc] = useState<string | null>(previewUrl ?? cached ?? null);
+function ImageChip({ imageKey, label }: { imageKey: string; label: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  const layoutId = `msg-img-${imageKey}`;
 
-  useEffect(() => {
-    if (previewUrl || cached) return;
-    let cancelled = false;
-    fetch(`${API_URL}/uploads/url?key=${encodeURIComponent(imageKey)}`, {
-      credentials: "include",
-      headers: getAuthHeaders(),
-    })
-      .then((res) => res.json())
-      .then((data: { url?: string }) => {
-        if (!cancelled && data.url) {
-          setCachedUrl(imageKey, data.url);
-          setSrc(data.url);
-        }
-      })
-      .catch((err) => { console.warn("Failed to load image URL:", err); });
-    return () => { cancelled = true; };
-  }, [imageKey, previewUrl, cached]);
-
-  if (!src) {
-    return (
-      <div className="h-16 w-16 rounded-md bg-muted animate-pulse shrink-0" />
-    );
-  }
+  const handleClick = async () => {
+    if (src) {
+      setLightboxOpen(true);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/uploads/url?key=${encodeURIComponent(imageKey)}`, {
+        credentials: "include",
+        headers: getAuthHeaders(),
+      });
+      const data = (await res.json()) as { url?: string };
+      if (data.url) {
+        setSrc(data.url);
+        setLightboxOpen(true);
+      }
+    } catch (err) {
+      console.warn("Failed to load image URL:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
-      <img
-        src={src}
-        alt="Attached image"
-        className="h-16 w-16 rounded-md object-cover cursor-pointer border border-border shrink-0"
-        onClick={() => setLightboxOpen(true)}
-      />
-      <ImageLightbox
-        src={src}
-        alt="Attached image"
-        open={lightboxOpen}
-        onClose={() => setLightboxOpen(false)}
-        layoutId={layoutId}
-      />
+      <button
+        onClick={() => void handleClick()}
+        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-elevated px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground hover:bg-surface-deep cursor-pointer"
+      >
+        <ImageIcon size={12} />
+        {loading ? "Loading…" : label}
+      </button>
+      {src && (
+        <ImageLightbox
+          src={src}
+          alt={label}
+          open={lightboxOpen}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
     </>
   );
 }
@@ -85,7 +64,6 @@ export function UserBubble({
   actorId,
   actorName,
   imageKeys,
-  imagePreviewUrls,
   footer,
 }: {
   text: string;
@@ -93,7 +71,6 @@ export function UserBubble({
   actorId?: string;
   actorName?: string | null;
   imageKeys?: string[];
-  imagePreviewUrls?: string[];
   footer?: ReactNode;
 }) {
   const currentUserId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
@@ -105,13 +82,9 @@ export function UserBubble({
     <div className="flex justify-end">
       <div className="flex max-w-[85%] flex-col items-end">
         {imageKeys && imageKeys.length > 0 && (
-          <div className="mb-2 flex gap-2 flex-wrap justify-end">
+          <div className="mb-2 flex gap-1.5 flex-wrap justify-end">
             {imageKeys.map((key, i) => (
-              <ImageThumbnail
-                key={key}
-                imageKey={key}
-                previewUrl={imagePreviewUrls?.[i]}
-              />
+              <ImageChip key={key} imageKey={key} label={`Image ${i + 1}`} />
             ))}
           </div>
         )}

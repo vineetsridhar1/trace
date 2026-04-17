@@ -164,7 +164,6 @@ export const SessionMessage = memo(function SessionMessage({
           actorId={actor?.id}
           actorName={actor?.name}
           imageKeys={asStringArray(payload?.imageKeys)}
-          imagePreviewUrls={asStringArray(payload?.imagePreviewUrls)}
           footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       ) : (
@@ -190,7 +189,6 @@ export const SessionMessage = memo(function SessionMessage({
           actorId={actor?.id}
           actorName={actor?.name}
           imageKeys={asStringArray(payload?.imageKeys)}
-          imagePreviewUrls={asStringArray(payload?.imagePreviewUrls)}
           footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       );
