@@ -68,6 +68,7 @@ export function createPrismaMock() {
       findMany: vi.fn(),
       findFirst: vi.fn(),
       findUnique: vi.fn(),
+      groupBy: vi.fn(),
     },
     ticket: {
       create: vi.fn(),

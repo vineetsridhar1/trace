@@ -48,6 +48,7 @@ const FILTERED_SESSION_GROUPS_QUERY = gql`
         prUrl
         worktreeDeleted
         sessionGroupId
+        lastMessageAt
         connection { state runtimeInstanceId runtimeLabel lastError retryCount canRetry canMove autoRetryable }
         createdBy { id name avatarUrl }
         repo { id name }
@@ -123,7 +124,10 @@ function TabTable({
         "sessionGroups",
         groups.map((group) => ({
           ...group,
-          _sortTimestamp: group.sessions?.[0]?.updatedAt ?? group.updatedAt,
+          _sortTimestamp:
+            group.sessions?.[0]?.lastMessageAt
+            ?? group.sessions?.[0]?.updatedAt
+            ?? group.updatedAt,
         })) as Array<SessionGroupEntity & { id: string }>,
       );
       upsertMany("sessions", flattenedSessions as Array<SessionEntity & { id: string }>);

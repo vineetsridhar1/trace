@@ -6,6 +6,7 @@ import { AgentStatusIcon } from "../session/AgentStatusIcon";
 import { timeAgo, cn } from "../../lib/utils";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { collapsedByDefault, sessionStatusGroupOrder } from "./sessions-table-types";
+import { getSessionLastActivityAt } from "./session-cell-data";
 
 function CompactSessionRow({
   row,
@@ -43,9 +44,7 @@ function CompactSessionRow({
         {row.name}
       </span>
       <span className="shrink-0 text-xs text-muted-foreground">
-        {timeAgo(
-          row._lastMessageAt ?? row.updatedAt ?? row.createdAt,
-        )}
+        {timeAgo(getSessionLastActivityAt(row) ?? row.createdAt)}
       </span>
     </button>
   );

@@ -275,7 +275,11 @@ type SessionGroupSnapshot = SessionGroupSummary & {
 };
 
 /** A session row with the fields needed by both SessionGroupStatusSource and sortSessionsByRecency. */
-type SessionWithTimestamps = SessionGroupStatusSource & { updatedAt: Date; createdAt: Date };
+type SessionWithTimestamps = SessionGroupStatusSource & {
+  updatedAt: Date;
+  createdAt: Date;
+  lastMessageAt?: Date | null;
+};
 
 const INVALID_FILE_PATH_ERROR = "Invalid file path";
 const LOCAL_FILE_ACCESS_DENIED_ERROR =
@@ -300,6 +304,7 @@ function serializeSession(session: {
   connection: Prisma.JsonValue | null;
   worktreeDeleted?: boolean;
   lastUserMessageAt?: Date | null;
+  lastMessageAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -328,6 +333,7 @@ function serializeSession(session: {
     connection: session.connection,
     worktreeDeleted: session.worktreeDeleted ?? false,
     lastUserMessageAt: session.lastUserMessageAt ?? null,
+    lastMessageAt: session.lastMessageAt ?? session.lastUserMessageAt ?? null,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
   };
@@ -369,9 +375,14 @@ function sortSessionsByRecency<
   T extends {
     updatedAt: Date;
     createdAt: Date;
+    lastMessageAt?: Date | null;
   },
 >(sessions: T[]): T[] {
   return [...sessions].sort((a, b) => {
+    const aRecency = (a.lastMessageAt ?? a.updatedAt).getTime();
+    const bRecency = (b.lastMessageAt ?? b.updatedAt).getTime();
+    const recencyDiff = bRecency - aRecency;
+    if (recencyDiff !== 0) return recencyDiff;
     const updatedDiff = b.updatedAt.getTime() - a.updatedAt.getTime();
     if (updatedDiff !== 0) return updatedDiff;
     return b.createdAt.getTime() - a.createdAt.getTime();
@@ -777,8 +788,8 @@ export class SessionService {
     return filtered.sort((a: MappedGroup, b: MappedGroup) => {
       const aLatest = a.sessions[0];
       const bLatest = b.sessions[0];
-      const aTs = aLatest?.updatedAt ?? a.updatedAt;
-      const bTs = bLatest?.updatedAt ?? b.updatedAt;
+      const aTs = aLatest?.lastMessageAt ?? aLatest?.updatedAt ?? a.updatedAt;
+      const bTs = bLatest?.lastMessageAt ?? bLatest?.updatedAt ?? b.updatedAt;
       return bTs.getTime() - aTs.getTime();
     });
   }
@@ -1150,6 +1161,7 @@ export class SessionService {
           sessionGroupId: sessionGroup.id,
           connection: sessionGroup.connection ?? initialConnection,
           lastUserMessageAt: input.prompt ? new Date() : undefined,
+          lastMessageAt: input.prompt ? new Date() : undefined,
           worktreeDeleted: sessionGroup.worktreeDeleted,
           readOnlyWorkspace,
           ...(projectIds.length > 0 && {
@@ -1794,6 +1806,13 @@ export class SessionService {
       ...(parentToolUseId ? { parentId: parentToolUseId } : {}),
     });
 
+    if (data.type === "assistant") {
+      await prisma.session.update({
+        where: { id: sessionId },
+        data: { lastMessageAt: new Date() },
+      });
+    }
+
     // If we found a title tag, update the session name
     if (extractedTitle) {
       await this.updateName(sessionId, extractedTitle);
@@ -2130,6 +2149,7 @@ export class SessionService {
               interactionMode: interactionMode ?? null,
               checkpointContext: null,
             } as unknown as Prisma.InputJsonValue,
+            lastMessageAt: new Date(),
             ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
           },
         });
@@ -2174,7 +2194,7 @@ export class SessionService {
         sessionId,
         session,
         pendingCommand,
-        actorType === "user" ? { lastUserMessageAt: new Date() } : undefined,
+        { lastMessageAt: new Date(), ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}) },
       );
       // Record the message event so it appears in the UI
       const event = await eventService.create({
@@ -2259,7 +2279,7 @@ export class SessionService {
           interactionMode: interactionMode ?? null,
           checkpointContext,
         },
-        actorType === "user" ? { lastUserMessageAt: new Date() } : undefined,
+        { lastMessageAt: new Date(), ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}) },
       );
       await this.persistConnectionFailure(
         sessionId,
@@ -2303,6 +2323,7 @@ export class SessionService {
           }),
         }),
         pendingRun: Prisma.DbNull,
+        lastMessageAt: new Date(),
         ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
       },
       include: SESSION_INCLUDE,

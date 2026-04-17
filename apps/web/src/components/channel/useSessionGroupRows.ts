@@ -13,6 +13,23 @@ type SessionGroupRowSelection = {
   signature: string;
 };
 
+function getSessionMessageTimestamp(session: SessionEntity | undefined): string | undefined {
+  return (
+    session?.lastMessageAt
+    ?? session?.lastUserMessageAt
+    ?? undefined
+  );
+}
+
+function getSessionSortTimestamp(session: SessionEntity | undefined): string | undefined {
+  return (
+    session?._sortTimestamp
+    ?? getSessionMessageTimestamp(session)
+    ?? session?.updatedAt
+    ?? session?.createdAt
+  );
+}
+
 function buildRowSignature(row: SessionGroupRow): string {
   const latestSession = row.latestSession;
   const latestRepo = (latestSession?.repo as { id?: string; name?: string } | null | undefined) ?? null;
@@ -33,7 +50,7 @@ function buildRowSignature(row: SessionGroupRow): string {
     row.displaySessionStatus,
     row.displayAgentStatus,
     row._sessionCount,
-    row._lastMessageAt ?? "",
+    row._groupLastMessageAt ?? "",
     row._sortTimestamp ?? "",
     groupRepo?.id ?? "",
     groupRepo?.name ?? "",
@@ -41,7 +58,7 @@ function buildRowSignature(row: SessionGroupRow): string {
     latestSession?.name ?? "",
     latestSession?.updatedAt ?? "",
     latestSession?._sortTimestamp ?? "",
-    latestSession?._lastMessageAt ?? "",
+    latestSession?.lastMessageAt ?? "",
     latestSession?.agentStatus ?? "",
     latestSession?.sessionStatus ?? "",
     latestRepo?.id ?? "",
@@ -80,8 +97,8 @@ export function useSessionGroupRows(
           .map((id: string) => state.sessions[id])
           .filter(Boolean)
           .sort((a: SessionEntity, b: SessionEntity) => {
-            const aSort = a._sortTimestamp ?? a.updatedAt ?? a.createdAt;
-            const bSort = b._sortTimestamp ?? b.updatedAt ?? b.createdAt;
+            const aSort = getSessionSortTimestamp(a) ?? "";
+            const bSort = getSessionSortTimestamp(b) ?? "";
             const diff = new Date(bSort).getTime() - new Date(aSort).getTime();
             if (diff !== 0) return diff;
             return a.id.localeCompare(b.id);
@@ -92,6 +109,16 @@ export function useSessionGroupRows(
         }
 
         const latestSession = groupSessions[0];
+        const latestMessageSession = groupSessions.reduce<SessionEntity | undefined>(
+          (best, session) => {
+            const ts = getSessionMessageTimestamp(session);
+            if (!ts) return best;
+            const bestTs = best ? getSessionMessageTimestamp(best) : undefined;
+            if (!bestTs || ts > bestTs) return session;
+            return best;
+          },
+          undefined,
+        );
         const createdBySession = [...groupSessions].sort(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         )[0];
@@ -114,15 +141,11 @@ export function useSessionGroupRows(
           displaySessionStatus,
           displayAgentStatus,
           _sessionCount: groupSessions.length,
-          _lastMessageAt:
-            latestSession?._lastMessageAt
-            ?? latestSession?._sortTimestamp
-            ?? latestSession?.updatedAt
-            ?? group.updatedAt,
+          _groupLastMessageAt:
+            getSessionMessageTimestamp(latestMessageSession)
+            ?? group.createdAt,
           _sortTimestamp:
-            latestSession?._sortTimestamp
-            ?? latestSession?._lastMessageAt
-            ?? latestSession?.updatedAt
+            getSessionSortTimestamp(latestSession)
             ?? group._sortTimestamp
             ?? group.updatedAt,
         } as SessionGroupRow;

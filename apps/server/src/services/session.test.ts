@@ -133,6 +133,7 @@ function makeSession(overrides: Record<string, unknown> = {}) {
     workdir: null,
     toolSessionId: null,
     toolChangedAt: null,
+    lastUserMessageAt: null,
     pendingRun: null,
     worktreeDeleted: false,
     prUrl: null,
@@ -242,6 +243,32 @@ describe("SessionService", () => {
         "session-newer",
         "session-older",
       ]);
+    });
+
+    it("prefers lastMessageAt over reconnect-driven updatedAt for sort order", async () => {
+      const reconnectedSession = makeSession({
+        id: "session-reconnected",
+        updatedAt: new Date("2024-01-05T00:00:00.000Z"),
+        lastMessageAt: new Date("2024-01-01T00:00:00.000Z"),
+      });
+      const repliedSession = makeSession({
+        id: "session-replied",
+        updatedAt: new Date("2024-01-04T00:00:00.000Z"),
+        lastMessageAt: new Date("2024-01-06T00:00:00.000Z"),
+      });
+
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        makeSessionGroup({ sessions: [reconnectedSession, repliedSession] }),
+      ]);
+
+      const result = await service.listGroups("channel-1", "org-1");
+
+      expect(result[0].sessions.map((session) => session.id)).toEqual([
+        "session-replied",
+        "session-reconnected",
+      ]);
+      expect(result[0].sessions[0]?.lastMessageAt?.toISOString()).toBe("2024-01-06T00:00:00.000Z");
+      expect(result[0].sessions[1]?.lastMessageAt?.toISOString()).toBe("2024-01-01T00:00:00.000Z");
     });
 
     it("excludes merged groups by default", async () => {
