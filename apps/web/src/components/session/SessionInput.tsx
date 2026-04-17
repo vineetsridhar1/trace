@@ -97,7 +97,8 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   }, []);
 
   const handleSubmit = useCallback(async (_html: string, text: string) => {
-    if (!text || !canSend) return;
+    const hasImages = images.some((img) => img.s3Key !== null || img.uploading);
+    if ((!text && !hasImages) || !canSend) return;
 
     if (text === "/clear") {
       const channelId = useUIStore.getState().activeChannelId;
@@ -116,7 +117,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
 
     const imageKeys = images.map((img) => img.s3Key).filter((k): k is string => k !== null);
     const imagePreviewUrls = images.map((img) => img.previewUrl);
-    const wrappedText = text.startsWith("/") ? text : wrapPrompt(mode, text);
+    const wrappedText = !text ? "" : text.startsWith("/") ? text : wrapPrompt(mode, text);
 
     const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
       sessionId,
@@ -235,7 +236,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
         ) : (
           <button
             onClick={() => void editorRef.current?.submit()}
-            disabled={!hasContent || !canSend}
+            disabled={(!hasContent && images.length === 0) || !canSend}
             className={cn(
               "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
               MODE_CONFIG[mode as InteractionMode].sendButton,
