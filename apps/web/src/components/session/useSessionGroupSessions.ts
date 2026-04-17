@@ -17,8 +17,8 @@ export function useSessionGroupSessions(
 
   const sessionsByRecency = useMemo(() => {
     return [...groupSessions].sort((a, b) => {
-      const aRecency = a._lastMessageAt ?? a.lastMessageAt ?? a.updatedAt;
-      const bRecency = b._lastMessageAt ?? b.lastMessageAt ?? b.updatedAt;
+      const aRecency = a.lastMessageAt ?? a.updatedAt;
+      const bRecency = b.lastMessageAt ?? b.updatedAt;
       const diff = new Date(bRecency).getTime() - new Date(aRecency).getTime();
       if (diff !== 0) return diff;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();

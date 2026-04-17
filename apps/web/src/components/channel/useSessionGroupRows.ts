@@ -15,8 +15,7 @@ type SessionGroupRowSelection = {
 
 function getSessionMessageTimestamp(session: SessionEntity | undefined): string | undefined {
   return (
-    session?._lastMessageAt
-    ?? session?.lastMessageAt
+    session?.lastMessageAt
     ?? session?.lastUserMessageAt
     ?? undefined
   );
@@ -51,7 +50,7 @@ function buildRowSignature(row: SessionGroupRow): string {
     row.displaySessionStatus,
     row.displayAgentStatus,
     row._sessionCount,
-    row._lastMessageAt ?? "",
+    row._groupLastMessageAt ?? "",
     row._sortTimestamp ?? "",
     groupRepo?.id ?? "",
     groupRepo?.name ?? "",
@@ -59,7 +58,6 @@ function buildRowSignature(row: SessionGroupRow): string {
     latestSession?.name ?? "",
     latestSession?.updatedAt ?? "",
     latestSession?._sortTimestamp ?? "",
-    latestSession?._lastMessageAt ?? "",
     latestSession?.lastMessageAt ?? "",
     latestSession?.agentStatus ?? "",
     latestSession?.sessionStatus ?? "",
@@ -143,7 +141,7 @@ export function useSessionGroupRows(
           displaySessionStatus,
           displayAgentStatus,
           _sessionCount: groupSessions.length,
-          _lastMessageAt:
+          _groupLastMessageAt:
             getSessionMessageTimestamp(latestMessageSession)
             ?? group.createdAt,
           _sortTimestamp:

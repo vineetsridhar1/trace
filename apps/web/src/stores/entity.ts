@@ -19,7 +19,6 @@ import type {
 /** Client-side session entity with extra fields not in the GQL schema */
 export type SessionEntity = Session & {
   _lastEventPreview?: string;
-  _lastMessageAt?: string;
   _sortTimestamp?: string;
   _optimistic?: boolean;
 };

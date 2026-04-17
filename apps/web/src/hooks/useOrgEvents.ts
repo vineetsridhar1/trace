@@ -752,7 +752,7 @@ export function useOrgEvents() {
             event.eventType === "message_sent" || payload.type === "assistant";
           const updates: Partial<SessionEntity> = {
             updatedAt: event.timestamp,
-            ...(isConversationalMessage ? { _lastMessageAt: event.timestamp, lastMessageAt: event.timestamp } : {}),
+            ...(isConversationalMessage ? { lastMessageAt: event.timestamp } : {}),
             ...(isUserMessage ? { lastUserMessageAt: event.timestamp } : {}),
           };
           // Bump sort for user messages and assistant text messages (not tool calls)
