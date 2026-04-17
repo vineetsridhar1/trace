@@ -85,22 +85,13 @@ function getLastMessagePatch(event: Event): Partial<SessionEntity> | null {
   };
 }
 
-function getPatchLastMessageTimestamp(patch: Partial<SessionEntity> | null): string | null {
-  if (!patch) return null;
-  return patch._lastMessageAt ?? patch.lastMessageAt ?? patch.lastUserMessageAt ?? null;
-}
-
-function getCurrentLastMessageTimestamp(sessionId: string): string | null {
-  const session = useEntityStore.getState().sessions[sessionId];
-  return session?._lastMessageAt ?? session?.lastMessageAt ?? session?.lastUserMessageAt ?? null;
-}
-
 function patchSessionLastMessageFromEvents(sessionId: string, events: Event[]) {
   for (let i = events.length - 1; i >= 0; i--) {
     const patch = getLastMessagePatch(events[i] as Event);
     if (!patch) continue;
-    const nextTimestamp = getPatchLastMessageTimestamp(patch);
-    const currentTimestamp = getCurrentLastMessageTimestamp(sessionId);
+    const nextTimestamp = patch._lastMessageAt ?? patch.lastMessageAt ?? null;
+    const session = useEntityStore.getState().sessions[sessionId];
+    const currentTimestamp = session?._lastMessageAt ?? session?.lastMessageAt ?? null;
     if (
       nextTimestamp &&
       currentTimestamp &&

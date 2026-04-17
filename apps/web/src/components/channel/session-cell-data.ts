@@ -18,5 +18,5 @@ export function getSessionCreatedBy(data: SessionGroupRow | undefined): CreatedB
 }
 
 export function getSessionLastActivityAt(data: SessionGroupRow | undefined): string | undefined {
-  return data?._lastMessageAt ?? data?.createdAt;
+  return data?._lastMessageAt ?? data?.updatedAt ?? data?.createdAt;
 }

@@ -111,15 +111,16 @@ export function useSessionGroupRows(
         }
 
         const latestSession = groupSessions[0];
-        const latestMessageSession = groupSessions
-          .filter((session: SessionEntity) => !!getSessionMessageTimestamp(session))
-          .sort((a: SessionEntity, b: SessionEntity) => {
-            const aMessage = getSessionMessageTimestamp(a) ?? "";
-            const bMessage = getSessionMessageTimestamp(b) ?? "";
-            const diff = new Date(bMessage).getTime() - new Date(aMessage).getTime();
-            if (diff !== 0) return diff;
-            return a.id.localeCompare(b.id);
-          })[0];
+        const latestMessageSession = groupSessions.reduce<SessionEntity | undefined>(
+          (best, session) => {
+            const ts = getSessionMessageTimestamp(session);
+            if (!ts) return best;
+            const bestTs = best ? getSessionMessageTimestamp(best) : undefined;
+            if (!bestTs || ts > bestTs) return session;
+            return best;
+          },
+          undefined,
+        );
         const createdBySession = [...groupSessions].sort(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         )[0];

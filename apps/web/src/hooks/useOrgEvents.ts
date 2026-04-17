@@ -748,15 +748,15 @@ export function useOrgEvents() {
         ) {
           const preview = extractMessagePreview(event.eventType, payload);
           const isUserMessage = event.eventType === "message_sent" && event.actor?.type === "user";
+          const isConversationalMessage =
+            event.eventType === "message_sent" || payload.type === "assistant";
           const updates: Partial<SessionEntity> = {
             updatedAt: event.timestamp,
-            _lastMessageAt: event.timestamp,
-            lastMessageAt: event.timestamp,
+            ...(isConversationalMessage ? { _lastMessageAt: event.timestamp, lastMessageAt: event.timestamp } : {}),
             ...(isUserMessage ? { lastUserMessageAt: event.timestamp } : {}),
           };
           // Bump sort for user messages and assistant text messages (not tool calls)
-          const bumpActivitySort =
-            event.eventType === "message_sent" || payload.type === "assistant";
+          const bumpActivitySort = isConversationalMessage;
           if (bumpActivitySort) {
             updates._sortTimestamp = event.timestamp;
           }
