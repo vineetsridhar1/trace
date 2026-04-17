@@ -41,7 +41,9 @@ function agentResultToString(content: unknown): string | undefined {
 function renderAssistantContent(
   payload: JsonObject,
   ts: string,
+  scopeKey: string,
   completedAgentTools: Map<string, AgentToolResult>,
+  gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>,
 ) {
   const message = asJsonObject(payload.message);
   const contentBlocks = message?.content;
@@ -68,6 +70,10 @@ function renderAssistantContent(
             isLoading={!agentResult}
             result={agentResult ? agentResultToString(agentResult.content) : undefined}
             timestamp={ts}
+            toolUseId={toolUseId}
+            scopeKey={scopeKey}
+            completedAgentTools={completedAgentTools}
+            gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
           />,
         );
       } else {
@@ -96,13 +102,21 @@ function renderAssistantContent(
 function renderSessionOutput(
   payload: JsonObject,
   ts: string,
+  scopeKey: string,
   completedAgentTools: Map<string, AgentToolResult>,
+  gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>,
 ) {
   const type = payload.type;
   if (typeof type !== "string") return null;
 
-  if (type === "assistant") {
-    return renderAssistantContent(payload, ts, completedAgentTools);
+  if (type === "assistant" || type === "user") {
+    return renderAssistantContent(
+      payload,
+      ts,
+      scopeKey,
+      completedAgentTools,
+      gitCheckpointsByPromptEventId,
+    );
   }
 
   if (type === "result") {
@@ -151,7 +165,15 @@ export const SessionMessage = memo(function SessionMessage({
       );
 
     case "session_output":
-      return payload ? renderSessionOutput(payload, timestamp, completedAgentTools) : null;
+      return payload
+        ? renderSessionOutput(
+            payload,
+            timestamp,
+            scopeKey,
+            completedAgentTools,
+            gitCheckpointsByPromptEventId,
+          )
+        : null;
 
     case "message_sent":
       return (
