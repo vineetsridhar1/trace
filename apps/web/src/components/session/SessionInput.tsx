@@ -173,13 +173,14 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
           : "Send a message...";
 
   return (
-    <div
-      className={cn(
-        "shrink-0 border-t px-4 py-3 transition-colors",
-        MODE_CONFIG[mode as InteractionMode].containerBorder,
-      )}
-    >
+    <div className="shrink-0">
       <ImageAttachmentBar images={images} onRemove={handleRemoveImage} />
+      <div
+        className={cn(
+          "border-t px-4 py-3 transition-colors",
+          MODE_CONFIG[mode as InteractionMode].containerBorder,
+        )}
+      >
       <div className="flex items-center gap-2">
         {!isNotStarted && (
           <Tooltip>
@@ -255,6 +256,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
           isActive={isActive}
         />
       )}
+      </div>
     </div>
   );
 }
