@@ -16,3 +16,10 @@ apps/container-bridge/
 coverage/
 .turbo/
 .eslintcache
+!packages/shared/dist/
+!packages/shared/dist/**
+!apps/container-bridge/
+!apps/container-bridge/Dockerfile
+!apps/container-bridge/package.json
+!apps/container-bridge/dist/
+!apps/container-bridge/dist/**
