@@ -919,6 +919,7 @@ type Query {
   sessionGroupBranchDiff(sessionGroupId: ID!): [BranchDiffFile!]!
   sessionGroupFileAtRef(sessionGroupId: ID!, filePath: String!, ref: String!): String!
   linkedCheckoutStatus(sessionGroupId: ID!, repoId: ID!): LinkedCheckoutStatus!
+  sessionGroupLatestCheckpoint(sessionGroupId: ID!): GitCheckpoint
   sessionSlashCommands(sessionId: ID!): [SlashCommand!]!
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
   chats: [Chat!]!

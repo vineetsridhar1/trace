@@ -145,7 +145,6 @@ export interface RunOptions {
   model?: string;
   /** Tool-specific session ID for resuming (e.g. Claude Code's --resume flag) */
   toolSessionId?: string;
-  imagePaths?: string[];
 }
 
 /**

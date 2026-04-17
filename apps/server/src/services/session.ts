@@ -877,6 +877,18 @@ export class SessionService {
     });
   }
 
+  async getLatestGitCheckpointForGroup(sessionGroupId: string, organizationId: string) {
+    await prisma.sessionGroup.findFirstOrThrow({
+      where: { id: sessionGroupId, organizationId },
+      select: { id: true },
+    });
+
+    return prisma.gitCheckpoint.findFirst({
+      where: { sessionGroupId },
+      orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
+    });
+  }
+
   async start(input: StartSessionServiceInput) {
     if (input.restoreCheckpointId && input.sessionGroupId) {
       throw new Error("restoreCheckpointId cannot reuse an existing session group");
@@ -2142,6 +2154,18 @@ export class SessionService {
         branch: true,
       },
     });
+
+    // Image keys are scoped to an organization (`uploads/{orgId}/...`).
+    // Reject keys whose org segment doesn't match the session's org so a
+    // multi-org user can't smuggle another org's image into this session.
+    if (imageKeys?.length) {
+      for (const key of imageKeys) {
+        const orgSegment = key.split("/")[1];
+        if (orgSegment !== session.organizationId) {
+          throw new Error("Image key does not belong to this organization");
+        }
+      }
+    }
 
     if (session.worktreeDeleted) {
       throw new Error("Cannot send messages: session worktree has been deleted");
