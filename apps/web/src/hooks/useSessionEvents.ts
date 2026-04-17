@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { gql } from "@urql/core";
+import { asJsonObject } from "@trace/shared";
 import type { Event } from "@trace/gql";
 import { client } from "../lib/urql";
-import { useScopedEventIds, eventScopeKey } from "../stores/entity";
+import { useScopedEventIds, eventScopeKey, useEntityStore, type SessionEntity } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { HIDDEN_SESSION_PAYLOAD_TYPES } from "../lib/session-event-filters";
 import {
@@ -65,6 +66,34 @@ const SESSION_EVENTS_SUBSCRIPTION = gql`
   }
 `;
 
+function getLastMessagePatch(event: Event): Partial<SessionEntity> | null {
+  if (event.eventType === "message_sent") {
+    return {
+      _lastMessageAt: event.timestamp,
+      lastMessageAt: event.timestamp,
+      ...(event.actor?.type === "user" ? { lastUserMessageAt: event.timestamp } : {}),
+    };
+  }
+
+  if (event.eventType !== "session_output") return null;
+  const payload = asJsonObject(event.payload);
+  if (payload?.type !== "assistant") return null;
+
+  return {
+    _lastMessageAt: event.timestamp,
+    lastMessageAt: event.timestamp,
+  };
+}
+
+function patchSessionLastMessageFromEvents(sessionId: string, events: Event[]) {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const patch = getLastMessagePatch(events[i] as Event);
+    if (!patch) continue;
+    useEntityStore.getState().patch("sessions", sessionId, patch);
+    return;
+  }
+}
+
 export function useSessionEvents(sessionId: string) {
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -100,6 +129,7 @@ export function useSessionEvents(sessionId: string) {
     if (result.data?.events) {
       const events = result.data.events as Array<Event & { id: string }>;
       upsertFetchedSessionEventsWithOptimisticResolution(sessionId, events);
+      patchSessionLastMessageFromEvents(sessionId, events);
 
       if (events.length < PAGE_SIZE) {
         setHasOlder(false);
@@ -131,6 +161,10 @@ export function useSessionEvents(sessionId: string) {
         if (!result.data?.sessionEvents) return;
         const event = result.data.sessionEvents as Event & { id: string };
         upsertSessionEventWithOptimisticResolution(sessionId, event);
+        const patch = getLastMessagePatch(event);
+        if (patch) {
+          useEntityStore.getState().patch("sessions", sessionId, patch);
+        }
       });
 
     return () => subscription.unsubscribe();
@@ -169,6 +203,7 @@ export function useSessionEvents(sessionId: string) {
     if (result.data?.events) {
       const events = result.data.events as Array<Event & { id: string }>;
       upsertFetchedSessionEventsWithOptimisticResolution(sessionId, events);
+      patchSessionLastMessageFromEvents(sessionId, events);
 
       if (events.length < PAGE_SIZE) {
         setHasOlder(false);
