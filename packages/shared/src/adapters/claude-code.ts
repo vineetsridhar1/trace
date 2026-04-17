@@ -269,7 +269,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
         }
         if (normalized.length > 0) {
           onOutput({
-            type: "assistant",
+            type: "user",
             message: { content: normalized },
             ...(parentToolUseId ? { parentToolUseId } : {}),
           });

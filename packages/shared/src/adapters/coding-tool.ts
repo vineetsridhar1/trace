@@ -116,6 +116,12 @@ export interface AssistantEvent {
   parentToolUseId?: string;
 }
 
+export interface UserEvent {
+  type: "user";
+  message: { content: MessageBlock[] };
+  parentToolUseId?: string;
+}
+
 export interface ResultEvent {
   type: "result";
   subtype?: "success" | "error";
@@ -126,7 +132,7 @@ export interface ErrorEvent {
   message: string;
 }
 
-export type ToolOutput = AssistantEvent | ResultEvent | ErrorEvent;
+export type ToolOutput = AssistantEvent | UserEvent | ResultEvent | ErrorEvent;
 
 export type OutputCallback = (data: ToolOutput) => void;
 

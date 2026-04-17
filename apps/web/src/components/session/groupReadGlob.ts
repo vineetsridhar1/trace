@@ -188,7 +188,7 @@ export function buildSessionNodes(
     const event = events[id];
     if (!event || event.eventType !== "session_output") continue;
     const payload = asJsonObject(event.payload);
-    if (payload?.type !== "assistant") continue;
+    if (payload?.type !== "assistant" && payload?.type !== "user") continue;
     const msg = asJsonObject(payload.message);
     const blocks = msg?.content;
     if (!Array.isArray(blocks)) continue;

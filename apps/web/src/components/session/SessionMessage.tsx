@@ -109,7 +109,7 @@ function renderSessionOutput(
   const type = payload.type;
   if (typeof type !== "string") return null;
 
-  if (type === "assistant") {
+  if (type === "assistant" || type === "user") {
     return renderAssistantContent(
       payload,
       ts,
