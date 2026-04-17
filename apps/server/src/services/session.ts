@@ -389,89 +389,6 @@ function sortSessionsByRecency<
   });
 }
 
-type SessionLastMessageSource = {
-  id: string;
-  lastUserMessageAt?: Date | null;
-};
-
-function getLastMessageAt(
-  lastUserMessageAt: Date | null | undefined,
-  lastAssistantMessageAt: Date | null | undefined,
-): Date | null {
-  if (lastUserMessageAt && lastAssistantMessageAt) {
-    return lastUserMessageAt.getTime() >= lastAssistantMessageAt.getTime()
-      ? lastUserMessageAt
-      : lastAssistantMessageAt;
-  }
-
-  return lastUserMessageAt ?? lastAssistantMessageAt ?? null;
-}
-
-async function getLastAssistantMessageAtBySessionId(
-  sessionIds: string[],
-): Promise<Map<string, Date>> {
-  if (sessionIds.length === 0) return new Map();
-
-  const rows = await prisma.event.groupBy({
-    by: ["scopeId"],
-    where: {
-      scopeType: "session",
-      scopeId: { in: sessionIds },
-      eventType: "session_output",
-      payload: { path: ["type"], equals: "assistant" },
-    },
-    _max: { timestamp: true },
-  });
-
-  const lastAssistantMessageAtBySessionId = new Map<string, Date>();
-  for (const row of rows) {
-    if (row._max.timestamp) {
-      lastAssistantMessageAtBySessionId.set(row.scopeId, row._max.timestamp);
-    }
-  }
-
-  return lastAssistantMessageAtBySessionId;
-}
-
-async function attachLastMessageAt<T extends SessionLastMessageSource>(
-  sessions: T[],
-): Promise<Array<T & { lastMessageAt: Date | null }>> {
-  if (sessions.length === 0) return [];
-
-  const lastAssistantMessageAtBySessionId = await getLastAssistantMessageAtBySessionId(
-    sessions.map((session) => session.id),
-  );
-
-  return sessions.map((session) => ({
-    ...session,
-    lastMessageAt: getLastMessageAt(
-      session.lastUserMessageAt ?? null,
-      lastAssistantMessageAtBySessionId.get(session.id) ?? null,
-    ),
-  }));
-}
-
-async function attachLastMessageAtToGroups<
-  T extends {
-    sessions: SessionLastMessageSource[];
-  },
->(
-  groups: T[],
-): Promise<Array<T & { sessions: Array<T["sessions"][number] & { lastMessageAt: Date | null }> }>> {
-  if (groups.length === 0) return [];
-
-  const sessionsWithLastMessageAt = await attachLastMessageAt(groups.flatMap((group) => group.sessions));
-  const sessionsById = new Map(sessionsWithLastMessageAt.map((session) => [session.id, session]));
-
-  return groups.map((group) => ({
-    ...group,
-    sessions: group.sessions.map((session) => {
-      const hydrated = sessionsById.get(session.id);
-      return hydrated ?? { ...session, lastMessageAt: null };
-    }),
-  }));
-}
-
 function buildSessionGroupSnapshot(
   group: SessionGroupSummary,
   sessions: SessionGroupStatusSource[],
@@ -768,14 +685,10 @@ export class SessionService {
     });
 
     type SessionGroupWithSessions = SessionGroupSummary & {
-      sessions: Array<SessionWithTimestamps & SessionLastMessageSource>;
+      sessions: SessionWithTimestamps[];
     };
 
-    const groupsWithLastMessageAt = await attachLastMessageAtToGroups(
-      groups as SessionGroupWithSessions[],
-    );
-
-    const mapped = groupsWithLastMessageAt.map((group) => {
+    const mapped = (groups as SessionGroupWithSessions[]).map((group) => {
       const sessions = sortSessionsByRecency<SessionWithTimestamps>(group.sessions);
       return {
         ...buildSessionGroupSnapshot(group, sessions),
@@ -810,12 +723,9 @@ export class SessionService {
     });
 
     if (!group) return null;
-    const [typedGroup] = await attachLastMessageAtToGroups([
-      group as SessionGroupSummary & {
-        sessions: Array<SessionWithTimestamps & SessionLastMessageSource>;
-      },
-    ]);
-    if (!typedGroup) return null;
+    const typedGroup = group as SessionGroupSummary & {
+      sessions: SessionWithTimestamps[];
+    };
     const sessions = sortSessionsByRecency<SessionWithTimestamps>(typedGroup.sessions);
     return {
       ...buildSessionGroupSnapshot(typedGroup, sessions),
@@ -831,12 +741,11 @@ export class SessionService {
   }
 
   async getGroupSessions(sessionGroupId: string) {
-    const sessions = await prisma.session.findMany({
+    return prisma.session.findMany({
       where: { sessionGroupId },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       include: SESSION_INCLUDE,
     });
-    return attachLastMessageAt(sessions);
   }
 
   async list(
@@ -853,30 +762,25 @@ export class SessionService {
     if (filters?.tool) where.tool = filters.tool;
     if (filters?.repoId) where.repoId = filters.repoId;
     if (filters?.channelId) where.channelId = filters.channelId;
-    const sessions = await prisma.session.findMany({
+    return prisma.session.findMany({
       where,
       orderBy: { updatedAt: "desc" },
       include: SESSION_INCLUDE,
     });
-    return attachLastMessageAt(sessions);
   }
 
   async get(id: string) {
-    const session = await prisma.session.findUnique({ where: { id }, include: SESSION_INCLUDE });
-    if (!session) return null;
-    const [sessionWithLastMessageAt] = await attachLastMessageAt([session]);
-    return sessionWithLastMessageAt ?? null;
+    return prisma.session.findUnique({ where: { id }, include: SESSION_INCLUDE });
   }
 
   async listByUser(organizationId: string, userId: string, agentStatus?: string | null) {
     const where: Record<string, unknown> = { organizationId, createdById: userId };
     if (agentStatus) where.agentStatus = agentStatus;
-    const sessions = await prisma.session.findMany({
+    return prisma.session.findMany({
       where,
       orderBy: { updatedAt: "desc" },
       include: SESSION_INCLUDE,
     });
-    return attachLastMessageAt(sessions);
   }
 
   async listGitCheckpointsForSession(sessionId: string) {
@@ -1179,6 +1083,7 @@ export class SessionService {
           sessionGroupId: sessionGroup.id,
           connection: sessionGroup.connection ?? initialConnection,
           lastUserMessageAt: input.prompt ? new Date() : undefined,
+          lastMessageAt: input.prompt ? new Date() : undefined,
           worktreeDeleted: sessionGroup.worktreeDeleted,
           readOnlyWorkspace,
           ...(projectIds.length > 0 && {
@@ -1819,6 +1724,13 @@ export class SessionService {
       actorId: "system",
     });
 
+    if (data.type === "assistant") {
+      await prisma.session.update({
+        where: { id: sessionId },
+        data: { lastMessageAt: new Date() },
+      });
+    }
+
     // If we found a title tag, update the session name
     if (extractedTitle) {
       await this.updateName(sessionId, extractedTitle);
@@ -2155,6 +2067,7 @@ export class SessionService {
               interactionMode: interactionMode ?? null,
               checkpointContext: null,
             } as unknown as Prisma.InputJsonValue,
+            lastMessageAt: new Date(),
             ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
           },
         });
@@ -2199,7 +2112,7 @@ export class SessionService {
         sessionId,
         session,
         pendingCommand,
-        actorType === "user" ? { lastUserMessageAt: new Date() } : undefined,
+        { lastMessageAt: new Date(), ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}) },
       );
       // Record the message event so it appears in the UI
       const event = await eventService.create({
@@ -2284,7 +2197,7 @@ export class SessionService {
           interactionMode: interactionMode ?? null,
           checkpointContext,
         },
-        actorType === "user" ? { lastUserMessageAt: new Date() } : undefined,
+        { lastMessageAt: new Date(), ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}) },
       );
       await this.persistConnectionFailure(
         sessionId,
@@ -2328,6 +2241,7 @@ export class SessionService {
           }),
         }),
         pendingRun: Prisma.DbNull,
+        lastMessageAt: new Date(),
         ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
       },
       include: SESSION_INCLUDE,

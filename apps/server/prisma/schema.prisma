@@ -563,6 +563,7 @@ model Session {
   model          String?
   toolChangedAt      DateTime?
   lastUserMessageAt  DateTime?
+  lastMessageAt      DateTime?
   hosting        HostingMode
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])

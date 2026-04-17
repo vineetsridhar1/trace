@@ -181,7 +181,6 @@ describe("SessionService", () => {
     sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
     sessionRouterMock.getDefaultRuntime?.mockReturnValue?.(null);
     sessionRouterMock.destroyRuntime.mockResolvedValue(undefined);
-    prismaMock.event.groupBy.mockResolvedValue([]);
     prismaMock.sessionGroup.findUnique.mockResolvedValue({
       ...makeSessionGroup(),
       sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
@@ -241,40 +240,24 @@ describe("SessionService", () => {
       ]);
     });
 
-    it("prefers the last assistant or user message over reconnect-driven updatedAt", async () => {
+    it("prefers lastMessageAt over reconnect-driven updatedAt for sort order", async () => {
       const reconnectedSession = makeSession({
         id: "session-reconnected",
         updatedAt: new Date("2024-01-05T00:00:00.000Z"),
-        lastUserMessageAt: new Date("2024-01-01T00:00:00.000Z"),
+        lastMessageAt: new Date("2024-01-01T00:00:00.000Z"),
       });
       const repliedSession = makeSession({
         id: "session-replied",
         updatedAt: new Date("2024-01-04T00:00:00.000Z"),
-        lastUserMessageAt: new Date("2024-01-02T00:00:00.000Z"),
+        lastMessageAt: new Date("2024-01-06T00:00:00.000Z"),
       });
 
       prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
         makeSessionGroup({ sessions: [reconnectedSession, repliedSession] }),
       ]);
-      prismaMock.event.groupBy.mockResolvedValueOnce([
-        {
-          scopeId: "session-replied",
-          _max: { timestamp: new Date("2024-01-06T00:00:00.000Z") },
-        },
-      ]);
 
       const result = await service.listGroups("channel-1", "org-1");
 
-      expect(prismaMock.event.groupBy).toHaveBeenCalledWith({
-        by: ["scopeId"],
-        where: {
-          scopeType: "session",
-          scopeId: { in: ["session-reconnected", "session-replied"] },
-          eventType: "session_output",
-          payload: { path: ["type"], equals: "assistant" },
-        },
-        _max: { timestamp: true },
-      });
       expect(result[0].sessions.map((session) => session.id)).toEqual([
         "session-replied",
         "session-reconnected",
