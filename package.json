@@ -28,7 +28,7 @@
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper node_modules/node-pty/prebuilds/linux-*/spawn-helper 2>/dev/null || true"
   },
   "engines": {
-    "node": ">=22",
+    "node": ">=24 <25",
     "pnpm": ">=10"
   },
   "pnpm": {
