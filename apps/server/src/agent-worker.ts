@@ -160,14 +160,16 @@ const executor = new ActionExecutor({
  * pending pipelines for graceful shutdown draining.
  */
 function handleBatch(batch: AggregatedBatch): void {
-  log("batch ready", {
-    scopeKey: batch.scopeKey,
-    orgId: batch.organizationId,
-    eventCount: batch.events.length,
-    closeReason: batch.closeReason,
-    durationMs: batch.closedAt - batch.openedAt,
-    ...(batch.maxTier !== undefined ? { maxTier: batch.maxTier } : {}),
-  });
+  if (verboseEventLogs) {
+    log("batch ready", {
+      scopeKey: batch.scopeKey,
+      orgId: batch.organizationId,
+      eventCount: batch.events.length,
+      closeReason: batch.closeReason,
+      durationMs: batch.closedAt - batch.openedAt,
+      ...(batch.maxTier !== undefined ? { maxTier: batch.maxTier } : {}),
+    });
+  }
 
   const agentSettings = agentContexts.get(batch.organizationId);
   if (!agentSettings) {
@@ -201,6 +203,7 @@ function handleBatch(batch: AggregatedBatch): void {
 
 const workerLogger = createAgentLogger("agent-worker");
 const { log, logError } = workerLogger;
+const verboseEventLogs = process.env.TRACE_AGENT_VERBOSE_EVENT_LOGS === "1";
 
 function streamKey(orgId: string): string {
   return `${STREAM_KEY_PREFIX}${orgId}${STREAM_KEY_SUFFIX}`;
@@ -468,16 +471,18 @@ async function processEvents(orgId: string, entries: StreamEntry[]): Promise<voi
       incrementMetric("eventsProcessed");
       if (result.decision === "drop") incrementMetric("eventsDropped");
 
-      log("event routed", {
-        orgId,
-        streamId: entry.id,
-        eventType: event.eventType,
-        scopeType: event.scopeType,
-        scopeId: event.scopeId,
-        decision: result.decision,
-        reason: result.reason,
-        ...(result.maxTier !== undefined ? { maxTier: result.maxTier } : {}),
-      });
+      if (verboseEventLogs) {
+        log("event routed", {
+          orgId,
+          streamId: entry.id,
+          eventType: event.eventType,
+          scopeType: event.scopeType,
+          scopeId: event.scopeId,
+          decision: result.decision,
+          reason: result.reason,
+          ...(result.maxTier !== undefined ? { maxTier: result.maxTier } : {}),
+        });
+      }
 
       // Feed non-dropped events into the aggregator
       if (result.decision !== "drop") {

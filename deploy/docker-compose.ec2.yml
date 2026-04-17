@@ -1,3 +1,9 @@
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   caddy:
     image: caddy:2-alpine
@@ -9,6 +15,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    logging: *default-logging
     restart: unless-stopped
     depends_on:
       - web
@@ -18,6 +25,7 @@ services:
     image: ${ECR_REGISTRY:-459063349068.dkr.ecr.us-east-1.amazonaws.com}/trace:${IMAGE_TAG:-latest}
     environment:
       ROLE: web
+    logging: *default-logging
     expose:
       - "3000"
     restart: unless-stopped
@@ -55,6 +63,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    logging: *default-logging
     ports:
       - "127.0.0.1:4000:4000"
     restart: unless-stopped
@@ -79,6 +88,8 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      TRACE_AGENT_VERBOSE_EVENT_LOGS: ${TRACE_AGENT_VERBOSE_EVENT_LOGS:-0}
+    logging: *default-logging
     restart: unless-stopped
     depends_on:
       backend:

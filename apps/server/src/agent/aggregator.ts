@@ -450,13 +450,15 @@ export class EventAggregator {
       closeReason: reason,
     };
 
-    log("window closed", {
-      scopeKey: batch.scopeKey,
-      orgId: batch.organizationId,
-      eventCount: batch.events.length,
-      reason,
-      durationMs: batch.closedAt - batch.openedAt,
-    });
+    if (verboseEventLogs) {
+      log("window closed", {
+        scopeKey: batch.scopeKey,
+        orgId: batch.organizationId,
+        eventCount: batch.events.length,
+        reason,
+        durationMs: batch.closedAt - batch.openedAt,
+      });
+    }
 
     this.batchHandler(batch);
   }
@@ -530,3 +532,4 @@ export class EventAggregator {
 
 const aggregatorLogger = createAgentLogger("aggregator");
 const { log, logError } = aggregatorLogger;
+const verboseEventLogs = process.env.TRACE_AGENT_VERBOSE_EVENT_LOGS === "1";
