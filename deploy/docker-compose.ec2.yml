@@ -4,83 +4,6 @@ x-default-logging: &default-logging
     max-size: "10m"
     max-file: "5"
 
-x-web-service: &web-service
-  image: ${ECR_REGISTRY:-459063349068.dkr.ecr.us-east-1.amazonaws.com}/trace:${IMAGE_TAG:-latest}
-  environment:
-    ROLE: web
-  init: true
-  logging: *default-logging
-  expose:
-    - "3000"
-  restart: unless-stopped
-  stop_grace_period: 15s
-  healthcheck:
-    test:
-      [
-        "CMD-SHELL",
-        'node -e "fetch(''http://localhost:3000/'').then(r=>{if(!r.ok)throw new Error(''bad status'');process.exit(0)}).catch(()=>process.exit(1))"',
-      ]
-    interval: 5s
-    timeout: 5s
-    retries: 12
-    start_period: 5s
-
-x-backend-service: &backend-service
-  image: ${ECR_REGISTRY:-459063349068.dkr.ecr.us-east-1.amazonaws.com}/trace:${IMAGE_TAG:-latest}
-  environment:
-    ROLE: backend
-    NODE_ENV: production
-    PORT: "4000"
-    DATABASE_URL: ${DATABASE_URL}
-    REDIS_URL: ${REDIS_URL}
-    JWT_SECRET: ${JWT_SECRET}
-    TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
-    TRACE_WEB_URL: ${TRACE_WEB_URL:-https://gettrace.org}
-    TRACE_SERVER_PUBLIC_URL: ${TRACE_SERVER_PUBLIC_URL:-https://gettrace.org}
-    S3_BUCKET: ${S3_BUCKET}
-    AWS_REGION: ${AWS_REGION}
-    CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://gettrace.org,https://www.gettrace.org}
-    GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
-    GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
-    FLY_API_TOKEN: ${FLY_API_TOKEN:-}
-    FLY_APP_NAME: ${FLY_APP_NAME:-}
-    CONTAINER_IMAGE: ${CONTAINER_IMAGE:-}
-    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-    GITHUB_TOKEN: ${GITHUB_TOKEN:-}
-  init: true
-  logging: *default-logging
-  expose:
-    - "4000"
-  restart: unless-stopped
-  stop_grace_period: 45s
-  healthcheck:
-    test:
-      [
-        "CMD-SHELL",
-        'node -e "fetch(''http://localhost:4000/health'').then(async r=>{if(!r.ok)throw new Error(''bad status'');const body=await r.json();if(body.ready!==true)throw new Error(''not ready'');process.exit(0)}).catch(()=>process.exit(1))"',
-      ]
-    interval: 5s
-    timeout: 10s
-    retries: 12
-    start_period: 20s
-
-x-worker-service: &worker-service
-  image: ${ECR_REGISTRY:-459063349068.dkr.ecr.us-east-1.amazonaws.com}/trace:${IMAGE_TAG:-latest}
-  environment:
-    ROLE: worker
-    NODE_ENV: production
-    DATABASE_URL: ${DATABASE_URL}
-    REDIS_URL: ${REDIS_URL}
-    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-    GITHUB_TOKEN: ${GITHUB_TOKEN:-}
-    TRACE_AGENT_VERBOSE_EVENT_LOGS: ${TRACE_AGENT_VERBOSE_EVENT_LOGS:-0}
-  init: true
-  logging: *default-logging
-  restart: unless-stopped
-  stop_grace_period: 45s
-
 services:
   caddy:
     image: caddy:2-alpine
@@ -94,29 +17,82 @@ services:
       - caddy_config:/config
     logging: *default-logging
     restart: unless-stopped
-
-  web-blue:
-    <<: *web-service
-
-  web-green:
-    <<: *web-service
-
-  backend-blue:
-    <<: *backend-service
-
-  backend-green:
-    <<: *backend-service
-
-  worker-blue:
-    <<: *worker-service
     depends_on:
-      backend-blue:
-        condition: service_healthy
+      - web
+      - backend
 
-  worker-green:
-    <<: *worker-service
+  web:
+    image: ${ECR_REGISTRY:-459063349068.dkr.ecr.us-east-1.amazonaws.com}/trace:${IMAGE_TAG:-latest}
+    environment:
+      ROLE: web
+    logging: *default-logging
+    expose:
+      - "3000"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://localhost:3000/'').then(r=>{if(!r.ok)throw new Error(''bad status'');process.exit(0)}).catch(()=>process.exit(1))"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  backend:
+    image: ${ECR_REGISTRY:-459063349068.dkr.ecr.us-east-1.amazonaws.com}/trace:${IMAGE_TAG:-latest}
+    environment:
+      ROLE: backend
+      NODE_ENV: production
+      PORT: "4000"
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
+      TRACE_WEB_URL: ${TRACE_WEB_URL:-https://gettrace.org}
+      TRACE_SERVER_PUBLIC_URL: ${TRACE_SERVER_PUBLIC_URL:-https://gettrace.org}
+      S3_BUCKET: ${S3_BUCKET}
+      AWS_REGION: ${AWS_REGION}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://gettrace.org,https://www.gettrace.org}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      FLY_API_TOKEN: ${FLY_API_TOKEN:-}
+      FLY_APP_NAME: ${FLY_APP_NAME:-}
+      CONTAINER_IMAGE: ${CONTAINER_IMAGE:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    logging: *default-logging
+    ports:
+      - "127.0.0.1:4000:4000"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://localhost:4000/health'').then(async r=>{if(!r.ok)throw new Error(''bad status'');const body=await r.json();if(body.ready!==true)throw new Error(''not ready'');process.exit(0)}).catch(()=>process.exit(1))"',
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  worker:
+    image: ${ECR_REGISTRY:-459063349068.dkr.ecr.us-east-1.amazonaws.com}/trace:${IMAGE_TAG:-latest}
+    environment:
+      ROLE: worker
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      TRACE_AGENT_VERBOSE_EVENT_LOGS: ${TRACE_AGENT_VERBOSE_EVENT_LOGS:-0}
+    logging: *default-logging
+    restart: unless-stopped
     depends_on:
-      backend-green:
+      backend:
         condition: service_healthy
 
 volumes:
