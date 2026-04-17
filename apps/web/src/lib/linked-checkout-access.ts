@@ -23,8 +23,9 @@ export interface LinkedCheckoutGroupAccess {
 
 export function getLinkedCheckoutGroupAccess(
   sessionGroupId: string,
-  currentUserId: string | null | undefined = useAuthStore.getState().user?.id ?? null,
+  currentUserId?: string | null | undefined,
 ): LinkedCheckoutGroupAccess {
+  const resolvedUserId = currentUserId ?? useAuthStore.getState().user?.id ?? null;
   const entityState = useEntityStore.getState();
   const group = entityState.sessionGroups[sessionGroupId] as SessionGroupEntity | undefined;
   const groupConnection = asRecord(group?.connection);
@@ -34,7 +35,7 @@ export function getLinkedCheckoutGroupAccess(
 
   const ownsRuntime =
     !!runtimeInstanceId &&
-    !!currentUserId &&
+    !!resolvedUserId &&
     sessionIds.some((sessionId) => {
       const session = entityState.sessions[sessionId] as SessionEntity | undefined;
       if (!session || session.hosting !== "local") return false;
@@ -43,7 +44,7 @@ export function getLinkedCheckoutGroupAccess(
       }
 
       const createdBy = session.createdBy as { id?: string } | undefined;
-      return createdBy?.id === currentUserId;
+      return createdBy?.id === resolvedUserId;
     });
 
   return {

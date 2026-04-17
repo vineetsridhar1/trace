@@ -1,5 +1,9 @@
 import type { WebSocket } from "ws";
 import { randomUUID } from "crypto";
+import type {
+  BridgeLinkedCheckoutStatus,
+  BridgeLinkedCheckoutActionResultPayload,
+} from "@trace/shared";
 import { sessionRouter } from "./session-router.js";
 import { sessionService } from "../services/session.js";
 import { runtimeDebug } from "./runtime-debug.js";
@@ -132,20 +136,7 @@ export function handleBridgeConnection(ws: WebSocket) {
       if (msg.type === "linked_checkout_status_result" && typeof msg.requestId === "string") {
         sessionRouter.resolveLinkedCheckoutStatusRequest(
           msg.requestId,
-          msg.status as {
-            repoId: string;
-            repoPath: string | null;
-            isAttached: boolean;
-            attachedSessionGroupId: string | null;
-            targetBranch: string | null;
-            autoSyncEnabled: boolean;
-            currentBranch: string | null;
-            currentCommitSha: string | null;
-            lastSyncedCommitSha: string | null;
-            lastSyncError: string | null;
-            restoreBranch: string | null;
-            restoreCommitSha: string | null;
-          },
+          msg.status as BridgeLinkedCheckoutStatus,
         );
         return;
       }
@@ -153,24 +144,7 @@ export function handleBridgeConnection(ws: WebSocket) {
       if (msg.type === "linked_checkout_action_result" && typeof msg.requestId === "string") {
         sessionRouter.resolveLinkedCheckoutActionRequest(
           msg.requestId,
-          msg.result as {
-            ok: boolean;
-            status: {
-              repoId: string;
-              repoPath: string | null;
-              isAttached: boolean;
-              attachedSessionGroupId: string | null;
-              targetBranch: string | null;
-              autoSyncEnabled: boolean;
-              currentBranch: string | null;
-              currentCommitSha: string | null;
-              lastSyncedCommitSha: string | null;
-              lastSyncError: string | null;
-              restoreBranch: string | null;
-              restoreCommitSha: string | null;
-            };
-            error: string | null;
-          },
+          msg.result as BridgeLinkedCheckoutActionResultPayload,
         );
         return;
       }

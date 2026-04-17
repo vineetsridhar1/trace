@@ -361,7 +361,7 @@ export async function restoreLinkedCheckout(
   }
 
   if (isLinkedCheckoutPending(repoId, runtimeInstanceId)) {
-    throw new Error("A root checkout sync is already in progress.");
+    throw new Error("A linked checkout sync is already in progress.");
   }
 
   useLinkedCheckoutStore.getState().setPending(key, true);
@@ -393,7 +393,7 @@ export async function setLinkedCheckoutAutoSync(
   }
 
   if (isLinkedCheckoutPending(repoId, runtimeInstanceId)) {
-    throw new Error("A root checkout sync is already in progress.");
+    throw new Error("A linked checkout sync is already in progress.");
   }
 
   useLinkedCheckoutStore.getState().setPending(key, true);
