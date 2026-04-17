@@ -80,6 +80,8 @@ export type EntityState = Tables & {
   _sessionIdsByGroup: Record<string, string[]>;
   /** Reverse index: scope key → message IDs belonging to that scope */
   _messageIdsByScope: MessageIdsByScope;
+  /** Reverse index: parentId (tool_use_id) → event IDs that are children of that parent */
+  _eventIdsByParentId: Record<string, string[]>;
 } & EntityActions;
 
 type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
@@ -100,6 +102,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   eventsByScope: {},
   _sessionIdsByGroup: {},
   _messageIdsByScope: {},
+  _eventIdsByParentId: {},
 
   upsert: <T extends EntityType>(entityType: T, id: string, data: EntityTableMap[T]) =>
     set((state: EntityState) => {
@@ -263,16 +266,25 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
     set((state: EntityState) => {
       const bucket = state.eventsByScope[scopeKey];
       const updated = bucket ? { ...bucket, [id]: event } : { [id]: event };
-      return { eventsByScope: { ...state.eventsByScope, [scopeKey]: updated } };
+      const parentIdx = updateParentIdIndex(state._eventIdsByParentId, id, event.parentId);
+      return {
+        eventsByScope: { ...state.eventsByScope, [scopeKey]: updated },
+        ...(parentIdx !== state._eventIdsByParentId ? { _eventIdsByParentId: parentIdx } : {}),
+      };
     }),
 
   upsertManyScopedEvents: (scopeKey: string, items: Array<Event & { id: string }>) =>
     set((state: EntityState) => {
       const bucket = { ...(state.eventsByScope[scopeKey] ?? {}) };
+      let parentIdx = state._eventIdsByParentId;
       for (const item of items) {
         bucket[item.id] = item;
+        parentIdx = updateParentIdIndex(parentIdx, item.id, item.parentId);
       }
-      return { eventsByScope: { ...state.eventsByScope, [scopeKey]: bucket } };
+      return {
+        eventsByScope: { ...state.eventsByScope, [scopeKey]: bucket },
+        ...(parentIdx !== state._eventIdsByParentId ? { _eventIdsByParentId: parentIdx } : {}),
+      };
     }),
 
   removeScopedEvents: (scopeKey: string) =>
@@ -292,6 +304,7 @@ export class StoreBatchWriter {
   private eventsByScope: EventsByScope;
   private _sessionIdsByGroup: Record<string, string[]>;
   private _messageIdsByScope: MessageIdsByScope;
+  private _eventIdsByParentId: Record<string, string[]>;
   private dirty = new Set<string>();
 
   constructor() {
@@ -305,6 +318,7 @@ export class StoreBatchWriter {
     this.eventsByScope = s.eventsByScope;
     this._sessionIdsByGroup = s._sessionIdsByGroup;
     this._messageIdsByScope = s._messageIdsByScope;
+    this._eventIdsByParentId = s._eventIdsByParentId;
   }
 
   /** Read the current (possibly batched) value of an entity */
@@ -384,6 +398,7 @@ export class StoreBatchWriter {
     const bucket = this.eventsByScope[scopeKey];
     this.eventsByScope[scopeKey] = bucket ? { ...bucket, [id]: event } : { [id]: event };
     this.dirty.add("eventsByScope");
+    this.updateParentIdIndex(id, event.parentId);
   }
 
   /** Remove a single event from a scoped bucket (used for optimistic cleanup) */
@@ -408,6 +423,8 @@ export class StoreBatchWriter {
         update._sessionIdsByGroup = this._sessionIdsByGroup;
       } else if (key === "_messageIdsByScope") {
         update._messageIdsByScope = this._messageIdsByScope;
+      } else if (key === "_eventIdsByParentId") {
+        update._eventIdsByParentId = this._eventIdsByParentId;
       } else {
         update[key] = (this.tables as Record<string, unknown>)[key];
       }
@@ -489,6 +506,20 @@ export class StoreBatchWriter {
       this.dirty.add("_messageIdsByScope");
     }
   }
+
+  private updateParentIdIndex(
+    eventId: string,
+    parentId: string | null | undefined,
+  ): void {
+    if (!parentId) return;
+    const arr = this._eventIdsByParentId[parentId];
+    if (arr?.includes(eventId)) return;
+    if (this._eventIdsByParentId === useEntityStore.getState()._eventIdsByParentId) {
+      this._eventIdsByParentId = { ...this._eventIdsByParentId };
+    }
+    this._eventIdsByParentId[parentId] = arr ? [...arr, eventId] : [eventId];
+    this.dirty.add("_eventIdsByParentId");
+  }
 }
 
 const ENTITY_KEYS: EntityType[] = [
@@ -513,6 +544,19 @@ function getMessageEntityScopeKey(
   if (message.chatId) return messageScopeKey("chat", message.chatId);
   if (message.channelId) return messageScopeKey("channel", message.channelId);
   return null;
+}
+
+function updateParentIdIndex(
+  index: Record<string, string[]>,
+  eventId: string,
+  parentId: string | null | undefined,
+): Record<string, string[]> {
+  if (!parentId) return index;
+  const arr = index[parentId];
+  if (arr?.includes(eventId)) return index;
+  const next = index === useEntityStore.getState()._eventIdsByParentId ? { ...index } : index;
+  next[parentId] = arr ? [...arr, eventId] : [eventId];
+  return next;
 }
 
 function updateMessageIdsByScope(
@@ -660,28 +704,17 @@ export function useMessageIdsForScope(
   );
 }
 
-/** Subscribe to event IDs whose parentId matches the given value, sorted by timestamp.
+/** Subscribe to event IDs whose parentId matches the given value.
+ *  Backed by a reverse index — O(1) lookup, no bucket scan.
  *  Used by SubagentRow to surface nested child events belonging to a specific tool_use. */
 export function useScopedEventIdsByParentId(
-  scopeKey: string,
+  _scopeKey: string,
   parentId: string | null | undefined,
 ): string[] {
   return useEntityStore(
     useShallow((state: EntityState) => {
       if (!parentId) return EMPTY_IDS;
-      const bucket = state.eventsByScope[scopeKey];
-      if (!bucket) return EMPTY_IDS;
-      const matches: Array<readonly [string, Event]> = [];
-      for (const [id, event] of Object.entries(bucket)) {
-        if (event.parentId === parentId) matches.push([id, event] as const);
-      }
-      matches.sort(([, a], [, b]) => {
-        const ta = a.timestamp ?? "";
-        const tb = b.timestamp ?? "";
-        if (ta === tb) return 0;
-        return ta < tb ? -1 : 1;
-      });
-      return matches.map(([id]) => id);
+      return state._eventIdsByParentId[parentId] ?? EMPTY_IDS;
     }),
   );
 }
