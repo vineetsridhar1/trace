@@ -466,9 +466,13 @@ export class BridgeClient implements IBridgeClient {
     // Download attached images to temp files
     let imagePaths: string[] | undefined;
     if (imageUrls?.length) {
-      imagePaths = await downloadImagesToTempFiles(imageUrls, {
-        fs, path, tmpdir: os.tmpdir, randomUUID: crypto.randomUUID,
-      });
+      try {
+        imagePaths = await downloadImagesToTempFiles(imageUrls, {
+          fs, path, tmpdir: os.tmpdir, randomUUID: crypto.randomUUID,
+        });
+      } catch (err) {
+        console.error(`[bridge] Failed to download images for ${sessionId}:`, err);
+      }
     }
 
     const runId = this.startRun(sessionId);
