@@ -35,12 +35,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
 
     const permissionFlag =
       interactionMode === "plan" ? "--permission-mode" : "--dangerously-skip-permissions";
-    let fullPrompt = prompt;
-    if (imagePaths && imagePaths.length > 0) {
-      const refs = imagePaths.map((p) => `[Attached image: ${p}]`).join("\n");
-      fullPrompt = `${refs}\n\n${prompt}`;
-    }
-    const args = ["-p", fullPrompt, "--output-format", "stream-json", "--verbose"];
+    const args = ["-p", prompt, "--output-format", "stream-json", "--verbose"];
     if (model) {
       args.push("--model", model);
     }

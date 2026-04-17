@@ -477,13 +477,20 @@ export class BridgeClient implements IBridgeClient {
       }
     }
 
+    // Prepend image paths to prompt so all adapters see them
+    let finalPrompt = prompt;
+    if (imagePaths?.length) {
+      const refs = imagePaths.map((p) => `[Attached image: ${p}]`).join("\n");
+      finalPrompt = `${refs}\n\n${prompt}`;
+    }
+
     const runId = this.startRun(sessionId);
     adapter.abort();
 
     // Capture adapter/run identity so callbacks from older runs are dropped.
     const activeAdapter = adapter;
     adapter.run({
-      prompt,
+      prompt: finalPrompt,
       cwd: workdir,
       imagePaths,
       onOutput: (output) => {
