@@ -7,7 +7,7 @@ interface Props {
   state: LinkedCheckoutHeaderState;
 }
 
-type PendingAction = "link" | "sync" | "restore" | "toggle-auto-sync" | null;
+type PendingAction = "sync" | "restore" | "toggle-auto-sync" | null;
 
 export function LinkedCheckoutActions({ state }: Props) {
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
@@ -18,9 +18,6 @@ export function LinkedCheckoutActions({ state }: Props) {
     isAttachedToThisGroup,
     pending,
     autoSyncEnabled,
-    canLinkRepo,
-    requiresRepoLink,
-    onLinkRepo,
     onSync,
     onRestore,
     onToggleAutoSync,
@@ -36,21 +33,6 @@ export function LinkedCheckoutActions({ state }: Props) {
       setPendingAction((current) => (current === action ? null : current));
     }
   };
-
-  if (requiresRepoLink && canLinkRepo) {
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => void runAction("link", onLinkRepo)}
-        disabled={pending}
-      >
-        {pendingAction === "link" ? "Linking..." : "Link Local Checkout"}
-      </Button>
-    );
-  }
-
-  if (requiresRepoLink) return null;
 
   return (
     <>
