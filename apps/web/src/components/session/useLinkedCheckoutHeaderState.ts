@@ -1,11 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
-import type { GitCheckpoint } from "@trace/gql";
-import { useEntityField } from "../../stores/entity";
 import {
   linkLinkedCheckoutRepo,
   restoreLinkedCheckout,
-  scheduleAutoSyncLinkedCheckout,
   setLinkedCheckoutAutoSync,
   syncLinkedCheckout,
   useLinkedCheckoutStatus,
@@ -44,9 +41,6 @@ export function useLinkedCheckoutHeaderState({
   sessionGroupId,
   enabled,
 }: UseLinkedCheckoutHeaderStateProps): LinkedCheckoutHeaderState {
-  const groupGitCheckpoints = useEntityField("sessionGroups", sessionGroupId, "gitCheckpoints") as
-    | GitCheckpoint[]
-    | undefined;
   const {
     status,
     pending: syncPending,
@@ -65,54 +59,6 @@ export function useLinkedCheckoutHeaderState({
   const pending = syncPending || linking;
   const syncedCommitSha = status?.lastSyncedCommitSha ?? status?.currentCommitSha ?? null;
   const summaryBranch = isAttachedToThisGroup && groupBranch ? groupBranch : status?.targetBranch;
-  const latestGroupCheckpoint = (groupGitCheckpoints ?? []).reduce<GitCheckpoint | null>(
-    (latest, checkpoint) => {
-      if (!latest) return checkpoint;
-
-      const latestCommittedAt = latest.committedAt ?? "";
-      const checkpointCommittedAt = checkpoint.committedAt ?? "";
-      if (checkpointCommittedAt !== latestCommittedAt) {
-        return checkpointCommittedAt.localeCompare(latestCommittedAt) > 0 ? checkpoint : latest;
-      }
-
-      return checkpoint.createdAt.localeCompare(latest.createdAt) > 0 ? checkpoint : latest;
-    },
-    null,
-  );
-
-  useEffect(() => {
-    if (!enabled || !loaded || pending) return;
-    if (!repoId || !groupBranch || !runtimeInstanceId || !status) return;
-    if (!latestGroupCheckpoint?.commitSha) return;
-    if (!status.isAttached || status.attachedSessionGroupId !== sessionGroupId) return;
-    if (!status.autoSyncEnabled) return;
-    if (
-      status.lastSyncedCommitSha === latestGroupCheckpoint.commitSha ||
-      status.currentCommitSha === latestGroupCheckpoint.commitSha
-    ) {
-      return;
-    }
-
-    scheduleAutoSyncLinkedCheckout({
-      repoId,
-      sessionGroupId,
-      runtimeInstanceId,
-      branch: groupBranch,
-      commitSha: latestGroupCheckpoint.commitSha,
-      autoSyncEnabled: status.autoSyncEnabled,
-      source: "auto",
-    });
-  }, [
-    enabled,
-    groupBranch,
-    latestGroupCheckpoint,
-    loaded,
-    pending,
-    repoId,
-    runtimeInstanceId,
-    sessionGroupId,
-    status,
-  ]);
 
   const onLinkRepo = async () => {
     if (!repoId || !runtimeInstanceId || pending) return;

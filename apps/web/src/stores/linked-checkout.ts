@@ -18,6 +18,11 @@ export interface LinkedCheckoutSyncRequest extends DesktopLinkedCheckoutSyncInpu
   source: LinkedCheckoutSyncSource;
 }
 
+interface AutoSyncBlockState {
+  commitSha: string;
+  retryAt: number;
+}
+
 type LinkedCheckoutQueryData = {
   linkedCheckoutStatus?: DesktopLinkedCheckoutStatus | null;
 };
@@ -37,16 +42,21 @@ interface LinkedCheckoutState {
   pendingByKey: Record<string, boolean>;
   queuedSyncByKey: Record<string, LinkedCheckoutSyncRequest | null>;
   inFlightSyncByKey: Record<string, Promise<DesktopLinkedCheckoutActionResult> | null | undefined>;
+  autoSyncBlockByKey: Record<string, AutoSyncBlockState | null | undefined>;
   setStatus: (key: string, status: DesktopLinkedCheckoutStatus | null) => void;
   setPending: (key: string, pending: boolean) => void;
   replaceQueuedSync: (key: string, request: LinkedCheckoutSyncRequest | null) => void;
   takeQueuedSync: (key: string) => LinkedCheckoutSyncRequest | null;
   getInFlightSync: (key: string) => Promise<DesktopLinkedCheckoutActionResult> | null | undefined;
+  getAutoSyncBlock: (key: string) => AutoSyncBlockState | null | undefined;
+  setAutoSyncBlock: (key: string, block: AutoSyncBlockState | null) => void;
   setInFlightSync: (
     key: string,
     promise: Promise<DesktopLinkedCheckoutActionResult> | null,
   ) => void;
 }
+
+const AUTO_SYNC_FAILURE_COOLDOWN_MS = 30_000;
 
 function hasLinkedCheckoutPicker(): boolean {
   return typeof window !== "undefined" && typeof window.trace?.pickFolder === "function";
@@ -120,14 +130,35 @@ export const useLinkedCheckoutStore = create<LinkedCheckoutState>((set, get) => 
   pendingByKey: {},
   queuedSyncByKey: {},
   inFlightSyncByKey: {},
+  autoSyncBlockByKey: {},
 
   setStatus: (key, status) =>
-    set((state) => ({
-      statusByKey: {
-        ...state.statusByKey,
-        [key]: status,
-      },
-    })),
+    set((state) => {
+      const nextState: Partial<LinkedCheckoutState> = {
+        statusByKey: {
+          ...state.statusByKey,
+          [key]: status,
+        },
+      };
+
+      const currentBlock = state.autoSyncBlockByKey[key];
+      const shouldClearBlock =
+        !!currentBlock &&
+        (!status ||
+          !status.isAttached ||
+          !status.autoSyncEnabled ||
+          status.lastSyncedCommitSha === currentBlock.commitSha ||
+          status.currentCommitSha === currentBlock.commitSha);
+
+      if (shouldClearBlock) {
+        nextState.autoSyncBlockByKey = {
+          ...state.autoSyncBlockByKey,
+          [key]: null,
+        };
+      }
+
+      return nextState;
+    }),
 
   setPending: (key, pending) =>
     set((state) => ({
@@ -157,6 +188,16 @@ export const useLinkedCheckoutStore = create<LinkedCheckoutState>((set, get) => 
   },
 
   getInFlightSync: (key) => get().inFlightSyncByKey[key],
+
+  getAutoSyncBlock: (key) => get().autoSyncBlockByKey[key],
+
+  setAutoSyncBlock: (key, block) =>
+    set((state) => ({
+      autoSyncBlockByKey: {
+        ...state.autoSyncBlockByKey,
+        [key]: block,
+      },
+    })),
 
   setInFlightSync: (key, promise) =>
     set((state) => ({
@@ -254,6 +295,9 @@ async function runSyncLoop(
 
   const store = useLinkedCheckoutStore.getState();
   store.setPending(key, true);
+  if (initialRequest.source === "manual") {
+    store.setAutoSyncBlock(key, null);
+  }
 
   let nextRequest: LinkedCheckoutSyncRequest | null = initialRequest;
   let lastResult: DesktopLinkedCheckoutActionResult = {
@@ -277,9 +321,16 @@ async function runSyncLoop(
       );
       useLinkedCheckoutStore.getState().setStatus(key, lastResult.status);
       if (!lastResult.ok) {
+        if (nextRequest.source === "auto" && nextRequest.commitSha) {
+          useLinkedCheckoutStore.getState().setAutoSyncBlock(key, {
+            commitSha: nextRequest.commitSha,
+            retryAt: Date.now() + AUTO_SYNC_FAILURE_COOLDOWN_MS,
+          });
+        }
         useLinkedCheckoutStore.getState().replaceQueuedSync(key, null);
         break;
       }
+      useLinkedCheckoutStore.getState().setAutoSyncBlock(key, null);
       nextRequest = useLinkedCheckoutStore.getState().takeQueuedSync(key);
     }
   } catch (error) {
@@ -296,6 +347,12 @@ async function runSyncLoop(
       status,
     };
     useLinkedCheckoutStore.getState().setStatus(key, status);
+    if (nextRequest?.source === "auto" && nextRequest.commitSha) {
+      useLinkedCheckoutStore.getState().setAutoSyncBlock(key, {
+        commitSha: nextRequest.commitSha,
+        retryAt: Date.now() + AUTO_SYNC_FAILURE_COOLDOWN_MS,
+      });
+    }
     useLinkedCheckoutStore.getState().replaceQueuedSync(key, null);
   } finally {
     useLinkedCheckoutStore.getState().setPending(key, false);
@@ -328,6 +385,15 @@ export async function syncLinkedCheckout(
 export function scheduleAutoSyncLinkedCheckout(request: LinkedCheckoutSyncRequest): void {
   const key = getStoreKey(request.repoId, request.runtimeInstanceId);
   if (!key) return;
+
+  const autoSyncBlock = useLinkedCheckoutStore.getState().getAutoSyncBlock(key);
+  if (
+    request.commitSha &&
+    autoSyncBlock?.commitSha === request.commitSha &&
+    autoSyncBlock.retryAt > Date.now()
+  ) {
+    return;
+  }
 
   const existingPromise = useLinkedCheckoutStore.getState().getInFlightSync(key);
   if (existingPromise) {
@@ -365,6 +431,7 @@ export async function restoreLinkedCheckout(
   }
 
   useLinkedCheckoutStore.getState().setPending(key, true);
+  useLinkedCheckoutStore.getState().setAutoSyncBlock(key, null);
   try {
     const result = await runLinkedCheckoutMutation(
       RESTORE_LINKED_CHECKOUT_MUTATION,
@@ -408,6 +475,7 @@ export async function setLinkedCheckoutAutoSync(
       },
     );
     useLinkedCheckoutStore.getState().setStatus(key, result.status);
+    useLinkedCheckoutStore.getState().setAutoSyncBlock(key, null);
     return result;
   } finally {
     useLinkedCheckoutStore.getState().setPending(key, false);

@@ -105,6 +105,10 @@ export const sessionQueries = {
       ctx.userId,
     );
   },
+  sessionGroupLatestCheckpoint: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return sessionService.getLatestGitCheckpointForGroup(args.sessionGroupId, orgId);
+  },
   sessionSlashCommands: async (_: unknown, args: { sessionId: string }, ctx: Context) => {
     if (!ctx.userId) throw new AuthenticationError();
 
