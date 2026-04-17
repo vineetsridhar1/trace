@@ -86,15 +86,15 @@ export function UserBubble({
             <span className="text-xs font-semibold text-accent">{displayName}</span>
             <span className="text-[10px] text-muted-foreground">{formatTime(timestamp)}</span>
           </div>
+          {imageKeys && imageKeys.length > 0 && (
+            <div className="mb-1.5 flex gap-1.5 flex-wrap">
+              {imageKeys.map((key, i) => (
+                <ImageChip key={key} imageKey={key} label={`Image ${i + 1}`} />
+              ))}
+            </div>
+          )}
           <div className="text-sm leading-relaxed break-words">
             <Markdown>{displayText}</Markdown>
-            {imageKeys && imageKeys.length > 0 && (
-              <span className="inline-flex gap-1.5 flex-wrap ml-1 align-middle">
-                {imageKeys.map((key, i) => (
-                  <ImageChip key={key} imageKey={key} label={`Image ${i + 1}`} />
-                ))}
-              </span>
-            )}
           </div>
         </div>
         {footer ? <div className="mt-1.5 w-full">{footer}</div> : null}
