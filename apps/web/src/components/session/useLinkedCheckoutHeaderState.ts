@@ -1,7 +1,5 @@
-import { useState } from "react";
 import { toast } from "sonner";
 import {
-  linkLinkedCheckoutRepo,
   restoreLinkedCheckout,
   setLinkedCheckoutAutoSync,
   syncLinkedCheckout,
@@ -17,9 +15,6 @@ interface UseLinkedCheckoutHeaderStateProps {
 }
 
 export interface LinkedCheckoutHeaderState {
-  repoLinked: boolean;
-  canLinkRepo: boolean;
-  requiresRepoLink: boolean;
   isAttachedToThisGroup: boolean;
   isAttachedElsewhere: boolean;
   pending: boolean;
@@ -28,7 +23,6 @@ export interface LinkedCheckoutHeaderState {
   syncedCommitSha: string | null;
   lastSyncError: string | null | undefined;
   canShowControls: boolean;
-  onLinkRepo: () => Promise<void>;
   onSync: () => Promise<void>;
   onRestore: () => Promise<void>;
   onToggleAutoSync: () => Promise<void>;
@@ -41,62 +35,20 @@ export function useLinkedCheckoutHeaderState({
   sessionGroupId,
   enabled,
 }: UseLinkedCheckoutHeaderStateProps): LinkedCheckoutHeaderState {
-  const {
-    status,
-    pending: syncPending,
-    loaded,
-    canPickFolder,
-  } = useLinkedCheckoutStatus(repoId ?? null, sessionGroupId, runtimeInstanceId ?? null, enabled);
-  const [linking, setLinking] = useState(false);
+  const { status, pending, loaded } = useLinkedCheckoutStatus(
+    repoId ?? null,
+    sessionGroupId,
+    runtimeInstanceId ?? null,
+    enabled,
+  );
 
   const isAttachedToThisGroup = status?.attachedSessionGroupId === sessionGroupId;
   const isAttachedElsewhere = !!status?.isAttached && !isAttachedToThisGroup;
   const repoLinked = !!status?.repoPath;
   const hasSyncContext = !!repoId && !!groupBranch && !!runtimeInstanceId;
-  const canShowControls = enabled && hasSyncContext && loaded;
-  const canLinkRepo = canShowControls && !repoLinked && canPickFolder;
-  const requiresRepoLink = canShowControls && !repoLinked;
-  const pending = syncPending || linking;
+  const canShowControls = enabled && hasSyncContext && loaded && repoLinked;
   const syncedCommitSha = status?.lastSyncedCommitSha ?? status?.currentCommitSha ?? null;
   const summaryBranch = isAttachedToThisGroup && groupBranch ? groupBranch : status?.targetBranch;
-
-  const onLinkRepo = async () => {
-    if (!repoId || !runtimeInstanceId || pending) return;
-
-    if (!window.trace?.pickFolder || !canPickFolder) {
-      toast.error("Linking a local checkout is only available in Trace Desktop.");
-      return;
-    }
-
-    setLinking(true);
-    try {
-      const folderPath = await window.trace.pickFolder();
-      if (!folderPath) return;
-
-      const result = await linkLinkedCheckoutRepo(
-        sessionGroupId,
-        repoId,
-        folderPath,
-        runtimeInstanceId,
-      );
-      if (!result.ok) {
-        toast.error("Failed to link local checkout", {
-          description: result.error ?? "Unknown error",
-        });
-        return;
-      }
-
-      toast.success("Local checkout linked", {
-        description: "You can now sync this session group into your main worktree.",
-      });
-    } catch (error) {
-      toast.error("Failed to link local checkout", {
-        description: error instanceof Error ? error.message : String(error),
-      });
-    } finally {
-      setLinking(false);
-    }
-  };
 
   const onSync = async () => {
     if (!repoId || !groupBranch || !runtimeInstanceId || pending) return;
@@ -176,9 +128,6 @@ export function useLinkedCheckoutHeaderState({
   };
 
   return {
-    repoLinked,
-    canLinkRepo,
-    requiresRepoLink,
     isAttachedToThisGroup,
     isAttachedElsewhere,
     pending,
@@ -187,7 +136,6 @@ export function useLinkedCheckoutHeaderState({
     syncedCommitSha,
     lastSyncError: status?.lastSyncError,
     canShowControls,
-    onLinkRepo,
     onSync,
     onRestore,
     onToggleAutoSync,

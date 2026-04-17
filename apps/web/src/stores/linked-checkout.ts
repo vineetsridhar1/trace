@@ -48,10 +48,6 @@ interface LinkedCheckoutState {
   ) => void;
 }
 
-function hasLinkedCheckoutPicker(): boolean {
-  return typeof window !== "undefined" && typeof window.trace?.pickFolder === "function";
-}
-
 function getStoreKey(
   repoId: string | null | undefined,
   runtimeInstanceId: string | null | undefined,
@@ -198,7 +194,6 @@ export async function refreshLinkedCheckoutStatus(
     useLinkedCheckoutStore.getState().setStatus(key, status);
     return status;
   } catch (error) {
-    useLinkedCheckoutStore.getState().setStatus(key, null);
     throw error;
   }
 }
@@ -438,6 +433,5 @@ export function useLinkedCheckoutStatus(
     status: enabled ? (status ?? null) : null,
     pending: enabled ? pending : false,
     loaded: enabled ? loaded : false,
-    canPickFolder: hasLinkedCheckoutPicker(),
   };
 }
