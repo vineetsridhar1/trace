@@ -14,6 +14,7 @@ import {
 import { getSessionChannelId } from "../lib/session-group";
 import { notifyForEvent } from "../notifications/handlers";
 import { takePendingOptimisticSession } from "../lib/optimistic-message";
+import { getLinkedCheckoutGroupAccess } from "../lib/linked-checkout-access";
 import type {
   AgentStatus,
   Event,
@@ -211,31 +212,19 @@ function extractGitCheckpointRewrite(
   };
 }
 
-function canManageLinkedCheckoutForGroup(sessionGroupId: string): boolean {
-  const currentUserId = useAuthStore.getState().user?.id;
-  if (!currentUserId) return false;
-
-  const entityState = useEntityStore.getState();
-  const sessionIds = entityState._sessionIdsByGroup[sessionGroupId] ?? [];
-
-  return sessionIds.some((sessionId) => {
-    const session = entityState.sessions[sessionId];
-    if (!session || session.hosting !== "local") return false;
-    const createdBy = session.createdBy as { id?: string } | undefined;
-    if (createdBy?.id !== currentUserId) return false;
-    const connection = session.connection as Record<string, unknown> | null | undefined;
-    return !connection || connection.state !== "disconnected";
-  });
-}
-
 async function maybeAutoSyncLinkedCheckout(checkpoint: GitCheckpoint): Promise<void> {
-  if (!canManageLinkedCheckoutForGroup(checkpoint.sessionGroupId)) {
+  const access = getLinkedCheckoutGroupAccess(checkpoint.sessionGroupId);
+  if (!access.allowed || !access.runtimeInstanceId) {
     return;
   }
 
   const currentStatus =
-    getLinkedCheckoutStatusSnapshot(checkpoint.repoId, checkpoint.sessionGroupId) ??
-    (await ensureLinkedCheckoutStatus(checkpoint.repoId, checkpoint.sessionGroupId));
+    getLinkedCheckoutStatusSnapshot(checkpoint.repoId, access.runtimeInstanceId) ??
+    (await ensureLinkedCheckoutStatus(
+      checkpoint.repoId,
+      checkpoint.sessionGroupId,
+      access.runtimeInstanceId,
+    ));
 
   if (!currentStatus?.isAttached) return;
   if (currentStatus.attachedSessionGroupId !== checkpoint.sessionGroupId) return;
@@ -249,6 +238,7 @@ async function maybeAutoSyncLinkedCheckout(checkpoint: GitCheckpoint): Promise<v
   scheduleAutoSyncLinkedCheckout({
     repoId: checkpoint.repoId,
     sessionGroupId: checkpoint.sessionGroupId,
+    runtimeInstanceId: access.runtimeInstanceId,
     branch,
     commitSha: checkpoint.commitSha,
     autoSyncEnabled: currentStatus.autoSyncEnabled,

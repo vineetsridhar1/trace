@@ -32,6 +32,11 @@ vi.mock("../lib/session-router.js", () => ({
     listBranches: vi.fn().mockResolvedValue([]),
     listFiles: vi.fn().mockResolvedValue([]),
     readFile: vi.fn().mockResolvedValue(""),
+    getLinkedCheckoutStatus: vi.fn().mockResolvedValue(null),
+    linkLinkedCheckoutRepo: vi.fn().mockResolvedValue(null),
+    syncLinkedCheckout: vi.fn().mockResolvedValue(null),
+    restoreLinkedCheckout: vi.fn().mockResolvedValue(null),
+    setLinkedCheckoutAutoSync: vi.fn().mockResolvedValue(null),
   },
 }));
 
@@ -1316,12 +1321,10 @@ describe("SessionService", () => {
           }),
         }),
       );
-      const resumedCalls = eventServiceMock.create.mock.calls.filter(
-        (call: unknown[]) => {
-          const arg = call[0] as { eventType?: string } | undefined;
-          return arg?.eventType === "session_resumed";
-        },
-      );
+      const resumedCalls = eventServiceMock.create.mock.calls.filter((call: unknown[]) => {
+        const arg = call[0] as { eventType?: string } | undefined;
+        return arg?.eventType === "session_resumed";
+      });
       expect(resumedCalls.length).toBe(1);
     });
 
@@ -1386,12 +1389,10 @@ describe("SessionService", () => {
       );
       // persistConnectionFailure must mark this as non-auto-retryable because
       // the home bridge is the cause — only Move/home-return can unblock.
-      const connectionWrites = prismaMock.session.update.mock.calls.filter(
-        (call: unknown[]) => {
-          const arg = call[0] as { data?: { connection?: { autoRetryable?: boolean } } } | undefined;
-          return arg?.data?.connection !== undefined;
-        },
-      );
+      const connectionWrites = prismaMock.session.update.mock.calls.filter((call: unknown[]) => {
+        const arg = call[0] as { data?: { connection?: { autoRetryable?: boolean } } } | undefined;
+        return arg?.data?.connection !== undefined;
+      });
       expect(connectionWrites.length).toBeGreaterThan(0);
       const lastConn = connectionWrites[connectionWrites.length - 1][0].data.connection as {
         autoRetryable?: boolean;
@@ -1399,12 +1400,10 @@ describe("SessionService", () => {
       };
       expect(lastConn.autoRetryable).toBe(false);
       expect(lastConn.lastError).toContain("Laptop A");
-      const connectionLostCalls = eventServiceMock.create.mock.calls.filter(
-        (call: unknown[]) => {
-          const arg = call[0] as { payload?: { type?: string } } | undefined;
-          return arg?.payload?.type === "connection_lost";
-        },
-      );
+      const connectionLostCalls = eventServiceMock.create.mock.calls.filter((call: unknown[]) => {
+        const arg = call[0] as { payload?: { type?: string } } | undefined;
+        return arg?.payload?.type === "connection_lost";
+      });
       expect(connectionLostCalls.length).toBeGreaterThan(0);
     });
   });
@@ -1439,9 +1438,7 @@ describe("SessionService", () => {
           },
         }),
       );
-      sessionRouterMock.isRuntimeAvailable.mockImplementation(
-        (id: string) => id !== "runtime-a",
-      );
+      sessionRouterMock.isRuntimeAvailable.mockImplementation((id: string) => id !== "runtime-a");
       sessionRouterMock.getRuntime.mockImplementation((id: string) =>
         id === "runtime-a" ? null : { id, label: id, ws: { readyState: 1, OPEN: 1 } },
       );
@@ -1453,12 +1450,18 @@ describe("SessionService", () => {
 
       expect(sessionRouterMock.bindSession).not.toHaveBeenCalled();
       expect(sessionRouterMock.send).not.toHaveBeenCalled();
-      const recoveryFailedCalls = eventServiceMock.create.mock.calls.filter(
-        (call: unknown[]) => {
-          const arg = call[0] as { payload?: { type?: string; reason?: string; connection?: { autoRetryable?: boolean } } } | undefined;
-          return arg?.payload?.type === "recovery_failed";
-        },
-      );
+      const recoveryFailedCalls = eventServiceMock.create.mock.calls.filter((call: unknown[]) => {
+        const arg = call[0] as
+          | {
+              payload?: {
+                type?: string;
+                reason?: string;
+                connection?: { autoRetryable?: boolean };
+              };
+            }
+          | undefined;
+        return arg?.payload?.type === "recovery_failed";
+      });
       expect(recoveryFailedCalls.length).toBe(1);
       const failurePayload = recoveryFailedCalls[0][0].payload as {
         reason: string;
@@ -1893,6 +1896,136 @@ describe("SessionService", () => {
       const result = await service.moveToCloud("session-1", "org-1", "user", "user-1");
 
       expect(result.id).toBe("session-3");
+    });
+  });
+
+  describe("linked checkout", () => {
+    it("uses the session group's canonical runtime instead of the first local session runtime", async () => {
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        repoId: "repo-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-home",
+        },
+        sessions: [
+          {
+            id: "session-stale",
+            repoId: "repo-1",
+            hosting: "local",
+            createdById: "user-1",
+            connection: { state: "connected", runtimeInstanceId: "runtime-stale" },
+          },
+          {
+            id: "session-home",
+            repoId: "repo-1",
+            hosting: "local",
+            createdById: "user-1",
+            connection: { state: "connected", runtimeInstanceId: "runtime-home" },
+          },
+        ],
+      });
+      sessionRouterMock.getRuntime.mockImplementation((runtimeId: string) =>
+        runtimeId === "runtime-home"
+          ? {
+              id: "runtime-home",
+              hostingMode: "local",
+              ws: { readyState: 1, OPEN: 1 },
+            }
+          : null,
+      );
+      sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValueOnce({
+        repoId: "repo-1",
+        repoPath: "/tmp/trace",
+        isAttached: true,
+        attachedSessionGroupId: "group-1",
+        targetBranch: "main",
+        autoSyncEnabled: true,
+        currentBranch: "main",
+        currentCommitSha: "abc123",
+        lastSyncedCommitSha: "abc123",
+        lastSyncError: null,
+        restoreBranch: "main",
+        restoreCommitSha: "abc123",
+      });
+
+      await service.getLinkedCheckoutStatus("group-1", "repo-1", "org-1", "user-1");
+
+      expect(sessionRouterMock.getLinkedCheckoutStatus).toHaveBeenCalledWith(
+        "runtime-home",
+        "repo-1",
+      );
+    });
+
+    it("rejects linked-checkout access when the repo does not belong to the session group", async () => {
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        repoId: "repo-2",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-home",
+        },
+        sessions: [
+          {
+            id: "session-home",
+            repoId: "repo-2",
+            hosting: "local",
+            createdById: "user-1",
+            connection: { state: "connected", runtimeInstanceId: "runtime-home" },
+          },
+        ],
+      });
+
+      await expect(
+        service.getLinkedCheckoutStatus("group-1", "repo-1", "org-1", "user-1"),
+      ).rejects.toThrow("Session group is not associated with this repo");
+      expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
+    });
+
+    it("only allows the user who owns the session group's local runtime", async () => {
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        repoId: "repo-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-home",
+        },
+        sessions: [
+          {
+            id: "session-owner",
+            repoId: "repo-1",
+            hosting: "local",
+            createdById: "user-2",
+            connection: { state: "connected", runtimeInstanceId: "runtime-home" },
+          },
+          {
+            id: "session-other-runtime",
+            repoId: "repo-1",
+            hosting: "local",
+            createdById: "user-1",
+            connection: { state: "connected", runtimeInstanceId: "runtime-other" },
+          },
+        ],
+      });
+      sessionRouterMock.getRuntime.mockImplementation((runtimeId: string) =>
+        runtimeId === "runtime-home"
+          ? {
+              id: "runtime-home",
+              hostingMode: "local",
+              ws: { readyState: 1, OPEN: 1 },
+            }
+          : null,
+      );
+
+      await expect(
+        service.getLinkedCheckoutStatus("group-1", "repo-1", "org-1", "user-1"),
+      ).rejects.toThrow(
+        "Linked checkout is only available on session groups backed by your local runtime.",
+      );
+      expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
     });
   });
 

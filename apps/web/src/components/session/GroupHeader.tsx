@@ -22,6 +22,7 @@ interface GroupHeaderProps {
   sessionGroupId: string;
   repoId?: string | null;
   groupBranch?: string | null;
+  linkedCheckoutRuntimeInstanceId?: string | null;
   canManageLinkedCheckout: boolean;
   selectedSessionStatus: string;
   selectedSessionId: string | null;
@@ -39,6 +40,7 @@ export function GroupHeader({
   sessionGroupId,
   repoId,
   groupBranch,
+  linkedCheckoutRuntimeInstanceId,
   canManageLinkedCheckout,
   selectedSessionStatus,
   selectedSessionId,
@@ -56,6 +58,7 @@ export function GroupHeader({
   const linkedCheckout = useLinkedCheckoutHeaderState({
     repoId,
     groupBranch,
+    runtimeInstanceId: linkedCheckoutRuntimeInstanceId,
     sessionGroupId,
     enabled: canManageLinkedCheckout,
   });

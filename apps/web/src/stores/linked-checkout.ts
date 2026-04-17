@@ -14,6 +14,7 @@ import {
 export type LinkedCheckoutSyncSource = "manual" | "auto";
 
 export interface LinkedCheckoutSyncRequest extends DesktopLinkedCheckoutSyncInput {
+  runtimeInstanceId: string;
   source: LinkedCheckoutSyncSource;
 }
 
@@ -53,10 +54,11 @@ function hasLinkedCheckoutPicker(): boolean {
 
 function getStoreKey(
   repoId: string | null | undefined,
-  sessionGroupId: string | null | undefined,
+  runtimeInstanceId: string | null | undefined,
 ): string | null {
-  if (!repoId || !sessionGroupId) return null;
-  return `${sessionGroupId}:${repoId}`;
+  if (!repoId || !runtimeInstanceId) return null;
+  // Linked-checkout state lives on a specific local bridge, not just on the repo.
+  return `${runtimeInstanceId}:${repoId}`;
 }
 
 function emptyStatus(repoId: string): DesktopLinkedCheckoutStatus {
@@ -167,18 +169,18 @@ export const useLinkedCheckoutStore = create<LinkedCheckoutState>((set, get) => 
 
 export function isLinkedCheckoutPending(
   repoId: string | null | undefined,
-  sessionGroupId: string | null | undefined,
+  runtimeInstanceId: string | null | undefined,
 ): boolean {
-  const key = getStoreKey(repoId, sessionGroupId);
+  const key = getStoreKey(repoId, runtimeInstanceId);
   if (!key) return false;
   return useLinkedCheckoutStore.getState().pendingByKey[key] ?? false;
 }
 
 export function getLinkedCheckoutStatusSnapshot(
   repoId: string | null | undefined,
-  sessionGroupId: string | null | undefined,
+  runtimeInstanceId: string | null | undefined,
 ): DesktopLinkedCheckoutStatus | null | undefined {
-  const key = getStoreKey(repoId, sessionGroupId);
+  const key = getStoreKey(repoId, runtimeInstanceId);
   if (!key) return null;
   return useLinkedCheckoutStore.getState().statusByKey[key];
 }
@@ -186,8 +188,9 @@ export function getLinkedCheckoutStatusSnapshot(
 export async function refreshLinkedCheckoutStatus(
   repoId: string,
   sessionGroupId: string,
+  runtimeInstanceId: string,
 ): Promise<DesktopLinkedCheckoutStatus | null> {
-  const key = getStoreKey(repoId, sessionGroupId);
+  const key = getStoreKey(repoId, runtimeInstanceId);
   if (!key) return null;
 
   try {
@@ -203,22 +206,24 @@ export async function refreshLinkedCheckoutStatus(
 export async function ensureLinkedCheckoutStatus(
   repoId: string,
   sessionGroupId: string,
+  runtimeInstanceId: string,
 ): Promise<DesktopLinkedCheckoutStatus | null> {
-  const current = getLinkedCheckoutStatusSnapshot(repoId, sessionGroupId);
+  const current = getLinkedCheckoutStatusSnapshot(repoId, runtimeInstanceId);
   if (current !== undefined) {
     return current ?? null;
   }
-  return refreshLinkedCheckoutStatus(repoId, sessionGroupId);
+  return refreshLinkedCheckoutStatus(repoId, sessionGroupId, runtimeInstanceId);
 }
 
 export async function linkLinkedCheckoutRepo(
   sessionGroupId: string,
   repoId: string,
   localPath: string,
+  runtimeInstanceId: string,
 ): Promise<DesktopLinkedCheckoutActionResult> {
-  const key = getStoreKey(repoId, sessionGroupId);
+  const key = getStoreKey(repoId, runtimeInstanceId);
   if (!key) {
-    throw new Error("Missing linked checkout session group or repo.");
+    throw new Error("Missing linked checkout session group, repo, or runtime.");
   }
 
   useLinkedCheckoutStore.getState().setPending(key, true);
@@ -242,9 +247,9 @@ export async function linkLinkedCheckoutRepo(
 async function runSyncLoop(
   initialRequest: LinkedCheckoutSyncRequest,
 ): Promise<DesktopLinkedCheckoutActionResult> {
-  const key = getStoreKey(initialRequest.repoId, initialRequest.sessionGroupId);
+  const key = getStoreKey(initialRequest.repoId, initialRequest.runtimeInstanceId);
   if (!key) {
-    throw new Error("Missing linked checkout session group or repo.");
+    throw new Error("Missing linked checkout session group, repo, or runtime.");
   }
 
   const store = useLinkedCheckoutStore.getState();
@@ -283,6 +288,7 @@ async function runSyncLoop(
       (await refreshLinkedCheckoutStatus(
         initialRequest.repoId,
         initialRequest.sessionGroupId,
+        initialRequest.runtimeInstanceId,
       ).catch(() => null)) ?? emptyStatus(initialRequest.repoId);
     lastResult = {
       ok: false,
@@ -301,9 +307,9 @@ async function runSyncLoop(
 export async function syncLinkedCheckout(
   request: LinkedCheckoutSyncRequest,
 ): Promise<DesktopLinkedCheckoutActionResult> {
-  const key = getStoreKey(request.repoId, request.sessionGroupId);
+  const key = getStoreKey(request.repoId, request.runtimeInstanceId);
   if (!key) {
-    throw new Error("Missing linked checkout session group or repo.");
+    throw new Error("Missing linked checkout session group, repo, or runtime.");
   }
 
   const existingPromise = useLinkedCheckoutStore.getState().getInFlightSync(key);
@@ -320,7 +326,7 @@ export async function syncLinkedCheckout(
 }
 
 export function scheduleAutoSyncLinkedCheckout(request: LinkedCheckoutSyncRequest): void {
-  const key = getStoreKey(request.repoId, request.sessionGroupId);
+  const key = getStoreKey(request.repoId, request.runtimeInstanceId);
   if (!key) return;
 
   const existingPromise = useLinkedCheckoutStore.getState().getInFlightSync(key);
@@ -347,13 +353,14 @@ export function scheduleAutoSyncLinkedCheckout(request: LinkedCheckoutSyncReques
 export async function restoreLinkedCheckout(
   repoId: string,
   sessionGroupId: string,
+  runtimeInstanceId: string,
 ): Promise<DesktopLinkedCheckoutActionResult> {
-  const key = getStoreKey(repoId, sessionGroupId);
+  const key = getStoreKey(repoId, runtimeInstanceId);
   if (!key) {
-    throw new Error("Missing linked checkout session group or repo.");
+    throw new Error("Missing linked checkout session group, repo, or runtime.");
   }
 
-  if (isLinkedCheckoutPending(repoId, sessionGroupId)) {
+  if (isLinkedCheckoutPending(repoId, runtimeInstanceId)) {
     throw new Error("A root checkout sync is already in progress.");
   }
 
@@ -378,13 +385,14 @@ export async function setLinkedCheckoutAutoSync(
   repoId: string,
   sessionGroupId: string,
   enabled: boolean,
+  runtimeInstanceId: string,
 ): Promise<DesktopLinkedCheckoutActionResult> {
-  const key = getStoreKey(repoId, sessionGroupId);
+  const key = getStoreKey(repoId, runtimeInstanceId);
   if (!key) {
-    throw new Error("Missing linked checkout session group or repo.");
+    throw new Error("Missing linked checkout session group, repo, or runtime.");
   }
 
-  if (isLinkedCheckoutPending(repoId, sessionGroupId)) {
+  if (isLinkedCheckoutPending(repoId, runtimeInstanceId)) {
     throw new Error("A root checkout sync is already in progress.");
   }
 
@@ -409,9 +417,10 @@ export async function setLinkedCheckoutAutoSync(
 export function useLinkedCheckoutStatus(
   repoId: string | null | undefined,
   sessionGroupId: string | null | undefined,
+  runtimeInstanceId: string | null | undefined,
   enabled = true,
 ) {
-  const key = getStoreKey(repoId, sessionGroupId);
+  const key = enabled ? getStoreKey(repoId, runtimeInstanceId) : null;
   const status = useLinkedCheckoutStore((state) => (key ? state.statusByKey[key] : null));
   const pending = useLinkedCheckoutStore((state) =>
     key ? (state.pendingByKey[key] ?? false) : false,
@@ -421,14 +430,14 @@ export function useLinkedCheckoutStatus(
   );
 
   useEffect(() => {
-    if (!enabled || !repoId || !sessionGroupId) return;
-    void ensureLinkedCheckoutStatus(repoId, sessionGroupId).catch(() => {});
-  }, [enabled, repoId, sessionGroupId]);
+    if (!enabled || !repoId || !sessionGroupId || !runtimeInstanceId) return;
+    void ensureLinkedCheckoutStatus(repoId, sessionGroupId, runtimeInstanceId).catch(() => {});
+  }, [enabled, repoId, runtimeInstanceId, sessionGroupId]);
 
   return {
-    status: status ?? null,
-    pending,
-    loaded,
+    status: enabled ? (status ?? null) : null,
+    pending: enabled ? pending : false,
+    loaded: enabled ? loaded : false,
     canPickFolder: hasLinkedCheckoutPicker(),
   };
 }

@@ -653,37 +653,66 @@ export class SessionService {
     throw new Error("No connected runtime available for this session group");
   }
 
+  private getConnectionRuntimeInstanceId(connection: unknown): string | null {
+    if (!connection || typeof connection !== "object" || Array.isArray(connection)) {
+      return null;
+    }
+
+    const runtimeInstanceId = (connection as { runtimeInstanceId?: unknown }).runtimeInstanceId;
+    return typeof runtimeInstanceId === "string" && runtimeInstanceId.trim()
+      ? runtimeInstanceId
+      : null;
+  }
+
   private async resolveLinkedCheckoutRuntime(
     sessionGroupId: string,
+    repoId: string,
     organizationId: string,
     userId: string,
   ): Promise<string> {
     const group = await prisma.sessionGroup.findFirst({
       where: { id: sessionGroupId, organizationId },
-      select: { id: true },
+      select: {
+        id: true,
+        repoId: true,
+        connection: true,
+        sessions: {
+          select: {
+            id: true,
+            repoId: true,
+            hosting: true,
+            createdById: true,
+            connection: true,
+          },
+        },
+      },
     });
     if (!group) throw new Error("Session group not found");
 
-    const sessions = await prisma.session.findMany({
-      where: { sessionGroupId, organizationId },
-      select: { id: true, hosting: true, createdById: true, connection: true },
-    });
-    this.assertLocalFileOwnership(sessions, userId);
+    const repoMatchesGroup =
+      group.repoId === repoId || group.sessions.some((session) => session.repoId === repoId);
+    if (!repoMatchesGroup) {
+      throw new Error("Session group is not associated with this repo");
+    }
 
-    const runtimeId = sessions
-      .map((session) => {
-        if (session.hosting !== "local" || session.createdById !== userId) return null;
-        const connection = session.connection;
-        if (!connection || typeof connection !== "object" || !("runtimeInstanceId" in connection)) {
-          return null;
-        }
-        const value = (connection as { runtimeInstanceId?: string | null }).runtimeInstanceId;
-        return typeof value === "string" && value.trim() ? value : null;
-      })
-      .find((value): value is string => value != null);
+    // Linked checkout is tied to the session group's shared workspace runtime,
+    // not whichever child session happens to be selected in the UI.
+    const runtimeId = this.getConnectionRuntimeInstanceId(group.connection);
 
     if (!runtimeId) {
-      throw new Error("Linked checkout is only available for your local sessions.");
+      throw new Error(
+        "Linked checkout is only available on session groups backed by a local runtime.",
+      );
+    }
+
+    const ownsRuntime = group.sessions.some((session) => {
+      if (session.hosting !== "local" || session.createdById !== userId) return false;
+      return this.getConnectionRuntimeInstanceId(session.connection) === runtimeId;
+    });
+    if (!ownsRuntime) {
+      throw new Error(
+        "Linked checkout is only available on session groups backed by your local runtime.",
+      );
     }
 
     const runtime = sessionRouter.getRuntime(runtimeId);
@@ -3484,6 +3513,7 @@ export class SessionService {
     await this.assertRepoExists(repoId, organizationId);
     const runtimeId = await this.resolveLinkedCheckoutRuntime(
       sessionGroupId,
+      repoId,
       organizationId,
       userId,
     );
@@ -3500,6 +3530,7 @@ export class SessionService {
     await this.assertRepoExists(repoId, organizationId);
     const runtimeId = await this.resolveLinkedCheckoutRuntime(
       sessionGroupId,
+      repoId,
       organizationId,
       userId,
     );
@@ -3517,6 +3548,7 @@ export class SessionService {
     await this.assertRepoExists(repoId, organizationId);
     const runtimeId = await this.resolveLinkedCheckoutRuntime(
       sessionGroupId,
+      repoId,
       organizationId,
       userId,
     );
@@ -3538,6 +3570,7 @@ export class SessionService {
     await this.assertRepoExists(repoId, organizationId);
     const runtimeId = await this.resolveLinkedCheckoutRuntime(
       sessionGroupId,
+      repoId,
       organizationId,
       userId,
     );
@@ -3554,6 +3587,7 @@ export class SessionService {
     await this.assertRepoExists(repoId, organizationId);
     const runtimeId = await this.resolveLinkedCheckoutRuntime(
       sessionGroupId,
+      repoId,
       organizationId,
       userId,
     );

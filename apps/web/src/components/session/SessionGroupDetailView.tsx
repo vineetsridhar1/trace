@@ -22,6 +22,7 @@ import { useSessionGroupSessions } from "./useSessionGroupSessions";
 import { useTerminalActions } from "./useTerminalActions";
 import { useFileActions } from "./useFileActions";
 import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
+import { getLinkedCheckoutGroupAccess } from "../../lib/linked-checkout-access";
 
 const SESSION_GROUP_DETAIL_QUERY = gql`
   query SessionGroupDetail($id: ID!) {
@@ -316,13 +317,8 @@ export function SessionGroupDetailView({
   const linkedCheckoutRepoId =
     groupRepo?.id ?? (selectedSession?.repo as { id: string } | null | undefined)?.id ?? null;
   const linkedCheckoutBranch = groupBranch ?? selectedSession?.branch ?? null;
-  const linkedCheckoutAllowed = (() => {
-    if (!selectedSession || selectedSessionIsOptimistic) return false;
-    const createdBy = selectedSession.createdBy as { id: string } | undefined;
-    const isLocalOwner = selectedSession.hosting === "local" && createdBy?.id === currentUserId;
-    const isConnected = !groupConnection || groupConnection.state !== "disconnected";
-    return isLocalOwner && isConnected;
-  })();
+  const linkedCheckoutAccess = getLinkedCheckoutGroupAccess(sessionGroupId, currentUserId ?? null);
+  const linkedCheckoutAllowed = linkedCheckoutAccess.allowed;
 
   const terminalAllowed = (() => {
     if (!selectedSession) return false;
@@ -439,6 +435,7 @@ export function SessionGroupDetailView({
             sessionGroupId={sessionGroupId}
             repoId={linkedCheckoutRepoId}
             groupBranch={linkedCheckoutBranch}
+            linkedCheckoutRuntimeInstanceId={linkedCheckoutAccess.runtimeInstanceId}
             canManageLinkedCheckout={linkedCheckoutAllowed}
             selectedSessionStatus={selectedSessionStatus}
             selectedSessionId={selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)}
