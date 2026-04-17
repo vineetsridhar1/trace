@@ -81,13 +81,6 @@ export function UserBubble({
   return (
     <div className="flex justify-end">
       <div className="flex max-w-[85%] flex-col items-end">
-        {imageKeys && imageKeys.length > 0 && (
-          <div className="mb-2 flex gap-1.5 flex-wrap justify-end">
-            {imageKeys.map((key, i) => (
-              <ImageChip key={key} imageKey={key} label={`Image ${i + 1}`} />
-            ))}
-          </div>
-        )}
         <div className="user-prompt-bubble px-3 py-2 w-full">
           <div className="mb-1 flex items-center gap-2">
             <span className="text-xs font-semibold text-accent">{displayName}</span>
@@ -95,6 +88,13 @@ export function UserBubble({
           </div>
           <div className="text-sm leading-relaxed break-words">
             <Markdown>{displayText}</Markdown>
+            {imageKeys && imageKeys.length > 0 && (
+              <span className="inline-flex gap-1.5 flex-wrap ml-1 align-middle">
+                {imageKeys.map((key, i) => (
+                  <ImageChip key={key} imageKey={key} label={`Image ${i + 1}`} />
+                ))}
+              </span>
+            )}
           </div>
         </div>
         {footer ? <div className="mt-1.5 w-full">{footer}</div> : null}
