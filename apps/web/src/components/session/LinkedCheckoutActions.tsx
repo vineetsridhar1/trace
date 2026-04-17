@@ -18,6 +18,7 @@ export function LinkedCheckoutActions({ state }: Props) {
     isAttachedToThisGroup,
     pending,
     autoSyncEnabled,
+    canLinkRepo,
     requiresRepoLink,
     onLinkRepo,
     onSync,
@@ -36,7 +37,7 @@ export function LinkedCheckoutActions({ state }: Props) {
     }
   };
 
-  if (requiresRepoLink) {
+  if (requiresRepoLink && canLinkRepo) {
     return (
       <Button
         variant="outline"
@@ -48,6 +49,8 @@ export function LinkedCheckoutActions({ state }: Props) {
       </Button>
     );
   }
+
+  if (requiresRepoLink) return null;
 
   return (
     <>

@@ -510,6 +510,29 @@ export type InboxItemType =
   | 'session_suggestion'
   | 'ticket_suggestion';
 
+export type LinkedCheckoutActionResult = {
+  __typename?: 'LinkedCheckoutActionResult';
+  error?: Maybe<Scalars['String']['output']>;
+  ok: Scalars['Boolean']['output'];
+  status: LinkedCheckoutStatus;
+};
+
+export type LinkedCheckoutStatus = {
+  __typename?: 'LinkedCheckoutStatus';
+  attachedSessionGroupId?: Maybe<Scalars['ID']['output']>;
+  autoSyncEnabled: Scalars['Boolean']['output'];
+  currentBranch?: Maybe<Scalars['String']['output']>;
+  currentCommitSha?: Maybe<Scalars['String']['output']>;
+  isAttached: Scalars['Boolean']['output'];
+  lastSyncError?: Maybe<Scalars['String']['output']>;
+  lastSyncedCommitSha?: Maybe<Scalars['String']['output']>;
+  repoId: Scalars['ID']['output'];
+  repoPath?: Maybe<Scalars['String']['output']>;
+  restoreBranch?: Maybe<Scalars['String']['output']>;
+  restoreCommitSha?: Maybe<Scalars['String']['output']>;
+  targetBranch?: Maybe<Scalars['String']['output']>;
+};
+
 export type Message = {
   __typename?: 'Message';
   actor: Actor;
@@ -572,6 +595,7 @@ export type Mutation = {
   leaveChannel: Channel;
   leaveChat: Chat;
   linkEntityToProject: Project;
+  linkLinkedCheckoutRepo: LinkedCheckoutActionResult;
   linkTicket: Ticket;
   moveChannel: Channel;
   moveSessionToCloud: Session;
@@ -582,6 +606,7 @@ export type Mutation = {
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
+  restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
   runSession: Session;
@@ -591,8 +616,10 @@ export type Mutation = {
   sendSessionMessage: Event;
   sendTurn: Turn;
   setApiToken: ApiTokenStatus;
+  setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   startSession: Session;
   subscribe: Participant;
+  syncLinkedCheckout: LinkedCheckoutActionResult;
   terminateSession: Session;
   unassignTicket: Ticket;
   unlinkTicket: Ticket;
@@ -778,6 +805,13 @@ export type MutationLinkEntityToProjectArgs = {
 };
 
 
+export type MutationLinkLinkedCheckoutRepoArgs = {
+  localPath: Scalars['String']['input'];
+  repoId: Scalars['ID']['input'];
+  sessionGroupId: Scalars['ID']['input'];
+};
+
+
 export type MutationLinkTicketArgs = {
   entityId: Scalars['ID']['input'];
   entityType: EntityType;
@@ -831,6 +865,12 @@ export type MutationReorderChannelGroupsArgs = {
 
 export type MutationReorderChannelsArgs = {
   input: ReorderChannelsInput;
+};
+
+
+export type MutationRestoreLinkedCheckoutArgs = {
+  repoId: Scalars['ID']['input'];
+  sessionGroupId: Scalars['ID']['input'];
 };
 
 
@@ -894,6 +934,13 @@ export type MutationSetApiTokenArgs = {
 };
 
 
+export type MutationSetLinkedCheckoutAutoSyncArgs = {
+  enabled: Scalars['Boolean']['input'];
+  repoId: Scalars['ID']['input'];
+  sessionGroupId: Scalars['ID']['input'];
+};
+
+
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
 };
@@ -902,6 +949,15 @@ export type MutationStartSessionArgs = {
 export type MutationSubscribeArgs = {
   scopeId: Scalars['ID']['input'];
   scopeType: Scalars['String']['input'];
+};
+
+
+export type MutationSyncLinkedCheckoutArgs = {
+  autoSyncEnabled?: InputMaybe<Scalars['Boolean']['input']>;
+  branch: Scalars['String']['input'];
+  commitSha?: InputMaybe<Scalars['String']['input']>;
+  repoId: Scalars['ID']['input'];
+  sessionGroupId: Scalars['ID']['input'];
 };
 
 
@@ -1086,6 +1142,7 @@ export type Query = {
   chats: Array<Chat>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
+  linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
@@ -1227,6 +1284,12 @@ export type QueryEventsArgs = {
 export type QueryInboxItemsArgs = {
   organizationId: Scalars['ID']['input'];
   status?: InputMaybe<InboxItemStatus>;
+};
+
+
+export type QueryLinkedCheckoutStatusArgs = {
+  repoId: Scalars['ID']['input'];
+  sessionGroupId: Scalars['ID']['input'];
 };
 
 
@@ -1884,6 +1947,8 @@ export type ResolversTypes = ResolversObject<{
   InboxItemType: InboxItemType;
   Int: ResolverTypeWrapper<Scalars['Int']['output']>;
   JSON: ResolverTypeWrapper<Scalars['JSON']['output']>;
+  LinkedCheckoutActionResult: ResolverTypeWrapper<LinkedCheckoutActionResult>;
+  LinkedCheckoutStatus: ResolverTypeWrapper<LinkedCheckoutStatus>;
   Message: ResolverTypeWrapper<Message>;
   ModelTier: ModelTier;
   MoveChannelInput: MoveChannelInput;
@@ -1978,6 +2043,8 @@ export type ResolversParentTypes = ResolversObject<{
   InboxItem: InboxItem;
   Int: Scalars['Int']['output'];
   JSON: Scalars['JSON']['output'];
+  LinkedCheckoutActionResult: LinkedCheckoutActionResult;
+  LinkedCheckoutStatus: LinkedCheckoutStatus;
   Message: Message;
   MoveChannelInput: MoveChannelInput;
   Mutation: {};
@@ -2302,6 +2369,29 @@ export interface JsonScalarConfig extends GraphQLScalarTypeConfig<ResolversTypes
   name: 'JSON';
 }
 
+export type LinkedCheckoutActionResultResolvers<ContextType = Context, ParentType extends ResolversParentTypes['LinkedCheckoutActionResult'] = ResolversParentTypes['LinkedCheckoutActionResult']> = ResolversObject<{
+  error?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  ok?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes['LinkedCheckoutStatus'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type LinkedCheckoutStatusResolvers<ContextType = Context, ParentType extends ResolversParentTypes['LinkedCheckoutStatus'] = ResolversParentTypes['LinkedCheckoutStatus']> = ResolversObject<{
+  attachedSessionGroupId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
+  autoSyncEnabled?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  currentBranch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  currentCommitSha?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  isAttached?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  lastSyncError?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  lastSyncedCommitSha?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  repoId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  repoPath?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  restoreBranch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  restoreCommitSha?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  targetBranch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type MessageResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Message'] = ResolversParentTypes['Message']> = ResolversObject<{
   actor?: Resolver<ResolversTypes['Actor'], ParentType, ContextType>;
   channelId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
@@ -2353,6 +2443,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   leaveChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationLeaveChannelArgs, 'channelId'>>;
   leaveChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationLeaveChatArgs, 'chatId'>>;
   linkEntityToProject?: Resolver<ResolversTypes['Project'], ParentType, ContextType, RequireFields<MutationLinkEntityToProjectArgs, 'entityId' | 'entityType' | 'projectId'>>;
+  linkLinkedCheckoutRepo?: Resolver<ResolversTypes['LinkedCheckoutActionResult'], ParentType, ContextType, RequireFields<MutationLinkLinkedCheckoutRepoArgs, 'localPath' | 'repoId' | 'sessionGroupId'>>;
   linkTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationLinkTicketArgs, 'entityId' | 'entityType' | 'ticketId'>>;
   moveChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationMoveChannelArgs, 'input'>>;
   moveSessionToCloud?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationMoveSessionToCloudArgs, 'sessionId'>>;
@@ -2363,6 +2454,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   renameChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationRenameChatArgs, 'chatId' | 'name'>>;
   reorderChannelGroups?: Resolver<Array<ResolversTypes['ChannelGroup']>, ParentType, ContextType, RequireFields<MutationReorderChannelGroupsArgs, 'input'>>;
   reorderChannels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<MutationReorderChannelsArgs, 'input'>>;
+  restoreLinkedCheckout?: Resolver<ResolversTypes['LinkedCheckoutActionResult'], ParentType, ContextType, RequireFields<MutationRestoreLinkedCheckoutArgs, 'repoId' | 'sessionGroupId'>>;
   retrySessionConnection?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRetrySessionConnectionArgs, 'sessionId'>>;
   retrySessionGroupSetup?: Resolver<ResolversTypes['SessionGroup'], ParentType, ContextType, RequireFields<MutationRetrySessionGroupSetupArgs, 'id'>>;
   runSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRunSessionArgs, 'id'>>;
@@ -2372,8 +2464,10 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   sendSessionMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendSessionMessageArgs, 'sessionId' | 'text'>>;
   sendTurn?: Resolver<ResolversTypes['Turn'], ParentType, ContextType, RequireFields<MutationSendTurnArgs, 'branchId' | 'content'>>;
   setApiToken?: Resolver<ResolversTypes['ApiTokenStatus'], ParentType, ContextType, RequireFields<MutationSetApiTokenArgs, 'input'>>;
+  setLinkedCheckoutAutoSync?: Resolver<ResolversTypes['LinkedCheckoutActionResult'], ParentType, ContextType, RequireFields<MutationSetLinkedCheckoutAutoSyncArgs, 'enabled' | 'repoId' | 'sessionGroupId'>>;
   startSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationStartSessionArgs, 'input'>>;
   subscribe?: Resolver<ResolversTypes['Participant'], ParentType, ContextType, RequireFields<MutationSubscribeArgs, 'scopeId' | 'scopeType'>>;
+  syncLinkedCheckout?: Resolver<ResolversTypes['LinkedCheckoutActionResult'], ParentType, ContextType, RequireFields<MutationSyncLinkedCheckoutArgs, 'branch' | 'repoId' | 'sessionGroupId'>>;
   terminateSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationTerminateSessionArgs, 'id'>>;
   unassignTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationUnassignTicketArgs, 'ticketId' | 'userId'>>;
   unlinkTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationUnlinkTicketArgs, 'entityId' | 'entityType' | 'ticketId'>>;
@@ -2467,6 +2561,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   chats?: Resolver<Array<ResolversTypes['Chat']>, ParentType, ContextType>;
   events?: Resolver<Array<ResolversTypes['Event']>, ParentType, ContextType, RequireFields<QueryEventsArgs, 'organizationId'>>;
   inboxItems?: Resolver<Array<ResolversTypes['InboxItem']>, ParentType, ContextType, RequireFields<QueryInboxItemsArgs, 'organizationId'>>;
+  linkedCheckoutStatus?: Resolver<ResolversTypes['LinkedCheckoutStatus'], ParentType, ContextType, RequireFields<QueryLinkedCheckoutStatusArgs, 'repoId' | 'sessionGroupId'>>;
   myApiTokens?: Resolver<Array<ResolversTypes['ApiTokenStatus']>, ParentType, ContextType>;
   myOrganizations?: Resolver<Array<ResolversTypes['OrgMember']>, ParentType, ContextType>;
   mySessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QueryMySessionsArgs, 'organizationId'>>;
@@ -2706,6 +2801,8 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   GitCheckpoint?: GitCheckpointResolvers<ContextType>;
   InboxItem?: InboxItemResolvers<ContextType>;
   JSON?: GraphQLScalarType;
+  LinkedCheckoutActionResult?: LinkedCheckoutActionResultResolvers<ContextType>;
+  LinkedCheckoutStatus?: LinkedCheckoutStatusResolvers<ContextType>;
   Message?: MessageResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   Notification?: NotificationResolvers<ContextType>;

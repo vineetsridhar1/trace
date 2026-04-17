@@ -2,13 +2,36 @@ import type WebSocket from "ws";
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import type { CloudMachineService } from "./cloud-machine-service.js";
-import type { BridgeTerminalCreateCommand, BridgeTerminalInputCommand, BridgeTerminalResizeCommand, BridgeTerminalDestroyCommand, BridgeListFilesCommand, BridgeReadFileCommand, BridgeBranchDiffCommand, BridgeFileAtRefCommand, BridgeBranchDiffFile, BridgeListSkillsCommand, BridgeSkillInfo } from "@trace/shared";
+import type {
+  BridgeTerminalCreateCommand,
+  BridgeTerminalInputCommand,
+  BridgeTerminalResizeCommand,
+  BridgeTerminalDestroyCommand,
+  BridgeListFilesCommand,
+  BridgeReadFileCommand,
+  BridgeBranchDiffCommand,
+  BridgeFileAtRefCommand,
+  BridgeBranchDiffFile,
+  BridgeListSkillsCommand,
+  BridgeSkillInfo,
+  BridgeLinkedCheckoutStatus,
+  BridgeLinkedCheckoutActionResultPayload,
+} from "@trace/shared";
 import { prisma } from "./db.js";
 import { apiTokenService } from "../services/api-token.js";
 import { runtimeDebug } from "./runtime-debug.js";
 
 interface BaseSessionCommand {
-  type: "run" | "terminate" | "pause" | "resume" | "send" | "prepare" | "delete" | "list_branches" | "upgrade_workspace";
+  type:
+    | "run"
+    | "terminate"
+    | "pause"
+    | "resume"
+    | "send"
+    | "prepare"
+    | "delete"
+    | "list_branches"
+    | "upgrade_workspace";
   sessionId: string;
   prompt?: string;
   [key: string]: unknown;
@@ -80,8 +103,18 @@ interface SessionAdapterCreateCtx {
 
 interface SessionAdapter {
   create(options: SessionAdapterCreateOptions, ctx: SessionAdapterCreateCtx): void;
-  destroy(options: SessionAdapterDestroyOptions, ctx: { send: (cmd: SessionCommand) => DeliveryResult }): Promise<void>;
-  transition(sessionId: string, command: "pause" | "resume" | "terminate", ctx: { send: (cmd: SessionCommand) => DeliveryResult; waitForBridge: (sessionId: string, timeoutMs?: number, runtimeId?: string) => Promise<void> }): Promise<DeliveryResult>;
+  destroy(
+    options: SessionAdapterDestroyOptions,
+    ctx: { send: (cmd: SessionCommand) => DeliveryResult },
+  ): Promise<void>;
+  transition(
+    sessionId: string,
+    command: "pause" | "resume" | "terminate",
+    ctx: {
+      send: (cmd: SessionCommand) => DeliveryResult;
+      waitForBridge: (sessionId: string, timeoutMs?: number, runtimeId?: string) => Promise<void>;
+    },
+  ): Promise<DeliveryResult>;
 }
 
 // --- Cloud adapter factory ---
@@ -158,14 +191,22 @@ function createCloudAdapter(cloudMachineService: CloudMachineService): SessionAd
 
     async destroy(options, ctx) {
       // Send delete to bridge — cleans up worktree + adapter for this session only
-      ctx.send({ type: "delete", sessionId: options.sessionId, workdir: options.workdir, repoId: options.repoId });
+      ctx.send({
+        type: "delete",
+        sessionId: options.sessionId,
+        workdir: options.workdir,
+        repoId: options.repoId,
+      });
 
       // Notify cloud machine service that a session ended (schedules idle check)
       const conn = options.connection as Record<string, unknown> | null;
       const cloudMachineId = conn?.cloudMachineId as string | undefined;
       if (cloudMachineId) {
         await cloudMachineService.sessionEnded(cloudMachineId).catch((err: Error) => {
-          console.warn(`[cloud-adapter] sessionEnded failed for machine ${cloudMachineId}:`, err.message);
+          console.warn(
+            `[cloud-adapter] sessionEnded failed for machine ${cloudMachineId}:`,
+            err.message,
+          );
         });
       }
     },
@@ -231,9 +272,16 @@ const localAdapter: SessionAdapter = {
   },
 
   async destroy(options, ctx) {
-    const result = ctx.send({ type: "delete", sessionId: options.sessionId, workdir: options.workdir, repoId: options.repoId });
+    const result = ctx.send({
+      type: "delete",
+      sessionId: options.sessionId,
+      workdir: options.workdir,
+      repoId: options.repoId,
+    });
     if (result !== "delivered") {
-      console.warn(`[local-adapter] bridge did not receive delete for ${options.sessionId}: ${result}`);
+      console.warn(
+        `[local-adapter] bridge did not receive delete for ${options.sessionId}: ${result}`,
+      );
     }
   },
 
@@ -253,17 +301,48 @@ export class SessionRouter {
   /** Pending waitForBridge promises for cloud sessions */
   private pendingWaits = new Map<string, { resolve: () => void; reject: (err: Error) => void }>();
   /** Pending branch list requests: requestId → resolve/reject */
-  private pendingBranchRequests = new Map<string, { resolve: (branches: string[]) => void; reject: (err: Error) => void }>();
+  private pendingBranchRequests = new Map<
+    string,
+    { resolve: (branches: string[]) => void; reject: (err: Error) => void }
+  >();
   /** Pending file list requests: requestId → resolve/reject */
-  private pendingFileRequests = new Map<string, { resolve: (files: string[]) => void; reject: (err: Error) => void }>();
+  private pendingFileRequests = new Map<
+    string,
+    { resolve: (files: string[]) => void; reject: (err: Error) => void }
+  >();
   /** Pending file content requests: requestId → resolve/reject */
-  private pendingFileContentRequests = new Map<string, { resolve: (content: string) => void; reject: (err: Error) => void }>();
+  private pendingFileContentRequests = new Map<
+    string,
+    { resolve: (content: string) => void; reject: (err: Error) => void }
+  >();
   /** Pending branch diff requests: requestId → resolve/reject */
-  private pendingBranchDiffRequests = new Map<string, { resolve: (files: BridgeBranchDiffFile[]) => void; reject: (err: Error) => void }>();
+  private pendingBranchDiffRequests = new Map<
+    string,
+    { resolve: (files: BridgeBranchDiffFile[]) => void; reject: (err: Error) => void }
+  >();
   /** Pending file-at-ref requests: requestId → resolve/reject */
-  private pendingFileAtRefRequests = new Map<string, { resolve: (content: string) => void; reject: (err: Error) => void }>();
+  private pendingFileAtRefRequests = new Map<
+    string,
+    { resolve: (content: string) => void; reject: (err: Error) => void }
+  >();
   /** Pending skills list requests: requestId → resolve/reject */
-  private pendingSkillsRequests = new Map<string, { resolve: (skills: BridgeSkillInfo[]) => void; reject: (err: Error) => void }>();
+  private pendingSkillsRequests = new Map<
+    string,
+    { resolve: (skills: BridgeSkillInfo[]) => void; reject: (err: Error) => void }
+  >();
+  /** Pending linked-checkout status requests: requestId → resolve/reject */
+  private pendingLinkedCheckoutStatusRequests = new Map<
+    string,
+    { resolve: (status: BridgeLinkedCheckoutStatus) => void; reject: (err: Error) => void }
+  >();
+  /** Pending linked-checkout action requests: requestId → resolve/reject */
+  private pendingLinkedCheckoutActionRequests = new Map<
+    string,
+    {
+      resolve: (result: BridgeLinkedCheckoutActionResultPayload) => void;
+      reject: (err: Error) => void;
+    }
+  >();
 
   /** Cloud adapter instance, initialized once CloudMachineService is available */
   private cloudAdapter: SessionAdapter | null = null;
@@ -503,7 +582,8 @@ export class SessionRouter {
     }
 
     let runtimeId = this.sessionRuntime.get(sessionId);
-    const requiredTool = "tool" in command && typeof command.tool === "string" ? command.tool : undefined;
+    const requiredTool =
+      "tool" in command && typeof command.tool === "string" ? command.tool : undefined;
 
     // Auto-bind to a default runtime if not yet bound. Only reachable when no
     // expectedHomeId was passed (new sessions without a home yet).
@@ -628,8 +708,14 @@ export class SessionRouter {
       }, timeoutMs);
 
       this.pendingBranchRequests.set(requestId, {
-        resolve: (branches) => { clearTimeout(timer); resolve(branches); },
-        reject: (err) => { clearTimeout(timer); reject(err); },
+        resolve: (branches) => {
+          clearTimeout(timer);
+          resolve(branches);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
       });
     });
   }
@@ -650,9 +736,19 @@ export class SessionRouter {
    * Ask a runtime to list files in a working directory.
    * Returns a promise that resolves when the bridge responds with files_result.
    */
-  listFiles(runtimeId: string, sessionId: string, workdirHint?: string, timeoutMs = 15_000): Promise<string[]> {
+  listFiles(
+    runtimeId: string,
+    sessionId: string,
+    workdirHint?: string,
+    timeoutMs = 15_000,
+  ): Promise<string[]> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, { type: "list_files", requestId, sessionId, workdirHint });
+    const result = this.sendToRuntime(runtimeId, {
+      type: "list_files",
+      requestId,
+      sessionId,
+      workdirHint,
+    });
     if (result !== "delivered") {
       return Promise.reject(new Error(`Runtime not available: ${result}`));
     }
@@ -664,8 +760,14 @@ export class SessionRouter {
       }, timeoutMs);
 
       this.pendingFileRequests.set(requestId, {
-        resolve: (files) => { clearTimeout(timer); resolve(files); },
-        reject: (err) => { clearTimeout(timer); reject(err); },
+        resolve: (files) => {
+          clearTimeout(timer);
+          resolve(files);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
       });
     });
   }
@@ -686,9 +788,21 @@ export class SessionRouter {
    * Ask a runtime to read a file's contents.
    * Returns a promise that resolves when the bridge responds with file_content_result.
    */
-  readFile(runtimeId: string, sessionId: string, relativePath: string, workdirHint?: string, timeoutMs = 15_000): Promise<string> {
+  readFile(
+    runtimeId: string,
+    sessionId: string,
+    relativePath: string,
+    workdirHint?: string,
+    timeoutMs = 15_000,
+  ): Promise<string> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, { type: "read_file", requestId, sessionId, relativePath, workdirHint });
+    const result = this.sendToRuntime(runtimeId, {
+      type: "read_file",
+      requestId,
+      sessionId,
+      relativePath,
+      workdirHint,
+    });
     if (result !== "delivered") {
       return Promise.reject(new Error(`Runtime not available: ${result}`));
     }
@@ -700,8 +814,14 @@ export class SessionRouter {
       }, timeoutMs);
 
       this.pendingFileContentRequests.set(requestId, {
-        resolve: (content) => { clearTimeout(timer); resolve(content); },
-        reject: (err) => { clearTimeout(timer); reject(err); },
+        resolve: (content) => {
+          clearTimeout(timer);
+          resolve(content);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
       });
     });
   }
@@ -721,9 +841,21 @@ export class SessionRouter {
   /**
    * Ask a runtime to compute the branch diff (changed files vs base branch).
    */
-  branchDiff(runtimeId: string, sessionId: string, baseBranch: string, workdirHint?: string, timeoutMs = 30_000): Promise<BridgeBranchDiffFile[]> {
+  branchDiff(
+    runtimeId: string,
+    sessionId: string,
+    baseBranch: string,
+    workdirHint?: string,
+    timeoutMs = 30_000,
+  ): Promise<BridgeBranchDiffFile[]> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, { type: "branch_diff", requestId, sessionId, baseBranch, workdirHint });
+    const result = this.sendToRuntime(runtimeId, {
+      type: "branch_diff",
+      requestId,
+      sessionId,
+      baseBranch,
+      workdirHint,
+    });
     if (result !== "delivered") {
       return Promise.reject(new Error(`Runtime not available: ${result}`));
     }
@@ -735,8 +867,14 @@ export class SessionRouter {
       }, timeoutMs);
 
       this.pendingBranchDiffRequests.set(requestId, {
-        resolve: (files) => { clearTimeout(timer); resolve(files); },
-        reject: (err) => { clearTimeout(timer); reject(err); },
+        resolve: (files) => {
+          clearTimeout(timer);
+          resolve(files);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
       });
     });
   }
@@ -756,9 +894,23 @@ export class SessionRouter {
   /**
    * Ask a runtime to read a file's content at a specific git ref.
    */
-  fileAtRef(runtimeId: string, sessionId: string, filePath: string, ref: string, workdirHint?: string, timeoutMs = 15_000): Promise<string> {
+  fileAtRef(
+    runtimeId: string,
+    sessionId: string,
+    filePath: string,
+    ref: string,
+    workdirHint?: string,
+    timeoutMs = 15_000,
+  ): Promise<string> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, { type: "file_at_ref", requestId, sessionId, filePath, ref, workdirHint });
+    const result = this.sendToRuntime(runtimeId, {
+      type: "file_at_ref",
+      requestId,
+      sessionId,
+      filePath,
+      ref,
+      workdirHint,
+    });
     if (result !== "delivered") {
       return Promise.reject(new Error(`Runtime not available: ${result}`));
     }
@@ -770,8 +922,14 @@ export class SessionRouter {
       }, timeoutMs);
 
       this.pendingFileAtRefRequests.set(requestId, {
-        resolve: (content) => { clearTimeout(timer); resolve(content); },
-        reject: (err) => { clearTimeout(timer); reject(err); },
+        resolve: (content) => {
+          clearTimeout(timer);
+          resolve(content);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
       });
     });
   }
@@ -827,8 +985,14 @@ export class SessionRouter {
       }, timeoutMs);
 
       this.pendingSkillsRequests.set(requestId, {
-        resolve: (skills) => { clearTimeout(timer); resolve(skills); },
-        reject: (err) => { clearTimeout(timer); reject(err); },
+        resolve: (skills) => {
+          clearTimeout(timer);
+          resolve(skills);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
       });
     });
   }
@@ -845,11 +1009,172 @@ export class SessionRouter {
     }
   }
 
+  getLinkedCheckoutStatus(
+    runtimeId: string,
+    repoId: string,
+    timeoutMs = 15_000,
+  ): Promise<BridgeLinkedCheckoutStatus> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, {
+      type: "linked_checkout_status",
+      requestId,
+      repoId,
+    });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<BridgeLinkedCheckoutStatus>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingLinkedCheckoutStatusRequests.delete(requestId);
+        reject(new Error("Linked checkout status request timed out"));
+      }, timeoutMs);
+
+      this.pendingLinkedCheckoutStatusRequests.set(requestId, {
+        resolve: (status) => {
+          clearTimeout(timer);
+          resolve(status);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  resolveLinkedCheckoutStatusRequest(requestId: string, status: BridgeLinkedCheckoutStatus): void {
+    const pending = this.pendingLinkedCheckoutStatusRequests.get(requestId);
+    if (!pending) return;
+    this.pendingLinkedCheckoutStatusRequests.delete(requestId);
+    pending.resolve(status);
+  }
+
+  private requestLinkedCheckoutAction(
+    runtimeId: string,
+    command: Record<string, unknown>,
+    timeoutMs = 30_000,
+  ): Promise<BridgeLinkedCheckoutActionResultPayload> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, {
+      ...command,
+      requestId,
+    });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<BridgeLinkedCheckoutActionResultPayload>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingLinkedCheckoutActionRequests.delete(requestId);
+        reject(new Error("Linked checkout action request timed out"));
+      }, timeoutMs);
+
+      this.pendingLinkedCheckoutActionRequests.set(requestId, {
+        resolve: (actionResult) => {
+          clearTimeout(timer);
+          resolve(actionResult);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  linkLinkedCheckoutRepo(
+    runtimeId: string,
+    repoId: string,
+    localPath: string,
+    timeoutMs = 30_000,
+  ): Promise<BridgeLinkedCheckoutActionResultPayload> {
+    return this.requestLinkedCheckoutAction(
+      runtimeId,
+      {
+        type: "linked_checkout_link_repo",
+        repoId,
+        localPath,
+      },
+      timeoutMs,
+    );
+  }
+
+  syncLinkedCheckout(
+    runtimeId: string,
+    input: {
+      repoId: string;
+      sessionGroupId: string;
+      branch: string;
+      commitSha?: string | null;
+      autoSyncEnabled?: boolean;
+    },
+    timeoutMs = 60_000,
+  ): Promise<BridgeLinkedCheckoutActionResultPayload> {
+    return this.requestLinkedCheckoutAction(
+      runtimeId,
+      {
+        type: "linked_checkout_sync",
+        repoId: input.repoId,
+        sessionGroupId: input.sessionGroupId,
+        branch: input.branch,
+        commitSha: input.commitSha,
+        autoSyncEnabled: input.autoSyncEnabled,
+      },
+      timeoutMs,
+    );
+  }
+
+  restoreLinkedCheckout(
+    runtimeId: string,
+    repoId: string,
+    timeoutMs = 60_000,
+  ): Promise<BridgeLinkedCheckoutActionResultPayload> {
+    return this.requestLinkedCheckoutAction(
+      runtimeId,
+      {
+        type: "linked_checkout_restore",
+        repoId,
+      },
+      timeoutMs,
+    );
+  }
+
+  setLinkedCheckoutAutoSync(
+    runtimeId: string,
+    repoId: string,
+    enabled: boolean,
+    timeoutMs = 15_000,
+  ): Promise<BridgeLinkedCheckoutActionResultPayload> {
+    return this.requestLinkedCheckoutAction(
+      runtimeId,
+      {
+        type: "linked_checkout_set_auto_sync",
+        repoId,
+        enabled,
+      },
+      timeoutMs,
+    );
+  }
+
+  resolveLinkedCheckoutActionRequest(
+    requestId: string,
+    result: BridgeLinkedCheckoutActionResultPayload,
+  ): void {
+    const pending = this.pendingLinkedCheckoutActionRequests.get(requestId);
+    if (!pending) return;
+    this.pendingLinkedCheckoutActionRequests.delete(requestId);
+    pending.resolve(result);
+  }
+
   // --- Adapter-dispatched lifecycle methods ---
 
   private getAdapter(hosting: string): SessionAdapter {
     if (hosting === "cloud") {
-      if (!this.cloudAdapter) throw new Error("CloudMachineService not initialized — call setCloudMachineService() first");
+      if (!this.cloudAdapter)
+        throw new Error(
+          "CloudMachineService not initialized — call setCloudMachineService() first",
+        );
       return this.cloudAdapter;
     }
     return localAdapter;
@@ -858,7 +1183,13 @@ export class SessionRouter {
   /**
    * Provision the runtime for a session. Delegates to the correct adapter.
    */
-  createRuntime(options: SessionAdapterCreateOptions & { hosting: string; onFailed: (error: string) => void; onWorkspaceReady?: (workdir: string) => void }): void {
+  createRuntime(
+    options: SessionAdapterCreateOptions & {
+      hosting: string;
+      onFailed: (error: string) => void;
+      onWorkspaceReady?: (workdir: string) => void;
+    },
+  ): void {
     const { hosting, onFailed, onWorkspaceReady, ...adapterOptions } = options;
     const adapter = this.getAdapter(hosting);
     adapter.create(adapterOptions, {
@@ -872,10 +1203,23 @@ export class SessionRouter {
   /**
    * Destroy a session's runtime. Delegates to the correct adapter.
    */
-  async destroyRuntime(sessionId: string, session: { hosting: string; workdir?: string | null; repoId?: string | null; connection?: unknown }): Promise<void> {
+  async destroyRuntime(
+    sessionId: string,
+    session: {
+      hosting: string;
+      workdir?: string | null;
+      repoId?: string | null;
+      connection?: unknown;
+    },
+  ): Promise<void> {
     const adapter = this.getAdapter(session.hosting);
     await adapter.destroy(
-      { sessionId, workdir: session.workdir, repoId: session.repoId, connection: session.connection },
+      {
+        sessionId,
+        workdir: session.workdir,
+        repoId: session.repoId,
+        connection: session.connection,
+      },
       { send: (cmd) => this.send(sessionId, cmd) },
     );
     this.unbindSession(sessionId);
@@ -884,7 +1228,11 @@ export class SessionRouter {
   /**
    * Transition a session's runtime (pause/resume/terminate). Delegates to the correct adapter.
    */
-  async transitionRuntime(sessionId: string, hosting: string, command: "pause" | "resume" | "terminate"): Promise<DeliveryResult> {
+  async transitionRuntime(
+    sessionId: string,
+    hosting: string,
+    command: "pause" | "resume" | "terminate",
+  ): Promise<DeliveryResult> {
     const adapter = this.getAdapter(hosting);
     return adapter.transition(sessionId, command, {
       send: (cmd) => this.send(sessionId, cmd),

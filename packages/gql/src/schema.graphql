@@ -917,6 +917,7 @@ type Query {
   sessionGroupFileContent(sessionGroupId: ID!, filePath: String!): String!
   sessionGroupBranchDiff(sessionGroupId: ID!): [BranchDiffFile!]!
   sessionGroupFileAtRef(sessionGroupId: ID!, filePath: String!, ref: String!): String!
+  linkedCheckoutStatus(sessionGroupId: ID!, repoId: ID!): LinkedCheckoutStatus!
   sessionSlashCommands(sessionId: ID!): [SlashCommand!]!
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
   chats: [Chat!]!
@@ -947,6 +948,27 @@ type Query {
 type Terminal {
   id: ID!
   sessionId: ID!
+}
+
+type LinkedCheckoutStatus {
+  repoId: ID!
+  repoPath: String
+  isAttached: Boolean!
+  attachedSessionGroupId: ID
+  targetBranch: String
+  autoSyncEnabled: Boolean!
+  currentBranch: String
+  currentCommitSha: String
+  lastSyncedCommitSha: String
+  lastSyncError: String
+  restoreBranch: String
+  restoreCommitSha: String
+}
+
+type LinkedCheckoutActionResult {
+  ok: Boolean!
+  status: LinkedCheckoutStatus!
+  error: String
 }
 
 # --- Mutations ---
@@ -988,6 +1010,24 @@ type Mutation {
   retrySessionGroupSetup(id: ID!): SessionGroup!
   moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!
   moveSessionToCloud(sessionId: ID!): Session!
+  linkLinkedCheckoutRepo(
+    sessionGroupId: ID!
+    repoId: ID!
+    localPath: String!
+  ): LinkedCheckoutActionResult!
+  syncLinkedCheckout(
+    sessionGroupId: ID!
+    repoId: ID!
+    branch: String!
+    commitSha: String
+    autoSyncEnabled: Boolean
+  ): LinkedCheckoutActionResult!
+  restoreLinkedCheckout(sessionGroupId: ID!, repoId: ID!): LinkedCheckoutActionResult!
+  setLinkedCheckoutAutoSync(
+    sessionGroupId: ID!
+    repoId: ID!
+    enabled: Boolean!
+  ): LinkedCheckoutActionResult!
   createTicket(input: CreateTicketInput!): Ticket!
   updateTicket(id: ID!, input: UpdateTicketInput!): Ticket!
   commentOnTicket(ticketId: ID!, text: String!): Event!

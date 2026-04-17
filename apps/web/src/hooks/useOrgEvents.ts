@@ -211,18 +211,31 @@ function extractGitCheckpointRewrite(
   };
 }
 
+function canManageLinkedCheckoutForGroup(sessionGroupId: string): boolean {
+  const currentUserId = useAuthStore.getState().user?.id;
+  if (!currentUserId) return false;
+
+  const entityState = useEntityStore.getState();
+  const sessionIds = entityState._sessionIdsByGroup[sessionGroupId] ?? [];
+
+  return sessionIds.some((sessionId) => {
+    const session = entityState.sessions[sessionId];
+    if (!session || session.hosting !== "local") return false;
+    const createdBy = session.createdBy as { id?: string } | undefined;
+    if (createdBy?.id !== currentUserId) return false;
+    const connection = session.connection as Record<string, unknown> | null | undefined;
+    return !connection || connection.state !== "disconnected";
+  });
+}
+
 async function maybeAutoSyncLinkedCheckout(checkpoint: GitCheckpoint): Promise<void> {
-  if (
-    typeof window === "undefined" ||
-    typeof window.trace?.getLinkedCheckoutStatus !== "function" ||
-    typeof window.trace?.syncLinkedCheckout !== "function"
-  ) {
+  if (!canManageLinkedCheckoutForGroup(checkpoint.sessionGroupId)) {
     return;
   }
 
   const currentStatus =
-    getLinkedCheckoutStatusSnapshot(checkpoint.repoId) ??
-    (await ensureLinkedCheckoutStatus(checkpoint.repoId));
+    getLinkedCheckoutStatusSnapshot(checkpoint.repoId, checkpoint.sessionGroupId) ??
+    (await ensureLinkedCheckoutStatus(checkpoint.repoId, checkpoint.sessionGroupId));
 
   if (!currentStatus?.isAttached) return;
   if (currentStatus.attachedSessionGroupId !== checkpoint.sessionGroupId) return;

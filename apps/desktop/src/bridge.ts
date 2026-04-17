@@ -30,6 +30,13 @@ import {
 import type { GitExecFn } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
+import {
+  getLinkedCheckoutStatus,
+  linkLinkedCheckoutRepo,
+  restoreLinkedCheckout,
+  setLinkedCheckoutAutoSync,
+  syncLinkedCheckout,
+} from "./linked-checkout.js";
 import { createWorktree, removeWorktree } from "./worktree.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { TerminalManager } from "@trace/shared/adapters";
@@ -53,6 +60,35 @@ async function inspectGitCheckpoint(
     execFileAsync("git", [...GIT_DIFF_TREE_ARGS], { cwd, maxBuffer: 5 * 1024 * 1024 }),
   ]);
   return parseGitShowOutput(showStdout, diffStdout, trigger, command, new Date().toISOString());
+}
+
+function emptyLinkedCheckoutStatus(repoId: string) {
+  return {
+    repoId,
+    repoPath: null,
+    isAttached: false,
+    attachedSessionGroupId: null,
+    targetBranch: null,
+    autoSyncEnabled: false,
+    currentBranch: null,
+    currentCommitSha: null,
+    lastSyncedCommitSha: null,
+    lastSyncError: null,
+    restoreBranch: null,
+    restoreCommitSha: null,
+  };
+}
+
+async function buildLinkedCheckoutFailureResult(repoId: string, error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  const status = await getLinkedCheckoutStatus(repoId).catch(() =>
+    emptyLinkedCheckoutStatus(repoId),
+  );
+  return {
+    ok: false,
+    status,
+    error: message,
+  };
 }
 
 function isPendingInputOutput(output: ToolOutput): boolean {
@@ -715,6 +751,129 @@ export class BridgeClient implements IBridgeClient {
             this.send({ type: "branches_result", requestId, branches: parseBranchOutput(stdout) });
           },
         );
+        break;
+      }
+      case "linked_checkout_status": {
+        void getLinkedCheckoutStatus(cmd.repoId)
+          .then((status) => {
+            this.send({ type: "linked_checkout_status_result", requestId: cmd.requestId, status });
+          })
+          .catch((error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error);
+            console.warn(
+              `[bridge] failed to read linked checkout status for ${cmd.repoId}:`,
+              message,
+            );
+            this.send({
+              type: "linked_checkout_status_result",
+              requestId: cmd.requestId,
+              status: emptyLinkedCheckoutStatus(cmd.repoId),
+            });
+          });
+        break;
+      }
+      case "linked_checkout_link_repo": {
+        void linkLinkedCheckoutRepo(cmd.repoId, cmd.localPath)
+          .then((result) => {
+            if (result.ok) {
+              this.send({ type: "repo_linked", repoId: cmd.repoId });
+            }
+            this.send({
+              type: "linked_checkout_action_result",
+              requestId: cmd.requestId,
+              action: "link_repo",
+              result,
+            });
+          })
+          .catch((error: unknown) => {
+            console.error(`[bridge] failed to link local repo for ${cmd.repoId}:`, error);
+            void buildLinkedCheckoutFailureResult(cmd.repoId, error).then((result) => {
+              this.send({
+                type: "linked_checkout_action_result",
+                requestId: cmd.requestId,
+                action: "link_repo",
+                result,
+              });
+            });
+          });
+        break;
+      }
+      case "linked_checkout_sync": {
+        void syncLinkedCheckout({
+          repoId: cmd.repoId,
+          sessionGroupId: cmd.sessionGroupId,
+          branch: cmd.branch,
+          commitSha: cmd.commitSha,
+          autoSyncEnabled: cmd.autoSyncEnabled,
+        })
+          .then((result) => {
+            this.send({
+              type: "linked_checkout_action_result",
+              requestId: cmd.requestId,
+              action: "sync",
+              result,
+            });
+          })
+          .catch((error: unknown) => {
+            console.error(`[bridge] failed to sync linked checkout for ${cmd.repoId}:`, error);
+            void buildLinkedCheckoutFailureResult(cmd.repoId, error).then((result) => {
+              this.send({
+                type: "linked_checkout_action_result",
+                requestId: cmd.requestId,
+                action: "sync",
+                result,
+              });
+            });
+          });
+        break;
+      }
+      case "linked_checkout_restore": {
+        void restoreLinkedCheckout(cmd.repoId)
+          .then((result) => {
+            this.send({
+              type: "linked_checkout_action_result",
+              requestId: cmd.requestId,
+              action: "restore",
+              result,
+            });
+          })
+          .catch((error: unknown) => {
+            console.error(`[bridge] failed to restore linked checkout for ${cmd.repoId}:`, error);
+            void buildLinkedCheckoutFailureResult(cmd.repoId, error).then((result) => {
+              this.send({
+                type: "linked_checkout_action_result",
+                requestId: cmd.requestId,
+                action: "restore",
+                result,
+              });
+            });
+          });
+        break;
+      }
+      case "linked_checkout_set_auto_sync": {
+        void setLinkedCheckoutAutoSync(cmd.repoId, cmd.enabled)
+          .then((result) => {
+            this.send({
+              type: "linked_checkout_action_result",
+              requestId: cmd.requestId,
+              action: "set_auto_sync",
+              result,
+            });
+          })
+          .catch((error: unknown) => {
+            console.error(
+              `[bridge] failed to update linked checkout auto-sync for ${cmd.repoId}:`,
+              error,
+            );
+            void buildLinkedCheckoutFailureResult(cmd.repoId, error).then((result) => {
+              this.send({
+                type: "linked_checkout_action_result",
+                requestId: cmd.requestId,
+                action: "set_auto_sync",
+                result,
+              });
+            });
+          });
         break;
       }
       case "list_files": {

@@ -316,6 +316,13 @@ export function SessionGroupDetailView({
   const linkedCheckoutRepoId =
     groupRepo?.id ?? (selectedSession?.repo as { id: string } | null | undefined)?.id ?? null;
   const linkedCheckoutBranch = groupBranch ?? selectedSession?.branch ?? null;
+  const linkedCheckoutAllowed = (() => {
+    if (!selectedSession || selectedSessionIsOptimistic) return false;
+    const createdBy = selectedSession.createdBy as { id: string } | undefined;
+    const isLocalOwner = selectedSession.hosting === "local" && createdBy?.id === currentUserId;
+    const isConnected = !groupConnection || groupConnection.state !== "disconnected";
+    return isLocalOwner && isConnected;
+  })();
 
   const terminalAllowed = (() => {
     if (!selectedSession) return false;
@@ -432,6 +439,7 @@ export function SessionGroupDetailView({
             sessionGroupId={sessionGroupId}
             repoId={linkedCheckoutRepoId}
             groupBranch={linkedCheckoutBranch}
+            canManageLinkedCheckout={linkedCheckoutAllowed}
             selectedSessionStatus={selectedSessionStatus}
             selectedSessionId={selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)}
             groupPrUrl={groupPrUrl}

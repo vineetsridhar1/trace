@@ -5,9 +5,10 @@ interface Props {
 }
 
 export function LinkedCheckoutSubtitle({ state }: Props) {
-  if (!state.hasDesktopApi) return null;
+  if (!state.canShowControls) return null;
 
   const {
+    canLinkRepo,
     requiresRepoLink,
     isAttachedToThisGroup,
     isAttachedElsewhere,
@@ -27,7 +28,9 @@ export function LinkedCheckoutSubtitle({ state }: Props) {
     <>
       {requiresRepoLink ? (
         <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          Link a local checkout to sync this session group into your main worktree.
+          {canLinkRepo
+            ? "Link a local checkout to sync this session group into your main worktree."
+            : "Link a local checkout in Trace Desktop to sync this session group into your main worktree."}
         </p>
       ) : isAttachedToThisGroup && summaryBranch ? (
         <p className="mt-0.5 truncate text-xs text-muted-foreground">

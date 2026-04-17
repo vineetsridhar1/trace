@@ -223,6 +223,97 @@ export const REPO_BRANCHES_QUERY = gql`
   }
 `;
 
+const LINKED_CHECKOUT_STATUS_FIELDS = `
+  repoId
+  repoPath
+  isAttached
+  attachedSessionGroupId
+  targetBranch
+  autoSyncEnabled
+  currentBranch
+  currentCommitSha
+  lastSyncedCommitSha
+  lastSyncError
+  restoreBranch
+  restoreCommitSha
+`;
+
+export const LINKED_CHECKOUT_STATUS_QUERY = gql`
+  query LinkedCheckoutStatus($sessionGroupId: ID!, $repoId: ID!) {
+    linkedCheckoutStatus(sessionGroupId: $sessionGroupId, repoId: $repoId) {
+      ${LINKED_CHECKOUT_STATUS_FIELDS}
+    }
+  }
+`;
+
+export const LINK_LINKED_CHECKOUT_REPO_MUTATION = gql`
+  mutation LinkLinkedCheckoutRepo($sessionGroupId: ID!, $repoId: ID!, $localPath: String!) {
+    linkLinkedCheckoutRepo(
+      sessionGroupId: $sessionGroupId
+      repoId: $repoId
+      localPath: $localPath
+    ) {
+      ok
+      error
+      status {
+        ${LINKED_CHECKOUT_STATUS_FIELDS}
+      }
+    }
+  }
+`;
+
+export const SYNC_LINKED_CHECKOUT_MUTATION = gql`
+  mutation SyncLinkedCheckout(
+    $sessionGroupId: ID!
+    $repoId: ID!
+    $branch: String!
+    $commitSha: String
+    $autoSyncEnabled: Boolean
+  ) {
+    syncLinkedCheckout(
+      sessionGroupId: $sessionGroupId
+      repoId: $repoId
+      branch: $branch
+      commitSha: $commitSha
+      autoSyncEnabled: $autoSyncEnabled
+    ) {
+      ok
+      error
+      status {
+        ${LINKED_CHECKOUT_STATUS_FIELDS}
+      }
+    }
+  }
+`;
+
+export const RESTORE_LINKED_CHECKOUT_MUTATION = gql`
+  mutation RestoreLinkedCheckout($sessionGroupId: ID!, $repoId: ID!) {
+    restoreLinkedCheckout(sessionGroupId: $sessionGroupId, repoId: $repoId) {
+      ok
+      error
+      status {
+        ${LINKED_CHECKOUT_STATUS_FIELDS}
+      }
+    }
+  }
+`;
+
+export const SET_LINKED_CHECKOUT_AUTO_SYNC_MUTATION = gql`
+  mutation SetLinkedCheckoutAutoSync($sessionGroupId: ID!, $repoId: ID!, $enabled: Boolean!) {
+    setLinkedCheckoutAutoSync(
+      sessionGroupId: $sessionGroupId
+      repoId: $repoId
+      enabled: $enabled
+    ) {
+      ok
+      error
+      status {
+        ${LINKED_CHECKOUT_STATUS_FIELDS}
+      }
+    }
+  }
+`;
+
 export const SESSION_SLASH_COMMANDS_QUERY = gql`
   query SessionSlashCommands($sessionId: ID!) {
     sessionSlashCommands(sessionId: $sessionId) {
