@@ -41,7 +41,7 @@ function ImageChip({ imageKey, label }: { imageKey: string; label: string }) {
     <>
       <button
         onClick={() => void handleClick()}
-        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-elevated px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground hover:bg-surface-deep cursor-pointer"
+        className="inline-flex items-center gap-1.5 rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs text-white transition-colors hover:bg-white/20 cursor-pointer"
       >
         <ImageIcon size={12} />
         {loading ? "Loading…" : label}
