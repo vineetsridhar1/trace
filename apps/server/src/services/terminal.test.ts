@@ -15,6 +15,12 @@ vi.mock("../lib/terminal-relay.js", () => ({
   },
 }));
 
+vi.mock("./runtime-access.js", () => ({
+  runtimeAccessService: {
+    assertAccess: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 // Use the real isFullyUnloadedSession — it's a pure function with no side effects
 vi.mock("./session.js", async () => {
   const actual = await vi.importActual<typeof import("./session.js")>("./session.js");
@@ -23,14 +29,17 @@ vi.mock("./session.js", async () => {
 
 import { prisma } from "../lib/db.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
+import { runtimeAccessService } from "./runtime-access.js";
 import { terminalService } from "./terminal.js";
 
 const prismaMock = prisma as any;
 const terminalRelayMock = terminalRelay as any;
+const runtimeAccessServiceMock = runtimeAccessService as any;
 
 describe("TerminalService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    runtimeAccessServiceMock.assertAccess.mockResolvedValue(undefined);
   });
 
   describe("create", () => {
@@ -143,11 +152,14 @@ describe("TerminalService", () => {
     });
 
     it("throws when local session is accessed by different user", async () => {
+      runtimeAccessServiceMock.assertAccess.mockRejectedValueOnce(
+        new Error("Access denied: you do not have permission to use this local bridge"),
+      );
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
+        organizationId: "org-1",
         sessionGroupId: "group-1",
-        hosting: "local",
-        createdById: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
         agentStatus: "active",
         sessionStatus: "in_progress",
         sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
@@ -161,15 +173,15 @@ describe("TerminalService", () => {
           organizationId: "org-1",
           userId: "user-2",
         }),
-      ).rejects.toThrow("Access denied: you can only access terminals on your own local sessions");
+      ).rejects.toThrow("Access denied: you do not have permission to use this local bridge");
     });
 
     it("allows local session access by the owner", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
+        organizationId: "org-1",
         sessionGroupId: "group-1",
-        hosting: "local",
-        createdById: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
         agentStatus: "active",
         sessionStatus: "in_progress",
         sessionGroup: { workdir: "/workspace", worktreeDeleted: false },

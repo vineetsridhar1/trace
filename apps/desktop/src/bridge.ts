@@ -116,6 +116,11 @@ function getPendingInputToolUseId(output: ToolOutput): string | null {
 
 export type BridgeConnectionStatus = "connecting" | "connected" | "disconnected";
 
+type BridgeAuthContext = {
+  sessionToken: string;
+  organizationId: string;
+};
+
 export class BridgeClient implements IBridgeClient {
   private ws: WebSocket | null = null;
   private serverUrl: string;
@@ -129,6 +134,9 @@ export class BridgeClient implements IBridgeClient {
   private isFlushingHookQueue = false;
   private status: BridgeConnectionStatus = "disconnected";
   private statusListeners = new Set<(status: BridgeConnectionStatus) => void>();
+  private authContext: BridgeAuthContext | null = null;
+  private bridgeAuthToken: { token: string; expiresAt: number } | null = null;
+  private connectAttempt = 0;
   /** Maps sessionId → workdir so terminals can spawn in the correct directory */
   private sessionWorkdirs = new Map<string, string>();
   /** Coalesces concurrent createWorktree calls for the same worktree key (sessionGroupId or sessionId) */
@@ -170,13 +178,77 @@ export class BridgeClient implements IBridgeClient {
   }
 
   connect() {
+    const attempt = ++this.connectAttempt;
     this.cancelPendingReconnect();
+    if (!this.authContext) {
+      runtimeDebug("desktop bridge connect skipped awaiting auth", {
+        instanceId: this.instanceId,
+      });
+      this.setStatus("disconnected");
+      return;
+    }
+
     this.setStatus("connecting");
     runtimeDebug("desktop bridge connecting", {
       serverUrl: this.serverUrl,
       instanceId: this.instanceId,
     });
-    this.ws = new WebSocket(`${this.serverUrl}/bridge`);
+    void this.openSocket(attempt);
+  }
+
+  setAuthContext(sessionToken: string | null, organizationId: string | null) {
+    const nextContext =
+      sessionToken && organizationId
+        ? { sessionToken, organizationId }
+        : null;
+    const changed =
+      this.authContext?.sessionToken !== nextContext?.sessionToken ||
+      this.authContext?.organizationId !== nextContext?.organizationId;
+
+    this.authContext = nextContext;
+    this.bridgeAuthToken = null;
+    runtimeDebug("desktop bridge auth context updated", {
+      instanceId: this.instanceId,
+      hasAuthContext: !!nextContext,
+      organizationId: nextContext?.organizationId ?? null,
+      changed,
+    });
+
+    if (!nextContext) {
+      this.disconnect();
+      return;
+    }
+
+    if (changed) {
+      this.forceReconnect();
+    } else if (this.status === "disconnected") {
+      this.connect();
+    }
+  }
+
+  private async openSocket(attempt: number) {
+    let bridgeAuthToken: string;
+    try {
+      bridgeAuthToken = await this.fetchBridgeAuthToken();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[bridge] failed to fetch bridge auth token:", message);
+      runtimeDebug("desktop bridge auth token fetch failed", {
+        instanceId: this.instanceId,
+        error: message,
+      });
+      this.setStatus("disconnected");
+      if (attempt === this.connectAttempt && this.authContext) {
+        this.scheduleReconnect(5000);
+      }
+      return;
+    }
+
+    if (attempt !== this.connectAttempt) return;
+
+    const bridgeUrl = new URL(`${this.serverUrl}/bridge`);
+    bridgeUrl.searchParams.set("bridgeAuthToken", bridgeAuthToken);
+    this.ws = new WebSocket(bridgeUrl.toString());
 
     this.ws.on("open", () => {
       console.log("[bridge] connected to server");
@@ -203,7 +275,9 @@ export class BridgeClient implements IBridgeClient {
       this.stopHookQueueDrain();
       runtimeDebug("desktop bridge websocket closed", { instanceId: this.instanceId });
       this.setStatus("disconnected");
-      this.scheduleReconnect(3000);
+      if (this.authContext) {
+        this.scheduleReconnect(3000);
+      }
     });
 
     this.ws.on("error", (err) => {
@@ -265,8 +339,56 @@ export class BridgeClient implements IBridgeClient {
   }
 
   private scheduleReconnect(delayMs: number) {
+    if (!this.authContext) return;
     this.cancelPendingReconnect();
     this.reconnectTimer = setTimeout(() => this.connect(), delayMs);
+  }
+
+  private async fetchBridgeAuthToken(): Promise<string> {
+    if (!this.authContext) {
+      throw new Error("Bridge auth context is not available");
+    }
+
+    if (
+      this.bridgeAuthToken &&
+      this.bridgeAuthToken.expiresAt - Date.now() > 30_000
+    ) {
+      return this.bridgeAuthToken.token;
+    }
+
+    const url = new URL(`${this.serverUrl}/auth/bridge-token`);
+    url.searchParams.set("instanceId", this.instanceId);
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${this.authContext.sessionToken}`,
+        "X-Organization-Id": this.authContext.organizationId,
+      },
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new Error(body || `Auth request failed with ${response.status}`);
+    }
+
+    const payload = (await response.json()) as {
+      token?: unknown;
+      expiresAt?: unknown;
+    };
+    if (typeof payload.token !== "string" || typeof payload.expiresAt !== "string") {
+      throw new Error("Invalid bridge auth token response");
+    }
+
+    const expiresAt = Date.parse(payload.expiresAt);
+    if (Number.isNaN(expiresAt)) {
+      throw new Error("Invalid bridge auth token expiry");
+    }
+
+    this.bridgeAuthToken = {
+      token: payload.token,
+      expiresAt,
+    };
+    return payload.token;
   }
 
   getStatus(): BridgeConnectionStatus {

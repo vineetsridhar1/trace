@@ -24,10 +24,24 @@ import { useUIStore } from "../../stores/ui";
 import { ImageAttachmentBar, type ImageAttachment } from "./ImageAttachmentBar";
 import { uploadImage } from "../../lib/upload";
 import { useAuthStore } from "../../stores/auth";
+import { BridgeAccessNotice } from "./BridgeAccessNotice";
+import type { BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
 const MAX_IMAGES = 5;
 
-export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop: () => void }) {
+export function SessionInput({
+  sessionId,
+  onStop,
+  bridgeAccess,
+  sessionGroupId,
+  onAccessRequested,
+}: {
+  sessionId: string;
+  onStop: () => void;
+  bridgeAccess: BridgeRuntimeAccessInfo | null;
+  sessionGroupId?: string | null;
+  onAccessRequested?: () => void | Promise<void>;
+}) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
@@ -57,8 +71,14 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   const isNotStarted = agentStatus === "not_started";
   const disconnected = isDisconnected(connection);
   const canQueue = canQueueMessage(agentStatus, worktreeDeleted);
+  const bridgeInteractionAllowed =
+    !bridgeAccess || bridgeAccess.hostingMode !== "local" || bridgeAccess.allowed;
   const canSend =
-    !isOptimistic && (isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted) || canQueue);
+    bridgeInteractionAllowed &&
+    !isOptimistic &&
+    (isNotStarted ||
+      canSendMessage(agentStatus, connection, worktreeDeleted) ||
+      canQueue);
   const displayModel = model ? getModelLabel(model) : "Claude Code";
 
   const _lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as string | undefined;
@@ -195,6 +215,18 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
       setIsSending(false);
     }
   }, [sessionId, mode, canSend, canQueue, images]);
+
+  if (!bridgeInteractionAllowed) {
+    return (
+      <div className="border-t px-4 py-3">
+        <BridgeAccessNotice
+          access={bridgeAccess}
+          sessionGroupId={sessionGroupId ?? null}
+          onRequested={onAccessRequested}
+        />
+      </div>
+    );
+  }
 
   // Show recovery panel when disconnected — but not for not_started sessions
   if (disconnected && !isNotStarted) {

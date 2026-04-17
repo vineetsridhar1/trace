@@ -3,6 +3,7 @@ import type { AgentStatus, CodingTool, SessionFilters, StartSessionInput } from 
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
 import { sessionRouter } from "../lib/session-router.js";
+import { runtimeAccessService } from "../services/runtime-access.js";
 import { BUILTIN_SLASH_COMMANDS, type BridgeSkillInfo } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { AuthenticationError } from "../lib/errors.js";
@@ -46,20 +47,38 @@ export const sessionQueries = {
     );
   },
   availableSessionRuntimes: (_: unknown, args: { sessionId: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
     const orgId = requireOrgContext(ctx);
-    return sessionService.listAvailableRuntimes(args.sessionId, orgId);
+    return sessionService.listAvailableRuntimes(args.sessionId, orgId, ctx.userId);
   },
-  availableRuntimes: (_: unknown, args: { tool: CodingToolEnum }, ctx: Context) => {
+  availableRuntimes: (
+    _: unknown,
+    args: { tool: CodingToolEnum; sessionGroupId?: string | null },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
     const orgId = requireOrgContext(ctx);
-    return sessionService.listRuntimesForTool(args.tool, orgId);
+    return sessionService.listRuntimesForTool(
+      args.tool,
+      orgId,
+      ctx.userId,
+      args.sessionGroupId ?? undefined,
+    );
   },
   repoBranches: (
     _: unknown,
-    args: { repoId: string; runtimeInstanceId?: string | null },
+    args: { repoId: string; runtimeInstanceId?: string | null; sessionGroupId?: string | null },
     ctx: Context,
   ) => {
+    if (!ctx.userId) throw new AuthenticationError();
     const orgId = requireOrgContext(ctx);
-    return sessionService.listBranches(args.repoId, orgId, args.runtimeInstanceId ?? undefined);
+    return sessionService.listBranches(
+      args.repoId,
+      orgId,
+      ctx.userId,
+      args.runtimeInstanceId ?? undefined,
+      args.sessionGroupId ?? undefined,
+    );
   },
   sessionGroupFiles: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
@@ -119,22 +138,40 @@ export const sessionQueries = {
         id: true,
         tool: true,
         workdir: true,
-        hosting: true,
-        createdById: true,
+        sessionGroupId: true,
+        connection: true,
       },
     });
     if (!session || session.tool !== "claude_code") return [];
 
-    const runtime = sessionRouter.getRuntimeForSession(args.sessionId);
+    const runtimeInstanceId =
+      session.connection &&
+      typeof session.connection === "object" &&
+      !Array.isArray(session.connection) &&
+      typeof (session.connection as { runtimeInstanceId?: unknown }).runtimeInstanceId === "string"
+        ? ((session.connection as { runtimeInstanceId?: string }).runtimeInstanceId ?? null)
+        : null;
+    const runtime =
+      (runtimeInstanceId ? sessionRouter.getRuntime(runtimeInstanceId) : null) ??
+      sessionRouter.getRuntimeForSession(args.sessionId);
 
     // Try to get skills from bridge
     let skills: BridgeSkillInfo[] = [];
-    if (runtime) {
+    let canUseBridgeSkills = true;
+    if (runtimeInstanceId) {
+      const access = await runtimeAccessService.getAccessState({
+        userId: ctx.userId,
+        organizationId: orgId,
+        runtimeInstanceId,
+        sessionGroupId: session.sessionGroupId ?? undefined,
+      });
+      canUseBridgeSkills = access.hostingMode !== "local" || access.allowed;
+    }
+    if (runtime && canUseBridgeSkills) {
       try {
-        const includeUserSkills = session.hosting !== "local" || session.createdById === ctx.userId;
         skills = await sessionRouter.listSkills(runtime.id, args.sessionId, {
           workdirHint: session.workdir ?? undefined,
-          includeUserSkills,
+          includeUserSkills: true,
           includeProjectSkills: true,
         });
       } catch {
@@ -181,9 +218,13 @@ export const sessionMutations = {
   runSession: (
     _: unknown,
     args: { id: string; prompt?: string | null; interactionMode?: string | null },
-    _ctx: Context,
+    ctx: Context,
   ) => {
-    return sessionService.run(args.id, args.prompt, args.interactionMode ?? undefined);
+    if (!ctx.userId) throw new AuthenticationError();
+    return sessionService.run(args.id, args.prompt, args.interactionMode ?? undefined, {
+      userId: ctx.userId,
+      organizationId: requireOrgContext(ctx),
+    });
   },
   terminateSession: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.terminate(args.id, ctx.actorType, ctx.userId);

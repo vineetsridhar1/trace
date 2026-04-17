@@ -1,6 +1,7 @@
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import jwt from "jsonwebtoken";
 import { prisma } from "../lib/db.js";
+import { createBridgeAuthToken, getRequestToken, verifyToken } from "../lib/auth.js";
 
 const router: RouterType = Router();
 
@@ -155,18 +156,19 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
 
 // Get current user with org memberships
 router.get("/auth/me", async (req: Request, res: Response) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith("Bearer ")
-    ? authHeader.slice(7)
-    : req.cookies?.trace_token;
+  const token = getRequestToken(req);
   if (!token) {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
+  const userId = verifyToken(token);
+  if (!userId) {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as { userId: string };
     const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
+      where: { id: userId },
       select: {
         id: true,
         email: true,
@@ -191,6 +193,39 @@ router.get("/auth/me", async (req: Request, res: Response) => {
   } catch {
     return res.status(401).json({ error: "Invalid token" });
   }
+});
+
+router.get("/auth/bridge-token", async (req: Request, res: Response) => {
+  const token = getRequestToken(req);
+  const userId = token ? verifyToken(token) : null;
+  if (!userId) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  const rawOrgId = req.headers["x-organization-id"];
+  const organizationId = Array.isArray(rawOrgId) ? rawOrgId[0] : rawOrgId;
+  if (typeof organizationId !== "string" || !organizationId.trim()) {
+    return res.status(400).json({ error: "Missing X-Organization-Id header" });
+  }
+
+  const instanceId = typeof req.query.instanceId === "string" ? req.query.instanceId.trim() : "";
+  if (!instanceId) {
+    return res.status(400).json({ error: "instanceId is required" });
+  }
+
+  const membership = await prisma.orgMember.findUnique({
+    where: { userId_organizationId: { userId, organizationId } },
+    select: { userId: true },
+  });
+  if (!membership) {
+    return res.status(403).json({ error: "Not a member of this organization" });
+  }
+
+  const bridgeToken = createBridgeAuthToken({ userId, organizationId, instanceId });
+  res.json({
+    token: bridgeToken.token,
+    expiresAt: bridgeToken.expiresAt.toISOString(),
+  });
 });
 
 // Logout

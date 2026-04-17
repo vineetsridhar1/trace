@@ -27,11 +27,24 @@ import { createQuickSession } from "./lib/create-quick-session";
 export function App() {
   const user = useAuthStore((s: AuthState) => s.user);
   const loading = useAuthStore((s: AuthState) => s.loading);
+  const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
   const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
   useEffect(() => {
     fetchMe();
   }, [fetchMe]);
+
+  useEffect(() => {
+    if (!window.trace?.setBridgeAuthContext) return;
+
+    const token = localStorage.getItem("trace_token");
+    if (!user || !token || !activeOrgId) {
+      void window.trace.setBridgeAuthContext(null, null);
+      return;
+    }
+
+    void window.trace.setBridgeAuthContext(token, activeOrgId);
+  }, [activeOrgId, user]);
 
   if (loading) {
     return (

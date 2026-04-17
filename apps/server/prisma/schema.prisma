@@ -58,6 +58,17 @@ enum HostingMode {
   local
 }
 
+enum BridgeAccessScopeType {
+  all_sessions
+  session_group
+}
+
+enum BridgeAccessRequestStatus {
+  pending
+  approved
+  denied
+}
+
 enum CodingTool {
   claude_code
   codex
@@ -235,6 +246,7 @@ model Organization {
   orgMembers OrgMember[]
   repos    Repo[]
   projects Project[]
+  bridgeRuntimes BridgeRuntime[]
   channelGroups ChannelGroup[]
   channels Channel[]
   sessionGroups SessionGroup[]
@@ -403,6 +415,12 @@ model User {
   githubId       Int?         @unique
 
   orgMemberships    OrgMember[]
+  ownedBridgeRuntimes BridgeRuntime[] @relation("BridgeRuntimeOwner")
+  bridgeAccessGrants BridgeAccessGrant[] @relation("BridgeAccessGrantGrantee")
+  grantedBridgeAccessGrants BridgeAccessGrant[] @relation("BridgeAccessGrantGrantedBy")
+  requestedBridgeAccess BridgeAccessRequest[] @relation("BridgeAccessRequestRequester")
+  ownedBridgeAccessRequests BridgeAccessRequest[] @relation("BridgeAccessRequestOwner")
+  resolvedBridgeAccessRequests BridgeAccessRequest[] @relation("BridgeAccessRequestResolver")
   createdSessions   Session[]        @relation("SessionCreator")
   createdTickets    Ticket[]         @relation("TicketCreator")
   ticketAssignments TicketAssignee[] @relation("TicketAssignees")
@@ -550,6 +568,8 @@ model SessionGroup {
 
   sessions Session[]
   gitCheckpoints GitCheckpoint[]
+  bridgeAccessGrants BridgeAccessGrant[]
+  bridgeAccessRequests BridgeAccessRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -775,6 +795,77 @@ model CloudMachine {
 
   @@unique([userId, organizationId])
   @@index([status])
+}
+
+model BridgeRuntime {
+  id             String       @id @default(uuid())
+  instanceId     String       @unique
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ownerUserId    String
+  ownerUser      User         @relation("BridgeRuntimeOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  label          String
+  hostingMode    HostingMode
+  lastSeenAt     DateTime?
+  connectedAt    DateTime?
+  disconnectedAt DateTime?
+  metadata       Json?
+
+  accessGrants   BridgeAccessGrant[]
+  accessRequests BridgeAccessRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, ownerUserId])
+  @@index([organizationId, connectedAt])
+}
+
+model BridgeAccessGrant {
+  id               String                @id @default(uuid())
+  bridgeRuntimeId  String
+  bridgeRuntime    BridgeRuntime         @relation(fields: [bridgeRuntimeId], references: [id], onDelete: Cascade)
+  granteeUserId    String
+  granteeUser      User                  @relation("BridgeAccessGrantGrantee", fields: [granteeUserId], references: [id], onDelete: Cascade)
+  grantedByUserId  String
+  grantedByUser    User                  @relation("BridgeAccessGrantGrantedBy", fields: [grantedByUserId], references: [id], onDelete: Cascade)
+  scopeType        BridgeAccessScopeType
+  sessionGroupId   String?
+  sessionGroup     SessionGroup?         @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  expiresAt        DateTime?
+  revokedAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bridgeRuntimeId, granteeUserId, revokedAt])
+  @@index([granteeUserId, revokedAt, expiresAt])
+  @@index([sessionGroupId, revokedAt])
+}
+
+model BridgeAccessRequest {
+  id                 String                    @id @default(uuid())
+  bridgeRuntimeId    String
+  bridgeRuntime      BridgeRuntime             @relation(fields: [bridgeRuntimeId], references: [id], onDelete: Cascade)
+  requesterUserId    String
+  requesterUser      User                      @relation("BridgeAccessRequestRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  ownerUserId        String
+  ownerUser          User                      @relation("BridgeAccessRequestOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  scopeType          BridgeAccessScopeType
+  sessionGroupId     String?
+  sessionGroup       SessionGroup?             @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  requestedExpiresAt DateTime?
+  status             BridgeAccessRequestStatus @default(pending)
+  resolvedAt         DateTime?
+  resolvedByUserId   String?
+  resolvedByUser     User?                     @relation("BridgeAccessRequestResolver", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bridgeRuntimeId, requesterUserId, status])
+  @@index([ownerUserId, status, createdAt])
+  @@index([sessionGroupId, status])
 }
 
 model InboxItem {

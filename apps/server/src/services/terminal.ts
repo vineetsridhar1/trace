@@ -1,12 +1,33 @@
 import { prisma } from "../lib/db.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
+import { runtimeAccessService } from "./runtime-access.js";
 import { isFullyUnloadedSession } from "./session.js";
 
 class TerminalService {
-  private assertLocalOwnership(session: { hosting: string | null; createdById: string }, userId: string): void {
-    if (session.hosting === "local" && session.createdById !== userId) {
-      throw new Error("Access denied: you can only access terminals on your own local sessions");
+  private getConnectionRuntimeInstanceId(connection: unknown): string | null {
+    if (!connection || typeof connection !== "object" || Array.isArray(connection)) {
+      return null;
     }
+    const runtimeInstanceId = (connection as { runtimeInstanceId?: unknown }).runtimeInstanceId;
+    return typeof runtimeInstanceId === "string" && runtimeInstanceId.trim()
+      ? runtimeInstanceId
+      : null;
+  }
+
+  private async assertTerminalAccess(
+    session: {
+      organizationId: string;
+      sessionGroupId: string | null;
+      connection: unknown;
+    },
+    userId: string,
+  ): Promise<void> {
+    await runtimeAccessService.assertAccess({
+      userId,
+      organizationId: session.organizationId,
+      runtimeInstanceId: this.getConnectionRuntimeInstanceId(session.connection),
+      sessionGroupId: session.sessionGroupId,
+    });
   }
 
   async create({
@@ -26,9 +47,9 @@ class TerminalService {
       where: { id: sessionId, organizationId },
       select: {
         id: true,
+        organizationId: true,
         sessionGroupId: true,
-        hosting: true,
-        createdById: true,
+        connection: true,
         agentStatus: true,
         sessionStatus: true,
         sessionGroup: {
@@ -50,7 +71,7 @@ class TerminalService {
     if (session.sessionGroup?.setupStatus === "running") {
       throw new Error("Cannot create terminal while the setup script is still running");
     }
-    this.assertLocalOwnership(session, userId);
+    await this.assertTerminalAccess(session, userId);
 
     const terminalId = terminalRelay.createTerminal(
       sessionId,
@@ -73,10 +94,10 @@ class TerminalService {
   }): Promise<Array<{ id: string; sessionId: string }>> {
     const session = await prisma.session.findFirst({
       where: { id: sessionId, organizationId },
-      select: { id: true, sessionGroupId: true, hosting: true, createdById: true },
+      select: { id: true, organizationId: true, sessionGroupId: true, connection: true },
     });
     if (!session) throw new Error("Session not found");
-    this.assertLocalOwnership(session, userId);
+    await this.assertTerminalAccess(session, userId);
 
     const terminalIds = session.sessionGroupId
       ? terminalRelay.getTerminalsForSessionGroup(session.sessionGroupId)
@@ -86,23 +107,33 @@ class TerminalService {
       .filter((id): id is string => !!id);
 
     const owningSessions = terminalSessionIds.length === 0
-      ? []
-      : await prisma.session.findMany({
+        ? []
+        : await prisma.session.findMany({
           where: { id: { in: terminalSessionIds }, organizationId },
-          select: { id: true, hosting: true, createdById: true },
+          select: { id: true, organizationId: true, sessionGroupId: true, connection: true },
         });
-    type OwningSession = { id: string; hosting: string | null; createdById: string };
+    type OwningSession = {
+      id: string;
+      organizationId: string;
+      sessionGroupId: string | null;
+      connection: unknown;
+    };
     const owningSessionMap = new Map<string, OwningSession>(owningSessions.map((item: OwningSession) => [item.id, item]));
 
-    return terminalIds.flatMap((id) => {
+    const results: Array<{ id: string; sessionId: string }> = [];
+    for (const id of terminalIds) {
       const ownerSessionId = terminalRelay.getSessionId(id) ?? sessionId;
       const ownerSession = owningSessionMap.get(ownerSessionId);
-      if (!ownerSession) return [];
-      if (ownerSession.hosting === "local" && ownerSession.createdById !== userId) {
-        return [];
+      if (!ownerSession) continue;
+      try {
+        await this.assertTerminalAccess(ownerSession, userId);
+        results.push({ id, sessionId: ownerSessionId });
+      } catch {
+        continue;
       }
-      return [{ id, sessionId: ownerSessionId }];
-    });
+    }
+
+    return results;
   }
 
   async destroy({
@@ -119,10 +150,10 @@ class TerminalService {
 
     const session = await prisma.session.findFirst({
       where: { id: sessionId, organizationId },
-      select: { id: true, hosting: true, createdById: true },
+      select: { id: true, organizationId: true, sessionGroupId: true, connection: true },
     });
     if (!session) throw new Error("Terminal not found");
-    this.assertLocalOwnership(session, userId);
+    await this.assertTerminalAccess(session, userId);
 
     terminalRelay.destroyTerminal(terminalId);
     return true;

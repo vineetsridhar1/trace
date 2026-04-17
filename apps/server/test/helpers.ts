@@ -166,6 +166,27 @@ export function createPrismaMock() {
       update: vi.fn(),
       delete: vi.fn(),
     },
+    bridgeRuntime: {
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      upsert: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    bridgeAccessGrant: {
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    bridgeAccessRequest: {
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+    },
     gitCheckpoint: {
       create: vi.fn(),
       findMany: vi.fn(),

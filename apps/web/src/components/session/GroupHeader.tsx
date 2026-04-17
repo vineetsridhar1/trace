@@ -24,6 +24,7 @@ interface GroupHeaderProps {
   groupBranch?: string | null;
   linkedCheckoutRuntimeInstanceId?: string | null;
   canManageLinkedCheckout: boolean;
+  canInteract: boolean;
   selectedSessionStatus: string;
   selectedSessionId: string | null;
   groupPrUrl: string | null | undefined;
@@ -42,6 +43,7 @@ export function GroupHeader({
   groupBranch,
   linkedCheckoutRuntimeInstanceId,
   canManageLinkedCheckout,
+  canInteract,
   selectedSessionStatus,
   selectedSessionId,
   groupPrUrl,
@@ -122,7 +124,7 @@ export function GroupHeader({
       {hasRunScripts && (
         <button
           onClick={handleRun}
-          disabled={!canRun}
+          disabled={!canRun || !canInteract}
           className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
           title="Run scripts"
         >

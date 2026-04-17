@@ -3,6 +3,8 @@ import { cn } from "../../lib/utils";
 import { FileExplorer } from "./FileExplorer";
 import { CheckpointPanel } from "./CheckpointPanel";
 import { BranchChangesPanel } from "./BranchChangesPanel";
+import { BridgeAccessNotice } from "./BridgeAccessNotice";
+import type { BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
 export type SidebarTab = "files" | "git" | "changes";
 
@@ -15,6 +17,8 @@ interface SidebarPanelProps {
   onDiffFileClick?: (filePath: string, status: string) => void;
   highlightCheckpointId?: string | null;
   onCheckpointClick?: (sessionId: string, promptEventId: string) => void;
+  bridgeAccess?: BridgeRuntimeAccessInfo | null;
+  onBridgeAccessRequested?: () => void | Promise<void>;
 }
 
 const tabClass =
@@ -32,7 +36,12 @@ export function SidebarPanel({
   onDiffFileClick,
   highlightCheckpointId,
   onCheckpointClick,
+  bridgeAccess,
+  onBridgeAccessRequested,
 }: SidebarPanelProps) {
+  const bridgeInteractionAllowed =
+    !bridgeAccess || bridgeAccess.hostingMode !== "local" || bridgeAccess.allowed;
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="flex shrink-0 border-b border-border">
@@ -63,7 +72,15 @@ export function SidebarPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        {activeTab === "files" ? (
+        {!bridgeInteractionAllowed && activeTab !== "git" ? (
+          <div className="p-3">
+            <BridgeAccessNotice
+              access={bridgeAccess ?? null}
+              sessionGroupId={sessionGroupId}
+              onRequested={onBridgeAccessRequested}
+            />
+          </div>
+        ) : activeTab === "files" ? (
           <FileExplorer
             sessionGroupId={sessionGroupId}
             onFileClick={onFileClick}

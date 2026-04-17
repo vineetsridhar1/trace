@@ -26,7 +26,9 @@ import { createUserLoader } from "./dataloader.js";
 import {
   buildContext,
   buildWsContext,
+  createBridgeAuthToken,
   parseCookieToken,
+  verifyBridgeAuthToken,
   verifyToken,
 } from "./auth.js";
 
@@ -49,6 +51,22 @@ describe("auth helpers", () => {
 
     expect(verifyToken(token)).toBe("user-1");
     expect(verifyToken("bad-token")).toBeNull();
+  });
+
+  it("verifies bridge auth tokens separately from session tokens", () => {
+    const { token } = createBridgeAuthToken({
+      userId: "user-1",
+      organizationId: "org-1",
+      instanceId: "bridge-1",
+    });
+
+    expect(verifyToken(token)).toBeNull();
+    expect(verifyBridgeAuthToken(token)).toMatchObject({
+      userId: "user-1",
+      organizationId: "org-1",
+      instanceId: "bridge-1",
+      tokenType: "bridge_auth",
+    });
   });
 
   it("builds a context from a bearer token", async () => {

@@ -86,6 +86,17 @@ enum SlashCommandCategory {
   special
 }
 
+enum BridgeAccessScopeType {
+  all_sessions
+  session_group
+}
+
+enum BridgeAccessRequestStatus {
+  pending
+  approved
+  denied
+}
+
 type SlashCommand {
   name: String!
   description: String!
@@ -689,6 +700,60 @@ type SessionRuntimeInstance {
   registeredRepoIds: [ID!]!
 }
 
+type BridgeAccessGrant {
+  id: ID!
+  granteeUser: User!
+  grantedByUser: User!
+  scopeType: BridgeAccessScopeType!
+  sessionGroup: SessionGroup
+  expiresAt: DateTime
+  revokedAt: DateTime
+  createdAt: DateTime!
+}
+
+type BridgeAccessRequest {
+  id: ID!
+  requesterUser: User!
+  ownerUser: User!
+  resolvedByUser: User
+  scopeType: BridgeAccessScopeType!
+  sessionGroup: SessionGroup
+  requestedExpiresAt: DateTime
+  status: BridgeAccessRequestStatus!
+  resolvedAt: DateTime
+  createdAt: DateTime!
+}
+
+type BridgeRuntime {
+  id: ID!
+  instanceId: ID!
+  ownerUser: User!
+  label: String!
+  hostingMode: HostingMode!
+  lastSeenAt: DateTime!
+  connectedAt: DateTime
+  disconnectedAt: DateTime
+  metadata: JSON
+  connected: Boolean!
+  accessRequests: [BridgeAccessRequest!]!
+  accessGrants: [BridgeAccessGrant!]!
+}
+
+type BridgeRuntimeAccess {
+  runtimeInstanceId: ID!
+  bridgeRuntimeId: ID
+  label: String
+  hostingMode: HostingMode
+  connected: Boolean!
+  ownerUser: User
+  allowed: Boolean!
+  isOwner: Boolean!
+  scopeType: BridgeAccessScopeType
+  sessionGroupId: ID
+  expiresAt: DateTime
+  pendingRequest: BridgeAccessRequest
+}
+
 type BranchDiffFile {
   path: String!
   status: String!
@@ -927,6 +992,8 @@ type Query {
   ): [Event!]!
   availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!
   availableRuntimes(tool: CodingTool!): [SessionRuntimeInstance!]!
+  myBridgeRuntimes: [BridgeRuntime!]!
+  bridgeRuntimeAccess(runtimeInstanceId: ID!, sessionGroupId: ID): BridgeRuntimeAccess!
   repoBranches(repoId: ID!, runtimeInstanceId: ID): [String!]!
   sessionGroupFiles(sessionGroupId: ID!): [String!]!
   sessionGroupFileContent(sessionGroupId: ID!, filePath: String!): String!
@@ -1030,6 +1097,15 @@ type Mutation {
   retrySessionGroupSetup(id: ID!): SessionGroup!
   moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!
   moveSessionToCloud(sessionId: ID!): Session!
+  requestBridgeAccess(
+    runtimeInstanceId: ID!
+    scopeType: BridgeAccessScopeType!
+    sessionGroupId: ID
+    requestedExpiresAt: DateTime
+  ): BridgeAccessRequest!
+  approveBridgeAccessRequest(requestId: ID!): BridgeAccessGrant!
+  denyBridgeAccessRequest(requestId: ID!): BridgeAccessRequest!
+  revokeBridgeAccessGrant(grantId: ID!): BridgeAccessGrant!
   linkLinkedCheckoutRepo(
     sessionGroupId: ID!
     repoId: ID!

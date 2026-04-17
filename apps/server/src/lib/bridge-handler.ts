@@ -8,6 +8,7 @@ import { sessionRouter } from "./session-router.js";
 import { sessionService } from "../services/session.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { terminalRelay } from "./terminal-relay.js";
+import { runtimeAccessService } from "../services/runtime-access.js";
 
 /** Grace period before marking sessions disconnected — allows fast reconnects */
 const DISCONNECT_GRACE_MS = 10_000;
@@ -15,16 +16,29 @@ const DISCONNECT_GRACE_MS = 10_000;
 /** Interval between server→client pings to keep the WebSocket alive through proxies (e.g. Render). */
 const PING_INTERVAL_MS = 20_000;
 
-export function handleBridgeConnection(ws: WebSocket) {
+type LocalBridgeAuth = {
+  kind: "local";
+  userId: string;
+  organizationId: string;
+  instanceId: string;
+};
+
+type BridgeAuth = { kind: "cloud" } | LocalBridgeAuth;
+
+export type BridgeConnectionRequest = {
+  bridgeAuth?: BridgeAuth;
+};
+
+export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequest) {
   // Default runtime ID; replaced if the bridge sends runtime_hello
   let runtimeId: string = randomUUID();
   let registered = false;
+  const bridgeAuth = req?.bridgeAuth;
 
-  runtimeDebug("bridge websocket connected", { provisionalRuntimeId: runtimeId });
-
-  // Register with defaults until runtime_hello arrives
-  sessionRouter.registerBridge(runtimeId, ws);
-  registered = true;
+  runtimeDebug("bridge websocket connected", {
+    provisionalRuntimeId: runtimeId,
+    authKind: bridgeAuth?.kind ?? "unknown",
+  });
 
   // Keep-alive: periodically ping the client to prevent idle timeout
   // from reverse proxies (Render closes idle WebSockets after ~55-60s).
@@ -57,69 +71,134 @@ export function handleBridgeConnection(ws: WebSocket) {
       const msg = JSON.parse(raw.toString());
 
       if (msg.type === "runtime_hello") {
-        // Bridge is announcing its identity. Re-register with the real info.
-        const oldId = runtimeId;
-        const newId = (msg.instanceId as string) ?? runtimeId;
-        const existingRuntime = sessionRouter.getRuntime(newId);
-        runtimeDebug("received runtime_hello", {
-          oldId,
-          newId,
-          label: msg.label,
-          hostingMode: msg.hostingMode,
-          supportedTools: msg.supportedTools,
-          registeredRepoIds: msg.registeredRepoIds,
-        });
+        void (async () => {
+          const oldId = runtimeId;
+          const newId = (msg.instanceId as string) ?? runtimeId;
+          const hostingMode = (msg.hostingMode as "cloud" | "local") ?? "local";
+          const supportedTools = (msg.supportedTools as string[]) ?? [
+            "claude_code",
+            "codex",
+            "custom",
+          ];
+          const registeredRepoIds = (msg.registeredRepoIds as string[]) ?? [];
 
-        if (registered && oldId !== newId) {
-          sessionRouter.unregisterRuntime(oldId, ws);
-        }
-
-        runtimeId = newId;
-        sessionRouter.registerRuntime({
-          id: runtimeId,
-          label: (msg.label as string) ?? runtimeId,
-          ws,
-          hostingMode: (msg.hostingMode as "cloud" | "local") ?? "local",
-          supportedTools: (msg.supportedTools as string[]) ?? ["claude_code", "codex", "custom"],
-          registeredRepoIds: (msg.registeredRepoIds as string[]) ?? [],
-        });
-
-        if (existingRuntime && existingRuntime.ws !== ws) {
-          runtimeDebug("closing superseded websocket for runtime", {
-            runtimeId: newId,
-            previousLabel: existingRuntime.label,
-            previousReadyState: existingRuntime.ws.readyState,
+          runtimeDebug("received runtime_hello", {
+            oldId,
+            newId,
+            label: msg.label,
+            hostingMode,
+            supportedTools,
+            registeredRepoIds,
+            authKind: bridgeAuth?.kind ?? "unknown",
           });
-          existingRuntime.ws.close();
-        }
 
-        // Restore all sessions owned by this runtime from the DB.
-        // The DB (connection.runtimeInstanceId) is the single source of truth —
-        // the bridge doesn't need to report session lists.
-        runtimeDebug("restoring sessions for runtime after hello", { runtimeId });
-        sessionService.restoreSessionsForRuntime(runtimeId).catch((err) => {
-          console.error("[bridge] error restoring sessions for runtime:", err);
-        });
+          if (bridgeAuth?.kind === "local") {
+            if (newId !== bridgeAuth.instanceId) {
+              runtimeDebug("bridge auth rejected runtime_hello instance mismatch", {
+                expectedInstanceId: bridgeAuth.instanceId,
+                receivedInstanceId: newId,
+              });
+              ws.close(1008, "Bridge auth mismatch");
+              return;
+            }
 
-        // Restore terminal relay entries from bridge-reported active terminals
-        if (Array.isArray(msg.activeTerminals) && msg.activeTerminals.length > 0) {
-          const activeTerminals = (msg.activeTerminals as unknown[]).filter(
-            (t): t is { terminalId: string; sessionId: string } =>
-              typeof t === "object" &&
-              t !== null &&
-              typeof (t as Record<string, unknown>).terminalId === "string" &&
-              typeof (t as Record<string, unknown>).sessionId === "string",
-          );
-          if (activeTerminals.length > 0) {
-            runtimeDebug("restoring terminals from bridge", {
-              runtimeId,
-              count: activeTerminals.length,
+            const bridgeRuntime = await runtimeAccessService.registerLocalRuntimeConnection({
+              instanceId: newId,
+              organizationId: bridgeAuth.organizationId,
+              ownerUserId: bridgeAuth.userId,
+              label: (msg.label as string) ?? newId,
+              hostingMode: "local",
+              metadata: {
+                supportedTools,
+                registeredRepoIds,
+              },
             });
-            terminalRelay.restoreTerminals(activeTerminals).catch((err) => {
-              console.error("[bridge] error restoring terminals:", err);
+
+            if (registered && oldId !== newId) {
+              sessionRouter.unregisterRuntime(oldId, ws);
+            }
+
+            runtimeId = newId;
+            const existingRuntime = sessionRouter.getRuntime(newId);
+            sessionRouter.registerRuntime({
+              id: runtimeId,
+              label: bridgeRuntime.label,
+              ws,
+              hostingMode: "local",
+              organizationId: bridgeRuntime.organizationId,
+              ownerUserId: bridgeRuntime.ownerUserId,
+              bridgeRuntimeId: bridgeRuntime.id,
+              supportedTools,
+              registeredRepoIds,
             });
+
+            if (existingRuntime && existingRuntime.ws !== ws) {
+              runtimeDebug("closing superseded websocket for runtime", {
+                runtimeId: newId,
+                previousLabel: existingRuntime.label,
+                previousReadyState: existingRuntime.ws.readyState,
+              });
+              existingRuntime.ws.close();
+            }
+          } else {
+            if (registered && oldId !== newId) {
+              sessionRouter.unregisterRuntime(oldId, ws);
+            }
+
+            runtimeId = newId;
+            const existingRuntime = sessionRouter.getRuntime(newId);
+            sessionRouter.registerRuntime({
+              id: runtimeId,
+              label: (msg.label as string) ?? runtimeId,
+              ws,
+              hostingMode,
+              supportedTools,
+              registeredRepoIds,
+            });
+
+            if (existingRuntime && existingRuntime.ws !== ws) {
+              runtimeDebug("closing superseded websocket for runtime", {
+                runtimeId: newId,
+                previousLabel: existingRuntime.label,
+                previousReadyState: existingRuntime.ws.readyState,
+              });
+              existingRuntime.ws.close();
+            }
           }
-        }
+
+          registered = true;
+
+          // Restore all sessions owned by this runtime from the DB.
+          // The DB (connection.runtimeInstanceId) is the single source of truth —
+          // the bridge doesn't need to report session lists.
+          runtimeDebug("restoring sessions for runtime after hello", { runtimeId });
+          sessionService.restoreSessionsForRuntime(runtimeId).catch((err) => {
+            console.error("[bridge] error restoring sessions for runtime:", err);
+          });
+
+          // Restore terminal relay entries from bridge-reported active terminals
+          if (Array.isArray(msg.activeTerminals) && msg.activeTerminals.length > 0) {
+            const activeTerminals = (msg.activeTerminals as unknown[]).filter(
+              (t): t is { terminalId: string; sessionId: string } =>
+                typeof t === "object" &&
+                t !== null &&
+                typeof (t as Record<string, unknown>).terminalId === "string" &&
+                typeof (t as Record<string, unknown>).sessionId === "string",
+            );
+            if (activeTerminals.length > 0) {
+              runtimeDebug("restoring terminals from bridge", {
+                runtimeId,
+                count: activeTerminals.length,
+              });
+              terminalRelay.restoreTerminals(activeTerminals).catch((err) => {
+                console.error("[bridge] error restoring terminals:", err);
+              });
+            }
+          }
+        })().catch((err) => {
+          console.error("[bridge] error handling runtime_hello:", err);
+          ws.close(1011, "runtime_hello failed");
+        });
         return;
       }
 
@@ -299,12 +378,18 @@ export function handleBridgeConnection(ws: WebSocket) {
       runtimeId,
       graceMs: DISCONNECT_GRACE_MS,
     });
-    const closedRuntimeId = runtimeId;
-    const affectedSessions = sessionRouter.unregisterRuntime(closedRuntimeId, ws);
+    const closedRuntimeId = bridgeAuth?.kind === "local" ? bridgeAuth.instanceId : runtimeId;
+    const affectedSessions = registered ? sessionRouter.unregisterRuntime(runtimeId, ws) : [];
     runtimeDebug("bridge close affected sessions", {
       runtimeId: closedRuntimeId,
       affectedSessions,
     });
+
+    if (bridgeAuth?.kind === "local") {
+      runtimeAccessService.markRuntimeDisconnected(closedRuntimeId).catch((err) => {
+        console.error("[bridge] failed to mark local runtime disconnected:", err);
+      });
+    }
 
     // Wait a grace period before marking sessions disconnected — if the bridge
     // reconnects quickly (e.g. brief network blip), restoreSessionsForRuntime

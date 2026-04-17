@@ -140,6 +140,13 @@ ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: string) => {
 });
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());
+ipcMain.handle(
+  "set-bridge-auth-context",
+  (_event, token: string | null, organizationId: string | null) => {
+    bridge.setAuthContext(token, organizationId);
+    return true;
+  },
+);
 
 app.whenReady().then(() => {
   ensureHookRunnerEntrypoint({

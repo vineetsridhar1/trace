@@ -5,13 +5,14 @@ import type { GitCheckpoint, QueuedMessage } from "@trace/gql";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import { useEntityStore, useEntityField, useScopedEvents, eventScopeKey, type SessionEntity, type SessionGroupEntity } from "../../stores/entity";
 import { EventScopeContext } from "./EventScopeContext";
-import { useAuthStore } from "../../stores/auth";
 import { SessionMessageList } from "./SessionMessageList";
 import { SessionHeader } from "./SessionHeader";
 import { SessionInput } from "./SessionInput";
 import { PlanResponseBar } from "./PlanResponseBar";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
+import { BridgeAccessNotice } from "./BridgeAccessNotice";
+import { useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { Loader2, AlertCircle } from "lucide-react";
 import { StickyTodoList, extractLatestTodos } from "./StickyTodoList";
@@ -25,6 +26,7 @@ import {
   RETRY_SESSION_GROUP_SETUP_MUTATION,
   SEND_SESSION_MESSAGE_MUTATION,
 } from "../../lib/mutations";
+import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 
 const SESSION_DETAIL_QUERY = gql`
   query SessionDetail($id: ID!) {
@@ -150,21 +152,29 @@ export function SessionDetailView({
   const events = useScopedEvents(scopeKey);
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as string | undefined;
-  const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
-  const createdBy = useEntityField("sessions", sessionId, "createdBy") as { id: string } | undefined;
   const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
     | GitCheckpoint[]
     | undefined;
-  const currentUserId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
   const connection = useEntityField("sessions", sessionId, "connection") as
     | Record<string, unknown>
     | null
     | undefined;
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as boolean | undefined;
-  const isCloud = hosting === "cloud";
-  const isLocalOwner = hosting === "local" && createdBy?.id === currentUserId;
   const isConnected = !connection || connection.state !== "disconnected";
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
+  const groupConnection = useEntityField("sessionGroups", sessionGroupId ?? "", "connection") as
+    | Record<string, unknown>
+    | null
+    | undefined;
+  const runtimeInstanceId =
+    getLinkedCheckoutRuntimeInstanceId(groupConnection) ??
+    getLinkedCheckoutRuntimeInstanceId(connection);
+  const { access: bridgeAccess, refresh: refreshBridgeAccess } = useBridgeRuntimeAccess(
+    runtimeInstanceId,
+    sessionGroupId ?? null,
+  );
+  const bridgeInteractionAllowed =
+    !bridgeAccess || bridgeAccess.hostingMode !== "local" || bridgeAccess.allowed;
   const setupStatus = useEntityField("sessionGroups", sessionGroupId ?? "", "setupStatus") as
     | "idle"
     | "running"
@@ -202,7 +212,12 @@ export function SessionDetailView({
     setShowTerminalPanel(false);
   }, [sessionId, setShowTerminalPanel]);
 
-  const canAccessTerminal = (isCloud || isLocalOwner) && isConnected && !isTerminalStatus(agentStatus, sessionStatus) && !worktreeDeleted && !setupBlocking;
+  const canAccessTerminal =
+    bridgeInteractionAllowed &&
+    isConnected &&
+    !isTerminalStatus(agentStatus, sessionStatus) &&
+    !worktreeDeleted &&
+    !setupBlocking;
 
   // Fetch full session detail — merge to avoid wiping fields set by events
   useEffect(() => {
@@ -378,7 +393,7 @@ export function SessionDetailView({
               <span className="text-xs text-destructive">Setup failed{setupError ? `: ${setupError}` : ""}</span>
               <button
                 type="button"
-                disabled={!sessionGroupId || retryingSetup}
+                disabled={!sessionGroupId || retryingSetup || !bridgeInteractionAllowed}
                 className="ml-2 text-xs text-foreground underline"
                 onClick={() => {
                   if (!sessionGroupId) return;
@@ -399,7 +414,15 @@ export function SessionDetailView({
           )}
         </div>
 
-        {showQuestion ? (
+        {!bridgeInteractionAllowed ? (
+          <div className="p-4">
+            <BridgeAccessNotice
+              access={bridgeAccess}
+              sessionGroupId={sessionGroupId ?? null}
+              onRequested={refreshBridgeAccess}
+            />
+          </div>
+        ) : showQuestion ? (
           <AskUserQuestionBar
             node={showQuestion}
             onResponse={(text) => {
@@ -427,7 +450,13 @@ export function SessionDetailView({
               <StickyTodoList todos={latestTodos} />
             )}
             <QueuedMessagesList sessionId={sessionId} />
-            <SessionInput sessionId={sessionId} onStop={handleStop} />
+            <SessionInput
+              sessionId={sessionId}
+              onStop={handleStop}
+              bridgeAccess={bridgeAccess}
+              sessionGroupId={sessionGroupId ?? null}
+              onAccessRequested={refreshBridgeAccess}
+            />
           </>
         )}
       </div>
