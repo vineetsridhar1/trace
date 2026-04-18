@@ -832,6 +832,16 @@ export class SessionService {
       : null;
   }
 
+  /** Return the runtime instance ID that a session is targeted at, or null. */
+  async getSessionRuntimeInstanceId(sessionId: string): Promise<string | null> {
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { connection: true },
+    });
+    if (!session) return null;
+    return this.getConnectionRuntimeInstanceId(session.connection);
+  }
+
   private async resolveLinkedCheckoutRuntime(
     sessionGroupId: string,
     repoId: string,

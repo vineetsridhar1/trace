@@ -267,6 +267,11 @@ class TerminalRelay {
   }
 
   /** Forward a message from the bridge to the attached frontend WebSocket. */
+  getSessionIdForTerminal(terminalId: string): string | null {
+    const entry = this.terminals.get(terminalId);
+    return entry?.sessionId ?? null;
+  }
+
   relayFromBridge(msg: { type: string; terminalId: string; [key: string]: unknown }): void {
     const entry = this.terminals.get(msg.terminalId);
     if (!entry) return;

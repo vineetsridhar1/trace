@@ -4,6 +4,12 @@ import jwt from "jsonwebtoken";
 import type { Context } from "../context.js";
 import { AuthenticationError } from "./errors.js";
 import { prisma } from "./db.js";
+import { isTokenRevoked } from "./token-revocation.js";
+import {
+  allowDevHeaderAuth,
+  isSuperAdminEmail,
+  resolveJwtSecret,
+} from "./auth-config.js";
 import {
   createUserLoader,
   createSessionLoader,
@@ -19,11 +25,14 @@ import {
   createChatMembershipLoader,
 } from "./dataloader.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
+const JWT_SECRET = resolveJwtSecret();
 const BRIDGE_AUTH_TOKEN_TTL_SECONDS = 5 * 60;
 
 type SessionTokenPayload = {
   userId: string;
+  jti?: string;
+  iat?: number;
+  exp?: number;
   tokenType?: "session";
 };
 
@@ -34,21 +43,30 @@ type BridgeAuthTokenPayload = {
   tokenType: "bridge_auth";
 };
 
-function parseSessionToken(token: string): SessionTokenPayload | null {
+function parseSessionTokenSync(token: string): SessionTokenPayload | null {
   try {
     const payload = jwt.verify(token, JWT_SECRET) as SessionTokenPayload | BridgeAuthTokenPayload;
     if (
       !payload ||
       typeof payload !== "object" ||
       typeof payload.userId !== "string" ||
-      payload.tokenType === "bridge_auth"
+      (payload as BridgeAuthTokenPayload).tokenType === "bridge_auth"
     ) {
       return null;
     }
-    return payload;
+    return payload as SessionTokenPayload;
   } catch {
     return null;
   }
+}
+
+async function parseSessionTokenAsync(token: string): Promise<SessionTokenPayload | null> {
+  const payload = parseSessionTokenSync(token);
+  if (!payload) return null;
+  if (payload.jti && (await isTokenRevoked(payload.jti))) {
+    return null;
+  }
+  return payload;
 }
 
 export function parseCookieToken(cookieHeader?: string): string | undefined {
@@ -57,9 +75,21 @@ export function parseCookieToken(cookieHeader?: string): string | undefined {
   return match?.[1];
 }
 
-/** Verify a JWT and return the userId, or null if invalid. */
+/**
+ * Verify a session JWT and return the userId, or null if invalid.
+ *
+ * Sync variant: does not check the token-revocation list. Used by callers
+ * that cannot run async (local storage token verification, upload routes
+ * where the blast radius of a revoked-but-not-yet-expired token is small).
+ * For the GraphQL request path, {@link buildContext} performs the async
+ * revocation check.
+ */
 export function verifyToken(token: string): string | null {
-  return parseSessionToken(token)?.userId ?? null;
+  return parseSessionTokenSync(token)?.userId ?? null;
+}
+
+export async function verifyTokenAsync(token: string): Promise<string | null> {
+  return (await parseSessionTokenAsync(token))?.userId ?? null;
 }
 
 export function createBridgeAuthToken(input: {
@@ -131,15 +161,17 @@ export function getRequestToken(req: Pick<Request, "headers" | "cookies">): stri
 export async function buildContext({ req }: ExpressContextFunctionArgument): Promise<Context> {
   let userId: string | undefined;
 
-  // Accept token from Authorization header, cookie, or x-user-id fallback
+  // Accept token from Authorization header or cookie. x-user-id is a
+  // development-only fallback gated on NODE_ENV + ALLOW_DEV_HEADER_AUTH=1 so
+  // it cannot be reached in production builds even accidentally.
   const token = getRequestToken(req);
   if (token) {
-    const payload = parseSessionToken(token);
+    const payload = await parseSessionTokenAsync(token);
     if (!payload) {
       throw new AuthenticationError("Invalid token");
     }
     userId = payload.userId;
-  } else {
+  } else if (allowDevHeaderAuth()) {
     const rawUserId = req.headers["x-user-id"];
     userId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
   }
@@ -157,7 +189,7 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
     throw new AuthenticationError("User not found");
   }
 
-  const isSuperAdmin = user.email === "vineets1600@gmail.com";
+  const isSuperAdmin = isSuperAdminEmail(user.email);
 
   // Resolve organization from X-Organization-Id header
   const orgHeader = req.headers["x-organization-id"];
@@ -188,7 +220,7 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
     role,
     actorType: "user",
     userLoader: createUserLoader(),
-    sessionLoader: createSessionLoader(),
+    sessionLoader: createSessionLoader(organizationId),
     sessionGroupLoader: createSessionGroupLoader(),
     repoLoader: createRepoLoader(),
     eventLoader: createEventLoader(),
@@ -196,7 +228,7 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
     branchLoader: createBranchLoader(),
     turnLoader: createTurnLoader(),
     chatMembersLoader: createChatMembersLoader(),
-    sessionTicketsLoader: createSessionTicketsLoader(),
+    sessionTicketsLoader: createSessionTicketsLoader(organizationId),
     channelMembershipLoader: createChannelMembershipLoader(user.id),
     chatMembershipLoader: createChatMembershipLoader(user.id),
   };
@@ -208,7 +240,7 @@ export async function buildWsContext(connectionParams?: Record<string, unknown>,
 
   if (!token) throw new AuthenticationError("Missing auth token for WebSocket");
 
-  const payload = parseSessionToken(token);
+  const payload = await parseSessionTokenAsync(token);
   if (!payload) {
     throw new AuthenticationError("Invalid token");
   }
@@ -220,7 +252,7 @@ export async function buildWsContext(connectionParams?: Record<string, unknown>,
   });
   if (!user) throw new AuthenticationError("User not found");
 
-  const isSuperAdmin = user.email === "vineets1600@gmail.com";
+  const isSuperAdmin = isSuperAdminEmail(user.email);
 
   // Resolve organization from connectionParams
   const requestedOrgId = connectionParams?.organizationId as string | undefined;
@@ -248,7 +280,7 @@ export async function buildWsContext(connectionParams?: Record<string, unknown>,
     role,
     actorType: "user",
     userLoader: createUserLoader(),
-    sessionLoader: createSessionLoader(),
+    sessionLoader: createSessionLoader(organizationId),
     sessionGroupLoader: createSessionGroupLoader(),
     repoLoader: createRepoLoader(),
     eventLoader: createEventLoader(),
@@ -256,7 +288,7 @@ export async function buildWsContext(connectionParams?: Record<string, unknown>,
     branchLoader: createBranchLoader(),
     turnLoader: createTurnLoader(),
     chatMembersLoader: createChatMembersLoader(),
-    sessionTicketsLoader: createSessionTicketsLoader(),
+    sessionTicketsLoader: createSessionTicketsLoader(organizationId),
     channelMembershipLoader: createChannelMembershipLoader(user.id),
     chatMembershipLoader: createChatMembershipLoader(user.id),
   };

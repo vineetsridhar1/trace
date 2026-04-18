@@ -20,6 +20,11 @@ import { localStorageRouter } from "./lib/storage/index.js";
 import webhookRouter from "./routes/webhook.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
 import { handleBridgeConnection, type BridgeConnectionRequest } from "./lib/bridge-handler.js";
+import {
+  formatGraphQLError,
+  hardeningValidationRules,
+} from "./lib/graphql-hardening.js";
+import { rateLimit } from "./lib/rate-limit.js";
 import { sessionRouter } from "./lib/session-router.js";
 import { sessionService } from "./services/session.js";
 import { CloudMachineService } from "./lib/cloud-machine-service.js";
@@ -48,19 +53,50 @@ async function main() {
   const cloudMachineService = new CloudMachineService(flyProvider, "fly");
   sessionRouter.setCloudMachineService(cloudMachineService);
 
+  const WEB_URL =
+    process.env.TRACE_WEB_URL ||
+    `http://localhost:${3000 + Number(process.env.TRACE_PORT || 0)}`;
+  const corsAllowed = (process.env.CORS_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const defaultAllowed =
+    corsAllowed.length > 0 ? corsAllowed : [WEB_URL];
   app.use(
     cors({
-      origin: process.env.CORS_ALLOWED_ORIGINS ? process.env.CORS_ALLOWED_ORIGINS.split(",") : true,
+      origin: (origin, callback) => {
+        // Allow same-origin / server-to-server (no Origin header) requests.
+        if (!origin) return callback(null, true);
+        if (defaultAllowed.includes(origin)) return callback(null, true);
+        return callback(new Error("Not allowed by CORS"));
+      },
       credentials: true,
     }),
   );
+  // Trust the first proxy hop (Fly / nginx) so req.secure reflects real TLS.
+  app.set("trust proxy", 1);
+
+  // Basic security headers (equivalent to helmet essentials).
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    if (process.env.NODE_ENV === "production") {
+      res.setHeader(
+        "Strict-Transport-Security",
+        "max-age=31536000; includeSubDomains",
+      );
+    }
+    next();
+  });
   // Webhook route needs raw body for signature verification — register before express.json()
   app.use("/webhooks/github", express.raw({ type: "application/json" }), webhookRouter);
 
   // Local storage PUT accepts raw body — register BEFORE express.json()
   if (localStorageRouter) app.use(localStorageRouter);
 
-  app.use(express.json());
+  app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
   app.use(authRouter);
   app.use(uploadRouter);
@@ -185,6 +221,9 @@ async function main() {
   // Apollo Server
   const apollo = new ApolloServer<Context>({
     schema,
+    introspection: process.env.NODE_ENV !== "production",
+    validationRules: hardeningValidationRules(),
+    formatError: (formatted, error) => formatGraphQLError(formatted, error),
     plugins: [
       ApolloServerPluginDrainHttpServer({ httpServer }),
       {
@@ -204,11 +243,20 @@ async function main() {
   });
 
   await apollo.start();
-  app.use("/graphql", expressMiddleware(apollo, { context: buildContext }));
+  // Per-IP GraphQL rate limit: 600 req/min ≈ 10/s steady-state, leaves headroom
+  // for subscription set-up bursts while blocking brute force and aggressive
+  // scrapers. Auth endpoints are rate limited separately at tighter levels.
+  const graphqlLimiter = rateLimit({
+    name: "graphql",
+    max: 600,
+    windowSeconds: 60,
+  });
+  app.use("/graphql", graphqlLimiter, expressMiddleware(apollo, { context: buildContext }));
 
+  const bindHost = process.env.TRACE_BIND_HOST ?? "127.0.0.1";
   await new Promise<void>((resolve) => {
-    httpServer.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server ready at http://localhost:${PORT}/graphql`);
+    httpServer.listen(PORT, bindHost, () => {
+      console.log(`Server ready at http://localhost:${PORT}/graphql (bound ${bindHost})`);
       console.log(`Subscriptions ready at ws://localhost:${PORT}/ws`);
       console.log(`Bridge ready at ws://localhost:${PORT}/bridge`);
       resolve();

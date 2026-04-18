@@ -2,18 +2,7 @@ import path from "path";
 import fs from "fs";
 import jwt from "jsonwebtoken";
 import type { StorageAdapter } from "./types.js";
-
-// Tokens for local storage PUT/GET URLs are signed with JWT_SECRET. Falling
-// back to a constant in dev is acceptable; in any other environment a missing
-// secret would let anyone forge upload/download URLs against the server's disk.
-function resolveJwtSecret(): string {
-  const secret = process.env.JWT_SECRET;
-  if (secret) return secret;
-  if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
-    return "trace-dev-secret";
-  }
-  throw new Error("JWT_SECRET is required when STORAGE_MODE=local outside development");
-}
+import { resolveJwtSecret } from "../auth-config.js";
 
 const JWT_SECRET = resolveJwtSecret();
 
