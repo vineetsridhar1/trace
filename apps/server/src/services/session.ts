@@ -743,6 +743,19 @@ export class SessionService {
       throw new Error("Cannot access files: session worktree has been deleted");
     }
 
+    const sessions = await prisma.session.findMany({
+      where: { sessionGroupId, organizationId },
+      select: { id: true, workdir: true, connection: true },
+    });
+
+    const resolveSessionRuntimeId = (session: {
+      id: string;
+      connection: unknown;
+    }): string | null =>
+      this.getConnectionRuntimeInstanceId(session.connection) ??
+      sessionRouter.getRuntimeForSession(session.id)?.id ??
+      null;
+
     const groupRuntimeId = this.getConnectionRuntimeInstanceId(group.connection);
     if (groupRuntimeId) {
       await this.assertRuntimeAccess({
@@ -752,18 +765,30 @@ export class SessionService {
         sessionGroupId,
         failureMessage: LOCAL_FILE_ACCESS_DENIED_ERROR,
       });
-    }
 
-    const sessions = await prisma.session.findMany({
-      where: { sessionGroupId, organizationId },
-      select: { id: true, workdir: true, connection: true },
-    });
+      const runtime = sessionRouter.getRuntime(groupRuntimeId);
+      if (!runtime) {
+        throw new Error("No connected runtime available for this session group");
+      }
+
+      const sessionOnGroupRuntime = sessions.find(
+        (session: { id: string; workdir: string | null; connection: unknown }) =>
+          resolveSessionRuntimeId(session) === groupRuntimeId,
+      );
+      if (!sessionOnGroupRuntime) {
+        throw new Error("No session is bound to the current session group runtime");
+      }
+
+      return {
+        runtimeId: runtime.id,
+        sessionId: sessionOnGroupRuntime.id,
+        workdirHint: sessionOnGroupRuntime.workdir ?? group.workdir ?? undefined,
+      };
+    }
 
     let accessDenied = false;
     for (const session of sessions) {
-      const runtimeId =
-        this.getConnectionRuntimeInstanceId(session.connection) ??
-        sessionRouter.getRuntimeForSession(session.id)?.id;
+      const runtimeId = resolveSessionRuntimeId(session);
       if (!runtimeId) continue;
       try {
         await this.assertRuntimeAccess({
@@ -4074,6 +4099,7 @@ export class SessionService {
     organizationId: string,
     userId: string,
     runtimeInstanceId?: string,
+    sessionGroupId?: string | null,
   ): Promise<string[]> {
     await this.assertRepoExists(repoId, organizationId);
     let runtimeId = runtimeInstanceId;
@@ -4082,11 +4108,13 @@ export class SessionService {
         userId,
         organizationId,
         runtimeInstanceId: runtimeId,
+        sessionGroupId,
       });
     } else {
       const accessibleRuntimeIds = await runtimeAccessService.listAccessibleRuntimeInstanceIds({
         userId,
         organizationId,
+        sessionGroupId,
       });
       runtimeId = sessionRouter
         .listRuntimes()

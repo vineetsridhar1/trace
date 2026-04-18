@@ -187,8 +187,8 @@ export const DISMISS_AGENT_SUGGESTION_MUTATION = gql`
 `;
 
 export const AVAILABLE_RUNTIMES_QUERY = gql`
-  query AvailableRuntimes($tool: CodingTool!) {
-    availableRuntimes(tool: $tool) {
+  query AvailableRuntimes($tool: CodingTool!, $sessionGroupId: ID) {
+    availableRuntimes(tool: $tool, sessionGroupId: $sessionGroupId) {
       id
       label
       hostingMode
@@ -391,8 +391,12 @@ export const UNREGISTER_REPO_WEBHOOK_MUTATION = gql`
 `;
 
 export const REPO_BRANCHES_QUERY = gql`
-  query RepoBranches($repoId: ID!, $runtimeInstanceId: ID) {
-    repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)
+  query RepoBranches($repoId: ID!, $runtimeInstanceId: ID, $sessionGroupId: ID) {
+    repoBranches(
+      repoId: $repoId
+      runtimeInstanceId: $runtimeInstanceId
+      sessionGroupId: $sessionGroupId
+    )
   }
 `;
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { client } from "../../lib/urql";
 import { BRIDGE_RUNTIME_ACCESS_QUERY } from "../../lib/mutations";
 
@@ -31,12 +31,36 @@ export type BridgeRuntimeAccessInfo = {
   pendingRequest?: BridgePendingRequest | null;
 };
 
+function buildFallbackAccess(runtimeInstanceId: string): BridgeRuntimeAccessInfo {
+  const hostingMode = runtimeInstanceId.startsWith("cloud-machine-") ? "cloud" : "local";
+  const allowed = hostingMode !== "local";
+
+  return {
+    runtimeInstanceId,
+    bridgeRuntimeId: null,
+    label: null,
+    hostingMode,
+    connected: false,
+    ownerUser: null,
+    allowed,
+    isOwner: allowed,
+    scopeType: null,
+    sessionGroupId: null,
+    expiresAt: null,
+    pendingRequest: null,
+  };
+}
+
 export function useBridgeRuntimeAccess(
   runtimeInstanceId?: string | null,
   sessionGroupId?: string | null,
 ) {
   const [access, setAccess] = useState<BridgeRuntimeAccessInfo | null>(null);
   const [loading, setLoading] = useState(false);
+  const fallbackAccess = useMemo(
+    () => (runtimeInstanceId ? buildFallbackAccess(runtimeInstanceId) : null),
+    [runtimeInstanceId],
+  );
 
   const refresh = useCallback(async () => {
     if (!runtimeInstanceId) {
@@ -53,6 +77,10 @@ export function useBridgeRuntimeAccess(
           sessionGroupId: sessionGroupId ?? undefined,
         })
         .toPromise();
+      if (result.error) {
+        setAccess(null);
+        return;
+      }
       setAccess((result.data?.bridgeRuntimeAccess as BridgeRuntimeAccessInfo | undefined) ?? null);
     } catch {
       setAccess(null);
@@ -65,5 +93,8 @@ export function useBridgeRuntimeAccess(
     void refresh();
   }, [refresh]);
 
-  return { access, loading, refresh };
+  const effectiveAccess =
+    access && access.hostingMode !== null ? access : fallbackAccess;
+
+  return { access: effectiveAccess, loading, refresh };
 }

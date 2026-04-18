@@ -15,6 +15,7 @@ interface RepoSectionProps {
   branch: string;
   runtimeInfo: RuntimeInfo | null;
   runtimeInstanceId: string | undefined;
+  sessionGroupId?: string;
   lockedRepoId?: string;
   onRepoChange: (repoId: string | undefined) => void;
   onBranchChange: (branch: string) => void;
@@ -25,6 +26,7 @@ export function RepoSection({
   branch,
   runtimeInfo,
   runtimeInstanceId,
+  sessionGroupId,
   lockedRepoId,
   onRepoChange,
   onBranchChange,
@@ -85,6 +87,7 @@ export function RepoSection({
           <BranchCombobox
             repoId={effectiveRepoId}
             runtimeInstanceId={runtimeInstanceId}
+            sessionGroupId={sessionGroupId}
             value={branch}
             onChange={onBranchChange}
           />

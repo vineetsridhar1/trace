@@ -991,10 +991,10 @@ type Query {
     excludePayloadTypes: [String!]
   ): [Event!]!
   availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!
-  availableRuntimes(tool: CodingTool!): [SessionRuntimeInstance!]!
+  availableRuntimes(tool: CodingTool!, sessionGroupId: ID): [SessionRuntimeInstance!]!
   myBridgeRuntimes: [BridgeRuntime!]!
   bridgeRuntimeAccess(runtimeInstanceId: ID!, sessionGroupId: ID): BridgeRuntimeAccess!
-  repoBranches(repoId: ID!, runtimeInstanceId: ID): [String!]!
+  repoBranches(repoId: ID!, runtimeInstanceId: ID, sessionGroupId: ID): [String!]!
   sessionGroupFiles(sessionGroupId: ID!): [String!]!
   sessionGroupFileContent(sessionGroupId: ID!, filePath: String!): String!
   sessionGroupBranchDiff(sessionGroupId: ID!): [BranchDiffFile!]!
