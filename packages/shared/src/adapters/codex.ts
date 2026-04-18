@@ -17,12 +17,16 @@ export class CodexAdapter implements CodingToolAdapter {
   private interactionMode: "code" | "plan" | "ask" | undefined;
   private lastTextContent: string | null = null;
   private processGeneration = 0;
+  private sawErrorEvent = false;
+  private lastErrorMessage: string | null = null;
 
   run({ prompt, cwd, onOutput, onComplete, model, toolSessionId, interactionMode }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
     this.interactionMode = interactionMode;
     this.lastTextContent = null;
+    this.sawErrorEvent = false;
+    this.lastErrorMessage = null;
 
     if (toolSessionId && !this.threadId) {
       this.threadId = toolSessionId;
@@ -96,8 +100,9 @@ export class CodexAdapter implements CodingToolAdapter {
         });
       }
       if (!this.resultEmitted) {
-        const isError = code !== 0 && code !== null;
-        if (isError && stderrChunks.length > 0) {
+        const exitError = code !== 0 && code !== null;
+        const isError = exitError || this.sawErrorEvent;
+        if (exitError && stderrChunks.length > 0) {
           onOutput({ type: "error", message: stderrChunks.join("\n") });
         }
         onOutput({ type: "result", subtype: isError ? "error" : "success" });
@@ -120,6 +125,28 @@ export class CodexAdapter implements CodingToolAdapter {
 
     if (eventType === "thread.started" && typeof data.thread_id === "string") {
       this.threadId = data.thread_id;
+      return;
+    }
+
+    // Codex surfaces fatal run errors (e.g. usage limits, auth failures) as
+    // top-level `error` and `turn.failed` events with no `item`. Emit these
+    // as ErrorEvents so the UI renders the message instead of a bare "Run ended".
+    if (eventType === "error") {
+      const message = typeof data.message === "string" ? data.message : "Codex error";
+      onOutput({ type: "error", message });
+      this.sawErrorEvent = true;
+      this.lastErrorMessage = message;
+      return;
+    }
+
+    if (eventType === "turn.failed") {
+      const error = data.error as Record<string, unknown> | undefined;
+      const message = typeof error?.message === "string" ? error.message : "Turn failed";
+      if (this.lastErrorMessage !== message) {
+        onOutput({ type: "error", message });
+        this.lastErrorMessage = message;
+      }
+      this.sawErrorEvent = true;
       return;
     }
 
