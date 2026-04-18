@@ -1,0 +1,241 @@
+import { useState } from "react";
+import { ChevronDown, Clock3, Lock, Shield } from "lucide-react";
+import { toast } from "sonner";
+import { client } from "../lib/urql";
+import {
+  APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION,
+  DENY_BRIDGE_ACCESS_REQUEST_MUTATION,
+} from "../lib/mutations";
+import {
+  BRIDGE_ACCESS_APPROVAL_OPTIONS,
+  getBridgeAccessApprovalExpiresAt,
+} from "../lib/bridge-access";
+import { cn } from "../lib/utils";
+import { Button, buttonVariants } from "../components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
+
+export type BridgeAccessRequestToastData = {
+  ownerUserId: string;
+  requestId: string;
+  runtimeInstanceId: string;
+  runtimeLabel: string;
+  scopeType: "all_sessions" | "session_group";
+  sessionGroup: { id: string; name?: string | null } | null;
+  requestedExpiresAt?: string | null;
+  createdAt: string;
+  status: "pending" | "approved" | "denied";
+  requesterUser: {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+    avatarUrl?: string | null;
+  };
+  grant?: {
+    id: string;
+    scopeType: "all_sessions" | "session_group";
+    sessionGroupId?: string | null;
+    expiresAt?: string | null;
+    createdAt: string;
+  } | null;
+};
+
+function formatRequestedScope(data: BridgeAccessRequestToastData): string {
+  if (data.scopeType === "session_group") {
+    return data.sessionGroup?.name ? `This workspace (${data.sessionGroup.name})` : "This workspace";
+  }
+  return "All sessions on this bridge";
+}
+
+function formatRequestedDuration(requestedExpiresAt?: string | null): string {
+  if (!requestedExpiresAt) return "No expiration";
+
+  const date = new Date(requestedExpiresAt);
+  if (Number.isNaN(date.getTime())) return "Custom expiration";
+  return `Until ${date.toLocaleString()}`;
+}
+
+export function BridgeAccessRequestToast({
+  toastId,
+  request,
+}: {
+  toastId: string;
+  request: BridgeAccessRequestToastData;
+}) {
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+
+  const requesterName =
+    request.requesterUser.name?.trim() ||
+    request.requesterUser.email?.trim() ||
+    "A teammate";
+  const runtimeLabel = request.runtimeLabel.trim() || "your bridge";
+  const canApproveThisSession = !!request.sessionGroup?.id;
+
+  const runApprove = async (input?: {
+    scopeType?: "all_sessions" | "session_group";
+    sessionGroupId?: string | null;
+    expiresAt?: string | null;
+    successMessage?: string;
+  }) => {
+    if (pendingAction) return;
+    setPendingAction(input?.successMessage ?? "approve");
+    try {
+      const result = await client
+        .mutation(APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION, {
+          requestId: request.requestId,
+          scopeType: input?.scopeType,
+          sessionGroupId: input?.sessionGroupId,
+          expiresAt: input?.expiresAt,
+        })
+        .toPromise();
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      toast.dismiss(toastId);
+      toast.success(
+        input?.successMessage ?? `${requesterName} can now use ${runtimeLabel}`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to approve bridge access");
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const runDeny = async () => {
+    if (pendingAction) return;
+    setPendingAction("deny");
+    try {
+      const result = await client
+        .mutation(DENY_BRIDGE_ACCESS_REQUEST_MUTATION, {
+          requestId: request.requestId,
+        })
+        .toPromise();
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      toast.dismiss(toastId);
+      toast.success(`Denied ${requesterName}'s bridge request`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to deny bridge access");
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  return (
+    <div className="w-[min(28rem,calc(100vw-2rem))] rounded-xl border border-border bg-popover p-4 text-popover-foreground shadow-lg">
+      <div className="flex items-start gap-3">
+        <div className="rounded-lg bg-amber-500/15 p-2 text-amber-400">
+          <Lock size={16} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-foreground">
+            {requesterName} requested bridge access
+          </div>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Allow {requesterName} to interact with {runtimeLabel}.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-1">
+              <Shield size={11} />
+              {formatRequestedScope(request)}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-1">
+              <Clock3 size={11} />
+              {formatRequestedDuration(request.requestedExpiresAt)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          disabled={!!pendingAction}
+          onClick={() =>
+            void runApprove(
+              canApproveThisSession
+                ? {
+                    scopeType: "session_group",
+                    sessionGroupId: request.sessionGroup?.id ?? null,
+                    expiresAt: null,
+                    successMessage: `${requesterName} can use this workspace`,
+                  }
+                : {
+                    successMessage: `${requesterName} can now use ${runtimeLabel}`,
+                  },
+            )
+          }
+        >
+          {canApproveThisSession ? "Approve This Session" : "Approve Request"}
+        </Button>
+
+        <div className="flex items-stretch">
+          <Button
+            size="sm"
+            disabled={!!pendingAction}
+            className="rounded-r-none"
+            onClick={() =>
+              void runApprove({
+                scopeType: "all_sessions",
+                sessionGroupId: null,
+                expiresAt: getBridgeAccessApprovalExpiresAt("1h"),
+                successMessage: `${requesterName} can use ${runtimeLabel} for 1 hour`,
+              })
+            }
+          >
+            Approve 1 Hour
+          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className={cn(
+                buttonVariants({ size: "sm" }),
+                "rounded-l-none border-l border-primary-foreground/15 px-2",
+              )}
+              disabled={!!pendingAction}
+              aria-label="More bridge approval options"
+            >
+              <ChevronDown size={14} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              {BRIDGE_ACCESS_APPROVAL_OPTIONS.filter((option) => option.id !== "1h").map(
+                (option) => (
+                  <DropdownMenuItem
+                    key={option.id}
+                    onClick={() =>
+                      void runApprove({
+                        scopeType: "all_sessions",
+                        sessionGroupId: null,
+                        expiresAt: getBridgeAccessApprovalExpiresAt(option.id),
+                        successMessage:
+                          option.id === "never"
+                            ? `${requesterName} can use ${runtimeLabel} with no expiration`
+                            : `${requesterName} can use ${runtimeLabel} for ${option.id === "3h" ? "3 hours" : "1 day"}`,
+                      })
+                    }
+                  >
+                    {option.label}
+                  </DropdownMenuItem>
+                ),
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <Button variant="ghost" size="sm" disabled={!!pendingAction} onClick={() => void runDeny()}>
+          Deny
+        </Button>
+      </div>
+    </div>
+  );
+}

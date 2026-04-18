@@ -200,6 +200,8 @@ enum EventType {
   message_sent
   message_edited
   message_deleted
+  bridge_access_requested
+  bridge_access_request_resolved
   session_started
   session_paused
   session_resumed
@@ -1103,7 +1105,12 @@ type Mutation {
     sessionGroupId: ID
     requestedExpiresAt: DateTime
   ): BridgeAccessRequest!
-  approveBridgeAccessRequest(requestId: ID!): BridgeAccessGrant!
+  approveBridgeAccessRequest(
+    requestId: ID!
+    scopeType: BridgeAccessScopeType
+    sessionGroupId: ID
+    expiresAt: DateTime
+  ): BridgeAccessGrant!
   denyBridgeAccessRequest(requestId: ID!): BridgeAccessRequest!
   revokeBridgeAccessGrant(grantId: ID!): BridgeAccessGrant!
   linkLinkedCheckoutRepo(

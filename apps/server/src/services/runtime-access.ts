@@ -2,6 +2,7 @@ import { Prisma, type BridgeAccessScopeType } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { AuthorizationError } from "../lib/errors.js";
 import { sessionRouter } from "../lib/session-router.js";
+import { eventService } from "./event.js";
 
 const BRIDGE_ACCESS_DENIED_ERROR =
   "Access denied: you do not have permission to use this local bridge";
@@ -26,6 +27,41 @@ type BridgeAccessRequestWithRelations = Prisma.BridgeAccessRequestGetPayload<{
     sessionGroup: true;
   };
 }>;
+
+type BridgeAccessRequestEventRecord = Prisma.BridgeAccessRequestGetPayload<{
+  include: {
+    bridgeRuntime: true;
+    requesterUser: true;
+    ownerUser: true;
+    resolvedByUser: true;
+    sessionGroup: true;
+  };
+}>;
+
+type BridgeRequestEventPayload = {
+  ownerUserId: string;
+  requestId: string;
+  runtimeInstanceId: string;
+  runtimeLabel: string;
+  scopeType: BridgeAccessScopeType;
+  sessionGroup: { id: string; name: string | null } | null;
+  requestedExpiresAt: string | null;
+  createdAt: string;
+  status: "pending" | "approved" | "denied";
+  requesterUser: {
+    id: string;
+    name: string | null;
+    email: string;
+    avatarUrl: string | null;
+  };
+  grant: {
+    id: string;
+    scopeType: BridgeAccessScopeType;
+    sessionGroupId: string | null;
+    expiresAt: string | null;
+    createdAt: string;
+  } | null;
+};
 
 export type BridgeRuntimeAccessState = {
   runtimeInstanceId: string;
@@ -88,6 +124,45 @@ function runtimeHostingMode(
   if (persisted) return "local";
   if (runtimeInstanceId.startsWith("cloud-machine-")) return "cloud";
   return null;
+}
+
+function serializeBridgeAccessEventPayload(input: {
+  request: BridgeAccessRequestEventRecord;
+  status?: "pending" | "approved" | "denied";
+  grant?: BridgeAccessGrantWithRelations | null;
+}): BridgeRequestEventPayload {
+  const { request, grant } = input;
+  return {
+    ownerUserId: request.ownerUserId,
+    requestId: request.id,
+    runtimeInstanceId: request.bridgeRuntime.instanceId,
+    runtimeLabel: request.bridgeRuntime.label,
+    scopeType: request.scopeType,
+    sessionGroup: request.sessionGroup
+      ? {
+          id: request.sessionGroup.id,
+          name: request.sessionGroup.name ?? null,
+        }
+      : null,
+    requestedExpiresAt: request.requestedExpiresAt?.toISOString() ?? null,
+    createdAt: request.createdAt.toISOString(),
+    status: input.status ?? request.status,
+    requesterUser: {
+      id: request.requesterUser.id,
+      name: request.requesterUser.name ?? null,
+      email: request.requesterUser.email,
+      avatarUrl: request.requesterUser.avatarUrl ?? null,
+    },
+    grant: grant
+      ? {
+          id: grant.id,
+          scopeType: grant.scopeType,
+          sessionGroupId: grant.sessionGroupId ?? null,
+          expiresAt: grant.expiresAt?.toISOString() ?? null,
+          createdAt: grant.createdAt.toISOString(),
+        }
+      : null,
+  };
 }
 
 class RuntimeAccessService {
@@ -429,7 +504,7 @@ class RuntimeAccessService {
     });
     if (pending) return pending;
 
-    return prisma.bridgeAccessRequest.create({
+    const request = await prisma.bridgeAccessRequest.create({
       data: {
         bridgeRuntimeId: runtime.id,
         requesterUserId: input.requesterUserId,
@@ -439,21 +514,39 @@ class RuntimeAccessService {
         requestedExpiresAt: input.requestedExpiresAt ?? null,
       },
       include: {
+        bridgeRuntime: true,
         requesterUser: true,
         ownerUser: true,
         resolvedByUser: true,
         sessionGroup: true,
       },
     });
+
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "system",
+      scopeId: input.organizationId,
+      eventType: "bridge_access_requested",
+      payload: serializeBridgeAccessEventPayload({ request }),
+      actorType: "user",
+      actorId: input.requesterUserId,
+    });
+
+    return request;
   }
 
   async approveRequest(input: {
     requestId: string;
     organizationId: string;
     ownerUserId: string;
+    scopeType?: BridgeAccessScopeType | null;
+    sessionGroupId?: string | null;
+    expiresAt?: Date | null;
   }) {
     const now = new Date();
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    let resolvedPayload: BridgeRequestEventPayload | null = null;
+
+    const grant = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const request = await tx.bridgeAccessRequest.findUnique({
         where: { id: input.requestId },
         include: {
@@ -474,12 +567,35 @@ class RuntimeAccessService {
         throw new Error("Bridge access request is no longer pending");
       }
 
+      if (input.expiresAt && input.expiresAt.getTime() <= now.getTime()) {
+        throw new Error("Bridge access expiration must be in the future");
+      }
+
+      const scopeType = input.scopeType ?? request.scopeType;
+      const sessionGroupId =
+        scopeType === "session_group"
+          ? (input.sessionGroupId ?? request.sessionGroupId ?? null)
+          : null;
+      if (scopeType === "session_group" && !sessionGroupId) {
+        throw new Error("sessionGroupId is required for session group bridge access");
+      }
+      if (sessionGroupId) {
+        const sessionGroup = await tx.sessionGroup.findFirst({
+          where: { id: sessionGroupId, organizationId: input.organizationId },
+          select: { id: true },
+        });
+        if (!sessionGroup) {
+          throw new Error("Session group not found");
+        }
+      }
+      const expiresAt = input.expiresAt !== undefined ? input.expiresAt : request.requestedExpiresAt;
+
       await tx.bridgeAccessGrant.updateMany({
         where: {
           bridgeRuntimeId: request.bridgeRuntimeId,
           granteeUserId: request.requesterUserId,
-          scopeType: request.scopeType,
-          sessionGroupId: request.sessionGroupId,
+          scopeType,
+          sessionGroupId,
           revokedAt: null,
         },
         data: { revokedAt: now },
@@ -490,9 +606,9 @@ class RuntimeAccessService {
           bridgeRuntimeId: request.bridgeRuntimeId,
           granteeUserId: request.requesterUserId,
           grantedByUserId: input.ownerUserId,
-          scopeType: request.scopeType,
-          sessionGroupId: request.sessionGroupId,
-          expiresAt: request.requestedExpiresAt,
+          scopeType,
+          sessionGroupId,
+          expiresAt,
         },
         include: {
           granteeUser: true,
@@ -510,8 +626,28 @@ class RuntimeAccessService {
         },
       });
 
+      resolvedPayload = serializeBridgeAccessEventPayload({
+        request,
+        status: "approved",
+        grant,
+      });
+
       return grant;
     });
+
+    if (resolvedPayload) {
+      await eventService.create({
+        organizationId: input.organizationId,
+        scopeType: "system",
+        scopeId: input.organizationId,
+        eventType: "bridge_access_request_resolved",
+        payload: resolvedPayload,
+        actorType: "user",
+        actorId: input.ownerUserId,
+      });
+    }
+
+    return grant;
   }
 
   async denyRequest(input: {
@@ -539,7 +675,7 @@ class RuntimeAccessService {
       throw new Error("Bridge access request is no longer pending");
     }
 
-    return prisma.bridgeAccessRequest.update({
+    const denied = await prisma.bridgeAccessRequest.update({
       where: { id: request.id },
       data: {
         status: "denied",
@@ -547,12 +683,28 @@ class RuntimeAccessService {
         resolvedByUserId: input.ownerUserId,
       },
       include: {
+        bridgeRuntime: true,
         requesterUser: true,
         ownerUser: true,
         resolvedByUser: true,
         sessionGroup: true,
       },
     });
+
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "system",
+      scopeId: input.organizationId,
+      eventType: "bridge_access_request_resolved",
+      payload: serializeBridgeAccessEventPayload({
+        request: denied,
+        status: "denied",
+      }),
+      actorType: "user",
+      actorId: input.ownerUserId,
+    });
+
+    return denied;
   }
 
   async revokeGrant(input: {

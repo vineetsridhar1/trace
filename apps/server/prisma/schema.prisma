@@ -196,6 +196,8 @@ enum EventType {
   message_sent
   message_edited
   message_deleted
+  bridge_access_requested
+  bridge_access_request_resolved
   session_started
   session_paused
   session_resumed

@@ -388,6 +388,8 @@ export type Event = {
 };
 
 export type EventType =
+  | 'bridge_access_request_resolved'
+  | 'bridge_access_requested'
   | 'channel_created'
   | 'channel_deleted'
   | 'channel_group_created'

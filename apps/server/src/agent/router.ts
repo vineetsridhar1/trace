@@ -114,6 +114,8 @@ const AGGREGATE_EVENT_TYPES = new Set<string>([
  * Low-value events that are always dropped.
  */
 const LOW_VALUE_EVENT_TYPES = new Set<string>([
+  "bridge_access_requested",
+  "bridge_access_request_resolved",
   "inbox_item_created",
   "inbox_item_resolved",
   "channel_created", // Not actionable by agent — just a structural event

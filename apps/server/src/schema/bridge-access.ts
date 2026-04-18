@@ -45,12 +45,25 @@ export const bridgeAccessMutations = {
       requestedExpiresAt: args.requestedExpiresAt ? new Date(args.requestedExpiresAt) : undefined,
     });
   },
-  approveBridgeAccessRequest: (_: unknown, args: { requestId: string }, ctx: Context) => {
+  approveBridgeAccessRequest: (
+    _: unknown,
+    args: {
+      requestId: string;
+      scopeType?: "all_sessions" | "session_group" | null;
+      sessionGroupId?: string | null;
+      expiresAt?: string | null;
+    },
+    ctx: Context,
+  ) => {
     if (!ctx.userId) throw new AuthenticationError();
     return runtimeAccessService.approveRequest({
       requestId: args.requestId,
       organizationId: requireOrgContext(ctx),
       ownerUserId: ctx.userId,
+      scopeType: args.scopeType ?? undefined,
+      sessionGroupId: args.sessionGroupId ?? undefined,
+      expiresAt:
+        args.expiresAt === undefined ? undefined : args.expiresAt ? new Date(args.expiresAt) : null,
     });
   },
   denyBridgeAccessRequest: (_: unknown, args: { requestId: string }, ctx: Context) => {

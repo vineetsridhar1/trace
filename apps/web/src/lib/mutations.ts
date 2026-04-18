@@ -309,8 +309,18 @@ export const REQUEST_BRIDGE_ACCESS_MUTATION = gql`
 `;
 
 export const APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION = gql`
-  mutation ApproveBridgeAccessRequest($requestId: ID!) {
-    approveBridgeAccessRequest(requestId: $requestId) {
+  mutation ApproveBridgeAccessRequest(
+    $requestId: ID!
+    $scopeType: BridgeAccessScopeType
+    $sessionGroupId: ID
+    $expiresAt: DateTime
+  ) {
+    approveBridgeAccessRequest(
+      requestId: $requestId
+      scopeType: $scopeType
+      sessionGroupId: $sessionGroupId
+      expiresAt: $expiresAt
+    ) {
       id
       scopeType
       expiresAt
