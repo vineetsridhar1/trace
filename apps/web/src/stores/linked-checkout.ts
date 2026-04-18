@@ -1,8 +1,8 @@
 import { useEffect } from "react";
-import { toast } from "sonner";
 import { create } from "zustand";
 import type { DocumentInput } from "@urql/core";
 import { client } from "../lib/urql";
+import { useUIStore, type UIState } from "./ui";
 import {
   LINKED_CHECKOUT_STATUS_QUERY,
   LINK_LINKED_CHECKOUT_REPO_MUTATION,
@@ -11,16 +11,8 @@ import {
   SYNC_LINKED_CHECKOUT_MUTATION,
 } from "../lib/mutations";
 
-export type LinkedCheckoutSyncSource = "manual" | "auto";
-
 export interface LinkedCheckoutSyncRequest extends DesktopLinkedCheckoutSyncInput {
   runtimeInstanceId: string;
-  source: LinkedCheckoutSyncSource;
-}
-
-interface AutoSyncBlockState {
-  commitSha: string;
-  retryAt: number;
 }
 
 type LinkedCheckoutQueryData = {
@@ -40,23 +32,9 @@ type LinkedCheckoutMutationData = Partial<
 interface LinkedCheckoutState {
   statusByKey: Record<string, DesktopLinkedCheckoutStatus | null | undefined>;
   pendingByKey: Record<string, boolean>;
-  queuedSyncByKey: Record<string, LinkedCheckoutSyncRequest | null>;
-  inFlightSyncByKey: Record<string, Promise<DesktopLinkedCheckoutActionResult> | null | undefined>;
-  autoSyncBlockByKey: Record<string, AutoSyncBlockState | null | undefined>;
   setStatus: (key: string, status: DesktopLinkedCheckoutStatus | null) => void;
   setPending: (key: string, pending: boolean) => void;
-  replaceQueuedSync: (key: string, request: LinkedCheckoutSyncRequest | null) => void;
-  takeQueuedSync: (key: string) => LinkedCheckoutSyncRequest | null;
-  getInFlightSync: (key: string) => Promise<DesktopLinkedCheckoutActionResult> | null | undefined;
-  getAutoSyncBlock: (key: string) => AutoSyncBlockState | null | undefined;
-  setAutoSyncBlock: (key: string, block: AutoSyncBlockState | null) => void;
-  setInFlightSync: (
-    key: string,
-    promise: Promise<DesktopLinkedCheckoutActionResult> | null,
-  ) => void;
 }
-
-const AUTO_SYNC_FAILURE_COOLDOWN_MS = 30_000;
 
 function hasLinkedCheckoutPicker(): boolean {
   return typeof window !== "undefined" && typeof window.trace?.pickFolder === "function";
@@ -125,40 +103,17 @@ async function runLinkedCheckoutMutation(
   return payload;
 }
 
-export const useLinkedCheckoutStore = create<LinkedCheckoutState>((set, get) => ({
+export const useLinkedCheckoutStore = create<LinkedCheckoutState>((set) => ({
   statusByKey: {},
   pendingByKey: {},
-  queuedSyncByKey: {},
-  inFlightSyncByKey: {},
-  autoSyncBlockByKey: {},
 
   setStatus: (key, status) =>
-    set((state) => {
-      const nextState: Partial<LinkedCheckoutState> = {
-        statusByKey: {
-          ...state.statusByKey,
-          [key]: status,
-        },
-      };
-
-      const currentBlock = state.autoSyncBlockByKey[key];
-      const shouldClearBlock =
-        !!currentBlock &&
-        (!status ||
-          !status.isAttached ||
-          !status.autoSyncEnabled ||
-          status.lastSyncedCommitSha === currentBlock.commitSha ||
-          status.currentCommitSha === currentBlock.commitSha);
-
-      if (shouldClearBlock) {
-        nextState.autoSyncBlockByKey = {
-          ...state.autoSyncBlockByKey,
-          [key]: null,
-        };
-      }
-
-      return nextState;
-    }),
+    set((state) => ({
+      statusByKey: {
+        ...state.statusByKey,
+        [key]: status,
+      },
+    })),
 
   setPending: (key, pending) =>
     set((state) => ({
@@ -167,63 +122,15 @@ export const useLinkedCheckoutStore = create<LinkedCheckoutState>((set, get) => 
         [key]: pending,
       },
     })),
-
-  replaceQueuedSync: (key, request) =>
-    set((state) => ({
-      queuedSyncByKey: {
-        ...state.queuedSyncByKey,
-        [key]: request,
-      },
-    })),
-
-  takeQueuedSync: (key) => {
-    const queued = get().queuedSyncByKey[key] ?? null;
-    set((state) => ({
-      queuedSyncByKey: {
-        ...state.queuedSyncByKey,
-        [key]: null,
-      },
-    }));
-    return queued;
-  },
-
-  getInFlightSync: (key) => get().inFlightSyncByKey[key],
-
-  getAutoSyncBlock: (key) => get().autoSyncBlockByKey[key],
-
-  setAutoSyncBlock: (key, block) =>
-    set((state) => ({
-      autoSyncBlockByKey: {
-        ...state.autoSyncBlockByKey,
-        [key]: block,
-      },
-    })),
-
-  setInFlightSync: (key, promise) =>
-    set((state) => ({
-      inFlightSyncByKey: {
-        ...state.inFlightSyncByKey,
-        [key]: promise,
-      },
-    })),
 }));
 
-export function isLinkedCheckoutPending(
+function isLinkedCheckoutPending(
   repoId: string | null | undefined,
   runtimeInstanceId: string | null | undefined,
 ): boolean {
   const key = getStoreKey(repoId, runtimeInstanceId);
   if (!key) return false;
   return useLinkedCheckoutStore.getState().pendingByKey[key] ?? false;
-}
-
-export function getLinkedCheckoutStatusSnapshot(
-  repoId: string | null | undefined,
-  runtimeInstanceId: string | null | undefined,
-): DesktopLinkedCheckoutStatus | null | undefined {
-  const key = getStoreKey(repoId, runtimeInstanceId);
-  if (!key) return null;
-  return useLinkedCheckoutStore.getState().statusByKey[key];
 }
 
 export async function refreshLinkedCheckoutStatus(
@@ -242,18 +149,6 @@ export async function refreshLinkedCheckoutStatus(
     useLinkedCheckoutStore.getState().setStatus(key, null);
     throw error;
   }
-}
-
-export async function ensureLinkedCheckoutStatus(
-  repoId: string,
-  sessionGroupId: string,
-  runtimeInstanceId: string,
-): Promise<DesktopLinkedCheckoutStatus | null> {
-  const current = getLinkedCheckoutStatusSnapshot(repoId, runtimeInstanceId);
-  if (current !== undefined) {
-    return current ?? null;
-  }
-  return refreshLinkedCheckoutStatus(repoId, sessionGroupId, runtimeInstanceId);
 }
 
 export async function linkLinkedCheckoutRepo(
@@ -285,80 +180,6 @@ export async function linkLinkedCheckoutRepo(
   }
 }
 
-async function runSyncLoop(
-  initialRequest: LinkedCheckoutSyncRequest,
-): Promise<DesktopLinkedCheckoutActionResult> {
-  const key = getStoreKey(initialRequest.repoId, initialRequest.runtimeInstanceId);
-  if (!key) {
-    throw new Error("Missing linked checkout session group, repo, or runtime.");
-  }
-
-  const store = useLinkedCheckoutStore.getState();
-  store.setPending(key, true);
-  if (initialRequest.source === "manual") {
-    store.setAutoSyncBlock(key, null);
-  }
-
-  let nextRequest: LinkedCheckoutSyncRequest | null = initialRequest;
-  // The loop always runs at least once because nextRequest starts as
-  // initialRequest, so this default is only assigned to satisfy the type checker.
-  let lastResult!: DesktopLinkedCheckoutActionResult;
-
-  try {
-    while (nextRequest) {
-      lastResult = await runLinkedCheckoutMutation(
-        SYNC_LINKED_CHECKOUT_MUTATION,
-        "syncLinkedCheckout",
-        {
-          sessionGroupId: nextRequest.sessionGroupId,
-          repoId: nextRequest.repoId,
-          branch: nextRequest.branch,
-          commitSha: nextRequest.commitSha,
-          autoSyncEnabled: nextRequest.autoSyncEnabled,
-        },
-      );
-      useLinkedCheckoutStore.getState().setStatus(key, lastResult.status);
-      if (!lastResult.ok) {
-        if (nextRequest.source === "auto" && nextRequest.commitSha) {
-          useLinkedCheckoutStore.getState().setAutoSyncBlock(key, {
-            commitSha: nextRequest.commitSha,
-            retryAt: Date.now() + AUTO_SYNC_FAILURE_COOLDOWN_MS,
-          });
-        }
-        useLinkedCheckoutStore.getState().replaceQueuedSync(key, null);
-        break;
-      }
-      useLinkedCheckoutStore.getState().setAutoSyncBlock(key, null);
-      nextRequest = useLinkedCheckoutStore.getState().takeQueuedSync(key);
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const status =
-      (await refreshLinkedCheckoutStatus(
-        initialRequest.repoId,
-        initialRequest.sessionGroupId,
-        initialRequest.runtimeInstanceId,
-      ).catch(() => null)) ?? emptyStatus(initialRequest.repoId);
-    lastResult = {
-      ok: false,
-      error: message,
-      status,
-    };
-    useLinkedCheckoutStore.getState().setStatus(key, status);
-    if (nextRequest?.source === "auto" && nextRequest.commitSha) {
-      useLinkedCheckoutStore.getState().setAutoSyncBlock(key, {
-        commitSha: nextRequest.commitSha,
-        retryAt: Date.now() + AUTO_SYNC_FAILURE_COOLDOWN_MS,
-      });
-    }
-    useLinkedCheckoutStore.getState().replaceQueuedSync(key, null);
-  } finally {
-    useLinkedCheckoutStore.getState().setPending(key, false);
-  }
-
-  return lastResult;
-}
-
 export async function syncLinkedCheckout(
   request: LinkedCheckoutSyncRequest,
 ): Promise<DesktopLinkedCheckoutActionResult> {
@@ -367,51 +188,34 @@ export async function syncLinkedCheckout(
     throw new Error("Missing linked checkout session group, repo, or runtime.");
   }
 
-  const existingPromise = useLinkedCheckoutStore.getState().getInFlightSync(key);
-  if (existingPromise) {
-    useLinkedCheckoutStore.getState().replaceQueuedSync(key, request);
-    return existingPromise;
+  useLinkedCheckoutStore.getState().setPending(key, true);
+  try {
+    const result = await runLinkedCheckoutMutation(
+      SYNC_LINKED_CHECKOUT_MUTATION,
+      "syncLinkedCheckout",
+      {
+        sessionGroupId: request.sessionGroupId,
+        repoId: request.repoId,
+        branch: request.branch,
+        commitSha: request.commitSha,
+        autoSyncEnabled: request.autoSyncEnabled,
+      },
+    );
+    useLinkedCheckoutStore.getState().setStatus(key, result.status);
+    return result;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const status =
+      (await refreshLinkedCheckoutStatus(
+        request.repoId,
+        request.sessionGroupId,
+        request.runtimeInstanceId,
+      ).catch(() => null)) ?? emptyStatus(request.repoId);
+    useLinkedCheckoutStore.getState().setStatus(key, status);
+    return { ok: false, error: message, status };
+  } finally {
+    useLinkedCheckoutStore.getState().setPending(key, false);
   }
-
-  const promise = runSyncLoop(request).finally(() => {
-    useLinkedCheckoutStore.getState().setInFlightSync(key, null);
-  });
-  useLinkedCheckoutStore.getState().setInFlightSync(key, promise);
-  return promise;
-}
-
-export function scheduleAutoSyncLinkedCheckout(request: LinkedCheckoutSyncRequest): void {
-  const key = getStoreKey(request.repoId, request.runtimeInstanceId);
-  if (!key) return;
-
-  const autoSyncBlock = useLinkedCheckoutStore.getState().getAutoSyncBlock(key);
-  if (
-    request.commitSha &&
-    autoSyncBlock?.commitSha === request.commitSha &&
-    autoSyncBlock.retryAt > Date.now()
-  ) {
-    return;
-  }
-
-  const existingPromise = useLinkedCheckoutStore.getState().getInFlightSync(key);
-  if (existingPromise) {
-    useLinkedCheckoutStore.getState().replaceQueuedSync(key, request);
-    return;
-  }
-
-  void syncLinkedCheckout(request)
-    .then((result) => {
-      if (!result.ok && result.error) {
-        toast.error("Auto-sync paused", {
-          description: result.error,
-        });
-      }
-    })
-    .catch((error) => {
-      toast.error("Auto-sync paused", {
-        description: error instanceof Error ? error.message : String(error),
-      });
-    });
 }
 
 export async function restoreLinkedCheckout(
@@ -429,7 +233,6 @@ export async function restoreLinkedCheckout(
   }
 
   useLinkedCheckoutStore.getState().setPending(key, true);
-  useLinkedCheckoutStore.getState().setAutoSyncBlock(key, null);
   try {
     const result = await runLinkedCheckoutMutation(
       RESTORE_LINKED_CHECKOUT_MUTATION,
@@ -473,7 +276,6 @@ export async function setLinkedCheckoutAutoSync(
       },
     );
     useLinkedCheckoutStore.getState().setStatus(key, result.status);
-    useLinkedCheckoutStore.getState().setAutoSyncBlock(key, null);
     return result;
   } finally {
     useLinkedCheckoutStore.getState().setPending(key, false);
@@ -494,11 +296,12 @@ export function useLinkedCheckoutStatus(
   const loaded = useLinkedCheckoutStore((state) =>
     key ? state.statusByKey[key] !== undefined : false,
   );
+  const refreshTick = useUIStore((s: UIState) => s.refreshTick);
 
   useEffect(() => {
     if (!enabled || !repoId || !sessionGroupId || !runtimeInstanceId) return;
-    void ensureLinkedCheckoutStatus(repoId, sessionGroupId, runtimeInstanceId).catch(() => {});
-  }, [enabled, repoId, runtimeInstanceId, sessionGroupId]);
+    void refreshLinkedCheckoutStatus(repoId, sessionGroupId, runtimeInstanceId).catch(() => {});
+  }, [enabled, repoId, runtimeInstanceId, sessionGroupId, refreshTick]);
 
   return {
     status: enabled ? (status ?? null) : null,

@@ -37,9 +37,11 @@ import {
   getLinkedCheckoutStatus,
   linkLinkedCheckoutRepo,
   restoreLinkedCheckout,
+  setAutoSyncManager,
   setLinkedCheckoutAutoSync,
   syncLinkedCheckout,
 } from "./linked-checkout.js";
+import { LinkedCheckoutAutoSyncManager } from "./linked-checkout-auto-sync.js";
 import { createWorktree, removeWorktree } from "./worktree.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { TerminalManager } from "@trace/shared/adapters";
@@ -51,6 +53,7 @@ import {
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 const HOOK_QUEUE_FLUSH_INTERVAL_MS = 2_000;
+const LINKED_CHECKOUT_AUTO_SYNC_INTERVAL_MS = 15_000;
 const execFileAsync = promisify(execFile);
 
 async function inspectGitCheckpoint(
@@ -147,6 +150,7 @@ export class BridgeClient implements IBridgeClient {
   private sessionRunSequence = new Map<string, number>();
   private activeRuns = new Map<string, number>();
   private terminalManager: TerminalManager;
+  private autoSyncManager: LinkedCheckoutAutoSyncManager;
 
   private gitExec: GitExecFn = (args, cwd) =>
     new Promise((resolve, reject) => {
@@ -167,6 +171,10 @@ export class BridgeClient implements IBridgeClient {
         this.send({ type: "terminal_exit", terminalId, exitCode });
       },
     });
+    this.autoSyncManager = new LinkedCheckoutAutoSyncManager(
+      LINKED_CHECKOUT_AUTO_SYNC_INTERVAL_MS,
+    );
+    setAutoSyncManager(this.autoSyncManager);
   }
 
   connect() {
@@ -185,6 +193,8 @@ export class BridgeClient implements IBridgeClient {
       this.sendRuntimeHello();
       this.startHeartbeat();
       this.startHookQueueDrain();
+      this.autoSyncManager.start();
+      void this.autoSyncManager.reconcileAll();
       void this.flushQueuedGitHookCheckpoints();
     });
 
@@ -201,6 +211,7 @@ export class BridgeClient implements IBridgeClient {
       console.log("[bridge] disconnected, reconnecting in 3s...");
       this.stopHeartbeat();
       this.stopHookQueueDrain();
+      this.autoSyncManager.stop();
       runtimeDebug("desktop bridge websocket closed", { instanceId: this.instanceId });
       this.setStatus("disconnected");
       this.scheduleReconnect(3000);
@@ -225,6 +236,7 @@ export class BridgeClient implements IBridgeClient {
     this.cancelPendingReconnect();
     this.stopHeartbeat();
     this.stopHookQueueDrain();
+    this.autoSyncManager.stop();
     this.terminalManager.destroyAll();
     for (const [sessionId, adapter] of this.adapters.entries()) {
       this.cancelRun(sessionId);
@@ -247,6 +259,7 @@ export class BridgeClient implements IBridgeClient {
     this.cancelPendingReconnect();
     this.stopHeartbeat();
     this.stopHookQueueDrain();
+    this.autoSyncManager.stop();
     // Tear down the old socket without triggering the close handler's reconnect
     if (this.ws) {
       this.ws.removeAllListeners();

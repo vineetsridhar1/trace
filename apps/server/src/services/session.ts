@@ -877,18 +877,6 @@ export class SessionService {
     });
   }
 
-  async getLatestGitCheckpointForGroup(sessionGroupId: string, organizationId: string) {
-    await prisma.sessionGroup.findFirstOrThrow({
-      where: { id: sessionGroupId, organizationId },
-      select: { id: true },
-    });
-
-    return prisma.gitCheckpoint.findFirst({
-      where: { sessionGroupId },
-      orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
-    });
-  }
-
   async start(input: StartSessionServiceInput) {
     if (input.restoreCheckpointId && input.sessionGroupId) {
       throw new Error("restoreCheckpointId cannot reuse an existing session group");

@@ -1,5 +1,3 @@
-import { execFile } from "child_process";
-import { promisify } from "util";
 import {
   assertValidCommitSha,
   type BridgeLinkedCheckoutActionResultPayload,
@@ -12,16 +10,40 @@ import {
   type LinkedCheckoutConfig,
 } from "./config.js";
 import { installOrRepairRepoHooks } from "./repo-hooks.js";
+import {
+  assertSafeGitRef,
+  execFileAsync,
+  formatGitError,
+  getCurrentBranch,
+  GIT_MAX_BUFFER,
+  isSafeGitRef,
+  runGit,
+} from "./git-utils.js";
 
-const execFileAsync = promisify(execFile);
-const GIT_MAX_BUFFER = 5 * 1024 * 1024;
+// Avoids an import cycle with linked-checkout-auto-sync.ts: the auto-sync
+// manager imports helpers from this file, so we wire it back in via a setter.
+interface AutoSyncManager {
+  reconcile(repoId: string): Promise<void>;
+}
+
+let autoSyncManager: AutoSyncManager | null = null;
+
+export function setAutoSyncManager(manager: AutoSyncManager | null): void {
+  autoSyncManager = manager;
+}
+
+function triggerAutoSyncReconcile(repoId: string): void {
+  const manager = autoSyncManager;
+  if (!manager) return;
+  void manager.reconcile(repoId).catch(() => undefined);
+}
 
 // Per-repo mutex: serialize git and config mutations for a single root checkout
 // so concurrent sync/restore/auto-sync calls can't race on `.git/index.lock` or
 // produce interleaved config writes.
 const repoLocks = new Map<string, Promise<unknown>>();
 
-function withRepoLock<T>(repoId: string, fn: () => Promise<T>): Promise<T> {
+export function withRepoLock<T>(repoId: string, fn: () => Promise<T>): Promise<T> {
   const previous = repoLocks.get(repoId) ?? Promise.resolve();
   const next = previous.then(fn, fn);
   const settled = next.catch(() => undefined);
@@ -33,21 +55,6 @@ function withRepoLock<T>(repoId: string, fn: () => Promise<T>): Promise<T> {
   });
 }
 
-function isSafeGitRef(ref: string): boolean {
-  return !!ref && !ref.startsWith("-") && !ref.includes("..") && !/[\x00-\x1f\x7f\s]/.test(ref);
-}
-
-function assertSafeGitRef(ref: string): void {
-  if (!isSafeGitRef(ref)) {
-    throw new Error(`Unsafe git ref: ${ref}`);
-  }
-}
-
-type GitExecError = Error & {
-  stderr?: string;
-  stdout?: string;
-};
-
 export type LinkedCheckoutStatus = BridgeLinkedCheckoutStatus;
 
 export type LinkedCheckoutActionResult = BridgeLinkedCheckoutActionResultPayload;
@@ -58,35 +65,6 @@ export interface SyncLinkedCheckoutInput {
   branch: string;
   commitSha?: string | null;
   autoSyncEnabled?: boolean;
-}
-
-function formatGitError(error: unknown): string {
-  if (error instanceof Error) {
-    const gitError = error as GitExecError;
-    const stderr = gitError.stderr?.trim();
-    if (stderr) return stderr;
-    const stdout = gitError.stdout?.trim();
-    if (stdout) return stdout;
-    if (gitError.message.trim()) return gitError.message.trim();
-  }
-  return String(error);
-}
-
-async function runGit(repoPath: string, args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync("git", args, {
-    cwd: repoPath,
-    maxBuffer: GIT_MAX_BUFFER,
-  });
-  return stdout.trim();
-}
-
-async function getCurrentBranch(repoPath: string): Promise<string | null> {
-  try {
-    const branch = await runGit(repoPath, ["symbolic-ref", "--short", "-q", "HEAD"]);
-    return branch || null;
-  } catch {
-    return null;
-  }
 }
 
 async function getCurrentCommitSha(repoPath: string): Promise<string> {
@@ -207,7 +185,7 @@ async function actionResult(
   };
 }
 
-async function pauseExistingAttachment(repoId: string, error: string): Promise<void> {
+export async function pauseExistingAttachment(repoId: string, error: string): Promise<void> {
   const repoConfig = getRepoConfig(repoId);
   const attachment = repoConfig?.linkedCheckout;
   if (!attachment) return;
@@ -217,6 +195,7 @@ async function pauseExistingAttachment(repoId: string, error: string): Promise<v
     autoSyncEnabled: false,
     lastSyncError: error,
   });
+  triggerAutoSyncReconcile(repoId);
 }
 
 export async function getLinkedCheckoutStatus(repoId: string): Promise<LinkedCheckoutStatus> {
@@ -233,6 +212,7 @@ export function linkLinkedCheckoutRepo(
       if (repoConfig.gitHooksEnabled) {
         await installOrRepairRepoHooks(localPath);
       }
+      triggerAutoSyncReconcile(repoId);
       return actionResult(repoId, true);
     } catch (error) {
       return actionResult(repoId, false, formatGitError(error));
@@ -278,6 +258,7 @@ export function syncLinkedCheckout(
         lastSyncError: null,
         lastSyncAt: new Date().toISOString(),
       });
+      triggerAutoSyncReconcile(input.repoId);
 
       return actionResult(input.repoId, true);
     } catch (error) {
@@ -329,6 +310,7 @@ export function restoreLinkedCheckout(repoId: string): Promise<LinkedCheckoutAct
       }
 
       await setRepoLinkedCheckout(repoId, null);
+      triggerAutoSyncReconcile(repoId);
       return actionResult(repoId, true);
     } catch (error) {
       const message = formatGitError(error);
@@ -355,6 +337,7 @@ export function setLinkedCheckoutAutoSync(
       autoSyncEnabled: enabled,
       lastSyncError: null,
     });
+    triggerAutoSyncReconcile(repoId);
 
     return actionResult(repoId, true);
   });

@@ -108,7 +108,6 @@ export function useLinkedCheckoutHeaderState({
         runtimeInstanceId,
         branch: groupBranch,
         autoSyncEnabled: true,
-        source: "manual",
       });
 
       if (!result.ok) {
