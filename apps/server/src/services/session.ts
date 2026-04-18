@@ -2584,7 +2584,20 @@ export class SessionService {
           organizationId: popped.organizationId,
         },
       });
+      const message = error instanceof Error ? error.message : String(error);
       console.error(`[session:${sessionId}] Failed to drain queued message ${popped.id}:`, error);
+      await eventService.create({
+        organizationId: current.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "session_output",
+        payload: {
+          type: "error",
+          message: `Failed to send queued message: ${message}`,
+        },
+        actorType: "system",
+        actorId: "system",
+      });
       return false;
     }
 
