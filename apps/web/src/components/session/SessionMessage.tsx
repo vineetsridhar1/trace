@@ -60,6 +60,7 @@ function renderAssistantContent(
     if (!block) continue;
 
     if (block.type === "text" && typeof block.text === "string") {
+      if (!block.text.trim()) continue;
       elements.push(<AssistantText key={i} text={block.text} timestamp={ts} />);
     } else if (block.type === "tool_use") {
       const name = str(block.name, "Tool");
