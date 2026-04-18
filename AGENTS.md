@@ -95,6 +95,12 @@ apps/web/            — React + Vite + urql + Zustand, TailwindCSS
 apps/desktop/        — Electron shell + bridge client
 ```
 
+## Agent Skills
+
+- Shared project agent skills live in `.agents/skills/`
+- `.claude/skills` is a symlink to `.agents/skills` so Claude and Codex can share the same source files
+- Run `scripts/sync-codex-skills.sh` after adding or changing a shared skill, or after switching worktrees, then restart Codex so it reloads `~/.codex/skills`
+
 ## Code Quality
 
 ### Approach
