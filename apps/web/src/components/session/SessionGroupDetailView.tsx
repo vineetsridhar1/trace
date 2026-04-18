@@ -7,7 +7,7 @@ import { useDetailPanelStore } from "../../stores/detail-panel";
 import { useEntityField, useEntityStore } from "../../stores/entity";
 import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
 import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
-import { useUIStore } from "../../stores/ui";
+import { navigateToSession, useUIStore } from "../../stores/ui";
 import { getSessionChannelId, getSessionGroupChannelId } from "../../lib/session-group";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { GroupHeader } from "./GroupHeader";
@@ -24,6 +24,7 @@ import { useTerminalActions } from "./useTerminalActions";
 import { useFileActions } from "./useFileActions";
 import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
+import { toast } from "sonner";
 
 const SESSION_GROUP_DETAIL_QUERY = gql`
   query SessionGroupDetail($id: ID!) {
@@ -375,28 +376,40 @@ export function SessionGroupDetailView({
   }, []);
 
   const handleNewChat = useCallback(async () => {
-    if (!selectedSession || selectedSession._optimistic || !bridgeInteractionAllowed) return;
+    if (!selectedSession || selectedSession._optimistic) return;
     const resolvedChannelId =
       getSessionGroupChannelId(
         useEntityStore.getState().sessionGroups[sessionGroupId] ?? null,
         groupSessions,
       ) ?? getSessionChannelId(selectedSession);
+    const startInExistingGroup = bridgeInteractionAllowed;
     const result = await client
       .mutation(START_SESSION_MUTATION, {
         input: {
           tool: selectedSession.tool,
           model: selectedSession.model ?? undefined,
-          hosting: selectedSession.hosting,
+          hosting: startInExistingGroup ? selectedSession.hosting : "cloud",
           channelId: resolvedChannelId ?? undefined,
           repoId: groupRepo?.id ?? (selectedSession.repo as { id: string } | null | undefined)?.id,
           branch: groupBranch ?? selectedSession.branch ?? undefined,
-          sessionGroupId,
+          sessionGroupId: startInExistingGroup ? sessionGroupId : undefined,
         },
       })
       .toPromise();
 
+    if (result.error) {
+      toast.error("Failed to create session", { description: result.error.message });
+      return;
+    }
+
     const newSessionId = result.data?.startSession?.id;
-    if (newSessionId) {
+    const newSessionGroupId = result.data?.startSession?.sessionGroupId ?? null;
+    if (!newSessionId || !newSessionGroupId) {
+      toast.error("Failed to create session");
+      return;
+    }
+
+    if (startInExistingGroup) {
       optimisticallyInsertSession({
         id: newSessionId,
         sessionGroupId,
@@ -409,7 +422,11 @@ export function SessionGroupDetailView({
       });
       openSessionTab(sessionGroupId, newSessionId);
       setActiveSessionId(newSessionId);
+      return;
     }
+
+    openSessionTab(newSessionGroupId, newSessionId);
+    navigateToSession(resolvedChannelId ?? null, newSessionGroupId, newSessionId);
   }, [
     groupSessions,
     groupBranch,
@@ -486,7 +503,7 @@ export function SessionGroupDetailView({
             onCloseFile={handleCloseFile}
             onNewChat={handleNewChat}
             onOpenTerminal={() => handleOpenTerminal(selectedSession ?? null, terminalAllowed)}
-            canNewChat={!!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed}
+            canNewChat={!!selectedSession && !selectedSessionIsOptimistic}
             canOpenTerminal={!selectedSessionIsOptimistic && terminalAllowed}
           />
 
