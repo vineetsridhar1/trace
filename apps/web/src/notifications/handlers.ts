@@ -220,6 +220,8 @@ function handleBridgeAccessRequested(event: Event): void {
     id: toastId,
     duration: Infinity,
   });
+
+  useUIStore.getState().triggerRefresh();
 }
 
 function handleBridgeAccessResolved(event: Event): void {

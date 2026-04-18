@@ -1,23 +1,12 @@
 import { useState } from "react";
-import { ChevronDown, Clock3, Lock, Shield } from "lucide-react";
+import { Clock3, Lock, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { client } from "../lib/urql";
 import {
   APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION,
   DENY_BRIDGE_ACCESS_REQUEST_MUTATION,
 } from "../lib/mutations";
-import {
-  BRIDGE_ACCESS_APPROVAL_OPTIONS,
-  getBridgeAccessApprovalExpiresAt,
-} from "../lib/bridge-access";
-import { cn } from "../lib/utils";
-import { Button, buttonVariants } from "../components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../components/ui/dropdown-menu";
+import { Button } from "../components/ui/button";
 
 export type BridgeAccessRequestToastData = {
   ownerUserId: string;
@@ -66,30 +55,21 @@ export function BridgeAccessRequestToast({
   toastId: string;
   request: BridgeAccessRequestToastData;
 }) {
-  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<"approve" | "deny" | null>(null);
 
   const requesterName =
     request.requesterUser.name?.trim() ||
     request.requesterUser.email?.trim() ||
     "A teammate";
   const runtimeLabel = request.runtimeLabel.trim() || "your bridge";
-  const canApproveThisSession = !!request.sessionGroup?.id;
 
-  const runApprove = async (input?: {
-    scopeType?: "all_sessions" | "session_group";
-    sessionGroupId?: string | null;
-    expiresAt?: string | null;
-    successMessage?: string;
-  }) => {
+  const runApprove = async () => {
     if (pendingAction) return;
-    setPendingAction(input?.successMessage ?? "approve");
+    setPendingAction("approve");
     try {
       const result = await client
         .mutation(APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION, {
           requestId: request.requestId,
-          scopeType: input?.scopeType,
-          sessionGroupId: input?.sessionGroupId,
-          expiresAt: input?.expiresAt,
         })
         .toPromise();
 
@@ -98,9 +78,7 @@ export function BridgeAccessRequestToast({
       }
 
       toast.dismiss(toastId);
-      toast.success(
-        input?.successMessage ?? `${requesterName} can now use ${runtimeLabel}`,
-      );
+      toast.success(`${requesterName} can now use ${runtimeLabel}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to approve bridge access");
     } finally {
@@ -158,51 +136,15 @@ export function BridgeAccessRequestToast({
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        {canApproveThisSession && (
-          <Button
-            size="sm"
-            disabled={!!pendingAction}
-            onClick={() =>
-              void runApprove({
-                scopeType: "session_group",
-                sessionGroupId: request.sessionGroup?.id ?? null,
-                expiresAt: null,
-                successMessage: `${requesterName} can use this workspace`,
-              })
-            }
-          >
-            Approve This Session
-          </Button>
-        )}
-
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            className={cn(buttonVariants({ size: "sm" }), "gap-1")}
-            disabled={!!pendingAction}
-          >
-            Approve All Sessions
-            <ChevronDown size={14} />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            {BRIDGE_ACCESS_APPROVAL_OPTIONS.map((option) => (
-              <DropdownMenuItem
-                key={option.id}
-                onClick={() =>
-                  void runApprove({
-                    scopeType: "all_sessions",
-                    sessionGroupId: null,
-                    expiresAt: getBridgeAccessApprovalExpiresAt(option.id),
-                    successMessage: `${requesterName} can use ${runtimeLabel} for ${option.label}`,
-                  })
-                }
-              >
-                {option.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <Button variant="ghost" size="sm" disabled={!!pendingAction} onClick={() => void runDeny()}>
+        <Button size="sm" disabled={!!pendingAction} onClick={() => void runApprove()}>
+          Approve
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={!!pendingAction}
+          onClick={() => void runDeny()}
+        >
           Deny
         </Button>
       </div>

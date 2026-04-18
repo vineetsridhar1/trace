@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Laptop, Shield, Clock3, Inbox, UserRoundCheck } from "lucide-react";
+import { ChevronDown, Laptop, Shield, Clock3, Inbox, UserRoundCheck } from "lucide-react";
 import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import {
@@ -8,7 +8,19 @@ import {
   MY_BRIDGE_RUNTIMES_QUERY,
   REVOKE_BRIDGE_ACCESS_GRANT_MUTATION,
 } from "../../lib/mutations";
-import { Button } from "../ui/button";
+import { useUIStore } from "../../stores/ui";
+import {
+  BRIDGE_ACCESS_APPROVAL_OPTIONS,
+  getBridgeAccessApprovalExpiresAt,
+} from "../../lib/bridge-access";
+import { cn } from "../../lib/utils";
+import { Button, buttonVariants } from "../ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 
 type BridgeUser = {
   id: string;
@@ -72,11 +84,14 @@ export function BridgeAccessSection() {
   const [runtimes, setRuntimes] = useState<BridgeRuntimeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  const refreshTick = useUIStore((s: { refreshTick: number }) => s.refreshTick);
 
   const fetchRuntimes = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await client.query(MY_BRIDGE_RUNTIMES_QUERY, {}).toPromise();
+      const result = await client
+        .query(MY_BRIDGE_RUNTIMES_QUERY, {}, { requestPolicy: "network-only" })
+        .toPromise();
       if (result.error) {
         throw result.error;
       }
@@ -90,7 +105,7 @@ export function BridgeAccessSection() {
 
   useEffect(() => {
     void fetchRuntimes();
-  }, [fetchRuntimes]);
+  }, [fetchRuntimes, refreshTick]);
 
   const runAction = useCallback(
     async (id: string, action: () => Promise<void>, successMessage: string) => {
@@ -178,27 +193,67 @@ export function BridgeAccessSection() {
                           <div className="text-xs text-muted-foreground">
                             Expires {formatDate(request.requestedExpiresAt)}
                           </div>
-                          <div className="mt-3 flex gap-2">
-                            <Button
-                              size="sm"
-                              disabled={pendingActionId === request.id}
-                              onClick={() =>
-                                void runAction(
-                                  request.id,
-                                  async () => {
-                                    const result = await client
-                                      .mutation(APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION, {
-                                        requestId: request.id,
-                                      })
-                                      .toPromise();
-                                    if (result.error) throw result.error;
-                                  },
-                                  "Access granted",
-                                )
-                              }
-                            >
-                              Approve
-                            </Button>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {request.sessionGroup?.id && (
+                              <Button
+                                size="sm"
+                                disabled={pendingActionId === request.id}
+                                onClick={() =>
+                                  void runAction(
+                                    request.id,
+                                    async () => {
+                                      const result = await client
+                                        .mutation(APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION, {
+                                          requestId: request.id,
+                                          scopeType: "session_group",
+                                          sessionGroupId: request.sessionGroup?.id,
+                                          expiresAt: null,
+                                        })
+                                        .toPromise();
+                                      if (result.error) throw result.error;
+                                    },
+                                    "Access granted for this session",
+                                  )
+                                }
+                              >
+                                Approve This Session
+                              </Button>
+                            )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger
+                                className={cn(buttonVariants({ size: "sm" }), "gap-1")}
+                                disabled={pendingActionId === request.id}
+                              >
+                                Approve All Sessions
+                                <ChevronDown size={14} />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="start" className="w-44">
+                                {BRIDGE_ACCESS_APPROVAL_OPTIONS.map((option) => (
+                                  <DropdownMenuItem
+                                    key={option.id}
+                                    onClick={() =>
+                                      void runAction(
+                                        request.id,
+                                        async () => {
+                                          const result = await client
+                                            .mutation(APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION, {
+                                              requestId: request.id,
+                                              scopeType: "all_sessions",
+                                              sessionGroupId: null,
+                                              expiresAt: getBridgeAccessApprovalExpiresAt(option.id),
+                                            })
+                                            .toPromise();
+                                          if (result.error) throw result.error;
+                                        },
+                                        `Access granted for ${option.label}`,
+                                      )
+                                    }
+                                  >
+                                    {option.label}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                             <Button
                               variant="outline"
                               size="sm"
