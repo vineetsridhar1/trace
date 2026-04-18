@@ -16,6 +16,18 @@ vi.mock("./inbox.js", () => ({
   },
 }));
 
+vi.mock("./runtime-access.js", () => ({
+  runtimeAccessService: {
+    assertAccess: vi.fn().mockResolvedValue(undefined),
+    listAccessibleRuntimeInstanceIds: vi
+      .fn()
+      .mockResolvedValue(new Set(["runtime-1", "runtime-a", "runtime-b"])),
+    getAccessState: vi
+      .fn()
+      .mockResolvedValue({ hostingMode: "cloud", allowed: true, isOwner: true }),
+  },
+}));
+
 vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
     send: vi.fn().mockReturnValue("delivered"),
@@ -67,6 +79,7 @@ import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
+import { runtimeAccessService } from "./runtime-access.js";
 import { SessionService, isFullyUnloadedSession } from "./session.js";
 import type { StartSessionServiceInput } from "./session.js";
 
@@ -82,6 +95,9 @@ const prismaMock = prisma as unknown as MockedDeep<typeof prisma>;
 const eventServiceMock = eventService as unknown as MockedDeep<typeof eventService>;
 const sessionRouterMock = sessionRouter as unknown as MockedDeep<typeof sessionRouter>;
 const terminalRelayMock = terminalRelay as unknown as MockedDeep<typeof terminalRelay>;
+const runtimeAccessServiceMock = runtimeAccessService as unknown as MockedDeep<
+  typeof runtimeAccessService
+>;
 
 function makeSessionGroup(overrides: Record<string, unknown> = {}) {
   return {
@@ -179,6 +195,15 @@ describe("SessionService", () => {
     vi.clearAllMocks();
     service = new SessionService();
     eventServiceMock.create.mockResolvedValue({ id: "event-1" });
+    runtimeAccessServiceMock.assertAccess.mockResolvedValue(undefined);
+    runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds.mockResolvedValue(
+      new Set(["runtime-1", "runtime-a", "runtime-b"]),
+    );
+    runtimeAccessServiceMock.getAccessState.mockResolvedValue({
+      hostingMode: "cloud",
+      allowed: true,
+      isOwner: true,
+    });
     sessionRouterMock.send.mockReturnValue("delivered");
     sessionRouterMock.transitionRuntime.mockResolvedValue("delivered");
     sessionRouterMock.getRuntimeForSession.mockReturnValue(null);
@@ -901,22 +926,25 @@ describe("SessionService", () => {
 
   describe("file access", () => {
     it("rejects local file access for non-owners", async () => {
+      runtimeAccessServiceMock.assertAccess.mockRejectedValueOnce(
+        new Error("Access denied: you do not have permission to use this local bridge"),
+      );
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
         id: "group-1",
         workdir: "/tmp/trace",
         worktreeDeleted: false,
+        connection: { runtimeInstanceId: "runtime-1" },
       });
       prismaMock.session.findMany.mockResolvedValueOnce([
         {
           id: "session-1",
           workdir: "/tmp/trace",
-          hosting: "local",
-          createdById: "user-2",
+          connection: { runtimeInstanceId: "runtime-1" },
         },
       ]);
 
       await expect(service.listFiles("group-1", "org-1", "user-1")).rejects.toThrow(
-        "Access denied: you can only access files on your own local sessions",
+        "Access denied: you do not have permission to access files on this local bridge",
       );
       expect(sessionRouterMock.listFiles).not.toHaveBeenCalled();
     });
@@ -926,16 +954,16 @@ describe("SessionService", () => {
         id: "group-1",
         workdir: "/tmp/trace",
         worktreeDeleted: false,
+        connection: { runtimeInstanceId: "runtime-1" },
       });
       prismaMock.session.findMany.mockResolvedValueOnce([
         {
           id: "session-1",
           workdir: "/tmp/trace",
-          hosting: "cloud",
-          createdById: "user-1",
+          connection: { runtimeInstanceId: "runtime-1" },
         },
       ]);
-      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce({ id: "runtime-1" });
+      sessionRouterMock.getRuntime.mockReturnValueOnce({ id: "runtime-1" });
       sessionRouterMock.listFiles.mockResolvedValueOnce(["src/app.ts"]);
 
       await expect(service.readFile("group-1", "secrets.txt", "org-1", "user-1")).rejects.toThrow(
@@ -2087,6 +2115,38 @@ describe("SessionService", () => {
 
       expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
       expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("listBranches", () => {
+    it("rejects a client-supplied sessionGroupId that doesn't own the repo", async () => {
+      // Repo exists in org, session group is real, but its repoId != requested repo.
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-other" });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({ repoId: "repo-a" });
+
+      await expect(
+        service.listBranches("repo-other", "org-1", "user-2", "runtime-1", "group-a"),
+      ).rejects.toThrow(
+        "Bridge access denied: this session group does not own the requested repo",
+      );
+      expect(sessionRouterMock.listBranches).not.toHaveBeenCalled();
+      expect(runtimeAccessServiceMock.assertAccess).not.toHaveBeenCalled();
+    });
+
+    it("allows listing branches when the sessionGroupId matches the repo", async () => {
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-a" });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({ repoId: "repo-a" });
+      sessionRouterMock.listBranches.mockResolvedValueOnce(["main", "feat/x"]);
+
+      const branches = await service.listBranches(
+        "repo-a",
+        "org-1",
+        "user-2",
+        "runtime-1",
+        "group-a",
+      );
+      expect(branches).toEqual(["main", "feat/x"]);
+      expect(runtimeAccessServiceMock.assertAccess).toHaveBeenCalled();
     });
   });
 });

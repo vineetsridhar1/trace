@@ -15,6 +15,18 @@ vi.mock("../lib/terminal-relay.js", () => ({
   },
 }));
 
+vi.mock("../lib/session-router.js", () => ({
+  sessionRouter: {
+    getRuntimeForSession: vi.fn(),
+  },
+}));
+
+vi.mock("./runtime-access.js", () => ({
+  runtimeAccessService: {
+    assertAccess: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 // Use the real isFullyUnloadedSession — it's a pure function with no side effects
 vi.mock("./session.js", async () => {
   const actual = await vi.importActual<typeof import("./session.js")>("./session.js");
@@ -22,15 +34,21 @@ vi.mock("./session.js", async () => {
 });
 
 import { prisma } from "../lib/db.js";
+import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
+import { runtimeAccessService } from "./runtime-access.js";
 import { terminalService } from "./terminal.js";
 
 const prismaMock = prisma as any;
 const terminalRelayMock = terminalRelay as any;
+const runtimeAccessServiceMock = runtimeAccessService as any;
+const sessionRouterMock = sessionRouter as any;
 
 describe("TerminalService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    runtimeAccessServiceMock.assertAccess.mockResolvedValue(undefined);
+    sessionRouterMock.getRuntimeForSession.mockReturnValue(undefined);
   });
 
   describe("create", () => {
@@ -42,6 +60,7 @@ describe("TerminalService", () => {
         createdById: "user-1",
         agentStatus: "active",
         sessionStatus: "in_progress",
+        connection: { runtimeInstanceId: "runtime-1" },
         sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
       });
 
@@ -85,6 +104,7 @@ describe("TerminalService", () => {
         createdById: "user-1",
         agentStatus: "failed",
         sessionStatus: "in_progress",
+        connection: { runtimeInstanceId: "runtime-1" },
         sessionGroup: { workdir: null, worktreeDeleted: false },
       });
       await expect(
@@ -143,11 +163,14 @@ describe("TerminalService", () => {
     });
 
     it("throws when local session is accessed by different user", async () => {
+      runtimeAccessServiceMock.assertAccess.mockRejectedValueOnce(
+        new Error("Access denied: you do not have permission to use this local bridge"),
+      );
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
+        organizationId: "org-1",
         sessionGroupId: "group-1",
-        hosting: "local",
-        createdById: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
         agentStatus: "active",
         sessionStatus: "in_progress",
         sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
@@ -161,15 +184,15 @@ describe("TerminalService", () => {
           organizationId: "org-1",
           userId: "user-2",
         }),
-      ).rejects.toThrow("Access denied: you can only access terminals on your own local sessions");
+      ).rejects.toThrow("Access denied: you do not have permission to use this local bridge");
     });
 
     it("allows local session access by the owner", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
+        organizationId: "org-1",
         sessionGroupId: "group-1",
-        hosting: "local",
-        createdById: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
         agentStatus: "active",
         sessionStatus: "in_progress",
         sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
@@ -194,6 +217,7 @@ describe("TerminalService", () => {
         createdById: "user-1",
         agentStatus: "active",
         sessionStatus: "in_progress",
+        connection: { runtimeInstanceId: "runtime-1" },
         sessionGroup: { workdir: null, worktreeDeleted: false },
       });
 
@@ -214,6 +238,57 @@ describe("TerminalService", () => {
       );
     });
 
+    it("throws when session has no bound runtime", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        connection: null,
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        sessionGroup: { workdir: "/workspace", worktreeDeleted: false, connection: null },
+      });
+      sessionRouterMock.getRuntimeForSession.mockReturnValue(undefined);
+
+      await expect(
+        terminalService.create({
+          sessionId: "session-1",
+          cols: 80,
+          rows: 24,
+          organizationId: "org-1",
+          userId: "user-1",
+        }),
+      ).rejects.toThrow("Cannot open terminal: this session is not connected to a runtime");
+    });
+
+    it("falls back to session group runtime when session has no connection", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        connection: null,
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        sessionGroup: {
+          workdir: "/workspace",
+          worktreeDeleted: false,
+          connection: { runtimeInstanceId: "group-runtime" },
+        },
+      });
+
+      await terminalService.create({
+        sessionId: "session-1",
+        cols: 80,
+        rows: 24,
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+
+      expect(runtimeAccessServiceMock.assertAccess).toHaveBeenCalledWith(
+        expect.objectContaining({ runtimeInstanceId: "group-runtime" }),
+      );
+    });
+
     it("allows cloud session access by any user", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
@@ -222,6 +297,7 @@ describe("TerminalService", () => {
         createdById: "user-1",
         agentStatus: "active",
         sessionStatus: "in_progress",
+        connection: { runtimeInstanceId: "runtime-1" },
         sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
       });
 
@@ -281,11 +357,15 @@ describe("TerminalService", () => {
     });
 
     it("throws when local session accessed by wrong user", async () => {
+      runtimeAccessServiceMock.assertAccess.mockRejectedValueOnce(
+        new Error("Access denied: you do not have permission to use this local bridge"),
+      );
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
         sessionGroupId: "group-1",
         hosting: "local",
         createdById: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
       });
 
       await expect(
@@ -313,6 +393,24 @@ describe("TerminalService", () => {
       });
 
       expect(result).toEqual([]);
+    });
+
+    it("returns [] when no runtime resolves for the session (fail closed)", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        sessionGroupId: "group-1",
+        connection: null,
+        sessionGroup: { connection: null },
+      });
+
+      const result = await terminalService.listForSession({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+
+      expect(result).toEqual([]);
+      expect(runtimeAccessServiceMock.assertAccess).not.toHaveBeenCalled();
     });
 
     it("filters out local terminals owned by a different user in the same group", async () => {
@@ -388,12 +486,35 @@ describe("TerminalService", () => {
       ).rejects.toThrow("Terminal not found");
     });
 
+    it("no-ops fail-closed when no runtime resolves", async () => {
+      terminalRelayMock.getSessionId.mockReturnValueOnce("session-1");
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        connection: null,
+        sessionGroup: { connection: null },
+      });
+
+      const result = await terminalService.destroy({
+        terminalId: "term-1",
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+      expect(result).toBe(true);
+      expect(terminalRelayMock.destroyTerminal).not.toHaveBeenCalled();
+    });
+
     it("throws when local session accessed by wrong user", async () => {
+      runtimeAccessServiceMock.assertAccess.mockRejectedValueOnce(
+        new Error("Access denied: you do not have permission to use this local bridge"),
+      );
       terminalRelayMock.getSessionId.mockReturnValueOnce("session-1");
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
         hosting: "local",
         createdById: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
       });
 
       await expect(

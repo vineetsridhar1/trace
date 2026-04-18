@@ -17,6 +17,7 @@ import { Button } from "./components/ui/button";
 import { useOrgEvents } from "./hooks/useOrgEvents";
 import { useHistorySync } from "./hooks/useHistorySync";
 import { useVisibilityRefresh } from "./hooks/useVisibilityRefresh";
+import { useBridgePendingRequestToasts } from "./hooks/useBridgePendingRequestToasts";
 import { useIsMobile } from "./hooks/use-mobile";
 import { Toaster } from "./components/ui/sonner";
 import { InstallBanner } from "./components/InstallBanner";
@@ -26,11 +27,24 @@ import { createQuickSession } from "./lib/create-quick-session";
 export function App() {
   const user = useAuthStore((s: AuthState) => s.user);
   const loading = useAuthStore((s: AuthState) => s.loading);
+  const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
   const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
   useEffect(() => {
     fetchMe();
   }, [fetchMe]);
+
+  useEffect(() => {
+    if (!window.trace?.setBridgeAuthContext) return;
+
+    const token = localStorage.getItem("trace_token");
+    if (!user || !token || !activeOrgId) {
+      void window.trace.setBridgeAuthContext(null, null);
+      return;
+    }
+
+    void window.trace.setBridgeAuthContext(token, activeOrgId);
+  }, [activeOrgId, user]);
 
   if (loading) {
     return (
@@ -56,6 +70,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   useOrgEvents();
   useHistorySync();
   useVisibilityRefresh();
+  useBridgePendingRequestToasts();
   const activePage = useUIStore((s: UIState) => s.activePage);
   const activeChatId = useUIStore((s: UIState) => s.activeChatId);
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);

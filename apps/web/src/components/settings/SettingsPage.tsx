@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, GitBranch, Bot, SlidersHorizontal, Bell, Key, Users, Code } from "lucide-react";
+import { ArrowLeft, GitBranch, Bot, SlidersHorizontal, Bell, Key, Users, Code, MonitorCog } from "lucide-react";
 import { useUIStore } from "../../stores/ui";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
@@ -11,6 +11,7 @@ import { NotificationsSection } from "./NotificationsSection";
 import { ApiTokensSection } from "./ApiTokensSection";
 import { MembersSection } from "./MembersSection";
 import { ChannelsSection } from "./ChannelsSection";
+import { BridgeAccessSection } from "./BridgeAccessSection";
 
 type SettingsTab =
   | "repositories"
@@ -19,7 +20,8 @@ type SettingsTab =
   | "notifications"
   | "api-keys"
   | "members"
-  | "channels";
+  | "channels"
+  | "bridge-access";
 
 const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
   { id: "repositories", label: "Repositories", icon: GitBranch },
@@ -28,6 +30,7 @@ const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
   { id: "session-defaults", label: "Session Defaults", icon: SlidersHorizontal },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "api-keys", label: "API Keys", icon: Key },
+  { id: "bridge-access", label: "Bridge Access", icon: MonitorCog },
   { id: "channels", label: "Channels", icon: Code },
 ];
 
@@ -35,7 +38,10 @@ export function SettingsPage() {
   const setActivePage = useUIStore((s) => s.setActivePage);
   const [activeTab, setActiveTab] = useState<SettingsTab>("repositories");
   const contentWidthClass =
-    activeTab === "members" || activeTab === "repositories" || activeTab === "channels"
+    activeTab === "members" ||
+    activeTab === "repositories" ||
+    activeTab === "channels" ||
+    activeTab === "bridge-access"
       ? "mx-auto max-w-5xl"
       : "mx-auto max-w-2xl";
 
@@ -84,6 +90,7 @@ export function SettingsPage() {
             {activeTab === "session-defaults" && <SessionDefaultsSection />}
             {activeTab === "notifications" && <NotificationsSection />}
             {activeTab === "api-keys" && <ApiTokensSection />}
+            {activeTab === "bridge-access" && <BridgeAccessSection />}
             {activeTab === "channels" && <ChannelsSection />}
           </div>
         </div>

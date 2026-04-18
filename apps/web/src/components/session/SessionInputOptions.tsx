@@ -44,6 +44,9 @@ export function SessionInputOptions({
     | SessionConnection
     | null
     | undefined;
+  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
+    | string
+    | undefined;
 
   const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
   const channelRepoId = repo?.id;
@@ -63,7 +66,10 @@ export function SessionInputOptions({
   useEffect(() => {
     if (!isNotStarted || isOptimistic) return;
     client
-      .query(AVAILABLE_RUNTIMES_QUERY, { tool: currentTool })
+      .query(AVAILABLE_RUNTIMES_QUERY, {
+        tool: currentTool,
+        sessionGroupId: sessionGroupId ?? null,
+      })
       .toPromise()
       .then((result: { data?: Record<string, unknown> }) => {
         const data = result.data?.availableRuntimes as SessionRuntimeInstance[] | undefined;
@@ -72,7 +78,7 @@ export function SessionInputOptions({
       .catch((error: unknown) => {
         console.error("Failed to fetch available runtimes:", error);
       });
-  }, [isNotStarted, isOptimistic, currentTool]);
+  }, [isNotStarted, isOptimistic, currentTool, sessionGroupId]);
 
   const handleToolChange = useCallback(
     async (newTool: string | null) => {

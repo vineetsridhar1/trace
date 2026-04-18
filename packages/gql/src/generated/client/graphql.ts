@@ -227,6 +227,73 @@ export type BranchDiffFile = {
   status: Scalars['String']['output'];
 };
 
+export type BridgeAccessGrant = {
+  __typename?: 'BridgeAccessGrant';
+  createdAt: Scalars['DateTime']['output'];
+  expiresAt?: Maybe<Scalars['DateTime']['output']>;
+  grantedByUser: User;
+  granteeUser: User;
+  id: Scalars['ID']['output'];
+  revokedAt?: Maybe<Scalars['DateTime']['output']>;
+  scopeType: BridgeAccessScopeType;
+  sessionGroup?: Maybe<SessionGroup>;
+};
+
+export type BridgeAccessRequest = {
+  __typename?: 'BridgeAccessRequest';
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  ownerUser: User;
+  requestedExpiresAt?: Maybe<Scalars['DateTime']['output']>;
+  requesterUser: User;
+  resolvedAt?: Maybe<Scalars['DateTime']['output']>;
+  resolvedByUser?: Maybe<User>;
+  scopeType: BridgeAccessScopeType;
+  sessionGroup?: Maybe<SessionGroup>;
+  status: BridgeAccessRequestStatus;
+};
+
+export type BridgeAccessRequestStatus =
+  | 'approved'
+  | 'denied'
+  | 'pending';
+
+export type BridgeAccessScopeType =
+  | 'all_sessions'
+  | 'session_group';
+
+export type BridgeRuntime = {
+  __typename?: 'BridgeRuntime';
+  accessGrants: Array<BridgeAccessGrant>;
+  accessRequests: Array<BridgeAccessRequest>;
+  connected: Scalars['Boolean']['output'];
+  connectedAt?: Maybe<Scalars['DateTime']['output']>;
+  disconnectedAt?: Maybe<Scalars['DateTime']['output']>;
+  hostingMode: HostingMode;
+  id: Scalars['ID']['output'];
+  instanceId: Scalars['ID']['output'];
+  label: Scalars['String']['output'];
+  lastSeenAt: Scalars['DateTime']['output'];
+  metadata?: Maybe<Scalars['JSON']['output']>;
+  ownerUser: User;
+};
+
+export type BridgeRuntimeAccess = {
+  __typename?: 'BridgeRuntimeAccess';
+  allowed: Scalars['Boolean']['output'];
+  bridgeRuntimeId?: Maybe<Scalars['ID']['output']>;
+  connected: Scalars['Boolean']['output'];
+  expiresAt?: Maybe<Scalars['DateTime']['output']>;
+  hostingMode?: Maybe<HostingMode>;
+  isOwner: Scalars['Boolean']['output'];
+  label?: Maybe<Scalars['String']['output']>;
+  ownerUser?: Maybe<User>;
+  pendingRequest?: Maybe<BridgeAccessRequest>;
+  runtimeInstanceId: Scalars['ID']['output'];
+  scopeType?: Maybe<BridgeAccessScopeType>;
+  sessionGroupId?: Maybe<Scalars['ID']['output']>;
+};
+
 export type Channel = {
   __typename?: 'Channel';
   aiMode?: Maybe<AutonomyMode>;
@@ -388,6 +455,9 @@ export type Event = {
 };
 
 export type EventType =
+  | 'bridge_access_request_resolved'
+  | 'bridge_access_requested'
+  | 'bridge_access_revoked'
   | 'channel_created'
   | 'channel_deleted'
   | 'channel_group_created'
@@ -570,6 +640,7 @@ export type Mutation = {
   acceptAgentSuggestion: InboxItem;
   addChatMember: Chat;
   addOrgMember: OrgMember;
+  approveBridgeAccessRequest: BridgeAccessGrant;
   archiveSessionGroup: SessionGroup;
   assignTicket: Ticket;
   clearQueuedMessages: Scalars['Boolean']['output'];
@@ -589,6 +660,7 @@ export type Mutation = {
   deleteChatMessage: Message;
   deleteSession: Session;
   deleteSessionGroup: Scalars['Boolean']['output'];
+  denyBridgeAccessRequest: BridgeAccessRequest;
   destroyTerminal: Scalars['Boolean']['output'];
   dismissAgentSuggestion: InboxItem;
   dismissInboxItem: InboxItem;
@@ -612,9 +684,11 @@ export type Mutation = {
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
+  requestBridgeAccess: BridgeAccessRequest;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
+  revokeBridgeAccessGrant: BridgeAccessGrant;
   runSession: Session;
   sendChannelMessage: Message;
   sendChatMessage: Message;
@@ -659,6 +733,14 @@ export type MutationAddOrgMemberArgs = {
   organizationId: Scalars['ID']['input'];
   role?: InputMaybe<UserRole>;
   userId: Scalars['ID']['input'];
+};
+
+
+export type MutationApproveBridgeAccessRequestArgs = {
+  expiresAt?: InputMaybe<Scalars['DateTime']['input']>;
+  requestId: Scalars['ID']['input'];
+  scopeType?: InputMaybe<BridgeAccessScopeType>;
+  sessionGroupId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 
@@ -759,6 +841,11 @@ export type MutationDeleteSessionArgs = {
 
 export type MutationDeleteSessionGroupArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationDenyBridgeAccessRequestArgs = {
+  requestId: Scalars['ID']['input'];
 };
 
 
@@ -891,6 +978,14 @@ export type MutationReorderChannelsArgs = {
 };
 
 
+export type MutationRequestBridgeAccessArgs = {
+  requestedExpiresAt?: InputMaybe<Scalars['DateTime']['input']>;
+  runtimeInstanceId: Scalars['ID']['input'];
+  scopeType: BridgeAccessScopeType;
+  sessionGroupId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+
 export type MutationRestoreLinkedCheckoutArgs = {
   repoId: Scalars['ID']['input'];
   sessionGroupId: Scalars['ID']['input'];
@@ -904,6 +999,11 @@ export type MutationRetrySessionConnectionArgs = {
 
 export type MutationRetrySessionGroupSetupArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationRevokeBridgeAccessGrantArgs = {
+  grantId: Scalars['ID']['input'];
 };
 
 
@@ -1157,6 +1257,7 @@ export type Query = {
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   branch?: Maybe<Branch>;
+  bridgeRuntimeAccess: BridgeRuntimeAccess;
   channel?: Maybe<Channel>;
   channelGroups: Array<ChannelGroup>;
   channelMessages: Array<Message>;
@@ -1168,6 +1269,7 @@ export type Query = {
   inboxItems: Array<InboxItem>;
   linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
+  myBridgeRuntimes: Array<BridgeRuntime>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
   organization?: Maybe<Organization>;
@@ -1242,6 +1344,7 @@ export type QueryAiConversationsArgs = {
 
 
 export type QueryAvailableRuntimesArgs = {
+  sessionGroupId?: InputMaybe<Scalars['ID']['input']>;
   tool: CodingTool;
 };
 
@@ -1253,6 +1356,12 @@ export type QueryAvailableSessionRuntimesArgs = {
 
 export type QueryBranchArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryBridgeRuntimeAccessArgs = {
+  runtimeInstanceId: Scalars['ID']['input'];
+  sessionGroupId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 
@@ -1353,6 +1462,7 @@ export type QueryRepoArgs = {
 export type QueryRepoBranchesArgs = {
   repoId: Scalars['ID']['input'];
   runtimeInstanceId?: InputMaybe<Scalars['ID']['input']>;
+  sessionGroupId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 

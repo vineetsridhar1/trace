@@ -4,6 +4,7 @@ import { orgMemberService } from "../services/org-member.js";
 import { channelQueries, channelMutations, channelSubscriptions, channelTypeResolvers } from "./channel.js";
 import { channelGroupQueries, channelGroupMutations } from "./channelGroup.js";
 import { sessionQueries, sessionMutations, sessionSubscriptions, sessionTypeResolvers } from "./session.js";
+import { bridgeAccessQueries, bridgeAccessMutations, bridgeAccessTypeResolvers } from "./bridge-access.js";
 import { ticketQueries, ticketMutations, ticketSubscriptions, ticketTypeResolvers } from "./ticket.js";
 import { eventQueries, eventSubscriptions } from "./event.js";
 import { inboxQueries, inboxMutations } from "./inbox.js";
@@ -30,6 +31,7 @@ export const resolvers = {
   ...participantTypeResolvers,
   ...ticketTypeResolvers,
   ...sessionTypeResolvers,
+  ...bridgeAccessTypeResolvers,
   ...agentIdentityTypeResolvers,
   ...agentDebugTypeResolvers,
   ...aiConversationTypeResolvers,
@@ -48,6 +50,7 @@ export const resolvers = {
     ...channelQueries,
     ...channelGroupQueries,
     ...sessionQueries,
+    ...bridgeAccessQueries,
     ...ticketQueries,
     ...eventQueries,
     ...inboxQueries,
@@ -67,6 +70,7 @@ export const resolvers = {
     ...channelMutations,
     ...channelGroupMutations,
     ...sessionMutations,
+    ...bridgeAccessMutations,
     ...ticketMutations,
     ...inboxMutations,
     ...apiTokenMutations,

@@ -12,6 +12,42 @@ const CHANNEL_MESSAGE_EVENTS = new Set<EventType>([
   "message_deleted",
 ]);
 
+function canViewSystemEvent(
+  event: { eventType: string; payload?: unknown },
+  userId: string | null | undefined,
+): boolean {
+  if (
+    event.eventType !== "bridge_access_requested" &&
+    event.eventType !== "bridge_access_request_resolved" &&
+    event.eventType !== "bridge_access_revoked"
+  ) {
+    return true;
+  }
+
+  if (!userId || !event.payload || typeof event.payload !== "object" || Array.isArray(event.payload)) {
+    return false;
+  }
+
+  const payload = event.payload as {
+    ownerUserId?: unknown;
+    granteeUserId?: unknown;
+    requesterUser?: { id?: unknown } | null;
+  };
+  if (payload.ownerUserId === userId) return true;
+  if (
+    event.eventType === "bridge_access_request_resolved" &&
+    payload.requesterUser &&
+    typeof payload.requesterUser === "object" &&
+    payload.requesterUser.id === userId
+  ) {
+    return true;
+  }
+  if (event.eventType === "bridge_access_revoked" && payload.granteeUserId === userId) {
+    return true;
+  }
+  return false;
+}
+
 export const eventQueries = {
   events: async (
     _: unknown,
@@ -83,7 +119,10 @@ export const eventQueries = {
         : Promise.resolve(new Map<string, boolean>()),
     ]);
 
-    return events.filter((event: { scopeType: string; scopeId: string; eventType: string }) => {
+    return events.filter((event: { scopeType: string; scopeId: string; eventType: string; payload?: unknown }) => {
+      if (!canViewSystemEvent(event, ctx.userId)) {
+        return false;
+      }
       if (event.scopeType === "chat") {
         return chatMembership.get(event.scopeId) ?? false;
       }
@@ -107,11 +146,22 @@ export const eventSubscriptions = {
       const membershipCache = new Map<string, boolean>();
 
       return filterAsyncIterator(
-        pubsub.asyncIterator<{ orgEvents: { scopeType: string; scopeId: string; eventType: EventType } }>(
+        pubsub.asyncIterator<{
+          orgEvents: {
+            scopeType: string;
+            scopeId: string;
+            eventType: EventType;
+            payload?: unknown;
+          };
+        }>(
           topics.orgEvents(args.organizationId),
         ),
         async (payload) => {
           const event = payload.orgEvents;
+
+          if (!canViewSystemEvent(event, ctx.userId)) {
+            return false;
+          }
 
           // Invalidate cache on membership changes
           if (

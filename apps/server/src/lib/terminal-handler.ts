@@ -2,6 +2,7 @@ import type { WebSocket } from "ws";
 import { parseCookieToken, verifyToken } from "./auth.js";
 import { terminalRelay } from "./terminal-relay.js";
 import { prisma } from "./db.js";
+import { runtimeAccessService } from "../services/runtime-access.js";
 
 /**
  * Handles frontend WebSocket connections to /terminal.
@@ -21,6 +22,16 @@ import { prisma } from "./db.js";
 
 /** Interval between server→client pings to keep the WebSocket alive. */
 const PING_INTERVAL_MS = 30_000;
+
+function getConnectionRuntimeInstanceId(connection: unknown): string | null {
+  if (!connection || typeof connection !== "object" || Array.isArray(connection)) {
+    return null;
+  }
+  const runtimeInstanceId = (connection as { runtimeInstanceId?: unknown }).runtimeInstanceId;
+  return typeof runtimeInstanceId === "string" && runtimeInstanceId.trim()
+    ? runtimeInstanceId
+    : null;
+}
 
 export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie?: string }; url?: string }) {
   const sendFatalError = (message: string): void => {
@@ -125,18 +136,32 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
                 id: sessionId,
                 organization: { orgMembers: { some: { userId: user.id } } },
               },
-              select: { id: true, hosting: true, createdById: true },
+              select: {
+                id: true,
+                organizationId: true,
+                sessionGroupId: true,
+                connection: true,
+              },
             });
             if (!session) {
               ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
               return;
             }
-            if (session.hosting === "local" && session.createdById !== userId) {
-              console.warn(`[terminal-handler] user ${userId} denied terminal access to local session ${sessionId} owned by ${session.createdById}`);
+            try {
+              await runtimeAccessService.assertAccess({
+                userId,
+                organizationId: session.organizationId,
+                runtimeInstanceId: getConnectionRuntimeInstanceId(session.connection),
+                sessionGroupId: session.sessionGroupId,
+              });
+            } catch {
+              console.warn(
+                `[terminal-handler] user ${userId} denied terminal access to session ${sessionId}`,
+              );
               ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
               return;
             }
-            const attached = terminalRelay.attachFrontend(terminalId, ws);
+            const attached = terminalRelay.attachFrontend(terminalId, ws, userId);
             if (!attached) {
               ws.send(JSON.stringify({ type: "error", message: "Terminal not found" }));
               return;

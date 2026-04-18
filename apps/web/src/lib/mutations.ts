@@ -187,8 +187,8 @@ export const DISMISS_AGENT_SUGGESTION_MUTATION = gql`
 `;
 
 export const AVAILABLE_RUNTIMES_QUERY = gql`
-  query AvailableRuntimes($tool: CodingTool!) {
-    availableRuntimes(tool: $tool) {
+  query AvailableRuntimes($tool: CodingTool!, $sessionGroupId: ID) {
+    availableRuntimes(tool: $tool, sessionGroupId: $sessionGroupId) {
       id
       label
       hostingMode
@@ -196,6 +196,155 @@ export const AVAILABLE_RUNTIMES_QUERY = gql`
       connected
       sessionCount
       registeredRepoIds
+    }
+  }
+`;
+
+export const BRIDGE_RUNTIME_ACCESS_QUERY = gql`
+  query BridgeRuntimeAccess($runtimeInstanceId: ID!, $sessionGroupId: ID) {
+    bridgeRuntimeAccess(runtimeInstanceId: $runtimeInstanceId, sessionGroupId: $sessionGroupId) {
+      runtimeInstanceId
+      bridgeRuntimeId
+      label
+      hostingMode
+      connected
+      allowed
+      isOwner
+      scopeType
+      sessionGroupId
+      expiresAt
+      ownerUser {
+        id
+        name
+        avatarUrl
+      }
+      pendingRequest {
+        id
+        scopeType
+        requestedExpiresAt
+        status
+        sessionGroup {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+
+export const MY_BRIDGE_RUNTIMES_QUERY = gql`
+  query MyBridgeRuntimes {
+    myBridgeRuntimes {
+      id
+      instanceId
+      label
+      hostingMode
+      lastSeenAt
+      connectedAt
+      disconnectedAt
+      connected
+      ownerUser {
+        id
+        name
+      }
+      accessRequests {
+        id
+        scopeType
+        requestedExpiresAt
+        status
+        createdAt
+        requesterUser {
+          id
+          name
+          email
+          avatarUrl
+        }
+        sessionGroup {
+          id
+          name
+        }
+      }
+      accessGrants {
+        id
+        scopeType
+        expiresAt
+        revokedAt
+        createdAt
+        granteeUser {
+          id
+          name
+          email
+        }
+        grantedByUser {
+          id
+          name
+        }
+        sessionGroup {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+
+export const REQUEST_BRIDGE_ACCESS_MUTATION = gql`
+  mutation RequestBridgeAccess(
+    $runtimeInstanceId: ID!
+    $scopeType: BridgeAccessScopeType!
+    $sessionGroupId: ID
+    $requestedExpiresAt: DateTime
+  ) {
+    requestBridgeAccess(
+      runtimeInstanceId: $runtimeInstanceId
+      scopeType: $scopeType
+      sessionGroupId: $sessionGroupId
+      requestedExpiresAt: $requestedExpiresAt
+    ) {
+      id
+      status
+      scopeType
+      requestedExpiresAt
+    }
+  }
+`;
+
+export const APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION = gql`
+  mutation ApproveBridgeAccessRequest(
+    $requestId: ID!
+    $scopeType: BridgeAccessScopeType
+    $sessionGroupId: ID
+    $expiresAt: DateTime
+  ) {
+    approveBridgeAccessRequest(
+      requestId: $requestId
+      scopeType: $scopeType
+      sessionGroupId: $sessionGroupId
+      expiresAt: $expiresAt
+    ) {
+      id
+      scopeType
+      expiresAt
+      revokedAt
+    }
+  }
+`;
+
+export const DENY_BRIDGE_ACCESS_REQUEST_MUTATION = gql`
+  mutation DenyBridgeAccessRequest($requestId: ID!) {
+    denyBridgeAccessRequest(requestId: $requestId) {
+      id
+      status
+      resolvedAt
+    }
+  }
+`;
+
+export const REVOKE_BRIDGE_ACCESS_GRANT_MUTATION = gql`
+  mutation RevokeBridgeAccessGrant($grantId: ID!) {
+    revokeBridgeAccessGrant(grantId: $grantId) {
+      id
+      revokedAt
     }
   }
 `;
@@ -253,8 +402,12 @@ export const UNREGISTER_REPO_WEBHOOK_MUTATION = gql`
 `;
 
 export const REPO_BRANCHES_QUERY = gql`
-  query RepoBranches($repoId: ID!, $runtimeInstanceId: ID) {
-    repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)
+  query RepoBranches($repoId: ID!, $runtimeInstanceId: ID, $sessionGroupId: ID) {
+    repoBranches(
+      repoId: $repoId
+      runtimeInstanceId: $runtimeInstanceId
+      sessionGroupId: $sessionGroupId
+    )
   }
 `;
 

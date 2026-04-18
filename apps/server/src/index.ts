@@ -18,8 +18,8 @@ import { authRouter } from "./routes/auth.js";
 import { uploadRouter } from "./routes/upload.js";
 import { localStorageRouter } from "./lib/storage/index.js";
 import webhookRouter from "./routes/webhook.js";
-import { buildContext, buildWsContext } from "./lib/auth.js";
-import { handleBridgeConnection } from "./lib/bridge-handler.js";
+import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
+import { handleBridgeConnection, type BridgeConnectionRequest } from "./lib/bridge-handler.js";
 import { sessionRouter } from "./lib/session-router.js";
 import { sessionService } from "./services/session.js";
 import { CloudMachineService } from "./lib/cloud-machine-service.js";
@@ -28,6 +28,7 @@ import { runtimeDebug } from "./lib/runtime-debug.js";
 import { handleTerminalConnection } from "./lib/terminal-handler.js";
 import { connectRedis, disconnectRedis } from "./lib/redis.js";
 import { pubsub } from "./lib/pubsub.js";
+import { runtimeAccessService } from "./services/runtime-access.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -108,6 +109,9 @@ async function main() {
         sessionIds: stale.sessionIds,
       });
       const affectedSessions = sessionRouter.unregisterRuntime(stale.runtimeId);
+      if (stale.runtimeId) {
+        void runtimeAccessService.markRuntimeDisconnected(stale.runtimeId);
+      }
       for (const sessionId of affectedSessions) {
         runtimeDebug("marking session disconnected after stale runtime eviction", {
           runtimeId: stale.runtimeId,
@@ -131,19 +135,41 @@ async function main() {
         wsServer.emit("connection", ws, req);
       });
     } else if (pathname === "/bridge") {
-      // Cloud bridges must provide a valid token; local bridges (no token) are allowed
       const url = new URL(req.url ?? "", "http://localhost");
-      const token = url.searchParams.get("token");
+      const cloudToken = url.searchParams.get("token");
+      const bridgeAuthToken = url.searchParams.get("bridgeAuthToken");
 
       const validateAndUpgrade = async () => {
-        if (token && !(await cloudMachineService.isValidBridgeToken(token))) {
+        const bridgeReq = req as IncomingMessage & BridgeConnectionRequest;
+
+        if (cloudToken) {
+          if (!(await cloudMachineService.isValidBridgeToken(cloudToken))) {
+            socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+            socket.destroy();
+            return;
+          }
+          bridgeReq.bridgeAuth = { kind: "cloud" };
+        } else if (bridgeAuthToken) {
+          const payload = verifyBridgeAuthToken(bridgeAuthToken);
+          if (!payload) {
+            socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+            socket.destroy();
+            return;
+          }
+          bridgeReq.bridgeAuth = {
+            kind: "local",
+            userId: payload.userId,
+            organizationId: payload.organizationId,
+            instanceId: payload.instanceId,
+          };
+        } else {
           socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
           socket.destroy();
           return;
         }
 
         bridgeWss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
-          bridgeWss.emit("connection", ws, req);
+          bridgeWss.emit("connection", ws, bridgeReq);
         });
       };
       validateAndUpgrade().catch(() => socket.destroy());

@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import type { CloudMachine } from "@prisma/client";
+import { CLOUD_MACHINE_RUNTIME_PREFIX } from "@trace/shared";
 import type { CloudMachineProvider } from "./cloud-machine-provider.js";
 import { prisma } from "./db.js";
 
@@ -151,7 +152,7 @@ export class CloudMachineService {
     const { userId, orgId, defaultTool, userTokens } = options;
     const bridgeToken = randomUUID();
     const cloudMachineId = randomUUID();
-    const runtimeInstanceId = `cloud-machine-${cloudMachineId}`;
+    const runtimeInstanceId = `${CLOUD_MACHINE_RUNTIME_PREFIX}${cloudMachineId}`;
     const bridgeUrl = TRACE_SERVER_PUBLIC_URL.replace(/^http/, "ws") + "/bridge";
 
     // Build env vars for the VM

@@ -20,6 +20,36 @@ import {
 } from "./dataloader.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
+const BRIDGE_AUTH_TOKEN_TTL_SECONDS = 5 * 60;
+
+type SessionTokenPayload = {
+  userId: string;
+  tokenType?: "session";
+};
+
+type BridgeAuthTokenPayload = {
+  userId: string;
+  organizationId: string;
+  instanceId: string;
+  tokenType: "bridge_auth";
+};
+
+function parseSessionToken(token: string): SessionTokenPayload | null {
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as SessionTokenPayload | BridgeAuthTokenPayload;
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      typeof payload.userId !== "string" ||
+      payload.tokenType === "bridge_auth"
+    ) {
+      return null;
+    }
+    return payload;
+  } catch {
+    return null;
+  }
+}
 
 export function parseCookieToken(cookieHeader?: string): string | undefined {
   if (!cookieHeader) return undefined;
@@ -29,9 +59,42 @@ export function parseCookieToken(cookieHeader?: string): string | undefined {
 
 /** Verify a JWT and return the userId, or null if invalid. */
 export function verifyToken(token: string): string | null {
+  return parseSessionToken(token)?.userId ?? null;
+}
+
+export function createBridgeAuthToken(input: {
+  userId: string;
+  organizationId: string;
+  instanceId: string;
+}): { token: string; expiresAt: Date } {
+  const expiresAt = new Date(Date.now() + BRIDGE_AUTH_TOKEN_TTL_SECONDS * 1000);
+  const token = jwt.sign(
+    {
+      userId: input.userId,
+      organizationId: input.organizationId,
+      instanceId: input.instanceId,
+      tokenType: "bridge_auth",
+    } satisfies BridgeAuthTokenPayload,
+    JWT_SECRET,
+    { expiresIn: BRIDGE_AUTH_TOKEN_TTL_SECONDS },
+  );
+  return { token, expiresAt };
+}
+
+export function verifyBridgeAuthToken(token: string): BridgeAuthTokenPayload | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as { userId: string };
-    return payload.userId;
+    const payload = jwt.verify(token, JWT_SECRET) as BridgeAuthTokenPayload;
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      payload.tokenType !== "bridge_auth" ||
+      typeof payload.userId !== "string" ||
+      typeof payload.organizationId !== "string" ||
+      typeof payload.instanceId !== "string"
+    ) {
+      return null;
+    }
+    return payload;
   } catch {
     return null;
   }
@@ -71,12 +134,11 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
   // Accept token from Authorization header, cookie, or x-user-id fallback
   const token = getRequestToken(req);
   if (token) {
-    try {
-      const payload = jwt.verify(token, JWT_SECRET) as { userId: string };
-      userId = payload.userId;
-    } catch {
+    const payload = parseSessionToken(token);
+    if (!payload) {
       throw new AuthenticationError("Invalid token");
     }
+    userId = payload.userId;
   } else {
     const rawUserId = req.headers["x-user-id"];
     userId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
@@ -146,13 +208,11 @@ export async function buildWsContext(connectionParams?: Record<string, unknown>,
 
   if (!token) throw new AuthenticationError("Missing auth token for WebSocket");
 
-  let userId: string;
-  try {
-    const payload = jwt.verify(token, JWT_SECRET) as { userId: string };
-    userId = payload.userId;
-  } catch {
+  const payload = parseSessionToken(token);
+  if (!payload) {
     throw new AuthenticationError("Invalid token");
   }
+  const userId = payload.userId;
 
   const user = await prisma.user.findUnique({
     where: { id: userId },

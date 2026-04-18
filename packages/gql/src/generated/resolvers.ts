@@ -228,6 +228,73 @@ export type BranchDiffFile = {
   status: Scalars['String']['output'];
 };
 
+export type BridgeAccessGrant = {
+  __typename?: 'BridgeAccessGrant';
+  createdAt: Scalars['DateTime']['output'];
+  expiresAt?: Maybe<Scalars['DateTime']['output']>;
+  grantedByUser: User;
+  granteeUser: User;
+  id: Scalars['ID']['output'];
+  revokedAt?: Maybe<Scalars['DateTime']['output']>;
+  scopeType: BridgeAccessScopeType;
+  sessionGroup?: Maybe<SessionGroup>;
+};
+
+export type BridgeAccessRequest = {
+  __typename?: 'BridgeAccessRequest';
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  ownerUser: User;
+  requestedExpiresAt?: Maybe<Scalars['DateTime']['output']>;
+  requesterUser: User;
+  resolvedAt?: Maybe<Scalars['DateTime']['output']>;
+  resolvedByUser?: Maybe<User>;
+  scopeType: BridgeAccessScopeType;
+  sessionGroup?: Maybe<SessionGroup>;
+  status: BridgeAccessRequestStatus;
+};
+
+export type BridgeAccessRequestStatus =
+  | 'approved'
+  | 'denied'
+  | 'pending';
+
+export type BridgeAccessScopeType =
+  | 'all_sessions'
+  | 'session_group';
+
+export type BridgeRuntime = {
+  __typename?: 'BridgeRuntime';
+  accessGrants: Array<BridgeAccessGrant>;
+  accessRequests: Array<BridgeAccessRequest>;
+  connected: Scalars['Boolean']['output'];
+  connectedAt?: Maybe<Scalars['DateTime']['output']>;
+  disconnectedAt?: Maybe<Scalars['DateTime']['output']>;
+  hostingMode: HostingMode;
+  id: Scalars['ID']['output'];
+  instanceId: Scalars['ID']['output'];
+  label: Scalars['String']['output'];
+  lastSeenAt: Scalars['DateTime']['output'];
+  metadata?: Maybe<Scalars['JSON']['output']>;
+  ownerUser: User;
+};
+
+export type BridgeRuntimeAccess = {
+  __typename?: 'BridgeRuntimeAccess';
+  allowed: Scalars['Boolean']['output'];
+  bridgeRuntimeId?: Maybe<Scalars['ID']['output']>;
+  connected: Scalars['Boolean']['output'];
+  expiresAt?: Maybe<Scalars['DateTime']['output']>;
+  hostingMode?: Maybe<HostingMode>;
+  isOwner: Scalars['Boolean']['output'];
+  label?: Maybe<Scalars['String']['output']>;
+  ownerUser?: Maybe<User>;
+  pendingRequest?: Maybe<BridgeAccessRequest>;
+  runtimeInstanceId: Scalars['ID']['output'];
+  scopeType?: Maybe<BridgeAccessScopeType>;
+  sessionGroupId?: Maybe<Scalars['ID']['output']>;
+};
+
 export type Channel = {
   __typename?: 'Channel';
   aiMode?: Maybe<AutonomyMode>;
@@ -389,6 +456,9 @@ export type Event = {
 };
 
 export type EventType =
+  | 'bridge_access_request_resolved'
+  | 'bridge_access_requested'
+  | 'bridge_access_revoked'
   | 'channel_created'
   | 'channel_deleted'
   | 'channel_group_created'
@@ -571,6 +641,7 @@ export type Mutation = {
   acceptAgentSuggestion: InboxItem;
   addChatMember: Chat;
   addOrgMember: OrgMember;
+  approveBridgeAccessRequest: BridgeAccessGrant;
   archiveSessionGroup: SessionGroup;
   assignTicket: Ticket;
   clearQueuedMessages: Scalars['Boolean']['output'];
@@ -590,6 +661,7 @@ export type Mutation = {
   deleteChatMessage: Message;
   deleteSession: Session;
   deleteSessionGroup: Scalars['Boolean']['output'];
+  denyBridgeAccessRequest: BridgeAccessRequest;
   destroyTerminal: Scalars['Boolean']['output'];
   dismissAgentSuggestion: InboxItem;
   dismissInboxItem: InboxItem;
@@ -613,9 +685,11 @@ export type Mutation = {
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
+  requestBridgeAccess: BridgeAccessRequest;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
+  revokeBridgeAccessGrant: BridgeAccessGrant;
   runSession: Session;
   sendChannelMessage: Message;
   sendChatMessage: Message;
@@ -660,6 +734,14 @@ export type MutationAddOrgMemberArgs = {
   organizationId: Scalars['ID']['input'];
   role?: InputMaybe<UserRole>;
   userId: Scalars['ID']['input'];
+};
+
+
+export type MutationApproveBridgeAccessRequestArgs = {
+  expiresAt?: InputMaybe<Scalars['DateTime']['input']>;
+  requestId: Scalars['ID']['input'];
+  scopeType?: InputMaybe<BridgeAccessScopeType>;
+  sessionGroupId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 
@@ -760,6 +842,11 @@ export type MutationDeleteSessionArgs = {
 
 export type MutationDeleteSessionGroupArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationDenyBridgeAccessRequestArgs = {
+  requestId: Scalars['ID']['input'];
 };
 
 
@@ -892,6 +979,14 @@ export type MutationReorderChannelsArgs = {
 };
 
 
+export type MutationRequestBridgeAccessArgs = {
+  requestedExpiresAt?: InputMaybe<Scalars['DateTime']['input']>;
+  runtimeInstanceId: Scalars['ID']['input'];
+  scopeType: BridgeAccessScopeType;
+  sessionGroupId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+
 export type MutationRestoreLinkedCheckoutArgs = {
   repoId: Scalars['ID']['input'];
   sessionGroupId: Scalars['ID']['input'];
@@ -905,6 +1000,11 @@ export type MutationRetrySessionConnectionArgs = {
 
 export type MutationRetrySessionGroupSetupArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationRevokeBridgeAccessGrantArgs = {
+  grantId: Scalars['ID']['input'];
 };
 
 
@@ -1158,6 +1258,7 @@ export type Query = {
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   branch?: Maybe<Branch>;
+  bridgeRuntimeAccess: BridgeRuntimeAccess;
   channel?: Maybe<Channel>;
   channelGroups: Array<ChannelGroup>;
   channelMessages: Array<Message>;
@@ -1169,6 +1270,7 @@ export type Query = {
   inboxItems: Array<InboxItem>;
   linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
+  myBridgeRuntimes: Array<BridgeRuntime>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
   organization?: Maybe<Organization>;
@@ -1243,6 +1345,7 @@ export type QueryAiConversationsArgs = {
 
 
 export type QueryAvailableRuntimesArgs = {
+  sessionGroupId?: InputMaybe<Scalars['ID']['input']>;
   tool: CodingTool;
 };
 
@@ -1254,6 +1357,12 @@ export type QueryAvailableSessionRuntimesArgs = {
 
 export type QueryBranchArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryBridgeRuntimeAccessArgs = {
+  runtimeInstanceId: Scalars['ID']['input'];
+  sessionGroupId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 
@@ -1354,6 +1463,7 @@ export type QueryRepoArgs = {
 export type QueryRepoBranchesArgs = {
   repoId: Scalars['ID']['input'];
   runtimeInstanceId?: InputMaybe<Scalars['ID']['input']>;
+  sessionGroupId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 
@@ -1951,6 +2061,12 @@ export type ResolversTypes = ResolversObject<{
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
   Branch: ResolverTypeWrapper<Branch>;
   BranchDiffFile: ResolverTypeWrapper<BranchDiffFile>;
+  BridgeAccessGrant: ResolverTypeWrapper<BridgeAccessGrant>;
+  BridgeAccessRequest: ResolverTypeWrapper<BridgeAccessRequest>;
+  BridgeAccessRequestStatus: BridgeAccessRequestStatus;
+  BridgeAccessScopeType: BridgeAccessScopeType;
+  BridgeRuntime: ResolverTypeWrapper<BridgeRuntime>;
+  BridgeRuntimeAccess: ResolverTypeWrapper<BridgeRuntimeAccess>;
   Channel: ResolverTypeWrapper<Channel>;
   ChannelGroup: ResolverTypeWrapper<ChannelGroup>;
   ChannelMember: ResolverTypeWrapper<ChannelMember>;
@@ -2059,6 +2175,10 @@ export type ResolversParentTypes = ResolversObject<{
   Boolean: Scalars['Boolean']['output'];
   Branch: Branch;
   BranchDiffFile: BranchDiffFile;
+  BridgeAccessGrant: BridgeAccessGrant;
+  BridgeAccessRequest: BridgeAccessRequest;
+  BridgeRuntime: BridgeRuntime;
+  BridgeRuntimeAccess: BridgeRuntimeAccess;
   Channel: Channel;
   ChannelGroup: ChannelGroup;
   ChannelMember: ChannelMember;
@@ -2295,6 +2415,64 @@ export type BranchDiffFileResolvers<ContextType = Context, ParentType extends Re
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type BridgeAccessGrantResolvers<ContextType = Context, ParentType extends ResolversParentTypes['BridgeAccessGrant'] = ResolversParentTypes['BridgeAccessGrant']> = ResolversObject<{
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  expiresAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
+  grantedByUser?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
+  granteeUser?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  revokedAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
+  scopeType?: Resolver<ResolversTypes['BridgeAccessScopeType'], ParentType, ContextType>;
+  sessionGroup?: Resolver<Maybe<ResolversTypes['SessionGroup']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type BridgeAccessRequestResolvers<ContextType = Context, ParentType extends ResolversParentTypes['BridgeAccessRequest'] = ResolversParentTypes['BridgeAccessRequest']> = ResolversObject<{
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  ownerUser?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
+  requestedExpiresAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
+  requesterUser?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
+  resolvedAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
+  resolvedByUser?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType>;
+  scopeType?: Resolver<ResolversTypes['BridgeAccessScopeType'], ParentType, ContextType>;
+  sessionGroup?: Resolver<Maybe<ResolversTypes['SessionGroup']>, ParentType, ContextType>;
+  status?: Resolver<ResolversTypes['BridgeAccessRequestStatus'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type BridgeRuntimeResolvers<ContextType = Context, ParentType extends ResolversParentTypes['BridgeRuntime'] = ResolversParentTypes['BridgeRuntime']> = ResolversObject<{
+  accessGrants?: Resolver<Array<ResolversTypes['BridgeAccessGrant']>, ParentType, ContextType>;
+  accessRequests?: Resolver<Array<ResolversTypes['BridgeAccessRequest']>, ParentType, ContextType>;
+  connected?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  connectedAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
+  disconnectedAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
+  hostingMode?: Resolver<ResolversTypes['HostingMode'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  instanceId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  label?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  lastSeenAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  metadata?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
+  ownerUser?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type BridgeRuntimeAccessResolvers<ContextType = Context, ParentType extends ResolversParentTypes['BridgeRuntimeAccess'] = ResolversParentTypes['BridgeRuntimeAccess']> = ResolversObject<{
+  allowed?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  bridgeRuntimeId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
+  connected?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  expiresAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
+  hostingMode?: Resolver<Maybe<ResolversTypes['HostingMode']>, ParentType, ContextType>;
+  isOwner?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  label?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  ownerUser?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType>;
+  pendingRequest?: Resolver<Maybe<ResolversTypes['BridgeAccessRequest']>, ParentType, ContextType>;
+  runtimeInstanceId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  scopeType?: Resolver<Maybe<ResolversTypes['BridgeAccessScopeType']>, ParentType, ContextType>;
+  sessionGroupId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type ChannelResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Channel'] = ResolversParentTypes['Channel']> = ResolversObject<{
   aiMode?: Resolver<Maybe<ResolversTypes['AutonomyMode']>, ParentType, ContextType>;
   baseBranch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
@@ -2454,6 +2632,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   acceptAgentSuggestion?: Resolver<ResolversTypes['InboxItem'], ParentType, ContextType, RequireFields<MutationAcceptAgentSuggestionArgs, 'inboxItemId'>>;
   addChatMember?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationAddChatMemberArgs, 'input'>>;
   addOrgMember?: Resolver<ResolversTypes['OrgMember'], ParentType, ContextType, RequireFields<MutationAddOrgMemberArgs, 'organizationId' | 'userId'>>;
+  approveBridgeAccessRequest?: Resolver<ResolversTypes['BridgeAccessGrant'], ParentType, ContextType, RequireFields<MutationApproveBridgeAccessRequestArgs, 'requestId'>>;
   archiveSessionGroup?: Resolver<ResolversTypes['SessionGroup'], ParentType, ContextType, RequireFields<MutationArchiveSessionGroupArgs, 'id'>>;
   assignTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationAssignTicketArgs, 'ticketId' | 'userId'>>;
   clearQueuedMessages?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationClearQueuedMessagesArgs, 'sessionId'>>;
@@ -2473,6 +2652,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   deleteChatMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationDeleteChatMessageArgs, 'messageId'>>;
   deleteSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationDeleteSessionArgs, 'id'>>;
   deleteSessionGroup?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteSessionGroupArgs, 'id'>>;
+  denyBridgeAccessRequest?: Resolver<ResolversTypes['BridgeAccessRequest'], ParentType, ContextType, RequireFields<MutationDenyBridgeAccessRequestArgs, 'requestId'>>;
   destroyTerminal?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDestroyTerminalArgs, 'terminalId'>>;
   dismissAgentSuggestion?: Resolver<ResolversTypes['InboxItem'], ParentType, ContextType, RequireFields<MutationDismissAgentSuggestionArgs, 'inboxItemId'>>;
   dismissInboxItem?: Resolver<ResolversTypes['InboxItem'], ParentType, ContextType, RequireFields<MutationDismissInboxItemArgs, 'id'>>;
@@ -2496,9 +2676,11 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   renameChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationRenameChatArgs, 'chatId' | 'name'>>;
   reorderChannelGroups?: Resolver<Array<ResolversTypes['ChannelGroup']>, ParentType, ContextType, RequireFields<MutationReorderChannelGroupsArgs, 'input'>>;
   reorderChannels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<MutationReorderChannelsArgs, 'input'>>;
+  requestBridgeAccess?: Resolver<ResolversTypes['BridgeAccessRequest'], ParentType, ContextType, RequireFields<MutationRequestBridgeAccessArgs, 'runtimeInstanceId' | 'scopeType'>>;
   restoreLinkedCheckout?: Resolver<ResolversTypes['LinkedCheckoutActionResult'], ParentType, ContextType, RequireFields<MutationRestoreLinkedCheckoutArgs, 'repoId' | 'sessionGroupId'>>;
   retrySessionConnection?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRetrySessionConnectionArgs, 'sessionId'>>;
   retrySessionGroupSetup?: Resolver<ResolversTypes['SessionGroup'], ParentType, ContextType, RequireFields<MutationRetrySessionGroupSetupArgs, 'id'>>;
+  revokeBridgeAccessGrant?: Resolver<ResolversTypes['BridgeAccessGrant'], ParentType, ContextType, RequireFields<MutationRevokeBridgeAccessGrantArgs, 'grantId'>>;
   runSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRunSessionArgs, 'id'>>;
   sendChannelMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationSendChannelMessageArgs, 'channelId'>>;
   sendChatMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationSendChatMessageArgs, 'chatId'>>;
@@ -2594,6 +2776,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   availableRuntimes?: Resolver<Array<ResolversTypes['SessionRuntimeInstance']>, ParentType, ContextType, RequireFields<QueryAvailableRuntimesArgs, 'tool'>>;
   availableSessionRuntimes?: Resolver<Array<ResolversTypes['SessionRuntimeInstance']>, ParentType, ContextType, RequireFields<QueryAvailableSessionRuntimesArgs, 'sessionId'>>;
   branch?: Resolver<Maybe<ResolversTypes['Branch']>, ParentType, ContextType, RequireFields<QueryBranchArgs, 'id'>>;
+  bridgeRuntimeAccess?: Resolver<ResolversTypes['BridgeRuntimeAccess'], ParentType, ContextType, RequireFields<QueryBridgeRuntimeAccessArgs, 'runtimeInstanceId'>>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelArgs, 'id'>>;
   channelGroups?: Resolver<Array<ResolversTypes['ChannelGroup']>, ParentType, ContextType, RequireFields<QueryChannelGroupsArgs, 'organizationId'>>;
   channelMessages?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType, RequireFields<QueryChannelMessagesArgs, 'channelId'>>;
@@ -2605,6 +2788,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   inboxItems?: Resolver<Array<ResolversTypes['InboxItem']>, ParentType, ContextType, RequireFields<QueryInboxItemsArgs, 'organizationId'>>;
   linkedCheckoutStatus?: Resolver<ResolversTypes['LinkedCheckoutStatus'], ParentType, ContextType, RequireFields<QueryLinkedCheckoutStatusArgs, 'repoId' | 'sessionGroupId'>>;
   myApiTokens?: Resolver<Array<ResolversTypes['ApiTokenStatus']>, ParentType, ContextType>;
+  myBridgeRuntimes?: Resolver<Array<ResolversTypes['BridgeRuntime']>, ParentType, ContextType>;
   myOrganizations?: Resolver<Array<ResolversTypes['OrgMember']>, ParentType, ContextType>;
   mySessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QueryMySessionsArgs, 'organizationId'>>;
   organization?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<QueryOrganizationArgs, 'id'>>;
@@ -2844,6 +3028,10 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   ApiTokenStatus?: ApiTokenStatusResolvers<ContextType>;
   Branch?: BranchResolvers<ContextType>;
   BranchDiffFile?: BranchDiffFileResolvers<ContextType>;
+  BridgeAccessGrant?: BridgeAccessGrantResolvers<ContextType>;
+  BridgeAccessRequest?: BridgeAccessRequestResolvers<ContextType>;
+  BridgeRuntime?: BridgeRuntimeResolvers<ContextType>;
+  BridgeRuntimeAccess?: BridgeRuntimeAccessResolvers<ContextType>;
   Channel?: ChannelResolvers<ContextType>;
   ChannelGroup?: ChannelGroupResolvers<ContextType>;
   ChannelMember?: ChannelMemberResolvers<ContextType>;

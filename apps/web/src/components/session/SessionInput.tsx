@@ -23,11 +23,26 @@ import { createQuickSession } from "../../lib/create-quick-session";
 import { useUIStore } from "../../stores/ui";
 import { ImageAttachmentBar, type ImageAttachment } from "./ImageAttachmentBar";
 import { uploadImage } from "../../lib/upload";
+import { generateUUID } from "../../lib/uuid";
 import { useAuthStore } from "../../stores/auth";
+import { BridgeAccessNotice } from "./BridgeAccessNotice";
+import type { BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
 const MAX_IMAGES = 5;
 
-export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop: () => void }) {
+export function SessionInput({
+  sessionId,
+  onStop,
+  bridgeAccess,
+  sessionGroupId,
+  onAccessRequested,
+}: {
+  sessionId: string;
+  onStop: () => void;
+  bridgeAccess: BridgeRuntimeAccessInfo | null;
+  sessionGroupId?: string | null;
+  onAccessRequested?: () => void | Promise<void>;
+}) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
@@ -57,8 +72,14 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   const isNotStarted = agentStatus === "not_started";
   const disconnected = isDisconnected(connection);
   const canQueue = canQueueMessage(agentStatus, worktreeDeleted);
+  const bridgeInteractionAllowed =
+    !bridgeAccess || bridgeAccess.hostingMode !== "local" || bridgeAccess.allowed;
   const canSend =
-    !isOptimistic && (isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted) || canQueue);
+    bridgeInteractionAllowed &&
+    !isOptimistic &&
+    (isNotStarted ||
+      canSendMessage(agentStatus, connection, worktreeDeleted) ||
+      canQueue);
   const displayModel = model ? getModelLabel(model) : "Claude Code";
 
   const _lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as string | undefined;
@@ -78,7 +99,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     const remaining = MAX_IMAGES - images.length;
     if (remaining <= 0) return;
     const newImages: ImageAttachment[] = files.slice(0, remaining).map((file) => ({
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       file,
       previewUrl: URL.createObjectURL(file),
       s3Key: null,
@@ -109,92 +130,101 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
 
     isSendingRef.current = true;
     setIsSending(true);
-    const savedImages = [...images];
-    const imagePreviewUrls = savedImages.map((img) => img.previewUrl);
-    const wrappedText = !text ? "" : text.startsWith("/") ? text : wrapPrompt(mode, text);
+    try {
+      const savedImages = [...images];
+      const imagePreviewUrls = savedImages.map((img) => img.previewUrl);
+      const wrappedText = !text ? "" : text.startsWith("/") ? text : wrapPrompt(mode, text);
 
-    if (canQueue) {
+      if (canQueue) {
+        try {
+          const result = await client
+            .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
+              sessionId,
+              text: wrappedText,
+              interactionMode: mode === "code" ? undefined : mode,
+            })
+            .toPromise();
+
+          if (result.error) {
+            throw result.error;
+          }
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Failed to queue message");
+          throw error;
+        }
+        return;
+      }
+
+      let imageKeys: string[] = [];
+      if (savedImages.length > 0) {
+        const savedIds = new Set(savedImages.map((img) => img.id));
+        setImages((prev) => prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: true } : img)));
+        const orgId = useAuthStore.getState().activeOrgId;
+        try {
+          imageKeys = await Promise.all(
+            savedImages.map((img) => uploadImage(img.file, orgId ?? undefined)),
+          );
+        } catch (error) {
+          setImages((prev) => prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: false } : img)));
+          toast.error(error instanceof Error ? error.message : "Failed to upload image");
+          throw error;
+        }
+      }
+
+      const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
+        sessionId,
+        wrappedText,
+        imageKeys.length > 0 ? { imageKeys, imagePreviewUrls } : undefined,
+      );
+
+      const savedIds = new Set(savedImages.map((img) => img.id));
+      setImages((prev) => prev.filter((img) => !savedIds.has(img.id)));
+
       try {
         const result = await client
-          .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
+          .mutation(SEND_SESSION_MESSAGE_MUTATION, {
             sessionId,
             text: wrappedText,
+            imageKeys: imageKeys.length > 0 ? imageKeys : undefined,
             interactionMode: mode === "code" ? undefined : mode,
+            clientMutationId,
           })
           .toPromise();
 
         if (result.error) {
           throw result.error;
         }
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to queue message");
-        throw error;
-      } finally {
-        isSendingRef.current = false;
-        setIsSending(false);
-      }
-      return;
-    }
 
-    let imageKeys: string[] = [];
-    if (savedImages.length > 0) {
-      const savedIds = new Set(savedImages.map((img) => img.id));
-      setImages((prev) => prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: true } : img)));
-      const orgId = useAuthStore.getState().activeOrgId;
-      try {
-        imageKeys = await Promise.all(
-          savedImages.map((img) => uploadImage(img.file, orgId ?? undefined)),
-        );
+        const realEventId = result.data?.sendSessionMessage?.id;
+        if (!realEventId) {
+          throw new Error("Failed to send message");
+        }
+
+        reconcileOptimisticSessionMessage(sessionId, tempEventId, realEventId);
+        for (const img of savedImages) URL.revokeObjectURL(img.previewUrl);
       } catch (error) {
-        setImages((prev) => prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: false } : img)));
-        toast.error(error instanceof Error ? error.message : "Failed to upload image");
-        isSendingRef.current = false;
-        setIsSending(false);
+        removeOptimisticSessionMessage(sessionId, tempEventId);
+        setImages((prev) => [...savedImages.map((img) => ({ ...img, uploading: false })), ...prev]);
+        toast.error(error instanceof Error ? error.message : "Failed to send message");
         throw error;
       }
-    }
-
-    const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
-      sessionId,
-      wrappedText,
-      imageKeys.length > 0 ? { imageKeys, imagePreviewUrls } : undefined,
-    );
-
-    const savedIds = new Set(savedImages.map((img) => img.id));
-    setImages((prev) => prev.filter((img) => !savedIds.has(img.id)));
-
-    try {
-      const result = await client
-        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-          sessionId,
-          text: wrappedText,
-          imageKeys: imageKeys.length > 0 ? imageKeys : undefined,
-          interactionMode: mode === "code" ? undefined : mode,
-          clientMutationId,
-        })
-        .toPromise();
-
-      if (result.error) {
-        throw result.error;
-      }
-
-      const realEventId = result.data?.sendSessionMessage?.id;
-      if (!realEventId) {
-        throw new Error("Failed to send message");
-      }
-
-      reconcileOptimisticSessionMessage(sessionId, tempEventId, realEventId);
-      for (const img of savedImages) URL.revokeObjectURL(img.previewUrl);
-    } catch (error) {
-      removeOptimisticSessionMessage(sessionId, tempEventId);
-      setImages((prev) => [...savedImages.map((img) => ({ ...img, uploading: false })), ...prev]);
-      toast.error(error instanceof Error ? error.message : "Failed to send message");
-      throw error;
     } finally {
       isSendingRef.current = false;
       setIsSending(false);
     }
   }, [sessionId, mode, canSend, canQueue, images]);
+
+  if (!bridgeInteractionAllowed) {
+    return (
+      <div className="border-t px-4 py-3">
+        <BridgeAccessNotice
+          access={bridgeAccess}
+          sessionGroupId={sessionGroupId ?? null}
+          onRequested={onAccessRequested}
+        />
+      </div>
+    );
+  }
 
   // Show recovery panel when disconnected — but not for not_started sessions
   if (disconnected && !isNotStarted) {

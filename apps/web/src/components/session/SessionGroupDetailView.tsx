@@ -6,7 +6,6 @@ import type { Terminal } from "@trace/gql";
 import { useDetailPanelStore } from "../../stores/detail-panel";
 import { useEntityField, useEntityStore } from "../../stores/entity";
 import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
-import { useAuthStore } from "../../stores/auth";
 import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
 import { useUIStore } from "../../stores/ui";
 import { getSessionChannelId, getSessionGroupChannelId } from "../../lib/session-group";
@@ -18,11 +17,13 @@ import { CheckpointOpenContext } from "./CheckpointOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
 import { SidebarPanel } from "./SidebarPanel";
 import type { SidebarTab } from "./SidebarPanel";
+import { useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useSessionGroupSessions } from "./useSessionGroupSessions";
 import { useTerminalActions } from "./useTerminalActions";
 import { useFileActions } from "./useFileActions";
 import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
-import { getLinkedCheckoutGroupAccess } from "../../lib/linked-checkout-access";
+import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
+import { toast } from "sonner";
 
 const SESSION_GROUP_DETAIL_QUERY = gql`
   query SessionGroupDetail($id: ID!) {
@@ -174,7 +175,6 @@ export function SessionGroupDetailView({
     (s: { toggleFullscreen: () => void }) => s.toggleFullscreen,
   );
   const isFullscreen = useDetailPanelStore((s: { isFullscreen: boolean }) => s.isFullscreen);
-  const currentUserId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
   const upsert = useEntityStore(
     (s: { upsert: ReturnType<typeof useEntityStore.getState>["upsert"] }) => s.upsert,
   );
@@ -317,18 +317,26 @@ export function SessionGroupDetailView({
   const linkedCheckoutRepoId =
     groupRepo?.id ?? (selectedSession?.repo as { id: string } | null | undefined)?.id ?? null;
   const linkedCheckoutBranch = groupBranch ?? selectedSession?.branch ?? null;
-  const linkedCheckoutAccess = getLinkedCheckoutGroupAccess(sessionGroupId, currentUserId ?? null);
-  const linkedCheckoutAllowed = linkedCheckoutAccess.allowed;
+  const groupRuntimeInstanceId =
+    getLinkedCheckoutRuntimeInstanceId(groupConnection) ??
+    getLinkedCheckoutRuntimeInstanceId(selectedSession?.connection) ??
+    null;
+  const { access: bridgeAccess, refresh: refreshBridgeAccess } = useBridgeRuntimeAccess(
+    groupRuntimeInstanceId,
+    sessionGroupId,
+  );
+  const bridgeInteractionAllowed =
+    !bridgeAccess || bridgeAccess.hostingMode !== "local" || bridgeAccess.allowed;
+  const linkedCheckoutAllowed =
+    bridgeInteractionAllowed &&
+    !!groupRuntimeInstanceId &&
+    (!groupConnection || groupConnection.state !== "disconnected");
 
   const terminalAllowed = (() => {
     if (!selectedSession) return false;
-    const hosting = selectedSession.hosting;
-    const createdBy = selectedSession.createdBy as { id: string } | undefined;
-    const isCloud = hosting === "cloud";
-    const isLocalOwner = hosting === "local" && createdBy?.id === currentUserId;
     const isConnected = !groupConnection || groupConnection.state !== "disconnected";
     return (
-      (isCloud || isLocalOwner) &&
+      bridgeInteractionAllowed &&
       isConnected &&
       !isTerminalStatus(selectedSession.agentStatus, selectedSession.sessionStatus) &&
       !groupWorktreeDeleted
@@ -367,7 +375,7 @@ export function SessionGroupDetailView({
   }, []);
 
   const handleNewChat = useCallback(async () => {
-    if (!selectedSession || selectedSession._optimistic) return;
+    if (!selectedSession || selectedSession._optimistic || !bridgeInteractionAllowed) return;
     const resolvedChannelId =
       getSessionGroupChannelId(
         useEntityStore.getState().sessionGroups[sessionGroupId] ?? null,
@@ -387,24 +395,33 @@ export function SessionGroupDetailView({
       })
       .toPromise();
 
-    const newSessionId = result.data?.startSession?.id;
-    if (newSessionId) {
-      optimisticallyInsertSession({
-        id: newSessionId,
-        sessionGroupId,
-        tool: selectedSession.tool,
-        model: selectedSession.model,
-        hosting: selectedSession.hosting,
-        channel: resolvedChannelId ? { id: resolvedChannelId } : null,
-        repo: groupRepo ?? (selectedSession.repo as { id: string } | null | undefined),
-        branch: groupBranch ?? selectedSession.branch,
-      });
-      openSessionTab(sessionGroupId, newSessionId);
-      setActiveSessionId(newSessionId);
+    if (result.error) {
+      toast.error("Failed to create session", { description: result.error.message });
+      return;
     }
+
+    const newSessionId = result.data?.startSession?.id;
+    if (!newSessionId) {
+      toast.error("Failed to create session");
+      return;
+    }
+
+    optimisticallyInsertSession({
+      id: newSessionId,
+      sessionGroupId,
+      tool: selectedSession.tool,
+      model: selectedSession.model,
+      hosting: selectedSession.hosting,
+      channel: resolvedChannelId ? { id: resolvedChannelId } : null,
+      repo: groupRepo ?? (selectedSession.repo as { id: string } | null | undefined),
+      branch: groupBranch ?? selectedSession.branch,
+    });
+    openSessionTab(sessionGroupId, newSessionId);
+    setActiveSessionId(newSessionId);
   }, [
     groupSessions,
     groupBranch,
+    bridgeInteractionAllowed,
     groupRepo,
     openSessionTab,
     selectedSession,
@@ -435,8 +452,9 @@ export function SessionGroupDetailView({
             sessionGroupId={sessionGroupId}
             repoId={linkedCheckoutRepoId}
             groupBranch={linkedCheckoutBranch}
-            linkedCheckoutRuntimeInstanceId={linkedCheckoutAccess.runtimeInstanceId}
+            linkedCheckoutRuntimeInstanceId={groupRuntimeInstanceId}
             canManageLinkedCheckout={linkedCheckoutAllowed}
+            canInteract={bridgeInteractionAllowed}
             selectedSessionStatus={selectedSessionStatus}
             selectedSessionId={selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)}
             groupPrUrl={groupPrUrl}
@@ -466,7 +484,9 @@ export function SessionGroupDetailView({
             onCloseFile={handleCloseFile}
             onNewChat={handleNewChat}
             onOpenTerminal={() => handleOpenTerminal(selectedSession ?? null, terminalAllowed)}
-            canNewChat={!!selectedSession && !selectedSessionIsOptimistic}
+            canNewChat={
+              !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
+            }
             canOpenTerminal={!selectedSessionIsOptimistic && terminalAllowed}
           />
 
@@ -494,6 +514,8 @@ export function SessionGroupDetailView({
                   onDiffFileClick={handleDiffFileClick}
                   highlightCheckpointId={highlightCheckpointId}
                   onCheckpointClick={handleCheckpointClick}
+                  bridgeAccess={bridgeAccess}
+                  onBridgeAccessRequested={refreshBridgeAccess}
                 />
               </div>
             )}

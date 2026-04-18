@@ -102,6 +102,10 @@ declare global {
     getRepoGitHookStatus: (repoId: string) => Promise<DesktopRepoGitHookStatus | null>;
     repairRepoGitHooks: (repoId: string) => Promise<DesktopRepoGitHookStatus | null>;
     getBridgeStatus: () => Promise<DesktopBridgeConnectionStatus>;
+    setBridgeAuthContext: (
+      token: string | null,
+      organizationId: string | null,
+    ) => Promise<boolean>;
     onBridgeStatus: (callback: (status: DesktopBridgeConnectionStatus) => void) => () => void;
   }
 

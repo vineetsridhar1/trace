@@ -10,11 +10,18 @@ interface BranchComboboxProps {
   repoId: string;
   /** Optional — if omitted, the server picks an available runtime for the repo. */
   runtimeInstanceId?: string;
+  sessionGroupId?: string;
   value: string;
   onChange: (branch: string) => void;
 }
 
-export function BranchCombobox({ repoId, runtimeInstanceId, value, onChange }: BranchComboboxProps) {
+export function BranchCombobox({
+  repoId,
+  runtimeInstanceId,
+  sessionGroupId,
+  value,
+  onChange,
+}: BranchComboboxProps) {
   const defaultBranch = useEntityField("repos", repoId, "defaultBranch");
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -30,7 +37,11 @@ export function BranchCombobox({ repoId, runtimeInstanceId, value, onChange }: B
     setLoading(true);
     setError(null);
     client
-      .query(REPO_BRANCHES_QUERY, { repoId, runtimeInstanceId: runtimeInstanceId ?? null })
+      .query(REPO_BRANCHES_QUERY, {
+        repoId,
+        runtimeInstanceId: runtimeInstanceId ?? null,
+        sessionGroupId: sessionGroupId ?? null,
+      })
       .toPromise()
       .then((result: { error?: unknown; data?: { repoBranches?: string[] } }) => {
         if (result.error) {
@@ -45,7 +56,7 @@ export function BranchCombobox({ repoId, runtimeInstanceId, value, onChange }: B
         setError("Could not load branches");
       })
       .finally(() => setLoading(false));
-  }, [open, runtimeInstanceId, repoId]);
+  }, [open, runtimeInstanceId, repoId, sessionGroupId]);
 
   const filtered = search
     ? branches.filter((b: string) => b.toLowerCase().includes(search.toLowerCase()))

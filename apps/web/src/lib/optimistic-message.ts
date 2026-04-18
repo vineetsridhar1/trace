@@ -3,6 +3,7 @@ import { asJsonObject } from "@trace/shared";
 import type { JsonObject } from "@trace/shared";
 import { useEntityStore, eventScopeKey, messageScopeKey } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
+import { generateUUID } from "./uuid";
 
 type EntityStoreState = {
   messages: Record<string, Message>;
@@ -129,7 +130,7 @@ function patchPending<T>(
 }
 
 function createClientMutationId(): string {
-  return `${OPTIMISTIC_PREFIX}${crypto.randomUUID()}`;
+  return `${OPTIMISTIC_PREFIX}${generateUUID()}`;
 }
 
 function getClientMutationId(event: Event): string | null {
@@ -199,7 +200,7 @@ export function optimisticallyInsertSessionMessage(
   const user = useAuthStore.getState().user;
   const now = new Date().toISOString();
   const clientMutationId = createClientMutationId();
-  const tempId = `${OPTIMISTIC_PREFIX}${crypto.randomUUID()}`;
+  const tempId = `${OPTIMISTIC_PREFIX}${generateUUID()}`;
   const scopeKey = eventScopeKey("session", sessionId);
 
   const event: Event = {
@@ -326,8 +327,8 @@ export function optimisticallyInsertChatMessage(
   const user = useAuthStore.getState().user;
   const now = new Date().toISOString();
   const clientMutationId = createClientMutationId();
-  const tempEventId = `${OPTIMISTIC_PREFIX}${crypto.randomUUID()}`;
-  const tempMessageId = `${OPTIMISTIC_PREFIX}${crypto.randomUUID()}`;
+  const tempEventId = `${OPTIMISTIC_PREFIX}${generateUUID()}`;
+  const tempMessageId = `${OPTIMISTIC_PREFIX}${generateUUID()}`;
   const scopeKey = eventScopeKey("chat", chatId);
 
   const actor = {

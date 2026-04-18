@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import { toast } from "sonner";
 import type { Event, EventType, ScopeType, AgentStatus } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
@@ -6,6 +7,11 @@ import { useAuthStore } from "../stores/auth";
 import { useUIStore, navigateToSession } from "../stores/ui";
 import { agentStatusLabel } from "../components/session/sessionStatus";
 import { showNativeNotification } from "./native";
+import { getBridgeAccessRequestToastId } from "../lib/bridge-access";
+import {
+  BridgeAccessRequestToast,
+  type BridgeAccessRequestToastData,
+} from "./BridgeAccessRequestToast";
 
 /** Notification handler for a specific event type. */
 type NotificationHandler = (event: Event) => void;
@@ -46,6 +52,68 @@ function notify(
       ? { label: "View", onClick: options.onClick }
       : undefined,
   });
+}
+
+function parseBridgeAccessRequestPayload(payload: unknown): BridgeAccessRequestToastData | null {
+  const data = asJsonObject(payload);
+  if (!data) return null;
+  if (typeof data.requestId !== "string") return null;
+  if (typeof data.ownerUserId !== "string") return null;
+  if (typeof data.runtimeInstanceId !== "string") return null;
+  if (typeof data.runtimeLabel !== "string") return null;
+  if (data.scopeType !== "all_sessions" && data.scopeType !== "session_group") return null;
+  if (data.status !== "pending" && data.status !== "approved" && data.status !== "denied") {
+    return null;
+  }
+
+  const requesterUser = asJsonObject(data.requesterUser);
+  if (!requesterUser || typeof requesterUser.id !== "string") return null;
+
+  const sessionGroup = data.sessionGroup ? asJsonObject(data.sessionGroup) : null;
+  const grant = data.grant ? asJsonObject(data.grant) : null;
+
+  return {
+    ownerUserId: data.ownerUserId,
+    requestId: data.requestId,
+    runtimeInstanceId: data.runtimeInstanceId,
+    runtimeLabel: data.runtimeLabel,
+    scopeType: data.scopeType,
+    requestedExpiresAt:
+      typeof data.requestedExpiresAt === "string" || data.requestedExpiresAt === null
+        ? (data.requestedExpiresAt ?? null)
+        : null,
+    createdAt: typeof data.createdAt === "string" ? data.createdAt : new Date().toISOString(),
+    status: data.status,
+    sessionGroup:
+      sessionGroup && typeof sessionGroup.id === "string"
+        ? {
+            id: sessionGroup.id,
+            name: typeof sessionGroup.name === "string" ? sessionGroup.name : null,
+          }
+        : null,
+    requesterUser: {
+      id: requesterUser.id,
+      name: typeof requesterUser.name === "string" ? requesterUser.name : null,
+      avatarUrl: typeof requesterUser.avatarUrl === "string" ? requesterUser.avatarUrl : null,
+    },
+    grant:
+      grant && typeof grant.id === "string" && typeof grant.scopeType === "string"
+        ? {
+            id: grant.id,
+            scopeType: grant.scopeType === "session_group" ? "session_group" : "all_sessions",
+            sessionGroupId:
+              typeof grant.sessionGroupId === "string" || grant.sessionGroupId === null
+                ? (grant.sessionGroupId ?? null)
+                : null,
+            expiresAt:
+              typeof grant.expiresAt === "string" || grant.expiresAt === null
+                ? (grant.expiresAt ?? null)
+                : null,
+            createdAt:
+              typeof grant.createdAt === "string" ? grant.createdAt : new Date().toISOString(),
+          }
+        : null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -122,6 +190,67 @@ function handleInboxItemCreated(event: Event): void {
       useUIStore.getState().setActivePage("inbox");
     },
   });
+}
+
+function handleBridgeAccessRequested(event: Event): void {
+  const currentUserId = useAuthStore.getState().user?.id;
+  if (!currentUserId) return;
+
+  const request = parseBridgeAccessRequestPayload(event.payload);
+  if (!request || request.ownerUserId !== currentUserId || request.status !== "pending") {
+    return;
+  }
+
+  const requesterName =
+    request.requesterUser.name?.trim() || event.actor.name || "A teammate";
+  const runtimeLabel = request.runtimeLabel.trim() || "your bridge";
+  const toastId = getBridgeAccessRequestToastId(request.requestId);
+
+  showNativeNotification(`${requesterName} requested bridge access`, {
+    body: `Review access for ${runtimeLabel}`,
+    tag: toastId,
+    onClick: () => {},
+  });
+
+  toast.custom(() => createElement(BridgeAccessRequestToast, { toastId, request }), {
+    id: toastId,
+    duration: Infinity,
+  });
+
+  useUIStore.getState().triggerRefresh();
+}
+
+function handleBridgeAccessResolved(event: Event): void {
+  const request = parseBridgeAccessRequestPayload(event.payload);
+  if (!request) return;
+  toast.dismiss(getBridgeAccessRequestToastId(request.requestId));
+
+  const currentUserId = useAuthStore.getState().user?.id;
+  if (currentUserId && request.requesterUser.id === currentUserId) {
+    useUIStore.getState().triggerRefresh();
+  }
+}
+
+function handleBridgeAccessRevoked(event: Event): void {
+  const currentUserId = useAuthStore.getState().user?.id;
+  if (!currentUserId) return;
+
+  const payload = asJsonObject(event.payload);
+  if (!payload) return;
+
+  const granteeUserId = typeof payload.granteeUserId === "string" ? payload.granteeUserId : null;
+  const ownerUserId = typeof payload.ownerUserId === "string" ? payload.ownerUserId : null;
+  const runtimeLabel =
+    typeof payload.runtimeLabel === "string" && payload.runtimeLabel.trim()
+      ? payload.runtimeLabel.trim()
+      : "the bridge";
+
+  if (granteeUserId === currentUserId) {
+    notify(`Your access to ${runtimeLabel} was revoked`);
+    useUIStore.getState().triggerRefresh();
+  } else if (ownerUserId === currentUserId) {
+    useUIStore.getState().triggerRefresh();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -237,6 +366,9 @@ for (const eventType of sessionStatusEventTypes) {
 }
 registerHandler("session_pr_opened", handlePrEvent);
 registerHandler("session_pr_closed", handlePrEvent);
+registerHandler("bridge_access_requested", handleBridgeAccessRequested);
+registerHandler("bridge_access_request_resolved", handleBridgeAccessResolved);
+registerHandler("bridge_access_revoked", handleBridgeAccessRevoked);
 registerHandler("inbox_item_created", handleInboxItemCreated);
 registerHandler("message_sent", handleMentionNotification);
 registerHandler("message_sent", handleDmMessage);

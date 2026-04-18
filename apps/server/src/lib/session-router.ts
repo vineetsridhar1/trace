@@ -61,6 +61,9 @@ export interface RuntimeInstance {
   label: string;
   ws: WebSocket;
   hostingMode: "cloud" | "local";
+  organizationId?: string;
+  ownerUserId?: string;
+  bridgeRuntimeId?: string;
   supportedTools: string[];
   /** Repo IDs this runtime has locally registered. Cloud runtimes use empty (supports all). */
   registeredRepoIds: string[];
@@ -360,6 +363,9 @@ export class SessionRouter {
     label: string;
     ws: WebSocket;
     hostingMode: "cloud" | "local";
+    organizationId?: string;
+    ownerUserId?: string;
+    bridgeRuntimeId?: string;
     supportedTools: string[];
     registeredRepoIds?: string[];
   }) {
@@ -375,6 +381,9 @@ export class SessionRouter {
     }
     this.runtimes.set(runtime.id, {
       ...runtime,
+      organizationId: runtime.organizationId ?? existing?.organizationId,
+      ownerUserId: runtime.ownerUserId ?? existing?.ownerUserId,
+      bridgeRuntimeId: runtime.bridgeRuntimeId ?? existing?.bridgeRuntimeId,
       registeredRepoIds: runtime.registeredRepoIds ?? existing?.registeredRepoIds ?? [],
       lastHeartbeat: Date.now(),
       boundSessions,
@@ -383,6 +392,8 @@ export class SessionRouter {
       runtimeId: runtime.id,
       label: runtime.label,
       hostingMode: runtime.hostingMode,
+      organizationId: runtime.organizationId ?? null,
+      ownerUserId: runtime.ownerUserId ?? null,
       supportedTools: runtime.supportedTools,
       registeredRepoIds: runtime.registeredRepoIds ?? [],
       totalRuntimes: this.runtimes.size,
@@ -669,6 +680,9 @@ export class SessionRouter {
       id: runtime.id,
       label: runtime.label,
       hostingMode: runtime.hostingMode,
+      organizationId: runtime.organizationId ?? null,
+      ownerUserId: runtime.ownerUserId ?? null,
+      bridgeRuntimeId: runtime.bridgeRuntimeId ?? null,
       supportedTools: runtime.supportedTools,
       registeredRepoIds: runtime.registeredRepoIds,
       readyState: runtime.ws.readyState,
