@@ -226,6 +226,11 @@ function handleBridgeAccessResolved(event: Event): void {
   const request = parseBridgeAccessRequestPayload(event.payload);
   if (!request) return;
   toast.dismiss(getBridgeAccessRequestToastId(request.requestId));
+
+  const currentUserId = useAuthStore.getState().user?.id;
+  if (currentUserId && request.requesterUser.id === currentUserId) {
+    useUIStore.getState().triggerRefresh();
+  }
 }
 
 // ---------------------------------------------------------------------------

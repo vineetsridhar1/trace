@@ -27,7 +27,20 @@ function canViewSystemEvent(
     return false;
   }
 
-  return (event.payload as { ownerUserId?: unknown }).ownerUserId === userId;
+  const payload = event.payload as {
+    ownerUserId?: unknown;
+    requesterUser?: { id?: unknown } | null;
+  };
+  if (payload.ownerUserId === userId) return true;
+  if (
+    event.eventType === "bridge_access_request_resolved" &&
+    payload.requesterUser &&
+    typeof payload.requesterUser === "object" &&
+    payload.requesterUser.id === userId
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export const eventQueries = {

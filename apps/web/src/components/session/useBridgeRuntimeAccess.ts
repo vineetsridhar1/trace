@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { client } from "../../lib/urql";
 import { BRIDGE_RUNTIME_ACCESS_QUERY } from "../../lib/mutations";
+import { useUIStore } from "../../stores/ui";
 
 type BridgeUser = {
   id: string;
@@ -102,6 +103,12 @@ export function useBridgeRuntimeAccess(
     }
     void refresh();
   }, [refresh, runtimeInstanceId]);
+
+  const refreshTick = useUIStore((s: { refreshTick: number }) => s.refreshTick);
+  useEffect(() => {
+    if (!runtimeInstanceId) return;
+    void refresh();
+  }, [refreshTick, refresh, runtimeInstanceId]);
 
   const effectiveAccess =
     access && access.hostingMode !== null
