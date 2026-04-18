@@ -1183,7 +1183,6 @@ export type Query = {
   sessionGroupFileAtRef: Scalars['String']['output'];
   sessionGroupFileContent: Scalars['String']['output'];
   sessionGroupFiles: Array<Scalars['String']['output']>;
-  sessionGroupLatestCheckpoint?: Maybe<GitCheckpoint>;
   sessionGroups: Array<SessionGroup>;
   sessionSlashCommands: Array<SlashCommand>;
   sessionTerminals: Array<Terminal>;
@@ -1401,11 +1400,6 @@ export type QuerySessionGroupFileContentArgs = {
 
 
 export type QuerySessionGroupFilesArgs = {
-  sessionGroupId: Scalars['ID']['input'];
-};
-
-
-export type QuerySessionGroupLatestCheckpointArgs = {
   sessionGroupId: Scalars['ID']['input'];
 };
 

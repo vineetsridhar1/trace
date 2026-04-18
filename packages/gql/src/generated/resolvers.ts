@@ -1186,7 +1186,6 @@ export type Query = {
   sessionGroupFileAtRef: Scalars['String']['output'];
   sessionGroupFileContent: Scalars['String']['output'];
   sessionGroupFiles: Array<Scalars['String']['output']>;
-  sessionGroupLatestCheckpoint?: Maybe<GitCheckpoint>;
   sessionGroups: Array<SessionGroup>;
   sessionSlashCommands: Array<SlashCommand>;
   sessionTerminals: Array<Terminal>;
@@ -1404,11 +1403,6 @@ export type QuerySessionGroupFileContentArgs = {
 
 
 export type QuerySessionGroupFilesArgs = {
-  sessionGroupId: Scalars['ID']['input'];
-};
-
-
-export type QuerySessionGroupLatestCheckpointArgs = {
   sessionGroupId: Scalars['ID']['input'];
 };
 
@@ -2628,7 +2622,6 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   sessionGroupFileAtRef?: Resolver<ResolversTypes['String'], ParentType, ContextType, RequireFields<QuerySessionGroupFileAtRefArgs, 'filePath' | 'ref' | 'sessionGroupId'>>;
   sessionGroupFileContent?: Resolver<ResolversTypes['String'], ParentType, ContextType, RequireFields<QuerySessionGroupFileContentArgs, 'filePath' | 'sessionGroupId'>>;
   sessionGroupFiles?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType, RequireFields<QuerySessionGroupFilesArgs, 'sessionGroupId'>>;
-  sessionGroupLatestCheckpoint?: Resolver<Maybe<ResolversTypes['GitCheckpoint']>, ParentType, ContextType, RequireFields<QuerySessionGroupLatestCheckpointArgs, 'sessionGroupId'>>;
   sessionGroups?: Resolver<Array<ResolversTypes['SessionGroup']>, ParentType, ContextType, RequireFields<QuerySessionGroupsArgs, 'channelId'>>;
   sessionSlashCommands?: Resolver<Array<ResolversTypes['SlashCommand']>, ParentType, ContextType, RequireFields<QuerySessionSlashCommandsArgs, 'sessionId'>>;
   sessionTerminals?: Resolver<Array<ResolversTypes['Terminal']>, ParentType, ContextType, RequireFields<QuerySessionTerminalsArgs, 'sessionId'>>;

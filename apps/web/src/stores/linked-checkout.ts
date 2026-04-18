@@ -19,7 +19,6 @@ export interface LinkedCheckoutSyncRequest extends DesktopLinkedCheckoutSyncInpu
 }
 
 interface AutoSyncBlockState {
-  commitSha: string;
   retryAt: number;
 }
 
@@ -143,12 +142,7 @@ export const useLinkedCheckoutStore = create<LinkedCheckoutState>((set, get) => 
 
       const currentBlock = state.autoSyncBlockByKey[key];
       const shouldClearBlock =
-        !!currentBlock &&
-        (!status ||
-          !status.isAttached ||
-          !status.autoSyncEnabled ||
-          status.lastSyncedCommitSha === currentBlock.commitSha ||
-          status.currentCommitSha === currentBlock.commitSha);
+        !!currentBlock && (!status || !status.isAttached || !status.autoSyncEnabled);
 
       if (shouldClearBlock) {
         nextState.autoSyncBlockByKey = {
@@ -319,9 +313,8 @@ async function runSyncLoop(
       );
       useLinkedCheckoutStore.getState().setStatus(key, lastResult.status);
       if (!lastResult.ok) {
-        if (nextRequest.source === "auto" && nextRequest.commitSha) {
+        if (nextRequest.source === "auto") {
           useLinkedCheckoutStore.getState().setAutoSyncBlock(key, {
-            commitSha: nextRequest.commitSha,
             retryAt: Date.now() + AUTO_SYNC_FAILURE_COOLDOWN_MS,
           });
         }
@@ -345,9 +338,8 @@ async function runSyncLoop(
       status,
     };
     useLinkedCheckoutStore.getState().setStatus(key, status);
-    if (nextRequest?.source === "auto" && nextRequest.commitSha) {
+    if (nextRequest?.source === "auto") {
       useLinkedCheckoutStore.getState().setAutoSyncBlock(key, {
-        commitSha: nextRequest.commitSha,
         retryAt: Date.now() + AUTO_SYNC_FAILURE_COOLDOWN_MS,
       });
     }
@@ -385,11 +377,7 @@ export function scheduleAutoSyncLinkedCheckout(request: LinkedCheckoutSyncReques
   if (!key) return;
 
   const autoSyncBlock = useLinkedCheckoutStore.getState().getAutoSyncBlock(key);
-  if (
-    request.commitSha &&
-    autoSyncBlock?.commitSha === request.commitSha &&
-    autoSyncBlock.retryAt > Date.now()
-  ) {
+  if (autoSyncBlock && autoSyncBlock.retryAt > Date.now()) {
     return;
   }
 
