@@ -169,6 +169,7 @@ export function createPrismaMock() {
     bridgeRuntime: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       upsert: vi.fn(),
       updateMany: vi.fn(),
     },

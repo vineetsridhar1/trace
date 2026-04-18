@@ -63,7 +63,7 @@ describe("runtimeAccessService", () => {
   });
 
   it("grants access to the bridge owner", async () => {
-    prismaMock.bridgeRuntime.findUnique.mockResolvedValueOnce({
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
       id: "bridge-1",
       instanceId: "runtime-1",
       organizationId: "org-1",
@@ -86,7 +86,7 @@ describe("runtimeAccessService", () => {
   });
 
   it("returns an active session-group grant for a non-owner", async () => {
-    prismaMock.bridgeRuntime.findUnique.mockResolvedValueOnce({
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
       id: "bridge-1",
       instanceId: "runtime-1",
       organizationId: "org-1",
@@ -121,7 +121,7 @@ describe("runtimeAccessService", () => {
   });
 
   it("throws for denied local bridge access", async () => {
-    prismaMock.bridgeRuntime.findUnique.mockResolvedValueOnce({
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
       id: "bridge-1",
       instanceId: "runtime-1",
       organizationId: "org-1",
@@ -139,6 +139,30 @@ describe("runtimeAccessService", () => {
         runtimeInstanceId: "runtime-1",
       }),
     ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  it("does not leak bridge owner identity across organizations", async () => {
+    // A bridge from a different org is connected and visible to the router,
+    // but findFirst (scoped to the caller's org) returns null — so the cross-
+    // org row's label / owner / bridge id must never surface.
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce(null);
+    sessionRouterMock.getRuntime.mockReturnValue({
+      id: "runtime-other-org",
+      label: "Jane's Laptop",
+      hostingMode: "local",
+    });
+    sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+
+    const access = await runtimeAccessService.getAccessState({
+      userId: "user-2",
+      organizationId: "org-1",
+      runtimeInstanceId: "runtime-other-org",
+    });
+
+    expect(access.ownerUser).toBeNull();
+    expect(access.bridgeRuntimeId).toBeNull();
+    expect(access.label).toBeNull();
+    expect(access.allowed).toBe(false);
   });
 
   it("emits an owner-only bridge request event when access is requested", async () => {

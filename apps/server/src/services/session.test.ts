@@ -2117,4 +2117,36 @@ describe("SessionService", () => {
       expect(eventServiceMock.create).not.toHaveBeenCalled();
     });
   });
+
+  describe("listBranches", () => {
+    it("rejects a client-supplied sessionGroupId that doesn't own the repo", async () => {
+      // Repo exists in org, session group is real, but its repoId != requested repo.
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-other" });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({ repoId: "repo-a" });
+
+      await expect(
+        service.listBranches("repo-other", "org-1", "user-2", "runtime-1", "group-a"),
+      ).rejects.toThrow(
+        "Bridge access denied: this session group does not own the requested repo",
+      );
+      expect(sessionRouterMock.listBranches).not.toHaveBeenCalled();
+      expect(runtimeAccessServiceMock.assertAccess).not.toHaveBeenCalled();
+    });
+
+    it("allows listing branches when the sessionGroupId matches the repo", async () => {
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-a" });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({ repoId: "repo-a" });
+      sessionRouterMock.listBranches.mockResolvedValueOnce(["main", "feat/x"]);
+
+      const branches = await service.listBranches(
+        "repo-a",
+        "org-1",
+        "user-2",
+        "runtime-1",
+        "group-a",
+      );
+      expect(branches).toEqual(["main", "feat/x"]);
+      expect(runtimeAccessServiceMock.assertAccess).toHaveBeenCalled();
+    });
+  });
 });

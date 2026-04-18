@@ -12,6 +12,7 @@ import {
   type GitCheckpointContext,
 } from "@trace/shared";
 import { prisma } from "../lib/db.js";
+import { AuthorizationError } from "../lib/errors.js";
 import { eventService } from "./event.js";
 import {
   sessionRouter,
@@ -4102,6 +4103,22 @@ export class SessionService {
     sessionGroupId?: string | null,
   ): Promise<string[]> {
     await this.assertRepoExists(repoId, organizationId);
+    // If the caller scopes the check to a session group, the group must
+    // actually own this repo. Otherwise a `session_group`-scoped grant could
+    // be used to list branches of any repo on the bridge by pairing the
+    // grant's groupId with an unrelated repoId — client-supplied group IDs
+    // are not a free pass to widen the grant.
+    if (sessionGroupId) {
+      const scopedGroup = await prisma.sessionGroup.findFirst({
+        where: { id: sessionGroupId, organizationId },
+        select: { repoId: true },
+      });
+      if (!scopedGroup || scopedGroup.repoId !== repoId) {
+        throw new AuthorizationError(
+          "Bridge access denied: this session group does not own the requested repo",
+        );
+      }
+    }
     let runtimeId = runtimeInstanceId;
     if (runtimeId) {
       await this.assertRuntimeAccess({

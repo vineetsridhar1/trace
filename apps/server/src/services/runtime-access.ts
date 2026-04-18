@@ -243,8 +243,11 @@ class RuntimeAccessService {
     runtimeInstanceId: string;
     sessionGroupId?: string | null;
   }): Promise<BridgeRuntimeAccessState> {
-    const persisted = await prisma.bridgeRuntime.findUnique({
-      where: { instanceId: input.runtimeInstanceId },
+    // Scope the lookup to the caller's org. A cross-org runtime falls through
+    // to the !persisted branch below, returning no identifying fields — never
+    // leak label/ownerUser across tenants.
+    const persisted = await prisma.bridgeRuntime.findFirst({
+      where: { instanceId: input.runtimeInstanceId, organizationId: input.organizationId },
       include: {
         ownerUser: true,
         accessGrants: {
@@ -282,32 +285,18 @@ class RuntimeAccessService {
 
     if (!persisted) {
       const allowed = hostingMode !== "local";
+      // Never disclose a router-level label/ownership for a bridge that is
+      // not registered in the caller's org — sessionRouter is cross-org
+      // shared and would otherwise leak another tenant's bridge name.
       return {
         runtimeInstanceId: input.runtimeInstanceId,
         bridgeRuntimeId: null,
-        label: sessionRouter.getRuntime(input.runtimeInstanceId)?.label ?? null,
+        label: null,
         hostingMode,
         connected,
         ownerUser: null,
         allowed,
         isOwner: allowed,
-        scopeType: null,
-        sessionGroupId: null,
-        expiresAt: null,
-        pendingRequest: null,
-      };
-    }
-
-    if (persisted.organizationId !== input.organizationId) {
-      return {
-        runtimeInstanceId: input.runtimeInstanceId,
-        bridgeRuntimeId: persisted.id,
-        label: persisted.label,
-        hostingMode: "local",
-        connected,
-        ownerUser: persisted.ownerUser,
-        allowed: false,
-        isOwner: false,
         scopeType: null,
         sessionGroupId: null,
         expiresAt: null,
