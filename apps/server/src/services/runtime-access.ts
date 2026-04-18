@@ -729,7 +729,7 @@ class RuntimeAccessService {
     }
     if (grant.revokedAt) return grant;
 
-    return prisma.bridgeAccessGrant.update({
+    const updated = await prisma.bridgeAccessGrant.update({
       where: { id: grant.id },
       data: { revokedAt: new Date() },
       include: {
@@ -738,6 +738,30 @@ class RuntimeAccessService {
         sessionGroup: true,
       },
     });
+
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "system",
+      scopeId: input.organizationId,
+      eventType: "bridge_access_revoked",
+      payload: {
+        grantId: updated.id,
+        ownerUserId: grant.bridgeRuntime.ownerUserId,
+        granteeUserId: updated.granteeUserId,
+        runtimeInstanceId: grant.bridgeRuntime.instanceId,
+        runtimeLabel: grant.bridgeRuntime.label,
+        scopeType: updated.scopeType,
+        sessionGroupId: updated.sessionGroupId ?? null,
+        sessionGroup: updated.sessionGroup
+          ? { id: updated.sessionGroup.id, name: updated.sessionGroup.name ?? null }
+          : null,
+        revokedAt: updated.revokedAt?.toISOString() ?? new Date().toISOString(),
+      },
+      actorType: "user",
+      actorId: input.ownerUserId,
+    });
+
+    return updated;
   }
 }
 

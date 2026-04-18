@@ -18,7 +18,8 @@ function canViewSystemEvent(
 ): boolean {
   if (
     event.eventType !== "bridge_access_requested" &&
-    event.eventType !== "bridge_access_request_resolved"
+    event.eventType !== "bridge_access_request_resolved" &&
+    event.eventType !== "bridge_access_revoked"
   ) {
     return true;
   }
@@ -29,6 +30,7 @@ function canViewSystemEvent(
 
   const payload = event.payload as {
     ownerUserId?: unknown;
+    granteeUserId?: unknown;
     requesterUser?: { id?: unknown } | null;
   };
   if (payload.ownerUserId === userId) return true;
@@ -38,6 +40,9 @@ function canViewSystemEvent(
     typeof payload.requesterUser === "object" &&
     payload.requesterUser.id === userId
   ) {
+    return true;
+  }
+  if (event.eventType === "bridge_access_revoked" && payload.granteeUserId === userId) {
     return true;
   }
   return false;

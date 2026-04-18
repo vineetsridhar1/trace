@@ -235,6 +235,28 @@ function handleBridgeAccessResolved(event: Event): void {
   }
 }
 
+function handleBridgeAccessRevoked(event: Event): void {
+  const currentUserId = useAuthStore.getState().user?.id;
+  if (!currentUserId) return;
+
+  const payload = asJsonObject(event.payload);
+  if (!payload) return;
+
+  const granteeUserId = typeof payload.granteeUserId === "string" ? payload.granteeUserId : null;
+  const ownerUserId = typeof payload.ownerUserId === "string" ? payload.ownerUserId : null;
+  const runtimeLabel =
+    typeof payload.runtimeLabel === "string" && payload.runtimeLabel.trim()
+      ? payload.runtimeLabel.trim()
+      : "the bridge";
+
+  if (granteeUserId === currentUserId) {
+    notify(`Your access to ${runtimeLabel} was revoked`);
+    useUIStore.getState().triggerRefresh();
+  } else if (ownerUserId === currentUserId) {
+    useUIStore.getState().triggerRefresh();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Built-in handler: Mention notifications
 // ---------------------------------------------------------------------------
@@ -350,6 +372,7 @@ registerHandler("session_pr_opened", handlePrEvent);
 registerHandler("session_pr_closed", handlePrEvent);
 registerHandler("bridge_access_requested", handleBridgeAccessRequested);
 registerHandler("bridge_access_request_resolved", handleBridgeAccessResolved);
+registerHandler("bridge_access_revoked", handleBridgeAccessRevoked);
 registerHandler("inbox_item_created", handleInboxItemCreated);
 registerHandler("message_sent", handleMentionNotification);
 registerHandler("message_sent", handleDmMessage);
