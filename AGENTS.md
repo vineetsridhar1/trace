@@ -135,3 +135,7 @@ pnpm db:migrate       # Run Prisma migrations
 pnpm db:generate      # Generate Prisma client
 pnpm build            # Build all packages
 ```
+
+## Explanation Style
+
+- **When explaining things, use digestible bullet points instead of delivering everything all at once.** Break explanations into small, scannable chunks. Lead with the key idea, then supporting details as separate bullets. Prefer short bullets over long paragraphs so the reader can absorb one point at a time.
