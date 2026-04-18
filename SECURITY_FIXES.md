@@ -29,23 +29,23 @@ Source: `SECURITY_AUDIT.md` (36 findings). Each item is checked off after the fi
 
 ## Medium
 
-- [ ] **F20** No GraphQL depth/complexity/introspection/rate limits
-- [ ] **F21** Agent context builder fetches without orgId filter
-- [ ] **F22** No destructive-action deny-list for non-`act` modes
-- [ ] **F23** Agent router doesn't re-verify triggering user's access
-- [ ] **F24** LLM call logs persist raw user messages + system prompt
+- [x] **F20** No GraphQL depth/complexity/introspection/rate limits
+- [x] **F21** Agent context builder fetches without orgId filter
+- [x] **F22** No destructive-action deny-list for non-`act` modes
+- [x] **F23** Agent router doesn't re-verify triggering user's access
+- [x] **F24** LLM call logs persist raw user messages + system prompt
 - [x] **F25** Upload MIME allows SVG; no `Content-Disposition: attachment`
-- [ ] **F26** No key-version prefix on encrypted API tokens
+- [x] **F26** No key-version prefix on encrypted API tokens
 - [x] **F27** Hardcoded super-admin email
-- [ ] **F28** (folded into F20)
-- [ ] **F29** Electron IPC handlers don't validate `repoId` / `localPath`
-- [ ] **F30** Electron BrowserWindow has no CSP
-- [ ] **F31** Hook runner entrypoint 0o755 without verifying parent perms
-- [ ] **F32** Terminal scrollback retention DoS / data retention
+- [x] **F28** (folded into F20)
+- [x] **F29** Electron IPC handlers don't validate `repoId` / `localPath`
+- [x] **F30** Electron BrowserWindow has no CSP
+- [x] **F31** Hook runner entrypoint 0o755 without verifying parent perms
+- [x] **F32** Terminal scrollback retention DoS / data retention
 
 ## Low
 
-- [ ] **F33** `DateTime` / `JSON` scalars lack validation
+- [x] **F33** `DateTime` / `JSON` scalars lack validation
 - [x] **F34** Upload key path check uses `includes("..")`, not normalization
-- [ ] **F35** Agent `observe` mode permits memory write + summary side effects
+- [x] **F35** Agent `observe` mode permits memory write + summary side effects
 - [x] **F36** JWT echoed into HTML on OAuth callback (redundant with F7 fix)

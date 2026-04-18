@@ -102,7 +102,20 @@ export function ensureHookRunnerEntrypoint({
   runnerScriptPath: string;
 }): string {
   const wrapperPath = getHookRunnerWrapperPath();
-  fs.mkdirSync(path.dirname(wrapperPath), { recursive: true });
+  const wrapperDir = path.dirname(wrapperPath);
+  fs.mkdirSync(wrapperDir, { recursive: true });
+
+  // Make the parent directory user-private (0700). If it already exists with
+  // looser perms, tighten them — git hooks exec this wrapper, so any other
+  // local user with write access could hijack the command run.
+  try {
+    fs.chmodSync(wrapperDir, 0o700);
+    const traceDir = path.dirname(wrapperDir);
+    fs.chmodSync(traceDir, 0o700);
+  } catch {
+    // Non-POSIX filesystems (e.g. Windows) may not support chmod; the
+    // executable itself is still user-only owned below.
+  }
 
   const resolvedRunnerPath = resolveRunnerScriptPath(runnerScriptPath);
 
@@ -114,8 +127,8 @@ export function ensureHookRunnerEntrypoint({
     "",
   ].join("\n");
 
-  fs.writeFileSync(wrapperPath, wrapper, "utf8");
-  fs.chmodSync(wrapperPath, 0o755);
+  fs.writeFileSync(wrapperPath, wrapper, { encoding: "utf8", mode: 0o700 });
+  fs.chmodSync(wrapperPath, 0o700);
   return wrapperPath;
 }
 

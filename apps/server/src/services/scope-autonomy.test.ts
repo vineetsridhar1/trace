@@ -22,7 +22,10 @@ describe("resolveAutonomyMode", () => {
   });
 
   it("returns scope-level override when set on chat", async () => {
-    prismaMock.chat.findUnique.mockResolvedValueOnce({ aiMode: "act" });
+    prismaMock.chat.findUnique.mockResolvedValueOnce({
+      aiMode: "act",
+      members: [{ user: { orgMemberships: [{ organizationId: "org-1" }] } }],
+    });
 
     const result = await resolveAutonomyMode({
       scopeType: "chat",
@@ -36,7 +39,7 @@ describe("resolveAutonomyMode", () => {
   });
 
   it("returns scope-level override when set on ticket", async () => {
-    prismaMock.ticket.findUnique.mockResolvedValueOnce({ aiMode: "suggest" });
+    prismaMock.ticket.findFirst.mockResolvedValueOnce({ aiMode: "suggest" });
 
     const result = await resolveAutonomyMode({
       scopeType: "ticket",
@@ -49,7 +52,7 @@ describe("resolveAutonomyMode", () => {
   });
 
   it("returns project-level override when scope has no override", async () => {
-    prismaMock.ticket.findUnique.mockResolvedValueOnce({ aiMode: null });
+    prismaMock.ticket.findFirst.mockResolvedValueOnce({ aiMode: null });
     prismaMock.ticketProject.findMany.mockResolvedValueOnce([{ projectId: "proj-1" }]);
     prismaMock.project.findMany.mockResolvedValueOnce([{ aiMode: "suggest" }]);
 
@@ -64,7 +67,7 @@ describe("resolveAutonomyMode", () => {
   });
 
   it("returns most restrictive project override when multiple projects", async () => {
-    prismaMock.ticket.findUnique.mockResolvedValueOnce({ aiMode: null });
+    prismaMock.ticket.findFirst.mockResolvedValueOnce({ aiMode: null });
     prismaMock.ticketProject.findMany.mockResolvedValueOnce([
       { projectId: "proj-1" },
       { projectId: "proj-2" },
@@ -85,7 +88,10 @@ describe("resolveAutonomyMode", () => {
   });
 
   it("DMs default to act when no explicit override", async () => {
-    prismaMock.chat.findUnique.mockResolvedValueOnce({ aiMode: null });
+    prismaMock.chat.findUnique.mockResolvedValueOnce({
+      aiMode: null,
+      members: [{ user: { orgMemberships: [{ organizationId: "org-1" }] } }],
+    });
 
     const result = await resolveAutonomyMode({
       scopeType: "chat",
@@ -99,7 +105,10 @@ describe("resolveAutonomyMode", () => {
   });
 
   it("group chats default to suggest when no explicit override", async () => {
-    prismaMock.chat.findUnique.mockResolvedValueOnce({ aiMode: null });
+    prismaMock.chat.findUnique.mockResolvedValueOnce({
+      aiMode: null,
+      members: [{ user: { orgMemberships: [{ organizationId: "org-1" }] } }],
+    });
 
     const result = await resolveAutonomyMode({
       scopeType: "chat",
@@ -113,7 +122,7 @@ describe("resolveAutonomyMode", () => {
   });
 
   it("falls back to org default for non-chat scopes with no overrides", async () => {
-    prismaMock.channel.findUnique.mockResolvedValueOnce({ aiMode: null });
+    prismaMock.channel.findFirst.mockResolvedValueOnce({ aiMode: null });
     prismaMock.channelProject.findMany.mockResolvedValueOnce([]);
 
     const result = await resolveAutonomyMode({
@@ -127,7 +136,10 @@ describe("resolveAutonomyMode", () => {
   });
 
   it("null override on DM falls through to DM default (act)", async () => {
-    prismaMock.chat.findUnique.mockResolvedValueOnce({ aiMode: null });
+    prismaMock.chat.findUnique.mockResolvedValueOnce({
+      aiMode: null,
+      members: [{ user: { orgMemberships: [{ organizationId: "org-1" }] } }],
+    });
 
     const result = await resolveAutonomyMode({
       scopeType: "chat",
@@ -142,7 +154,7 @@ describe("resolveAutonomyMode", () => {
   });
 
   it("scope override wins over project override", async () => {
-    prismaMock.ticket.findUnique.mockResolvedValueOnce({ aiMode: "act" });
+    prismaMock.ticket.findFirst.mockResolvedValueOnce({ aiMode: "act" });
 
     const result = await resolveAutonomyMode({
       scopeType: "ticket",
@@ -163,6 +175,7 @@ describe("updateScopeAiMode", () => {
   });
 
   it("updates chat aiMode", async () => {
+    prismaMock.chat.findFirst.mockResolvedValueOnce({ id: "chat-1" });
     prismaMock.chat.update.mockResolvedValueOnce({});
 
     await updateScopeAiMode({ scopeType: "chat", scopeId: "chat-1", aiMode: "observe", userId: "user-1", organizationId: "org-1" });
@@ -174,12 +187,12 @@ describe("updateScopeAiMode", () => {
   });
 
   it("clears override when aiMode is null", async () => {
-    prismaMock.ticket.update.mockResolvedValueOnce({});
+    prismaMock.ticket.updateMany.mockResolvedValueOnce({ count: 1 });
 
     await updateScopeAiMode({ scopeType: "ticket", scopeId: "ticket-1", aiMode: null, userId: "user-1", organizationId: "org-1" });
 
-    expect(prismaMock.ticket.update).toHaveBeenCalledWith({
-      where: { id: "ticket-1" },
+    expect(prismaMock.ticket.updateMany).toHaveBeenCalledWith({
+      where: { id: "ticket-1", organizationId: "org-1" },
       data: { aiMode: null },
     });
   });

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, powerMonitor, shell } from "electron";
+import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -14,6 +15,26 @@ const portOffset = Number(process.env.TRACE_PORT || 0);
 const serverUrl = process.env.TRACE_SERVER_URL ?? `http://localhost:${4000 + portOffset}`;
 const bridge = new BridgeClient(serverUrl);
 
+const REPO_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+function isValidRepoId(value: unknown): value is string {
+  return typeof value === "string" && REPO_ID_PATTERN.test(value);
+}
+
+function isValidLocalPath(value: unknown): value is string {
+  if (typeof value !== "string" || !value.trim()) return false;
+  const resolved = path.resolve(value);
+  if (resolved !== path.normalize(value) && !path.isAbsolute(value)) return false;
+  if (!path.isAbsolute(resolved)) return false;
+  if (resolved.includes("\u0000")) return false;
+  try {
+    const stat = fs.statSync(resolved);
+    return stat.isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 function publishBridgeStatus(status: BridgeConnectionStatus) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send("bridge-status", status);
@@ -27,10 +48,33 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
   });
 
   const webUrl = process.env.TRACE_WEB_URL ?? `http://localhost:${3000 + portOffset}`;
+  const webOrigin = new URL(webUrl).origin;
+
+  // Apply a restrictive CSP defense-in-depth on top of the web app's own CSP.
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    const headers = { ...details.responseHeaders };
+    headers["Content-Security-Policy"] = [
+      [
+        "default-src 'self'",
+        `connect-src 'self' ${webOrigin} ws: wss:`,
+        "img-src 'self' data: https:",
+        "style-src 'self' 'unsafe-inline'",
+        "script-src 'self'",
+        "frame-ancestors 'none'",
+        "base-uri 'none'",
+        "object-src 'none'",
+      ].join("; "),
+    ];
+    callback({ responseHeaders: headers });
+  });
+
   mainWindow.loadURL(webUrl);
 
   // Open external links in the user's default browser,
@@ -77,63 +121,78 @@ ipcMain.handle("pick-folder", async () => {
   return result.canceled ? null : result.filePaths[0];
 });
 
-ipcMain.handle("get-git-info", async (_event, folderPath: string) => {
+ipcMain.handle("get-git-info", async (_event, folderPath: unknown) => {
+  if (!isValidLocalPath(folderPath)) {
+    return { error: "Invalid folder path" };
+  }
+  const resolved = path.resolve(folderPath as string);
   try {
     const [remoteResult, branchResult] = await Promise.all([
-      execFileAsync("git", ["remote", "get-url", "origin"], { cwd: folderPath }),
-      execFileAsync("git", ["symbolic-ref", "--short", "HEAD"], { cwd: folderPath }),
+      execFileAsync("git", ["remote", "get-url", "origin"], { cwd: resolved }),
+      execFileAsync("git", ["symbolic-ref", "--short", "HEAD"], { cwd: resolved }),
     ]);
     return {
       remoteUrl: remoteResult.stdout.trim(),
       defaultBranch: branchResult.stdout.trim() || "main",
-      name: path.basename(folderPath),
+      name: path.basename(resolved),
     };
   } catch {
     return { error: "Not a git repository or no remote origin configured." };
   }
 });
 
-ipcMain.handle("save-repo-path", async (_event, repoId: string, localPath: string) => {
-  const repoConfig = await saveRepoPath(repoId, localPath);
+ipcMain.handle("save-repo-path", async (_event, repoId: unknown, localPath: unknown) => {
+  if (!isValidRepoId(repoId)) throw new Error("Invalid repoId");
+  if (!isValidLocalPath(localPath)) throw new Error("Invalid localPath");
+  const resolved = path.resolve(localPath as string);
+  const repoConfig = await saveRepoPath(repoId, resolved);
   if (repoConfig.gitHooksEnabled) {
-    await installOrRepairRepoHooks(localPath);
+    await installOrRepairRepoHooks(resolved);
   }
-  // Notify the server that this bridge now has this repo registered
   bridge.send({ type: "repo_linked", repoId });
   return repoConfig;
 });
 
-ipcMain.handle("get-repo-path", (_event, repoId: string) => {
+ipcMain.handle("get-repo-path", (_event, repoId: unknown) => {
+  if (!isValidRepoId(repoId)) return null;
   return getRepoPath(repoId);
 });
 
-ipcMain.handle("get-repo-config", (_event, repoId: string) => {
+ipcMain.handle("get-repo-config", (_event, repoId: unknown) => {
+  if (!isValidRepoId(repoId)) return null;
   return getRepoConfig(repoId);
 });
 
-ipcMain.handle("set-repo-git-hooks-enabled", async (_event, repoId: string, enabled: boolean) => {
-  const repoConfig = await setRepoGitHooksEnabled(repoId, enabled);
-  if (!repoConfig) {
-    return { config: null, status: null };
-  }
+ipcMain.handle(
+  "set-repo-git-hooks-enabled",
+  async (_event, repoId: unknown, enabled: unknown) => {
+    if (!isValidRepoId(repoId)) throw new Error("Invalid repoId");
+    if (typeof enabled !== "boolean") throw new Error("Invalid enabled flag");
+    const repoConfig = await setRepoGitHooksEnabled(repoId, enabled);
+    if (!repoConfig) {
+      return { config: null, status: null };
+    }
 
-  const status = enabled
-    ? await installOrRepairRepoHooks(repoConfig.path)
-    : await disableRepoHooks(repoConfig.path);
+    const status = enabled
+      ? await installOrRepairRepoHooks(repoConfig.path)
+      : await disableRepoHooks(repoConfig.path);
 
-  return {
-    config: repoConfig,
-    status,
-  };
-});
+    return {
+      config: repoConfig,
+      status,
+    };
+  },
+);
 
-ipcMain.handle("get-repo-git-hook-status", async (_event, repoId: string) => {
+ipcMain.handle("get-repo-git-hook-status", async (_event, repoId: unknown) => {
+  if (!isValidRepoId(repoId)) return null;
   const repoConfig = getRepoConfig(repoId);
   if (!repoConfig) return null;
   return getRepoHookStatus(repoConfig.path);
 });
 
-ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: string) => {
+ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: unknown) => {
+  if (!isValidRepoId(repoId)) return null;
   const repoConfig = getRepoConfig(repoId);
   if (!repoConfig) return null;
   return installOrRepairRepoHooks(repoConfig.path);

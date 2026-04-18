@@ -17,6 +17,12 @@ vi.mock("../lib/db.js", () => ({
       findUnique: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
     },
+    chatMember: {
+      findFirst: vi.fn().mockResolvedValue({ chatId: "chat_1" }),
+    },
+    channelMember: {
+      findFirst: vi.fn().mockResolvedValue({ channelId: "channel_1" }),
+    },
     ticket: {
       findUnique: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),

@@ -43,6 +43,25 @@ export interface PolicyResult {
 
 export type AutonomyMode = "observe" | "suggest" | "act";
 
+/**
+ * Destructive / irreversible actions that must never be surfaced as
+ * suggestions or executed outside full `act` autonomy. These are dropped
+ * before the confidence matrix is consulted.
+ */
+const DESTRUCTIVE_ACTIONS = new Set<string>([
+  "chat.deleteMessage",
+  "channel.deleteMessage",
+  "ticket.delete",
+  "ticket.unlink",
+  "memory.delete",
+  "session.delete",
+  "chat.removeMember",
+  "channel.archive",
+  "channel.delete",
+  "org.removeMember",
+  "apiToken.revoke",
+]);
+
 // ---------------------------------------------------------------------------
 // Confidence × Risk × Autonomy thresholds
 // ---------------------------------------------------------------------------
@@ -369,6 +388,13 @@ async function evaluateAction(input: {
   // against future "blocked" values.
   if ((registration.risk as string) === "blocked") {
     return { action, decision: "drop", reason: "blocked_action" };
+  }
+
+  // ── Hard rule: destructive / irreversible actions require `act` mode ──
+  // These actions delete data or spend real resources; never surface them as
+  // mere suggestions or auto-approve them outside full-autonomy mode.
+  if (DESTRUCTIVE_ACTIONS.has(action.actionType) && autonomyMode !== "act") {
+    return { action, decision: "drop", reason: "destructive_requires_act_mode" };
   }
 
   // ── Look up thresholds ──
