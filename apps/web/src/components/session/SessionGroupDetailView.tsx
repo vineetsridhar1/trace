@@ -11,7 +11,6 @@ import { navigateToSession, useUIStore } from "../../stores/ui";
 import { getSessionChannelId, getSessionGroupChannelId } from "../../lib/session-group";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { GroupHeader } from "./GroupHeader";
-import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { GroupTabStrip } from "./GroupTabStrip";
 import { SessionGroupContentArea } from "./SessionGroupContentArea";
 import { CheckpointOpenContext } from "./CheckpointOpenContext";
@@ -474,16 +473,6 @@ export function SessionGroupDetailView({
             onToggleFullscreen={toggleFullscreen}
             onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
           />
-
-          {!bridgeInteractionAllowed && (
-            <div className="px-4 pt-3">
-              <BridgeAccessNotice
-                access={bridgeAccess}
-                sessionGroupId={sessionGroupId}
-                onRequested={refreshBridgeAccess}
-              />
-            </div>
-          )}
 
           <GroupTabStrip
             sessionTabs={sessionTabs}

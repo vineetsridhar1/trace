@@ -415,7 +415,7 @@ export function SessionDetailView({
         </div>
 
         {!bridgeInteractionAllowed ? (
-          <div className="p-4">
+          <div className="border-t p-4">
             <BridgeAccessNotice
               access={bridgeAccess}
               sessionGroupId={sessionGroupId ?? null}
