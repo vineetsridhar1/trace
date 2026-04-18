@@ -1,7 +1,12 @@
 import { prisma } from "../lib/db.js";
+import { AuthorizationError } from "../lib/errors.js";
+import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { runtimeAccessService } from "./runtime-access.js";
 import { isFullyUnloadedSession } from "./session.js";
+
+const TERMINAL_NO_RUNTIME_ERROR =
+  "Cannot open terminal: this session is not connected to a runtime";
 
 class TerminalService {
   private getConnectionRuntimeInstanceId(connection: unknown): string | null {
@@ -14,18 +19,41 @@ class TerminalService {
       : null;
   }
 
+  private resolveSessionRuntimeInstanceId(session: {
+    id: string;
+    connection: unknown;
+    sessionGroup?: { connection?: unknown } | null;
+  }): string | null {
+    return (
+      this.getConnectionRuntimeInstanceId(session.connection) ??
+      this.getConnectionRuntimeInstanceId(session.sessionGroup?.connection) ??
+      sessionRouter.getRuntimeForSession(session.id)?.id ??
+      null
+    );
+  }
+
   private async assertTerminalAccess(
     session: {
+      id: string;
       organizationId: string;
       sessionGroupId: string | null;
       connection: unknown;
+      sessionGroup?: { connection?: unknown } | null;
     },
     userId: string,
+    { requireRuntime }: { requireRuntime: boolean },
   ): Promise<void> {
+    const runtimeInstanceId = this.resolveSessionRuntimeInstanceId(session);
+    if (!runtimeInstanceId) {
+      if (requireRuntime) {
+        throw new AuthorizationError(TERMINAL_NO_RUNTIME_ERROR);
+      }
+      return;
+    }
     await runtimeAccessService.assertAccess({
       userId,
       organizationId: session.organizationId,
-      runtimeInstanceId: this.getConnectionRuntimeInstanceId(session.connection),
+      runtimeInstanceId,
       sessionGroupId: session.sessionGroupId,
     });
   }
@@ -57,6 +85,7 @@ class TerminalService {
             workdir: true,
             worktreeDeleted: true,
             setupStatus: true,
+            connection: true,
           },
         },
       },
@@ -71,7 +100,7 @@ class TerminalService {
     if (session.sessionGroup?.setupStatus === "running") {
       throw new Error("Cannot create terminal while the setup script is still running");
     }
-    await this.assertTerminalAccess(session, userId);
+    await this.assertTerminalAccess(session, userId, { requireRuntime: true });
 
     const terminalId = terminalRelay.createTerminal(
       sessionId,
@@ -94,10 +123,16 @@ class TerminalService {
   }): Promise<Array<{ id: string; sessionId: string }>> {
     const session = await prisma.session.findFirst({
       where: { id: sessionId, organizationId },
-      select: { id: true, organizationId: true, sessionGroupId: true, connection: true },
+      select: {
+        id: true,
+        organizationId: true,
+        sessionGroupId: true,
+        connection: true,
+        sessionGroup: { select: { connection: true } },
+      },
     });
     if (!session) throw new Error("Session not found");
-    await this.assertTerminalAccess(session, userId);
+    await this.assertTerminalAccess(session, userId, { requireRuntime: false });
 
     const terminalIds = session.sessionGroupId
       ? terminalRelay.getTerminalsForSessionGroup(session.sessionGroupId)
@@ -110,13 +145,20 @@ class TerminalService {
         ? []
         : await prisma.session.findMany({
           where: { id: { in: terminalSessionIds }, organizationId },
-          select: { id: true, organizationId: true, sessionGroupId: true, connection: true },
+          select: {
+            id: true,
+            organizationId: true,
+            sessionGroupId: true,
+            connection: true,
+            sessionGroup: { select: { connection: true } },
+          },
         });
     type OwningSession = {
       id: string;
       organizationId: string;
       sessionGroupId: string | null;
       connection: unknown;
+      sessionGroup: { connection: unknown } | null;
     };
     const owningSessionMap = new Map<string, OwningSession>(owningSessions.map((item: OwningSession) => [item.id, item]));
 
@@ -126,7 +168,7 @@ class TerminalService {
       const ownerSession = owningSessionMap.get(ownerSessionId);
       if (!ownerSession) continue;
       try {
-        await this.assertTerminalAccess(ownerSession, userId);
+        await this.assertTerminalAccess(ownerSession, userId, { requireRuntime: false });
         results.push({ id, sessionId: ownerSessionId });
       } catch {
         continue;
@@ -150,10 +192,16 @@ class TerminalService {
 
     const session = await prisma.session.findFirst({
       where: { id: sessionId, organizationId },
-      select: { id: true, organizationId: true, sessionGroupId: true, connection: true },
+      select: {
+        id: true,
+        organizationId: true,
+        sessionGroupId: true,
+        connection: true,
+        sessionGroup: { select: { connection: true } },
+      },
     });
     if (!session) throw new Error("Terminal not found");
-    await this.assertTerminalAccess(session, userId);
+    await this.assertTerminalAccess(session, userId, { requireRuntime: false });
 
     terminalRelay.destroyTerminal(terminalId);
     return true;
