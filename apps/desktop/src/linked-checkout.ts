@@ -13,6 +13,24 @@ import {
 } from "./config.js";
 import { installOrRepairRepoHooks } from "./repo-hooks.js";
 
+// Avoids an import cycle with linked-checkout-auto-sync.ts: the auto-sync
+// manager imports helpers from this file, so we wire it back in via a setter.
+interface AutoSyncManager {
+  reconcile(repoId: string): Promise<void>;
+}
+
+let autoSyncManager: AutoSyncManager | null = null;
+
+export function setAutoSyncManager(manager: AutoSyncManager | null): void {
+  autoSyncManager = manager;
+}
+
+function triggerAutoSyncReconcile(repoId: string): void {
+  const manager = autoSyncManager;
+  if (!manager) return;
+  void manager.reconcile(repoId).catch(() => undefined);
+}
+
 const execFileAsync = promisify(execFile);
 const GIT_MAX_BUFFER = 5 * 1024 * 1024;
 
@@ -21,7 +39,7 @@ const GIT_MAX_BUFFER = 5 * 1024 * 1024;
 // produce interleaved config writes.
 const repoLocks = new Map<string, Promise<unknown>>();
 
-function withRepoLock<T>(repoId: string, fn: () => Promise<T>): Promise<T> {
+export function withRepoLock<T>(repoId: string, fn: () => Promise<T>): Promise<T> {
   const previous = repoLocks.get(repoId) ?? Promise.resolve();
   const next = previous.then(fn, fn);
   const settled = next.catch(() => undefined);
@@ -207,7 +225,7 @@ async function actionResult(
   };
 }
 
-async function pauseExistingAttachment(repoId: string, error: string): Promise<void> {
+export async function pauseExistingAttachment(repoId: string, error: string): Promise<void> {
   const repoConfig = getRepoConfig(repoId);
   const attachment = repoConfig?.linkedCheckout;
   if (!attachment) return;
@@ -217,6 +235,7 @@ async function pauseExistingAttachment(repoId: string, error: string): Promise<v
     autoSyncEnabled: false,
     lastSyncError: error,
   });
+  triggerAutoSyncReconcile(repoId);
 }
 
 export async function getLinkedCheckoutStatus(repoId: string): Promise<LinkedCheckoutStatus> {
@@ -233,6 +252,7 @@ export function linkLinkedCheckoutRepo(
       if (repoConfig.gitHooksEnabled) {
         await installOrRepairRepoHooks(localPath);
       }
+      triggerAutoSyncReconcile(repoId);
       return actionResult(repoId, true);
     } catch (error) {
       return actionResult(repoId, false, formatGitError(error));
@@ -278,6 +298,7 @@ export function syncLinkedCheckout(
         lastSyncError: null,
         lastSyncAt: new Date().toISOString(),
       });
+      triggerAutoSyncReconcile(input.repoId);
 
       return actionResult(input.repoId, true);
     } catch (error) {
@@ -329,6 +350,7 @@ export function restoreLinkedCheckout(repoId: string): Promise<LinkedCheckoutAct
       }
 
       await setRepoLinkedCheckout(repoId, null);
+      triggerAutoSyncReconcile(repoId);
       return actionResult(repoId, true);
     } catch (error) {
       const message = formatGitError(error);
@@ -355,6 +377,7 @@ export function setLinkedCheckoutAutoSync(
       autoSyncEnabled: enabled,
       lastSyncError: null,
     });
+    triggerAutoSyncReconcile(repoId);
 
     return actionResult(repoId, true);
   });

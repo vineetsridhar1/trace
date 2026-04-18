@@ -15,7 +15,6 @@ import { SidebarProvider, SidebarInset, SidebarTrigger } from "./components/ui/s
 import { TooltipProvider } from "./components/ui/tooltip";
 import { Button } from "./components/ui/button";
 import { useOrgEvents } from "./hooks/useOrgEvents";
-import { useLinkedCheckoutAutoSync } from "./hooks/useLinkedCheckoutAutoSync";
 import { useHistorySync } from "./hooks/useHistorySync";
 import { useVisibilityRefresh } from "./hooks/useVisibilityRefresh";
 import { useIsMobile } from "./hooks/use-mobile";
@@ -55,7 +54,6 @@ export function App() {
 
 function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null }) {
   useOrgEvents();
-  useLinkedCheckoutAutoSync();
   useHistorySync();
   useVisibilityRefresh();
   const activePage = useUIStore((s: UIState) => s.activePage);
