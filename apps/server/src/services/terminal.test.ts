@@ -395,6 +395,24 @@ describe("TerminalService", () => {
       expect(result).toEqual([]);
     });
 
+    it("returns [] when no runtime resolves for the session (fail closed)", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        sessionGroupId: "group-1",
+        connection: null,
+        sessionGroup: { connection: null },
+      });
+
+      const result = await terminalService.listForSession({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+
+      expect(result).toEqual([]);
+      expect(runtimeAccessServiceMock.assertAccess).not.toHaveBeenCalled();
+    });
+
     it("filters out local terminals owned by a different user in the same group", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
@@ -466,6 +484,25 @@ describe("TerminalService", () => {
           userId: "user-1",
         }),
       ).rejects.toThrow("Terminal not found");
+    });
+
+    it("no-ops fail-closed when no runtime resolves", async () => {
+      terminalRelayMock.getSessionId.mockReturnValueOnce("session-1");
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        connection: null,
+        sessionGroup: { connection: null },
+      });
+
+      const result = await terminalService.destroy({
+        terminalId: "term-1",
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+      expect(result).toBe(true);
+      expect(terminalRelayMock.destroyTerminal).not.toHaveBeenCalled();
     });
 
     it("throws when local session accessed by wrong user", async () => {

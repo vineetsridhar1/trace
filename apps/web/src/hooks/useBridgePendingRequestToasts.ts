@@ -81,15 +81,11 @@ export function useBridgePendingRequestToasts() {
     }
   }, [userId, activeOrgId]);
 
-  // Initial hydration on auth/org change.
-  useEffect(() => {
-    void hydrate();
-  }, [hydrate]);
-
-  // Re-hydrate when the tab regains visibility — covers events missed while
-  // the subscription was disconnected (sleep, network drop).
   useEffect(() => {
     if (!userId || !activeOrgId) return;
+    void hydrate();
+    // Re-hydrate when the tab regains visibility — covers events missed while
+    // the subscription was disconnected (sleep, network drop).
     function onVisible() {
       if (!document.hidden) void hydrate();
     }

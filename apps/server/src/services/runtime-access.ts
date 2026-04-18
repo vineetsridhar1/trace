@@ -488,90 +488,100 @@ class RuntimeAccessService {
       throw new Error("Bridge access has already been granted");
     }
 
-    const supersededEvents: BridgeRequestEventPayload[] = [];
-    const { request, created } = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const pendings = await tx.bridgeAccessRequest.findMany({
-        where: {
-          bridgeRuntimeId: runtime.id,
-          requesterUserId: input.requesterUserId,
-          status: "pending",
-        },
-        orderBy: { createdAt: "desc" },
-        include: {
-          bridgeRuntime: true,
-          requesterUser: true,
-          ownerUser: true,
-          resolvedByUser: true,
-          sessionGroup: true,
-        },
-      });
-
-      const exactMatch = pendings.find(
-        (p: BridgeAccessRequestEventRecord) =>
-          p.scopeType === normalizedScopeType && p.sessionGroupId === normalizedSessionGroupId,
-      );
-      if (exactMatch) {
-        return { request: exactMatch, created: false };
-      }
-
-      const now = new Date();
-      for (const prior of pendings) {
-        await tx.bridgeAccessRequest.update({
-          where: { id: prior.id },
-          data: {
-            status: "denied",
-            resolvedAt: now,
-            resolvedByUserId: input.requesterUserId,
+    const attempt = async () =>
+      prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const pendings = await tx.bridgeAccessRequest.findMany({
+          where: {
+            bridgeRuntimeId: runtime.id,
+            requesterUserId: input.requesterUserId,
+            status: "pending",
+          },
+          orderBy: { createdAt: "desc" },
+          include: {
+            bridgeRuntime: true,
+            requesterUser: true,
+            ownerUser: true,
+            resolvedByUser: true,
+            sessionGroup: true,
           },
         });
-        supersededEvents.push(serializeBridgeAccessEventPayload({ request: prior, status: "denied" }));
-      }
 
-      const newRequest = await tx.bridgeAccessRequest.create({
-        data: {
-          bridgeRuntimeId: runtime.id,
-          requesterUserId: input.requesterUserId,
-          ownerUserId: runtime.ownerUserId,
-          scopeType: normalizedScopeType,
-          sessionGroupId: normalizedSessionGroupId,
-          requestedExpiresAt: input.requestedExpiresAt ?? null,
-        },
-        include: {
-          bridgeRuntime: true,
-          requesterUser: true,
-          ownerUser: true,
-          resolvedByUser: true,
-          sessionGroup: true,
-        },
-      });
-      return { request: newRequest, created: true };
-    });
+        const exactMatch = pendings.find(
+          (p: BridgeAccessRequestEventRecord) =>
+            p.scopeType === normalizedScopeType && p.sessionGroupId === normalizedSessionGroupId,
+        );
+        if (exactMatch) {
+          return exactMatch;
+        }
 
-    if (created) {
-      for (const payload of supersededEvents) {
-        await eventService.create({
-          organizationId: input.organizationId,
-          scopeType: "system",
-          scopeId: input.organizationId,
-          eventType: "bridge_access_request_resolved",
-          payload,
-          actorType: "user",
-          actorId: input.requesterUserId,
+        const now = new Date();
+        for (const prior of pendings) {
+          await tx.bridgeAccessRequest.update({
+            where: { id: prior.id },
+            // Requester-initiated supersede, not a human denial — leave
+            // resolvedByUserId null so audit reads clean.
+            data: { status: "denied", resolvedAt: now, resolvedByUserId: null },
+          });
+          await eventService.create(
+            {
+              organizationId: input.organizationId,
+              scopeType: "system",
+              scopeId: input.organizationId,
+              eventType: "bridge_access_request_resolved",
+              payload: serializeBridgeAccessEventPayload({ request: prior, status: "denied" }),
+              actorType: "user",
+              actorId: input.requesterUserId,
+            },
+            tx,
+          );
+        }
+
+        const newRequest = await tx.bridgeAccessRequest.create({
+          data: {
+            bridgeRuntimeId: runtime.id,
+            requesterUserId: input.requesterUserId,
+            ownerUserId: runtime.ownerUserId,
+            scopeType: normalizedScopeType,
+            sessionGroupId: normalizedSessionGroupId,
+            requestedExpiresAt: input.requestedExpiresAt ?? null,
+          },
+          include: {
+            bridgeRuntime: true,
+            requesterUser: true,
+            ownerUser: true,
+            resolvedByUser: true,
+            sessionGroup: true,
+          },
         });
-      }
 
-      await eventService.create({
-        organizationId: input.organizationId,
-        scopeType: "system",
-        scopeId: input.organizationId,
-        eventType: "bridge_access_requested",
-        payload: serializeBridgeAccessEventPayload({ request }),
-        actorType: "user",
-        actorId: input.requesterUserId,
+        await eventService.create(
+          {
+            organizationId: input.organizationId,
+            scopeType: "system",
+            scopeId: input.organizationId,
+            eventType: "bridge_access_requested",
+            payload: serializeBridgeAccessEventPayload({ request: newRequest }),
+            actorType: "user",
+            actorId: input.requesterUserId,
+          },
+          tx,
+        );
+
+        return newRequest;
       });
-    }
 
-    return request;
+    // Retry once on P2002 — the partial unique index on (bridgeRuntimeId,
+    // requesterUserId) WHERE status='pending' serializes concurrent requests
+    // from the same user. The retry sees the winner's pending and falls
+    // through the exact-match / supersede logic.
+    try {
+      return await attempt();
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        return await attempt();
+      }
+      throw error;
+    }
   }
 
   async approveRequest(input: {
@@ -583,9 +593,8 @@ class RuntimeAccessService {
     expiresAt?: Date | null;
   }) {
     const now = new Date();
-    let resolvedPayload: BridgeRequestEventPayload | null = null;
 
-    const grant = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const request = await tx.bridgeAccessRequest.findUnique({
         where: { id: input.requestId },
         include: {
@@ -665,28 +674,25 @@ class RuntimeAccessService {
         },
       });
 
-      resolvedPayload = serializeBridgeAccessEventPayload({
-        request,
-        status: "approved",
-        grant,
-      });
+      await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "system",
+          scopeId: input.organizationId,
+          eventType: "bridge_access_request_resolved",
+          payload: serializeBridgeAccessEventPayload({
+            request,
+            status: "approved",
+            grant,
+          }),
+          actorType: "user",
+          actorId: input.ownerUserId,
+        },
+        tx,
+      );
 
       return grant;
     });
-
-    if (resolvedPayload) {
-      await eventService.create({
-        organizationId: input.organizationId,
-        scopeType: "system",
-        scopeId: input.organizationId,
-        eventType: "bridge_access_request_resolved",
-        payload: resolvedPayload,
-        actorType: "user",
-        actorId: input.ownerUserId,
-      });
-    }
-
-    return grant;
   }
 
   async denyRequest(input: {
@@ -714,36 +720,38 @@ class RuntimeAccessService {
       throw new Error("Bridge access request is no longer pending");
     }
 
-    const denied = await prisma.bridgeAccessRequest.update({
-      where: { id: request.id },
-      data: {
-        status: "denied",
-        resolvedAt: new Date(),
-        resolvedByUserId: input.ownerUserId,
-      },
-      include: {
-        bridgeRuntime: true,
-        requesterUser: true,
-        ownerUser: true,
-        resolvedByUser: true,
-        sessionGroup: true,
-      },
-    });
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const denied = await tx.bridgeAccessRequest.update({
+        where: { id: request.id },
+        data: {
+          status: "denied",
+          resolvedAt: new Date(),
+          resolvedByUserId: input.ownerUserId,
+        },
+        include: {
+          bridgeRuntime: true,
+          requesterUser: true,
+          ownerUser: true,
+          resolvedByUser: true,
+          sessionGroup: true,
+        },
+      });
 
-    await eventService.create({
-      organizationId: input.organizationId,
-      scopeType: "system",
-      scopeId: input.organizationId,
-      eventType: "bridge_access_request_resolved",
-      payload: serializeBridgeAccessEventPayload({
-        request: denied,
-        status: "denied",
-      }),
-      actorType: "user",
-      actorId: input.ownerUserId,
-    });
+      await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "system",
+          scopeId: input.organizationId,
+          eventType: "bridge_access_request_resolved",
+          payload: serializeBridgeAccessEventPayload({ request: denied, status: "denied" }),
+          actorType: "user",
+          actorId: input.ownerUserId,
+        },
+        tx,
+      );
 
-    return denied;
+      return denied;
+    });
   }
 
   async revokeGrant(input: {
@@ -768,89 +776,92 @@ class RuntimeAccessService {
     }
     if (grant.revokedAt) return grant;
 
-    const updated = await prisma.bridgeAccessGrant.update({
-      where: { id: grant.id },
-      data: { revokedAt: new Date() },
-      include: {
-        granteeUser: true,
-        grantedByUser: true,
-        sessionGroup: true,
-      },
+    const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const updatedGrant = await tx.bridgeAccessGrant.update({
+        where: { id: grant.id },
+        data: { revokedAt: new Date() },
+        include: {
+          granteeUser: true,
+          grantedByUser: true,
+          sessionGroup: true,
+        },
+      });
+
+      await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "system",
+          scopeId: input.organizationId,
+          eventType: "bridge_access_revoked",
+          payload: {
+            grantId: updatedGrant.id,
+            ownerUserId: grant.bridgeRuntime.ownerUserId,
+            granteeUserId: updatedGrant.granteeUserId,
+            runtimeInstanceId: grant.bridgeRuntime.instanceId,
+            runtimeLabel: grant.bridgeRuntime.label,
+            scopeType: updatedGrant.scopeType,
+            sessionGroupId: updatedGrant.sessionGroupId ?? null,
+            sessionGroup: updatedGrant.sessionGroup
+              ? { id: updatedGrant.sessionGroup.id, name: updatedGrant.sessionGroup.name ?? null }
+              : null,
+            revokedAt: updatedGrant.revokedAt?.toISOString() ?? new Date().toISOString(),
+          },
+          actorType: "user",
+          actorId: input.ownerUserId,
+        },
+        tx,
+      );
+
+      return updatedGrant;
     });
 
+    // Tear down terminals after commit — the relay state is in-memory, so
+    // severing before the grant is durable could leave orphaned state if
+    // the transaction rolls back.
     await this.severGranteeTerminals({
-      bridgeRuntimeId: grant.bridgeRuntime.id,
-      bridgeRuntimeInstanceId: grant.bridgeRuntime.instanceId,
       organizationId: input.organizationId,
       granteeUserId: updated.granteeUserId,
       scopeType: updated.scopeType,
       sessionGroupId: updated.sessionGroupId,
     });
 
-    await eventService.create({
-      organizationId: input.organizationId,
-      scopeType: "system",
-      scopeId: input.organizationId,
-      eventType: "bridge_access_revoked",
-      payload: {
-        grantId: updated.id,
-        ownerUserId: grant.bridgeRuntime.ownerUserId,
-        granteeUserId: updated.granteeUserId,
-        runtimeInstanceId: grant.bridgeRuntime.instanceId,
-        runtimeLabel: grant.bridgeRuntime.label,
-        scopeType: updated.scopeType,
-        sessionGroupId: updated.sessionGroupId ?? null,
-        sessionGroup: updated.sessionGroup
-          ? { id: updated.sessionGroup.id, name: updated.sessionGroup.name ?? null }
-          : null,
-        revokedAt: updated.revokedAt?.toISOString() ?? new Date().toISOString(),
-      },
-      actorType: "user",
-      actorId: input.ownerUserId,
-    });
-
     return updated;
   }
 
   /**
-   * Destroy any terminals still open on this bridge for sessions created by
-   * the grantee. Scoped: for a session_group grant only that group's
-   * terminals are killed; for all_sessions every terminal the grantee owns
-   * on the bridge is killed. Best-effort — active bridge-side PTYs get a
-   * `terminal_destroy` command and the grantee's frontend WebSockets are
-   * closed.
+   * Close every terminal the revoked grantee currently has open on the
+   * bridge, closing their frontend WebSocket and tearing down the PTY.
+   * For a `session_group` grant only terminals whose session is in that
+   * group are affected; for `all_sessions` every in-org session is in
+   * scope. Uses the terminal-relay attachment index so shared sessions
+   * (terminals the grantee attached to on another user's session) are
+   * caught, not just sessions the grantee created.
    */
   private async severGranteeTerminals(input: {
-    bridgeRuntimeId: string;
-    bridgeRuntimeInstanceId: string;
     organizationId: string;
     granteeUserId: string;
     scopeType: BridgeAccessScopeType;
     sessionGroupId: string | null;
   }): Promise<void> {
-    const sessionFilter: Prisma.SessionWhereInput = {
-      organizationId: input.organizationId,
-      createdById: input.granteeUserId,
-    };
+    let scopedSessionIds: Set<string> | undefined;
     if (input.scopeType === "session_group" && input.sessionGroupId) {
-      sessionFilter.sessionGroupId = input.sessionGroupId;
+      const sessions = await prisma.session.findMany({
+        where: {
+          organizationId: input.organizationId,
+          sessionGroupId: input.sessionGroupId,
+        },
+        select: { id: true },
+      });
+      scopedSessionIds = new Set(sessions.map((s: { id: string }) => s.id));
+    } else {
+      const sessions = await prisma.session.findMany({
+        where: { organizationId: input.organizationId },
+        select: { id: true },
+      });
+      scopedSessionIds = new Set(sessions.map((s: { id: string }) => s.id));
     }
 
-    const granteeSessions = await prisma.session.findMany({
-      where: sessionFilter,
-      select: { id: true },
-    });
-    if (granteeSessions.length === 0) return;
-
-    const terminalIds = new Set<string>();
-    for (const session of granteeSessions) {
-      for (const id of terminalRelay.getTerminalsForSession(session.id)) {
-        terminalIds.add(id);
-      }
-    }
-    for (const terminalId of terminalIds) {
-      terminalRelay.destroyTerminal(terminalId);
-    }
+    terminalRelay.destroyTerminalsForUser(input.granteeUserId, scopedSessionIds);
   }
 }
 

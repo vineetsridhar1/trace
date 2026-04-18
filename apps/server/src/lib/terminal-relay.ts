@@ -7,6 +7,8 @@ interface TerminalEntry {
   sessionId: string;
   sessionGroupId: string | null;
   frontendWs: WebSocket | null;
+  /** User who currently has a frontend WebSocket attached to this terminal. */
+  attachedUserId: string | null;
   ready: boolean;
   /** True once the bridge has sent terminal_exit or terminal_error */
   terminated: boolean;
@@ -56,6 +58,7 @@ class TerminalRelay {
       sessionId,
       sessionGroupId,
       frontendWs: null,
+      attachedUserId: null,
       ready: false,
       terminated: false,
       buffer: [],
@@ -165,6 +168,7 @@ class TerminalRelay {
         sessionId,
         sessionGroupId,
         frontendWs: null,
+        attachedUserId: null,
         ready: true, // Bridge says it's alive, so it's ready
         terminated: false,
         buffer: [],
@@ -211,10 +215,11 @@ class TerminalRelay {
   }
 
   /** Attach a frontend WebSocket to an existing terminal. Flushes any buffered messages. */
-  attachFrontend(terminalId: string, ws: WebSocket): boolean {
+  attachFrontend(terminalId: string, ws: WebSocket, userId: string): boolean {
     const entry = this.terminals.get(terminalId);
     if (!entry) return false;
     entry.frontendWs = ws;
+    entry.attachedUserId = userId;
     const hadBufferedReady = entry.buffer.some((msg) => msg.includes("\"type\":\"ready\""));
 
     // Cancel orphan cleanup — a frontend has attached
@@ -247,6 +252,7 @@ class TerminalRelay {
     const entry = this.terminals.get(terminalId);
     if (entry) {
       entry.frontendWs = null;
+      entry.attachedUserId = null;
       this.scheduleOrphanCleanup(terminalId);
     }
   }
@@ -403,8 +409,31 @@ class TerminalRelay {
     for (const [terminalId, entry] of this.terminals) {
       if (entry.frontendWs === ws) {
         entry.frontendWs = null;
+        entry.attachedUserId = null;
         this.scheduleOrphanCleanup(terminalId);
       }
+    }
+  }
+
+  /**
+   * Destroy terminals attached by a specific user whose session falls within
+   * the given scope. Called when a bridge access grant is revoked — closes
+   * the grantee's frontend WS immediately and tears down the PTY on the
+   * bridge side. `sessionIds` limits the scope (for a session_group grant the
+   * caller passes the set of sessions in that group; for all_sessions it
+   * passes undefined to match all sessions).
+   */
+  destroyTerminalsForUser(userId: string, sessionIds?: Set<string>): void {
+    for (const [terminalId, entry] of this.terminals) {
+      if (entry.attachedUserId !== userId) continue;
+      if (sessionIds && !sessionIds.has(entry.sessionId)) continue;
+      if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
+        entry.frontendWs.send(
+          JSON.stringify({ type: "error", message: "Bridge access revoked" }),
+        );
+        entry.frontendWs.close(1008, "Bridge access revoked");
+      }
+      this.destroyTerminal(terminalId);
     }
   }
 

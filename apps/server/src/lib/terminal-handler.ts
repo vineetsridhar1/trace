@@ -161,7 +161,7 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
               ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
               return;
             }
-            const attached = terminalRelay.attachFrontend(terminalId, ws);
+            const attached = terminalRelay.attachFrontend(terminalId, ws, userId);
             if (!attached) {
               ws.send(JSON.stringify({ type: "error", message: "Terminal not found" }));
               return;

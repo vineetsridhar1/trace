@@ -120,7 +120,9 @@ export function useBridgeRuntimeAccess(
   return {
     access: effectiveAccess,
     loading: loadState === "loading",
-    failed: loadState === "failed" && access === null,
+    // True only when the initial fetch failed and no cached access is available.
+    // On a later refetch failure we keep the last successful access silently.
+    unreachable: loadState === "failed" && access === null,
     refresh,
   };
 }
