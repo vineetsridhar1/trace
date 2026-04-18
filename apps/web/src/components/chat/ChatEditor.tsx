@@ -54,6 +54,7 @@ interface ChatEditorProps {
   onShiftTab?: () => void;
   onChange?: (text: string) => void;
   onImagePaste?: (files: File[]) => void;
+  hasAttachments?: boolean;
 }
 
 export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function ChatEditor(
@@ -69,6 +70,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     onShiftTab,
     onChange,
     onImagePaste,
+    hasAttachments = false,
   }: ChatEditorProps,
   ref: React.ForwardedRef<ChatEditorHandle>,
 ) {
@@ -81,6 +83,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
   const onShiftTabRef = useRef(onShiftTab);
   const onChangeRef = useRef(onChange);
   const onImagePasteRef = useRef(onImagePaste);
+  const hasAttachmentsRef = useRef(hasAttachments);
 
   membersRef.current = mentionableUsers;
   currentUserIdRef.current = currentUserId;
@@ -89,6 +92,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
   onShiftTabRef.current = onShiftTab;
   onChangeRef.current = onChange;
   onImagePasteRef.current = onImagePaste;
+  hasAttachmentsRef.current = hasAttachments;
 
   useEffect(() => {
     setValue(initialHtml);
@@ -246,7 +250,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
 
     const html = editor.root.innerHTML;
     const text = editor.getText().trim();
-    if (!text) return false;
+    if (!text && !hasAttachmentsRef.current) return false;
 
     // Clear input immediately so it feels instant — the optimistic message
     // is already in the store by the time onSubmit returns synchronously.

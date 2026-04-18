@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Send, Square, Cloud, Monitor } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
@@ -42,7 +42,17 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   const [hasContent, setHasContent] = useState(false);
   const [mode, setMode] = useState<"code" | "plan" | "ask">("code");
   const [images, setImages] = useState<ImageAttachment[]>([]);
+  const [isSending, setIsSending] = useState(false);
+  const isSendingRef = useRef(false);
   const editorRef = useRef<ChatEditorHandle>(null);
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
+
+  useEffect(() => {
+    return () => {
+      for (const img of imagesRef.current) URL.revokeObjectURL(img.previewUrl);
+    };
+  }, []);
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
   const disconnected = isDisconnected(connection);
@@ -63,6 +73,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   }, []);
 
   const handleImagePaste = useCallback((files: File[]) => {
+    if (isSendingRef.current) return;
     const remaining = MAX_IMAGES - images.length;
     if (remaining <= 0) return;
     const newImages: ImageAttachment[] = files.slice(0, remaining).map((file) => ({
@@ -70,22 +81,9 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
       file,
       previewUrl: URL.createObjectURL(file),
       s3Key: null,
-      uploading: true,
+      uploading: false,
     }));
     setImages((prev) => [...prev, ...newImages]);
-    const orgId = useAuthStore.getState().activeOrgId;
-    for (const img of newImages) {
-      uploadImage(img.file, orgId ?? undefined)
-        .then((key) => {
-          setImages((curr) =>
-            curr.map((i) => (i.id === img.id ? { ...i, s3Key: key, uploading: false } : i)),
-          );
-        })
-        .catch(() => {
-          toast.error("Failed to upload image");
-          setImages((curr) => curr.filter((i) => i.id !== img.id));
-        });
-    }
   }, [images.length]);
 
   const handleRemoveImage = useCallback((id: string) => {
@@ -97,8 +95,8 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   }, []);
 
   const handleSubmit = useCallback(async (_html: string, text: string) => {
-    const hasImages = images.some((img) => img.s3Key !== null || img.uploading);
-    if ((!text && !hasImages) || !canSend) return;
+    if (isSendingRef.current) return;
+    if ((!text && images.length === 0) || !canSend) return;
 
     if (text === "/clear") {
       const channelId = useUIStore.getState().activeChannelId;
@@ -108,19 +106,29 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
       return;
     }
 
-    // Check if any images are still uploading
-    const stillUploading = images.some((img) => img.uploading);
-    if (stillUploading) {
-      toast.error("Please wait for images to finish uploading");
-      throw new Error("Images still uploading");
-    }
-
-    // After the stillUploading guard, every non-null s3Key represents a
-    // completed upload. Anything still null at this point is treated as a
-    // failed upload and silently dropped.
-    const imageKeys = images.flatMap((img) => (img.s3Key ? [img.s3Key] : []));
-    const imagePreviewUrls = images.map((img) => img.previewUrl);
+    isSendingRef.current = true;
+    setIsSending(true);
+    const savedImages = [...images];
+    const imagePreviewUrls = savedImages.map((img) => img.previewUrl);
     const wrappedText = !text ? "" : text.startsWith("/") ? text : wrapPrompt(mode, text);
+
+    let imageKeys: string[] = [];
+    if (savedImages.length > 0) {
+      const savedIds = new Set(savedImages.map((img) => img.id));
+      setImages((prev) => prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: true } : img)));
+      const orgId = useAuthStore.getState().activeOrgId;
+      try {
+        imageKeys = await Promise.all(
+          savedImages.map((img) => uploadImage(img.file, orgId ?? undefined)),
+        );
+      } catch (error) {
+        setImages((prev) => prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: false } : img)));
+        toast.error(error instanceof Error ? error.message : "Failed to upload image");
+        isSendingRef.current = false;
+        setIsSending(false);
+        throw error;
+      }
+    }
 
     const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
       sessionId,
@@ -128,8 +136,8 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
       imageKeys.length > 0 ? { imageKeys, imagePreviewUrls } : undefined,
     );
 
-    const savedImages = [...images];
-    setImages([]);
+    const savedIds = new Set(savedImages.map((img) => img.id));
+    setImages((prev) => prev.filter((img) => !savedIds.has(img.id)));
 
     try {
       const result = await client
@@ -152,13 +160,15 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
       }
 
       reconcileOptimisticSessionMessage(sessionId, tempEventId, realEventId);
-      // Revoke blob URLs after successful send
       for (const img of savedImages) URL.revokeObjectURL(img.previewUrl);
     } catch (error) {
       removeOptimisticSessionMessage(sessionId, tempEventId);
-      setImages(savedImages);
+      setImages((prev) => [...savedImages.map((img) => ({ ...img, uploading: false })), ...prev]);
       toast.error(error instanceof Error ? error.message : "Failed to send message");
       throw error;
+    } finally {
+      isSendingRef.current = false;
+      setIsSending(false);
     }
   }, [sessionId, mode, canSend, images]);
 
@@ -217,10 +227,11 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
               ref={editorRef}
               onSubmit={handleSubmit}
               placeholder={placeholder}
-              disabled={!canSend}
+              disabled={!canSend || isSending}
               slashCommands={slashCommands.commands}
               onShiftTab={cycleMode}
               onImagePaste={handleImagePaste}
+              hasAttachments={images.length > 0}
               onChange={(text: string) => {
                 setHasContent(text.trim().length > 0);
               }}
@@ -238,7 +249,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
         ) : (
           <button
             onClick={() => void editorRef.current?.submit()}
-            disabled={(!hasContent && images.length === 0) || !canSend}
+            disabled={(!hasContent && images.length === 0) || !canSend || isSending}
             className={cn(
               "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
               MODE_CONFIG[mode as InteractionMode].sendButton,
