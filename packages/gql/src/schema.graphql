@@ -225,6 +225,10 @@ enum EventType {
   chat_member_added
   chat_member_removed
   chat_renamed
+  queued_message_added
+  queued_message_removed
+  queued_messages_cleared
+  queued_messages_drained
 }
 
 # --- Core Types ---
@@ -348,8 +352,18 @@ type Session {
   worktreeDeleted: Boolean!
   lastUserMessageAt: DateTime
   lastMessageAt: DateTime
+  queuedMessages: [QueuedMessage!]!
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+type QueuedMessage {
+  id: ID!
+  sessionId: ID!
+  text: String!
+  interactionMode: String
+  position: Int!
+  createdAt: DateTime!
 }
 
 type GitCheckpoint {
@@ -1009,6 +1023,9 @@ type Mutation {
     interactionMode: String
     clientMutationId: String
   ): Event!
+  queueSessionMessage(sessionId: ID!, text: String!, interactionMode: String): QueuedMessage!
+  removeQueuedMessage(id: ID!): Boolean!
+  clearQueuedMessages(sessionId: ID!): Boolean!
   retrySessionConnection(sessionId: ID!): Session!
   retrySessionGroupSetup(id: ID!): SessionGroup!
   moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!

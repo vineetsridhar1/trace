@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Send, Square, Cloud, Monitor } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
-import { SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
+import { SEND_SESSION_MESSAGE_MUTATION, QUEUE_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
 import { type InteractionMode, MODE_CYCLE, MODE_CONFIG, wrapPrompt } from "./interactionModes";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
-import { isDisconnected, canSendMessage } from "./sessionStatus";
+import { isDisconnected, canSendMessage, canQueueMessage } from "./sessionStatus";
 import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
 import { getModelLabel } from "./modelOptions";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../ui/tooltip";
@@ -56,8 +56,9 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
   const disconnected = isDisconnected(connection);
+  const canQueue = canQueueMessage(agentStatus, worktreeDeleted);
   const canSend =
-    !isOptimistic && (isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted));
+    !isOptimistic && (isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted) || canQueue);
   const displayModel = model ? getModelLabel(model) : "Claude Code";
 
   const _lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as string | undefined;
@@ -111,6 +112,29 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     const savedImages = [...images];
     const imagePreviewUrls = savedImages.map((img) => img.previewUrl);
     const wrappedText = !text ? "" : text.startsWith("/") ? text : wrapPrompt(mode, text);
+
+    if (canQueue) {
+      try {
+        const result = await client
+          .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
+            sessionId,
+            text: wrappedText,
+            interactionMode: mode === "code" ? undefined : mode,
+          })
+          .toPromise();
+
+        if (result.error) {
+          throw result.error;
+        }
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to queue message");
+        throw error;
+      } finally {
+        isSendingRef.current = false;
+        setIsSending(false);
+      }
+      return;
+    }
 
     let imageKeys: string[] = [];
     if (savedImages.length > 0) {
@@ -170,7 +194,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
       isSendingRef.current = false;
       setIsSending(false);
     }
-  }, [sessionId, mode, canSend, images]);
+  }, [sessionId, mode, canSend, canQueue, images]);
 
   // Show recovery panel when disconnected — but not for not_started sessions
   if (disconnected && !isNotStarted) {
@@ -181,7 +205,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     : isOptimistic
       ? "Creating session..."
       : isActive
-        ? "Waiting for response..."
+        ? "Queue a message..."
         : isNotStarted
           ? "What should the agent work on?"
           : "Send a message...";
@@ -239,13 +263,26 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
           </div>
         </div>
         {isActive ? (
-          <button
-            onClick={onStop}
-            className="my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg border border-border px-3 text-muted-foreground transition-colors hover:text-foreground hover:bg-surface-elevated"
-            title="Stop"
-          >
-            <Square size={16} />
-          </button>
+          <>
+            <button
+              onClick={() => void editorRef.current?.submit()}
+              disabled={!hasContent || !canSend}
+              className={cn(
+                "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+                MODE_CONFIG[mode as InteractionMode].sendButton,
+              )}
+              title="Queue message"
+            >
+              <Send size={16} />
+            </button>
+            <button
+              onClick={onStop}
+              className="my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg border border-border px-3 text-muted-foreground transition-colors hover:text-foreground hover:bg-surface-elevated"
+              title="Stop"
+            >
+              <Square size={16} />
+            </button>
+          </>
         ) : (
           <button
             onClick={() => void editorRef.current?.submit()}
@@ -260,16 +297,15 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
         )}
       </div>
 
-      {isActive ? (
+      {isActive && (
         <AiLoadingIndicator model={displayModel} startedAt={lastUserMessageAt} />
-      ) : (
-        <SessionInputOptions
-          sessionId={sessionId}
-          mode={mode}
-          onModeChange={cycleMode}
-          isActive={isActive}
-        />
       )}
+      <SessionInputOptions
+        sessionId={sessionId}
+        mode={mode}
+        onModeChange={cycleMode}
+        isActive={isActive}
+      />
     </div>
   );
 }

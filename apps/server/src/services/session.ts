@@ -2104,6 +2104,12 @@ export class SessionService {
         });
       }
     }
+
+    if (newSessionStatus !== "needs_input") {
+      setImmediate(() => {
+        void this.drainOneQueuedMessage(id);
+      });
+    }
   }
 
   async sendMessage({
@@ -2417,6 +2423,182 @@ export class SessionService {
     });
 
     return event;
+  }
+
+  async queueMessage({
+    sessionId,
+    text,
+    actorId,
+    interactionMode,
+    organizationId,
+  }: {
+    sessionId: string;
+    text: string;
+    actorId: string;
+    interactionMode?: string;
+    organizationId: string;
+  }) {
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { worktreeDeleted: true, organizationId: true },
+    });
+    if (session.organizationId !== organizationId) {
+      throw new Error("Session does not belong to this organization");
+    }
+    if (session.worktreeDeleted) {
+      throw new Error("Cannot queue messages: session worktree has been deleted");
+    }
+
+    const orgId = session.organizationId;
+
+    const queuedMessage = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const maxPos = await tx.queuedMessage.aggregate({
+        where: { sessionId },
+        _max: { position: true },
+      });
+      const nextPosition = (maxPos._max.position ?? -1) + 1;
+
+      return tx.queuedMessage.create({
+        data: {
+          sessionId,
+          text,
+          interactionMode: interactionMode ?? null,
+          position: nextPosition,
+          createdById: actorId,
+          organizationId: orgId,
+        },
+      });
+    });
+
+    await eventService.create({
+      organizationId: orgId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "queued_message_added",
+      payload: {
+        sessionId,
+        queuedMessage: {
+          id: queuedMessage.id,
+          sessionId: queuedMessage.sessionId,
+          text: queuedMessage.text,
+          interactionMode: queuedMessage.interactionMode,
+          position: queuedMessage.position,
+          createdAt: queuedMessage.createdAt.toISOString(),
+        },
+      },
+      actorType: "user",
+      actorId,
+    });
+
+    return queuedMessage;
+  }
+
+  async removeQueuedMessage(id: string, actorId: string, organizationId: string) {
+    const queuedMessage = await prisma.queuedMessage.findUniqueOrThrow({
+      where: { id },
+      select: { sessionId: true, organizationId: true },
+    });
+    if (queuedMessage.organizationId !== organizationId) {
+      throw new Error("Queued message does not belong to this organization");
+    }
+
+    await prisma.queuedMessage.delete({ where: { id } });
+
+    await eventService.create({
+      organizationId: queuedMessage.organizationId,
+      scopeType: "session",
+      scopeId: queuedMessage.sessionId,
+      eventType: "queued_message_removed",
+      payload: { sessionId: queuedMessage.sessionId, queuedMessageId: id },
+      actorType: "user",
+      actorId,
+    });
+
+    return true;
+  }
+
+  async clearQueuedMessages(sessionId: string, actorId: string, organizationId: string) {
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { organizationId: true },
+    });
+    if (session.organizationId !== organizationId) {
+      throw new Error("Session does not belong to this organization");
+    }
+
+    await prisma.queuedMessage.deleteMany({ where: { sessionId } });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "queued_messages_cleared",
+      payload: { sessionId },
+      actorType: "user",
+      actorId,
+    });
+
+    return true;
+  }
+
+  private async drainOneQueuedMessage(sessionId: string) {
+    // Verify the session is in a drainable state before popping
+    const current = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { agentStatus: true, sessionStatus: true, organizationId: true },
+    });
+    if (!current || current.agentStatus === "active" || current.sessionStatus === "needs_input") {
+      return false;
+    }
+
+    const popped = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const first = await tx.queuedMessage.findFirst({
+        where: { sessionId },
+        orderBy: { position: "asc" },
+      });
+      if (!first) return null;
+      await tx.queuedMessage.delete({ where: { id: first.id } });
+      return first;
+    });
+
+    if (!popped) return false;
+
+    try {
+      await this.sendMessage({
+        sessionId,
+        text: popped.text,
+        actorType: "user",
+        actorId: popped.createdById,
+        interactionMode: popped.interactionMode ?? undefined,
+      });
+    } catch (error) {
+      // Re-insert the message so it's not lost
+      await prisma.queuedMessage.create({
+        data: {
+          id: popped.id,
+          sessionId: popped.sessionId,
+          text: popped.text,
+          interactionMode: popped.interactionMode,
+          position: popped.position,
+          createdById: popped.createdById,
+          organizationId: popped.organizationId,
+        },
+      });
+      console.error(`[session:${sessionId}] Failed to drain queued message ${popped.id}:`, error);
+      return false;
+    }
+
+    await eventService.create({
+      organizationId: current.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "queued_messages_drained",
+      payload: { sessionId, queuedMessageId: popped.id },
+      actorType: "system",
+      actorId: "system",
+    });
+
+    return true;
   }
 
   async workspaceReady(sessionId: string, workdir: string, branch?: string, slug?: string) {

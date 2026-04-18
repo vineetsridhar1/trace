@@ -406,6 +406,10 @@ export type EventType =
   | 'message_deleted'
   | 'message_edited'
   | 'message_sent'
+  | 'queued_message_added'
+  | 'queued_message_removed'
+  | 'queued_messages_cleared'
+  | 'queued_messages_drained'
   | 'repo_created'
   | 'repo_updated'
   | 'session_deleted'
@@ -566,6 +570,7 @@ export type Mutation = {
   addOrgMember: OrgMember;
   archiveSessionGroup: SessionGroup;
   assignTicket: Ticket;
+  clearQueuedMessages: Scalars['Boolean']['output'];
   commentOnTicket: Event;
   createAiConversation: AiConversation;
   createChannel: Channel;
@@ -598,8 +603,10 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  queueSessionMessage: QueuedMessage;
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars['Boolean']['output'];
+  removeQueuedMessage: Scalars['Boolean']['output'];
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
@@ -661,6 +668,11 @@ export type MutationArchiveSessionGroupArgs = {
 export type MutationAssignTicketArgs = {
   ticketId: Scalars['ID']['input'];
   userId: Scalars['ID']['input'];
+};
+
+
+export type MutationClearQueuedMessagesArgs = {
+  sessionId: Scalars['ID']['input'];
 };
 
 
@@ -838,6 +850,13 @@ export type MutationMuteScopeArgs = {
 };
 
 
+export type MutationQueueSessionMessageArgs = {
+  interactionMode?: InputMaybe<Scalars['String']['input']>;
+  sessionId: Scalars['ID']['input'];
+  text: Scalars['String']['input'];
+};
+
+
 export type MutationRegisterRepoWebhookArgs = {
   repoId: Scalars['ID']['input'];
 };
@@ -846,6 +865,11 @@ export type MutationRegisterRepoWebhookArgs = {
 export type MutationRemoveOrgMemberArgs = {
   organizationId: Scalars['ID']['input'];
   userId: Scalars['ID']['input'];
+};
+
+
+export type MutationRemoveQueuedMessageArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -1431,6 +1455,16 @@ export type QueryTicketsArgs = {
   organizationId: Scalars['ID']['input'];
 };
 
+export type QueuedMessage = {
+  __typename?: 'QueuedMessage';
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  interactionMode?: Maybe<Scalars['String']['output']>;
+  position: Scalars['Int']['output'];
+  sessionId: Scalars['ID']['output'];
+  text: Scalars['String']['output'];
+};
+
 export type ReorderChannelGroupsInput = {
   groupIds: Array<Scalars['ID']['input']>;
   organizationId: Scalars['ID']['input'];
@@ -1482,6 +1516,7 @@ export type Session = {
   name: Scalars['String']['output'];
   prUrl?: Maybe<Scalars['String']['output']>;
   projects: Array<Project>;
+  queuedMessages: Array<QueuedMessage>;
   repo?: Maybe<Repo>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupId?: Maybe<Scalars['ID']['output']>;

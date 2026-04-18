@@ -27,6 +27,7 @@ import type {
   InboxItem,
   GitCheckpoint,
   SessionStatus,
+  QueuedMessage,
 } from "@trace/gql";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
@@ -355,6 +356,38 @@ export function useOrgEvents() {
             if (Array.isArray(members)) {
               batch.patch("chats", event.scopeId, { members } as Partial<Chat>);
             }
+          }
+        }
+
+        // Queued message events
+        if (event.eventType === "queued_message_added" && payload) {
+          const qm = asJsonObject(payload.queuedMessage);
+          if (qm && typeof qm.id === "string" && typeof qm.sessionId === "string") {
+            batch.upsertQueuedMessage(
+              qm.sessionId as string,
+              qm.id as string,
+              qm as unknown as QueuedMessage,
+            );
+          }
+        }
+        if (event.eventType === "queued_message_removed" && payload) {
+          const qmId = payload.queuedMessageId as string | undefined;
+          const sid = payload.sessionId as string | undefined;
+          if (qmId && sid) {
+            batch.removeQueuedMessage(sid, qmId);
+          }
+        }
+        if (event.eventType === "queued_messages_cleared" && payload) {
+          const sid = payload.sessionId as string | undefined;
+          if (sid) {
+            batch.clearQueuedMessagesForSession(sid);
+          }
+        }
+        if (event.eventType === "queued_messages_drained" && payload) {
+          const qmId = payload.queuedMessageId as string | undefined;
+          const sid = payload.sessionId as string | undefined;
+          if (qmId && sid) {
+            batch.removeQueuedMessage(sid, qmId);
           }
         }
 
