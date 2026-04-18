@@ -18,6 +18,7 @@ import { useOrgEvents } from "./hooks/useOrgEvents";
 import { useLinkedCheckoutAutoSync } from "./hooks/useLinkedCheckoutAutoSync";
 import { useHistorySync } from "./hooks/useHistorySync";
 import { useVisibilityRefresh } from "./hooks/useVisibilityRefresh";
+import { useBridgePendingRequestToasts } from "./hooks/useBridgePendingRequestToasts";
 import { useIsMobile } from "./hooks/use-mobile";
 import { Toaster } from "./components/ui/sonner";
 import { InstallBanner } from "./components/InstallBanner";
@@ -71,6 +72,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   useLinkedCheckoutAutoSync();
   useHistorySync();
   useVisibilityRefresh();
+  useBridgePendingRequestToasts();
   const activePage = useUIStore((s: UIState) => s.activePage);
   const activeChatId = useUIStore((s: UIState) => s.activeChatId);
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);

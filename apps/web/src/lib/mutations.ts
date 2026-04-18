@@ -257,6 +257,7 @@ export const MY_BRIDGE_RUNTIMES_QUERY = gql`
           id
           name
           email
+          avatarUrl
         }
         sessionGroup {
           id
