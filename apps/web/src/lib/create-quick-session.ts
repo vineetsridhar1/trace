@@ -18,6 +18,7 @@ import {
   registerOptimisticSessionRedirect,
 } from "../stores/ui";
 import { getDefaultModel } from "../components/session/modelOptions";
+import { generateUUID } from "./uuid";
 
 /**
  * Resolve the best runtime for a new session based on user preference.
@@ -77,8 +78,8 @@ export async function createQuickSession(channelId: string): Promise<void> {
       : undefined;
 
   // Generate temp IDs and navigate immediately
-  const tempSessionId = crypto.randomUUID();
-  const tempGroupId = crypto.randomUUID();
+  const tempSessionId = generateUUID();
+  const tempGroupId = generateUUID();
   const assumedHosting = prefHosting === "cloud" ? "cloud" : "local";
 
   optimisticallyInsertSessionGroup({

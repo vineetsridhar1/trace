@@ -23,6 +23,7 @@ import { createQuickSession } from "../../lib/create-quick-session";
 import { useUIStore } from "../../stores/ui";
 import { ImageAttachmentBar, type ImageAttachment } from "./ImageAttachmentBar";
 import { uploadImage } from "../../lib/upload";
+import { generateUUID } from "../../lib/uuid";
 import { useAuthStore } from "../../stores/auth";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import type { BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
@@ -98,7 +99,7 @@ export function SessionInput({
     const remaining = MAX_IMAGES - images.length;
     if (remaining <= 0) return;
     const newImages: ImageAttachment[] = files.slice(0, remaining).map((file) => ({
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       file,
       previewUrl: URL.createObjectURL(file),
       s3Key: null,
@@ -129,87 +130,84 @@ export function SessionInput({
 
     isSendingRef.current = true;
     setIsSending(true);
-    const savedImages = [...images];
-    const imagePreviewUrls = savedImages.map((img) => img.previewUrl);
-    const wrappedText = !text ? "" : text.startsWith("/") ? text : wrapPrompt(mode, text);
+    try {
+      const savedImages = [...images];
+      const imagePreviewUrls = savedImages.map((img) => img.previewUrl);
+      const wrappedText = !text ? "" : text.startsWith("/") ? text : wrapPrompt(mode, text);
 
-    if (canQueue) {
+      if (canQueue) {
+        try {
+          const result = await client
+            .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
+              sessionId,
+              text: wrappedText,
+              interactionMode: mode === "code" ? undefined : mode,
+            })
+            .toPromise();
+
+          if (result.error) {
+            throw result.error;
+          }
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Failed to queue message");
+          throw error;
+        }
+        return;
+      }
+
+      let imageKeys: string[] = [];
+      if (savedImages.length > 0) {
+        const savedIds = new Set(savedImages.map((img) => img.id));
+        setImages((prev) => prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: true } : img)));
+        const orgId = useAuthStore.getState().activeOrgId;
+        try {
+          imageKeys = await Promise.all(
+            savedImages.map((img) => uploadImage(img.file, orgId ?? undefined)),
+          );
+        } catch (error) {
+          setImages((prev) => prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: false } : img)));
+          toast.error(error instanceof Error ? error.message : "Failed to upload image");
+          throw error;
+        }
+      }
+
+      const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
+        sessionId,
+        wrappedText,
+        imageKeys.length > 0 ? { imageKeys, imagePreviewUrls } : undefined,
+      );
+
+      const savedIds = new Set(savedImages.map((img) => img.id));
+      setImages((prev) => prev.filter((img) => !savedIds.has(img.id)));
+
       try {
         const result = await client
-          .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
+          .mutation(SEND_SESSION_MESSAGE_MUTATION, {
             sessionId,
             text: wrappedText,
+            imageKeys: imageKeys.length > 0 ? imageKeys : undefined,
             interactionMode: mode === "code" ? undefined : mode,
+            clientMutationId,
           })
           .toPromise();
 
         if (result.error) {
           throw result.error;
         }
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to queue message");
-        throw error;
-      } finally {
-        isSendingRef.current = false;
-        setIsSending(false);
-      }
-      return;
-    }
 
-    let imageKeys: string[] = [];
-    if (savedImages.length > 0) {
-      const savedIds = new Set(savedImages.map((img) => img.id));
-      setImages((prev) => prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: true } : img)));
-      const orgId = useAuthStore.getState().activeOrgId;
-      try {
-        imageKeys = await Promise.all(
-          savedImages.map((img) => uploadImage(img.file, orgId ?? undefined)),
-        );
+        const realEventId = result.data?.sendSessionMessage?.id;
+        if (!realEventId) {
+          throw new Error("Failed to send message");
+        }
+
+        reconcileOptimisticSessionMessage(sessionId, tempEventId, realEventId);
+        for (const img of savedImages) URL.revokeObjectURL(img.previewUrl);
       } catch (error) {
-        setImages((prev) => prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: false } : img)));
-        toast.error(error instanceof Error ? error.message : "Failed to upload image");
-        isSendingRef.current = false;
-        setIsSending(false);
+        removeOptimisticSessionMessage(sessionId, tempEventId);
+        setImages((prev) => [...savedImages.map((img) => ({ ...img, uploading: false })), ...prev]);
+        toast.error(error instanceof Error ? error.message : "Failed to send message");
         throw error;
       }
-    }
-
-    const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
-      sessionId,
-      wrappedText,
-      imageKeys.length > 0 ? { imageKeys, imagePreviewUrls } : undefined,
-    );
-
-    const savedIds = new Set(savedImages.map((img) => img.id));
-    setImages((prev) => prev.filter((img) => !savedIds.has(img.id)));
-
-    try {
-      const result = await client
-        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-          sessionId,
-          text: wrappedText,
-          imageKeys: imageKeys.length > 0 ? imageKeys : undefined,
-          interactionMode: mode === "code" ? undefined : mode,
-          clientMutationId,
-        })
-        .toPromise();
-
-      if (result.error) {
-        throw result.error;
-      }
-
-      const realEventId = result.data?.sendSessionMessage?.id;
-      if (!realEventId) {
-        throw new Error("Failed to send message");
-      }
-
-      reconcileOptimisticSessionMessage(sessionId, tempEventId, realEventId);
-      for (const img of savedImages) URL.revokeObjectURL(img.previewUrl);
-    } catch (error) {
-      removeOptimisticSessionMessage(sessionId, tempEventId);
-      setImages((prev) => [...savedImages.map((img) => ({ ...img, uploading: false })), ...prev]);
-      toast.error(error instanceof Error ? error.message : "Failed to send message");
-      throw error;
     } finally {
       isSendingRef.current = false;
       setIsSending(false);
