@@ -21,7 +21,6 @@ export type BridgeAccessRequestToastData = {
   requesterUser: {
     id: string;
     name?: string | null;
-    email?: string | null;
     avatarUrl?: string | null;
   };
   grant?: {
@@ -57,10 +56,7 @@ export function BridgeAccessRequestToast({
 }) {
   const [pendingAction, setPendingAction] = useState<"approve" | "deny" | null>(null);
 
-  const requesterName =
-    request.requesterUser.name?.trim() ||
-    request.requesterUser.email?.trim() ||
-    "A teammate";
+  const requesterName = request.requesterUser.name?.trim() || "A teammate";
   const runtimeLabel = request.runtimeLabel.trim() || "your bridge";
 
   const runApprove = async () => {

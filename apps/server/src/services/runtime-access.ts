@@ -1,7 +1,9 @@
 import { Prisma, type BridgeAccessScopeType } from "@prisma/client";
+import { isCloudMachineRuntimeId } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { AuthorizationError } from "../lib/errors.js";
 import { sessionRouter } from "../lib/session-router.js";
+import { terminalRelay } from "../lib/terminal-relay.js";
 import { eventService } from "./event.js";
 
 const BRIDGE_ACCESS_DENIED_ERROR =
@@ -51,7 +53,6 @@ type BridgeRequestEventPayload = {
   requesterUser: {
     id: string;
     name: string | null;
-    email: string;
     avatarUrl: string | null;
   };
   grant: {
@@ -122,7 +123,7 @@ function runtimeHostingMode(
   const runtime = sessionRouter.getRuntime(runtimeInstanceId);
   if (runtime) return runtime.hostingMode;
   if (persisted) return "local";
-  if (runtimeInstanceId.startsWith("cloud-machine-")) return "cloud";
+  if (isCloudMachineRuntimeId(runtimeInstanceId)) return "cloud";
   return null;
 }
 
@@ -150,7 +151,6 @@ function serializeBridgeAccessEventPayload(input: {
     requesterUser: {
       id: request.requesterUser.id,
       name: request.requesterUser.name ?? null,
-      email: request.requesterUser.email,
       avatarUrl: request.requesterUser.avatarUrl ?? null,
     },
     grant: grant
@@ -488,49 +488,88 @@ class RuntimeAccessService {
       throw new Error("Bridge access has already been granted");
     }
 
-    const pending = await prisma.bridgeAccessRequest.findFirst({
-      where: {
-        bridgeRuntimeId: runtime.id,
-        requesterUserId: input.requesterUserId,
-        status: "pending",
-      },
-      orderBy: { createdAt: "desc" },
-      include: {
-        requesterUser: true,
-        ownerUser: true,
-        resolvedByUser: true,
-        sessionGroup: true,
-      },
-    });
-    if (pending) return pending;
+    const supersededEvents: BridgeRequestEventPayload[] = [];
+    const { request, created } = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const pendings = await tx.bridgeAccessRequest.findMany({
+        where: {
+          bridgeRuntimeId: runtime.id,
+          requesterUserId: input.requesterUserId,
+          status: "pending",
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+          bridgeRuntime: true,
+          requesterUser: true,
+          ownerUser: true,
+          resolvedByUser: true,
+          sessionGroup: true,
+        },
+      });
 
-    const request = await prisma.bridgeAccessRequest.create({
-      data: {
-        bridgeRuntimeId: runtime.id,
-        requesterUserId: input.requesterUserId,
-        ownerUserId: runtime.ownerUserId,
-        scopeType: normalizedScopeType,
-        sessionGroupId: normalizedSessionGroupId,
-        requestedExpiresAt: input.requestedExpiresAt ?? null,
-      },
-      include: {
-        bridgeRuntime: true,
-        requesterUser: true,
-        ownerUser: true,
-        resolvedByUser: true,
-        sessionGroup: true,
-      },
+      const exactMatch = pendings.find(
+        (p: BridgeAccessRequestEventRecord) =>
+          p.scopeType === normalizedScopeType && p.sessionGroupId === normalizedSessionGroupId,
+      );
+      if (exactMatch) {
+        return { request: exactMatch, created: false };
+      }
+
+      const now = new Date();
+      for (const prior of pendings) {
+        await tx.bridgeAccessRequest.update({
+          where: { id: prior.id },
+          data: {
+            status: "denied",
+            resolvedAt: now,
+            resolvedByUserId: input.requesterUserId,
+          },
+        });
+        supersededEvents.push(serializeBridgeAccessEventPayload({ request: prior, status: "denied" }));
+      }
+
+      const newRequest = await tx.bridgeAccessRequest.create({
+        data: {
+          bridgeRuntimeId: runtime.id,
+          requesterUserId: input.requesterUserId,
+          ownerUserId: runtime.ownerUserId,
+          scopeType: normalizedScopeType,
+          sessionGroupId: normalizedSessionGroupId,
+          requestedExpiresAt: input.requestedExpiresAt ?? null,
+        },
+        include: {
+          bridgeRuntime: true,
+          requesterUser: true,
+          ownerUser: true,
+          resolvedByUser: true,
+          sessionGroup: true,
+        },
+      });
+      return { request: newRequest, created: true };
     });
 
-    await eventService.create({
-      organizationId: input.organizationId,
-      scopeType: "system",
-      scopeId: input.organizationId,
-      eventType: "bridge_access_requested",
-      payload: serializeBridgeAccessEventPayload({ request }),
-      actorType: "user",
-      actorId: input.requesterUserId,
-    });
+    if (created) {
+      for (const payload of supersededEvents) {
+        await eventService.create({
+          organizationId: input.organizationId,
+          scopeType: "system",
+          scopeId: input.organizationId,
+          eventType: "bridge_access_request_resolved",
+          payload,
+          actorType: "user",
+          actorId: input.requesterUserId,
+        });
+      }
+
+      await eventService.create({
+        organizationId: input.organizationId,
+        scopeType: "system",
+        scopeId: input.organizationId,
+        eventType: "bridge_access_requested",
+        payload: serializeBridgeAccessEventPayload({ request }),
+        actorType: "user",
+        actorId: input.requesterUserId,
+      });
+    }
 
     return request;
   }
@@ -739,6 +778,15 @@ class RuntimeAccessService {
       },
     });
 
+    await this.severGranteeTerminals({
+      bridgeRuntimeId: grant.bridgeRuntime.id,
+      bridgeRuntimeInstanceId: grant.bridgeRuntime.instanceId,
+      organizationId: input.organizationId,
+      granteeUserId: updated.granteeUserId,
+      scopeType: updated.scopeType,
+      sessionGroupId: updated.sessionGroupId,
+    });
+
     await eventService.create({
       organizationId: input.organizationId,
       scopeType: "system",
@@ -762,6 +810,47 @@ class RuntimeAccessService {
     });
 
     return updated;
+  }
+
+  /**
+   * Destroy any terminals still open on this bridge for sessions created by
+   * the grantee. Scoped: for a session_group grant only that group's
+   * terminals are killed; for all_sessions every terminal the grantee owns
+   * on the bridge is killed. Best-effort — active bridge-side PTYs get a
+   * `terminal_destroy` command and the grantee's frontend WebSockets are
+   * closed.
+   */
+  private async severGranteeTerminals(input: {
+    bridgeRuntimeId: string;
+    bridgeRuntimeInstanceId: string;
+    organizationId: string;
+    granteeUserId: string;
+    scopeType: BridgeAccessScopeType;
+    sessionGroupId: string | null;
+  }): Promise<void> {
+    const sessionFilter: Prisma.SessionWhereInput = {
+      organizationId: input.organizationId,
+      createdById: input.granteeUserId,
+    };
+    if (input.scopeType === "session_group" && input.sessionGroupId) {
+      sessionFilter.sessionGroupId = input.sessionGroupId;
+    }
+
+    const granteeSessions = await prisma.session.findMany({
+      where: sessionFilter,
+      select: { id: true },
+    });
+    if (granteeSessions.length === 0) return;
+
+    const terminalIds = new Set<string>();
+    for (const session of granteeSessions) {
+      for (const id of terminalRelay.getTerminalsForSession(session.id)) {
+        terminalIds.add(id);
+      }
+    }
+    for (const terminalId of terminalIds) {
+      terminalRelay.destroyTerminal(terminalId);
+    }
   }
 }
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { client } from "../../lib/urql";
 import { BRIDGE_RUNTIME_ACCESS_QUERY } from "../../lib/mutations";
 import { useUIStore } from "../../stores/ui";
+import { isCloudMachineRuntimeId } from "@trace/shared";
 
 type BridgeUser = {
   id: string;
@@ -33,7 +34,7 @@ export type BridgeRuntimeAccessInfo = {
 };
 
 function buildFallbackAccess(runtimeInstanceId: string): BridgeRuntimeAccessInfo {
-  const hostingMode = runtimeInstanceId.startsWith("cloud-machine-") ? "cloud" : "local";
+  const hostingMode = isCloudMachineRuntimeId(runtimeInstanceId) ? "cloud" : "local";
   const allowed = hostingMode !== "local";
 
   return {
@@ -94,20 +95,20 @@ export function useBridgeRuntimeAccess(
     }
   }, [runtimeInstanceId, sessionGroupId]);
 
+  const refreshTick = useUIStore((s: { refreshTick: number }) => s.refreshTick);
+  const lastRuntimeInstanceIdRef = useRef<string | null | undefined>(runtimeInstanceId);
+
   useEffect(() => {
-    setAccess(null);
+    if (lastRuntimeInstanceIdRef.current !== runtimeInstanceId) {
+      setAccess(null);
+      lastRuntimeInstanceIdRef.current = runtimeInstanceId;
+    }
     if (!runtimeInstanceId) {
       setLoadState("idle");
       return;
     }
     void refresh();
-  }, [refresh, runtimeInstanceId]);
-
-  const refreshTick = useUIStore((s: { refreshTick: number }) => s.refreshTick);
-  useEffect(() => {
-    if (!runtimeInstanceId) return;
-    void refresh();
-  }, [refreshTick, refresh, runtimeInstanceId]);
+  }, [refresh, runtimeInstanceId, refreshTick]);
 
   const effectiveAccess =
     access && access.hostingMode !== null
@@ -116,5 +117,10 @@ export function useBridgeRuntimeAccess(
         ? fallbackAccess
         : null;
 
-  return { access: effectiveAccess, loading: loadState === "loading", refresh };
+  return {
+    access: effectiveAccess,
+    loading: loadState === "loading",
+    failed: loadState === "failed" && access === null,
+    refresh,
+  };
 }

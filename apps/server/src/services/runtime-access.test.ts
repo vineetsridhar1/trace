@@ -16,6 +16,13 @@ vi.mock("../lib/session-router.js", () => ({
   },
 }));
 
+vi.mock("../lib/terminal-relay.js", () => ({
+  terminalRelay: {
+    getTerminalsForSession: vi.fn().mockReturnValue([]),
+    destroyTerminal: vi.fn(),
+  },
+}));
+
 vi.mock("./event.js", () => ({
   eventService: {
     create: vi.fn(),

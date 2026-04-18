@@ -94,7 +94,6 @@ function parseBridgeAccessRequestPayload(payload: unknown): BridgeAccessRequestT
     requesterUser: {
       id: requesterUser.id,
       name: typeof requesterUser.name === "string" ? requesterUser.name : null,
-      email: typeof requesterUser.email === "string" ? requesterUser.email : null,
       avatarUrl: typeof requesterUser.avatarUrl === "string" ? requesterUser.avatarUrl : null,
     },
     grant:
@@ -203,10 +202,7 @@ function handleBridgeAccessRequested(event: Event): void {
   }
 
   const requesterName =
-    request.requesterUser.name?.trim() ||
-    request.requesterUser.email?.trim() ||
-    event.actor.name ||
-    "A teammate";
+    request.requesterUser.name?.trim() || event.actor.name || "A teammate";
   const runtimeLabel = request.runtimeLabel.trim() || "your bridge";
   const toastId = getBridgeAccessRequestToastId(request.requestId);
 

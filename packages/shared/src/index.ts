@@ -135,3 +135,4 @@ export type { ModelOption } from "./models.js";
 export { getModelsForTool, getDefaultModel, getModelLabel, isSupportedModel } from "./models.js";
 export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from "./json.js";
 export { asJsonObject, isJsonObject } from "./json.js";
+export { CLOUD_MACHINE_RUNTIME_PREFIX, isCloudMachineRuntimeId } from "./runtime-ids.js";

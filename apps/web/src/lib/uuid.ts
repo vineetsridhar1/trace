@@ -13,6 +13,9 @@ export function generateUUID(): string {
   if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
     crypto.getRandomValues(bytes);
   } else {
+    // Non-cryptographic fallback. Only acceptable because these IDs are
+    // optimistic client-side temp IDs that get replaced by server-issued IDs.
+    // Do NOT use this helper for tokens, secrets, or anything security-sensitive.
     for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
   }
 

@@ -32,6 +32,12 @@ class TerminalService {
     );
   }
 
+  /**
+   * Enforce bridge access for a terminal op.
+   *   - "throw":  no runtime resolves  → throw (create path — we need a bound runtime)
+   *   - "deny":   no runtime resolves  → return false (list/destroy — fail closed silently)
+   * Returns true once access has been asserted.
+   */
   private async assertTerminalAccess(
     session: {
       id: string;
@@ -41,14 +47,14 @@ class TerminalService {
       sessionGroup?: { connection?: unknown } | null;
     },
     userId: string,
-    { requireRuntime }: { requireRuntime: boolean },
-  ): Promise<void> {
+    onMissingRuntime: "throw" | "deny",
+  ): Promise<boolean> {
     const runtimeInstanceId = this.resolveSessionRuntimeInstanceId(session);
     if (!runtimeInstanceId) {
-      if (requireRuntime) {
+      if (onMissingRuntime === "throw") {
         throw new AuthorizationError(TERMINAL_NO_RUNTIME_ERROR);
       }
-      return;
+      return false;
     }
     await runtimeAccessService.assertAccess({
       userId,
@@ -56,6 +62,7 @@ class TerminalService {
       runtimeInstanceId,
       sessionGroupId: session.sessionGroupId,
     });
+    return true;
   }
 
   async create({
@@ -100,7 +107,7 @@ class TerminalService {
     if (session.sessionGroup?.setupStatus === "running") {
       throw new Error("Cannot create terminal while the setup script is still running");
     }
-    await this.assertTerminalAccess(session, userId, { requireRuntime: true });
+    await this.assertTerminalAccess(session, userId, "throw");
 
     const terminalId = terminalRelay.createTerminal(
       sessionId,
@@ -132,7 +139,8 @@ class TerminalService {
       },
     });
     if (!session) throw new Error("Session not found");
-    await this.assertTerminalAccess(session, userId, { requireRuntime: false });
+    const allowed = await this.assertTerminalAccess(session, userId, "deny");
+    if (!allowed) return [];
 
     const terminalIds = session.sessionGroupId
       ? terminalRelay.getTerminalsForSessionGroup(session.sessionGroupId)
@@ -168,7 +176,8 @@ class TerminalService {
       const ownerSession = owningSessionMap.get(ownerSessionId);
       if (!ownerSession) continue;
       try {
-        await this.assertTerminalAccess(ownerSession, userId, { requireRuntime: false });
+        const ownerAllowed = await this.assertTerminalAccess(ownerSession, userId, "deny");
+        if (!ownerAllowed) continue;
         results.push({ id, sessionId: ownerSessionId });
       } catch {
         continue;
@@ -201,7 +210,8 @@ class TerminalService {
       },
     });
     if (!session) throw new Error("Terminal not found");
-    await this.assertTerminalAccess(session, userId, { requireRuntime: false });
+    const allowed = await this.assertTerminalAccess(session, userId, "deny");
+    if (!allowed) return true;
 
     terminalRelay.destroyTerminal(terminalId);
     return true;
