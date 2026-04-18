@@ -158,79 +158,49 @@ export function BridgeAccessRequestToast({
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Button
-          size="sm"
-          disabled={!!pendingAction}
-          onClick={() =>
-            void runApprove(
-              canApproveThisSession
-                ? {
-                    scopeType: "session_group",
-                    sessionGroupId: request.sessionGroup?.id ?? null,
-                    expiresAt: null,
-                    successMessage: `${requesterName} can use this workspace`,
-                  }
-                : {
-                    successMessage: `${requesterName} can now use ${runtimeLabel}`,
-                  },
-            )
-          }
-        >
-          {canApproveThisSession ? "Approve This Session" : "Approve Request"}
-        </Button>
-
-        <div className="flex items-stretch">
+        {canApproveThisSession && (
           <Button
             size="sm"
             disabled={!!pendingAction}
-            className="rounded-r-none"
             onClick={() =>
               void runApprove({
-                scopeType: "all_sessions",
-                sessionGroupId: null,
-                expiresAt: getBridgeAccessApprovalExpiresAt("1h"),
-                successMessage: `${requesterName} can use ${runtimeLabel} for 1 hour`,
+                scopeType: "session_group",
+                sessionGroupId: request.sessionGroup?.id ?? null,
+                expiresAt: null,
+                successMessage: `${requesterName} can use this workspace`,
               })
             }
           >
-            Approve 1 Hour
+            Approve This Session
           </Button>
+        )}
 
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              className={cn(
-                buttonVariants({ size: "sm" }),
-                "rounded-l-none border-l border-primary-foreground/15 px-2",
-              )}
-              disabled={!!pendingAction}
-              aria-label="More bridge approval options"
-            >
-              <ChevronDown size={14} />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              {BRIDGE_ACCESS_APPROVAL_OPTIONS.filter((option) => option.id !== "1h").map(
-                (option) => (
-                  <DropdownMenuItem
-                    key={option.id}
-                    onClick={() =>
-                      void runApprove({
-                        scopeType: "all_sessions",
-                        sessionGroupId: null,
-                        expiresAt: getBridgeAccessApprovalExpiresAt(option.id),
-                        successMessage:
-                          option.id === "never"
-                            ? `${requesterName} can use ${runtimeLabel} with no expiration`
-                            : `${requesterName} can use ${runtimeLabel} for ${option.id === "3h" ? "3 hours" : "1 day"}`,
-                      })
-                    }
-                  >
-                    {option.label}
-                  </DropdownMenuItem>
-                ),
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className={cn(buttonVariants({ size: "sm" }), "gap-1")}
+            disabled={!!pendingAction}
+          >
+            Approve All Sessions
+            <ChevronDown size={14} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            {BRIDGE_ACCESS_APPROVAL_OPTIONS.map((option) => (
+              <DropdownMenuItem
+                key={option.id}
+                onClick={() =>
+                  void runApprove({
+                    scopeType: "all_sessions",
+                    sessionGroupId: null,
+                    expiresAt: getBridgeAccessApprovalExpiresAt(option.id),
+                    successMessage: `${requesterName} can use ${runtimeLabel} for ${option.label}`,
+                  })
+                }
+              >
+                {option.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <Button variant="ghost" size="sm" disabled={!!pendingAction} onClick={() => void runDeny()}>
           Deny

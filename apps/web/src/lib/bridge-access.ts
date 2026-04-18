@@ -1,20 +1,17 @@
-export type BridgeAccessApprovalDuration = "1h" | "3h" | "1d" | "never";
+export type BridgeAccessApprovalDuration = "1h" | "3h" | "1d";
 
 export const BRIDGE_ACCESS_APPROVAL_OPTIONS: Array<{
   id: BridgeAccessApprovalDuration;
   label: string;
 }> = [
-  { id: "1h", label: "Approve 1 Hour" },
-  { id: "3h", label: "Approve 3 Hours" },
-  { id: "1d", label: "Approve 1 Day" },
-  { id: "never", label: "Approve Unlimited" },
+  { id: "1h", label: "1 hour" },
+  { id: "3h", label: "3 hours" },
+  { id: "1d", label: "1 day" },
 ];
 
 export function getBridgeAccessApprovalExpiresAt(
   duration: BridgeAccessApprovalDuration,
-): string | null {
-  if (duration === "never") return null;
-
+): string {
   const now = Date.now();
   const ms =
     duration === "1h"
