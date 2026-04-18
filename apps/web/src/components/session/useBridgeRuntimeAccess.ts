@@ -82,7 +82,7 @@ export function useBridgeRuntimeAccess(
         .toPromise();
       if (requestId !== requestIdRef.current) return;
       if (result.error) {
-        setAccess(null);
+        // Keep previous access so a transient failure doesn't flip the UI to locked.
         setLoadState("failed");
         return;
       }
@@ -90,7 +90,6 @@ export function useBridgeRuntimeAccess(
       setLoadState("loaded");
     } catch {
       if (requestId !== requestIdRef.current) return;
-      setAccess(null);
       setLoadState("failed");
     }
   }, [runtimeInstanceId, sessionGroupId]);
