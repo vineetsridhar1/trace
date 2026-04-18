@@ -97,9 +97,9 @@ apps/desktop/        — Electron shell + bridge client
 
 ## Agent Skills
 
-- Shared project agent skills live in `.agents/skills/`
-- `.claude/skills` is a symlink to `.agents/skills` so Claude and Codex can share the same source files
-- Run `scripts/sync-codex-skills.sh` after adding or changing a shared skill, or after switching worktrees, then restart Codex so it reloads `~/.codex/skills`
+- Claude skills live in `.claude/skills/`
+- Matching Codex copies live in `~/.codex/skills/`
+- If you add or change a skill, update both copies in the same change so Claude and Codex stay aligned
 
 ## Code Quality
 
