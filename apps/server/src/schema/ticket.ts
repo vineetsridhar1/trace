@@ -8,33 +8,48 @@ import type {
 import { ticketService } from "../services/ticket.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { requireOrgContext } from "../lib/require-org.js";
+import { assertTicketInOrg } from "../services/access.js";
 
 export const ticketQueries = {
   tickets: (_: unknown, args: { organizationId: string; filters?: TicketFilters }, ctx: Context) => {
-    requireOrgContext(ctx);
-    return ticketService.list(args.organizationId, args.filters);
+    const orgId = requireOrgContext(ctx);
+    if (orgId !== args.organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
+    return ticketService.list(orgId, args.filters);
   },
-  ticket: (_: unknown, args: { id: string }, ctx: Context) => {
-    requireOrgContext(ctx);
+  ticket: async (_: unknown, args: { id: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    await assertTicketInOrg(args.id, orgId);
     return ticketService.get(args.id);
   },
 };
 
 export const ticketMutations = {
   createTicket: (_: unknown, args: { input: CreateTicketInput }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    if (orgId !== args.input.organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
     return ticketService.create({
       ...args.input,
       actorType: ctx.actorType,
       actorId: ctx.userId,
     });
   },
-  updateTicket: (_: unknown, args: { id: string; input: UpdateTicketInput }, ctx: Context) => {
+  updateTicket: async (_: unknown, args: { id: string; input: UpdateTicketInput }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    await assertTicketInOrg(args.id, orgId);
     return ticketService.update(args.id, args.input, ctx.actorType, ctx.userId);
   },
-  commentOnTicket: (_: unknown, args: { ticketId: string; text: string }, ctx: Context) => {
+  commentOnTicket: async (_: unknown, args: { ticketId: string; text: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    await assertTicketInOrg(args.ticketId, orgId);
     return ticketService.addComment(args.ticketId, args.text, ctx.actorType, ctx.userId);
   },
-  assignTicket: (_: unknown, args: { ticketId: string; userId: string }, ctx: Context) => {
+  assignTicket: async (_: unknown, args: { ticketId: string; userId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    await assertTicketInOrg(args.ticketId, orgId);
     return ticketService.assign({
       ticketId: args.ticketId,
       userId: args.userId,
@@ -42,7 +57,9 @@ export const ticketMutations = {
       actorId: ctx.userId,
     });
   },
-  unassignTicket: (_: unknown, args: { ticketId: string; userId: string }, ctx: Context) => {
+  unassignTicket: async (_: unknown, args: { ticketId: string; userId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    await assertTicketInOrg(args.ticketId, orgId);
     return ticketService.unassign({
       ticketId: args.ticketId,
       userId: args.userId,
@@ -50,7 +67,9 @@ export const ticketMutations = {
       actorId: ctx.userId,
     });
   },
-  linkTicket: (_: unknown, args: { ticketId: string; entityType: EntityType; entityId: string }, ctx: Context) => {
+  linkTicket: async (_: unknown, args: { ticketId: string; entityType: EntityType; entityId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    await assertTicketInOrg(args.ticketId, orgId);
     return ticketService.link({
       ticketId: args.ticketId,
       entityType: args.entityType,
@@ -59,7 +78,9 @@ export const ticketMutations = {
       actorId: ctx.userId,
     });
   },
-  unlinkTicket: (_: unknown, args: { ticketId: string; entityType: EntityType; entityId: string }, ctx: Context) => {
+  unlinkTicket: async (_: unknown, args: { ticketId: string; entityType: EntityType; entityId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    await assertTicketInOrg(args.ticketId, orgId);
     return ticketService.unlink({
       ticketId: args.ticketId,
       entityType: args.entityType,
@@ -72,7 +93,16 @@ export const ticketMutations = {
 
 export const ticketSubscriptions = {
   ticketEvents: {
-    subscribe: (_: unknown, args: { ticketId: string; organizationId: string }) => {
+    subscribe: async (
+      _: unknown,
+      args: { ticketId: string; organizationId: string },
+      ctx: Context,
+    ) => {
+      const orgId = requireOrgContext(ctx);
+      if (orgId !== args.organizationId) {
+        throw new Error("Not authorized for this organization");
+      }
+      await assertTicketInOrg(args.ticketId, orgId);
       return pubsub.asyncIterator(topics.ticketEvents(args.ticketId));
     },
   },

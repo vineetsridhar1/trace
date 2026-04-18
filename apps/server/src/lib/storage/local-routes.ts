@@ -45,6 +45,15 @@ export function createLocalStorageRouter(adapter: LocalStorageAdapter): RouterTy
     if (!fs.existsSync(target)) {
       return res.status(404).json({ error: "Not found" });
     }
+    // Serve uploaded files as attachments with a neutral content type so an
+    // image/svg+xml payload cannot execute script in the app origin.
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    const fallbackName = path.basename(verified.key) || "download";
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${fallbackName.replace(/"/g, "")}"`,
+    );
     return res.sendFile(target);
   });
 

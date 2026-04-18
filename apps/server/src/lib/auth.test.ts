@@ -46,11 +46,11 @@ describe("auth helpers", () => {
     expect(parseCookieToken("foo=bar")).toBeUndefined();
   });
 
-  it("verifies valid tokens and rejects invalid ones", () => {
+  it("verifies valid tokens and rejects invalid ones", async () => {
     const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
 
-    expect(verifyToken(token)).toBe("user-1");
-    expect(verifyToken("bad-token")).toBeNull();
+    await expect(verifyToken(token)).resolves.toBe("user-1");
+    await expect(verifyToken("bad-token")).resolves.toBeNull();
   });
 
   it("verifies bridge auth tokens separately from session tokens", () => {

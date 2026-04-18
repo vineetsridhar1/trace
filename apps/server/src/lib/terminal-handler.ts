@@ -1,5 +1,5 @@
 import type { WebSocket } from "ws";
-import { parseCookieToken, verifyToken } from "./auth.js";
+import { parseCookieToken, verifyTokenAsync } from "./auth.js";
 import { terminalRelay } from "./terminal-relay.js";
 import { prisma } from "./db.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
@@ -41,6 +41,9 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
 
   let attachedTerminalId: string | null = null;
   let attachPending = false;
+  let authPending = true;
+  let authFailed = false;
+  let authenticatedUserId: string | null = null;
 
   // Authenticate from query param (preferred) or cookie fallback
   const url = new URL(req.url ?? "", "http://localhost");
@@ -50,11 +53,35 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
     return;
   }
 
-  const userId = verifyToken(token);
-  if (!userId) {
-    sendFatalError("Invalid token");
-    return;
+  const pendingAuthMessages: Array<Buffer | string> = [];
+
+  function finishAuthFailure(message: string): void {
+    authFailed = true;
+    authPending = false;
+    pendingAuthMessages.length = 0;
+    sendFatalError(message);
   }
+
+  function replayPendingAuthMessages(): void {
+    const buffered = pendingAuthMessages.splice(0, pendingAuthMessages.length);
+    for (const raw of buffered) {
+      handleRawMessage(raw);
+    }
+  }
+
+  void verifyTokenAsync(token)
+    .then((userId) => {
+      if (!userId) {
+        finishAuthFailure("Invalid token");
+        return;
+      }
+      authenticatedUserId = userId;
+      authPending = false;
+      replayPendingAuthMessages();
+    })
+    .catch(() => {
+      finishAuthFailure("Invalid token");
+    });
 
   // Keep-alive: periodically ping the client to prevent idle timeout
   let pongReceived = true;
@@ -101,9 +128,16 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
     }
   }
 
-  ws.on("message", (raw: Buffer | string) => {
+  function handleRawMessage(raw: Buffer | string): void {
+    if (authFailed) return;
+    if (authPending || !authenticatedUserId) {
+      pendingAuthMessages.push(raw);
+      return;
+    }
+
     try {
       const msg = JSON.parse(raw.toString());
+      const userId = authenticatedUserId;
 
       if (msg.type === "attach") {
         const terminalId = msg.terminalId as string;
@@ -130,7 +164,9 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
               ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
               return;
             }
-            // Check session exists and user has org membership for the session's org
+            // Require session ownership for all hosting modes. Sharing across
+            // org members must go through an explicit ACL, not implicit org
+            // membership (prior behavior leaked terminal I/O across users).
             const session = await prisma.session.findFirst({
               where: {
                 id: sessionId,
@@ -153,7 +189,6 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
                 organizationId: session.organizationId,
                 runtimeInstanceId: getConnectionRuntimeInstanceId(session.connection),
                 sessionGroupId: session.sessionGroupId,
-                capability: "terminal",
               });
             } catch {
               console.warn(
@@ -189,7 +224,9 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
     } catch (err) {
       console.error("[terminal-handler] error handling message:", err);
     }
-  });
+  }
+
+  ws.on("message", handleRawMessage);
 
   ws.on("error", (err: Error) => {
     console.warn("[terminal-handler] websocket error:", err.message);
@@ -197,6 +234,7 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
 
   ws.on("close", () => {
     clearInterval(pingInterval);
+    pendingAuthMessages.length = 0;
     pendingMessages = [];
     terminalRelay.detachAllForFrontend(ws);
   });

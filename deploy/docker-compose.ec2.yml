@@ -46,10 +46,14 @@ services:
       ROLE: backend
       NODE_ENV: production
       PORT: "4000"
+      # Bind inside the container namespace so docker can proxy to 127.0.0.1.
+      TRACE_BIND_HOST: "0.0.0.0"
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       JWT_SECRET: ${JWT_SECRET}
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
+      TRACE_BRIDGE_SHARED_SECRET: ${TRACE_BRIDGE_SHARED_SECRET}
+      SUPER_ADMIN_EMAILS: ${SUPER_ADMIN_EMAILS:-}
       TRACE_WEB_URL: ${TRACE_WEB_URL:-https://gettrace.org}
       TRACE_SERVER_PUBLIC_URL: ${TRACE_SERVER_PUBLIC_URL:-https://gettrace.org}
       S3_BUCKET: ${S3_BUCKET}

@@ -1,5 +1,21 @@
 import { prisma } from "../lib/db.js";
 
+export async function assertSessionInOrg(sessionId: string, organizationId: string) {
+  const session = await prisma.session.findFirst({
+    where: { id: sessionId, organizationId },
+    select: { id: true },
+  });
+  if (!session) throw new Error("Not authorized for this session");
+}
+
+export async function assertTicketInOrg(ticketId: string, organizationId: string) {
+  const ticket = await prisma.ticket.findFirst({
+    where: { id: ticketId, organizationId },
+    select: { id: true },
+  });
+  if (!ticket) throw new Error("Not authorized for this ticket");
+}
+
 async function assertOrgEntityExists(
   model: "channel" | "session" | "ticket",
   id: string,
