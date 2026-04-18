@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { client } from "../../lib/urql";
 import { BRIDGE_RUNTIME_ACCESS_QUERY } from "../../lib/mutations";
 
@@ -56,20 +56,22 @@ export function useBridgeRuntimeAccess(
   sessionGroupId?: string | null,
 ) {
   const [access, setAccess] = useState<BridgeRuntimeAccessInfo | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadState, setLoadState] = useState<"idle" | "loading" | "loaded" | "failed">("idle");
+  const requestIdRef = useRef(0);
   const fallbackAccess = useMemo(
     () => (runtimeInstanceId ? buildFallbackAccess(runtimeInstanceId) : null),
     [runtimeInstanceId],
   );
 
   const refresh = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     if (!runtimeInstanceId) {
       setAccess(null);
-      setLoading(false);
+      setLoadState("idle");
       return;
     }
 
-    setLoading(true);
+    setLoadState("loading");
     try {
       const result = await client
         .query(BRIDGE_RUNTIME_ACCESS_QUERY, {
@@ -77,24 +79,36 @@ export function useBridgeRuntimeAccess(
           sessionGroupId: sessionGroupId ?? undefined,
         })
         .toPromise();
+      if (requestId !== requestIdRef.current) return;
       if (result.error) {
         setAccess(null);
+        setLoadState("failed");
         return;
       }
       setAccess((result.data?.bridgeRuntimeAccess as BridgeRuntimeAccessInfo | undefined) ?? null);
+      setLoadState("loaded");
     } catch {
+      if (requestId !== requestIdRef.current) return;
       setAccess(null);
-    } finally {
-      setLoading(false);
+      setLoadState("failed");
     }
   }, [runtimeInstanceId, sessionGroupId]);
 
   useEffect(() => {
+    setAccess(null);
+    if (!runtimeInstanceId) {
+      setLoadState("idle");
+      return;
+    }
     void refresh();
-  }, [refresh]);
+  }, [refresh, runtimeInstanceId]);
 
   const effectiveAccess =
-    access && access.hostingMode !== null ? access : fallbackAccess;
+    access && access.hostingMode !== null
+      ? access
+      : loadState === "failed" || loadState === "loaded"
+        ? fallbackAccess
+        : null;
 
-  return { access: effectiveAccess, loading, refresh };
+  return { access: effectiveAccess, loading: loadState === "loading", refresh };
 }
