@@ -1,17 +1,21 @@
 import fs from "fs";
 import path from "path";
-import { execFile } from "child_process";
-import { promisify } from "util";
 import {
   getRepoConfig,
   readConfig,
   setRepoLinkedCheckout,
   type LinkedCheckoutConfig,
 } from "./config.js";
+import {
+  execFileAsync,
+  formatGitError,
+  GIT_MAX_BUFFER,
+  getCurrentBranch,
+  isSafeGitRef,
+  runGit,
+} from "./git-utils.js";
 import { pauseExistingAttachment, withRepoLock } from "./linked-checkout.js";
-
-const execFileAsync = promisify(execFile);
-const GIT_MAX_BUFFER = 5 * 1024 * 1024;
+import { runtimeDebug } from "./runtime-debug.js";
 
 // Match stderr fragments from git fetch that indicate transient network
 // conditions — recoverable by retrying the next tick without flipping
@@ -25,58 +29,77 @@ const TRANSIENT_FETCH_ERROR_PATTERNS: RegExp[] = [
   /Temporary failure in name resolution/i,
 ];
 
-type GitExecError = Error & {
-  stderr?: string;
-  stdout?: string;
-};
-
-function formatGitStderr(error: unknown): string {
-  if (error instanceof Error) {
-    const gitError = error as GitExecError;
-    const stderr = gitError.stderr?.trim();
-    if (stderr) return stderr;
-    const stdout = gitError.stdout?.trim();
-    if (stdout) return stdout;
-    if (gitError.message.trim()) return gitError.message.trim();
-  }
-  return String(error);
-}
+// Git state directories / files that indicate an in-progress multi-step
+// operation we must not interrupt by switching HEAD.
+const IN_PROGRESS_MARKERS = [
+  "rebase-merge",
+  "rebase-apply",
+  "MERGE_HEAD",
+  "CHERRY_PICK_HEAD",
+  "REVERT_HEAD",
+  "BISECT_LOG",
+];
 
 function isTransientFetchError(message: string): boolean {
   return TRANSIENT_FETCH_ERROR_PATTERNS.some((pattern) => pattern.test(message));
 }
 
-function isSafeGitRef(ref: string): boolean {
-  return !!ref && !ref.startsWith("-") && !ref.includes("..") && !/[\x00-\x1f\x7f\s]/.test(ref);
-}
-
-function hasActiveRebaseOrMerge(repoPath: string): boolean {
-  const gitDir = path.join(repoPath, ".git");
-  return (
-    fs.existsSync(path.join(gitDir, "rebase-merge")) ||
-    fs.existsSync(path.join(gitDir, "rebase-apply")) ||
-    fs.existsSync(path.join(gitDir, "MERGE_HEAD"))
-  );
-}
-
-async function runGit(repoPath: string, args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync("git", args, {
-    cwd: repoPath,
-    maxBuffer: GIT_MAX_BUFFER,
-  });
-  return stdout.trim();
-}
-
-async function getCurrentBranch(repoPath: string): Promise<string | null> {
+/**
+ * Resolve the real `.git` directory, handling the case where `<repo>/.git` is
+ * a file (linked worktrees) that points at the true gitdir. Returns null if
+ * anything goes wrong so callers can fail safe.
+ */
+export async function resolveGitDir(repoPath: string): Promise<string | null> {
   try {
-    const branch = await runGit(repoPath, ["symbolic-ref", "--short", "-q", "HEAD"]);
-    return branch || null;
+    const gitDir = await runGit(repoPath, ["rev-parse", "--git-dir"]);
+    if (!gitDir) return null;
+    return path.isAbsolute(gitDir) ? gitDir : path.join(repoPath, gitDir);
   } catch {
     return null;
   }
 }
 
-async function setLastSyncError(repoId: string, error: string): Promise<void> {
+export async function hasInProgressGitOperation(repoPath: string): Promise<boolean> {
+  const gitDir = await resolveGitDir(repoPath);
+  if (!gitDir) return false;
+  return IN_PROGRESS_MARKERS.some((marker) => fs.existsSync(path.join(gitDir, marker)));
+}
+
+export interface LinkedCheckoutAutoSyncDeps {
+  /** Async git runner. Returns stdout trimmed. Overrideable for tests. */
+  fetch: (repoPath: string, branch: string) => Promise<void>;
+  revParseHead: (repoPath: string) => Promise<string>;
+  resolveOriginSha: (repoPath: string, branch: string) => Promise<string>;
+  hasTrackedChanges: (repoPath: string) => Promise<boolean>;
+  switchDetached: (repoPath: string, sha: string) => Promise<void>;
+  getCurrentBranch: (repoPath: string) => Promise<string | null>;
+  hasInProgressOperation: (repoPath: string) => Promise<boolean>;
+  now: () => string;
+}
+
+const defaultDeps: LinkedCheckoutAutoSyncDeps = {
+  fetch: async (repoPath, branch) => {
+    await execFileAsync("git", ["fetch", "origin", branch], {
+      cwd: repoPath,
+      maxBuffer: GIT_MAX_BUFFER,
+    });
+  },
+  revParseHead: (repoPath) => runGit(repoPath, ["rev-parse", "HEAD"]),
+  resolveOriginSha: (repoPath, branch) =>
+    runGit(repoPath, ["rev-parse", `origin/${branch}^{commit}`]),
+  hasTrackedChanges: async (repoPath) => {
+    const status = await runGit(repoPath, ["status", "--porcelain", "--untracked-files=no"]);
+    return status.length > 0;
+  },
+  switchDetached: async (repoPath, sha) => {
+    await runGit(repoPath, ["switch", "--detach", sha]);
+  },
+  getCurrentBranch,
+  hasInProgressOperation: hasInProgressGitOperation,
+  now: () => new Date().toISOString(),
+};
+
+async function setLastSyncError(repoId: string, error: string | null): Promise<void> {
   const attachment = getRepoConfig(repoId)?.linkedCheckout;
   if (!attachment) return;
   if (attachment.lastSyncError === error) return;
@@ -90,13 +113,23 @@ async function setLastSyncError(repoId: string, error: string): Promise<void> {
 export class LinkedCheckoutAutoSyncManager {
   private timer: ReturnType<typeof setInterval> | null = null;
   private tickInFlight: Promise<void> | null = null;
+  private readonly deps: LinkedCheckoutAutoSyncDeps;
 
-  constructor(private readonly intervalMs: number) {}
+  constructor(
+    private readonly intervalMs: number,
+    deps: Partial<LinkedCheckoutAutoSyncDeps> = {},
+  ) {
+    this.deps = { ...defaultDeps, ...deps };
+  }
 
   start(): void {
     if (this.timer) return;
     this.timer = setInterval(() => {
-      void this.tick();
+      this.reconcileAll().catch((error: unknown) => {
+        runtimeDebug("auto-sync tick failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
     }, this.intervalMs);
   }
 
@@ -108,16 +141,6 @@ export class LinkedCheckoutAutoSyncManager {
   }
 
   reconcileAll(): Promise<void> {
-    return this.tick();
-  }
-
-  async reconcile(repoId: string): Promise<void> {
-    const attachment = getRepoConfig(repoId)?.linkedCheckout;
-    if (!attachment || !attachment.autoSyncEnabled) return;
-    await this.runOneTick(repoId, attachment);
-  }
-
-  private tick(): Promise<void> {
     if (this.tickInFlight) return this.tickInFlight;
 
     const run = (async () => {
@@ -137,6 +160,12 @@ export class LinkedCheckoutAutoSyncManager {
     return run;
   }
 
+  async reconcile(repoId: string): Promise<void> {
+    const attachment = getRepoConfig(repoId)?.linkedCheckout;
+    if (!attachment || !attachment.autoSyncEnabled) return;
+    await this.runOneTick(repoId, attachment);
+  }
+
   private async runOneTick(repoId: string, attachment: LinkedCheckoutConfig): Promise<void> {
     const repoPath = getRepoConfig(repoId)?.path;
     if (!repoPath) return;
@@ -148,70 +177,68 @@ export class LinkedCheckoutAutoSyncManager {
       const currentAttachment = getRepoConfig(repoId)?.linkedCheckout;
       if (!currentAttachment || !currentAttachment.autoSyncEnabled) return;
 
-      if (hasActiveRebaseOrMerge(repoPath)) return;
+      if (await this.deps.hasInProgressOperation(repoPath)) return;
 
       let currentBranch: string | null;
       let currentCommitSha: string;
       try {
-        currentBranch = await getCurrentBranch(repoPath);
-        currentCommitSha = await runGit(repoPath, ["rev-parse", "HEAD"]);
+        currentBranch = await this.deps.getCurrentBranch(repoPath);
+        currentCommitSha = await this.deps.revParseHead(repoPath);
       } catch (error) {
-        await pauseExistingAttachment(repoId, formatGitStderr(error));
+        await this.pause(repoId, formatGitError(error));
         return;
       }
 
       if (currentBranch !== null) {
-        await pauseExistingAttachment(repoId, "Branch changed externally");
+        await this.pause(repoId, "Branch changed externally");
         return;
       }
 
       try {
-        await execFileAsync("git", ["fetch", "origin", targetBranch], {
-          cwd: repoPath,
-          maxBuffer: GIT_MAX_BUFFER,
-        });
+        await this.deps.fetch(repoPath, targetBranch);
       } catch (error) {
-        const message = formatGitStderr(error);
+        const message = formatGitError(error);
         if (isTransientFetchError(message)) {
           await setLastSyncError(repoId, message);
           return;
         }
-        await pauseExistingAttachment(repoId, message);
+        await this.pause(repoId, message);
         return;
       }
 
       let targetSha: string;
       try {
-        targetSha = await runGit(repoPath, ["rev-parse", `origin/${targetBranch}^{commit}`]);
+        targetSha = await this.deps.resolveOriginSha(repoPath, targetBranch);
       } catch (error) {
-        await pauseExistingAttachment(repoId, formatGitStderr(error));
+        await this.pause(repoId, formatGitError(error));
         return;
       }
 
-      if (currentCommitSha === targetSha) return;
+      if (currentCommitSha === targetSha) {
+        // Heal stale transient errors when the next tick confirms we're in sync.
+        if (currentAttachment.lastSyncError !== null) {
+          await setLastSyncError(repoId, null);
+        }
+        return;
+      }
 
       try {
-        const statusOutput = await runGit(repoPath, [
-          "status",
-          "--porcelain",
-          "--untracked-files=no",
-        ]);
-        if (statusOutput.length > 0) {
-          await pauseExistingAttachment(
+        if (await this.deps.hasTrackedChanges(repoPath)) {
+          await this.pause(
             repoId,
             "Root checkout has tracked changes. Commit, stash, or discard them before syncing.",
           );
           return;
         }
       } catch (error) {
-        await pauseExistingAttachment(repoId, formatGitStderr(error));
+        await this.pause(repoId, formatGitError(error));
         return;
       }
 
       try {
-        await runGit(repoPath, ["switch", "--detach", targetSha]);
+        await this.deps.switchDetached(repoPath, targetSha);
       } catch (error) {
-        await pauseExistingAttachment(repoId, formatGitStderr(error));
+        await this.pause(repoId, formatGitError(error));
         return;
       }
 
@@ -222,8 +249,18 @@ export class LinkedCheckoutAutoSyncManager {
         ...latest,
         lastSyncedCommitSha: targetSha,
         lastSyncError: null,
-        lastSyncAt: new Date().toISOString(),
+        lastSyncAt: this.deps.now(),
+      });
+      runtimeDebug("auto-sync switched linked checkout", {
+        repoId,
+        targetBranch,
+        targetSha,
       });
     });
+  }
+
+  private async pause(repoId: string, reason: string): Promise<void> {
+    runtimeDebug("auto-sync paused linked checkout", { repoId, reason });
+    await pauseExistingAttachment(repoId, reason);
   }
 }
