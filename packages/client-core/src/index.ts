@@ -70,5 +70,5 @@ export { getOrgEventUIBindings, setOrgEventUIBindings } from "./events/ui-bindin
 export type { NotificationHandler } from "./notifications/registry.js";
 export { notifyForEvent, registerHandler } from "./notifications/registry.js";
 
-export type { CreateGqlClientOptions } from "./gql/createClient.js";
+export type { CreateGqlClientOptions, GqlClient } from "./gql/createClient.js";
 export { createGqlClient } from "./gql/createClient.js";

@@ -41,12 +41,17 @@ function createPlatformWebSocketImpl(platform: Platform): GraphqlWsWebSocketImpl
   }) as unknown as GraphqlWsWebSocketImpl;
 }
 
+/** A urql `Client` augmented with a `dispose()` that closes the underlying graphql-ws transport. */
+export type GqlClient = Client & { dispose: () => Promise<void> };
+
 /**
  * Build a urql `Client` configured for the Trace platform: cache disabled
  * (Zustand owns state), graphql-ws WebSocket transport with retry, and auth
- * headers injected per request.
+ * headers injected per request. The returned client carries a `dispose()`
+ * method that closes the WebSocket — call it when tearing down the client
+ * (e.g. on org switch) so the socket isn't left dangling for GC.
  */
-export function createGqlClient(options: CreateGqlClientOptions): Client {
+export function createGqlClient(options: CreateGqlClientOptions): GqlClient {
   const platform = getPlatform();
 
   const wsClient = createWSClient({
@@ -78,7 +83,7 @@ export function createGqlClient(options: CreateGqlClientOptions): Client {
     },
   });
 
-  return createUrqlClient({
+  const client = createUrqlClient({
     url: options.httpUrl,
     fetch: platform.fetch,
     fetchOptions: () => ({
@@ -103,5 +108,11 @@ export function createGqlClient(options: CreateGqlClientOptions): Client {
         },
       }),
     ],
+  });
+
+  return Object.assign(client, {
+    dispose: async () => {
+      await wsClient.dispose();
+    },
   });
 }

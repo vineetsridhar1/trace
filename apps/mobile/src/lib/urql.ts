@@ -1,22 +1,19 @@
-import { createGqlClient } from "@trace/client-core";
-import type { Client } from "@urql/core";
+import { createGqlClient, type GqlClient } from "@trace/client-core";
+import { HTTP_GRAPHQL_URL, WS_GRAPHQL_URL } from "@/lib/env";
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
-const wsBase = API_URL.replace(/^https?:/, API_URL.startsWith("https") ? "wss:" : "ws:");
-
-function build(): Client {
+function build(): GqlClient {
   return createGqlClient({
-    httpUrl: `${API_URL}/graphql`,
-    wsUrl: `${wsBase}/ws`,
+    httpUrl: HTTP_GRAPHQL_URL,
+    wsUrl: WS_GRAPHQL_URL,
   });
 }
 
 // Lazy: defer client construction until first use so that the platform
 // adapter (set by `index.js`) is registered before `getPlatform()` runs
 // inside `createGqlClient`.
-let _client: Client | null = null;
+let _client: GqlClient | null = null;
 
-export function getClient(): Client {
+export function getClient(): GqlClient {
   if (!_client) _client = build();
   return _client;
 }
@@ -27,7 +24,13 @@ export function getClient(): Client {
  * rebuild against the new org cleanly. Callers must trigger a re-render
  * (e.g. by changing `activeOrgId`) so consumers re-pull `getClient()`.
  */
-export function recreateClient(): Client {
+export function recreateClient(): GqlClient {
+  const previous = _client;
   _client = build();
+  if (previous) {
+    void previous.dispose().catch((err) => {
+      console.warn("[urql] previous client dispose failed", err);
+    });
+  }
   return _client;
 }

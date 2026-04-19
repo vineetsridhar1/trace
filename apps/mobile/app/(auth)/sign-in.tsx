@@ -7,19 +7,20 @@ import {
   Text,
   View,
 } from "react-native";
+import * as ExpoLinking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { useAuthStore, type AuthState } from "@trace/client-core";
+import { API_URL, isApiUrlConfigured } from "@/lib/env";
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 const REDIRECT_URL = "trace://auth/callback";
 const TERMS_URL = "https://trace.app/terms";
 const PRIVACY_URL = "https://trace.app/privacy";
 
 function tokenFromCallback(rawUrl: string): string | null {
   try {
-    const sanitized = rawUrl.replace(/^trace:\/\//, "https://placeholder/");
-    const u = new URL(sanitized);
-    return u.searchParams.get("token");
+    const parsed = ExpoLinking.parse(rawUrl);
+    const token = parsed.queryParams?.token;
+    return typeof token === "string" ? token : null;
   } catch {
     return null;
   }
@@ -33,7 +34,7 @@ export default function SignInScreen() {
   async function handleSignIn() {
     if (loading) return;
     setError(null);
-    if (!/^https?:\/\//.test(API_URL)) {
+    if (!isApiUrlConfigured()) {
       setError(
         "EXPO_PUBLIC_API_URL is not configured. Restart Metro with " +
           "EXPO_PUBLIC_API_URL=http://<host>:4000.",
