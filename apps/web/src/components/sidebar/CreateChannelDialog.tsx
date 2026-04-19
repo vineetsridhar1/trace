@@ -21,6 +21,7 @@ import {
 } from "../ui/select";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { client } from "../../lib/urql";
+import { features } from "../../lib/features";
 import { useAuthStore } from "../../stores/auth";
 import { useEntityField, useEntityIds } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
@@ -41,7 +42,7 @@ const CREATE_GROUP_MUTATION = gql`
   }
 `;
 
-const TYPE_OPTIONS: Array<{
+const ALL_TYPE_OPTIONS: Array<{
   value: ChannelType;
   label: string;
   description: string;
@@ -50,6 +51,10 @@ const TYPE_OPTIONS: Array<{
   { value: "coding", label: "Coding", description: "For AI coding sessions", icon: Code },
   { value: "text", label: "Text", description: "For team messaging", icon: MessageSquare },
 ];
+
+const TYPE_OPTIONS = features.messaging
+  ? ALL_TYPE_OPTIONS
+  : ALL_TYPE_OPTIONS.filter((o) => o.value !== "text");
 
 type CreateMode = "choose" | "channel" | "group";
 
@@ -232,10 +237,11 @@ export function CreateChannelDialog({
                   autoFocus={!isMobile}
                 />
               </div>
-              <div>
-                <label className="mb-1.5 block text-sm text-muted-foreground">Channel type</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {TYPE_OPTIONS.map((opt) => {
+              {TYPE_OPTIONS.length > 1 && (
+                <div>
+                  <label className="mb-1.5 block text-sm text-muted-foreground">Channel type</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {TYPE_OPTIONS.map((opt) => {
                     const Icon = opt.icon;
                     const selected = channelType === opt.value;
                     return (
@@ -262,8 +268,9 @@ export function CreateChannelDialog({
                       </button>
                     );
                   })}
+                  </div>
                 </div>
-              </div>
+              )}
               {channelType === "coding" && (
                 <div>
                   <label className="mb-1.5 block text-sm text-muted-foreground">Repository</label>

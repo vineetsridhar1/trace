@@ -3,6 +3,7 @@ import { Search, Code, MessageSquare, LogIn, LogOut } from "lucide-react";
 import type { ChannelType } from "@trace/gql";
 import { useAuthStore } from "../../stores/auth";
 import { client } from "../../lib/urql";
+import { features } from "../../lib/features";
 import { gql } from "@urql/core";
 import {
   ResponsiveDialog as Dialog,
@@ -85,7 +86,8 @@ export function BrowseChannelsDialog({
     setLoading(true);
     const result = await client.query(ALL_CHANNELS_QUERY, { organizationId: activeOrgId }).toPromise();
     if (result.data?.channels) {
-      setChannels(result.data.channels as BrowseChannel[]);
+      const all = result.data.channels as BrowseChannel[];
+      setChannels(features.messaging ? all : all.filter((c) => c.type !== "text"));
       setLoadedOrgId(activeOrgId);
     }
     setLoading(false);
