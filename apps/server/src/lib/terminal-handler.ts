@@ -3,6 +3,7 @@ import { parseCookieToken, verifyToken } from "./auth.js";
 import { terminalRelay } from "./terminal-relay.js";
 import { prisma } from "./db.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
+import { AuthorizationError } from "./errors.js";
 
 /**
  * Handles frontend WebSocket connections to /terminal.
@@ -22,16 +23,6 @@ import { runtimeAccessService } from "../services/runtime-access.js";
 
 /** Interval between server→client pings to keep the WebSocket alive. */
 const PING_INTERVAL_MS = 30_000;
-
-function getConnectionRuntimeInstanceId(connection: unknown): string | null {
-  if (!connection || typeof connection !== "object" || Array.isArray(connection)) {
-    return null;
-  }
-  const runtimeInstanceId = (connection as { runtimeInstanceId?: unknown }).runtimeInstanceId;
-  return typeof runtimeInstanceId === "string" && runtimeInstanceId.trim()
-    ? runtimeInstanceId
-    : null;
-}
 
 export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie?: string }; url?: string }) {
   const sendFatalError = (message: string): void => {
@@ -113,7 +104,8 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
         }
 
         const sessionId = terminalRelay.getSessionId(terminalId);
-        if (!sessionId) {
+        const runtimeInstanceId = terminalRelay.getRuntimeInstanceId(terminalId);
+        if (!sessionId || !runtimeInstanceId) {
           ws.send(JSON.stringify({ type: "error", message: "Terminal not found" }));
           return;
         }
@@ -140,7 +132,6 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
                 id: true,
                 organizationId: true,
                 sessionGroupId: true,
-                connection: true,
               },
             });
             if (!session) {
@@ -148,14 +139,18 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
               return;
             }
             try {
+              // Authorize against the runtime the terminal was pinned to at
+              // creation time — NOT the session's current DB connection (which
+              // can be null or stale and would silently bypass the check).
               await runtimeAccessService.assertAccess({
                 userId,
                 organizationId: session.organizationId,
-                runtimeInstanceId: getConnectionRuntimeInstanceId(session.connection),
+                runtimeInstanceId,
                 sessionGroupId: session.sessionGroupId,
                 capability: "terminal",
               });
-            } catch {
+            } catch (err) {
+              if (!(err instanceof AuthorizationError)) throw err;
               console.warn(
                 `[terminal-handler] user ${userId} denied terminal access to session ${sessionId}`,
               );

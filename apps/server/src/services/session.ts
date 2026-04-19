@@ -2937,13 +2937,24 @@ export class SessionService {
     });
 
     if (setupScript) {
-      await this.executeSetupScript({
-        sessionId,
-        sessionGroupId: session.sessionGroupId ?? null,
-        organizationId: session.organizationId,
-        workdir,
-        setupScript,
-      });
+      const runtimeInstanceId =
+        this.parseConnection(session.connection).runtimeInstanceId ??
+        sessionRouter.getRuntimeForSession(sessionId)?.id ??
+        null;
+      if (runtimeInstanceId) {
+        await this.executeSetupScript({
+          sessionId,
+          sessionGroupId: session.sessionGroupId ?? null,
+          organizationId: session.organizationId,
+          runtimeInstanceId,
+          workdir,
+          setupScript,
+        });
+      } else {
+        console.warn(
+          `[session] skipping setup script for ${sessionId}: no bound runtime to run it on`,
+        );
+      }
     }
 
     // If a run was queued while workspace was being prepared, execute it now
@@ -3047,6 +3058,9 @@ export class SessionService {
       runtimeInstanceId,
       sessionGroupId,
     });
+    if (!runtimeInstanceId) {
+      throw new Error("Cannot retry setup: session has no bound runtime");
+    }
 
     const runningGroup = await this.syncGroupWorkspaceState(sessionGroupId, {
       setupStatus: "running",
@@ -3069,6 +3083,7 @@ export class SessionService {
       sessionId: targetSession.id,
       sessionGroupId,
       organizationId,
+      runtimeInstanceId,
       workdir: group.workdir,
       setupScript,
     });
@@ -4581,12 +4596,14 @@ export class SessionService {
     sessionId,
     sessionGroupId,
     organizationId,
+    runtimeInstanceId,
     workdir,
     setupScript,
   }: {
     sessionId: string;
     sessionGroupId: string | null;
     organizationId: string;
+    runtimeInstanceId: string;
     workdir: string;
     setupScript: string;
   }) {
@@ -4594,6 +4611,7 @@ export class SessionService {
       const exitCode = await terminalRelay.executeCommand(
         sessionId,
         sessionGroupId,
+        runtimeInstanceId,
         setupScript,
         workdir,
       );

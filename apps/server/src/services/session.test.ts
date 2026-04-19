@@ -1585,6 +1585,13 @@ describe("SessionService", () => {
           agentStatus: "not_started",
           sessionStatus: "in_progress",
           workdir: "/tmp/trace/workspace",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
         }),
       );
       prismaMock.channel.findUnique.mockResolvedValueOnce({ setupScript: "pnpm install" });
@@ -1602,6 +1609,7 @@ describe("SessionService", () => {
       expect(terminalRelayMock.executeCommand).toHaveBeenCalledWith(
         "session-1",
         "group-1",
+        "runtime-1",
         "pnpm install",
         "/tmp/trace/workspace",
       );
@@ -1637,8 +1645,16 @@ describe("SessionService", () => {
         workdir: "/tmp/trace/workspace",
         worktreeDeleted: false,
         setupStatus: "failed",
+        connection: { runtimeInstanceId: "runtime-1" },
         channel: { setupScript: "pnpm install" },
-        sessions: [{ id: "session-1", hosting: "cloud", createdById: "user-1" }],
+        sessions: [
+          {
+            id: "session-1",
+            hosting: "cloud",
+            createdById: "user-1",
+            connection: { runtimeInstanceId: "runtime-1" },
+          },
+        ],
       });
       prismaMock.sessionGroup.update
         .mockResolvedValueOnce(
@@ -1661,6 +1677,7 @@ describe("SessionService", () => {
       expect(terminalRelayMock.executeCommand).toHaveBeenCalledWith(
         "session-1",
         "group-1",
+        "runtime-1",
         "pnpm install",
         "/tmp/trace/workspace",
       );

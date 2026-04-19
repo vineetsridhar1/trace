@@ -572,12 +572,12 @@ export class SessionRouter {
    * delivery result.
    *
    * `expectedHomeRuntimeId` pins delivery to the session's persistent home
-   * bridge. Callers that hold a session with `connection.runtimeInstanceId` set
-   * MUST pass it — otherwise a disconnected home bridge silently falls through
-   * to auto-bind and the command runs on the wrong machine (which has no
-   * workspace, no tool session, and fails immediately). When the expected home
-   * isn't currently available, returns `runtime_disconnected` without
-   * attempting delivery so the recovery flow handles handoff.
+   * bridge. Callers MUST pass it for any session that has (or should have) a
+   * home runtime — otherwise the router would have to guess, and the runtime
+   * map is a single cross-tenant namespace. We do not guess: when the session
+   * is not already bound AND no expected home was provided, we return
+   * `no_runtime` rather than auto-binding to whichever bridge happens to be
+   * connected first (which previously leaked PTYs/commands across orgs).
    */
   send(
     sessionId: string,
@@ -592,27 +592,21 @@ export class SessionRouter {
       this.bindSession(sessionId, expectedHomeId);
     }
 
-    let runtimeId = this.sessionRuntime.get(sessionId);
+    const runtimeId = this.sessionRuntime.get(sessionId);
+    if (!runtimeId) return "no_runtime";
+
     const requiredTool =
       "tool" in command && typeof command.tool === "string" ? command.tool : undefined;
-
-    // Auto-bind to a default runtime if not yet bound. Only reachable when no
-    // expectedHomeId was passed (new sessions without a home yet).
-    if (!runtimeId) {
-      const runtime = this.getDefaultRuntime(requiredTool);
-      if (!runtime) return "no_runtime";
-      this.bindSession(sessionId, runtime.id);
-      runtimeId = runtime.id;
-    }
 
     const runtime = this.runtimes.get(runtimeId);
     if (!runtime) return "session_unbound";
     if (runtime.ws.readyState !== runtime.ws.OPEN) return "runtime_disconnected";
     if (requiredTool && !runtime.supportedTools.includes(requiredTool)) {
-      const fallbackRuntime = this.getDefaultRuntime(requiredTool);
-      if (!fallbackRuntime) return "no_runtime";
-      this.bindSession(sessionId, fallbackRuntime.id);
-      return this.send(sessionId, command);
+      // The bound runtime doesn't speak the requested tool. We used to silently
+      // rebind to any connected runtime that did — that's a cross-tenant
+      // dispatch, so we now fail and let the caller resolve a proper home
+      // runtime via the authorized-runtime-selection path.
+      return "no_runtime";
     }
 
     try {
