@@ -12,6 +12,41 @@ const WEB_URL = process.env.TRACE_WEB_URL || `http://localhost:${3000 + Number(p
 const SERVER_PUBLIC_URL = process.env.TRACE_SERVER_PUBLIC_URL || WEB_URL;
 const GITHUB_CALLBACK_URL = `${SERVER_PUBLIC_URL.replace(/\/$/, "")}/auth/github/callback`;
 
+// Mobile uses ASWebAuthenticationSession which only terminates when the server
+// redirects to a registered custom URL scheme. Web origins can't satisfy that
+// requirement, so we recognise a sentinel origin value and swap the final
+// redirect to the mobile scheme while the rest of the OAuth flow stays identical.
+const MOBILE_ORIGIN = "trace-mobile";
+const MOBILE_REDIRECT_URL = "trace://auth/callback";
+const OAUTH_STATE_TTL_SECONDS = 5 * 60;
+
+type OAuthStatePayload = { origin: string; tokenType: "oauth_state" };
+
+export function createOAuthStateToken(origin: string): string {
+  return jwt.sign(
+    { origin, tokenType: "oauth_state" } satisfies OAuthStatePayload,
+    JWT_SECRET,
+    { expiresIn: OAUTH_STATE_TTL_SECONDS },
+  );
+}
+
+export function verifyOAuthStateToken(state: string): { origin: string } | null {
+  try {
+    const payload = jwt.verify(state, JWT_SECRET) as OAuthStatePayload;
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      payload.tokenType !== "oauth_state" ||
+      typeof payload.origin !== "string"
+    ) {
+      return null;
+    }
+    return { origin: payload.origin };
+  } catch {
+    return null;
+  }
+}
+
 // Redirect to GitHub OAuth
 router.get("/auth/github", (req: Request, res: Response) => {
   const origin = req.query.origin as string | undefined;
@@ -21,7 +56,7 @@ router.get("/auth/github", (req: Request, res: Response) => {
     scope: "read:user user:email",
   });
   if (origin) {
-    params.set("state", origin);
+    params.set("state", createOAuthStateToken(origin));
   }
   res.redirect(`https://github.com/login/oauth/authorize?${params}`);
 });
@@ -128,8 +163,15 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
       path: "/",
     });
 
-    // Use origin from OAuth state param if available, otherwise fall back to WEB_URL
-    const redirectOrigin = (req.query.state as string) || WEB_URL;
+    const origin = resolveStateOrigin(req.query.state);
+
+    if (origin === MOBILE_ORIGIN) {
+      const target = new URL(MOBILE_REDIRECT_URL);
+      target.searchParams.set("token", token);
+      return res.redirect(302, target.toString());
+    }
+
+    const redirectOrigin = origin ?? WEB_URL;
 
     // Signal the opener window and close the popup.
     // Always store the token in localStorage first — window.opener can be
@@ -152,7 +194,11 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
     </script></body></html>`);
   } catch (err) {
     console.error("GitHub OAuth error:", err);
-    const errorOrigin = (req.query.state as string) || WEB_URL;
+    const origin = resolveStateOrigin(req.query.state);
+    if (origin === MOBILE_ORIGIN) {
+      return res.redirect(302, `${MOBILE_REDIRECT_URL}?error=auth_failed`);
+    }
+    const errorOrigin = origin ?? WEB_URL;
     res.send(`<!DOCTYPE html><html><body><script>
       if (window.opener) {
         window.opener.postMessage({ type: "auth:error" }, "${errorOrigin}");
@@ -163,6 +209,11 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
     </script></body></html>`);
   }
 });
+
+function resolveStateOrigin(rawState: unknown): string | null {
+  if (typeof rawState !== "string" || rawState.length === 0) return null;
+  return verifyOAuthStateToken(rawState)?.origin ?? null;
+}
 
 // Get current user with org memberships
 router.get("/auth/me", async (req: Request, res: Response) => {
