@@ -22,6 +22,25 @@ const OAUTH_STATE_TTL_SECONDS = 5 * 60;
 
 type OAuthStatePayload = { origin: string; tokenType: "oauth_state" };
 
+// Origins permitted on /auth/github and /auth/github/callback. The popup
+// embeds this as the postMessage target — accepting arbitrary values would
+// let an attacker-chosen origin receive the token.
+export function getAllowedOAuthOrigins(): Set<string> {
+  const origins = new Set<string>([WEB_URL, MOBILE_ORIGIN]);
+  const extra = process.env.CORS_ALLOWED_ORIGINS;
+  if (extra) {
+    for (const value of extra.split(",")) {
+      const trimmed = value.trim();
+      if (trimmed) origins.add(trimmed);
+    }
+  }
+  return origins;
+}
+
+function isAllowedOrigin(origin: string): boolean {
+  return getAllowedOAuthOrigins().has(origin);
+}
+
 export function createOAuthStateToken(origin: string): string {
   return jwt.sign(
     { origin, tokenType: "oauth_state" } satisfies OAuthStatePayload,
@@ -47,6 +66,18 @@ export function verifyOAuthStateToken(state: string): { origin: string } | null 
   }
 }
 
+// Safely embed a string inside a <script> block. JSON.stringify handles
+// quote/backslash/unicode escaping; the `<` / `>` / `&` escapes stop a
+// pathological payload from closing the script tag.
+function escapeJsString(value: string): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
 // Redirect to GitHub OAuth
 router.get("/auth/github", (req: Request, res: Response) => {
   const origin = req.query.origin as string | undefined;
@@ -55,7 +86,7 @@ router.get("/auth/github", (req: Request, res: Response) => {
     redirect_uri: GITHUB_CALLBACK_URL,
     scope: "read:user user:email",
   });
-  if (origin) {
+  if (origin && isAllowedOrigin(origin)) {
     params.set("state", createOAuthStateToken(origin));
   }
   res.redirect(`https://github.com/login/oauth/authorize?${params}`);
@@ -172,6 +203,8 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
     }
 
     const redirectOrigin = origin ?? WEB_URL;
+    const tokenLiteral = escapeJsString(token);
+    const originLiteral = escapeJsString(redirectOrigin);
 
     // Signal the opener window and close the popup.
     // Always store the token in localStorage first — window.opener can be
@@ -181,14 +214,14 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
     // BroadcastChannel give the main window two independent fallback
     // signals that work even when the opener reference is severed.
     res.send(`<!DOCTYPE html><html><body><script>
-      try { localStorage.setItem("trace_token", "${token}"); } catch(e) {}
+      try { localStorage.setItem("trace_token", ${tokenLiteral}); } catch(e) {}
       try {
         var bc = new BroadcastChannel("trace_auth");
-        bc.postMessage({ type: "auth:success", token: "${token}" });
+        bc.postMessage({ type: "auth:success", token: ${tokenLiteral} });
         bc.close();
       } catch(e) {}
       if (window.opener) {
-        window.opener.postMessage({ type: "auth:success", token: "${token}" }, "${redirectOrigin}");
+        window.opener.postMessage({ type: "auth:success", token: ${tokenLiteral} }, ${originLiteral});
       }
       window.close();
     </script></body></html>`);
@@ -199,9 +232,10 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
       return res.redirect(302, `${MOBILE_REDIRECT_URL}?error=auth_failed`);
     }
     const errorOrigin = origin ?? WEB_URL;
+    const errorOriginLiteral = escapeJsString(errorOrigin);
     res.send(`<!DOCTYPE html><html><body><script>
       if (window.opener) {
-        window.opener.postMessage({ type: "auth:error" }, "${errorOrigin}");
+        window.opener.postMessage({ type: "auth:error" }, ${errorOriginLiteral});
         window.close();
       } else {
         document.body.textContent = "Authentication failed";
@@ -212,7 +246,8 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
 
 function resolveStateOrigin(rawState: unknown): string | null {
   if (typeof rawState !== "string" || rawState.length === 0) return null;
-  return verifyOAuthStateToken(rawState)?.origin ?? null;
+  const origin = verifyOAuthStateToken(rawState)?.origin ?? null;
+  return origin && isAllowedOrigin(origin) ? origin : null;
 }
 
 // Get current user with org memberships

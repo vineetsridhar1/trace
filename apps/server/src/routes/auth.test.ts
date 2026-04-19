@@ -1,7 +1,6 @@
 import { createServer, type Server } from "http";
 import type { AddressInfo } from "net";
 import express from "express";
-import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -24,6 +23,7 @@ import { prisma } from "../lib/db.js";
 import {
   authRouter,
   createOAuthStateToken,
+  getAllowedOAuthOrigins,
   verifyOAuthStateToken,
 } from "./auth.js";
 
@@ -65,7 +65,6 @@ describe("github oauth callback", () => {
 
   beforeEach(async () => {
     const app = express();
-    app.use(cookieParser());
     app.use(authRouter);
 
     server = createServer(app);
@@ -156,5 +155,40 @@ describe("github oauth callback", () => {
     const body = await res.text();
     expect(body).toContain("window.opener.postMessage");
     expect(body).not.toContain("trace://auth/callback");
+  });
+
+  it("falls back to WEB_URL when the signed state carries a non-allowlisted origin", async () => {
+    const state = createOAuthStateToken("http://evil.example.com");
+    const res = await fetch(
+      `${baseUrl}/auth/github/callback?code=abc&state=${encodeURIComponent(state)}`,
+      { redirect: "manual" },
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("window.opener.postMessage");
+    expect(body).not.toContain("evil.example.com");
+  });
+});
+
+describe("oauth origin allowlist", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("always permits the mobile sentinel and the configured web url", () => {
+    const origins = getAllowedOAuthOrigins();
+    expect(origins.has("trace-mobile")).toBe(true);
+    expect(origins.size).toBeGreaterThanOrEqual(2);
+  });
+
+  it("includes CORS_ALLOWED_ORIGINS when set", () => {
+    vi.stubEnv(
+      "CORS_ALLOWED_ORIGINS",
+      "https://trace.app, https://staging.trace.app",
+    );
+    const origins = getAllowedOAuthOrigins();
+    expect(origins.has("https://trace.app")).toBe(true);
+    expect(origins.has("https://staging.trace.app")).toBe(true);
   });
 });
