@@ -28,6 +28,7 @@ The remaining session-screen actions: the header overflow menu (stop, copy link,
 ## Dependencies
 
 - [19 — Session Group Header](19-session-group-detail-and-tab-strip.md)
+- [11a — IconButton SF Symbols + Context Menu](11a-iconbutton-sf-symbols-context-menu.md) — overflow `IconButton` renders the context menu
 - [21 — Connection Lost Banner node](21-session-message-node-renderers.md)
 - [23 — Input Composer](23-session-input-and-queued-messages.md)
 
