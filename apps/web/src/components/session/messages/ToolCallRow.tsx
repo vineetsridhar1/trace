@@ -56,7 +56,7 @@ export function ToolCallRow({ name, input, output, timestamp }: ToolCallRowProps
       <button
         type="button"
         className="tool-cmd-button"
-        onClick={() => hasBodyContent && setOpen(!open)}
+        onClick={() => setOpen(!open)}
         disabled={!hasBodyContent}
       >
         <span
