@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useEffect } from "react";
 import { useAuthStore, type AuthState } from "../stores/auth";
 import { useEntityStore } from "../stores/entity";
 import { useOnboardingStore } from "../stores/onboarding";
@@ -12,7 +12,6 @@ export interface OnboardingStatus {
   allDone: boolean;
   completedCount: number;
   totalCount: number;
-  refetch: () => void;
 }
 
 export function useOnboardingStatus(): OnboardingStatus {
@@ -22,10 +21,12 @@ export function useOnboardingStatus(): OnboardingStatus {
   const tokensLoaded = useOnboardingStore((s) => s.tokensLoaded);
   const tokensLoading = useOnboardingStore((s) => s.tokensLoading);
   const reposLoadedForOrg = useOnboardingStore((s) => s.reposLoadedForOrg);
+  const repoCount = useOnboardingStore((s) => s.repoCount);
   const fetchApiTokens = useOnboardingStore((s) => s.fetchApiTokens);
   const ensureReposLoaded = useOnboardingStore((s) => s.ensureReposLoaded);
 
-  const repoCount = useEntityStore((s) => Object.keys(s.repos).length);
+  // Channels are populated by the org subscription (useOrgEvents) which is org-scoped,
+  // so entity store channels reliably reflect the active org.
   const channelCount = useEntityStore((s) => Object.keys(s.channels).length);
 
   useEffect(() => {
@@ -44,11 +45,6 @@ export function useOnboardingStatus(): OnboardingStatus {
   const totalCount = 4;
   const allDone = completedCount === totalCount;
 
-  const refetch = useCallback(() => {
-    void fetchApiTokens();
-    if (activeOrgId) void ensureReposLoaded(activeOrgId);
-  }, [activeOrgId, fetchApiTokens, ensureReposLoaded]);
-
   return {
     loading: tokensLoading && !tokensLoaded,
     anthropicSet,
@@ -58,6 +54,5 @@ export function useOnboardingStatus(): OnboardingStatus {
     allDone,
     completedCount,
     totalCount,
-    refetch,
   };
 }

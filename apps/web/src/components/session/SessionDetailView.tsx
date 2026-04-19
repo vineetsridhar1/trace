@@ -269,7 +269,7 @@ export function SessionDetailView({
       });
   }, [sessionId]);
 
-  const { nodes, completedAgentTools } = useMemo(
+  const { nodes, completedAgentTools, toolResultByUseId } = useMemo(
     () => buildSessionNodes(eventIds, events),
     [eventIds, events],
   );
@@ -351,6 +351,7 @@ export function SessionDetailView({
                 loadingOlder={loadingOlder}
                 onLoadOlder={fetchOlderEvents}
                 completedAgentTools={completedAgentTools}
+                toolResultByUseId={toolResultByUseId}
                 scrollToEventId={scrollToEventId}
                 onScrollComplete={onScrollComplete}
               />

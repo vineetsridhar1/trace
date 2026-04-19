@@ -37,8 +37,11 @@ export interface OnboardingState {
   tokensLoaded: boolean;
   tokensLoading: boolean;
   reposLoadedForOrg: string | null;
+  reposLoading: boolean;
+  repoCount: number;
   fetchApiTokens: () => Promise<void>;
   ensureReposLoaded: (orgId: string) => Promise<void>;
+  invalidateRepos: () => void;
   reset: () => void;
 }
 
@@ -53,6 +56,8 @@ export const useOnboardingStore = create<OnboardingState>((set: Setter, get: Get
   tokensLoaded: false,
   tokensLoading: false,
   reposLoadedForOrg: null,
+  reposLoading: false,
+  repoCount: 0,
 
   fetchApiTokens: async () => {
     if (get().tokensLoading) return;
@@ -78,17 +83,21 @@ export const useOnboardingStore = create<OnboardingState>((set: Setter, get: Get
 
   ensureReposLoaded: async (orgId: string) => {
     if (get().reposLoadedForOrg === orgId) return;
+    set({ reposLoading: true });
     const result = await client
       .query(REPOS_QUERY, { organizationId: orgId }, { requestPolicy: "network-only" })
       .toPromise();
     if (result.error) {
       console.error("[onboarding] repos query failed", result.error);
+      set({ reposLoading: false });
       return;
     }
     const repos = (result.data?.repos ?? []) as Array<Repo & { id: string }>;
     useEntityStore.getState().upsertMany("repos", repos);
-    set({ reposLoadedForOrg: orgId });
+    set({ reposLoadedForOrg: orgId, reposLoading: false, repoCount: repos.length });
   },
+
+  invalidateRepos: () => set({ reposLoadedForOrg: null }),
 
   reset: () =>
     set({
@@ -97,6 +106,8 @@ export const useOnboardingStore = create<OnboardingState>((set: Setter, get: Get
       tokensLoaded: false,
       tokensLoading: false,
       reposLoadedForOrg: null,
+      reposLoading: false,
+      repoCount: 0,
     }),
 }));
 

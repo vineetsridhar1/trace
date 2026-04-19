@@ -29,10 +29,12 @@ export interface SubagentRowProps {
   scopeKey?: string;
   gitCheckpointsByPromptEventId?: Map<string, GitCheckpoint[]>;
   completedAgentTools?: Map<string, AgentToolResult>;
+  toolResultByUseId?: Map<string, unknown>;
 }
 
 const EMPTY_CHECKPOINTS: Map<string, GitCheckpoint[]> = new Map();
 const EMPTY_AGENT_TOOLS: Map<string, AgentToolResult> = new Map();
+const EMPTY_TOOL_RESULTS: Map<string, unknown> = new Map();
 
 export function SubagentRow({
   description,
@@ -45,6 +47,7 @@ export function SubagentRow({
   scopeKey,
   gitCheckpointsByPromptEventId,
   completedAgentTools,
+  toolResultByUseId,
 }: SubagentRowProps) {
   const [expanded, setExpanded] = useState(false);
   const style = getTypeStyle(subagentType);
@@ -98,6 +101,7 @@ export function SubagentRow({
               id={childId}
               gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId ?? EMPTY_CHECKPOINTS}
               completedAgentTools={completedAgentTools ?? EMPTY_AGENT_TOOLS}
+              toolResultByUseId={toolResultByUseId ?? EMPTY_TOOL_RESULTS}
             />
           ))}
           {!isLoading && (result != null || rawResponse != null) && (

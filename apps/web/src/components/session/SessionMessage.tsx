@@ -6,7 +6,6 @@ import { useEventScopeKey } from "./EventScopeContext";
 import { UserBubble } from "./messages/UserBubble";
 import { AssistantText } from "./messages/AssistantText";
 import { ToolCallRow } from "./messages/ToolCallRow";
-import { ToolResultRow } from "./messages/ToolResultRow";
 import { SubagentRow } from "./messages/SubagentRow";
 import { CompletionRow } from "./messages/CompletionRow";
 import { SystemBadge } from "./messages/SystemBadge";
@@ -26,10 +25,20 @@ function str(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
-/** Narrow unknown to the output type expected by ToolResultRow */
+/** Narrow and unwrap tool result content for display in ToolCallRow */
 function asOutput(value: unknown): string | Record<string, unknown> | undefined {
   if (typeof value === "string") return value;
-  return asJsonObject(value);
+  const obj = asJsonObject(value);
+  if (!obj) return undefined;
+  // Unwrap nested { output: ... } envelope that some adapters produce
+  if ("output" in obj) {
+    const nested = obj.output;
+    if (typeof nested === "string") return nested;
+    if (nested && typeof nested === "object" && !Array.isArray(nested))
+      return nested as Record<string, unknown>;
+    return undefined;
+  }
+  return obj;
 }
 
 /** Serialize agent result content to a display string */
@@ -48,6 +57,7 @@ function renderAssistantContent(
   ts: string,
   scopeKey: string,
   completedAgentTools: Map<string, AgentToolResult>,
+  toolResultByUseId: Map<string, unknown>,
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>,
 ) {
   const message = asJsonObject(payload.message);
@@ -64,9 +74,9 @@ function renderAssistantContent(
       elements.push(<AssistantText key={i} text={block.text} timestamp={ts} />);
     } else if (block.type === "tool_use") {
       const name = str(block.name, "Tool");
+      const toolUseId = typeof block.id === "string" ? block.id : undefined;
       if (AGENT_NAMES.has(name.toLowerCase())) {
         const input = asJsonObject(block.input);
-        const toolUseId = typeof block.id === "string" ? block.id : undefined;
         const agentResult = toolUseId ? completedAgentTools.get(toolUseId) : undefined;
         elements.push(
           <SubagentRow
@@ -79,26 +89,24 @@ function renderAssistantContent(
             toolUseId={toolUseId}
             scopeKey={scopeKey}
             completedAgentTools={completedAgentTools}
+            toolResultByUseId={toolResultByUseId}
             gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
           />,
         );
       } else {
+        const rawOutput = toolUseId ? toolResultByUseId.get(toolUseId) : undefined;
         elements.push(
-          <ToolCallRow key={i} name={name} input={asJsonObject(block.input)} timestamp={ts} />,
+          <ToolCallRow
+            key={i}
+            name={name}
+            input={asJsonObject(block.input)}
+            output={asOutput(rawOutput)}
+            timestamp={ts}
+          />,
         );
       }
     } else if (block.type === "tool_result") {
-      // Agent/task tool_results are rendered inline in the SubagentRow of the
-      // matching tool_use event — don't render them as standalone rows.
-      if (AGENT_NAMES.has(str(block.name, "").toLowerCase())) continue;
-      elements.push(
-        <ToolResultRow
-          key={i}
-          name={str(block.name, "Tool")}
-          output={asOutput(block.content ?? block.output)}
-          timestamp={ts}
-        />,
-      );
+      // Results are rendered inline inside the matching ToolCallRow — skip standalone rows.
     }
   }
 
@@ -110,6 +118,7 @@ function renderSessionOutput(
   ts: string,
   scopeKey: string,
   completedAgentTools: Map<string, AgentToolResult>,
+  toolResultByUseId: Map<string, unknown>,
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>,
 ) {
   const type = payload.type;
@@ -121,6 +130,7 @@ function renderSessionOutput(
       ts,
       scopeKey,
       completedAgentTools,
+      toolResultByUseId,
       gitCheckpointsByPromptEventId,
     );
   }
@@ -140,10 +150,12 @@ export const SessionMessage = memo(function SessionMessage({
   id,
   gitCheckpointsByPromptEventId,
   completedAgentTools,
+  toolResultByUseId,
 }: {
   id: string;
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
   completedAgentTools: Map<string, AgentToolResult>;
+  toolResultByUseId: Map<string, unknown>;
 }) {
   const scopeKey = useEventScopeKey();
   const eventType = useScopedEventField(scopeKey, id, "eventType");
@@ -178,6 +190,7 @@ export const SessionMessage = memo(function SessionMessage({
             timestamp,
             scopeKey,
             completedAgentTools,
+            toolResultByUseId,
             gitCheckpointsByPromptEventId,
           )
         : null;

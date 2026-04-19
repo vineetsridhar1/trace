@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Copy, LogOut, RefreshCw, Check } from "lucide-react";
 import { useAuthStore, type AuthState } from "../../stores/auth";
 import { Button } from "../ui/button";
@@ -9,7 +9,12 @@ export function NoOrgWelcome() {
   const logout = useAuthStore((s: AuthState) => s.logout);
   const [checking, setChecking] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const email = user?.email ?? "";
+
+  useEffect(() => {
+    return () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); };
+  }, []);
 
   async function handleCheckAgain() {
     setChecking(true);
@@ -22,7 +27,8 @@ export function NoOrgWelcome() {
     try {
       await navigator.clipboard.writeText(email);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       // ignore
     }

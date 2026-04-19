@@ -3,6 +3,7 @@ import type { Repo } from "@trace/gql";
 import { useAuthStore } from "../../stores/auth";
 import { useEntityStore, useEntityIds } from "../../stores/entity";
 import type { EntityTableMap } from "../../stores/entity";
+import { useOnboardingStore } from "../../stores/onboarding";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { RepoCard } from "./RepoCard";
@@ -55,7 +56,10 @@ export function RepositoriesSection() {
             Codebases linked to your organization.
           </p>
         </div>
-        <CreateRepoDialog onCreated={() => setDesktopRefreshKey((k: number) => k + 1)} />
+        <CreateRepoDialog onCreated={() => {
+          setDesktopRefreshKey((k: number) => k + 1);
+          useOnboardingStore.getState().invalidateRepos();
+        }} />
       </div>
 
       {sortedRepoIds.length === 0 ? (
