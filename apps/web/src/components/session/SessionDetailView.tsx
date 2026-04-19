@@ -25,7 +25,7 @@ import {
   DISMISS_SESSION_MUTATION,
   RETRY_SESSION_GROUP_SETUP_MUTATION,
   SEND_SESSION_MESSAGE_MUTATION,
-} from "../../lib/mutations";
+} from "@trace/client-core";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 
 const SESSION_DETAIL_QUERY = gql`

@@ -18,12 +18,18 @@ Wire up the end-to-end authentication experience on mobile: a sign-in screen tha
   - On press: `WebBrowser.openAuthSessionAsync(\`${API_URL}/auth/github?origin=trace-mobile\`, 'trace://auth/callback')`.
   - On success, parse `token` from returned URL and call `signInWithToken(token)` (from client-core). `signInWithToken` persists the token via `Platform.secureStorage` and runs `fetchMe()` itself — do not chain a second `fetchMe`.
   - Error state shown inline if auth fails.
+- **Org-event UI bindings** (must run **before** any `orgEvents` subscription opens, e.g. in `apps/mobile/src/lib/event-bindings.ts` imported from `app/_layout.tsx` after the platform adapter):
+  - Call `setOrgEventUIBindings(...)` from `@trace/client-core` with mobile impls of `getActive*Id`, `setActive*Id`, `mark*Done`, `openSessionTab` (no-op on mobile), and `navigateToSession` (delegates to the expo-router `router.push("/sessions/${groupId}/${sessionId}")`).
+  - Without this, the shared `handleOrgEvent` will silently skip badge marks, continuation-session navigation, and post-deletion redirects (see mobile-plan.md §13.2).
+- **GraphQL client construction** (`apps/mobile/src/lib/urql.ts`):
+  - Use `createGqlClient({ httpUrl, wsUrl, onConnectionChange })` from `@trace/client-core`. Wire `onConnectionChange` to the mobile equivalent of `useConnectionStore` if/when one exists.
+  - On org switch, dispose and recreate the client so the WS handshake picks up the new `X-Organization-Id` and the entity store is rebuilt cleanly.
 - **Post-auth hydration** (`apps/mobile/src/hooks/useHydrate.ts`, <200 lines):
   - On auth becoming true and active org set, fire:
     - `organization(activeOrgId)` query to hydrate channels/channel groups
     - `mySessions(activeOrgId)` to seed session list
   - Upsert results into the entity store.
-  - Subscribe to `orgEvents(activeOrgId)` (ambient) — stays subscribed for session duration.
+  - Subscribe to `orgEvents(activeOrgId)` (ambient) using `client.subscription(...).subscribe(({ data }) => handleOrgEvent(data.orgEvents))` — keep the hook a thin wrapper around `handleOrgEvent` from `@trace/client-core`. Stays subscribed for session duration.
 - **Org switcher sheet** (`apps/mobile/src/components/auth/OrgSwitcherSheet.tsx`, <200 lines):
   - Native iOS sheet with medium detent.
   - Lists `orgMemberships` from auth store.
@@ -42,9 +48,11 @@ Wire up the end-to-end authentication experience on mobile: a sign-in screen tha
 - [ ] Cold-launching the app with no token lands on sign-in
 - [ ] Completing GitHub OAuth returns to the app, stores token, shows authed shell
 - [ ] Sign-in screen includes working Terms + Privacy footer links
+- [ ] urql client built via `createGqlClient` from `@trace/client-core`
+- [ ] `setOrgEventUIBindings(...)` is called at boot before any subscription opens
 - [ ] Entity store is hydrated with channels + sessions after auth
-- [ ] Ambient `orgEvents` subscription is active
-- [ ] Org switcher changes active org, rebuilds the client, rehydrates, and resubscribes
+- [ ] Ambient `orgEvents` subscription is active and routes events through `handleOrgEvent`
+- [ ] Org switcher changes active org, disposes + rebuilds the client, rehydrates, and resubscribes
 - [ ] Sign-out clears state and returns to sign-in
 - [ ] 401 from any GraphQL operation clears auth and returns to sign-in
 - [ ] All files <200 lines

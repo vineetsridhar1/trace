@@ -1,14 +1,15 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { gql } from "@urql/core";
 import type { Event } from "@trace/gql";
-import { client } from "../lib/urql";
-import { useScopedEventIds, eventScopeKey } from "@trace/client-core";
-import { useAuthStore } from "@trace/client-core";
-import { HIDDEN_SESSION_PAYLOAD_TYPES } from "../lib/session-event-filters";
 import {
+  eventScopeKey,
+  handleSessionEvent,
   upsertFetchedSessionEventsWithOptimisticResolution,
-  upsertSessionEventWithOptimisticResolution,
-} from "../lib/optimistic-message";
+  useAuthStore,
+  useScopedEventIds,
+} from "@trace/client-core";
+import { client } from "../lib/urql";
+import { HIDDEN_SESSION_PAYLOAD_TYPES } from "../lib/session-event-filters";
 
 const PAGE_SIZE = 100;
 const SESSION_EVENTS_QUERY = gql`
@@ -129,8 +130,7 @@ export function useSessionEvents(sessionId: string) {
       })
       .subscribe((result: { data?: Record<string, unknown> }) => {
         if (!result.data?.sessionEvents) return;
-        const event = result.data.sessionEvents as Event & { id: string };
-        upsertSessionEventWithOptimisticResolution(sessionId, event);
+        handleSessionEvent(sessionId, result.data.sessionEvents as Event & { id: string });
       });
 
     return () => subscription.unsubscribe();

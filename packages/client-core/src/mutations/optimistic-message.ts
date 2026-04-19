@@ -1,9 +1,9 @@
 import type { Event, Message } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
 import type { JsonObject } from "@trace/shared";
-import { useEntityStore, eventScopeKey, messageScopeKey } from "@trace/client-core";
-import { useAuthStore } from "@trace/client-core";
-import { generateUUID } from "./uuid";
+import { useEntityStore, eventScopeKey, messageScopeKey } from "../stores/entity.js";
+import { useAuthStore } from "../stores/auth.js";
+import { generateUUID } from "../utils/uuid.js";
 
 type EntityStoreState = {
   messages: Record<string, Message>;
@@ -39,7 +39,6 @@ export interface PendingChatEntry {
 const pendingSessionOptimistic = new Map<string, PendingSessionEntry[]>();
 const pendingChatOptimistic = new Map<string, PendingChatEntry[]>();
 
-/** Remove entries older than PENDING_TTL_MS from all pending Maps. */
 function sweepStalePending(): void {
   const now = Date.now();
   for (const [key, queue] of pendingSessionOptimistic) {
@@ -54,7 +53,6 @@ function sweepStalePending(): void {
   }
 }
 
-// Periodic sweep to prevent unbounded growth under degraded network conditions
 setInterval(sweepStalePending, PENDING_TTL_MS);
 
 function enqueue<T>(map: Map<string, T[]>, key: string, item: T): void {
@@ -188,10 +186,6 @@ export interface OptimisticSessionIds {
   clientMutationId: string;
 }
 
-/**
- * Insert an optimistic `message_sent` event into the session's scoped
- * event bucket so it appears instantly in the session log.
- */
 export function optimisticallyInsertSessionMessage(
   sessionId: string,
   text: string,
@@ -315,10 +309,6 @@ export interface OptimisticChatIds {
   clientMutationId: string;
 }
 
-/**
- * Insert an optimistic chat message into the messages table and
- * a corresponding event into the chat's scoped event bucket.
- */
 export function optimisticallyInsertChatMessage(
   chatId: string,
   html: string,
@@ -338,7 +328,6 @@ export function optimisticallyInsertChatMessage(
     avatarUrl: user?.avatarUrl ?? null,
   };
 
-  // Insert message entity
   useEntityStore.getState().upsert("messages", tempMessageId, {
     id: tempMessageId,
     chatId,
@@ -357,7 +346,6 @@ export function optimisticallyInsertChatMessage(
     deletedAt: null,
   });
 
-  // Insert scoped event
   const event: Event = {
     id: tempEventId,
     scopeType: "chat",
@@ -399,14 +387,11 @@ export function removeOptimisticChatMessage(
     (entry) => entry.tempMessageId === tempMessageId && entry.tempEventId === tempEventId,
   );
 
-  // Atomic removal: delete message entity, update _messageIdsByScope index,
-  // and clean up scoped event in a single setState.
   const eventSK = eventScopeKey("chat", chatId);
   const msgSK = messageScopeKey("chat", chatId);
   useEntityStore.setState((state: EntityStoreState) => {
     const { [tempMessageId]: _removed, ...restMessages } = state.messages;
 
-    // Update _messageIdsByScope index
     let nextMsgIndex = state._messageIdsByScope;
     const scopeIds = nextMsgIndex[msgSK];
     if (scopeIds?.includes(tempMessageId)) {
@@ -414,7 +399,6 @@ export function removeOptimisticChatMessage(
       nextMsgIndex = { ...nextMsgIndex, [msgSK]: filtered };
     }
 
-    // Clean up scoped event
     let nextEventsByScope = state.eventsByScope;
     const bucket = nextEventsByScope[eventSK];
     if (bucket?.[tempEventId]) {
@@ -459,28 +443,22 @@ export function upsertFetchedChatMessagesWithOptimisticResolution(
   );
 
   if (matched.length === 0) {
-    // No optimistic entries to reconcile — just upsert the real messages
     useEntityStore.getState().upsertMany("messages", messages);
     return;
   }
 
-  // Atomic reconciliation: upsert real messages, remove optimistic messages,
-  // update _messageIdsByScope, and clean up scoped events in a single setState.
   const msgSK = messageScopeKey("chat", chatId);
   useEntityStore.setState((state: EntityStoreState) => {
-    // Start with current messages, add all real messages
     const nextMessages = { ...state.messages };
     for (const message of messages) {
       nextMessages[message.id] = message;
     }
 
-    // Remove optimistic message entities
     for (const entry of matched) {
       delete nextMessages[entry.tempMessageId];
     }
 
-    // Update _messageIdsByScope: remove optimistic IDs, add real IDs
-    let nextMsgIndex = { ...state._messageIdsByScope };
+    const nextMsgIndex = { ...state._messageIdsByScope };
     const scopeIds = [...(nextMsgIndex[msgSK] ?? [])];
     const tempIds = new Set(matched.map((e) => e.tempMessageId));
     const filtered = scopeIds.filter((id: string) => !tempIds.has(id));
@@ -491,7 +469,6 @@ export function upsertFetchedChatMessagesWithOptimisticResolution(
     }
     nextMsgIndex[msgSK] = filtered;
 
-    // Clean up optimistic scoped events
     let nextEventsByScope = state.eventsByScope;
     let bucket = state.eventsByScope[scopeKey];
     let bucketChanged = false;

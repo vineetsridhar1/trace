@@ -6,7 +6,7 @@ import {
   START_SESSION_MUTATION,
   RUN_SESSION_MUTATION,
   TERMINATE_SESSION_MUTATION,
-} from "../../lib/mutations";
+} from "@trace/client-core";
 import { useEntityField } from "@trace/client-core";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";

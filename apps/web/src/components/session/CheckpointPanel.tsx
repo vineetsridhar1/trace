@@ -4,11 +4,11 @@ import type { GitCheckpoint } from "@trace/gql";
 import { shortSha } from "@trace/shared";
 import { GitCommitHorizontal, RotateCcw } from "lucide-react";
 import { client } from "../../lib/urql";
-import { START_SESSION_MUTATION } from "../../lib/mutations";
+import { START_SESSION_MUTATION } from "@trace/client-core";
 import { useEntityField, useEntityStore, type SessionGroupEntity, type SessionEntity } from "@trace/client-core";
 import { navigateToSession } from "../../stores/ui";
 import { cn } from "../../lib/utils";
-import { getSessionGroupChannelId } from "../../lib/session-group";
+import { getSessionGroupChannelId } from "@trace/client-core";
 import {
   RestoreCheckpointDialog,
   shouldShowRestoreDialog,

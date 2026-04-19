@@ -5,7 +5,7 @@ import type { CodingTool, SessionConnection, SessionRuntimeInstance } from "@tra
 import { useEntityStore, useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
-import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "../../lib/mutations";
+import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "@trace/client-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
 import { getModelsForTool, getDefaultModel, getModelLabel } from "./modelOptions";

@@ -11,7 +11,7 @@ import {
   optimisticallyInsertChatMessage,
   reconcileOptimisticChatMessage,
   removeOptimisticChatMessage,
-} from "../../lib/optimistic-message";
+} from "@trace/client-core";
 
 const SEND_CHAT_MESSAGE = gql`
   mutation SendChatMessage($chatId: ID!, $html: String, $parentId: ID, $clientMutationId: String) {

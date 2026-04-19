@@ -6,7 +6,7 @@ import {
   AVAILABLE_SESSION_RUNTIMES_QUERY,
   MOVE_SESSION_TO_RUNTIME_MUTATION,
   MOVE_SESSION_TO_CLOUD_MUTATION,
-} from "../../lib/mutations";
+} from "@trace/client-core";
 import { navigateToSession } from "../../stores/ui";
 import { useEntityField } from "@trace/client-core";
 

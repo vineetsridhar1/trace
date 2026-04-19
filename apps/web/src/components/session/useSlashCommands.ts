@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { BUILTIN_SLASH_COMMANDS } from "@trace/shared";
 import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
-import { SESSION_SLASH_COMMANDS_QUERY } from "../../lib/mutations";
+import { SESSION_SLASH_COMMANDS_QUERY } from "@trace/client-core";
 import type { SlashCommandItem } from "../chat/ChatEditor";
 
 const BUILTIN_FALLBACK: SlashCommandItem[] = BUILTIN_SLASH_COMMANDS.map((cmd: { name: string; description: string; category: string }) => ({

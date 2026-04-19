@@ -4,7 +4,7 @@ import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
 import {
   RETRY_SESSION_CONNECTION_MUTATION,
-} from "../../lib/mutations";
+} from "@trace/client-core";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
 
 /** Max number of automatic retry attempts before giving up */

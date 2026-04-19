@@ -4,7 +4,7 @@ import type { UserRole } from "@trace/gql";
 import { useAuthStore } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
-import { ORG_MEMBERS_QUERY } from "../../lib/mutations";
+import { ORG_MEMBERS_QUERY } from "@trace/client-core";
 import { getInitials } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";

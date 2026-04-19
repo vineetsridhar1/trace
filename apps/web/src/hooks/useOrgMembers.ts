@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { User } from "@trace/gql";
 import { client } from "../lib/urql";
-import { ORG_MEMBERS_QUERY } from "../lib/mutations";
+import { ORG_MEMBERS_QUERY } from "@trace/client-core";
 import { useEntityStore } from "@trace/client-core";
 import { useAuthStore } from "@trace/client-core";
 

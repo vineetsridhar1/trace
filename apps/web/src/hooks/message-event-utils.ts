@@ -1,7 +1,7 @@
 import type { Actor, Event, Message } from "@trace/gql";
 import { asJsonObject, isJsonObject } from "@trace/shared";
 import { useEntityStore, eventScopeKey, messageScopeKey } from "@trace/client-core";
-import { takePendingOptimisticChat } from "../lib/optimistic-message";
+import { takePendingOptimisticChat } from "@trace/client-core";
 
 type MessageScope =
   | { scopeType: "chat"; scopeId: string }

@@ -1,4 +1,4 @@
-import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
+import type { SessionEntity, SessionGroupEntity } from "../stores/entity.js";
 
 type ChannelRef = { id: string } | null | undefined;
 

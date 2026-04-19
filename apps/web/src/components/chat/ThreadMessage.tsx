@@ -8,7 +8,7 @@ import {
   EDIT_CHAT_MESSAGE_MUTATION,
   DELETE_CHANNEL_MESSAGE_MUTATION,
   EDIT_CHANNEL_MESSAGE_MUTATION,
-} from "../../lib/mutations";
+} from "@trace/client-core";
 import { MessageContent } from "./MessageContent";
 import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 import { SmallMessageAvatar } from "./MessageAvatar";

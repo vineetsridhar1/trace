@@ -3,7 +3,7 @@ import { Lock, Shield, Clock3, Zap } from "lucide-react";
 import { toast } from "sonner";
 import type { BridgeAccessCapability } from "@trace/gql";
 import { client } from "../../lib/urql";
-import { REQUEST_BRIDGE_ACCESS_MUTATION } from "../../lib/mutations";
+import { REQUEST_BRIDGE_ACCESS_MUTATION } from "@trace/client-core";
 import { formatCapabilities } from "../../lib/bridge-access";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
