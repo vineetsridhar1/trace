@@ -41,6 +41,7 @@ export interface OnboardingState {
   repoCount: number;
   fetchApiTokens: () => Promise<void>;
   ensureReposLoaded: (orgId: string) => Promise<void>;
+  invalidateRepos: () => void;
   reset: () => void;
 }
 
@@ -81,7 +82,7 @@ export const useOnboardingStore = create<OnboardingState>((set: Setter, get: Get
   },
 
   ensureReposLoaded: async (orgId: string) => {
-    if (get().reposLoadedForOrg === orgId || get().reposLoading) return;
+    if (get().reposLoadedForOrg === orgId) return;
     set({ reposLoading: true });
     const result = await client
       .query(REPOS_QUERY, { organizationId: orgId }, { requestPolicy: "network-only" })
@@ -95,6 +96,8 @@ export const useOnboardingStore = create<OnboardingState>((set: Setter, get: Get
     useEntityStore.getState().upsertMany("repos", repos);
     set({ reposLoadedForOrg: orgId, reposLoading: false, repoCount: repos.length });
   },
+
+  invalidateRepos: () => set({ reposLoadedForOrg: null }),
 
   reset: () =>
     set({

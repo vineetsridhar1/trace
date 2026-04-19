@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useEffect } from "react";
 import { useAuthStore, type AuthState } from "../stores/auth";
 import { useEntityStore } from "../stores/entity";
 import { useOnboardingStore } from "../stores/onboarding";
@@ -12,7 +12,6 @@ export interface OnboardingStatus {
   allDone: boolean;
   completedCount: number;
   totalCount: number;
-  refetch: () => void;
 }
 
 export function useOnboardingStatus(): OnboardingStatus {
@@ -46,11 +45,6 @@ export function useOnboardingStatus(): OnboardingStatus {
   const totalCount = 4;
   const allDone = completedCount === totalCount;
 
-  const refetch = useCallback(() => {
-    void fetchApiTokens();
-    if (activeOrgId) void ensureReposLoaded(activeOrgId);
-  }, [activeOrgId, fetchApiTokens, ensureReposLoaded]);
-
   return {
     loading: tokensLoading && !tokensLoaded,
     anthropicSet,
@@ -60,6 +54,5 @@ export function useOnboardingStatus(): OnboardingStatus {
     allDone,
     completedCount,
     totalCount,
-    refetch,
   };
 }
