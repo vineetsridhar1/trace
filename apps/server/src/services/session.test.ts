@@ -209,7 +209,6 @@ describe("SessionService", () => {
     sessionRouterMock.getRuntimeForSession.mockReturnValue(null);
     sessionRouterMock.getRuntime.mockReturnValue(null);
     sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
-    sessionRouterMock.getDefaultRuntime?.mockReturnValue?.(null);
     sessionRouterMock.destroyRuntime.mockResolvedValue(undefined);
     prismaMock.sessionGroup.findUnique.mockResolvedValue({
       ...makeSessionGroup(),
@@ -1497,9 +1496,6 @@ describe("SessionService", () => {
       sessionRouterMock.getRuntime.mockImplementation((id: string) =>
         id === "runtime-a" ? null : { id, label: id, ws: { readyState: 1, OPEN: 1 } },
       );
-      sessionRouterMock.getDefaultRuntime = vi
-        .fn()
-        .mockReturnValue({ id: "runtime-b", label: "Laptop B", ws: { readyState: 1, OPEN: 1 } });
 
       await service.retryConnection("session-1", "org-1", "user", "user-1");
 

@@ -617,15 +617,6 @@ export class SessionRouter {
     }
   }
 
-  getDefaultRuntime(requiredTool?: string): RuntimeInstance | undefined {
-    for (const runtime of this.runtimes.values()) {
-      if (runtime.ws.readyState !== runtime.ws.OPEN) continue;
-      if (requiredTool && !runtime.supportedTools.includes(requiredTool)) continue;
-      return runtime;
-    }
-    return undefined;
-  }
-
   /** Find a connected runtime that has a given repo registered (or any cloud runtime). */
   getRuntimeForRepo(repoId: string): RuntimeInstance | undefined {
     for (const runtime of this.runtimes.values()) {
@@ -1248,26 +1239,6 @@ export class SessionRouter {
     });
   }
 
-  // Backwards-compatible aliases for bridge-handler migration
-  registerBridge(bridgeId: string, ws: WebSocket) {
-    this.registerRuntime({
-      id: bridgeId,
-      label: bridgeId,
-      ws,
-      hostingMode: "local",
-      supportedTools: ["claude_code", "codex", "custom"],
-    });
-  }
-
-  unregisterBridge(bridgeId: string): string[] {
-    return this.unregisterRuntime(bridgeId);
-  }
-
-  getDefaultBridge(): { id: string; ws: WebSocket } | undefined {
-    const runtime = this.getDefaultRuntime();
-    if (!runtime) return undefined;
-    return { id: runtime.id, ws: runtime.ws };
-  }
 }
 
 export const sessionRouter = new SessionRouter();

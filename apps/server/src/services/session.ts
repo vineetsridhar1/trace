@@ -3434,7 +3434,11 @@ export class SessionService {
             repoId: session.repoId,
             sessionGroupId: session.sessionGroupId,
           })
-        : sessionRouter.getDefaultRuntime();
+        : // Cloud session without a persisted home: do NOT fall back to
+          // getDefaultRuntime — the runtime map is a single cross-tenant
+          // namespace, so "first connected runtime" can mean another user's
+          // bridge. The user must re-provision via Move instead.
+          undefined;
 
     if (!runtime) {
       const failureReason = homeRuntimeId ? "home_runtime_offline" : "no_runtime";
