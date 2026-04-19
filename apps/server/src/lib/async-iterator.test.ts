@@ -47,4 +47,17 @@ describe("filterAsyncIterator", () => {
 
     await expect(iterator.throw?.(new Error("boom"))).rejects.toThrow("boom");
   });
+
+  it("ends the stream and closes upstream when predicate returns 'end'", async () => {
+    const inner = iteratorFrom([1, 2, 3, 4]);
+    const returnSpy = vi.spyOn(inner, "return");
+    const iterator = filterAsyncIterator(inner, (value) => (value === 3 ? "end" : "keep"));
+
+    await expect(iterator.next()).resolves.toEqual({ value: 1, done: false });
+    await expect(iterator.next()).resolves.toEqual({ value: 2, done: false });
+    await expect(iterator.next()).resolves.toEqual({ value: undefined, done: true });
+    // Later .next() calls remain done.
+    await expect(iterator.next()).resolves.toEqual({ value: undefined, done: true });
+    expect(returnSpy).toHaveBeenCalled();
+  });
 });
