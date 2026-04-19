@@ -233,12 +233,15 @@ Extracted from `apps/web/src/` in a preparatory refactor **before** mobile devel
 
 - `stores/entity.ts` → entire entity store, selectors, scoped-event utilities
 - `stores/auth.ts` → refactored to accept a `Platform` adapter for storage
-- `hooks/useOrgEvents.ts` → split: the handler logic (pure function: event → store patch) moves to `client-core/events/handlers.ts`; the `useSubscription` hook wrapper stays in each app
-- `hooks/useSessionEvents.ts` → same split
+- `hooks/useOrgEvents.ts` → split: the event-to-store logic (`handleOrgEvent`) moves to `client-core/events/handlers.ts`; the `useSubscription` hook wrapper stays in each app
+- `hooks/useSessionEvents.ts` → same split (`handleSessionEvent`)
 - `lib/optimistic-message.ts` → all of it
 - `lib/mutations.ts` → all of it (mutations are platform-free)
+- `lib/urql.ts` → only the **factory** (`createGqlClient({ httpUrl, wsUrl, onConnectionChange })`); each app constructs its own client and passes it to the urql `Provider`
 - GraphQL operation definitions (queries/subs) → all of them, re-exported from `@trace/gql` if not already
 - Utility helpers: scope key builders, sort timestamp logic, etc.
+- `notifications/registry.ts` — `registerHandler` / `notifyForEvent`; per-platform notification delivery (sonner / expo-notifications) stays in the apps
+- `events/ui-bindings.ts` — `OrgEventUIBindings` registry the handlers call into for UI side effects (badge marking, active-session/channel/group navigation, session-tab opening). Each platform installs an impl via `setOrgEventUIBindings()` at boot. Mobile uses no-op or platform-appropriate impls for web-only concerns (e.g. `openSessionTab`).
 
 ### 7.2 What stays platform-specific
 
@@ -755,6 +758,17 @@ From `EventType` enum in `schema.graphql`:
 - `inbox_item_created`, `inbox_item_resolved`
 - `ticket_*`
 - `channel_member_*`
+- `chat_*` (`chat_created`, `chat_renamed`, `chat_member_*`)
+
+### 13.2 UI bindings registry
+
+The shared handlers in `client-core/events/handlers.ts` perform store mutations purely, but a few branches need to call into UI state (mark a session/channel/group as "done", redirect away from a deleted session, follow a continuation session into a new tab). They reach this via the `OrgEventUIBindings` interface from `client-core/events/ui-bindings.ts`. **Each app must call `setOrgEventUIBindings(...)` at boot — before the first `orgEvents` subscription opens** — or the handler will silently no-op those side effects.
+
+Mobile bindings:
+- `getActive*Id`/`setActive*Id` — read/write the mobile UI store (Zustand) keys for active session, session group, and channel.
+- `markChannelDone` / `markSessionDone` / `markSessionGroupDone` — push into the badge state used by the Home tab.
+- `openSessionTab` — no-op on mobile (no tab strip).
+- `navigateToSession(channelId, groupId, sessionId)` — call `router.push("/sessions/${groupId}/${sessionId}")`.
 
 ---
 
