@@ -39,7 +39,7 @@ export function SidebarPanel({
   bridgeAccess,
   onBridgeAccessRequested,
 }: SidebarPanelProps) {
-  const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess);
+  const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess ?? null);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">

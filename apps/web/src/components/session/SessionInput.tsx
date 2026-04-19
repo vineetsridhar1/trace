@@ -213,10 +213,11 @@ export function SessionInput({
     }
   }, [sessionId, mode, canSend, canQueue, images]);
 
-  // Show recovery panel when disconnected — but not for not_started sessions.
-  // This runs before the bridge-access gate so an offline owned bridge shows
-  // the recovery panel instead of a misleading "request permission" prompt.
-  if (disconnected && !isNotStarted) {
+  // If the user has bridge access (owner or granted), a disconnected session
+  // belongs to the recovery panel — not the permission prompt. Non-owners
+  // without access always see the permission prompt so they can request
+  // access, whether the bridge is online or offline.
+  if (bridgeInteractionAllowed && disconnected && !isNotStarted) {
     return <SessionRecoveryPanel sessionId={sessionId} connection={connection} />;
   }
 
