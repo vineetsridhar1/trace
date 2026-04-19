@@ -24,6 +24,7 @@ import { useIsMobile } from "./hooks/use-mobile";
 import { Toaster } from "./components/ui/sonner";
 import { InstallBanner } from "./components/InstallBanner";
 import { cn } from "./lib/utils";
+import { features } from "./lib/features";
 import { createQuickSession } from "./lib/create-quick-session";
 
 export function App() {
@@ -154,7 +155,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
                   <AgentDebugPage />
                 ) : activePage === "inbox" ? (
                   <InboxView />
-                ) : activePage === "tickets" ? (
+                ) : activePage === "tickets" && features.tickets ? (
                   <TicketsView />
                 ) : activeChatId ? (
                   <ChatView chatId={activeChatId} />
