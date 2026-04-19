@@ -4,7 +4,7 @@ import { typography, type ThemeTypography } from "./typography";
 import { spacing, type ThemeSpacing } from "./spacing";
 import { radius, type ThemeRadius } from "./radius";
 import { motion, type ThemeMotion } from "./motion";
-import { shadows, type ThemeShadows } from "./shadows";
+import { makeShadows, type ThemeShadows } from "./shadows";
 import { glass, type ThemeGlass } from "./glass";
 
 export type ThemeScheme = "dark" | "light";
@@ -27,23 +27,24 @@ const darkTheme: Theme = {
   spacing,
   radius,
   motion,
-  shadows,
+  shadows: makeShadows(colors.dark.shadow),
   glass,
 };
 
 /**
  * Returns the active theme.
  *
- * V1 is dark-only. We still read `useColorScheme` so the hook re-renders when
- * the system preference changes — this keeps consumers stable when a future
- * light variant lands; no consumer code has to change.
+ * V1 is dark-only. The `useColorScheme()` call subscribes the hook to OS
+ * appearance changes so when a future light variant lands, consumers
+ * automatically re-render with it — intentionally kept even though the
+ * return value is currently unused.
  */
 export function useTheme(): Theme {
   useColorScheme();
   return darkTheme;
 }
 
-export { colors, typography, spacing, radius, motion, shadows, glass };
+export { colors, typography, spacing, radius, motion, glass, makeShadows };
 export type {
   ThemeColors,
   ThemeTypography,

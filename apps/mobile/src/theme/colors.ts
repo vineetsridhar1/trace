@@ -37,6 +37,8 @@ export interface ThemeColors {
   glassTint: string;
   glassTintLight: string;
 
+  shadow: string;
+
   statusActive: string;
   statusNeedsInput: string;
   statusInReview: string;
@@ -71,6 +73,8 @@ const dark: ThemeColors = {
 
   glassTint: "rgba(23,23,23,0.72)",
   glassTintLight: "rgba(23,23,23,0.55)",
+
+  shadow: "#000000",
 
   statusActive: "#3b82f6",
   statusNeedsInput: "#f59e0b",

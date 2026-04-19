@@ -3,7 +3,9 @@
  * (added in ticket 12) which wraps `expo-glass-effect` on iOS 26+ and falls
  * back to `expo-blur` elsewhere.
  *
- * - `tint`      — the color laid over the blurred backdrop
+ * - `tint`      — the color laid over the blurred backdrop. Only read on
+ *                 iOS; the Android `BlurView` fallback uses its own tint
+ *                 enum (`systemThinMaterialDark` etc.) and ignores this.
  * - `intensity` — 0-100; higher is a stronger blur / more opaque glass
  * - `shape`     — how the container's edges are finished; `capsule` rounds
  *                 to the container's height, `pill` matches the radius scale

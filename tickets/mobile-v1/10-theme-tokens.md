@@ -15,6 +15,7 @@ Create a typed theme system for the mobile app: colors, typography, spacing, rad
     - `success`, `warning`
     - `border`, `borderMuted`
     - `glassTint` (dark), `glassTintLight` (pre-iOS-26 fallback)
+    - `shadow` — base color consumed by `shadows.ts`
     - Status colors: `statusActive`, `statusNeedsInput`, `statusInReview`, `statusDone`, `statusFailed`, `statusMerged`
   - `typography.ts`:
     - Font family: iOS system (`.AppleSystemUIFont`) via the system default
@@ -22,7 +23,7 @@ Create a typed theme system for the mobile app: colors, typography, spacing, rad
   - `spacing.ts` — 4pt scale: `xs=4, sm=8, md=12, lg=16, xl=24, xxl=32, xxxl=48`
   - `radius.ts` — `sm=6, md=10, lg=14, xl=20, full=9999`
   - `motion.ts` — spring configs (`snap: damping 25/stiffness 400`, `smooth: damping 20/stiffness 250`, `gentle: damping 18/stiffness 180`), durations for timing-based
-  - `shadows.ts` — iOS-style subtle shadows per elevation level
+  - `shadows.ts` — iOS-style subtle shadows per elevation level; exports a `makeShadows(shadowColor)` factory so shadow color comes from the theme rather than being hard-coded
   - `glass.ts` — Liquid Glass presets: `{ tint, intensity, shape }` per use-case (`tabBar`, `navBar`, `input`, `pinnedBar`, `card`)
 - Create `useTheme()` hook returning the current theme (dark-only for now; wire up `useColorScheme` but always return dark).
 - Export everything from `apps/mobile/src/theme/index.ts`.
