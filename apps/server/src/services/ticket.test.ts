@@ -74,7 +74,7 @@ describe("TicketService", () => {
   });
 
   it("updates tickets and records prior status in the event payload", async () => {
-    prismaMock.ticket.findUniqueOrThrow.mockResolvedValueOnce({
+    prismaMock.ticket.findFirstOrThrow.mockResolvedValueOnce({
       organizationId: "org-1",
       status: "todo",
     });
@@ -112,7 +112,7 @@ describe("TicketService", () => {
   });
 
   it("adds comments through event creation", async () => {
-    prismaMock.ticket.findUniqueOrThrow.mockResolvedValueOnce({ organizationId: "org-1" });
+    prismaMock.ticket.findFirstOrThrow.mockResolvedValueOnce({ organizationId: "org-1" });
     eventServiceMock.create.mockResolvedValueOnce({ id: "event-1" });
 
     const service = new TicketService();
@@ -132,6 +132,12 @@ describe("TicketService", () => {
   });
 
   it("assigns, links, and unlinks tickets inside transactions", async () => {
+    // Each transactional action now calls findFirstOrThrow first (org check)
+    // and then findUniqueOrThrow to hydrate the full entity for the event.
+    prismaMock.ticket.findFirstOrThrow
+      .mockResolvedValueOnce({ id: "ticket-1" })
+      .mockResolvedValueOnce({ id: "ticket-1" })
+      .mockResolvedValueOnce({ id: "ticket-1" });
     prismaMock.ticket.findUniqueOrThrow
       .mockResolvedValueOnce({ id: "ticket-1", organizationId: "org-1" })
       .mockResolvedValueOnce({ id: "ticket-1", organizationId: "org-1" })

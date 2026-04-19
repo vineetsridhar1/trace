@@ -33,8 +33,11 @@ export class TicketService {
     return prisma.ticket.findMany({ where, include: TICKET_INCLUDE });
   }
 
-  async get(id: string) {
-    return prisma.ticket.findUnique({ where: { id }, include: TICKET_INCLUDE });
+  async get(id: string, organizationId?: string) {
+    return prisma.ticket.findFirst({
+      where: organizationId ? { id, organizationId } : { id },
+      include: TICKET_INCLUDE,
+    });
   }
 
   async listForSession(sessionId: string) {
@@ -87,9 +90,15 @@ export class TicketService {
     return ticket;
   }
 
-  async update(id: string, input: UpdateTicketInput, actorType: ActorType, actorId: string) {
-    const existing = await prisma.ticket.findUniqueOrThrow({
-      where: { id },
+  async update(
+    id: string,
+    input: UpdateTicketInput,
+    actorType: ActorType,
+    actorId: string,
+    organizationId?: string,
+  ) {
+    const existing = await prisma.ticket.findFirstOrThrow({
+      where: organizationId ? { id, organizationId } : { id },
       select: { organizationId: true, status: true },
     });
 
@@ -122,9 +131,15 @@ export class TicketService {
     return ticket;
   }
 
-  async addComment(ticketId: string, text: string, actorType: ActorType, actorId: string) {
-    const ticket = await prisma.ticket.findUniqueOrThrow({
-      where: { id: ticketId },
+  async addComment(
+    ticketId: string,
+    text: string,
+    actorType: ActorType,
+    actorId: string,
+    organizationId?: string,
+  ) {
+    const ticket = await prisma.ticket.findFirstOrThrow({
+      where: organizationId ? { id: ticketId, organizationId } : { id: ticketId },
       select: { organizationId: true },
     });
 
@@ -139,13 +154,19 @@ export class TicketService {
     });
   }
 
-  async assign({ ticketId, userId, actorType, actorId }: {
+  async assign({ ticketId, userId, actorType, actorId, organizationId }: {
     ticketId: string;
     userId: string;
     actorType: ActorType;
     actorId: string;
+    organizationId?: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.ticket.findFirstOrThrow({
+        where: organizationId ? { id: ticketId, organizationId } : { id: ticketId },
+        select: { id: true },
+      });
+      void existing;
       await tx.ticketAssignee.create({
         data: { ticketId, userId },
       });
@@ -171,13 +192,19 @@ export class TicketService {
     return ticket;
   }
 
-  async unassign({ ticketId, userId, actorType, actorId }: {
+  async unassign({ ticketId, userId, actorType, actorId, organizationId }: {
     ticketId: string;
     userId: string;
     actorType: ActorType;
     actorId: string;
+    organizationId?: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.ticket.findFirstOrThrow({
+        where: organizationId ? { id: ticketId, organizationId } : { id: ticketId },
+        select: { id: true },
+      });
+      void existing;
       await tx.ticketAssignee.delete({
         where: { ticketId_userId: { ticketId, userId } },
       });
@@ -203,14 +230,20 @@ export class TicketService {
     return ticket;
   }
 
-  async link({ ticketId, entityType, entityId, actorType, actorId }: {
+  async link({ ticketId, entityType, entityId, actorType, actorId, organizationId }: {
     ticketId: string;
     entityType: EntityType;
     entityId: string;
     actorType: ActorType;
     actorId: string;
+    organizationId?: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.ticket.findFirstOrThrow({
+        where: organizationId ? { id: ticketId, organizationId } : { id: ticketId },
+        select: { id: true },
+      });
+      void existing;
       await tx.ticketLink.create({
         data: { ticketId, entityType, entityId },
       });
@@ -236,14 +269,20 @@ export class TicketService {
     return ticket;
   }
 
-  async unlink({ ticketId, entityType, entityId, actorType, actorId }: {
+  async unlink({ ticketId, entityType, entityId, actorType, actorId, organizationId }: {
     ticketId: string;
     entityType: EntityType;
     entityId: string;
     actorType: ActorType;
     actorId: string;
+    organizationId?: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.ticket.findFirstOrThrow({
+        where: organizationId ? { id: ticketId, organizationId } : { id: ticketId },
+        select: { id: true },
+      });
+      void existing;
       await tx.ticketLink.delete({
         where: {
           ticketId_entityType_entityId: { ticketId, entityType, entityId },

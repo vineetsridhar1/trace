@@ -20,8 +20,7 @@ export const ticketQueries = {
   },
   ticket: async (_: unknown, args: { id: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
-    await assertTicketInOrg(args.id, orgId);
-    return ticketService.get(args.id);
+    return ticketService.get(args.id, orgId);
   },
 };
 
@@ -39,54 +38,52 @@ export const ticketMutations = {
   },
   updateTicket: async (_: unknown, args: { id: string; input: UpdateTicketInput }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
-    await assertTicketInOrg(args.id, orgId);
-    return ticketService.update(args.id, args.input, ctx.actorType, ctx.userId);
+    return ticketService.update(args.id, args.input, ctx.actorType, ctx.userId, orgId);
   },
   commentOnTicket: async (_: unknown, args: { ticketId: string; text: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
-    await assertTicketInOrg(args.ticketId, orgId);
-    return ticketService.addComment(args.ticketId, args.text, ctx.actorType, ctx.userId);
+    return ticketService.addComment(args.ticketId, args.text, ctx.actorType, ctx.userId, orgId);
   },
   assignTicket: async (_: unknown, args: { ticketId: string; userId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
-    await assertTicketInOrg(args.ticketId, orgId);
     return ticketService.assign({
       ticketId: args.ticketId,
       userId: args.userId,
       actorType: ctx.actorType,
       actorId: ctx.userId,
+      organizationId: orgId,
     });
   },
   unassignTicket: async (_: unknown, args: { ticketId: string; userId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
-    await assertTicketInOrg(args.ticketId, orgId);
     return ticketService.unassign({
       ticketId: args.ticketId,
       userId: args.userId,
       actorType: ctx.actorType,
       actorId: ctx.userId,
+      organizationId: orgId,
     });
   },
   linkTicket: async (_: unknown, args: { ticketId: string; entityType: EntityType; entityId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
-    await assertTicketInOrg(args.ticketId, orgId);
     return ticketService.link({
       ticketId: args.ticketId,
       entityType: args.entityType,
       entityId: args.entityId,
       actorType: ctx.actorType,
       actorId: ctx.userId,
+      organizationId: orgId,
     });
   },
   unlinkTicket: async (_: unknown, args: { ticketId: string; entityType: EntityType; entityId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
-    await assertTicketInOrg(args.ticketId, orgId);
     return ticketService.unlink({
       ticketId: args.ticketId,
       entityType: args.entityType,
       entityId: args.entityId,
       actorType: ctx.actorType,
       actorId: ctx.userId,
+      organizationId: orgId,
     });
   },
 };
