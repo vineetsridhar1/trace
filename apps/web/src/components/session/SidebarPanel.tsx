@@ -4,7 +4,7 @@ import { FileExplorer } from "./FileExplorer";
 import { CheckpointPanel } from "./CheckpointPanel";
 import { BranchChangesPanel } from "./BranchChangesPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
-import type { BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
+import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
 export type SidebarTab = "files" | "git" | "changes";
 
@@ -39,8 +39,7 @@ export function SidebarPanel({
   bridgeAccess,
   onBridgeAccessRequested,
 }: SidebarPanelProps) {
-  const bridgeInteractionAllowed =
-    !bridgeAccess || bridgeAccess.hostingMode !== "local" || bridgeAccess.allowed;
+  const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess ?? null);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
