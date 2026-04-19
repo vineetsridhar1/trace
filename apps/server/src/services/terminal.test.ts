@@ -285,7 +285,34 @@ describe("TerminalService", () => {
       });
 
       expect(runtimeAccessServiceMock.assertAccess).toHaveBeenCalledWith(
-        expect.objectContaining({ runtimeInstanceId: "group-runtime" }),
+        expect.objectContaining({
+          runtimeInstanceId: "group-runtime",
+          capability: "terminal",
+        }),
+      );
+    });
+
+    it("passes capability=terminal to runtimeAccessService.assertAccess", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
+      });
+
+      await terminalService.create({
+        sessionId: "session-1",
+        cols: 80,
+        rows: 24,
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+
+      expect(runtimeAccessServiceMock.assertAccess).toHaveBeenCalledWith(
+        expect.objectContaining({ capability: "terminal" }),
       );
     });
 

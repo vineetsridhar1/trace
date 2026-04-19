@@ -61,6 +61,7 @@ class TerminalService {
       organizationId: session.organizationId,
       runtimeInstanceId,
       sessionGroupId: session.sessionGroupId,
+      capability: "terminal",
     });
     return true;
   }

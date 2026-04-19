@@ -1,5 +1,6 @@
 import { createElement, useCallback, useEffect } from "react";
 import { toast } from "sonner";
+import type { BridgeAccessCapability } from "@trace/gql";
 import { client } from "../lib/urql";
 import { MY_BRIDGE_RUNTIMES_QUERY } from "../lib/mutations";
 import { useAuthStore } from "../stores/auth";
@@ -19,6 +20,7 @@ type AccessRequest = {
   id: string;
   scopeType: "all_sessions" | "session_group";
   requestedExpiresAt?: string | null;
+  requestedCapabilities?: BridgeAccessCapability[];
   status: "pending" | "approved" | "denied";
   createdAt: string;
   requesterUser: RequesterUser;
@@ -62,6 +64,7 @@ export function useBridgePendingRequestToasts() {
           sessionGroup: request.sessionGroup
             ? { id: request.sessionGroup.id, name: request.sessionGroup.name ?? null }
             : null,
+          requestedCapabilities: request.requestedCapabilities ?? [],
           requestedExpiresAt: request.requestedExpiresAt ?? null,
           createdAt: request.createdAt,
           status: "pending",

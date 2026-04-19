@@ -228,8 +228,13 @@ export type BranchDiffFile = {
   status: Scalars['String']['output'];
 };
 
+export type BridgeAccessCapability =
+  | 'session'
+  | 'terminal';
+
 export type BridgeAccessGrant = {
   __typename?: 'BridgeAccessGrant';
+  capabilities: Array<BridgeAccessCapability>;
   createdAt: Scalars['DateTime']['output'];
   expiresAt?: Maybe<Scalars['DateTime']['output']>;
   grantedByUser: User;
@@ -245,6 +250,7 @@ export type BridgeAccessRequest = {
   createdAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
   ownerUser: User;
+  requestedCapabilities: Array<BridgeAccessCapability>;
   requestedExpiresAt?: Maybe<Scalars['DateTime']['output']>;
   requesterUser: User;
   resolvedAt?: Maybe<Scalars['DateTime']['output']>;
@@ -283,6 +289,7 @@ export type BridgeRuntimeAccess = {
   __typename?: 'BridgeRuntimeAccess';
   allowed: Scalars['Boolean']['output'];
   bridgeRuntimeId?: Maybe<Scalars['ID']['output']>;
+  capabilities: Array<BridgeAccessCapability>;
   connected: Scalars['Boolean']['output'];
   expiresAt?: Maybe<Scalars['DateTime']['output']>;
   hostingMode?: Maybe<HostingMode>;
@@ -459,6 +466,7 @@ export type EventType =
   | 'bridge_access_request_resolved'
   | 'bridge_access_requested'
   | 'bridge_access_revoked'
+  | 'bridge_access_updated'
   | 'channel_created'
   | 'channel_deleted'
   | 'channel_group_created'
@@ -709,6 +717,7 @@ export type Mutation = {
   unsubscribe: Scalars['Boolean']['output'];
   updateAgentSettings: AgentIdentity;
   updateAiConversationTitle: AiConversation;
+  updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
@@ -738,6 +747,7 @@ export type MutationAddOrgMemberArgs = {
 
 
 export type MutationApproveBridgeAccessRequestArgs = {
+  capabilities?: InputMaybe<Array<BridgeAccessCapability>>;
   expiresAt?: InputMaybe<Scalars['DateTime']['input']>;
   requestId: Scalars['ID']['input'];
   scopeType?: InputMaybe<BridgeAccessScopeType>;
@@ -980,6 +990,7 @@ export type MutationReorderChannelsArgs = {
 
 
 export type MutationRequestBridgeAccessArgs = {
+  requestedCapabilities?: InputMaybe<Array<BridgeAccessCapability>>;
   requestedExpiresAt?: InputMaybe<Scalars['DateTime']['input']>;
   runtimeInstanceId: Scalars['ID']['input'];
   scopeType: BridgeAccessScopeType;
@@ -1130,6 +1141,12 @@ export type MutationUpdateAgentSettingsArgs = {
 export type MutationUpdateAiConversationTitleArgs = {
   conversationId: Scalars['ID']['input'];
   title: Scalars['String']['input'];
+};
+
+
+export type MutationUpdateBridgeAccessGrantArgs = {
+  capabilities: Array<BridgeAccessCapability>;
+  grantId: Scalars['ID']['input'];
 };
 
 
@@ -2061,6 +2078,7 @@ export type ResolversTypes = ResolversObject<{
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
   Branch: ResolverTypeWrapper<Branch>;
   BranchDiffFile: ResolverTypeWrapper<BranchDiffFile>;
+  BridgeAccessCapability: BridgeAccessCapability;
   BridgeAccessGrant: ResolverTypeWrapper<BridgeAccessGrant>;
   BridgeAccessRequest: ResolverTypeWrapper<BridgeAccessRequest>;
   BridgeAccessRequestStatus: BridgeAccessRequestStatus;
@@ -2416,6 +2434,7 @@ export type BranchDiffFileResolvers<ContextType = Context, ParentType extends Re
 }>;
 
 export type BridgeAccessGrantResolvers<ContextType = Context, ParentType extends ResolversParentTypes['BridgeAccessGrant'] = ResolversParentTypes['BridgeAccessGrant']> = ResolversObject<{
+  capabilities?: Resolver<Array<ResolversTypes['BridgeAccessCapability']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   expiresAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
   grantedByUser?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
@@ -2431,6 +2450,7 @@ export type BridgeAccessRequestResolvers<ContextType = Context, ParentType exten
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   ownerUser?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
+  requestedCapabilities?: Resolver<Array<ResolversTypes['BridgeAccessCapability']>, ParentType, ContextType>;
   requestedExpiresAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
   requesterUser?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
   resolvedAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
@@ -2460,6 +2480,7 @@ export type BridgeRuntimeResolvers<ContextType = Context, ParentType extends Res
 export type BridgeRuntimeAccessResolvers<ContextType = Context, ParentType extends ResolversParentTypes['BridgeRuntimeAccess'] = ResolversParentTypes['BridgeRuntimeAccess']> = ResolversObject<{
   allowed?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   bridgeRuntimeId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
+  capabilities?: Resolver<Array<ResolversTypes['BridgeAccessCapability']>, ParentType, ContextType>;
   connected?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   expiresAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
   hostingMode?: Resolver<Maybe<ResolversTypes['HostingMode']>, ParentType, ContextType>;
@@ -2700,6 +2721,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   unsubscribe?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationUnsubscribeArgs, 'scopeId' | 'scopeType'>>;
   updateAgentSettings?: Resolver<ResolversTypes['AgentIdentity'], ParentType, ContextType, RequireFields<MutationUpdateAgentSettingsArgs, 'input' | 'organizationId'>>;
   updateAiConversationTitle?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType, RequireFields<MutationUpdateAiConversationTitleArgs, 'conversationId' | 'title'>>;
+  updateBridgeAccessGrant?: Resolver<ResolversTypes['BridgeAccessGrant'], ParentType, ContextType, RequireFields<MutationUpdateBridgeAccessGrantArgs, 'capabilities' | 'grantId'>>;
   updateChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationUpdateChannelArgs, 'id' | 'input'>>;
   updateChannelGroup?: Resolver<ResolversTypes['ChannelGroup'], ParentType, ContextType, RequireFields<MutationUpdateChannelGroupArgs, 'id' | 'input'>>;
   updateOrgMemberRole?: Resolver<ResolversTypes['OrgMember'], ParentType, ContextType, RequireFields<MutationUpdateOrgMemberRoleArgs, 'organizationId' | 'role' | 'userId'>>;

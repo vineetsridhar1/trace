@@ -1,3 +1,4 @@
+import type { BridgeAccessCapability } from "@prisma/client";
 import type { Context } from "../context.js";
 import { AuthenticationError } from "../lib/errors.js";
 import { requireOrgContext } from "../lib/require-org.js";
@@ -32,6 +33,7 @@ export const bridgeAccessMutations = {
       scopeType: "all_sessions" | "session_group";
       sessionGroupId?: string | null;
       requestedExpiresAt?: string | null;
+      requestedCapabilities?: BridgeAccessCapability[] | null;
     },
     ctx: Context,
   ) => {
@@ -43,6 +45,7 @@ export const bridgeAccessMutations = {
       scopeType: args.scopeType,
       sessionGroupId: args.sessionGroupId ?? undefined,
       requestedExpiresAt: args.requestedExpiresAt ? new Date(args.requestedExpiresAt) : undefined,
+      requestedCapabilities: args.requestedCapabilities ?? undefined,
     });
   },
   approveBridgeAccessRequest: (
@@ -52,6 +55,7 @@ export const bridgeAccessMutations = {
       scopeType?: "all_sessions" | "session_group" | null;
       sessionGroupId?: string | null;
       expiresAt?: string | null;
+      capabilities?: BridgeAccessCapability[] | null;
     },
     ctx: Context,
   ) => {
@@ -64,6 +68,7 @@ export const bridgeAccessMutations = {
       sessionGroupId: args.sessionGroupId ?? undefined,
       expiresAt:
         args.expiresAt === undefined ? undefined : args.expiresAt ? new Date(args.expiresAt) : null,
+      capabilities: args.capabilities ?? undefined,
     });
   },
   denyBridgeAccessRequest: (_: unknown, args: { requestId: string }, ctx: Context) => {
@@ -80,6 +85,19 @@ export const bridgeAccessMutations = {
       grantId: args.grantId,
       organizationId: requireOrgContext(ctx),
       ownerUserId: ctx.userId,
+    });
+  },
+  updateBridgeAccessGrant: (
+    _: unknown,
+    args: { grantId: string; capabilities: BridgeAccessCapability[] },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return runtimeAccessService.updateGrant({
+      grantId: args.grantId,
+      organizationId: requireOrgContext(ctx),
+      ownerUserId: ctx.userId,
+      capabilities: args.capabilities,
     });
   },
 };

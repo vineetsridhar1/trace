@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
-import { Lock, Shield, Clock3 } from "lucide-react";
+import { Lock, Shield, Clock3, Zap } from "lucide-react";
 import { toast } from "sonner";
+import type { BridgeAccessCapability } from "@trace/gql";
 import { client } from "../../lib/urql";
 import { REQUEST_BRIDGE_ACCESS_MUTATION } from "../../lib/mutations";
+import { formatCapabilities } from "../../lib/bridge-access";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import {
@@ -57,6 +59,7 @@ export function BridgeAccessNotice({
     sessionGroupId ? "session_group" : "all_sessions",
   );
   const [duration, setDuration] = useState<DurationPreset>("1d");
+  const [wantsTerminal, setWantsTerminal] = useState(false);
 
   const pendingRequest = access?.pendingRequest ?? null;
   const ownerName = access?.ownerUser?.name?.trim() || "the bridge owner";
@@ -86,12 +89,16 @@ export function BridgeAccessNotice({
     if (!access.runtimeInstanceId || submitting) return;
     setSubmitting(true);
     try {
+      const requestedCapabilities: BridgeAccessCapability[] = wantsTerminal
+        ? ["session", "terminal"]
+        : ["session"];
       const result = await client
         .mutation(REQUEST_BRIDGE_ACCESS_MUTATION, {
           runtimeInstanceId: access.runtimeInstanceId,
           scopeType,
           sessionGroupId: scopeType === "session_group" ? (sessionGroupId ?? undefined) : undefined,
           requestedExpiresAt: getRequestedExpiresAt(duration),
+          requestedCapabilities,
         })
         .toPromise();
 
@@ -133,6 +140,10 @@ export function BridgeAccessNotice({
                   pendingRequest.scopeType,
                   pendingRequest.sessionGroup?.name,
                 ).toLowerCase()}
+                {pendingRequest.requestedCapabilities &&
+                pendingRequest.requestedCapabilities.length > 0 ? (
+                  <> — {formatCapabilities(pendingRequest.requestedCapabilities)}</>
+                ) : null}
                 .
               </p>
             ) : null}
@@ -180,6 +191,34 @@ export function BridgeAccessNotice({
                     {option.label}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <Zap size={12} />
+                Capabilities
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="rounded-lg border border-foreground bg-surface-elevated px-3 py-2 text-left text-sm text-foreground opacity-90">
+                  <div className="font-medium">Sessions</div>
+                  <div className="text-xs text-muted-foreground">Always included</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setWantsTerminal((prev) => !prev)}
+                  className={cn(
+                    "rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                    wantsTerminal
+                      ? "border-foreground bg-surface-elevated text-foreground"
+                      : "border-border bg-surface text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <div className="font-medium">Terminal</div>
+                  <div className="text-xs text-muted-foreground">
+                    {wantsTerminal ? "Included" : "Optional — owner may deny"}
+                  </div>
+                </button>
               </div>
             </div>
 

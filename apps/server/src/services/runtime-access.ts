@@ -1,4 +1,4 @@
-import { Prisma, type BridgeAccessScopeType } from "@prisma/client";
+import { Prisma, type BridgeAccessCapability, type BridgeAccessScopeType } from "@prisma/client";
 import { isCloudMachineRuntimeId } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { AuthorizationError } from "../lib/errors.js";
@@ -47,6 +47,7 @@ type BridgeRequestEventPayload = {
   runtimeLabel: string;
   scopeType: BridgeAccessScopeType;
   sessionGroup: { id: string; name: string | null } | null;
+  requestedCapabilities: BridgeAccessCapability[];
   requestedExpiresAt: string | null;
   createdAt: string;
   status: "pending" | "approved" | "denied";
@@ -59,10 +60,40 @@ type BridgeRequestEventPayload = {
     id: string;
     scopeType: BridgeAccessScopeType;
     sessionGroupId: string | null;
+    capabilities: BridgeAccessCapability[];
     expiresAt: string | null;
     createdAt: string;
   } | null;
 };
+
+type BridgeGrantUpdatedEventPayload = {
+  grantId: string;
+  ownerUserId: string;
+  granteeUserId: string;
+  runtimeInstanceId: string;
+  runtimeLabel: string;
+  scopeType: BridgeAccessScopeType;
+  sessionGroupId: string | null;
+  sessionGroup: { id: string; name: string | null } | null;
+  priorCapabilities: BridgeAccessCapability[];
+  capabilities: BridgeAccessCapability[];
+  updatedAt: string;
+};
+
+const OWNER_CAPABILITIES: BridgeAccessCapability[] = ["session", "terminal"];
+
+/**
+ * Dedupe and always include `session`. Used for both request and grant
+ * capability normalization — a request without `session` is meaningless, and
+ * a grant without it locks the grantee out of the sessions they were granted.
+ */
+function ensureSessionCapability(
+  input?: BridgeAccessCapability[] | null,
+): BridgeAccessCapability[] {
+  const set = new Set<BridgeAccessCapability>(input ?? []);
+  set.add("session");
+  return Array.from(set);
+}
 
 export type BridgeRuntimeAccessState = {
   runtimeInstanceId: string;
@@ -75,6 +106,7 @@ export type BridgeRuntimeAccessState = {
   isOwner: boolean;
   scopeType: BridgeAccessScopeType | null;
   sessionGroupId: string | null;
+  capabilities: BridgeAccessCapability[];
   expiresAt: Date | null;
   pendingRequest: BridgeAccessRequestWithRelations | null;
 };
@@ -97,10 +129,11 @@ function buildGrantScopeWhere(
 function buildActiveGrantWhere(params: {
   granteeUserId: string;
   sessionGroupId?: string | null;
+  capability?: BridgeAccessCapability;
   now?: Date;
 }): Prisma.BridgeAccessGrantWhereInput {
   const now = params.now ?? new Date();
-  return {
+  const where: Prisma.BridgeAccessGrantWhereInput = {
     granteeUserId: params.granteeUserId,
     revokedAt: null,
     AND: [
@@ -110,6 +143,10 @@ function buildActiveGrantWhere(params: {
       },
     ],
   };
+  if (params.capability) {
+    where.capabilities = { has: params.capability };
+  }
+  return where;
 }
 
 function isConnectedRuntime(instanceId: string): boolean {
@@ -145,6 +182,7 @@ function serializeBridgeAccessEventPayload(input: {
           name: request.sessionGroup.name ?? null,
         }
       : null,
+    requestedCapabilities: request.requestedCapabilities ?? [],
     requestedExpiresAt: request.requestedExpiresAt?.toISOString() ?? null,
     createdAt: request.createdAt.toISOString(),
     status: input.status ?? request.status,
@@ -158,6 +196,7 @@ function serializeBridgeAccessEventPayload(input: {
           id: grant.id,
           scopeType: grant.scopeType,
           sessionGroupId: grant.sessionGroupId ?? null,
+          capabilities: grant.capabilities ?? [],
           expiresAt: grant.expiresAt?.toISOString() ?? null,
           createdAt: grant.createdAt.toISOString(),
         }
@@ -237,11 +276,22 @@ class RuntimeAccessService {
     });
   }
 
+  /**
+   * Resolve the caller's access state against a bridge runtime.
+   *
+   * If `capability` is passed, the grant lookup filters to grants carrying
+   * that capability — `allowed` and the returned `capabilities` list reflect
+   * *only* that narrowed view. This is the right shape for `assertAccess`
+   * (which only checks `allowed`), but callers reading `capabilities` for
+   * display should NOT pass `capability`, or they'll get an empty array even
+   * when the caller has broader access via a session-only grant.
+   */
   async getAccessState(input: {
     userId: string;
     organizationId: string;
     runtimeInstanceId: string;
     sessionGroupId?: string | null;
+    capability?: BridgeAccessCapability;
   }): Promise<BridgeRuntimeAccessState> {
     // Scope the lookup to the caller's org. A cross-org runtime falls through
     // to the !persisted branch below, returning no identifying fields — never
@@ -254,6 +304,7 @@ class RuntimeAccessService {
           where: buildActiveGrantWhere({
             granteeUserId: input.userId,
             sessionGroupId: input.sessionGroupId,
+            capability: input.capability,
           }),
           orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }],
           take: 1,
@@ -299,6 +350,7 @@ class RuntimeAccessService {
         isOwner: allowed,
         scopeType: null,
         sessionGroupId: null,
+        capabilities: allowed ? OWNER_CAPABILITIES : [],
         expiresAt: null,
         pendingRequest: null,
       };
@@ -316,6 +368,7 @@ class RuntimeAccessService {
         isOwner: true,
         scopeType: "all_sessions",
         sessionGroupId: null,
+        capabilities: OWNER_CAPABILITIES,
         expiresAt: null,
         pendingRequest: persisted.accessRequests[0] ?? null,
       };
@@ -333,6 +386,7 @@ class RuntimeAccessService {
       isOwner: false,
       scopeType: grant?.scopeType ?? null,
       sessionGroupId: grant?.sessionGroupId ?? null,
+      capabilities: grant?.capabilities ?? [],
       expiresAt: grant?.expiresAt ?? null,
       pendingRequest: persisted.accessRequests[0] ?? null,
     };
@@ -343,6 +397,7 @@ class RuntimeAccessService {
     organizationId: string;
     runtimeInstanceId?: string | null;
     sessionGroupId?: string | null;
+    capability?: BridgeAccessCapability;
   }): Promise<void> {
     if (!input.runtimeInstanceId) return;
 
@@ -351,6 +406,7 @@ class RuntimeAccessService {
       organizationId: input.organizationId,
       runtimeInstanceId: input.runtimeInstanceId,
       sessionGroupId: input.sessionGroupId,
+      capability: input.capability,
     });
 
     if (access.hostingMode !== "local") return;
@@ -363,6 +419,7 @@ class RuntimeAccessService {
     userId: string;
     organizationId: string;
     sessionGroupId?: string | null;
+    capability?: BridgeAccessCapability;
   }): Promise<Set<string>> {
     const runtimes = await prisma.bridgeRuntime.findMany({
       where: {
@@ -374,6 +431,7 @@ class RuntimeAccessService {
               some: buildActiveGrantWhere({
                 granteeUserId: input.userId,
                 sessionGroupId: input.sessionGroupId,
+                capability: input.capability,
               }),
             },
           },
@@ -425,7 +483,11 @@ class RuntimeAccessService {
     scopeType: BridgeAccessScopeType;
     sessionGroupId?: string | null;
     requestedExpiresAt?: Date | null;
+    requestedCapabilities?: BridgeAccessCapability[] | null;
   }) {
+    const normalizedCapabilities = ensureSessionCapability(
+      input.requestedCapabilities,
+    );
     const runtime = await prisma.bridgeRuntime.findUnique({
       where: { instanceId: input.runtimeInstanceId },
       include: { ownerUser: true },
@@ -532,6 +594,7 @@ class RuntimeAccessService {
             ownerUserId: runtime.ownerUserId,
             scopeType: normalizedScopeType,
             sessionGroupId: normalizedSessionGroupId,
+            requestedCapabilities: normalizedCapabilities,
             requestedExpiresAt: input.requestedExpiresAt ?? null,
           },
           include: {
@@ -580,6 +643,7 @@ class RuntimeAccessService {
     scopeType?: BridgeAccessScopeType | null;
     sessionGroupId?: string | null;
     expiresAt?: Date | null;
+    capabilities?: BridgeAccessCapability[] | null;
   }) {
     const now = new Date();
 
@@ -627,6 +691,13 @@ class RuntimeAccessService {
       }
       const expiresAt = input.expiresAt !== undefined ? input.expiresAt : request.requestedExpiresAt;
 
+      // Secure default: when the owner doesn't specify capabilities, the grant
+      // is session-only. Terminal requires an explicit opt-in from the owner
+      // (via `input.capabilities`), regardless of what the requester asked for.
+      const resolvedCapabilities = ensureSessionCapability(
+        input.capabilities ?? [],
+      );
+
       await tx.bridgeAccessGrant.updateMany({
         where: {
           bridgeRuntimeId: request.bridgeRuntimeId,
@@ -645,6 +716,7 @@ class RuntimeAccessService {
           grantedByUserId: input.ownerUserId,
           scopeType,
           sessionGroupId,
+          capabilities: resolvedCapabilities,
           expiresAt,
         },
         include: {
@@ -793,6 +865,7 @@ class RuntimeAccessService {
             sessionGroup: updatedGrant.sessionGroup
               ? { id: updatedGrant.sessionGroup.id, name: updatedGrant.sessionGroup.name ?? null }
               : null,
+            capabilities: updatedGrant.capabilities ?? [],
             revokedAt: updatedGrant.revokedAt?.toISOString() ?? new Date().toISOString(),
           },
           actorType: "user",
@@ -813,6 +886,109 @@ class RuntimeAccessService {
       scopeType: updated.scopeType,
       sessionGroupId: updated.sessionGroupId,
     });
+
+    return updated;
+  }
+
+  async updateGrant(input: {
+    grantId: string;
+    organizationId: string;
+    ownerUserId: string;
+    capabilities: BridgeAccessCapability[];
+  }) {
+    const nextCapabilities = ensureSessionCapability(input.capabilities);
+
+    const { updated, priorCapabilities } = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        // Read inside the tx so the revokedAt/authorization checks and the
+        // update see a consistent snapshot — a concurrent revokeGrant between
+        // read and write would otherwise produce an "update" event on an
+        // already-revoked grant.
+        const grant = await tx.bridgeAccessGrant.findUnique({
+          where: { id: input.grantId },
+          include: {
+            bridgeRuntime: true,
+            granteeUser: true,
+            grantedByUser: true,
+            sessionGroup: true,
+          },
+        });
+        if (!grant || grant.bridgeRuntime.organizationId !== input.organizationId) {
+          throw new Error("Bridge access grant not found");
+        }
+        if (grant.bridgeRuntime.ownerUserId !== input.ownerUserId) {
+          throw new AuthorizationError(BRIDGE_ACCESS_DENIED_ERROR);
+        }
+        if (grant.revokedAt) {
+          throw new Error("Cannot update a revoked bridge access grant");
+        }
+
+        const prior = grant.capabilities ?? [];
+
+        // Guarded write: updateMany with revokedAt:null as a predicate so a
+        // race that revokes between read and write no-ops the update.
+        const updateResult = await tx.bridgeAccessGrant.updateMany({
+          where: { id: grant.id, revokedAt: null },
+          data: { capabilities: nextCapabilities },
+        });
+        if (updateResult.count === 0) {
+          throw new Error("Cannot update a revoked bridge access grant");
+        }
+
+        const updatedGrant = await tx.bridgeAccessGrant.findUniqueOrThrow({
+          where: { id: grant.id },
+          include: {
+            granteeUser: true,
+            grantedByUser: true,
+            sessionGroup: true,
+          },
+        });
+
+        const payload: BridgeGrantUpdatedEventPayload = {
+          grantId: updatedGrant.id,
+          ownerUserId: grant.bridgeRuntime.ownerUserId,
+          granteeUserId: updatedGrant.granteeUserId,
+          runtimeInstanceId: grant.bridgeRuntime.instanceId,
+          runtimeLabel: grant.bridgeRuntime.label,
+          scopeType: updatedGrant.scopeType,
+          sessionGroupId: updatedGrant.sessionGroupId ?? null,
+          sessionGroup: updatedGrant.sessionGroup
+            ? { id: updatedGrant.sessionGroup.id, name: updatedGrant.sessionGroup.name ?? null }
+            : null,
+          priorCapabilities: prior,
+          capabilities: updatedGrant.capabilities ?? [],
+          updatedAt: (updatedGrant.updatedAt ?? new Date()).toISOString(),
+        };
+
+        await eventService.create(
+          {
+            organizationId: input.organizationId,
+            scopeType: "system",
+            scopeId: input.organizationId,
+            eventType: "bridge_access_updated",
+            payload,
+            actorType: "user",
+            actorId: input.ownerUserId,
+          },
+          tx,
+        );
+
+        return { updated: updatedGrant, priorCapabilities: prior };
+      },
+    );
+
+    // If terminal was removed, close the grantee's live PTYs. The
+    // per-message gate in terminal-handler catches anything still in flight.
+    const hadTerminal = priorCapabilities.includes("terminal");
+    const hasTerminal = nextCapabilities.includes("terminal");
+    if (hadTerminal && !hasTerminal) {
+      await this.severGranteeTerminals({
+        organizationId: input.organizationId,
+        granteeUserId: updated.granteeUserId,
+        scopeType: updated.scopeType,
+        sessionGroupId: updated.sessionGroupId,
+      });
+    }
 
     return updated;
   }
