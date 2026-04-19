@@ -6,6 +6,13 @@ import { sessionRouter } from "./session-router.js";
 interface TerminalEntry {
   sessionId: string;
   sessionGroupId: string | null;
+  /**
+   * The runtime this terminal lives on. Every terminal command is pinned to
+   * this runtime via `expectedHomeRuntimeId` — without it, an unbound session
+   * would silently auto-bind to any connected bridge and leak the PTY to
+   * another user's machine.
+   */
+  runtimeInstanceId: string;
   frontendWs: WebSocket | null;
   /** User who currently has a frontend WebSocket attached to this terminal. */
   attachedUserId: string | null;
@@ -44,10 +51,16 @@ class TerminalRelay {
   /**
    * Create a terminal on the bridge for a given session.
    * Returns the terminalId that the frontend uses to attach.
+   *
+   * `runtimeInstanceId` pins the terminal to the session's home runtime so
+   * the PTY command can never fall through to a cross-tenant bridge via
+   * session-router auto-bind. The caller is responsible for authorizing the
+   * user against this runtime before we create a PTY on it.
    */
   createTerminal(
     sessionId: string,
     sessionGroupId: string | null,
+    runtimeInstanceId: string,
     cols: number,
     rows: number,
     cwd?: string,
@@ -57,6 +70,7 @@ class TerminalRelay {
     this.terminals.set(terminalId, {
       sessionId,
       sessionGroupId,
+      runtimeInstanceId,
       frontendWs: null,
       attachedUserId: null,
       ready: false,
@@ -75,15 +89,19 @@ class TerminalRelay {
       this.sessionGroupTerminals.set(sessionGroupId, groupIds);
     }
 
-    // Send terminal_create command to the bridge
-    const result = sessionRouter.send(sessionId, {
-      type: "terminal_create",
-      terminalId,
+    // Send terminal_create command to the bridge, pinned to the authorized runtime.
+    const result = sessionRouter.send(
       sessionId,
-      cols,
-      rows,
-      cwd: cwd ?? "",
-    });
+      {
+        type: "terminal_create",
+        terminalId,
+        sessionId,
+        cols,
+        rows,
+        cwd: cwd ?? "",
+      },
+      { expectedHomeRuntimeId: runtimeInstanceId },
+    );
 
     if (result !== "delivered") {
       // Bridge not available — buffer an error so the frontend gets feedback on attach
@@ -103,12 +121,20 @@ class TerminalRelay {
   executeCommand(
     sessionId: string,
     sessionGroupId: string | null,
+    runtimeInstanceId: string,
     command: string,
     cwd?: string,
     timeoutMs = 300_000,
   ): Promise<number> {
     return new Promise((resolve, reject) => {
-      const terminalId = this.createTerminal(sessionId, sessionGroupId, 80, 24, cwd);
+      const terminalId = this.createTerminal(
+        sessionId,
+        sessionGroupId,
+        runtimeInstanceId,
+        80,
+        24,
+        cwd,
+      );
       const entry = this.terminals.get(terminalId);
       if (!entry) {
         reject(new Error("Failed to create terminal"));
@@ -124,11 +150,15 @@ class TerminalRelay {
       }, timeoutMs);
 
       entry.onReady = () => {
-        sessionRouter.send(sessionId, {
-          type: "terminal_input",
-          terminalId,
-          data: command + "\n",
-        });
+        sessionRouter.send(
+          sessionId,
+          {
+            type: "terminal_input",
+            terminalId,
+            data: command + "\n",
+          },
+          { expectedHomeRuntimeId: runtimeInstanceId },
+        );
       };
 
       entry.onEnd = (exitCode: number | null, error?: string) => {
@@ -148,7 +178,10 @@ class TerminalRelay {
    * Rebuild relay entries from bridge-reported active terminals (on reconnect).
    * Skips entries that already exist. Starts orphan cleanup timer for each restored entry.
    */
-  async restoreTerminals(terminals: Array<{ terminalId: string; sessionId: string }>): Promise<void> {
+  async restoreTerminals(
+    runtimeInstanceId: string,
+    terminals: Array<{ terminalId: string; sessionId: string }>,
+  ): Promise<void> {
     const sessionIds = [...new Set(terminals.map(({ sessionId }) => sessionId))];
     const sessions = sessionIds.length === 0
       ? []
@@ -167,6 +200,7 @@ class TerminalRelay {
       this.terminals.set(terminalId, {
         sessionId,
         sessionGroupId,
+        runtimeInstanceId,
         frontendWs: null,
         attachedUserId: null,
         ready: true, // Bridge says it's alive, so it's ready
@@ -266,6 +300,17 @@ class TerminalRelay {
     return this.terminals.get(terminalId)?.sessionGroupId ?? undefined;
   }
 
+  /**
+   * The runtime this terminal was authorized against at creation time. The
+   * frontend attach path MUST use this (not the session's DB connection) when
+   * checking access, because the session's connection can be cleared or lag
+   * behind, and attach needs to authorize against the bridge that actually
+   * owns the PTY.
+   */
+  getRuntimeInstanceId(terminalId: string): string | undefined {
+    return this.terminals.get(terminalId)?.runtimeInstanceId;
+  }
+
   /** Forward a message from the bridge to the attached frontend WebSocket. */
   relayFromBridge(msg: { type: string; terminalId: string; [key: string]: unknown }): void {
     const entry = this.terminals.get(msg.terminalId);
@@ -329,18 +374,26 @@ class TerminalRelay {
     if (!entry) return;
 
     if (type === "input") {
-      sessionRouter.send(entry.sessionId, {
-        type: "terminal_input",
-        terminalId,
-        data: payload.data as string,
-      });
+      sessionRouter.send(
+        entry.sessionId,
+        {
+          type: "terminal_input",
+          terminalId,
+          data: payload.data as string,
+        },
+        { expectedHomeRuntimeId: entry.runtimeInstanceId },
+      );
     } else if (type === "resize") {
-      sessionRouter.send(entry.sessionId, {
-        type: "terminal_resize",
-        terminalId,
-        cols: payload.cols as number,
-        rows: payload.rows as number,
-      });
+      sessionRouter.send(
+        entry.sessionId,
+        {
+          type: "terminal_resize",
+          terminalId,
+          cols: payload.cols as number,
+          rows: payload.rows as number,
+        },
+        { expectedHomeRuntimeId: entry.runtimeInstanceId },
+      );
     }
   }
 
@@ -349,10 +402,14 @@ class TerminalRelay {
     const entry = this.terminals.get(terminalId);
     if (!entry) return;
 
-    sessionRouter.send(entry.sessionId, {
-      type: "terminal_destroy",
-      terminalId,
-    });
+    sessionRouter.send(
+      entry.sessionId,
+      {
+        type: "terminal_destroy",
+        terminalId,
+      },
+      { expectedHomeRuntimeId: entry.runtimeInstanceId },
+    );
 
     this.removeTerminal(terminalId);
   }
@@ -365,7 +422,11 @@ class TerminalRelay {
       const entry = this.terminals.get(terminalId);
       if (!entry) continue;
       // Kill the terminal process on the bridge
-      sessionRouter.send(entry.sessionId, { type: "terminal_destroy", terminalId });
+      sessionRouter.send(
+        entry.sessionId,
+        { type: "terminal_destroy", terminalId },
+        { expectedHomeRuntimeId: entry.runtimeInstanceId },
+      );
       if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
         entry.frontendWs.send(JSON.stringify({ type: "exit", exitCode: -1 }));
       }
@@ -389,7 +450,11 @@ class TerminalRelay {
       const entry = this.terminals.get(terminalId);
       if (!entry) continue;
       // Kill the terminal process on the bridge
-      sessionRouter.send(entry.sessionId, { type: "terminal_destroy", terminalId });
+      sessionRouter.send(
+        entry.sessionId,
+        { type: "terminal_destroy", terminalId },
+        { expectedHomeRuntimeId: entry.runtimeInstanceId },
+      );
       if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
         entry.frontendWs.send(JSON.stringify({ type: "exit", exitCode: -1 }));
       }

@@ -209,7 +209,6 @@ describe("SessionService", () => {
     sessionRouterMock.getRuntimeForSession.mockReturnValue(null);
     sessionRouterMock.getRuntime.mockReturnValue(null);
     sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
-    sessionRouterMock.getDefaultRuntime?.mockReturnValue?.(null);
     sessionRouterMock.destroyRuntime.mockResolvedValue(undefined);
     prismaMock.sessionGroup.findUnique.mockResolvedValue({
       ...makeSessionGroup(),
@@ -1497,9 +1496,6 @@ describe("SessionService", () => {
       sessionRouterMock.getRuntime.mockImplementation((id: string) =>
         id === "runtime-a" ? null : { id, label: id, ws: { readyState: 1, OPEN: 1 } },
       );
-      sessionRouterMock.getDefaultRuntime = vi
-        .fn()
-        .mockReturnValue({ id: "runtime-b", label: "Laptop B", ws: { readyState: 1, OPEN: 1 } });
 
       await service.retryConnection("session-1", "org-1", "user", "user-1");
 
@@ -1585,6 +1581,13 @@ describe("SessionService", () => {
           agentStatus: "not_started",
           sessionStatus: "in_progress",
           workdir: "/tmp/trace/workspace",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
         }),
       );
       prismaMock.channel.findUnique.mockResolvedValueOnce({ setupScript: "pnpm install" });
@@ -1602,6 +1605,7 @@ describe("SessionService", () => {
       expect(terminalRelayMock.executeCommand).toHaveBeenCalledWith(
         "session-1",
         "group-1",
+        "runtime-1",
         "pnpm install",
         "/tmp/trace/workspace",
       );
@@ -1637,8 +1641,16 @@ describe("SessionService", () => {
         workdir: "/tmp/trace/workspace",
         worktreeDeleted: false,
         setupStatus: "failed",
+        connection: { runtimeInstanceId: "runtime-1" },
         channel: { setupScript: "pnpm install" },
-        sessions: [{ id: "session-1", hosting: "cloud", createdById: "user-1" }],
+        sessions: [
+          {
+            id: "session-1",
+            hosting: "cloud",
+            createdById: "user-1",
+            connection: { runtimeInstanceId: "runtime-1" },
+          },
+        ],
       });
       prismaMock.sessionGroup.update
         .mockResolvedValueOnce(
@@ -1661,6 +1673,7 @@ describe("SessionService", () => {
       expect(terminalRelayMock.executeCommand).toHaveBeenCalledWith(
         "session-1",
         "group-1",
+        "runtime-1",
         "pnpm install",
         "/tmp/trace/workspace",
       );
