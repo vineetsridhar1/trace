@@ -49,60 +49,67 @@ export function ToolCallRow({ name, input, output, timestamp }: ToolCallRowProps
   // Show tabs when there's both input to display and output
   const showInput = !command && !hasEditDiff && input != null;
   const showTabs = showInput && output != null;
+  const hasBodyContent = hasEditDiff || showInput || output != null;
 
   return (
     <div className="tool-cmd-row">
       <button
         type="button"
         className="tool-cmd-button"
-        onClick={() => setOpen(!open)}
+        onClick={() => hasBodyContent && setOpen(!open)}
+        disabled={!hasBodyContent}
       >
         <span
           className="tool-cmd-chevron"
-          style={{ transform: open ? "rotate(90deg)" : undefined }}
+          style={{
+            transform: open ? "rotate(90deg)" : undefined,
+            visibility: hasBodyContent ? "visible" : "hidden",
+          }}
         >
           <ChevronRight size={10} />
         </span>
         <code className="tool-cmd-code">{label}</code>
         <span className="tool-cmd-time">{formatTime(timestamp)}</span>
       </button>
-      <div
-        className="tool-cmd-body"
-        style={{ maxHeight: open ? `${bodyHeight}px` : "0px" }}
-      >
-        <div ref={bodyRef}>
-          {showTabs ? (
-            <>
-              <div className="flex gap-0 border-b border-border/40 mb-1">
-                <TabButton active={tab === "output"} onClick={() => setTab("output")}>Output</TabButton>
-                <TabButton active={tab === "input"} onClick={() => setTab("input")}>Input</TabButton>
-              </div>
-              {tab === "input" ? (
-                <pre className="tool-cmd-output">{serializeUnknown(input)}</pre>
-              ) : (
-                <pre className="tool-cmd-output">{serializeUnknown(output)}</pre>
-              )}
-            </>
-          ) : (
-            <>
-              {hasEditDiff ? (
-                <InlineDiffView
-                  oldString={input.old_string as string}
-                  newString={input.new_string as string}
-                  filePath={editFilePath}
-                />
-              ) : (
-                showInput && (
+      {hasBodyContent && (
+        <div
+          className="tool-cmd-body"
+          style={{ maxHeight: open ? `${bodyHeight}px` : "0px" }}
+        >
+          <div ref={bodyRef}>
+            {showTabs ? (
+              <>
+                <div className="flex gap-0 border-b border-border/40 mb-1">
+                  <TabButton active={tab === "output"} onClick={() => setTab("output")}>Output</TabButton>
+                  <TabButton active={tab === "input"} onClick={() => setTab("input")}>Input</TabButton>
+                </div>
+                {tab === "input" ? (
                   <pre className="tool-cmd-output">{serializeUnknown(input)}</pre>
-                )
-              )}
-              {!showTabs && output != null && (
-                <pre className="tool-cmd-output">{serializeUnknown(output)}</pre>
-              )}
-            </>
-          )}
+                ) : (
+                  <pre className="tool-cmd-output">{serializeUnknown(output)}</pre>
+                )}
+              </>
+            ) : (
+              <>
+                {hasEditDiff ? (
+                  <InlineDiffView
+                    oldString={input.old_string as string}
+                    newString={input.new_string as string}
+                    filePath={editFilePath}
+                  />
+                ) : (
+                  showInput && (
+                    <pre className="tool-cmd-output">{serializeUnknown(input)}</pre>
+                  )
+                )}
+                {!showTabs && output != null && (
+                  <pre className="tool-cmd-output">{serializeUnknown(output)}</pre>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
