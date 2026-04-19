@@ -16,9 +16,11 @@
     "lint": "tsc -b && eslint src --max-warnings=0",
     "test": "vitest run"
   },
-  "peerDependencies": {
+  "dependencies": {
     "@trace/gql": "workspace:*",
-    "@trace/shared": "workspace:*",
+    "@trace/shared": "workspace:*"
+  },
+  "peerDependencies": {
     "@urql/core": "^5.1.1",
     "graphql": "^16.10.0",
     "graphql-ws": "^5.16.2",
@@ -27,8 +29,6 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
-    "@trace/gql": "workspace:*",
-    "@trace/shared": "workspace:*",
     "@types/node": "^24.5.2",
     "@types/react": "^19.0.0",
     "@urql/core": "^5.1.1",
