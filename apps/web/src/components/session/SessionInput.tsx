@@ -26,7 +26,7 @@ import { uploadImage } from "../../lib/upload";
 import { generateUUID } from "../../lib/uuid";
 import { useAuthStore } from "../../stores/auth";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
-import type { BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
+import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
 const MAX_IMAGES = 5;
 
@@ -72,8 +72,7 @@ export function SessionInput({
   const isNotStarted = agentStatus === "not_started";
   const disconnected = isDisconnected(connection);
   const canQueue = canQueueMessage(agentStatus, worktreeDeleted);
-  const bridgeInteractionAllowed =
-    !bridgeAccess || bridgeAccess.hostingMode !== "local" || bridgeAccess.allowed;
+  const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess);
   const canSend =
     bridgeInteractionAllowed &&
     !isOptimistic &&
@@ -214,6 +213,14 @@ export function SessionInput({
     }
   }, [sessionId, mode, canSend, canQueue, images]);
 
+  // If the user has bridge access (owner or granted), a disconnected session
+  // belongs to the recovery panel — not the permission prompt. Non-owners
+  // without access always see the permission prompt so they can request
+  // access, whether the bridge is online or offline.
+  if (bridgeInteractionAllowed && disconnected && !isNotStarted) {
+    return <SessionRecoveryPanel sessionId={sessionId} connection={connection} />;
+  }
+
   if (!bridgeInteractionAllowed) {
     return (
       <div className="border-t px-4 py-3">
@@ -224,11 +231,6 @@ export function SessionInput({
         />
       </div>
     );
-  }
-
-  // Show recovery panel when disconnected — but not for not_started sessions
-  if (disconnected && !isNotStarted) {
-    return <SessionRecoveryPanel sessionId={sessionId} connection={connection} />;
   }
   const placeholder = worktreeDeleted
     ? "Worktree deleted. This session is read-only."

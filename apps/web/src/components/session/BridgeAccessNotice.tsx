@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog";
-import type { BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
+import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
 type DurationPreset = "1h" | "1d" | "7d" | "never";
 type ScopePreset = "all_sessions" | "session_group";
@@ -81,7 +81,7 @@ export function BridgeAccessNotice({
     [pendingRequest?.sessionGroup?.name, sessionGroupId],
   );
 
-  if (!access || access.hostingMode !== "local" || access.allowed) {
+  if (!access || isBridgeInteractionAllowed(access)) {
     return null;
   }
 
