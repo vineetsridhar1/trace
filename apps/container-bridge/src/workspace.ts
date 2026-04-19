@@ -20,7 +20,7 @@ export function listClonedRepoIds(): string[] {
   if (!fs.existsSync(REPOS_DIR)) return [];
   return fs
     .readdirSync(REPOS_DIR, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
+    .filter((entry) => entry.isDirectory() && fs.existsSync(`${REPOS_DIR}/${entry.name}/.git`))
     .map((entry) => entry.name);
 }
 
