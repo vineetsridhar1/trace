@@ -75,21 +75,21 @@ export async function createWorktree({
   sessionGroupId?: string;
   /** Pre-assigned animal slug. If absent, one is generated. */
   slug?: string;
-}): Promise<{ workdir: string; slug: string }> {
+}): Promise<{ workdir: string; slug: string; branch: string }> {
   const repoPath = `${REPOS_DIR}/${repoId}`;
   const worktreeSlug = slug ?? generateAnimalSlug(await getUsedSlugs(WORKSPACES_DIR, repoPath));
   const worktreePath = `${WORKSPACES_DIR}/${worktreeSlug}`;
+  const branchName = `trace/${worktreeSlug}`;
 
   // If worktree already exists, reuse it
   if (fs.existsSync(worktreePath)) {
-    return { workdir: worktreePath, slug: worktreeSlug };
+    return { workdir: worktreePath, slug: worktreeSlug, branch: branchName };
   }
 
   fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
 
   if (checkpointSha) assertValidCommitSha(checkpointSha);
 
-  const branchName = `trace/${worktreeSlug}`;
   const baseRef = checkpointSha ?? `origin/${branch ?? defaultBranch}`;
 
   // When restoring a checkpoint, verify the SHA is locally reachable; fetch if not
@@ -114,7 +114,7 @@ export async function createWorktree({
     await execFileAsync("git", ["worktree", "add", "-b", branchName, worktreePath, baseRef], { cwd: repoPath });
   }
 
-  return { workdir: worktreePath, slug: worktreeSlug };
+  return { workdir: worktreePath, slug: worktreeSlug, branch: branchName };
 }
 
 /**
