@@ -45,7 +45,7 @@ export function depthLimitRule(context: ValidationContext) {
   ): number {
     let max = 0;
     for (const sel of selections) {
-      const d = depthOfSelection(sel, visitedFragments);
+      const d = depthOfSelection(sel, new Set(visitedFragments));
       if (d > max) max = d;
     }
     return max;

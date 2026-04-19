@@ -1305,7 +1305,10 @@ describe("SessionService", () => {
         }),
       );
 
-      await service.run("session-1", "Ship it");
+      await service.run("session-1", "Ship it", undefined, {
+        userId: "user-1",
+        organizationId: "org-1",
+      });
 
       expect(prismaMock.session.update).toHaveBeenCalledWith({
         where: { id: "session-1" },
@@ -1362,6 +1365,7 @@ describe("SessionService", () => {
         text: "hello",
         actorType: "user",
         actorId: "user-1",
+        organizationId: "org-1",
       });
 
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
@@ -1427,6 +1431,7 @@ describe("SessionService", () => {
         text: "hello from laptop B",
         actorType: "user",
         actorId: "user-1",
+        organizationId: "org-1",
       });
 
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
@@ -2042,7 +2047,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
     });
 
-    it("only allows the user who owns the session group's local runtime", async () => {
+    it("only allows users who have bridge access to the session group's local runtime", async () => {
       prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
         id: "group-1",
@@ -2077,11 +2082,14 @@ describe("SessionService", () => {
             }
           : null,
       );
+      runtimeAccessServiceMock.assertAccess.mockRejectedValueOnce(
+        new Error("Access denied: you do not have permission to use this local bridge"),
+      );
 
       await expect(
         service.getLinkedCheckoutStatus("group-1", "repo-1", "org-1", "user-1"),
       ).rejects.toThrow(
-        "Linked checkout is only available on session groups backed by your local runtime.",
+        "Linked checkout is only available on session groups backed by a bridge you can access.",
       );
       expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
     });

@@ -59,6 +59,15 @@ function createWindow() {
 
   // Apply a restrictive CSP defense-in-depth on top of the web app's own CSP.
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    const responseUrl = new URL(details.url);
+    const isAppOrigin = responseUrl.origin === webOrigin;
+    const isOAuthCallback =
+      isAppOrigin && responseUrl.pathname === "/auth/github/callback";
+    if (!isAppOrigin || isOAuthCallback) {
+      callback({ responseHeaders: details.responseHeaders });
+      return;
+    }
+
     const headers = { ...details.responseHeaders };
     headers["Content-Security-Policy"] = [
       [
