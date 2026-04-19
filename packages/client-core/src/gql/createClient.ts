@@ -6,13 +6,39 @@ import {
 } from "@urql/core";
 import { createClient as createWSClient } from "graphql-ws";
 import { getAuthHeaders, useAuthStore } from "../stores/auth.js";
-import { getPlatform } from "../platform.js";
+import { getPlatform, type Platform } from "../platform.js";
 
 export interface CreateGqlClientOptions {
   httpUrl: string;
   wsUrl: string;
   /** Notified when the WebSocket transport connects or disconnects. */
   onConnectionChange?: (connected: boolean) => void;
+}
+
+interface GraphqlWsWebSocketImpl {
+  new (url: string, protocols?: string | string[]): WebSocket;
+  readonly CONNECTING: number;
+  readonly OPEN: number;
+  readonly CLOSING: number;
+  readonly CLOSED: number;
+}
+
+function normalizeWebSocketProtocols(protocols?: string | string[]): string[] | undefined {
+  if (!protocols) return undefined;
+  return Array.isArray(protocols) ? protocols : [protocols];
+}
+
+function createPlatformWebSocketImpl(platform: Platform): GraphqlWsWebSocketImpl {
+  function PlatformWebSocket(this: unknown, url: string, protocols?: string | string[]): WebSocket {
+    return platform.createWebSocket(url, normalizeWebSocketProtocols(protocols));
+  }
+
+  return Object.assign(PlatformWebSocket, {
+    CONNECTING: 0,
+    OPEN: 1,
+    CLOSING: 2,
+    CLOSED: 3,
+  }) as unknown as GraphqlWsWebSocketImpl;
 }
 
 /**
@@ -25,6 +51,7 @@ export function createGqlClient(options: CreateGqlClientOptions): Client {
 
   const wsClient = createWSClient({
     url: options.wsUrl,
+    webSocketImpl: createPlatformWebSocketImpl(platform),
     connectionParams: () => {
       const { token, activeOrgId } = useAuthStore.getState();
       return {
