@@ -33,7 +33,8 @@
   },
   "pnpm": {
     "overrides": {
-      "graphql": "^16.10.0"
+      "graphql": "^16.10.0",
+      "@types/react": "~19.1.0"
     },
     "onlyBuiltDependencies": [
       "esbuild",
