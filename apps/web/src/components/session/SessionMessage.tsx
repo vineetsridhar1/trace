@@ -6,7 +6,6 @@ import { useEventScopeKey } from "./EventScopeContext";
 import { UserBubble } from "./messages/UserBubble";
 import { AssistantText } from "./messages/AssistantText";
 import { ToolCallRow } from "./messages/ToolCallRow";
-import { ToolResultRow } from "./messages/ToolResultRow";
 import { SubagentRow } from "./messages/SubagentRow";
 import { CompletionRow } from "./messages/CompletionRow";
 import { SystemBadge } from "./messages/SystemBadge";
@@ -26,10 +25,20 @@ function str(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
-/** Narrow unknown to the output type expected by ToolResultRow */
+/** Narrow and unwrap tool result content for display in ToolCallRow */
 function asOutput(value: unknown): string | Record<string, unknown> | undefined {
   if (typeof value === "string") return value;
-  return asJsonObject(value);
+  const obj = asJsonObject(value);
+  if (!obj) return undefined;
+  // Unwrap nested { output: ... } envelope that some adapters produce
+  if ("output" in obj) {
+    const nested = obj.output;
+    if (typeof nested === "string") return nested;
+    if (nested && typeof nested === "object" && !Array.isArray(nested))
+      return nested as Record<string, unknown>;
+    return undefined;
+  }
+  return obj;
 }
 
 /** Serialize agent result content to a display string */
@@ -54,6 +63,18 @@ function renderAssistantContent(
   const contentBlocks = message?.content;
   if (!Array.isArray(contentBlocks)) return null;
 
+  // Build a map of tool_use_id → output from tool_result blocks so we can
+  // render results inline inside the matching ToolCallRow accordion.
+  const toolResultByUseId = new Map<string, string | Record<string, unknown>>();
+  for (const raw of contentBlocks) {
+    const block = asJsonObject(raw);
+    if (!block || block.type !== "tool_result") continue;
+    const id = typeof block.tool_use_id === "string" ? block.tool_use_id : undefined;
+    if (!id) continue;
+    const out = asOutput(block.content ?? block.output);
+    if (out != null) toolResultByUseId.set(id, out);
+  }
+
   const elements: React.ReactNode[] = [];
   for (let i = 0; i < contentBlocks.length; i++) {
     const block = asJsonObject(contentBlocks[i]);
@@ -64,9 +85,9 @@ function renderAssistantContent(
       elements.push(<AssistantText key={i} text={block.text} timestamp={ts} />);
     } else if (block.type === "tool_use") {
       const name = str(block.name, "Tool");
+      const toolUseId = typeof block.id === "string" ? block.id : undefined;
       if (AGENT_NAMES.has(name.toLowerCase())) {
         const input = asJsonObject(block.input);
-        const toolUseId = typeof block.id === "string" ? block.id : undefined;
         const agentResult = toolUseId ? completedAgentTools.get(toolUseId) : undefined;
         elements.push(
           <SubagentRow
@@ -83,22 +104,19 @@ function renderAssistantContent(
           />,
         );
       } else {
+        const output = toolUseId ? toolResultByUseId.get(toolUseId) : undefined;
         elements.push(
-          <ToolCallRow key={i} name={name} input={asJsonObject(block.input)} timestamp={ts} />,
+          <ToolCallRow
+            key={i}
+            name={name}
+            input={asJsonObject(block.input)}
+            output={output}
+            timestamp={ts}
+          />,
         );
       }
     } else if (block.type === "tool_result") {
-      // Agent/task tool_results are rendered inline in the SubagentRow of the
-      // matching tool_use event — don't render them as standalone rows.
-      if (AGENT_NAMES.has(str(block.name, "").toLowerCase())) continue;
-      elements.push(
-        <ToolResultRow
-          key={i}
-          name={str(block.name, "Tool")}
-          output={asOutput(block.content ?? block.output)}
-          timestamp={ts}
-        />,
-      );
+      // Results are now rendered inline inside the matching ToolCallRow — skip standalone rows.
     }
   }
 

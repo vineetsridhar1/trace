@@ -7,10 +7,11 @@ export interface ToolCallRowProps {
   key?: React.Key;
   name: string;
   input?: Record<string, unknown>;
+  output?: string | Record<string, unknown>;
   timestamp: string;
 }
 
-export function ToolCallRow({ name, input, timestamp }: ToolCallRowProps) {
+export function ToolCallRow({ name, input, output, timestamp }: ToolCallRowProps) {
   const [open, setOpen] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [bodyHeight, setBodyHeight] = useState(0);
@@ -19,7 +20,7 @@ export function ToolCallRow({ name, input, timestamp }: ToolCallRowProps) {
     if (bodyRef.current) {
       setBodyHeight(bodyRef.current.scrollHeight);
     }
-  }, [open, input]);
+  }, [open, input, output]);
 
   const normalizedName = name.toLowerCase();
   const isCommand = normalizedName === "bash" || normalizedName === "command";
@@ -69,6 +70,9 @@ export function ToolCallRow({ name, input, timestamp }: ToolCallRowProps) {
             input && !command && (
               <pre className="tool-cmd-output">{serializeUnknown(input)}</pre>
             )
+          )}
+          {output != null && (
+            <pre className="tool-cmd-output">{serializeUnknown(output)}</pre>
           )}
         </div>
       </div>
