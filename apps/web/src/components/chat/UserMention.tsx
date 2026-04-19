@@ -1,4 +1,4 @@
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { useAuthStore, type AuthState } from "../../stores/auth";
 import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 

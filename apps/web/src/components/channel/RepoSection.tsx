@@ -6,7 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { useEntityIds, useEntityField } from "../../stores/entity";
+import { useEntityIds, useEntityField } from "@trace/client-core";
 import type { RuntimeInfo } from "../session/RuntimeSelector";
 import { BranchCombobox } from "./BranchCombobox";
 

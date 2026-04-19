@@ -3,7 +3,7 @@ import { SquareCheck } from "lucide-react";
 import { gql } from "@urql/core";
 import type { FilterChangedEvent, GridReadyEvent, RowClickedEvent } from "ag-grid-community";
 import type { Ticket } from "@trace/gql";
-import { useEntityStore } from "../../stores/entity";
+import { useEntityStore } from "@trace/client-core";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
 import { client } from "../../lib/urql";

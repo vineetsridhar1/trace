@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { Organization, User, UserRole } from "@trace/gql";
-import { useEntityStore } from "./entity";
+import { useEntityStore } from "@trace/client-core";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 const TOKEN_KEY = "trace_token";

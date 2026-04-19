@@ -1,6 +1,6 @@
 import type { Actor, Event, Message } from "@trace/gql";
 import { asJsonObject, isJsonObject } from "@trace/shared";
-import { useEntityStore, eventScopeKey, messageScopeKey } from "../stores/entity";
+import { useEntityStore, eventScopeKey, messageScopeKey } from "@trace/client-core";
 import { takePendingOptimisticChat } from "../lib/optimistic-message";
 
 type MessageScope =

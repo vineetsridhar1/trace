@@ -8,7 +8,7 @@ import {
   MOVE_SESSION_TO_CLOUD_MUTATION,
 } from "../../lib/mutations";
 import { navigateToSession } from "../../stores/ui";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 
 interface RuntimeInstance {
   id: string;

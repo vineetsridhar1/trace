@@ -1,4 +1,4 @@
-import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
+import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
 
 export type SessionGroupRow = SessionGroupEntity & {
   id: string;

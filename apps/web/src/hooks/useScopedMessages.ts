@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { DocumentNode } from "graphql";
 import type { Event, Message } from "@trace/gql";
 import { client } from "../lib/urql";
-import { messageScopeKey, useEntityStore, useMessageIdsForScope } from "../stores/entity";
+import { messageScopeKey, useEntityStore, useMessageIdsForScope } from "@trace/client-core";
 
 const PAGE_SIZE = 100;
 

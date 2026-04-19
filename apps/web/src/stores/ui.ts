@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { useEntityStore } from "./entity";
-import type { SessionEntity } from "./entity";
+import { useEntityStore } from "@trace/client-core";
+import type { SessionEntity } from "@trace/client-core";
 import {
   buildPath as buildPathInternal,
   persistActiveChannelId,

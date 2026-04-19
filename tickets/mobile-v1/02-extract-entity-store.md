@@ -19,11 +19,11 @@ Move the Zustand entity store (`apps/web/src/stores/entity.ts` and its associate
 
 ## Completion requirements
 
-- [ ] `packages/client-core/src/stores/entity.ts` is the only copy of the entity store
-- [ ] `apps/web/src/stores/entity.ts` is deleted
-- [ ] Every consumer in `apps/web` imports from `@trace/client-core`
-- [ ] `pnpm typecheck` passes
-- [ ] `pnpm lint` passes (including the client-core no-web-imports rule)
+- [x] `packages/client-core/src/stores/entity.ts` is the only copy of the entity store
+- [x] `apps/web/src/stores/entity.ts` is deleted
+- [x] Every consumer in `apps/web` imports from `@trace/client-core`
+- [x] `pnpm typecheck` passes
+- [x] `pnpm lint` passes (including the client-core no-web-imports rule)
 - [ ] Manual smoke: run web dev, log in, open a session, send a message — behavior unchanged
 
 ## How to test

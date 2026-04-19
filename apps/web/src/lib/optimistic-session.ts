@@ -1,5 +1,5 @@
-import { useEntityStore } from "../stores/entity";
-import type { SessionEntity, SessionGroupEntity } from "../stores/entity";
+import { useEntityStore } from "@trace/client-core";
+import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
 import { useUIStore } from "../stores/ui";
 
 type EntityStoreState = {

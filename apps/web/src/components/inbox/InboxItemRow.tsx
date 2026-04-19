@@ -12,7 +12,7 @@ import {
   ACCEPT_AGENT_SUGGESTION_MUTATION,
   DISMISS_AGENT_SUGGESTION_MUTATION,
 } from "../../lib/mutations";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { InboxPlanBody } from "./InboxPlanBody";

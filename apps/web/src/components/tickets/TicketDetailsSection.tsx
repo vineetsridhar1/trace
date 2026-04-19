@@ -14,7 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Priority, TicketStatus, User } from "@trace/gql";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { timeAgo } from "../../lib/utils";
 import {
   ticketStatusLabel,

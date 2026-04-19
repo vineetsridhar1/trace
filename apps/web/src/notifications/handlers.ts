@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { toast } from "sonner";
 import type { Event, EventType, ScopeType, AgentStatus, BridgeAccessCapability } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
-import { useEntityStore } from "../stores/entity";
+import { useEntityStore } from "@trace/client-core";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore, navigateToSession } from "../stores/ui";
 import { agentStatusLabel } from "../components/session/sessionStatus";

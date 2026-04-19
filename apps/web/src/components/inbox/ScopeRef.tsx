@@ -1,5 +1,5 @@
 import { Hash } from "lucide-react";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 
 /**
  * Renders a human-readable reference to a scope (channel, chat, ticket, session).

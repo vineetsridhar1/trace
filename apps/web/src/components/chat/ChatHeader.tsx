@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Hash, Pencil } from "lucide-react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { useAuthStore, type AuthState } from "../../stores/auth";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { SidebarTrigger } from "../ui/sidebar";

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, X, TerminalSquare } from "lucide-react";
 import { useSessionGroupTerminals, useTerminalStore, type TerminalEntry } from "../../stores/terminal";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { TerminalInstance } from "./TerminalInstance";
 import { client } from "../../lib/urql";
 import {

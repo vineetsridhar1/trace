@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { GitBranch, Pencil, Check, X } from "lucide-react";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import {
   UPDATE_REPO_MUTATION,

@@ -1,7 +1,7 @@
 import type { Event, Message } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
 import type { JsonObject } from "@trace/shared";
-import { useEntityStore, eventScopeKey, messageScopeKey } from "../stores/entity";
+import { useEntityStore, eventScopeKey, messageScopeKey } from "@trace/client-core";
 import { useAuthStore } from "../stores/auth";
 import { generateUUID } from "./uuid";
 

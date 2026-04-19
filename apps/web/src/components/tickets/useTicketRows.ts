@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useEntityStore } from "../../stores/entity";
+import { useEntityStore } from "@trace/client-core";
 import type { Ticket } from "@trace/gql";
 import type { TicketRow } from "./tickets-table-types";
 
