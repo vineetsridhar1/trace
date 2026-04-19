@@ -253,6 +253,7 @@ Extracted from `apps/web/src/` in a preparatory refactor **before** mobile devel
 ```ts
 // packages/client-core/src/platform.ts
 export interface Platform {
+  apiUrl: string;
   storage: {
     getItem(key: string): string | null | Promise<string | null>;
     setItem(key: string, value: string): void | Promise<void>;
@@ -268,7 +269,7 @@ export interface Platform {
 }
 ```
 
-Each app instantiates `client-core` with its platform impl at boot. Web uses a web-platform.ts; mobile uses `apps/mobile/src/lib/platform.ts` that wraps `expo-secure-store`, `MMKV`, and the RN fetch/WebSocket globals.
+Each app instantiates `client-core` with its platform impl at boot. Web uses `apps/web/src/lib/platform-web.ts` (passes `import.meta.env.VITE_API_URL`); mobile uses `apps/mobile/src/lib/platform-mobile.ts` (passes `process.env.EXPO_PUBLIC_API_URL`) that wraps `expo-secure-store`, `MMKV`, and the RN fetch/WebSocket globals. `apiUrl` lives on the platform because `@trace/client-core` builds absolute URLs for `/auth/me`, `/auth/logout`, and uploads — neither side has a sane default.
 
 ### 7.4 Extraction timing
 

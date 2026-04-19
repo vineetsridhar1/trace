@@ -17,6 +17,7 @@ Implement the `Platform` interface for mobile using `expo-secure-store` (token s
   const TOKEN_KEY = 'trace_token';
 
   setPlatform({
+    apiUrl: process.env.EXPO_PUBLIC_API_URL ?? '',
     storage: {
       getItem: k => storage.getString(k) ?? null,
       setItem: (k, v) => storage.set(k, v),
@@ -31,6 +32,7 @@ Implement the `Platform` interface for mobile using `expo-secure-store` (token s
     createWebSocket: (url, protocols) => new WebSocket(url, protocols),
   });
   ```
+  `apiUrl` is required by the `Platform` contract — `@trace/client-core` builds absolute URLs (`${apiUrl}/auth/me`, etc.) so the mobile app must inject it. Use whatever Expo env var the app already exposes for the server URL.
 - Import this file at the top of `apps/mobile/app/_layout.tsx` — before any client-core usage.
 - Replace the placeholder screen with a `useEffect` that calls `fetchMe()` and logs the result (proves end-to-end wiring works; will be replaced in next ticket).
 - Document in `apps/mobile/README.md` that the platform init must run before any client-core import executes.
