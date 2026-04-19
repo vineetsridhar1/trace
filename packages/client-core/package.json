@@ -1,0 +1,30 @@
+{
+  "name": "@trace/client-core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "tsc -b && eslint src --max-warnings=0"
+  },
+  "peerDependencies": {
+    "@trace/gql": "workspace:*",
+    "@urql/core": "^5.1.1",
+    "graphql": "^16.10.0",
+    "react": "^19.0.0",
+    "urql": "^4.2.1",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "eslint": "^10.0.3",
+    "typescript": "^5.7.0"
+  }
+}
