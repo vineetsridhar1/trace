@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, GitBranch, Bot, SlidersHorizontal, Bell, Key, Users, Code, MonitorCog } from "lucide-react";
 import { useUIStore } from "../../stores/ui";
 import { Button } from "../ui/button";
@@ -34,9 +34,34 @@ const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
   { id: "channels", label: "Channels", icon: Code },
 ];
 
+const ALL_TAB_IDS: SettingsTab[] = [
+  "repositories",
+  "ai",
+  "session-defaults",
+  "notifications",
+  "api-keys",
+  "members",
+  "channels",
+  "bridge-access",
+];
+
+function isSettingsTab(value: string | null): value is SettingsTab {
+  return value !== null && (ALL_TAB_IDS as string[]).includes(value);
+}
+
 export function SettingsPage() {
   const setActivePage = useUIStore((s) => s.setActivePage);
-  const [activeTab, setActiveTab] = useState<SettingsTab>("repositories");
+  const settingsInitialTab = useUIStore((s) => s.settingsInitialTab);
+  const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
+  const [activeTab, setActiveTab] = useState<SettingsTab>(
+    isSettingsTab(settingsInitialTab) ? settingsInitialTab : "repositories",
+  );
+
+  useEffect(() => {
+    if (settingsInitialTab !== null) {
+      setSettingsInitialTab(null);
+    }
+  }, [settingsInitialTab, setSettingsInitialTab]);
   const contentWidthClass =
     activeTab === "members" ||
     activeTab === "repositories" ||
