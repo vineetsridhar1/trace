@@ -1,18 +1,12 @@
-import { Check, ChevronRight, Circle, GitBranch, Github, Key } from "lucide-react";
+import { useState } from "react";
+import { Check, ChevronRight, Circle, GitBranch, Github, Hash, Key } from "lucide-react";
 import { motion } from "framer-motion";
 import { useUIStore, type UIState } from "../../stores/ui";
 import type { OnboardingStatus } from "../../hooks/useOnboardingStatus";
+import { BrowseChannelsDialog } from "../sidebar/BrowseChannelsDialog";
+import { CreateChannelDialog } from "../sidebar/CreateChannelDialog";
 
 type IconComponent = typeof Key;
-
-interface ChecklistItem {
-  key: string;
-  title: string;
-  description: string;
-  done: boolean;
-  icon: IconComponent;
-  settingsTab: string;
-}
 
 interface Props {
   status: OnboardingStatus;
@@ -21,33 +15,9 @@ interface Props {
 export function OnboardingChecklist({ status }: Props) {
   const setActivePage = useUIStore((s: UIState) => s.setActivePage);
   const setSettingsInitialTab = useUIStore((s: UIState) => s.setSettingsInitialTab);
-
-  const items: ChecklistItem[] = [
-    {
-      key: "anthropic",
-      title: "Add your Anthropic API key",
-      description: "Required to power Claude Code sessions.",
-      done: status.anthropicSet,
-      icon: Key,
-      settingsTab: "api-keys",
-    },
-    {
-      key: "github",
-      title: "Add a GitHub token",
-      description: "Used for repository access in cloud sessions.",
-      done: status.githubSet,
-      icon: Github,
-      settingsTab: "api-keys",
-    },
-    {
-      key: "repo",
-      title: "Connect a repository",
-      description: "Link a codebase to your organization.",
-      done: status.hasRepo,
-      icon: GitBranch,
-      settingsTab: "repositories",
-    },
-  ];
+  const triggerRefresh = useUIStore((s: UIState) => s.triggerRefresh);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [browseOpen, setBrowseOpen] = useState(false);
 
   function openSettings(tab: string) {
     setSettingsInitialTab(tab);
@@ -64,20 +34,63 @@ export function OnboardingChecklist({ status }: Props) {
       </div>
 
       <div className="space-y-2">
-        {items.map((item) => (
-          <ChecklistRow
-            key={item.key}
-            item={item}
-            onClick={() => openSettings(item.settingsTab)}
-          />
-        ))}
+        <SimpleRow
+          done={status.anthropicSet}
+          icon={Key}
+          title="Add your Anthropic API key"
+          description="Required to power Claude Code sessions."
+          onClick={() => openSettings("api-keys")}
+        />
+        <SimpleRow
+          done={status.githubSet}
+          icon={Github}
+          title="Add a GitHub token"
+          description="Used for repository access in cloud sessions."
+          onClick={() => openSettings("api-keys")}
+        />
+        <SimpleRow
+          done={status.hasRepo}
+          icon={GitBranch}
+          title="Connect a repository"
+          description="Link a codebase to your organization."
+          onClick={() => openSettings("repositories")}
+        />
+
+        <ChannelRow
+          done={status.hasChannel}
+          onBrowseClick={() => setBrowseOpen(true)}
+          onCreateClick={() => setCreateOpen(true)}
+        />
       </div>
+
+      <CreateChannelDialog
+        open={createOpen}
+        onOpenChange={(next: boolean) => {
+          setCreateOpen(next);
+          if (!next) triggerRefresh();
+        }}
+      />
+      <BrowseChannelsDialog
+        open={browseOpen}
+        onOpenChange={(next: boolean) => {
+          setBrowseOpen(next);
+          if (!next) triggerRefresh();
+        }}
+        hideTrigger
+      />
     </div>
   );
 }
 
-function ChecklistRow({ item, onClick }: { item: ChecklistItem; onClick: () => void }) {
-  const Icon = item.icon;
+interface SimpleRowProps {
+  done: boolean;
+  icon: IconComponent;
+  title: string;
+  description: string;
+  onClick: () => void;
+}
+
+function SimpleRow({ done, icon: Icon, title, description, onClick }: SimpleRowProps) {
   return (
     <motion.button
       type="button"
@@ -87,19 +100,62 @@ function ChecklistRow({ item, onClick }: { item: ChecklistItem; onClick: () => v
       transition={{ type: "spring", stiffness: 500, damping: 30 }}
       className="flex w-full items-center gap-3 rounded-lg border border-border bg-surface-deep p-4 text-left transition-colors hover:bg-surface-hover"
     >
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center">
-        {item.done ? (
-          <Check size={18} className="text-emerald-500" />
-        ) : (
-          <Circle size={18} className="text-muted-foreground" />
-        )}
-      </span>
+      <StatusIcon done={done} />
       <Icon size={16} className="shrink-0 text-muted-foreground" />
       <span className="flex-1 min-w-0">
-        <span className="block text-sm font-medium text-foreground">{item.title}</span>
-        <span className="block text-xs text-muted-foreground">{item.description}</span>
+        <span className="block text-sm font-medium text-foreground">{title}</span>
+        <span className="block text-xs text-muted-foreground">{description}</span>
       </span>
       <ChevronRight size={16} className="shrink-0 text-muted-foreground" />
     </motion.button>
+  );
+}
+
+interface ChannelRowProps {
+  done: boolean;
+  onBrowseClick: () => void;
+  onCreateClick: () => void;
+}
+
+function ChannelRow({ done, onBrowseClick, onCreateClick }: ChannelRowProps) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-deep p-4">
+      <StatusIcon done={done} />
+      <Hash size={16} className="shrink-0 text-muted-foreground" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-foreground">Join or create a channel</p>
+        <p className="text-xs text-muted-foreground">
+          Channels are where you chat and run coding sessions.
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onBrowseClick}
+          className="rounded-md border border-border bg-surface-elevated px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover"
+        >
+          Browse
+        </button>
+        <button
+          type="button"
+          onClick={onCreateClick}
+          className="rounded-md border border-border bg-surface-elevated px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover"
+        >
+          Create
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StatusIcon({ done }: { done: boolean }) {
+  return (
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+      {done ? (
+        <Check size={18} className="text-emerald-500" />
+      ) : (
+        <Circle size={18} className="text-muted-foreground" />
+      )}
+    </span>
   );
 }

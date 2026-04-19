@@ -14,6 +14,9 @@ const ONBOARDING_STATUS_QUERY = gql`
     repos(organizationId: $organizationId) {
       id
     }
+    channels(organizationId: $organizationId, memberOnly: true) {
+      id
+    }
   }
 `;
 
@@ -22,13 +25,14 @@ interface TokenRow {
   isSet: boolean;
 }
 
-interface RepoRow {
+interface IdRow {
   id: string;
 }
 
 interface OnboardingStatusData {
   myApiTokens: TokenRow[];
-  repos: RepoRow[];
+  repos: IdRow[];
+  channels: IdRow[];
 }
 
 export interface OnboardingStatus {
@@ -36,6 +40,7 @@ export interface OnboardingStatus {
   anthropicSet: boolean;
   githubSet: boolean;
   hasRepo: boolean;
+  hasChannel: boolean;
   allDone: boolean;
   completedCount: number;
   totalCount: number;
@@ -49,6 +54,7 @@ export function useOnboardingStatus(): OnboardingStatus {
   const [anthropicSet, setAnthropicSet] = useState(false);
   const [githubSet, setGithubSet] = useState(false);
   const [hasRepo, setHasRepo] = useState(false);
+  const [hasChannel, setHasChannel] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     if (!activeOrgId) {
@@ -66,6 +72,7 @@ export function useOnboardingStatus(): OnboardingStatus {
       setAnthropicSet(anthropic?.isSet === true);
       setGithubSet(github?.isSet === true);
       setHasRepo(data.repos.length > 0);
+      setHasChannel(data.channels.length > 0);
     }
     setLoading(false);
   }, [activeOrgId]);
@@ -74,8 +81,8 @@ export function useOnboardingStatus(): OnboardingStatus {
     void fetchStatus();
   }, [fetchStatus, refreshTick]);
 
-  const completedCount = [anthropicSet, githubSet, hasRepo].filter(Boolean).length;
-  const totalCount = 3;
+  const completedCount = [anthropicSet, githubSet, hasRepo, hasChannel].filter(Boolean).length;
+  const totalCount = 4;
   const allDone = completedCount === totalCount;
 
   return {
@@ -83,6 +90,7 @@ export function useOnboardingStatus(): OnboardingStatus {
     anthropicSet,
     githubSet,
     hasRepo,
+    hasChannel,
     allDone,
     completedCount,
     totalCount,

@@ -58,8 +58,20 @@ function ChannelTypeIcon({ type }: { type: ChannelType }) {
   return <Code size={16} className="shrink-0 text-muted-foreground" />;
 }
 
-export function BrowseChannelsDialog() {
-  const [open, setOpen] = useState(false);
+interface BrowseChannelsDialogProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+}
+
+export function BrowseChannelsDialog({
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  hideTrigger,
+}: BrowseChannelsDialogProps = {}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = controlledOnOpenChange ?? setInternalOpen;
   const [channels, setChannels] = useState<BrowseChannel[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
@@ -113,12 +125,14 @@ export function BrowseChannelsDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        className="flex items-center justify-center rounded-md p-0.5 text-muted-foreground transition-colors hover:text-foreground"
-        title="Browse channels"
-      >
-        <Search size={16} />
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger
+          className="flex items-center justify-center rounded-md p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+          title="Browse channels"
+        >
+          <Search size={16} />
+        </DialogTrigger>
+      )}
       <DialogContent className="max-h-[70vh]">
         <DialogHeader>
           <DialogTitle>Browse Channels</DialogTitle>
