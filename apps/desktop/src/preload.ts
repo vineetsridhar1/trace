@@ -24,4 +24,9 @@ contextBridge.exposeInMainWorld("trace", {
     ipcRenderer.on("bridge-status", listener);
     return () => ipcRenderer.removeListener("bridge-status", listener);
   },
+  onAuthToken: (callback: (token: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, token: string) => callback(token);
+    ipcRenderer.on("auth:token", listener);
+    return () => ipcRenderer.removeListener("auth:token", listener);
+  },
 });

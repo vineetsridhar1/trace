@@ -14,6 +14,56 @@ const portOffset = Number(process.env.TRACE_PORT || 0);
 const serverUrl = process.env.TRACE_SERVER_URL ?? `http://localhost:${4000 + portOffset}`;
 const bridge = new BridgeClient(serverUrl);
 
+const PROTOCOL = "trace";
+let pendingAuthToken: string | null = null;
+
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient(PROTOCOL);
+}
+
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on("second-instance", (_e, argv) => {
+    const url = argv.find((a) => a.startsWith(`${PROTOCOL}://`));
+    if (url) handleDeepLink(url);
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
+});
+
+function handleDeepLink(url: string) {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return;
+  }
+  if (parsed.protocol !== `${PROTOCOL}:`) return;
+  if (parsed.hostname !== "auth" || parsed.pathname !== "/callback") return;
+  const token = parsed.searchParams.get("token");
+  if (!token) return;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("auth:token", token);
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  } else {
+    pendingAuthToken = token;
+  }
+}
+
 function publishBridgeStatus(status: BridgeConnectionStatus) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send("bridge-status", status);
@@ -33,17 +83,21 @@ function createWindow() {
   const webUrl = process.env.TRACE_WEB_URL ?? `http://localhost:${3000 + portOffset}`;
   mainWindow.loadURL(webUrl);
 
-  // Open external links in the user's default browser,
-  // but allow the GitHub OAuth popup to open as an actual window
-  // so window.opener.postMessage can relay the token back.
+  // Open every external URL in the user's default browser, including the
+  // GitHub OAuth login URL — its callback redirects to trace://auth/callback,
+  // which we handle via app.on("open-url") / "second-instance".
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.includes("/auth/github")) {
-      return { action: "allow" };
-    }
     if (url.startsWith("http://") || url.startsWith("https://")) {
       shell.openExternal(url);
     }
     return { action: "deny" };
+  });
+
+  mainWindow.webContents.once("did-finish-load", () => {
+    if (pendingAuthToken && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("auth:token", pendingAuthToken);
+      pendingAuthToken = null;
+    }
   });
 
   mainWindow.webContents.on("will-navigate", (event, url) => {

@@ -33,7 +33,15 @@
   "config": {
     "forge": {
       "packagerConfig": {
-        "asar": true
+        "asar": true,
+        "protocols": [
+          {
+            "name": "Trace",
+            "schemes": [
+              "trace"
+            ]
+          }
+        ]
       },
       "makers": [
         {

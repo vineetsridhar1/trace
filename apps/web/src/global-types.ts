@@ -111,6 +111,7 @@ declare global {
       organizationId: string | null,
     ) => Promise<boolean>;
     onBridgeStatus: (callback: (status: DesktopBridgeConnectionStatus) => void) => () => void;
+    onAuthToken: (callback: (token: string) => void) => () => void;
   }
 
   interface Window {

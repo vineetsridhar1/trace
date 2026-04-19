@@ -195,6 +195,12 @@ function LoginPage() {
       fetchMe();
     }
 
+    // Electron: token arrives via IPC from the main process after the
+    // system browser hits our trace://auth/callback deep link.
+    const offDesktop = window.trace?.onAuthToken?.((token: string) => {
+      handleAuthSuccess(token);
+    });
+
     // Primary: postMessage from the OAuth popup (works when window.opener is intact)
     function onMessage(e: MessageEvent) {
       if (e.data?.type === "auth:success") {
@@ -227,6 +233,7 @@ function LoginPage() {
     window.addEventListener("storage", onStorage);
 
     return () => {
+      offDesktop?.();
       window.removeEventListener("message", onMessage);
       window.removeEventListener("storage", onStorage);
       bc?.close();
@@ -234,11 +241,17 @@ function LoginPage() {
   }, [fetchMe, setToken]);
 
   function openGithubLogin() {
+    const apiUrl = import.meta.env.VITE_API_URL ?? "";
+    if (window.trace) {
+      // Electron: setWindowOpenHandler routes this to shell.openExternal.
+      // origin=trace-desktop tells the server to redirect back via trace://.
+      window.open(`${apiUrl}/auth/github?origin=trace-desktop`);
+      return;
+    }
     const w = 500;
     const h = 700;
     const left = window.screenX + (window.innerWidth - w) / 2;
     const top = window.screenY + (window.innerHeight - h) / 2;
-    const apiUrl = import.meta.env.VITE_API_URL ?? "";
     window.open(
       `${apiUrl}/auth/github?origin=${encodeURIComponent(window.location.origin)}`,
       "github-login",

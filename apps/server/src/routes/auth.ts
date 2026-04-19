@@ -128,8 +128,15 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
       path: "/",
     });
 
+    const rawOrigin = (req.query.state as string) || "";
+
+    // Native shells hand off the JWT via a custom-scheme deep link.
+    if (rawOrigin === "trace-desktop") {
+      return res.redirect(302, `trace://auth/callback?token=${encodeURIComponent(token)}`);
+    }
+
     // Use origin from OAuth state param if available, otherwise fall back to WEB_URL
-    const redirectOrigin = (req.query.state as string) || WEB_URL;
+    const redirectOrigin = rawOrigin || WEB_URL;
 
     // Signal the opener window and close the popup.
     // Always store the token in localStorage first — window.opener can be
@@ -152,7 +159,11 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
     </script></body></html>`);
   } catch (err) {
     console.error("GitHub OAuth error:", err);
-    const errorOrigin = (req.query.state as string) || WEB_URL;
+    const rawOrigin = (req.query.state as string) || "";
+    if (rawOrigin === "trace-desktop") {
+      return res.redirect(302, `trace://auth/callback?error=1`);
+    }
+    const errorOrigin = rawOrigin || WEB_URL;
     res.send(`<!DOCTYPE html><html><body><script>
       if (window.opener) {
         window.opener.postMessage({ type: "auth:error" }, "${errorOrigin}");
