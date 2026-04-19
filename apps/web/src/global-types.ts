@@ -6,6 +6,7 @@ declare global {
     readonly VITE_AG_GRID_LICENSE_KEY?: string;
     readonly VITE_ENABLE_MESSAGING?: string;
     readonly VITE_ENABLE_TICKETS?: string;
+    readonly VITE_ENABLE_AGENT_DEBUG?: string;
   }
 
   interface ImportMeta {

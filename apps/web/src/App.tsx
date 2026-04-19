@@ -151,7 +151,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
               <SidebarInset className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {activePage === "settings" ? (
                   <SettingsPage />
-                ) : activePage === "agent-debug" ? (
+                ) : activePage === "agent-debug" && features.agentDebug ? (
                   <AgentDebugPage />
                 ) : activePage === "inbox" ? (
                   <InboxView />
