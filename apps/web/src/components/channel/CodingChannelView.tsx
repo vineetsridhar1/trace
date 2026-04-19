@@ -7,6 +7,7 @@ import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { client } from "../../lib/urql";
 import { StartSessionDialog } from "./StartSessionDialog";
+import { SessionsTable } from "./SessionsTable";
 import { MergedArchivedPage } from "./MergedArchivedPage";
 import { SidebarTrigger } from "../ui/sidebar";
 import { ConnectionStatus } from "../ConnectionStatus";
@@ -151,7 +152,9 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
               </div>
             ))}
           </div>
-        ) : null}
+        ) : (
+          <SessionsTable channelId={channelId} />
+        )}
       </div>
     </div>
   );
