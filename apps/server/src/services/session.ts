@@ -444,9 +444,9 @@ function appendPromptInstructions(prompt: string, { hasRepo }: { hasRepo: boolea
   return result;
 }
 
-function buildBaseBranchInstruction(baseBranch: string): string {
+function buildBaseBranchInstruction(baseBranch: string, repoDefaultBranch: string): string {
   return `\n\n<system-instruction>
-This session is working off the base branch "${baseBranch}". All work should be branched from this base branch, and when merging, merge into "${baseBranch}" (not main/master). When pushing, ensure your branch is based on origin/${baseBranch}.
+This channel overrides the repository's default branch. Work off "${baseBranch}" instead of "${repoDefaultBranch}": branch from origin/${baseBranch}, ensure pushes are based on it, and when opening a pull request set the base/target branch to "${baseBranch}" — do NOT target "${repoDefaultBranch}" or main.
 </system-instruction>`;
 }
 
@@ -1598,11 +1598,20 @@ export class SessionService {
       resolvedPrompt = appendPromptInstructions(resolvedPrompt, { hasRepo: !!session.repo });
     }
 
-    // Append base branch instruction when the channel specifies one
+    // Append base branch instruction when the channel overrides the repo's default
     const channelBaseBranch =
       session.channel?.baseBranch ?? session.sessionGroup?.channel?.baseBranch ?? null;
-    if (isFirstRun && resolvedPrompt && channelBaseBranch) {
-      resolvedPrompt = resolvedPrompt + buildBaseBranchInstruction(channelBaseBranch);
+    const repoDefaultBranch =
+      session.repo?.defaultBranch ?? session.sessionGroup?.repo?.defaultBranch ?? null;
+    if (
+      isFirstRun &&
+      resolvedPrompt &&
+      channelBaseBranch &&
+      repoDefaultBranch &&
+      channelBaseBranch !== repoDefaultBranch
+    ) {
+      resolvedPrompt =
+        resolvedPrompt + buildBaseBranchInstruction(channelBaseBranch, repoDefaultBranch);
     }
 
     const checkpointContext = buildCheckpointContextFromStartMeta({
