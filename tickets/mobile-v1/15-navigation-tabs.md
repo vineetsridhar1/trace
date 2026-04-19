@@ -30,6 +30,7 @@ Wire up the full route tree from the plan (§9): authed tab group with Home / Ch
   - Active tab: accent tint; inactive: muted
   - Tap haptic: `selection`
   - Badge support (pass count prop; shown when >0)
+  - Home tab badge is wired to the current `needs_input` count from the store; Channels and Settings stay unbadged in V1
 - Configure expo-router stack headers per route:
   - Home: `largeTitle` mode (native iOS title collapse behavior via `react-native-screens`)
   - Channels list: `largeTitle` mode + search bar slot (search implementation in ticket 16)
@@ -53,6 +54,7 @@ Wire up the full route tree from the plan (§9): authed tab group with Home / Ch
 - [ ] All routes exist with placeholder content
 - [ ] Tab bar uses Liquid Glass on iOS 26+
 - [ ] Tab switching works with haptic
+- [ ] Home tab badge reflects the current `needs_input` count; other tabs remain unbadged
 - [ ] Stack pushes and pops with native iOS transitions
 - [ ] Swipe-back gesture works on every stack screen
 - [ ] Navigation files total <200 lines each
@@ -60,6 +62,7 @@ Wire up the full route tree from the plan (§9): authed tab group with Home / Ch
 ## How to test
 
 1. Launch app, verify three tabs at the bottom with glass effect.
-2. Tap each tab — haptic fires, content switches, title changes.
-3. Navigate Channels → [id] → Session group → Session stream; swipe back works at each level.
-4. Session stream URL deep link via `xcrun simctl openurl booted trace://sessions/test-group/test-session` opens the stream screen.
+2. Put one session into `needs_input` and verify the Home tab badge increments while the other tabs stay unbadged.
+3. Tap each tab — haptic fires, content switches, title changes.
+4. Navigate Channels → [id] → Session group → Session stream; swipe back works at each level.
+5. Session stream URL deep link via `xcrun simctl openurl booted trace://sessions/test-group/test-session` opens the stream screen.

@@ -13,6 +13,8 @@ Move the event-handling pipeline (the pure store-update logic inside `useOrgEven
     export function handleSessionEvent(event: Event): void;
     ```
   - Move the `session_output` subtype routing into `packages/client-core/src/events/session-output.ts`.
+  - Preserve parity with the web event pipeline for every V1-relevant event family from `mobile-plan.md` §13: session lifecycle, `session_output` subtype routing, PR events, session-group archive events, and queued-message events.
+  - Explicitly keep the "ignored in V1 UI but still consumed for store correctness" behavior for non-rendered event families (`message_sent`, `inbox_item_*`, `ticket_*`, `channel_member_*`) so mobile does not fork the data model.
   - The `useOrgEvents` / `useSessionEvents` React hooks stay in `apps/web/src/hooks/`. They become thin wrappers: subscribe via urql, call `handleOrgEvent(event)` on each arrival.
 - **Notification hooks:**
   - Registry (`registerHandler`, `notifyForEvent`) is platform-agnostic — move to `packages/client-core/src/notifications/registry.ts`.
@@ -36,9 +38,11 @@ Move the event-handling pipeline (the pure store-update logic inside `useOrgEven
 
 - [ ] `packages/client-core/src/events/handlers.ts` contains the pure event-to-store logic
 - [ ] Web hooks (`useOrgEvents`, `useSessionEvents`) delegate to client-core handlers
+- [ ] V1 event parity is preserved, including non-rendered event families that still need store updates
 - [ ] Notification registry is in client-core; web-specific handlers remain in `apps/web`
 - [ ] Mutations + optimistic-message helpers are in client-core
 - [ ] `createGqlClient` factory is in client-core and used by `apps/web`
+- [ ] Unit tests cover the extracted event handlers and `session_output` subtype routing
 - [ ] `pnpm typecheck`, `pnpm lint` pass
 - [ ] Web app end-to-end behavior unchanged
 
@@ -50,4 +54,5 @@ Move the event-handling pipeline (the pure store-update logic inside `useOrgEven
    - Send a message, see optimistic event then real event
    - Queue a message while agent active, verify chip appears
    - Trigger a status change (e.g., stop session), verify toast fires
-2. No regressions from §10–14 of `mobile-plan.md` equivalents on web.
+2. Run the handler unit tests and cover representative events from each V1 event family, including one non-rendered-but-consumed event.
+3. No regressions from §10–14 of `mobile-plan.md` equivalents on web.

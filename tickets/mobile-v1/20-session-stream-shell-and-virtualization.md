@@ -18,6 +18,7 @@ The scaffold of the main session screen: the session header, the virtualized `Fl
   - Pagination: on reaching top, fetch older events using the existing paginated query pattern from web (via `before: timestamp` arg).
   - Auto-scroll: if user is within 120pt of bottom when a new node arrives, auto-scroll-to-bottom. Otherwise show floating "New activity" pill above the input composer (pill appears at bottom-right above safe area; tap: scrolls to bottom).
   - Scroll position preserved across re-mounts within session (store in memory ref).
+  - Render a skeleton stream while the initial `session(id)` query is loading, then render "Waiting for agent to start..." when hydration completes but the session has no events yet.
 - `NewActivityPill.tsx` (<100 lines):
   - Floating pill above composer; Liquid Glass background.
   - Shows "↓ N new" while count > 0 and user is away from bottom.
@@ -34,6 +35,7 @@ The scaffold of the main session screen: the session header, the virtualized `Fl
 
 - [ ] Session stream renders a placeholder per event
 - [ ] Subscribes to `sessionEvents` on focus; unsubscribes on blur
+- [ ] Initial loading state renders skeleton placeholders; no-event sessions show the empty-state copy from the plan
 - [ ] Scrolling back to top triggers pagination
 - [ ] New events auto-scroll when at bottom; show "New activity" pill otherwise
 - [ ] 120fps scrolling on ProMotion device with 500+ events
@@ -42,7 +44,8 @@ The scaffold of the main session screen: the session header, the virtualized `Fl
 ## How to test
 
 1. Open a session with many events → list renders placeholders for each event type.
-2. Scroll to top → older events load in batches.
-3. New event arrives while near bottom → auto-scrolls.
-4. Scroll up, then new event arrives → "New activity" pill appears; tap → scrolls down.
-5. Instruments / perf overlay shows no sustained frame drops during fast flicks.
+2. Open a brand-new session with zero events → "Waiting for agent to start..." appears after hydration.
+3. Scroll to top → older events load in batches.
+4. New event arrives while near bottom → auto-scrolls.
+5. Scroll up, then new event arrives → "New activity" pill appears; tap → scrolls down.
+6. Instruments / perf overlay shows no sustained frame drops during fast flicks.

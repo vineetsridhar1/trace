@@ -12,10 +12,13 @@ The bottom-pinned composer: plain-text input, interaction-mode toggle (code / pl
   - Interaction-mode pill on the left: cycles `code → plan → ask → code` on tap. Visual variants per mode. Haptic `selection` on cycle.
   - Send button on the right:
     - Disabled when input is empty
+    - Disabled with a subtle "Session complete" hint when the session is done/stopped and no further input is allowed
     - Label "Send" when `agentStatus !== 'active'`; label "Queue" when active
     - Haptic `light` on send/queue
   - On send (not active): calls `sendSessionMessage({ sessionId, text, interactionMode, clientMutationId })`. Optimistic insert via client-core's `insertOptimisticMessage` helper. Clears input.
   - On queue (active): calls `queueSessionMessage({ sessionId, text, interactionMode })`. Optimistic upsert into `queuedMessages`. Clears input.
+  - On send/queue failure: roll back the optimistic entry, restore the draft text, fire an error toast, and surface an inline retry affordance instead of dropping the user's input.
+  - V1 offline behavior: no durable offline outbox. Failed drafts remain visible only while the screen stays mounted; cross-launch persistence is deferred.
   - Keyboard handling via `react-native-keyboard-controller` — composer rises smoothly above keyboard; stream inset adjusts.
 - **`QueuedMessagesStrip.tsx`** (<150 lines):
   - Horizontal scroll strip above the composer, only visible when session has queued messages.
@@ -36,8 +39,9 @@ The bottom-pinned composer: plain-text input, interaction-mode toggle (code / pl
 
 - [ ] Composer sends when agent idle; queues when active
 - [ ] Optimistic update inserts event or queued-message immediately
-- [ ] Server event reconciles optimistic entry
+- [ ] Server event reconciles optimistic entry; mutation failures roll it back and restore the draft
 - [ ] Interaction mode toggle cycles correctly with haptic
+- [ ] Completed/stopped sessions disable the composer and show the completion hint
 - [ ] Queued strip displays and updates live
 - [ ] Keyboard behavior: composer rises, stream adjusts, no jank
 - [ ] All files <200 lines
@@ -46,7 +50,9 @@ The bottom-pinned composer: plain-text input, interaction-mode toggle (code / pl
 
 1. Agent idle → type → Send → message appears optimistically → reconciles when event arrives.
 2. Agent running → type → Queue → chip appears in strip.
-3. Tap `×` on chip → chip disappears (optimistic), `removeQueuedMessage` fires.
-4. Agent completes → queued messages drain one-by-one → chips disappear as they drain.
-5. Cycle interaction mode → visual + haptic changes.
-6. Keyboard interactions on device: no layout shift or jank.
+3. Force a send/queue mutation failure → optimistic UI rolls back, draft text is restored, retry affordance appears.
+4. Tap `×` on chip → chip disappears (optimistic), `removeQueuedMessage` fires.
+5. Agent completes or is stopped → composer disables and shows the completion hint.
+6. Agent completes → queued messages drain one-by-one → chips disappear as they drain.
+7. Cycle interaction mode → visual + haptic changes.
+8. Keyboard interactions on device: no layout shift or jank.

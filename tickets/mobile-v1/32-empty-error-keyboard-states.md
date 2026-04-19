@@ -19,6 +19,7 @@ Ensure every screen handles empty data, load failures, network errors, and keybo
   - Auth error (401): redirect to sign-in (already covered in ticket 09)
   - Rate-limit / 429: "Too many requests, try again shortly" with a backoff
   - Session-specific error: `lastError` card (covered in ticket 24)
+  - Offline send/queue failure: keep the current draft visible in the session composer, mark it failed inline, and offer retry while the screen stays mounted (no cross-launch persistence in V1)
   - Push registration failure: silent retry, no user-facing error
 - **Keyboard-up behavior** — per screen:
   - Session stream composer: ✅ (ticket 23)
@@ -43,10 +44,12 @@ Ensure every screen handles empty data, load failures, network errors, and keybo
 - [ ] Subscription-disconnected banner works
 - [ ] Every input field correctly avoids keyboard
 - [ ] GraphQL error paths show user-meaningful messages
+- [ ] Offline send/queue failure preserves the draft and exposes retry without introducing a durable outbox
 
 ## How to test
 
 1. Fresh org with zero data → empty states appear on every screen.
 2. Turn on airplane mode → offline banner appears; sessions can still be viewed (from cache).
-3. Force server to return 500 on a query → error card shows with retry.
-4. Cause WS disconnection (server restart) → reconnecting banner; resolves when back.
+3. Attempt to send or queue a message while offline → draft stays visible, failed state appears, retry works after reconnect.
+4. Force server to return 500 on a query → error card shows with retry.
+5. Cause WS disconnection (server restart) → reconnecting banner; resolves when back.

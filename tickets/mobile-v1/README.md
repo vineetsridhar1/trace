@@ -73,7 +73,7 @@ The single most important feature surface. Built in composable pieces, all files
 
 | # | Ticket | What it does |
 |---|--------|-------------|
-| 30 | [Motion + Haptic Polish](30-motion-and-haptic-polish-pass.md) | Deliberate review of every transition and haptic on real devices |
+| 30 | [Motion + Haptics + Performance Polish](30-motion-and-haptic-polish-pass.md) | Real-device review of motion/haptics plus instrumentation against the mobile performance budgets |
 | 31 | [Accessibility Audit](31-accessibility-audit.md) | VoiceOver, Dynamic Type, contrast, hit targets, Reduce Motion |
 | 32 | [Empty + Error + Keyboard States](32-empty-error-keyboard-states.md) | Robust handling of zero-data, failures, offline, and keyboard-up |
 
@@ -82,7 +82,7 @@ The single most important feature surface. Built in composable pieces, all files
 | # | Ticket | What it does |
 |---|--------|-------------|
 | 33 | [Crash Reporting + Analytics](33-crash-reporting-and-analytics.md) | Sentry + minimal product-event analytics |
-| 34 | [CI + EAS Preview Builds](34-ci-and-eas-preview-builds.md) | CI runs typecheck/lint, file-size guardrail, EAS preview on PRs, smoke test |
+| 34 | [CI + EAS Preview Builds](34-ci-and-eas-preview-builds.md) | CI runs typecheck/lint/test, file-size guardrail, EAS preview on PRs, smoke test |
 | 35 | [TestFlight Beta Launch](35-testflight-beta-launch.md) | App Store Connect, TestFlight groups, QA checklist, ship V1 |
 
 ## Dependency graph
@@ -130,7 +130,7 @@ M5 — Home + Push  (needs M4 complete)
 29 Badge Counts  (needs 25, 26)
 
 M6 — Polish  (needs M5 complete)
-30 Motion + Haptic
+30 Motion + Haptics + Performance
 31 Accessibility
 32 Empty/Error/Keyboard
 
@@ -146,6 +146,26 @@ M7 — Beta  (needs M6 complete)
 - M1 and M2 overlap heavily — once the mobile scaffold (05) exists, design-system work can run in parallel with auth work.
 - Within M4, tickets 21/22/23/24 can be worked in parallel after 20 lands.
 - M6 tickets 30/31/32 are independent and can be tackled in any order / in parallel.
+
+## Plan coverage map
+
+- `§1 Executive summary`, `§2 Goals & non-goals`, and `§3 Primary use cases` are realized across tickets 01-35, with tickets 09-35 owning the user-facing mobile experience and the scope guardrails below enforcing the deliberate omissions.
+- `§4 Tech stack`, `§5 Monorepo structure`, and `§7 Shared code strategy` are covered by tickets 01-06.
+- `§6 Architecture`, `§12 State management rules`, and `§13 Event handling` are covered by tickets 02-04, 09, 20-24, 29, and 32.
+- `§8 Authentication` is covered by tickets 06-09 and 18.
+- `§9 Navigation structure` is covered by tickets 15, 18, 28, and 29.
+- `§10 Screens` is covered by tickets 09, 15-25.
+- `§11 Design system` is covered by tickets 10-14, 30, and 31.
+- `§14 Push notifications` is covered by tickets 08 and 26-29.
+- `§15 Milestones` maps directly to the milestone grouping in this README (M0-M7).
+- `§16 Performance requirements` is covered by tickets 20, 30, and 34.
+- `§17 Quality, testing, and CI` is covered by tickets 01, 04, 31, and 34.
+- `§18 Server-side prerequisites` is covered by tickets 07, 08, 27, and 28.
+- `§19 Open questions & risks` are covered by tickets 12, 21, 23, 30, 34, and 35.
+- `§20 Success criteria` and the ship-readiness work are covered by tickets 30-35.
+- `§21 Out-of-scope reference` is enforced by the scope guardrails below and by the fact that no ticket takes on messaging, ticketing, terminals, file-tree/diff viewers, new-session creation, local-session control, light mode, or Android work for V1.
+
+If the plan gains a new actionable requirement, add or update its owning ticket in the same change and keep this coverage map in sync.
 
 ## Scope guardrails
 

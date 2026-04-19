@@ -213,7 +213,7 @@ Mobile follows the same subscription tiering as web:
 
 - **Ambient (always-on):** `orgEvents` subscription for the currently-active org. This drives badges, push decisions, and list ordering.
 - **Focused:** `sessionEvents` subscription for the single session currently on screen. Subscribes when the screen mounts, unsubscribes on blur/unmount. This is where full session_output payloads come from.
-- **Focused:** `sessionPortsChanged`, `sessionStatusChanged` subscribed only on session detail screen.
+- **Focused:** `sessionStatusChanged` subscribed only on the active session screen. V1 has no session-ports UI, so `sessionPortsChanged` is not part of the mobile surface.
 
 ### 6.5 Files Under 200 Lines
 
@@ -823,7 +823,7 @@ The app badge reflects the count of sessions in `needs_input` across the active 
 - Liquid Glass component wired up (`expo-glass-effect` or custom module).
 - Haptic wrapper implemented.
 - Motion tokens + helpers implemented.
-- **Exit criteria:** every primitive renders correctly in light/dark, on iOS 17 and iOS 26, with no layout jank.
+- **Exit criteria:** every primitive renders correctly in the V1 dark theme on iOS 17 and iOS 26, with no layout jank, and the token structure remains ready for a future light theme.
 
 ### M3 — Channels & session group list
 
@@ -859,7 +859,8 @@ The app badge reflects the count of sessions in `needs_input` across the active 
 - Accessibility audit: VoiceOver labels on every interactive element, Dynamic Type respected in Text primitive.
 - Keyboard interaction review — every screen tested with keyboard up/down.
 - Empty and error states on every screen.
-- **Exit criteria:** internal team can use the app as a daily driver for 1 week without feeling the polish gap.
+- Performance instrumentation and budget validation against §16.
+- **Exit criteria:** internal team can use the app as a daily driver for 1 week without feeling the polish gap, and any misses against §16 are fixed or explicitly documented before beta.
 
 ### M7 — Beta
 
@@ -929,10 +930,10 @@ No changes to the event schema are expected. No changes to existing session muta
 ### Open questions
 
 1. **Expo Modules API Liquid Glass package maturity.** `expo-glass-effect` or equivalent — does it cover all our usages (tab bar, input, pinned bars)? Decision: spike in M2; if gaps, write a thin custom Expo module. Budget: 1 day of Swift work.
-2. **Assistant message rich rendering.** The web app renders full markdown, code blocks, images. V1 mobile renders markdown + code blocks in a dark monospace box; images are deferred (won't appear in stream). Confirm this is acceptable.
-3. **Offline behavior.** What happens when the user drafts a message with no connection? V1 proposal: queue it locally in MMKV with a "Failed — tap to retry" indicator; do not attempt fancy offline sync. Confirm.
-4. **File size cap enforcement.** CLAUDE.md says <200 lines per file. Do we want a hard CI check for the mobile app specifically? Recommendation: yes, at M6 (after shape stabilizes).
-5. **Dark mode only vs. light+dark.** Web app has both. Recommendation: V1 ships dark-only; light mode in a follow-up. Confirm.
+2. **Assistant message rich rendering.** Decision for V1: render markdown + code blocks only; do not render images in the stream. If product wants image rendering, track it as a follow-up rather than expanding V1.
+3. **Offline message behavior.** Decision for V1: do not build a durable offline outbox. If send/queue fails because connectivity is down, keep the draft visible in-session, surface retry affordances, and defer cross-launch draft persistence to a follow-up.
+4. **File size cap enforcement.** Decision: yes. Enforce the <200-line rule in CI once the mobile app shape stabilizes (ticket 34).
+5. **Dark mode only vs. light+dark.** Decision: V1 ships dark-only. Theme tokens stay structured so light mode can land later without rewriting consumers.
 
 ### Risks
 
