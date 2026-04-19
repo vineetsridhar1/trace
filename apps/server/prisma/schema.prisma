@@ -126,6 +126,11 @@ enum ApiTokenProvider {
   ssh_key
 }
 
+enum PushPlatform {
+  ios
+  android
+}
+
 enum ParticipantScope {
   channel
   chat
@@ -253,6 +258,7 @@ model Organization {
   settings Json     @default("{}")
 
   orgMembers OrgMember[]
+  pushTokens PushToken[]
   repos    Repo[]
   projects Project[]
   bridgeRuntimes BridgeRuntime[]
@@ -438,6 +444,7 @@ model User {
   channelMemberships   ChannelMember[]
   participants         Participant[]
   apiTokens         ApiToken[]
+  pushTokens        PushToken[]
   cloudMachines     CloudMachine[]
   aiConversations   AiConversation[] @relation("AiConversationCreator")
   aiBranches        AiBranch[]       @relation("AiBranchCreator")
@@ -723,6 +730,22 @@ model ApiToken {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, provider])
+}
+
+model PushToken {
+  id             String        @id @default(uuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  token          String
+  platform       PushPlatform
+
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@unique([userId, token])
+  @@index([userId, organizationId])
 }
 
 model Event {
