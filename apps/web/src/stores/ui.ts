@@ -55,6 +55,8 @@ export interface UIState {
   restoreLastVisited: (tab: "dm" | "main") => void;
   channelSubPage: ChannelSubPage;
   setChannelSubPage: (subPage: ChannelSubPage) => void;
+  settingsInitialTab: string | null;
+  setSettingsInitialTab: (tab: string | null) => void;
   unreadChatIds: Record<string, boolean>;
   markChatUnread: (chatId: string) => void;
   markChatRead: (chatId: string) => void;
@@ -101,6 +103,8 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
   lastSelectedSessionIdsByGroup: {},
   openSessionTabsByGroup: {},
   channelSubPage: null,
+  settingsInitialTab: null,
+  setSettingsInitialTab: (tab: string | null) => set({ settingsInitialTab: tab }),
   showTerminalPanel: false,
   setShowTerminalPanel: (show: boolean) => set({ showTerminalPanel: show }),
   setChannelSubPage: (subPage: ChannelSubPage) => {

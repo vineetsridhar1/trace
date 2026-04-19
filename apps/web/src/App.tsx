@@ -6,12 +6,14 @@ import { AppSidebar } from "./components/AppSidebar";
 import { ChannelView } from "./components/channel/ChannelView";
 import { ChatView } from "./components/chat/ChatView";
 import { SettingsPage } from "./components/settings/SettingsPage";
+import { NoOrgWelcome } from "./components/onboarding/NoOrgWelcome";
+import { HomeView } from "./components/onboarding/HomeView";
 import { InboxView } from "./components/inbox/InboxView";
 import { TicketsView } from "./components/tickets/TicketsView";
 import { AgentDebugPage } from "./components/agent-debug/AgentDebugPage";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
 import { DetailPanel } from "./components/ui/detail-panel";
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "./components/ui/sidebar";
+import { SidebarProvider, SidebarInset } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { Button } from "./components/ui/button";
 import { useOrgEvents } from "./hooks/useOrgEvents";
@@ -28,6 +30,7 @@ export function App() {
   const user = useAuthStore((s: AuthState) => s.user);
   const loading = useAuthStore((s: AuthState) => s.loading);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
+  const hasOrg = useAuthStore((s: AuthState) => s.orgMemberships.length > 0);
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
   const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
   useEffect(() => {
@@ -56,6 +59,15 @@ export function App() {
 
   if (!user) {
     return <LoginPage />;
+  }
+
+  if (!hasOrg) {
+    return (
+      <>
+        <NoOrgWelcome />
+        <Toaster position="top-right" />
+      </>
+    );
   }
 
   return (
@@ -149,16 +161,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
                 ) : activeChannelId ? (
                   <ChannelView channelId={activeChannelId} />
                 ) : (
-                  <div className="flex h-full flex-col">
-                    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-                      <SidebarTrigger />
-                    </header>
-                    <div className="flex flex-1 items-center justify-center">
-                      <p className="text-sm text-muted-foreground">
-                        Select a channel to get started
-                      </p>
-                    </div>
-                  </div>
+                  <HomeView />
                 )}
               </SidebarInset>
             </div>
