@@ -24,7 +24,7 @@ import { useUIStore } from "../../stores/ui";
 import { ImageAttachmentBar, type ImageAttachment } from "./ImageAttachmentBar";
 import { uploadImage } from "../../lib/upload";
 import { generateUUID } from "../../lib/uuid";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import type { BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 

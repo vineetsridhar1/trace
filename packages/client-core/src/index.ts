@@ -25,3 +25,6 @@ export {
   useScopedEvents,
   useSessionIdsByGroup,
 } from "./stores/entity.js";
+
+export type { AuthState, OrgMembership } from "./stores/auth.js";
+export { getAuthHeaders, useAuthStore } from "./stores/auth.js";

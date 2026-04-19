@@ -16,7 +16,7 @@ Wire up the end-to-end authentication experience on mobile: a sign-in screen tha
   - Trace wordmark + "Continue with GitHub" button (uses `Button` primitive once M2 lands; placeholder until then).
   - Tiny footer links for Terms and Privacy that open the existing web URLs in Safari.
   - On press: `WebBrowser.openAuthSessionAsync(\`${API_URL}/auth/github?origin=trace-mobile\`, 'trace://auth/callback')`.
-  - On success, parse `token` from returned URL, call `signInWithToken(token)` (from client-core), then `fetchMe()`.
+  - On success, parse `token` from returned URL and call `signInWithToken(token)` (from client-core). `signInWithToken` persists the token via `Platform.secureStorage` and runs `fetchMe()` itself — do not chain a second `fetchMe`.
   - Error state shown inline if auth fails.
 - **Post-auth hydration** (`apps/mobile/src/hooks/useHydrate.ts`, <200 lines):
   - On auth becoming true and active org set, fire:

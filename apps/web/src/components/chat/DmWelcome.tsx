@@ -1,5 +1,5 @@
 import { useEntityField } from "@trace/client-core";
-import { useAuthStore, type AuthState } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "@trace/client-core";
 
 export function DmWelcome({ chatId }: { chatId: string }) {
   const type = useEntityField("chats", chatId, "type");

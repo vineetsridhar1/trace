@@ -23,7 +23,7 @@ import {
 import { useIsMobile } from "../../hooks/use-mobile";
 import { client } from "../../lib/urql";
 import { features } from "../../lib/features";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 import { useEntityField, useEntityIds } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 

@@ -1,5 +1,5 @@
 import { useEntityField } from "@trace/client-core";
-import { useAuthStore, type AuthState } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "@trace/client-core";
 import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 
 interface UserMentionProps {

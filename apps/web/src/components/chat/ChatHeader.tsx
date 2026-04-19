@@ -3,7 +3,7 @@ import { Hash, Pencil } from "lucide-react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
 import { useEntityField } from "@trace/client-core";
-import { useAuthStore, type AuthState } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "@trace/client-core";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { SidebarTrigger } from "../ui/sidebar";
 import { AddMemberDialog } from "./AddMemberDialog";

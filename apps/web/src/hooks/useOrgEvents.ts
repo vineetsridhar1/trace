@@ -4,7 +4,7 @@ import { asJsonObject, type JsonObject } from "@trace/shared";
 import { client } from "../lib/urql";
 import { useEntityStore, eventScopeKey, StoreBatchWriter } from "@trace/client-core";
 import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
-import { useAuthStore } from "../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 import { useUIStore, navigateToSession } from "../stores/ui";
 import { getSessionChannelId } from "../lib/session-group";
 import { notifyForEvent } from "../notifications/handlers";
