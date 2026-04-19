@@ -182,6 +182,8 @@ packages/
 
 **Rule:** `packages/client-core` has **zero** imports from `react-dom`, `window`, `document`, `localStorage`. Enforced by ESLint rule `no-restricted-imports` + a CI check.
 
+**Dependency coexistence:** Mobile and web share the monorepo, so their React type trees must stay unified. The root `package.json` pins `@types/react` via `pnpm.overrides` to match the React version RN ships with (currently `~19.1.0` for RN 0.81). Without the pin, mobile resolves `@types/react@19.1.x` while web resolves `19.2.x`, producing two incompatible React type trees and breaking `apps/web`'s `tsc` build. Bump this override in lockstep whenever the mobile RN version changes.
+
 ---
 
 ## 6. Architecture
