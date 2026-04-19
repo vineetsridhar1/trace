@@ -116,7 +116,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-surface-deep text-foreground;
+    @apply bg-blue-600 text-foreground;
   }
   html {
     @apply font-sans;
