@@ -1,6 +1,5 @@
 import type { Context } from "../context.js";
 import type { PushPlatform } from "@trace/gql";
-import type { PushPlatform as PushPlatformEnum } from "@prisma/client";
 import { pushTokenService } from "../services/pushTokenService.js";
 
 export const pushTokenMutations = {
@@ -13,7 +12,7 @@ export const pushTokenMutations = {
       userId: ctx.userId,
       organizationId: ctx.organizationId,
       token: args.token,
-      platform: args.platform as unknown as PushPlatformEnum,
+      platform: args.platform,
     }),
   unregisterPushToken: (_: unknown, args: { token: string }, ctx: Context) =>
     pushTokenService.unregister({ userId: ctx.userId, token: args.token }),
