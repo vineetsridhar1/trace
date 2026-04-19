@@ -9,7 +9,7 @@ The distinction between chat, project management, and AI coding is artificial. T
 ## Architecture
 
 ```
-Web / Desktop / Electron  →  GraphQL  →  Service Layer  ←  Agent Runtime
+Web / Desktop  →  GraphQL  →  Service Layer  ←  Agent Runtime
                                               ↓
                                          Event Store (PostgreSQL)
 ```
