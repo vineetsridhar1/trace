@@ -250,7 +250,13 @@ export const ticketDispatchers: Record<string, ActionDispatcher> = {
   "ticket.update": (services, args, ctx) => {
     const { actorType, actorId } = actorInfo(ctx);
     const { id, ...input } = args;
-    return services.ticketService.update(id as string, input, actorType, actorId);
+    return services.ticketService.update(
+      id as string,
+      input,
+      actorType,
+      actorId,
+      ctx.organizationId,
+    );
   },
 
   "ticket.addComment": (services, args, ctx) => {
@@ -260,6 +266,7 @@ export const ticketDispatchers: Record<string, ActionDispatcher> = {
       args.text as string,
       actorType,
       actorId,
+      ctx.organizationId,
     );
   },
 
@@ -270,6 +277,7 @@ export const ticketDispatchers: Record<string, ActionDispatcher> = {
       userId: args.userId as string,
       actorType,
       actorId,
+      organizationId: ctx.organizationId,
     });
   },
 
@@ -280,6 +288,7 @@ export const ticketDispatchers: Record<string, ActionDispatcher> = {
       userId: args.userId as string,
       actorType,
       actorId,
+      organizationId: ctx.organizationId,
     });
   },
 
@@ -291,6 +300,7 @@ export const ticketDispatchers: Record<string, ActionDispatcher> = {
       entityId: args.entityId as string,
       actorType,
       actorId,
+      organizationId: ctx.organizationId,
     });
   },
 
@@ -302,6 +312,7 @@ export const ticketDispatchers: Record<string, ActionDispatcher> = {
       entityId: args.entityId as string,
       actorType,
       actorId,
+      organizationId: ctx.organizationId,
     });
   },
 

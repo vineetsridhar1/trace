@@ -22,10 +22,7 @@ describe("resolveAutonomyMode", () => {
   });
 
   it("returns scope-level override when set on chat", async () => {
-    prismaMock.chat.findUnique.mockResolvedValueOnce({
-      aiMode: "act",
-      members: [{ user: { orgMemberships: [{ organizationId: "org-1" }] } }],
-    });
+    prismaMock.chat.findFirst.mockResolvedValueOnce({ aiMode: "act" });
 
     const result = await resolveAutonomyMode({
       scopeType: "chat",
@@ -88,10 +85,7 @@ describe("resolveAutonomyMode", () => {
   });
 
   it("DMs default to act when no explicit override", async () => {
-    prismaMock.chat.findUnique.mockResolvedValueOnce({
-      aiMode: null,
-      members: [{ user: { orgMemberships: [{ organizationId: "org-1" }] } }],
-    });
+    prismaMock.chat.findFirst.mockResolvedValueOnce({ aiMode: null });
 
     const result = await resolveAutonomyMode({
       scopeType: "chat",
@@ -105,10 +99,7 @@ describe("resolveAutonomyMode", () => {
   });
 
   it("group chats default to suggest when no explicit override", async () => {
-    prismaMock.chat.findUnique.mockResolvedValueOnce({
-      aiMode: null,
-      members: [{ user: { orgMemberships: [{ organizationId: "org-1" }] } }],
-    });
+    prismaMock.chat.findFirst.mockResolvedValueOnce({ aiMode: null });
 
     const result = await resolveAutonomyMode({
       scopeType: "chat",
@@ -136,10 +127,7 @@ describe("resolveAutonomyMode", () => {
   });
 
   it("null override on DM falls through to DM default (act)", async () => {
-    prismaMock.chat.findUnique.mockResolvedValueOnce({
-      aiMode: null,
-      members: [{ user: { orgMemberships: [{ organizationId: "org-1" }] } }],
-    });
+    prismaMock.chat.findFirst.mockResolvedValueOnce({ aiMode: null });
 
     const result = await resolveAutonomyMode({
       scopeType: "chat",

@@ -36,7 +36,7 @@ export const scopeAutonomyQueries = {
     let isDm = false;
     let prefetchedAiMode: AutonomyMode | null | undefined;
     if (scopeType === "chat") {
-      const chat = await getChatAutonomyContext(args.scopeId);
+      const chat = await getChatAutonomyContext(args.scopeId, args.organizationId);
       isDm = chat.isDm;
       prefetchedAiMode = chat.aiMode;
     }

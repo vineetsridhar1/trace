@@ -77,7 +77,6 @@ export const projectActions: AgentActionRegistration[] = [
 
 export const projectDispatchers: Record<string, ActionDispatcher> = {
   "project.create": (services, args, ctx) => {
-
     const { actorType, actorId } = actorInfo(ctx);
     return services.organizationService.createProject(
       {
@@ -85,25 +84,25 @@ export const projectDispatchers: Record<string, ActionDispatcher> = {
         organizationId: ctx.organizationId,
         repoId: args.repoId as string | undefined,
       },
+      ctx.organizationId,
       actorType,
       actorId,
     );
   },
 
   "project.linkEntity": (services, args, ctx) => {
-
     const { actorType, actorId } = actorInfo(ctx);
     return services.organizationService.linkEntityToProject(
       args.entityType as EntityType,
       args.entityId as string,
       args.projectId as string,
+      ctx.organizationId,
       actorType,
       actorId,
     );
   },
 
   "project.get": (services, args, ctx) => {
-
     return services.organizationService.getProject(args.projectId as string, ctx.organizationId);
   },
 };

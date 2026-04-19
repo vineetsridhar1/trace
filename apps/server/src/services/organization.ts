@@ -18,6 +18,57 @@ const PROJECT_INCLUDE = {
 } as const;
 
 export class OrganizationService {
+  private async assertActorOrgMembership(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    if (actorType === "system") return;
+
+    await tx.orgMember.findUniqueOrThrow({
+      where: {
+        userId_organizationId: {
+          userId: actorId,
+          organizationId,
+        },
+      },
+      select: { userId: true },
+    });
+  }
+
+  private async assertProjectLinkTargetInOrg(
+    tx: Prisma.TransactionClient,
+    entityType: EntityType,
+    entityId: string,
+    organizationId: string,
+  ) {
+    switch (entityType) {
+      case "session":
+        await tx.session.findFirstOrThrow({
+          where: { id: entityId, organizationId },
+          select: { id: true },
+        });
+        return;
+      case "ticket":
+        await tx.ticket.findFirstOrThrow({
+          where: { id: entityId, organizationId },
+          select: { id: true },
+        });
+        return;
+      case "channel":
+        await tx.channel.findFirstOrThrow({
+          where: { id: entityId, organizationId },
+          select: { id: true },
+        });
+        return;
+      case "chat":
+        throw new Error("Chats cannot be linked to projects");
+      case "message":
+        throw new Error("Messages cannot be linked to projects");
+    }
+  }
+
   async getOrganization(id: string, userId: string) {
     await prisma.orgMember.findUniqueOrThrow({
       where: { userId_organizationId: { userId, organizationId: id } },
@@ -108,34 +159,46 @@ export class OrganizationService {
     });
   }
 
-  async createRepo(input: CreateRepoInput, actorType: ActorType, actorId: string) {
-    // Deduplicate by remote URL within the org — if it already exists, return it
-    const existing = await prisma.repo.findUnique({
-      where: {
-        organizationId_remoteUrl: {
-          organizationId: input.organizationId,
-          remoteUrl: input.remoteUrl,
-        },
-      },
-      include: { projects: true, sessions: true },
-    });
-
-    if (existing) return existing;
+  async createRepo(
+    input: CreateRepoInput,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    if (input.organizationId !== organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
 
     const [repo] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await this.assertActorOrgMembership(tx, organizationId, actorType, actorId);
+
+      const existing = await tx.repo.findUnique({
+        where: {
+          organizationId_remoteUrl: {
+            organizationId,
+            remoteUrl: input.remoteUrl,
+          },
+        },
+        include: { projects: true, sessions: true },
+      });
+
+      if (existing) {
+        return [existing] as const;
+      }
+
       const repo = await tx.repo.create({
         data: {
           name: input.name,
           remoteUrl: input.remoteUrl,
           defaultBranch: input.defaultBranch ?? "main",
-          organizationId: input.organizationId,
+          organizationId,
         },
         include: { projects: true, sessions: true },
       });
 
       const event = await eventService.create(
         {
-          organizationId: input.organizationId,
+          organizationId,
           scopeType: "system",
           scopeId: repo.id,
           eventType: "repo_created",
@@ -210,12 +273,30 @@ export class OrganizationService {
     return repo;
   }
 
-  async createProject(input: CreateProjectInput, actorType: ActorType, actorId: string) {
+  async createProject(
+    input: CreateProjectInput,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    if (input.organizationId !== organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
+
     const [project] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await this.assertActorOrgMembership(tx, organizationId, actorType, actorId);
+
+      if (input.repoId) {
+        await tx.repo.findFirstOrThrow({
+          where: { id: input.repoId, organizationId },
+          select: { id: true },
+        });
+      }
+
       const project = await tx.project.create({
         data: {
           name: input.name,
-          organizationId: input.organizationId,
+          organizationId,
           ...(input.repoId && { repoId: input.repoId }),
         },
         include: PROJECT_INCLUDE,
@@ -223,7 +304,7 @@ export class OrganizationService {
 
       const event = await eventService.create(
         {
-          organizationId: input.organizationId,
+          organizationId,
           scopeType: "system",
           scopeId: project.id,
           eventType: "entity_linked",
@@ -244,28 +325,26 @@ export class OrganizationService {
     entityType: EntityType,
     entityId: string,
     projectId: string,
+    organizationId: string,
     actorType: ActorType,
     actorId: string,
   ) {
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const project = await tx.project.findUniqueOrThrow({
-        where: { id: projectId },
+      await this.assertActorOrgMembership(tx, organizationId, actorType, actorId);
+
+      const project = await tx.project.findFirstOrThrow({
+        where: { id: projectId, organizationId },
         select: { organizationId: true },
       });
+      await this.assertProjectLinkTargetInOrg(tx, entityType, entityId, organizationId);
 
-      const joinOps: Record<EntityType, () => Promise<unknown>> = {
-        session: () => tx.sessionProject.create({ data: { sessionId: entityId, projectId } }),
-        ticket: () => tx.ticketProject.create({ data: { ticketId: entityId, projectId } }),
-        channel: () => tx.channelProject.create({ data: { channelId: entityId, projectId } }),
-        chat: () => {
-          throw new Error("Chats cannot be linked to projects");
-        },
-        message: () => {
-          throw new Error("Messages cannot be linked to projects");
-        },
-      };
-
-      await joinOps[entityType]();
+      if (entityType === "session") {
+        await tx.sessionProject.create({ data: { sessionId: entityId, projectId } });
+      } else if (entityType === "ticket") {
+        await tx.ticketProject.create({ data: { ticketId: entityId, projectId } });
+      } else if (entityType === "channel") {
+        await tx.channelProject.create({ data: { channelId: entityId, projectId } });
+      }
 
       await eventService.create(
         {
@@ -280,8 +359,8 @@ export class OrganizationService {
         tx,
       );
 
-      return tx.project.findUniqueOrThrow({
-        where: { id: projectId },
+      return tx.project.findFirstOrThrow({
+        where: { id: projectId, organizationId },
         include: PROJECT_INCLUDE,
       });
     });

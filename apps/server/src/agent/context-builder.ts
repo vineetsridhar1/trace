@@ -245,8 +245,19 @@ type ScopeEntityFetcher = (
 
 const scopeFetchers: Record<string, ScopeEntityFetcher> = {
   async chat(organizationId, scopeId) {
-    const chat = await prisma.chat.findUnique({
-      where: { id: scopeId },
+    const chat = await prisma.chat.findFirst({
+      where: {
+        id: scopeId,
+        members: {
+          some: {
+            user: {
+              orgMemberships: {
+                some: { organizationId },
+              },
+            },
+          },
+        },
+      },
       include: {
         members: { include: { user: { select: { id: true, name: true } } } },
       },
@@ -266,8 +277,8 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
   },
 
   async ticket(organizationId, scopeId) {
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: scopeId },
+    const ticket = await prisma.ticket.findFirst({
+      where: { id: scopeId, organizationId },
       include: {
         assignees: { include: { user: { select: { id: true, name: true } } } },
         links: true,
@@ -302,8 +313,8 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
 
   async session(organizationId, scopeId) {
     const [session, linkedTicketLinks] = await Promise.all([
-      prisma.session.findUnique({
-        where: { id: scopeId },
+      prisma.session.findFirst({
+        where: { id: scopeId, organizationId },
         include: {
           repo: { select: { id: true, name: true, remoteUrl: true } },
           channel: { select: { id: true, name: true } },
@@ -312,7 +323,11 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
       }),
       // Reverse lookup: find tickets that link to this session
       prisma.ticketLink.findMany({
-        where: { entityType: "session", entityId: scopeId },
+        where: {
+          entityType: "session",
+          entityId: scopeId,
+          ticket: { organizationId },
+        },
         include: {
           ticket: {
             select: {
@@ -365,8 +380,8 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
   },
 
   async channel(organizationId, scopeId) {
-    const channel = await prisma.channel.findUnique({
-      where: { id: scopeId },
+    const channel = await prisma.channel.findFirst({
+      where: { id: scopeId, organizationId },
       include: {
         members: {
           where: { leftAt: null },

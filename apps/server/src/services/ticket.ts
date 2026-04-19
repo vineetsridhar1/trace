@@ -17,6 +17,123 @@ const TICKET_INCLUDE = {
 } as const;
 
 export class TicketService {
+  private async assertActorOrgMembership(
+    db: Prisma.TransactionClient | typeof prisma,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    if (actorType === "system") return;
+
+    await db.orgMember.findUniqueOrThrow({
+      where: {
+        userId_organizationId: {
+          userId: actorId,
+          organizationId,
+        },
+      },
+      select: { userId: true },
+    });
+  }
+
+  private async assertAssigneesInOrg(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    assigneeIds: string[],
+  ) {
+    const uniqueAssigneeIds = [...new Set(assigneeIds)];
+    if (uniqueAssigneeIds.length === 0) return;
+
+    const members = await tx.orgMember.findMany({
+      where: {
+        organizationId,
+        userId: { in: uniqueAssigneeIds },
+      },
+      select: { userId: true },
+    });
+
+    if (members.length !== uniqueAssigneeIds.length) {
+      throw new Error("One or more assignees are not in this organization");
+    }
+  }
+
+  private async assertLinkedEntityInOrganization(
+    tx: Prisma.TransactionClient,
+    entityType: EntityType,
+    entityId: string,
+    organizationId: string,
+  ) {
+    switch (entityType) {
+      case "session":
+        await tx.session.findFirstOrThrow({
+          where: { id: entityId, organizationId },
+          select: { id: true },
+        });
+        return;
+      case "ticket":
+        await tx.ticket.findFirstOrThrow({
+          where: { id: entityId, organizationId },
+          select: { id: true },
+        });
+        return;
+      case "channel":
+        await tx.channel.findFirstOrThrow({
+          where: { id: entityId, organizationId },
+          select: { id: true },
+        });
+        return;
+      case "chat": {
+        const chat = await tx.chat.findFirst({
+          where: {
+            id: entityId,
+            members: {
+              some: {
+                user: {
+                  orgMemberships: {
+                    some: { organizationId },
+                  },
+                },
+              },
+            },
+          },
+          select: { id: true },
+        });
+        if (!chat) {
+          throw new Error("Linked chat not in this organization");
+        }
+        return;
+      }
+      case "message": {
+        const message = await tx.message.findFirst({
+          where: {
+            id: entityId,
+            OR: [
+              { channel: { organizationId } },
+              {
+                chat: {
+                  members: {
+                    some: {
+                      user: {
+                        orgMemberships: {
+                          some: { organizationId },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          },
+          select: { id: true },
+        });
+        if (!message) {
+          throw new Error("Linked message not in this organization");
+        }
+        return;
+      }
+    }
+  }
+
   async list(
     organizationId: string,
     filters?: {
@@ -33,22 +150,48 @@ export class TicketService {
     return prisma.ticket.findMany({ where, include: TICKET_INCLUDE });
   }
 
-  async get(id: string, organizationId?: string) {
+  async get(id: string, organizationId: string) {
     return prisma.ticket.findFirst({
-      where: organizationId ? { id, organizationId } : { id },
+      where: { id, organizationId },
       include: TICKET_INCLUDE,
     });
   }
 
-  async listForSession(sessionId: string) {
+  async listForSession(sessionId: string, organizationId: string) {
     return prisma.ticket.findMany({
-      where: { links: { some: { entityType: "session", entityId: sessionId } } },
+      where: {
+        organizationId,
+        links: { some: { entityType: "session", entityId: sessionId } },
+      },
       include: TICKET_INCLUDE,
     });
   }
 
   async create(input: CreateTicketServiceInput) {
     const [ticket] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await this.assertActorOrgMembership(
+        tx,
+        input.organizationId,
+        input.actorType,
+        input.actorId,
+      );
+
+      if (input.channelId) {
+        await tx.channel.findFirstOrThrow({
+          where: { id: input.channelId, organizationId: input.organizationId },
+          select: { id: true },
+        });
+      }
+
+      if (input.projectId) {
+        await tx.project.findFirstOrThrow({
+          where: { id: input.projectId, organizationId: input.organizationId },
+          select: { id: true },
+        });
+      }
+
+      await this.assertAssigneesInOrg(tx, input.organizationId, input.assigneeIds ?? []);
+
       const ticket = await tx.ticket.create({
         data: {
           title: input.title,
@@ -95,10 +238,12 @@ export class TicketService {
     input: UpdateTicketInput,
     actorType: ActorType,
     actorId: string,
-    organizationId?: string,
+    organizationId: string,
   ) {
+    await this.assertActorOrgMembership(prisma, organizationId, actorType, actorId);
+
     const existing = await prisma.ticket.findFirstOrThrow({
-      where: organizationId ? { id, organizationId } : { id },
+      where: { id, organizationId },
       select: { organizationId: true, status: true },
     });
 
@@ -136,10 +281,12 @@ export class TicketService {
     text: string,
     actorType: ActorType,
     actorId: string,
-    organizationId?: string,
+    organizationId: string,
   ) {
+    await this.assertActorOrgMembership(prisma, organizationId, actorType, actorId);
+
     const ticket = await prisma.ticket.findFirstOrThrow({
-      where: organizationId ? { id: ticketId, organizationId } : { id: ticketId },
+      where: { id: ticketId, organizationId },
       select: { organizationId: true },
     });
 
@@ -159,14 +306,22 @@ export class TicketService {
     userId: string;
     actorType: ActorType;
     actorId: string;
-    organizationId?: string;
+    organizationId: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await this.assertActorOrgMembership(tx, organizationId, actorType, actorId);
+
       const existing = await tx.ticket.findFirstOrThrow({
-        where: organizationId ? { id: ticketId, organizationId } : { id: ticketId },
+        where: { id: ticketId, organizationId },
         select: { id: true },
       });
       void existing;
+
+      await tx.orgMember.findUniqueOrThrow({
+        where: { userId_organizationId: { userId, organizationId } },
+        select: { userId: true },
+      });
+
       await tx.ticketAssignee.create({
         data: { ticketId, userId },
       });
@@ -197,11 +352,13 @@ export class TicketService {
     userId: string;
     actorType: ActorType;
     actorId: string;
-    organizationId?: string;
+    organizationId: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await this.assertActorOrgMembership(tx, organizationId, actorType, actorId);
+
       const existing = await tx.ticket.findFirstOrThrow({
-        where: organizationId ? { id: ticketId, organizationId } : { id: ticketId },
+        where: { id: ticketId, organizationId },
         select: { id: true },
       });
       void existing;
@@ -236,14 +393,19 @@ export class TicketService {
     entityId: string;
     actorType: ActorType;
     actorId: string;
-    organizationId?: string;
+    organizationId: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await this.assertActorOrgMembership(tx, organizationId, actorType, actorId);
+
       const existing = await tx.ticket.findFirstOrThrow({
-        where: organizationId ? { id: ticketId, organizationId } : { id: ticketId },
+        where: { id: ticketId, organizationId },
         select: { id: true },
       });
       void existing;
+
+      await this.assertLinkedEntityInOrganization(tx, entityType, entityId, organizationId);
+
       await tx.ticketLink.create({
         data: { ticketId, entityType, entityId },
       });
@@ -275,11 +437,13 @@ export class TicketService {
     entityId: string;
     actorType: ActorType;
     actorId: string;
-    organizationId?: string;
+    organizationId: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await this.assertActorOrgMembership(tx, organizationId, actorType, actorId);
+
       const existing = await tx.ticket.findFirstOrThrow({
-        where: organizationId ? { id: ticketId, organizationId } : { id: ticketId },
+        where: { id: ticketId, organizationId },
         select: { id: true },
       });
       void existing;

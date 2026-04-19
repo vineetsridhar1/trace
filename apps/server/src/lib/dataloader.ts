@@ -35,16 +35,27 @@ function createPrismaLoaderWithInclude<T extends { id: string }>(
   });
 }
 
-export function createSessionLoader() {
-  return createPrismaLoaderWithInclude(
-    prisma.session.findMany.bind(prisma.session) as unknown as Parameters<typeof createPrismaLoaderWithInclude>[0],
-    {
-      createdBy: true,
-      repo: true,
-      channel: true,
-      sessionGroup: true,
-    },
-  );
+export function createSessionLoader(organizationId?: string | null) {
+  return new DataLoader<string, unknown | null>(async (ids: readonly string[]) => {
+    if (!organizationId) {
+      return ids.map(() => null);
+    }
+
+    const sessions = await prisma.session.findMany({
+      where: {
+        id: { in: [...ids] },
+        organizationId,
+      },
+      include: {
+        createdBy: true,
+        repo: true,
+        channel: true,
+        sessionGroup: true,
+      },
+    });
+    const map = new Map(sessions.map((session: { id: string }) => [session.id, session]));
+    return ids.map((id: string) => map.get(id) ?? null);
+  });
 }
 
 export function createSessionGroupLoader() {
@@ -113,19 +124,24 @@ export function createChatMembersLoader() {
 }
 
 /** Batch-load tickets linked to sessions by sessionId */
-export function createSessionTicketsLoader() {
+export function createSessionTicketsLoader(organizationId?: string | null) {
   return new DataLoader<string, unknown[]>(async (sessionIds: readonly string[]) => {
+    if (!organizationId) {
+      return sessionIds.map(() => []);
+    }
+
     const links = await prisma.ticketLink.findMany({
       where: {
         entityType: "session",
         entityId: { in: [...sessionIds] },
+        ticket: { organizationId },
       },
       select: { entityId: true, ticketId: true },
     });
     const ticketIds = [...new Set(links.map((l: { ticketId: string }) => l.ticketId))];
     const tickets = ticketIds.length > 0
       ? await prisma.ticket.findMany({
-          where: { id: { in: ticketIds } },
+          where: { id: { in: ticketIds }, organizationId },
           include: {
             assignees: { include: { user: { select: { id: true, name: true, avatarUrl: true } } } },
             links: true,

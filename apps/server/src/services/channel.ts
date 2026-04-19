@@ -672,7 +672,7 @@ export class ChannelService {
     });
     const { sessionService } = await import("./session.js");
     for (const session of sessions) {
-      await sessionService.delete(session.id, actorType, actorId);
+      await sessionService.delete(session.id, actorType, actorId, organizationId);
     }
 
     // Delete remaining session groups, channel associations, and the channel itself

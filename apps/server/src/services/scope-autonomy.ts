@@ -33,12 +33,23 @@ export interface ResolveAutonomyInput {
   prefetchedAiMode?: AutonomyMode | null;
 }
 
-export async function getChatAutonomyContext(chatId: string): Promise<{
+export async function getChatAutonomyContext(chatId: string, organizationId: string): Promise<{
   isDm: boolean;
   aiMode: AutonomyMode | null;
 }> {
-  const chat = await prisma.chat.findUnique({
-    where: { id: chatId },
+  const chat = await prisma.chat.findFirst({
+    where: {
+      id: chatId,
+      members: {
+        some: {
+          user: {
+            orgMemberships: {
+              some: { organizationId },
+            },
+          },
+        },
+      },
+    },
     select: { type: true, aiMode: true },
   });
 
@@ -86,17 +97,24 @@ async function getScopeAiMode(
 ): Promise<AutonomyMode | null> {
   switch (scopeType) {
     case "chat": {
-      const chat = await prisma.chat.findUnique({
-        where: { id: scopeId },
-        select: { aiMode: true, members: { select: { user: { select: { orgMemberships: { select: { organizationId: true } } } } } } },
+      if (!organizationId) return null;
+
+      const chat = await prisma.chat.findFirst({
+        where: {
+          id: scopeId,
+          members: {
+            some: {
+              user: {
+                orgMemberships: {
+                  some: { organizationId },
+                },
+              },
+            },
+          },
+        },
+        select: { aiMode: true },
       });
       if (!chat) return null;
-      if (organizationId) {
-        const inOrg = chat.members.some((m) =>
-          m.user.orgMemberships.some((om) => om.organizationId === organizationId),
-        );
-        if (!inOrg) return null;
-      }
       return chat.aiMode ?? null;
     }
     case "ticket": {

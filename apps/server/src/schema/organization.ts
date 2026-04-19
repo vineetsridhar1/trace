@@ -47,24 +47,34 @@ export const organizationQueries = {
 
 export const organizationMutations = {
   createRepo: (_: unknown, args: { input: CreateRepoInput }, ctx: Context) => {
-    return organizationService.createRepo(args.input, ctx.actorType, ctx.userId);
+    const orgId = requireOrgContext(ctx);
+    if (args.input.organizationId !== orgId) {
+      throw new Error("Not authorized for this organization");
+    }
+    return organizationService.createRepo(args.input, orgId, ctx.actorType, ctx.userId);
   },
   updateRepo: (_: unknown, args: { id: string; input: UpdateRepoInput }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     return organizationService.updateRepo(args.id, orgId, args.input, ctx.actorType, ctx.userId);
   },
   createProject: (_: unknown, args: { input: CreateProjectInput }, ctx: Context) => {
-    return organizationService.createProject(args.input, ctx.actorType, ctx.userId);
+    const orgId = requireOrgContext(ctx);
+    if (args.input.organizationId !== orgId) {
+      throw new Error("Not authorized for this organization");
+    }
+    return organizationService.createProject(args.input, orgId, ctx.actorType, ctx.userId);
   },
   linkEntityToProject: (
     _: unknown,
     args: { entityType: EntityType; entityId: string; projectId: string },
     ctx: Context,
   ) => {
+    const orgId = requireOrgContext(ctx);
     return organizationService.linkEntityToProject(
       args.entityType,
       args.entityId,
       args.projectId,
+      orgId,
       ctx.actorType,
       ctx.userId,
     );
