@@ -15,7 +15,6 @@ interface Props {
 export function OnboardingChecklist({ status }: Props) {
   const setActivePage = useUIStore((s: UIState) => s.setActivePage);
   const setSettingsInitialTab = useUIStore((s: UIState) => s.setSettingsInitialTab);
-  const triggerRefresh = useUIStore((s: UIState) => s.triggerRefresh);
   const [createOpen, setCreateOpen] = useState(false);
   const [browseOpen, setBrowseOpen] = useState(false);
 
@@ -63,21 +62,8 @@ export function OnboardingChecklist({ status }: Props) {
         />
       </div>
 
-      <CreateChannelDialog
-        open={createOpen}
-        onOpenChange={(next: boolean) => {
-          setCreateOpen(next);
-          if (!next) triggerRefresh();
-        }}
-      />
-      <BrowseChannelsDialog
-        open={browseOpen}
-        onOpenChange={(next: boolean) => {
-          setBrowseOpen(next);
-          if (!next) triggerRefresh();
-        }}
-        hideTrigger
-      />
+      <CreateChannelDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <BrowseChannelsDialog open={browseOpen} onOpenChange={setBrowseOpen} hideTrigger />
     </div>
   );
 }
@@ -129,22 +115,25 @@ function ChannelRow({ done, onBrowseClick, onCreateClick }: ChannelRowProps) {
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        <button
-          type="button"
-          onClick={onBrowseClick}
-          className="rounded-md border border-border bg-surface-elevated px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover"
-        >
-          Browse
-        </button>
-        <button
-          type="button"
-          onClick={onCreateClick}
-          className="rounded-md border border-border bg-surface-elevated px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover"
-        >
-          Create
-        </button>
+        <ChannelActionButton label="Browse" onClick={onBrowseClick} />
+        <ChannelActionButton label="Create" onClick={onCreateClick} />
       </div>
     </div>
+  );
+}
+
+function ChannelActionButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      whileHover={{ scale: 1.03 }}
+      whileTap={{ scale: 0.97 }}
+      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+      className="rounded-md border border-border bg-surface-elevated px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover"
+    >
+      {label}
+    </motion.button>
   );
 }
 

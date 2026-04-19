@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Key, Trash2, Check, Eye, EyeOff } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
+import { useOnboardingStore } from "../../stores/onboarding";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { Button } from "../ui/button";
@@ -94,12 +95,14 @@ export function ApiTokensSection() {
     setShowInput(false);
     // Refetch to get the updated state from the server
     fetchTokens();
+    void useOnboardingStore.getState().fetchApiTokens();
   }
 
   async function handleDelete(provider: string) {
     await client.mutation(DELETE_API_TOKEN, { provider }).toPromise();
     // Refetch to get the updated state from the server
     fetchTokens();
+    void useOnboardingStore.getState().fetchApiTokens();
   }
 
   return (

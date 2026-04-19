@@ -34,19 +34,10 @@ const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
   { id: "channels", label: "Channels", icon: Code },
 ];
 
-const ALL_TAB_IDS: SettingsTab[] = [
-  "repositories",
-  "ai",
-  "session-defaults",
-  "notifications",
-  "api-keys",
-  "members",
-  "channels",
-  "bridge-access",
-];
+const ALL_TAB_IDS: readonly SettingsTab[] = TABS.map((t) => t.id);
 
 function isSettingsTab(value: string | null): value is SettingsTab {
-  return value !== null && (ALL_TAB_IDS as string[]).includes(value);
+  return value !== null && (ALL_TAB_IDS as readonly string[]).includes(value);
 }
 
 export function SettingsPage() {

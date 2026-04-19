@@ -1,39 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
-import { gql } from "@urql/core";
-import type { ApiTokenProvider } from "@trace/gql";
-import { client } from "../lib/urql";
+import { useCallback, useEffect } from "react";
 import { useAuthStore, type AuthState } from "../stores/auth";
-import { useUIStore, type UIState } from "../stores/ui";
-
-const ONBOARDING_STATUS_QUERY = gql`
-  query OnboardingStatus($organizationId: ID!) {
-    myApiTokens {
-      provider
-      isSet
-    }
-    repos(organizationId: $organizationId) {
-      id
-    }
-    channels(organizationId: $organizationId, memberOnly: true) {
-      id
-    }
-  }
-`;
-
-interface TokenRow {
-  provider: ApiTokenProvider;
-  isSet: boolean;
-}
-
-interface IdRow {
-  id: string;
-}
-
-interface OnboardingStatusData {
-  myApiTokens: TokenRow[];
-  repos: IdRow[];
-  channels: IdRow[];
-}
+import { useEntityStore } from "../stores/entity";
+import { useOnboardingStore } from "../stores/onboarding";
 
 export interface OnboardingStatus {
   loading: boolean;
@@ -49,44 +17,40 @@ export interface OnboardingStatus {
 
 export function useOnboardingStatus(): OnboardingStatus {
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
-  const refreshTick = useUIStore((s: UIState) => s.refreshTick);
-  const [loading, setLoading] = useState(true);
-  const [anthropicSet, setAnthropicSet] = useState(false);
-  const [githubSet, setGithubSet] = useState(false);
-  const [hasRepo, setHasRepo] = useState(false);
-  const [hasChannel, setHasChannel] = useState(false);
+  const anthropicSet = useOnboardingStore((s) => s.anthropicSet);
+  const githubSet = useOnboardingStore((s) => s.githubSet);
+  const tokensLoaded = useOnboardingStore((s) => s.tokensLoaded);
+  const tokensLoading = useOnboardingStore((s) => s.tokensLoading);
+  const reposLoadedForOrg = useOnboardingStore((s) => s.reposLoadedForOrg);
+  const fetchApiTokens = useOnboardingStore((s) => s.fetchApiTokens);
+  const ensureReposLoaded = useOnboardingStore((s) => s.ensureReposLoaded);
 
-  const fetchStatus = useCallback(async () => {
-    if (!activeOrgId) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    const result = await client
-      .query(ONBOARDING_STATUS_QUERY, { organizationId: activeOrgId }, { requestPolicy: "network-only" })
-      .toPromise();
-    const data = result.data as OnboardingStatusData | undefined;
-    if (data) {
-      const anthropic = data.myApiTokens.find((t) => t.provider === "anthropic");
-      const github = data.myApiTokens.find((t) => t.provider === "github");
-      setAnthropicSet(anthropic?.isSet === true);
-      setGithubSet(github?.isSet === true);
-      setHasRepo(data.repos.length > 0);
-      setHasChannel(data.channels.length > 0);
-    }
-    setLoading(false);
-  }, [activeOrgId]);
+  const repoCount = useEntityStore((s) => Object.keys(s.repos).length);
+  const channelCount = useEntityStore((s) => Object.keys(s.channels).length);
 
   useEffect(() => {
-    void fetchStatus();
-  }, [fetchStatus, refreshTick]);
+    if (!tokensLoaded) void fetchApiTokens();
+  }, [tokensLoaded, fetchApiTokens]);
 
+  useEffect(() => {
+    if (activeOrgId && reposLoadedForOrg !== activeOrgId) {
+      void ensureReposLoaded(activeOrgId);
+    }
+  }, [activeOrgId, reposLoadedForOrg, ensureReposLoaded]);
+
+  const hasRepo = repoCount > 0;
+  const hasChannel = channelCount > 0;
   const completedCount = [anthropicSet, githubSet, hasRepo, hasChannel].filter(Boolean).length;
   const totalCount = 4;
   const allDone = completedCount === totalCount;
 
+  const refetch = useCallback(() => {
+    void fetchApiTokens();
+    if (activeOrgId) void ensureReposLoaded(activeOrgId);
+  }, [activeOrgId, fetchApiTokens, ensureReposLoaded]);
+
   return {
-    loading,
+    loading: tokensLoading && !tokensLoaded,
     anthropicSet,
     githubSet,
     hasRepo,
@@ -94,8 +58,6 @@ export function useOnboardingStatus(): OnboardingStatus {
     allDone,
     completedCount,
     totalCount,
-    refetch: () => {
-      void fetchStatus();
-    },
+    refetch,
   };
 }

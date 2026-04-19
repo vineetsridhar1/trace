@@ -30,7 +30,7 @@ export function App() {
   const user = useAuthStore((s: AuthState) => s.user);
   const loading = useAuthStore((s: AuthState) => s.loading);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
-  const orgMemberships = useAuthStore((s: AuthState) => s.orgMemberships);
+  const hasOrg = useAuthStore((s: AuthState) => s.orgMemberships.length > 0);
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
   const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
   useEffect(() => {
@@ -61,7 +61,7 @@ export function App() {
     return <LoginPage />;
   }
 
-  if (activeOrgId === null && orgMemberships.length === 0) {
+  if (!hasOrg) {
     return (
       <>
         <NoOrgWelcome />
