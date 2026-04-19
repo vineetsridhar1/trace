@@ -11,11 +11,15 @@ function build(): Client {
   });
 }
 
-let _client: Client = build();
+// Lazy: defer client construction until first use so that the platform
+// adapter (set by `app/_layout.tsx`) is registered before `getPlatform()`
+// runs inside `createGqlClient`.
+let _client: Client | null = null;
 let _epoch = 0;
 const listeners = new Set<() => void>();
 
 export function getClient(): Client {
+  if (!_client) _client = build();
   return _client;
 }
 
