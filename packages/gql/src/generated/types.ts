@@ -225,8 +225,13 @@ export type BranchDiffFile = {
   status: Scalars['String']['output'];
 };
 
+export type BridgeAccessCapability =
+  | 'session'
+  | 'terminal';
+
 export type BridgeAccessGrant = {
   __typename?: 'BridgeAccessGrant';
+  capabilities: Array<BridgeAccessCapability>;
   createdAt: Scalars['DateTime']['output'];
   expiresAt?: Maybe<Scalars['DateTime']['output']>;
   grantedByUser: User;
@@ -242,6 +247,7 @@ export type BridgeAccessRequest = {
   createdAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
   ownerUser: User;
+  requestedCapabilities: Array<BridgeAccessCapability>;
   requestedExpiresAt?: Maybe<Scalars['DateTime']['output']>;
   requesterUser: User;
   resolvedAt?: Maybe<Scalars['DateTime']['output']>;
@@ -280,6 +286,7 @@ export type BridgeRuntimeAccess = {
   __typename?: 'BridgeRuntimeAccess';
   allowed: Scalars['Boolean']['output'];
   bridgeRuntimeId?: Maybe<Scalars['ID']['output']>;
+  capabilities: Array<BridgeAccessCapability>;
   connected: Scalars['Boolean']['output'];
   expiresAt?: Maybe<Scalars['DateTime']['output']>;
   hostingMode?: Maybe<HostingMode>;
@@ -456,6 +463,7 @@ export type EventType =
   | 'bridge_access_request_resolved'
   | 'bridge_access_requested'
   | 'bridge_access_revoked'
+  | 'bridge_access_updated'
   | 'channel_created'
   | 'channel_deleted'
   | 'channel_group_created'
@@ -706,6 +714,7 @@ export type Mutation = {
   unsubscribe: Scalars['Boolean']['output'];
   updateAgentSettings: AgentIdentity;
   updateAiConversationTitle: AiConversation;
+  updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
@@ -735,6 +744,7 @@ export type MutationAddOrgMemberArgs = {
 
 
 export type MutationApproveBridgeAccessRequestArgs = {
+  capabilities?: InputMaybe<Array<BridgeAccessCapability>>;
   expiresAt?: InputMaybe<Scalars['DateTime']['input']>;
   requestId: Scalars['ID']['input'];
   scopeType?: InputMaybe<BridgeAccessScopeType>;
@@ -977,6 +987,7 @@ export type MutationReorderChannelsArgs = {
 
 
 export type MutationRequestBridgeAccessArgs = {
+  requestedCapabilities?: InputMaybe<Array<BridgeAccessCapability>>;
   requestedExpiresAt?: InputMaybe<Scalars['DateTime']['input']>;
   runtimeInstanceId: Scalars['ID']['input'];
   scopeType: BridgeAccessScopeType;
@@ -1127,6 +1138,12 @@ export type MutationUpdateAgentSettingsArgs = {
 export type MutationUpdateAiConversationTitleArgs = {
   conversationId: Scalars['ID']['input'];
   title: Scalars['String']['input'];
+};
+
+
+export type MutationUpdateBridgeAccessGrantArgs = {
+  capabilities: Array<BridgeAccessCapability>;
+  grantId: Scalars['ID']['input'];
 };
 
 

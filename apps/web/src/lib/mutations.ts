@@ -212,6 +212,7 @@ export const BRIDGE_RUNTIME_ACCESS_QUERY = gql`
       isOwner
       scopeType
       sessionGroupId
+      capabilities
       expiresAt
       ownerUser {
         id
@@ -222,6 +223,7 @@ export const BRIDGE_RUNTIME_ACCESS_QUERY = gql`
         id
         scopeType
         requestedExpiresAt
+        requestedCapabilities
         status
         sessionGroup {
           id
@@ -251,6 +253,7 @@ export const MY_BRIDGE_RUNTIMES_QUERY = gql`
         id
         scopeType
         requestedExpiresAt
+        requestedCapabilities
         status
         createdAt
         requesterUser {
@@ -267,6 +270,7 @@ export const MY_BRIDGE_RUNTIMES_QUERY = gql`
       accessGrants {
         id
         scopeType
+        capabilities
         expiresAt
         revokedAt
         createdAt
@@ -294,16 +298,19 @@ export const REQUEST_BRIDGE_ACCESS_MUTATION = gql`
     $scopeType: BridgeAccessScopeType!
     $sessionGroupId: ID
     $requestedExpiresAt: DateTime
+    $requestedCapabilities: [BridgeAccessCapability!]
   ) {
     requestBridgeAccess(
       runtimeInstanceId: $runtimeInstanceId
       scopeType: $scopeType
       sessionGroupId: $sessionGroupId
       requestedExpiresAt: $requestedExpiresAt
+      requestedCapabilities: $requestedCapabilities
     ) {
       id
       status
       scopeType
+      requestedCapabilities
       requestedExpiresAt
     }
   }
@@ -315,15 +322,18 @@ export const APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION = gql`
     $scopeType: BridgeAccessScopeType
     $sessionGroupId: ID
     $expiresAt: DateTime
+    $capabilities: [BridgeAccessCapability!]
   ) {
     approveBridgeAccessRequest(
       requestId: $requestId
       scopeType: $scopeType
       sessionGroupId: $sessionGroupId
       expiresAt: $expiresAt
+      capabilities: $capabilities
     ) {
       id
       scopeType
+      capabilities
       expiresAt
       revokedAt
     }
@@ -345,6 +355,18 @@ export const REVOKE_BRIDGE_ACCESS_GRANT_MUTATION = gql`
     revokeBridgeAccessGrant(grantId: $grantId) {
       id
       revokedAt
+    }
+  }
+`;
+
+export const UPDATE_BRIDGE_ACCESS_GRANT_MUTATION = gql`
+  mutation UpdateBridgeAccessGrant(
+    $grantId: ID!
+    $capabilities: [BridgeAccessCapability!]!
+  ) {
+    updateBridgeAccessGrant(grantId: $grantId, capabilities: $capabilities) {
+      id
+      capabilities
     }
   }
 `;

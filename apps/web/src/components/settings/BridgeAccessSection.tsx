@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, Laptop, Shield, Clock3, Inbox, UserRoundCheck } from "lucide-react";
+import { ChevronDown, Laptop, Shield, Clock3, Inbox, UserRoundCheck, Zap } from "lucide-react";
 import { toast } from "sonner";
+import type { BridgeAccessCapability } from "@trace/gql";
 import { client } from "../../lib/urql";
 import {
   APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION,
   DENY_BRIDGE_ACCESS_REQUEST_MUTATION,
   MY_BRIDGE_RUNTIMES_QUERY,
   REVOKE_BRIDGE_ACCESS_GRANT_MUTATION,
+  UPDATE_BRIDGE_ACCESS_GRANT_MUTATION,
 } from "../../lib/mutations";
 import { useUIStore } from "../../stores/ui";
 import {
   BRIDGE_ACCESS_APPROVAL_OPTIONS,
+  ensureSessionCapability,
+  formatCapabilities,
   getBridgeAccessApprovalExpiresAt,
 } from "../../lib/bridge-access";
 import { cn } from "../../lib/utils";
@@ -32,6 +36,7 @@ type BridgeAccessRequest = {
   id: string;
   scopeType: "all_sessions" | "session_group";
   requestedExpiresAt?: string | null;
+  requestedCapabilities?: BridgeAccessCapability[];
   status: "pending" | "approved" | "denied";
   createdAt: string;
   requesterUser: BridgeUser;
@@ -41,6 +46,7 @@ type BridgeAccessRequest = {
 type BridgeAccessGrant = {
   id: string;
   scopeType: "all_sessions" | "session_group";
+  capabilities?: BridgeAccessCapability[];
   expiresAt?: string | null;
   revokedAt?: string | null;
   createdAt: string;
@@ -84,7 +90,18 @@ export function BridgeAccessSection() {
   const [runtimes, setRuntimes] = useState<BridgeRuntimeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  const [grantTerminalByRequestId, setGrantTerminalByRequestId] = useState<
+    Record<string, boolean>
+  >({});
   const refreshTick = useUIStore((s: { refreshTick: number }) => s.refreshTick);
+
+  const buildCapabilities = useCallback(
+    (requestId: string): BridgeAccessCapability[] =>
+      grantTerminalByRequestId[requestId]
+        ? ["session", "terminal"]
+        : ["session"],
+    [grantTerminalByRequestId],
+  );
 
   const fetchRuntimes = useCallback(async () => {
     setLoading(true);
@@ -179,7 +196,11 @@ export function BridgeAccessSection() {
                     <p className="text-sm text-muted-foreground">No pending requests.</p>
                   ) : (
                     <div className="space-y-3">
-                      {runtime.accessRequests.map((request) => (
+                      {runtime.accessRequests.map((request) => {
+                        const grantTerminal = grantTerminalByRequestId[request.id] ?? false;
+                        const requestedTerminal =
+                          request.requestedCapabilities?.includes("terminal") ?? false;
+                        return (
                         <div key={request.id} className="rounded-lg border border-border bg-surface-deep p-3">
                           <div className="text-sm font-medium text-foreground">
                             {request.requesterUser.name || request.requesterUser.email || "Unknown user"}
@@ -192,6 +213,48 @@ export function BridgeAccessSection() {
                           </div>
                           <div className="text-xs text-muted-foreground">
                             Expires {formatDate(request.requestedExpiresAt)}
+                          </div>
+                          {request.requestedCapabilities && request.requestedCapabilities.length > 0 ? (
+                            <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                              <Zap size={11} />
+                              Asked for: {formatCapabilities(request.requestedCapabilities)}
+                            </div>
+                          ) : null}
+                          <div className="mt-3 rounded-md border border-border/60 bg-surface p-2">
+                            <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              <Shield size={11} />
+                              Grant capabilities
+                            </div>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <div className="rounded-md border border-border bg-surface-deep px-2.5 py-1.5 text-xs text-foreground">
+                                <div className="font-medium">Sessions</div>
+                                <div className="text-[11px] text-muted-foreground">Required</div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setGrantTerminalByRequestId((prev) => ({
+                                    ...prev,
+                                    [request.id]: !grantTerminal,
+                                  }))
+                                }
+                                className={cn(
+                                  "rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors",
+                                  grantTerminal
+                                    ? "border-foreground bg-surface-elevated text-foreground"
+                                    : "border-border bg-surface-deep text-muted-foreground hover:text-foreground",
+                                )}
+                              >
+                                <div className="font-medium">Terminal</div>
+                                <div className="text-[11px] text-muted-foreground">
+                                  {grantTerminal
+                                    ? "Will grant shell access"
+                                    : requestedTerminal
+                                      ? "Requester asked — still off"
+                                      : "Off"}
+                                </div>
+                              </button>
+                            </div>
                           </div>
                           <div className="mt-3 flex flex-wrap gap-2">
                             {request.sessionGroup?.id && (
@@ -208,11 +271,12 @@ export function BridgeAccessSection() {
                                           scopeType: "session_group",
                                           sessionGroupId: request.sessionGroup?.id,
                                           expiresAt: null,
+                                          capabilities: buildCapabilities(request.id),
                                         })
                                         .toPromise();
                                       if (result.error) throw result.error;
                                     },
-                                    "Access granted for this session",
+                                    `Access granted — ${formatCapabilities(buildCapabilities(request.id))}`,
                                   )
                                 }
                               >
@@ -241,11 +305,12 @@ export function BridgeAccessSection() {
                                               scopeType: "all_sessions",
                                               sessionGroupId: null,
                                               expiresAt: getBridgeAccessApprovalExpiresAt(option.id),
+                                              capabilities: buildCapabilities(request.id),
                                             })
                                             .toPromise();
                                           if (result.error) throw result.error;
                                         },
-                                        `Access granted for ${option.label}`,
+                                        `Access granted for ${option.label} — ${formatCapabilities(buildCapabilities(request.id))}`,
                                       )
                                     }
                                   >
@@ -277,7 +342,8 @@ export function BridgeAccessSection() {
                             </Button>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -291,47 +357,99 @@ export function BridgeAccessSection() {
                     <p className="text-sm text-muted-foreground">No active grants.</p>
                   ) : (
                     <div className="space-y-3">
-                      {runtime.accessGrants.map((grant) => (
-                        <div key={grant.id} className="rounded-lg border border-border bg-surface-deep p-3">
-                          <div className="text-sm font-medium text-foreground">
-                            {grant.granteeUser.name || grant.granteeUser.email || "Unknown user"}
+                      {runtime.accessGrants.map((grant) => {
+                        const grantCaps = grant.capabilities ?? [];
+                        const hasTerminal = grantCaps.includes("terminal");
+                        const toggleTerminal = async () => {
+                          const nextCaps: BridgeAccessCapability[] = hasTerminal
+                            ? ensureSessionCapability(
+                                grantCaps.filter((c) => c !== "terminal"),
+                              )
+                            : ensureSessionCapability([...grantCaps, "terminal"]);
+                          await runAction(
+                            grant.id,
+                            async () => {
+                              const result = await client
+                                .mutation(UPDATE_BRIDGE_ACCESS_GRANT_MUTATION, {
+                                  grantId: grant.id,
+                                  capabilities: nextCaps,
+                                })
+                                .toPromise();
+                              if (result.error) throw result.error;
+                            },
+                            hasTerminal
+                              ? "Terminal access revoked — live terminals closed"
+                              : "Terminal access granted",
+                          );
+                        };
+                        return (
+                          <div key={grant.id} className="rounded-lg border border-border bg-surface-deep p-3">
+                            <div className="text-sm font-medium text-foreground">
+                              {grant.granteeUser.name || grant.granteeUser.email || "Unknown user"}
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {describeScope(grant.scopeType, grant.sessionGroup)}
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {grantCaps.length === 0 ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-[10px] text-muted-foreground">
+                                  <Zap size={10} />
+                                  No capabilities
+                                </span>
+                              ) : (
+                                grantCaps.map((cap) => (
+                                  <span
+                                    key={cap}
+                                    className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300"
+                                  >
+                                    <Zap size={10} />
+                                    {cap === "session" ? "Sessions" : "Terminal"}
+                                  </span>
+                                ))
+                              )}
+                            </div>
+                            <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                              <Clock3 size={11} />
+                              Expires {formatDate(grant.expiresAt)}
+                            </div>
+                            <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                              <Shield size={11} />
+                              Granted {formatDate(grant.createdAt)}
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={pendingActionId === grant.id}
+                                onClick={() => void toggleTerminal()}
+                              >
+                                {hasTerminal ? "Disable terminal" : "Enable terminal"}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={pendingActionId === grant.id}
+                                onClick={() =>
+                                  void runAction(
+                                    grant.id,
+                                    async () => {
+                                      const result = await client
+                                        .mutation(REVOKE_BRIDGE_ACCESS_GRANT_MUTATION, {
+                                          grantId: grant.id,
+                                        })
+                                        .toPromise();
+                                      if (result.error) throw result.error;
+                                    },
+                                    "Grant revoked",
+                                  )
+                                }
+                              >
+                                Revoke
+                              </Button>
+                            </div>
                           </div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {describeScope(grant.scopeType, grant.sessionGroup)}
-                          </div>
-                          <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                            <Clock3 size={11} />
-                            Expires {formatDate(grant.expiresAt)}
-                          </div>
-                          <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                            <Shield size={11} />
-                            Granted {formatDate(grant.createdAt)}
-                          </div>
-                          <div className="mt-3">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={pendingActionId === grant.id}
-                              onClick={() =>
-                                void runAction(
-                                  grant.id,
-                                  async () => {
-                                    const result = await client
-                                      .mutation(REVOKE_BRIDGE_ACCESS_GRANT_MUTATION, {
-                                        grantId: grant.id,
-                                      })
-                                      .toPromise();
-                                    if (result.error) throw result.error;
-                                  },
-                                  "Grant revoked",
-                                )
-                              }
-                            >
-                              Revoke
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

@@ -1,17 +1,28 @@
 import { createElement } from "react";
 import { toast } from "sonner";
-import type { Event, EventType, ScopeType, AgentStatus } from "@trace/gql";
+import type { Event, EventType, ScopeType, AgentStatus, BridgeAccessCapability } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
 import { useEntityStore } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore, navigateToSession } from "../stores/ui";
 import { agentStatusLabel } from "../components/session/sessionStatus";
 import { showNativeNotification } from "./native";
-import { getBridgeAccessRequestToastId } from "../lib/bridge-access";
+import { formatCapabilities, getBridgeAccessRequestToastId } from "../lib/bridge-access";
 import {
   BridgeAccessRequestToast,
   type BridgeAccessRequestToastData,
 } from "./BridgeAccessRequestToast";
+
+function parseCapabilityArray(value: unknown): BridgeAccessCapability[] {
+  if (!Array.isArray(value)) return [];
+  const caps: BridgeAccessCapability[] = [];
+  for (const entry of value) {
+    if (entry === "session" || entry === "terminal") {
+      caps.push(entry);
+    }
+  }
+  return caps;
+}
 
 /** Notification handler for a specific event type. */
 type NotificationHandler = (event: Event) => void;
@@ -78,6 +89,7 @@ function parseBridgeAccessRequestPayload(payload: unknown): BridgeAccessRequestT
     runtimeInstanceId: data.runtimeInstanceId,
     runtimeLabel: data.runtimeLabel,
     scopeType: data.scopeType,
+    requestedCapabilities: parseCapabilityArray(data.requestedCapabilities),
     requestedExpiresAt:
       typeof data.requestedExpiresAt === "string" || data.requestedExpiresAt === null
         ? (data.requestedExpiresAt ?? null)
@@ -105,6 +117,7 @@ function parseBridgeAccessRequestPayload(payload: unknown): BridgeAccessRequestT
               typeof grant.sessionGroupId === "string" || grant.sessionGroupId === null
                 ? (grant.sessionGroupId ?? null)
                 : null,
+            capabilities: parseCapabilityArray(grant.capabilities),
             expiresAt:
               typeof grant.expiresAt === "string" || grant.expiresAt === null
                 ? (grant.expiresAt ?? null)
@@ -227,6 +240,38 @@ function handleBridgeAccessResolved(event: Event): void {
 
   const currentUserId = useAuthStore.getState().user?.id;
   if (currentUserId && request.requesterUser.id === currentUserId) {
+    useUIStore.getState().triggerRefresh();
+  }
+}
+
+function handleBridgeAccessUpdated(event: Event): void {
+  const currentUserId = useAuthStore.getState().user?.id;
+  if (!currentUserId) return;
+
+  const payload = asJsonObject(event.payload);
+  if (!payload) return;
+
+  const granteeUserId = typeof payload.granteeUserId === "string" ? payload.granteeUserId : null;
+  const ownerUserId = typeof payload.ownerUserId === "string" ? payload.ownerUserId : null;
+  const runtimeLabel =
+    typeof payload.runtimeLabel === "string" && payload.runtimeLabel.trim()
+      ? payload.runtimeLabel.trim()
+      : "the bridge";
+  const nextCaps = parseCapabilityArray(payload.capabilities);
+  const priorCaps = parseCapabilityArray(payload.priorCapabilities);
+
+  if (granteeUserId === currentUserId) {
+    const hadTerminal = priorCaps.includes("terminal");
+    const hasTerminal = nextCaps.includes("terminal");
+    if (hadTerminal && !hasTerminal) {
+      notify(`Terminal access to ${runtimeLabel} was removed`);
+    } else if (!hadTerminal && hasTerminal) {
+      notify(`Terminal access to ${runtimeLabel} was granted`);
+    } else {
+      notify(`Your access to ${runtimeLabel} is now ${formatCapabilities(nextCaps)}`);
+    }
+    useUIStore.getState().triggerRefresh();
+  } else if (ownerUserId === currentUserId) {
     useUIStore.getState().triggerRefresh();
   }
 }
@@ -369,6 +414,7 @@ registerHandler("session_pr_closed", handlePrEvent);
 registerHandler("bridge_access_requested", handleBridgeAccessRequested);
 registerHandler("bridge_access_request_resolved", handleBridgeAccessResolved);
 registerHandler("bridge_access_revoked", handleBridgeAccessRevoked);
+registerHandler("bridge_access_updated", handleBridgeAccessUpdated);
 registerHandler("inbox_item_created", handleInboxItemCreated);
 registerHandler("message_sent", handleMentionNotification);
 registerHandler("message_sent", handleDmMessage);

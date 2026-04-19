@@ -97,6 +97,11 @@ enum BridgeAccessRequestStatus {
   denied
 }
 
+enum BridgeAccessCapability {
+  session
+  terminal
+}
+
 type SlashCommand {
   name: String!
   description: String!
@@ -203,6 +208,7 @@ enum EventType {
   bridge_access_requested
   bridge_access_request_resolved
   bridge_access_revoked
+  bridge_access_updated
   session_started
   session_paused
   session_resumed
@@ -709,6 +715,7 @@ type BridgeAccessGrant {
   grantedByUser: User!
   scopeType: BridgeAccessScopeType!
   sessionGroup: SessionGroup
+  capabilities: [BridgeAccessCapability!]!
   expiresAt: DateTime
   revokedAt: DateTime
   createdAt: DateTime!
@@ -721,6 +728,7 @@ type BridgeAccessRequest {
   resolvedByUser: User
   scopeType: BridgeAccessScopeType!
   sessionGroup: SessionGroup
+  requestedCapabilities: [BridgeAccessCapability!]!
   requestedExpiresAt: DateTime
   status: BridgeAccessRequestStatus!
   resolvedAt: DateTime
@@ -753,6 +761,7 @@ type BridgeRuntimeAccess {
   isOwner: Boolean!
   scopeType: BridgeAccessScopeType
   sessionGroupId: ID
+  capabilities: [BridgeAccessCapability!]!
   expiresAt: DateTime
   pendingRequest: BridgeAccessRequest
 }
@@ -1104,15 +1113,21 @@ type Mutation {
     scopeType: BridgeAccessScopeType!
     sessionGroupId: ID
     requestedExpiresAt: DateTime
+    requestedCapabilities: [BridgeAccessCapability!]
   ): BridgeAccessRequest!
   approveBridgeAccessRequest(
     requestId: ID!
     scopeType: BridgeAccessScopeType
     sessionGroupId: ID
     expiresAt: DateTime
+    capabilities: [BridgeAccessCapability!]
   ): BridgeAccessGrant!
   denyBridgeAccessRequest(requestId: ID!): BridgeAccessRequest!
   revokeBridgeAccessGrant(grantId: ID!): BridgeAccessGrant!
+  updateBridgeAccessGrant(
+    grantId: ID!
+    capabilities: [BridgeAccessCapability!]!
+  ): BridgeAccessGrant!
   linkLinkedCheckoutRepo(
     sessionGroupId: ID!
     repoId: ID!

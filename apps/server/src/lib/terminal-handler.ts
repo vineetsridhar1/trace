@@ -153,6 +153,7 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
                 organizationId: session.organizationId,
                 runtimeInstanceId: getConnectionRuntimeInstanceId(session.connection),
                 sessionGroupId: session.sessionGroupId,
+                capability: "terminal",
               });
             } catch {
               console.warn(

@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Clock3, Lock, Shield } from "lucide-react";
+import { Clock3, Lock, Shield, Zap } from "lucide-react";
 import { toast } from "sonner";
+import type { BridgeAccessCapability } from "@trace/gql";
 import { client } from "../lib/urql";
-import {
-  APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION,
-  DENY_BRIDGE_ACCESS_REQUEST_MUTATION,
-} from "../lib/mutations";
+import { DENY_BRIDGE_ACCESS_REQUEST_MUTATION } from "../lib/mutations";
+import { formatCapabilities } from "../lib/bridge-access";
+import { useUIStore } from "../stores/ui";
 import { Button } from "../components/ui/button";
 
 export type BridgeAccessRequestToastData = {
@@ -15,6 +15,7 @@ export type BridgeAccessRequestToastData = {
   runtimeLabel: string;
   scopeType: "all_sessions" | "session_group";
   sessionGroup: { id: string; name?: string | null } | null;
+  requestedCapabilities?: BridgeAccessCapability[];
   requestedExpiresAt?: string | null;
   createdAt: string;
   status: "pending" | "approved" | "denied";
@@ -27,6 +28,7 @@ export type BridgeAccessRequestToastData = {
     id: string;
     scopeType: "all_sessions" | "session_group";
     sessionGroupId?: string | null;
+    capabilities?: BridgeAccessCapability[];
     expiresAt?: string | null;
     createdAt: string;
   } | null;
@@ -54,32 +56,16 @@ export function BridgeAccessRequestToast({
   toastId: string;
   request: BridgeAccessRequestToastData;
 }) {
-  const [pendingAction, setPendingAction] = useState<"approve" | "deny" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"review" | "deny" | null>(null);
 
   const requesterName = request.requesterUser.name?.trim() || "A teammate";
   const runtimeLabel = request.runtimeLabel.trim() || "your bridge";
+  const requestedCaps = request.requestedCapabilities ?? [];
 
-  const runApprove = async () => {
-    if (pendingAction) return;
-    setPendingAction("approve");
-    try {
-      const result = await client
-        .mutation(APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION, {
-          requestId: request.requestId,
-        })
-        .toPromise();
-
-      if (result.error) {
-        throw result.error;
-      }
-
-      toast.dismiss(toastId);
-      toast.success(`${requesterName} can now use ${runtimeLabel}`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to approve bridge access");
-    } finally {
-      setPendingAction(null);
-    }
+  const runReview = () => {
+    setPendingAction("review");
+    toast.dismiss(toastId);
+    useUIStore.getState().setActivePage("settings");
   };
 
   const runDeny = async () => {
@@ -127,13 +113,19 @@ export function BridgeAccessRequestToast({
               <Clock3 size={11} />
               {formatRequestedDuration(request.requestedExpiresAt)}
             </span>
+            {requestedCaps.length > 0 ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-1">
+                <Zap size={11} />
+                {formatCapabilities(requestedCaps)}
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Button size="sm" disabled={!!pendingAction} onClick={() => void runApprove()}>
-          Approve
+        <Button size="sm" disabled={!!pendingAction} onClick={runReview}>
+          Review in settings
         </Button>
         <Button
           variant="ghost"

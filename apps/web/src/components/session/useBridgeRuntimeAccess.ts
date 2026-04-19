@@ -3,6 +3,7 @@ import { client } from "../../lib/urql";
 import { BRIDGE_RUNTIME_ACCESS_QUERY } from "../../lib/mutations";
 import { useUIStore } from "../../stores/ui";
 import { isCloudMachineRuntimeId } from "@trace/shared";
+import type { BridgeAccessCapability } from "@trace/gql";
 
 type BridgeUser = {
   id: string;
@@ -14,6 +15,7 @@ type BridgePendingRequest = {
   id: string;
   scopeType: "all_sessions" | "session_group";
   requestedExpiresAt?: string | null;
+  requestedCapabilities?: BridgeAccessCapability[];
   status: "pending" | "approved" | "denied";
   sessionGroup?: { id: string; name?: string | null } | null;
 };
@@ -29,6 +31,7 @@ export type BridgeRuntimeAccessInfo = {
   isOwner: boolean;
   scopeType?: "all_sessions" | "session_group" | null;
   sessionGroupId?: string | null;
+  capabilities?: BridgeAccessCapability[];
   expiresAt?: string | null;
   pendingRequest?: BridgePendingRequest | null;
 };
@@ -48,6 +51,7 @@ function buildFallbackAccess(runtimeInstanceId: string): BridgeRuntimeAccessInfo
     isOwner: allowed,
     scopeType: null,
     sessionGroupId: null,
+    capabilities: allowed ? ["session", "terminal"] : [],
     expiresAt: null,
     pendingRequest: null,
   };

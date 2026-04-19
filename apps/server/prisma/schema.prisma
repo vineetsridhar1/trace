@@ -69,6 +69,11 @@ enum BridgeAccessRequestStatus {
   denied
 }
 
+enum BridgeAccessCapability {
+  session
+  terminal
+}
+
 enum CodingTool {
   claude_code
   codex
@@ -199,6 +204,7 @@ enum EventType {
   bridge_access_requested
   bridge_access_request_resolved
   bridge_access_revoked
+  bridge_access_updated
   session_started
   session_paused
   session_resumed
@@ -835,6 +841,7 @@ model BridgeAccessGrant {
   scopeType        BridgeAccessScopeType
   sessionGroupId   String?
   sessionGroup     SessionGroup?         @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  capabilities     BridgeAccessCapability[]
   expiresAt        DateTime?
   revokedAt        DateTime?
 
@@ -857,6 +864,7 @@ model BridgeAccessRequest {
   scopeType          BridgeAccessScopeType
   sessionGroupId     String?
   sessionGroup       SessionGroup?             @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  requestedCapabilities BridgeAccessCapability[]
   requestedExpiresAt DateTime?
   status             BridgeAccessRequestStatus @default(pending)
   resolvedAt         DateTime?
