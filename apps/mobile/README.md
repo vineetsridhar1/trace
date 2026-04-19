@@ -12,7 +12,7 @@ The mobile adapter lives at `src/lib/platform-mobile.ts` and wires up:
 - `react-native-mmkv` — fast persistent key/value for non-sensitive state
 - `global.fetch` and `WebSocket` — React Native's native implementations
 
-The adapter is imported at the very top of `app/_layout.tsx` so the `setPlatform()` side effect runs before Expo Router renders any screen that touches client-core. **Do not import client-core from files that are evaluated before `app/_layout.tsx`** — nothing should reach `getPlatform()` before the adapter has registered.
+The adapter is imported by the custom entry point `index.js` (set as `package.json#main`) **before** `expo-router/entry`. This ordering matters: Expo Router calls `loadRoute()` for every layout during route-tree construction (before rendering), and any layout that touches client-core would otherwise crash if `app/_layout.tsx` hadn't been loaded first. Routing the side effect through `index.js` guarantees `setPlatform()` runs before any route module is evaluated. **Do not move `setPlatform()` out of `index.js`** without verifying every layout still loads after it.
 
 ## Environment variables
 

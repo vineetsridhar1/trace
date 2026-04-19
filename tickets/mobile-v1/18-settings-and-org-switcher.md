@@ -16,7 +16,8 @@ A minimal settings screen: user info, active org switcher (opens native sheet), 
   - Presented as native iOS sheet with `.medium` detent via expo-router's modal presentation.
   - Uses `Sheet` layout primitive.
   - Lists each membership as a `ListRow`: org name, role subtitle, checkmark on active.
-  - Tap row: `setActiveOrg(id)` from client-core, haptic `selection`, dismiss sheet. The hydration hook (ticket 09) handles resubscription.
+  - Tap row: `setActiveOrg(id)` from client-core, then `recreateClient()` from `@/lib/urql` so the WS handshake re-sends `X-Organization-Id`, then `useEntityStore.getState().reset()` and `useMobileUIStore.getState().reset()` to drop stale entities. Haptic `selection`, dismiss sheet. The hydration hook (ticket 09) re-runs because `activeOrgId` changed and handles resubscription.
+  - **Replaces** the placeholder sheet at `apps/mobile/src/components/auth/OrgSwitcherSheet.tsx` introduced by ticket 09. Move the org-switch + sign-out logic into the new component and delete the placeholder.
 
 ## Dependencies
 

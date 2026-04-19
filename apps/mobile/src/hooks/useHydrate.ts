@@ -8,7 +8,7 @@ import {
   useEntityStore,
   type AuthState,
 } from "@trace/client-core";
-import type { Channel, Event, Session } from "@trace/gql";
+import type { Channel, ChannelGroup, Event, Session } from "@trace/gql";
 import { getClient } from "@/lib/urql";
 
 const ORGANIZATION_QUERY = gql`
@@ -25,6 +25,17 @@ const ORGANIZATION_QUERY = gql`
         baseBranch
         repo { id name }
       }
+    }
+  }
+`;
+
+const CHANNEL_GROUPS_QUERY = gql`
+  query MobileChannelGroups($organizationId: ID!) {
+    channelGroups(organizationId: $organizationId) {
+      id
+      name
+      position
+      isCollapsed
     }
   }
 `;
@@ -98,11 +109,17 @@ export function useHydrate(activeOrgId: string | null): void {
     }
 
     void (async () => {
-      const orgResult = await client
-        .query(ORGANIZATION_QUERY, { id: activeOrgId })
-        .toPromise();
+      const [orgResult, groupsResult, sessionsResult] = await Promise.all([
+        client.query(ORGANIZATION_QUERY, { id: activeOrgId }).toPromise(),
+        client.query(CHANNEL_GROUPS_QUERY, { organizationId: activeOrgId }).toPromise(),
+        client.query(MY_SESSIONS_QUERY, { organizationId: activeOrgId }).toPromise(),
+      ]);
       if (cancelled) return;
-      if (isUnauthorized(orgResult.error)) {
+      if (
+        isUnauthorized(orgResult.error) ||
+        isUnauthorized(groupsResult.error) ||
+        isUnauthorized(sessionsResult.error)
+      ) {
         await handle401();
         return;
       }
@@ -111,14 +128,11 @@ export function useHydrate(activeOrgId: string | null): void {
       >;
       if (channels.length > 0) upsertMany("channels", channels);
 
-      const sessionsResult = await client
-        .query(MY_SESSIONS_QUERY, { organizationId: activeOrgId })
-        .toPromise();
-      if (cancelled) return;
-      if (isUnauthorized(sessionsResult.error)) {
-        await handle401();
-        return;
-      }
+      const channelGroups = (groupsResult.data?.channelGroups ?? []) as Array<
+        ChannelGroup & { id: string }
+      >;
+      if (channelGroups.length > 0) upsertMany("channelGroups", channelGroups);
+
       const sessions = (sessionsResult.data?.mySessions ?? []) as Array<
         Session & { id: string }
       >;
