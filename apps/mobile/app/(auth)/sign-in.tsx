@@ -33,6 +33,13 @@ export default function SignInScreen() {
   async function handleSignIn() {
     if (loading) return;
     setError(null);
+    if (!/^https?:\/\//.test(API_URL)) {
+      setError(
+        "EXPO_PUBLIC_API_URL is not configured. Restart Metro with " +
+          "EXPO_PUBLIC_API_URL=http://<host>:4000.",
+      );
+      return;
+    }
     setLoading(true);
     try {
       const result = await WebBrowser.openAuthSessionAsync(
