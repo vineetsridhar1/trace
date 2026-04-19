@@ -5,8 +5,16 @@ import { createMMKV } from "react-native-mmkv";
 const storage = createMMKV({ id: "trace" });
 const TOKEN_KEY = "trace_token";
 
+const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? "";
+if (__DEV__ && !apiUrl) {
+  console.warn(
+    "[trace] EXPO_PUBLIC_API_URL is not set — network calls will produce invalid relative URLs. " +
+      "Start Metro with `EXPO_PUBLIC_API_URL=http://<lan-ip>:4000 pnpm --filter @trace/mobile start`.",
+  );
+}
+
 setPlatform({
-  apiUrl: process.env.EXPO_PUBLIC_API_URL ?? "",
+  apiUrl,
   storage: {
     getItem: (k) => storage.getString(k) ?? null,
     setItem: (k, v) => storage.set(k, v),
