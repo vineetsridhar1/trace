@@ -124,6 +124,27 @@ export function BridgeAccessSection() {
     void fetchRuntimes();
   }, [fetchRuntimes, refreshTick]);
 
+  // Drop stale toggle state for requests that are no longer pending (resolved
+  // by approve/deny or superseded). Without this the map would grow for the
+  // lifetime of the settings view.
+  useEffect(() => {
+    const activeIds = new Set(
+      runtimes.flatMap((runtime) => runtime.accessRequests.map((r) => r.id)),
+    );
+    setGrantTerminalByRequestId((prev) => {
+      const next: Record<string, boolean> = {};
+      let changed = false;
+      for (const [id, value] of Object.entries(prev)) {
+        if (activeIds.has(id)) {
+          next[id] = value;
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [runtimes]);
+
   const runAction = useCallback(
     async (id: string, action: () => Promise<void>, successMessage: string) => {
       setPendingActionId(id);

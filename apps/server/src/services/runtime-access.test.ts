@@ -684,7 +684,8 @@ describe("runtimeAccessService", () => {
       grantedByUser: { id: "user-1", name: "Owner" },
       sessionGroup: { id: "group-1", name: "A" },
     });
-    prismaMock.bridgeAccessGrant.update.mockResolvedValueOnce({
+    prismaMock.bridgeAccessGrant.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.bridgeAccessGrant.findUniqueOrThrow.mockResolvedValueOnce({
       id: "grant-1",
       granteeUserId: "user-2",
       scopeType: "session_group",
@@ -705,6 +706,11 @@ describe("runtimeAccessService", () => {
       capabilities: ["session"],
     });
 
+    expect(prismaMock.bridgeAccessGrant.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: "grant-1", revokedAt: null }),
+      }),
+    );
     expect(terminalRelayMock.destroyTerminalsForUser).toHaveBeenCalledWith(
       "user-2",
       new Set(["session-a"]),
@@ -741,7 +747,8 @@ describe("runtimeAccessService", () => {
       grantedByUser: { id: "user-1", name: "Owner" },
       sessionGroup: null,
     });
-    prismaMock.bridgeAccessGrant.update.mockResolvedValueOnce({
+    prismaMock.bridgeAccessGrant.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.bridgeAccessGrant.findUniqueOrThrow.mockResolvedValueOnce({
       id: "grant-1",
       granteeUserId: "user-2",
       scopeType: "all_sessions",
@@ -783,7 +790,8 @@ describe("runtimeAccessService", () => {
       grantedByUser: { id: "user-1", name: "Owner" },
       sessionGroup: null,
     });
-    prismaMock.bridgeAccessGrant.update.mockResolvedValueOnce({
+    prismaMock.bridgeAccessGrant.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.bridgeAccessGrant.findUniqueOrThrow.mockResolvedValueOnce({
       id: "grant-1",
       granteeUserId: "user-2",
       scopeType: "all_sessions",
@@ -804,9 +812,45 @@ describe("runtimeAccessService", () => {
       capabilities: [],
     });
 
-    const updateCall = prismaMock.bridgeAccessGrant.update.mock.calls[0]?.[0] as
+    const updateCall = prismaMock.bridgeAccessGrant.updateMany.mock.calls[0]?.[0] as
       | { data: { capabilities: string[] } }
       | undefined;
     expect(updateCall?.data.capabilities).toEqual(["session"]);
+  });
+
+  it("updateGrant throws if a concurrent revoke wins (updateMany count=0)", async () => {
+    prismaMock.bridgeAccessGrant.findUnique.mockResolvedValueOnce({
+      id: "grant-1",
+      granteeUserId: "user-2",
+      scopeType: "all_sessions",
+      sessionGroupId: null,
+      capabilities: ["session", "terminal"],
+      revokedAt: null,
+      bridgeRuntime: {
+        id: "bridge-1",
+        instanceId: "runtime-1",
+        label: "Laptop",
+        organizationId: "org-1",
+        ownerUserId: "user-1",
+      },
+      granteeUser: { id: "user-2", name: "Guest" },
+      grantedByUser: { id: "user-1", name: "Owner" },
+      sessionGroup: null,
+    });
+    // Simulate concurrent revoke: findUnique saw revokedAt=null but by update
+    // time the row already has revokedAt set, so updateMany matches zero rows.
+    prismaMock.bridgeAccessGrant.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      runtimeAccessService.updateGrant({
+        grantId: "grant-1",
+        organizationId: "org-1",
+        ownerUserId: "user-1",
+        capabilities: ["session"],
+      }),
+    ).rejects.toThrow("Cannot update a revoked bridge access grant");
+
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
+    expect(terminalRelayMock.destroyTerminalsForUser).not.toHaveBeenCalled();
   });
 });

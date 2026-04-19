@@ -65,7 +65,9 @@ export function BridgeAccessRequestToast({
   const runReview = () => {
     setPendingAction("review");
     toast.dismiss(toastId);
-    useUIStore.getState().setActivePage("settings");
+    const ui = useUIStore.getState();
+    ui.setSettingsInitialTab("bridge-access");
+    ui.setActivePage("settings");
   };
 
   const runDeny = async () => {

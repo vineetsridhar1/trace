@@ -841,7 +841,7 @@ model BridgeAccessGrant {
   scopeType        BridgeAccessScopeType
   sessionGroupId   String?
   sessionGroup     SessionGroup?         @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  capabilities     BridgeAccessCapability[]
+  capabilities     BridgeAccessCapability[] @default([])
   expiresAt        DateTime?
   revokedAt        DateTime?
 
@@ -864,7 +864,7 @@ model BridgeAccessRequest {
   scopeType          BridgeAccessScopeType
   sessionGroupId     String?
   sessionGroup       SessionGroup?             @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  requestedCapabilities BridgeAccessCapability[]
+  requestedCapabilities BridgeAccessCapability[] @default([])
   requestedExpiresAt DateTime?
   status             BridgeAccessRequestStatus @default(pending)
   resolvedAt         DateTime?

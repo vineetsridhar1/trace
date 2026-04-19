@@ -82,16 +82,11 @@ type BridgeGrantUpdatedEventPayload = {
 
 const OWNER_CAPABILITIES: BridgeAccessCapability[] = ["session", "terminal"];
 
-function normalizeRequestedCapabilities(
-  input?: BridgeAccessCapability[] | null,
-): BridgeAccessCapability[] {
-  const set = new Set<BridgeAccessCapability>(input ?? []);
-  // A request without `session` is meaningless — a grantee without session
-  // access can't do anything, terminal-only wouldn't make sense either.
-  set.add("session");
-  return Array.from(set);
-}
-
+/**
+ * Dedupe and always include `session`. Used for both request and grant
+ * capability normalization — a request without `session` is meaningless, and
+ * a grant without it locks the grantee out of the sessions they were granted.
+ */
 function ensureSessionCapability(
   input?: BridgeAccessCapability[] | null,
 ): BridgeAccessCapability[] {
@@ -281,6 +276,16 @@ class RuntimeAccessService {
     });
   }
 
+  /**
+   * Resolve the caller's access state against a bridge runtime.
+   *
+   * If `capability` is passed, the grant lookup filters to grants carrying
+   * that capability — `allowed` and the returned `capabilities` list reflect
+   * *only* that narrowed view. This is the right shape for `assertAccess`
+   * (which only checks `allowed`), but callers reading `capabilities` for
+   * display should NOT pass `capability`, or they'll get an empty array even
+   * when the caller has broader access via a session-only grant.
+   */
   async getAccessState(input: {
     userId: string;
     organizationId: string;
@@ -480,7 +485,7 @@ class RuntimeAccessService {
     requestedExpiresAt?: Date | null;
     requestedCapabilities?: BridgeAccessCapability[] | null;
   }) {
-    const normalizedCapabilities = normalizeRequestedCapabilities(
+    const normalizedCapabilities = ensureSessionCapability(
       input.requestedCapabilities,
     );
     const runtime = await prisma.bridgeRuntime.findUnique({
@@ -686,15 +691,11 @@ class RuntimeAccessService {
       }
       const expiresAt = input.expiresAt !== undefined ? input.expiresAt : request.requestedExpiresAt;
 
-      // Secure default: when the owner doesn't specify capabilities, take the
-      // request's requested set **intersected with `["session"]`** — dropping
-      // `terminal` even if the requester asked for it. The owner must opt in
-      // to terminal explicitly by passing `capabilities` through the UI.
-      const requestedCaps = request.requestedCapabilities ?? [];
+      // Secure default: when the owner doesn't specify capabilities, the grant
+      // is session-only. Terminal requires an explicit opt-in from the owner
+      // (via `input.capabilities`), regardless of what the requester asked for.
       const resolvedCapabilities = ensureSessionCapability(
-        input.capabilities === undefined || input.capabilities === null
-          ? requestedCaps.filter((c) => c === "session")
-          : input.capabilities,
+        input.capabilities ?? [],
       );
 
       await tx.bridgeAccessGrant.updateMany({
@@ -895,70 +896,86 @@ class RuntimeAccessService {
     ownerUserId: string;
     capabilities: BridgeAccessCapability[];
   }) {
-    const grant = await prisma.bridgeAccessGrant.findUnique({
-      where: { id: input.grantId },
-      include: {
-        bridgeRuntime: true,
-        granteeUser: true,
-        grantedByUser: true,
-        sessionGroup: true,
-      },
-    });
-    if (!grant || grant.bridgeRuntime.organizationId !== input.organizationId) {
-      throw new Error("Bridge access grant not found");
-    }
-    if (grant.bridgeRuntime.ownerUserId !== input.ownerUserId) {
-      throw new AuthorizationError(BRIDGE_ACCESS_DENIED_ERROR);
-    }
-    if (grant.revokedAt) {
-      throw new Error("Cannot update a revoked bridge access grant");
-    }
-
-    const priorCapabilities = grant.capabilities ?? [];
     const nextCapabilities = ensureSessionCapability(input.capabilities);
 
-    const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const updatedGrant = await tx.bridgeAccessGrant.update({
-        where: { id: grant.id },
-        data: { capabilities: nextCapabilities },
-        include: {
-          granteeUser: true,
-          grantedByUser: true,
-          sessionGroup: true,
-        },
-      });
+    const { updated, priorCapabilities } = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        // Read inside the tx so the revokedAt/authorization checks and the
+        // update see a consistent snapshot — a concurrent revokeGrant between
+        // read and write would otherwise produce an "update" event on an
+        // already-revoked grant.
+        const grant = await tx.bridgeAccessGrant.findUnique({
+          where: { id: input.grantId },
+          include: {
+            bridgeRuntime: true,
+            granteeUser: true,
+            grantedByUser: true,
+            sessionGroup: true,
+          },
+        });
+        if (!grant || grant.bridgeRuntime.organizationId !== input.organizationId) {
+          throw new Error("Bridge access grant not found");
+        }
+        if (grant.bridgeRuntime.ownerUserId !== input.ownerUserId) {
+          throw new AuthorizationError(BRIDGE_ACCESS_DENIED_ERROR);
+        }
+        if (grant.revokedAt) {
+          throw new Error("Cannot update a revoked bridge access grant");
+        }
 
-      const payload: BridgeGrantUpdatedEventPayload = {
-        grantId: updatedGrant.id,
-        ownerUserId: grant.bridgeRuntime.ownerUserId,
-        granteeUserId: updatedGrant.granteeUserId,
-        runtimeInstanceId: grant.bridgeRuntime.instanceId,
-        runtimeLabel: grant.bridgeRuntime.label,
-        scopeType: updatedGrant.scopeType,
-        sessionGroupId: updatedGrant.sessionGroupId ?? null,
-        sessionGroup: updatedGrant.sessionGroup
-          ? { id: updatedGrant.sessionGroup.id, name: updatedGrant.sessionGroup.name ?? null }
-          : null,
-        priorCapabilities,
-        capabilities: updatedGrant.capabilities ?? [],
-        updatedAt: (updatedGrant.updatedAt ?? new Date()).toISOString(),
-      };
+        const prior = grant.capabilities ?? [];
 
-      await eventService.create(
-        {
-          organizationId: input.organizationId,
-          scopeType: "system",
-          scopeId: input.organizationId,
-          eventType: "bridge_access_updated",
-          payload,
-          actorType: "user",
-          actorId: input.ownerUserId,
-        },
-        tx,
-      );
+        // Guarded write: updateMany with revokedAt:null as a predicate so a
+        // race that revokes between read and write no-ops the update.
+        const updateResult = await tx.bridgeAccessGrant.updateMany({
+          where: { id: grant.id, revokedAt: null },
+          data: { capabilities: nextCapabilities },
+        });
+        if (updateResult.count === 0) {
+          throw new Error("Cannot update a revoked bridge access grant");
+        }
 
-      return updatedGrant;
-    });
+        const updatedGrant = await tx.bridgeAccessGrant.findUniqueOrThrow({
+          where: { id: grant.id },
+          include: {
+            granteeUser: true,
+            grantedByUser: true,
+            sessionGroup: true,
+          },
+        });
+
+        const payload: BridgeGrantUpdatedEventPayload = {
+          grantId: updatedGrant.id,
+          ownerUserId: grant.bridgeRuntime.ownerUserId,
+          granteeUserId: updatedGrant.granteeUserId,
+          runtimeInstanceId: grant.bridgeRuntime.instanceId,
+          runtimeLabel: grant.bridgeRuntime.label,
+          scopeType: updatedGrant.scopeType,
+          sessionGroupId: updatedGrant.sessionGroupId ?? null,
+          sessionGroup: updatedGrant.sessionGroup
+            ? { id: updatedGrant.sessionGroup.id, name: updatedGrant.sessionGroup.name ?? null }
+            : null,
+          priorCapabilities: prior,
+          capabilities: updatedGrant.capabilities ?? [],
+          updatedAt: (updatedGrant.updatedAt ?? new Date()).toISOString(),
+        };
+
+        await eventService.create(
+          {
+            organizationId: input.organizationId,
+            scopeType: "system",
+            scopeId: input.organizationId,
+            eventType: "bridge_access_updated",
+            payload,
+            actorType: "user",
+            actorId: input.ownerUserId,
+          },
+          tx,
+        );
+
+        return { updated: updatedGrant, priorCapabilities: prior };
+      },
+    );
 
     // If terminal was removed, close the grantee's live PTYs. The
     // per-message gate in terminal-handler catches anything still in flight.
