@@ -21,9 +21,11 @@ export interface ThemeColors {
   dimForeground: string;
 
   accent: string;
+  accentForeground: string;
   accentMuted: string;
 
   destructive: string;
+  destructiveForeground: string;
   destructiveMuted: string;
 
   success: string;
@@ -37,6 +39,7 @@ export interface ThemeColors {
 
   statusActive: string;
   statusNeedsInput: string;
+  statusInReview: string;
   statusDone: string;
   statusFailed: string;
   statusMerged: string;
@@ -53,9 +56,11 @@ const dark: ThemeColors = {
   dimForeground: "#71717a",
 
   accent: "#3b82f6",
+  accentForeground: "#ffffff",
   accentMuted: "rgba(59,130,246,0.16)",
 
   destructive: "#ef4444",
+  destructiveForeground: "#ffffff",
   destructiveMuted: "rgba(239,68,68,0.16)",
 
   success: "#22c55e",
@@ -69,6 +74,7 @@ const dark: ThemeColors = {
 
   statusActive: "#3b82f6",
   statusNeedsInput: "#f59e0b",
+  statusInReview: "#06b6d4",
   statusDone: "#22c55e",
   statusFailed: "#ef4444",
   statusMerged: "#a855f7",

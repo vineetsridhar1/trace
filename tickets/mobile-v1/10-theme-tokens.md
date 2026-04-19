@@ -10,12 +10,12 @@ Create a typed theme system for the mobile app: colors, typography, spacing, rad
   - `colors.ts` — semantic tokens:
     - `background`, `surface`, `surfaceElevated`, `surfaceDeep`
     - `foreground`, `mutedForeground`, `dimForeground`
-    - `accent`, `accentMuted`
-    - `destructive`, `destructiveMuted`
+    - `accent`, `accentForeground`, `accentMuted`
+    - `destructive`, `destructiveForeground`, `destructiveMuted`
     - `success`, `warning`
     - `border`, `borderMuted`
     - `glassTint` (dark), `glassTintLight` (pre-iOS-26 fallback)
-    - Status colors: `statusActive`, `statusNeedsInput`, `statusDone`, `statusFailed`, `statusMerged`
+    - Status colors: `statusActive`, `statusNeedsInput`, `statusInReview`, `statusDone`, `statusFailed`, `statusMerged`
   - `typography.ts`:
     - Font family: iOS system (`.AppleSystemUIFont`) via the system default
     - Variants: `largeTitle` (34/41), `title1` (28/34), `title2` (22/28), `headline` (17/22 semibold), `body` (17/22), `callout` (16/21), `subheadline` (15/20), `footnote` (13/18), `caption1` (12/16), `caption2` (11/13), `mono` (16/21 monospace)
