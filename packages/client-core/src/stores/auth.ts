@@ -131,8 +131,12 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
   },
 
   setActiveOrg: (orgId: string) => {
-    void getPlatform().storage.setItem(ACTIVE_ORG_KEY, orgId);
     set({ activeOrgId: orgId });
+    Promise.resolve(getPlatform().storage.setItem(ACTIVE_ORG_KEY, orgId)).catch(
+      (err: unknown) => {
+        console.error("[auth] failed to persist active org", err);
+      },
+    );
   },
 }));
 
