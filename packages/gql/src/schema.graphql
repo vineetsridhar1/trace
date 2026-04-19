@@ -191,6 +191,11 @@ enum ApiTokenProvider {
   ssh_key
 }
 
+enum PushPlatform {
+  ios
+  android
+}
+
 enum AiConversationVisibility {
   PRIVATE
   ORG
@@ -1162,6 +1167,8 @@ type Mutation {
   dismissAgentSuggestion(inboxItemId: ID!): InboxItem!
   setApiToken(input: SetApiTokenInput!): ApiTokenStatus!
   deleteApiToken(provider: ApiTokenProvider!): Boolean!
+  registerPushToken(token: String!, platform: PushPlatform!): Boolean!
+  unregisterPushToken(token: String!): Boolean!
   createTerminal(sessionId: ID!, cols: Int!, rows: Int!): Terminal!
   destroyTerminal(terminalId: ID!): Boolean!
   registerRepoWebhook(repoId: ID!): Repo!

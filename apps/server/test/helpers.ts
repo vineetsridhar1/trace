@@ -63,6 +63,13 @@ export function createPrismaMock() {
       upsert: vi.fn(),
       delete: vi.fn(),
     },
+    pushToken: {
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
     event: {
       create: vi.fn(),
       findMany: vi.fn(),

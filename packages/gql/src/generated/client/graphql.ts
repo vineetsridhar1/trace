@@ -686,6 +686,7 @@ export type Mutation = {
   moveSessionToRuntime: Session;
   muteScope: Participant;
   queueSessionMessage: QueuedMessage;
+  registerPushToken: Scalars['Boolean']['output'];
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars['Boolean']['output'];
   removeQueuedMessage: Scalars['Boolean']['output'];
@@ -712,6 +713,7 @@ export type Mutation = {
   unassignTicket: Ticket;
   unlinkTicket: Ticket;
   unmuteScope: Participant;
+  unregisterPushToken: Scalars['Boolean']['output'];
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
   updateAgentSettings: AgentIdentity;
@@ -956,6 +958,12 @@ export type MutationQueueSessionMessageArgs = {
 };
 
 
+export type MutationRegisterPushTokenArgs = {
+  platform: PushPlatform;
+  token: Scalars['String']['input'];
+};
+
+
 export type MutationRegisterRepoWebhookArgs = {
   repoId: Scalars['ID']['input'];
 };
@@ -1120,6 +1128,11 @@ export type MutationUnmuteScopeArgs = {
 };
 
 
+export type MutationUnregisterPushTokenArgs = {
+  token: Scalars['String']['input'];
+};
+
+
 export type MutationUnregisterRepoWebhookArgs = {
   repoId: Scalars['ID']['input'];
 };
@@ -1260,6 +1273,10 @@ export type Project = {
   sessions: Array<Session>;
   tickets: Array<Ticket>;
 };
+
+export type PushPlatform =
+  | 'android'
+  | 'ios';
 
 export type Query = {
   __typename?: 'Query';

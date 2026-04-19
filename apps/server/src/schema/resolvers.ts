@@ -9,6 +9,7 @@ import { ticketQueries, ticketMutations, ticketSubscriptions, ticketTypeResolver
 import { eventQueries, eventSubscriptions } from "./event.js";
 import { inboxQueries, inboxMutations } from "./inbox.js";
 import { apiTokenQueries, apiTokenMutations } from "./api-token.js";
+import { pushTokenMutations } from "./push-token.js";
 import { terminalQueries, terminalMutations } from "./terminal.js";
 import { chatQueries, chatMutations, chatSubscriptions, chatTypeResolvers } from "./chat.js";
 import { participantQueries, participantMutations, participantTypeResolvers } from "./participant.js";
@@ -74,6 +75,7 @@ export const resolvers = {
     ...ticketMutations,
     ...inboxMutations,
     ...apiTokenMutations,
+    ...pushTokenMutations,
     ...terminalMutations,
     ...chatMutations,
     ...participantMutations,

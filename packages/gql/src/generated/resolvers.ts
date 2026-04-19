@@ -687,6 +687,7 @@ export type Mutation = {
   moveSessionToRuntime: Session;
   muteScope: Participant;
   queueSessionMessage: QueuedMessage;
+  registerPushToken: Scalars['Boolean']['output'];
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars['Boolean']['output'];
   removeQueuedMessage: Scalars['Boolean']['output'];
@@ -713,6 +714,7 @@ export type Mutation = {
   unassignTicket: Ticket;
   unlinkTicket: Ticket;
   unmuteScope: Participant;
+  unregisterPushToken: Scalars['Boolean']['output'];
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
   updateAgentSettings: AgentIdentity;
@@ -957,6 +959,12 @@ export type MutationQueueSessionMessageArgs = {
 };
 
 
+export type MutationRegisterPushTokenArgs = {
+  platform: PushPlatform;
+  token: Scalars['String']['input'];
+};
+
+
 export type MutationRegisterRepoWebhookArgs = {
   repoId: Scalars['ID']['input'];
 };
@@ -1121,6 +1129,11 @@ export type MutationUnmuteScopeArgs = {
 };
 
 
+export type MutationUnregisterPushTokenArgs = {
+  token: Scalars['String']['input'];
+};
+
+
 export type MutationUnregisterRepoWebhookArgs = {
   repoId: Scalars['ID']['input'];
 };
@@ -1261,6 +1274,10 @@ export type Project = {
   sessions: Array<Session>;
   tickets: Array<Ticket>;
 };
+
+export type PushPlatform =
+  | 'android'
+  | 'ios';
 
 export type Query = {
   __typename?: 'Query';
@@ -2132,6 +2149,7 @@ export type ResolversTypes = ResolversObject<{
   PortEndpoint: ResolverTypeWrapper<PortEndpoint>;
   Priority: Priority;
   Project: ResolverTypeWrapper<Project>;
+  PushPlatform: PushPlatform;
   Query: ResolverTypeWrapper<{}>;
   QueuedMessage: ResolverTypeWrapper<QueuedMessage>;
   ReorderChannelGroupsInput: ReorderChannelGroupsInput;
@@ -2691,6 +2709,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   moveSessionToRuntime?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationMoveSessionToRuntimeArgs, 'runtimeInstanceId' | 'sessionId'>>;
   muteScope?: Resolver<ResolversTypes['Participant'], ParentType, ContextType, RequireFields<MutationMuteScopeArgs, 'scopeId' | 'scopeType'>>;
   queueSessionMessage?: Resolver<ResolversTypes['QueuedMessage'], ParentType, ContextType, RequireFields<MutationQueueSessionMessageArgs, 'sessionId' | 'text'>>;
+  registerPushToken?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationRegisterPushTokenArgs, 'platform' | 'token'>>;
   registerRepoWebhook?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationRegisterRepoWebhookArgs, 'repoId'>>;
   removeOrgMember?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationRemoveOrgMemberArgs, 'organizationId' | 'userId'>>;
   removeQueuedMessage?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationRemoveQueuedMessageArgs, 'id'>>;
@@ -2717,6 +2736,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   unassignTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationUnassignTicketArgs, 'ticketId' | 'userId'>>;
   unlinkTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationUnlinkTicketArgs, 'entityId' | 'entityType' | 'ticketId'>>;
   unmuteScope?: Resolver<ResolversTypes['Participant'], ParentType, ContextType, RequireFields<MutationUnmuteScopeArgs, 'scopeId' | 'scopeType'>>;
+  unregisterPushToken?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationUnregisterPushTokenArgs, 'token'>>;
   unregisterRepoWebhook?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationUnregisterRepoWebhookArgs, 'repoId'>>;
   unsubscribe?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationUnsubscribeArgs, 'scopeId' | 'scopeType'>>;
   updateAgentSettings?: Resolver<ResolversTypes['AgentIdentity'], ParentType, ContextType, RequireFields<MutationUpdateAgentSettingsArgs, 'input' | 'organizationId'>>;
