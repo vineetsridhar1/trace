@@ -4,6 +4,10 @@ declare global {
     readonly VITE_API_URL?: string;
     readonly VITE_WS_URL?: string;
     readonly VITE_AG_GRID_LICENSE_KEY?: string;
+    readonly VITE_ENABLE_MESSAGING?: string;
+    readonly VITE_ENABLE_TICKETS?: string;
+    readonly VITE_ENABLE_AGENT_DEBUG?: string;
+    readonly VITE_ENABLE_AGENT?: string;
   }
 
   interface ImportMeta {

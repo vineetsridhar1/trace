@@ -294,7 +294,7 @@ model AgentIdentity {
   organizationId String       @unique
   organization   Organization @relation(fields: [organizationId], references: [id])
   name           String       @default("Trace AI")
-  status         OrgAgentStatus  @default(enabled)
+  status         OrgAgentStatus  @default(disabled)
   autonomyMode   AutonomyMode @default(observe)
   soulFile       String       @default("")
   dailyLimitCents Int         @default(1000)
