@@ -2,6 +2,7 @@ import type { UserRole } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
+import { isSuperAdminEmail } from "../lib/auth-config.js";
 
 export class OrgMemberService {
   async addMember({
@@ -32,7 +33,7 @@ export class OrgMemberService {
 
     // Ensure every organization always has at least one human admin.
     // Auto-promote super-admin email to admin in all orgs.
-    const isSuperAdmin = user.email === "vineets1600@gmail.com";
+    const isSuperAdmin = isSuperAdminEmail(user.email);
     const effectiveRole =
       isSuperAdmin || (user.id !== TRACE_AI_USER_ID && existingHumanMembers === 0)
         ? "admin"
@@ -159,7 +160,7 @@ export class OrgMemberService {
         where: { id: userId },
         select: { email: true },
       });
-      if (user?.email !== "vineets1600@gmail.com") {
+      if (!isSuperAdminEmail(user?.email)) {
         throw new Error("Only admins can perform this action");
       }
     }

@@ -26,7 +26,7 @@ export const agentIdentityMutations = {
     },
     ctx: Context,
   ) => {
-    await orgMemberService.assertMembership(ctx.userId, args.organizationId);
+    await orgMemberService.assertAdmin(ctx.userId, args.organizationId);
 
     return agentIdentityService.update(args.organizationId, {
       ...(args.input.name != null && { name: args.input.name }),

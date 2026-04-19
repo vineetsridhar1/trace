@@ -46,7 +46,7 @@ describe("auth helpers", () => {
     expect(parseCookieToken("foo=bar")).toBeUndefined();
   });
 
-  it("verifies valid tokens and rejects invalid ones", () => {
+  it("verifies valid tokens and rejects invalid ones", async () => {
     const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
 
     expect(verifyToken(token)).toBe("user-1");

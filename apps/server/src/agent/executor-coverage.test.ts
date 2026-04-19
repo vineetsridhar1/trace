@@ -528,6 +528,7 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
           organizationId: "org-1",
           repoId: "repo-1",
         },
+        "org-1",
         "agent",
         "agent-1",
       );
@@ -541,6 +542,7 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
         "session",
         "session-1",
         "proj-1",
+        "org-1",
         "agent",
         "agent-1",
       );
@@ -586,6 +588,11 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
       expect(services.sessionService.run).toHaveBeenCalledWith(
         "session-1",
         "Continue from the failing test",
+        undefined,
+        {
+          userId: "agent-1",
+          organizationId: "org-1",
+        },
       );
     },
   },
@@ -598,6 +605,7 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
         text: "Please focus on auth.ts",
         actorType: "agent",
         actorId: "agent-1",
+        organizationId: "org-1",
       });
     },
   },
@@ -609,6 +617,7 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
         "session-1",
         "agent",
         "agent-1",
+        "org-1",
       );
     },
   },
@@ -620,6 +629,7 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
         "session-1",
         "agent",
         "agent-1",
+        "org-1",
       );
     },
   },
@@ -631,6 +641,7 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
         "session-1",
         "agent",
         "agent-1",
+        "org-1",
       );
     },
   },
@@ -638,7 +649,7 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
     actionType: "session.get",
     args: { sessionId: "session-1" },
     assertCall: (services) => {
-      expect(services.sessionService.get).toHaveBeenCalledWith("session-1");
+      expect(services.sessionService.get).toHaveBeenCalledWith("session-1", "org-1");
     },
   },
   {
@@ -728,6 +739,7 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
         { status: "in_review", priority: "urgent", title: "Updated title" },
         "agent",
         "agent-1",
+        "org-1",
       );
     },
   },
@@ -740,6 +752,7 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
         "Investigating now",
         "agent",
         "agent-1",
+        "org-1",
       );
     },
   },
@@ -752,6 +765,7 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
         userId: "user-1",
         actorType: "agent",
         actorId: "agent-1",
+        organizationId: "org-1",
       });
     },
   },
@@ -764,6 +778,7 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
         userId: "user-1",
         actorType: "agent",
         actorId: "agent-1",
+        organizationId: "org-1",
       });
     },
   },
@@ -777,6 +792,7 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
         entityId: "session-1",
         actorType: "agent",
         actorId: "agent-1",
+        organizationId: "org-1",
       });
     },
   },
@@ -790,6 +806,7 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
         entityId: "session-1",
         actorType: "agent",
         actorId: "agent-1",
+        organizationId: "org-1",
       });
     },
   },
@@ -837,6 +854,7 @@ const ALIAS_EXECUTION_CASES: ExecutionCase[] = [
         entityId: "chat-1",
         actorType: "agent",
         actorId: "agent-1",
+        organizationId: "org-1",
       });
     },
   },

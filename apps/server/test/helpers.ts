@@ -73,9 +73,11 @@ export function createPrismaMock() {
     ticket: {
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       findFirst: vi.fn(),
+      findFirstOrThrow: vi.fn(),
       findMany: vi.fn(),
     },
     ticketAssignee: {
@@ -141,10 +143,13 @@ export function createPrismaMock() {
     },
     project: {
       create: vi.fn(),
+      findFirst: vi.fn(),
+      findFirstOrThrow: vi.fn(),
       findMany: vi.fn(),
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     session: {
       create: vi.fn(),
@@ -207,6 +212,7 @@ export function createPrismaMock() {
       findUniqueOrThrow: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       findFirstOrThrow: vi.fn(),
       findUnique: vi.fn(),
     },
@@ -220,6 +226,7 @@ export function createPrismaMock() {
     channelGroup: {
       create: vi.fn(),
       findFirst: vi.fn(),
+      findFirstOrThrow: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),

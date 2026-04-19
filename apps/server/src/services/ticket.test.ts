@@ -21,9 +21,12 @@ const eventServiceMock = eventService as any;
 describe("TicketService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "user-1" });
   });
 
   it("creates tickets with defaults, relationships, and events", async () => {
+    prismaMock.project.findFirstOrThrow.mockResolvedValueOnce({ id: "project-1" });
+    prismaMock.orgMember.findMany.mockResolvedValueOnce([{ userId: "user-2" }]);
     prismaMock.ticket.create.mockResolvedValueOnce({
       id: "ticket-1",
       title: "Fix auth",
@@ -74,7 +77,7 @@ describe("TicketService", () => {
   });
 
   it("updates tickets and records prior status in the event payload", async () => {
-    prismaMock.ticket.findUniqueOrThrow.mockResolvedValueOnce({
+    prismaMock.ticket.findFirstOrThrow.mockResolvedValueOnce({
       organizationId: "org-1",
       status: "todo",
     });
@@ -86,6 +89,7 @@ describe("TicketService", () => {
       { title: "Updated", status: "done", description: null } as any,
       "user",
       "user-1",
+      "org-1",
     );
 
     expect(prismaMock.ticket.update).toHaveBeenCalledWith({
@@ -112,11 +116,13 @@ describe("TicketService", () => {
   });
 
   it("adds comments through event creation", async () => {
-    prismaMock.ticket.findUniqueOrThrow.mockResolvedValueOnce({ organizationId: "org-1" });
+    prismaMock.ticket.findFirstOrThrow.mockResolvedValueOnce({ organizationId: "org-1" });
     eventServiceMock.create.mockResolvedValueOnce({ id: "event-1" });
 
     const service = new TicketService();
-    await expect(service.addComment("ticket-1", "hello", "user", "user-1")).resolves.toEqual({
+    await expect(
+      service.addComment("ticket-1", "hello", "user", "user-1", "org-1"),
+    ).resolves.toEqual({
       id: "event-1",
     });
 
@@ -132,10 +138,22 @@ describe("TicketService", () => {
   });
 
   it("assigns, links, and unlinks tickets inside transactions", async () => {
+    // Each transactional action now calls findFirstOrThrow first (org check)
+    // and then findUniqueOrThrow to hydrate the full entity for the event.
+    prismaMock.ticket.findFirstOrThrow
+      .mockResolvedValueOnce({ id: "ticket-1" })
+      .mockResolvedValueOnce({ id: "ticket-1" })
+      .mockResolvedValueOnce({ id: "ticket-1" });
+    prismaMock.orgMember.findUniqueOrThrow
+      .mockResolvedValueOnce({ userId: "user-1" })
+      .mockResolvedValueOnce({ userId: "user-2" })
+      .mockResolvedValueOnce({ userId: "user-1" })
+      .mockResolvedValueOnce({ userId: "user-1" });
     prismaMock.ticket.findUniqueOrThrow
       .mockResolvedValueOnce({ id: "ticket-1", organizationId: "org-1" })
       .mockResolvedValueOnce({ id: "ticket-1", organizationId: "org-1" })
       .mockResolvedValueOnce({ id: "ticket-1", organizationId: "org-1" });
+    prismaMock.session.findFirstOrThrow.mockResolvedValueOnce({ id: "session-1" });
 
     const service = new TicketService();
     await service.assign({
@@ -143,6 +161,7 @@ describe("TicketService", () => {
       userId: "user-2",
       actorType: "user",
       actorId: "user-1",
+      organizationId: "org-1",
     });
     await service.link({
       ticketId: "ticket-1",
@@ -150,14 +169,16 @@ describe("TicketService", () => {
       entityId: "session-1",
       actorType: "user",
       actorId: "user-1",
-    } as any);
+      organizationId: "org-1",
+    });
     await service.unlink({
       ticketId: "ticket-1",
       entityType: "session",
       entityId: "session-1",
       actorType: "user",
       actorId: "user-1",
-    } as any);
+      organizationId: "org-1",
+    });
 
     expect(prismaMock.ticketAssignee.create).toHaveBeenCalledWith({
       data: { ticketId: "ticket-1", userId: "user-2" },
@@ -174,5 +195,25 @@ describe("TicketService", () => {
         },
       },
     });
+  });
+
+  it("rejects linking a ticket to a session in another org", async () => {
+    prismaMock.ticket.findFirstOrThrow.mockResolvedValueOnce({ id: "ticket-1" });
+    prismaMock.session.findFirstOrThrow.mockRejectedValueOnce(new Error("No record found"));
+
+    const service = new TicketService();
+
+    await expect(
+      service.link({
+        ticketId: "ticket-1",
+        entityType: "session",
+        entityId: "session-org-b",
+        actorType: "user",
+        actorId: "user-1",
+        organizationId: "org-1",
+      }),
+    ).rejects.toThrow();
+
+    expect(prismaMock.ticketLink.create).not.toHaveBeenCalled();
   });
 });

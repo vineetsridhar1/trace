@@ -1,12 +1,29 @@
 import { randomUUID } from "crypto";
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { prisma } from "../lib/db.js";
-import { getRequestToken, verifyToken } from "../lib/auth.js";
+import { getRequestToken, verifyTokenAsync } from "../lib/auth.js";
 import { storage } from "../lib/storage/index.js";
 
 const router: RouterType = Router();
 const MAX_FILENAME_LENGTH = 100;
 const FALLBACK_BASENAME = "image";
+
+// SVG is an active image format and can execute script inline; keep the list
+// restricted to inert raster formats only.
+const ALLOWED_CONTENT_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
+
+const UPLOAD_KEY_PATTERN = /^uploads\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/;
+
+function isValidUploadKey(key: string): boolean {
+  if (!UPLOAD_KEY_PATTERN.test(key)) return false;
+  if (key.includes("..") || key.includes("\\")) return false;
+  return true;
+}
 
 function sanitizeFilename(filename: string): string {
   const trimmed = filename.trim();
@@ -29,7 +46,7 @@ router.post("/uploads/presign", async (req: Request, res: Response) => {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
-  const userId = verifyToken(token);
+  const userId = await verifyTokenAsync(token);
   if (!userId) {
     return res.status(401).json({ error: "Invalid token" });
   }
@@ -68,8 +85,10 @@ router.post("/uploads/presign", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "contentType is required" });
   }
 
-  if (!contentType.startsWith("image/")) {
-    return res.status(400).json({ error: "contentType must be an image" });
+  if (!ALLOWED_CONTENT_TYPES.has(contentType.toLowerCase())) {
+    return res
+      .status(400)
+      .json({ error: "Unsupported image type (allowed: jpeg, png, webp, gif)" });
   }
 
   const sanitizedFilename = sanitizeFilename(filename);
@@ -85,7 +104,7 @@ router.get("/uploads/url", async (req: Request, res: Response) => {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
-  const userId = verifyToken(token);
+  const userId = await verifyTokenAsync(token);
   if (!userId) {
     return res.status(401).json({ error: "Invalid token" });
   }
@@ -99,7 +118,7 @@ router.get("/uploads/url", async (req: Request, res: Response) => {
   }
 
   const key = req.query.key as string | undefined;
-  if (!key || !key.startsWith("uploads/") || key.includes("..")) {
+  if (!key || !isValidUploadKey(key)) {
     return res.status(400).json({ error: "Invalid key" });
   }
 

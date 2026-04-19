@@ -33,7 +33,18 @@
   },
   "pnpm": {
     "overrides": {
-      "graphql": "^16.10.0"
+      "graphql": "^16.10.0",
+      "path-to-regexp@<8.4.2": ">=8.4.2",
+      "path-to-regexp@<0.1.13": ">=0.1.13",
+      "picomatch@<2.3.2": ">=2.3.2",
+      "picomatch@>=4.0.0 <4.0.4": ">=4.0.4",
+      "lodash-es@<4.17.24": ">=4.17.24",
+      "defu@<=6.1.4": ">=6.1.7",
+      "brace-expansion@>=4.0.0 <5.0.5": ">=5.0.5",
+      "yaml@>=2.0.0 <2.8.3": ">=2.8.3",
+      "sanitize-html@<2.17.3": ">=2.17.3",
+      "dompurify@<=3.3.3": ">=3.4.0",
+      "effect@<3.20.0": ">=3.20.0"
     },
     "onlyBuiltDependencies": [
       "esbuild",

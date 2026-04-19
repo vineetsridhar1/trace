@@ -14,22 +14,33 @@ import type { OrgAgentSettings } from "../services/agent-identity.js";
 vi.mock("../lib/db.js", () => ({
   prisma: {
     chat: {
+      findFirst: vi.fn().mockResolvedValue(null),
       findUnique: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
     },
+    chatMember: {
+      findFirst: vi.fn().mockResolvedValue({ chatId: "chat_1" }),
+    },
+    channelMember: {
+      findFirst: vi.fn().mockResolvedValue({ channelId: "channel_1" }),
+    },
     ticket: {
+      findFirst: vi.fn().mockResolvedValue(null),
       findUnique: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
     },
     session: {
+      findFirst: vi.fn().mockResolvedValue(null),
       findUnique: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
     },
     channel: {
+      findFirst: vi.fn().mockResolvedValue(null),
       findUnique: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
     },
     project: {
+      findFirst: vi.fn().mockResolvedValue(null),
       findUnique: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
     },
@@ -349,7 +360,7 @@ describe("buildContext", () => {
   it("derives canonical session completion facts into decisionContext", async () => {
     const { prisma } = await import("../lib/db.js");
 
-    (prisma.session.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (prisma.session.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "session_1",
       name: "Fix login bug",
       agentStatus: "done",
@@ -396,7 +407,7 @@ describe("buildContext", () => {
   it("normalizes recent signals and excludes assistant session output noise", async () => {
     const { prisma } = await import("../lib/db.js");
 
-    (prisma.session.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (prisma.session.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "session_1",
       name: "Fix login bug",
       agentStatus: "done",
@@ -494,7 +505,7 @@ describe("buildContext", () => {
     const { prisma } = await import("../lib/db.js");
 
     // Session scope entity
-    (prisma.session.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (prisma.session.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "session_1",
       name: "Fix login bug",
       agentStatus: "in_progress",
@@ -553,7 +564,7 @@ describe("buildContext", () => {
   it("handles session scope with no linked tickets", async () => {
     const { prisma } = await import("../lib/db.js");
 
-    (prisma.session.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (prisma.session.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "session_2",
       name: "Explore codebase",
       agentStatus: "in_progress",

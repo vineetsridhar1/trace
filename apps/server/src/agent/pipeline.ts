@@ -50,6 +50,7 @@ import { processedEventService } from "../services/processed-event.js";
 import { estimateCostCents } from "./cost-utils.js";
 import { llmCallLoggingService, type LlmCallRecord } from "../services/llm-call-logging.js";
 import { createTimedLogger, incrementMetric, type AgentLogger } from "./logger.js";
+import { redactDeep, redactSecrets } from "./log-redactor.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -246,12 +247,12 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
       turnNumber: turn,
       model: llmResponse.model,
       provider: turnResult.provider,
-      systemPrompt: turn === 1 ? systemPrompt : null,
-      messages: messagesSnapshot,
+      systemPrompt: turn === 1 ? redactSecrets(systemPrompt) : null,
+      messages: redactDeep(messagesSnapshot),
       tools: [PLANNER_TOOL],
       maxTokens: turnResult.maxTokens,
       temperature: 0,
-      responseContent: llmResponse.content,
+      responseContent: redactDeep(llmResponse.content),
       stopReason: llmResponse.stopReason ?? "end_turn",
       inputTokens: llmResponse.usage.inputTokens,
       outputTokens: llmResponse.usage.outputTokens,
@@ -635,6 +636,13 @@ async function handleSummarize(
   logError: PipelineLogger["logError"],
 ): Promise<void> {
   log("summary requested", { scopeKey: packet.scopeKey });
+  // Skip side-effecting summary refresh in observe mode — the agent is meant
+  // to be read-only and should not spend tokens or write state.
+  if (packet.permissions.autonomyMode === "observe") {
+    log("summary skipped in observe mode", { scopeKey: packet.scopeKey });
+    pushEmptyTurn(turnResults, turnResults.length + 1, turnResult.output, turnResult, llmResponse);
+    return;
+  }
   try {
     const summaryResult = await refreshSummary(
       packet.organizationId,

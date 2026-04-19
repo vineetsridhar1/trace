@@ -245,8 +245,19 @@ type ScopeEntityFetcher = (
 
 const scopeFetchers: Record<string, ScopeEntityFetcher> = {
   async chat(organizationId, scopeId) {
-    const chat = await prisma.chat.findUnique({
-      where: { id: scopeId },
+    const chat = await prisma.chat.findFirst({
+      where: {
+        id: scopeId,
+        members: {
+          some: {
+            user: {
+              orgMemberships: {
+                some: { organizationId },
+              },
+            },
+          },
+        },
+      },
       include: {
         members: { include: { user: { select: { id: true, name: true } } } },
       },
@@ -266,8 +277,8 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
   },
 
   async ticket(organizationId, scopeId) {
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: scopeId },
+    const ticket = await prisma.ticket.findFirst({
+      where: { id: scopeId, organizationId },
       include: {
         assignees: { include: { user: { select: { id: true, name: true } } } },
         links: true,
@@ -302,8 +313,8 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
 
   async session(organizationId, scopeId) {
     const [session, linkedTicketLinks] = await Promise.all([
-      prisma.session.findUnique({
-        where: { id: scopeId },
+      prisma.session.findFirst({
+        where: { id: scopeId, organizationId },
         include: {
           repo: { select: { id: true, name: true, remoteUrl: true } },
           channel: { select: { id: true, name: true } },
@@ -312,7 +323,11 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
       }),
       // Reverse lookup: find tickets that link to this session
       prisma.ticketLink.findMany({
-        where: { entityType: "session", entityId: scopeId },
+        where: {
+          entityType: "session",
+          entityId: scopeId,
+          ticket: { organizationId },
+        },
         include: {
           ticket: {
             select: {
@@ -365,8 +380,8 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
   },
 
   async channel(organizationId, scopeId) {
-    const channel = await prisma.channel.findUnique({
-      where: { id: scopeId },
+    const channel = await prisma.channel.findFirst({
+      where: { id: scopeId, organizationId },
       include: {
         members: {
           where: { leftAt: null },
@@ -486,7 +501,7 @@ async function findRelevantEntities(input: {
   // Run ticket search and Hop 1 link fetch in parallel
   const [searchResults, hop1Fetched] = await Promise.all([
     ticketSearchPromise,
-    batchFetchLinkedEntities(hop1Links),
+    batchFetchLinkedEntities(hop1Links, input.organizationId),
   ]);
 
   // Add ticket search results
@@ -563,7 +578,7 @@ async function findRelevantEntities(input: {
     }
 
     if (hop2Links.length > 0) {
-      const hop2Fetched = await batchFetchLinkedEntities(hop2Links);
+      const hop2Fetched = await batchFetchLinkedEntities(hop2Links, input.organizationId);
       for (const link of hop2Links) {
         const key = `${link.entityType}:${link.entityId}`;
         const fetched = hop2Fetched.get(key);
@@ -625,6 +640,7 @@ async function findRelevantEntities(input: {
  */
 async function batchFetchLinkedEntities(
   links: Array<{ entityType: string; entityId: string }>,
+  organizationId?: string,
 ): Promise<Map<string, Omit<ContextEntity, "hop">>> {
   const result = new Map<string, Omit<ContextEntity, "hop">>();
   if (links.length === 0) return result;
@@ -637,14 +653,18 @@ async function batchFetchLinkedEntities(
     grouped.set(link.entityType, ids);
   }
 
-  // Execute batched queries in parallel
+  // Execute batched queries in parallel. Every org-scoped model filters by
+  // organizationId so a crafted cross-org link cannot pull data from another
+  // org into the agent's context.
   const queries: Promise<void>[] = [];
 
   const sessionIds = grouped.get("session");
   if (sessionIds?.length) {
     queries.push(
       prisma.session.findMany({
-        where: { id: { in: sessionIds } },
+        where: organizationId
+          ? { id: { in: sessionIds }, organizationId }
+          : { id: { in: sessionIds } },
         select: { id: true, name: true, agentStatus: true, sessionStatus: true, tool: true },
       }).then((rows: Array<{ id: string; name: string | null; agentStatus: string; sessionStatus: string; tool: string }>) => {
         for (const s of rows) {
@@ -661,7 +681,9 @@ async function batchFetchLinkedEntities(
   if (channelIds?.length) {
     queries.push(
       prisma.channel.findMany({
-        where: { id: { in: channelIds } },
+        where: organizationId
+          ? { id: { in: channelIds }, organizationId }
+          : { id: { in: channelIds } },
         select: { id: true, name: true, type: true },
       }).then((rows: Array<{ id: string; name: string; type: string }>) => {
         for (const c of rows) {
@@ -676,13 +698,22 @@ async function batchFetchLinkedEntities(
 
   const chatIds = grouped.get("chat");
   if (chatIds?.length) {
+    // Chats are not directly org-scoped; verify via member overlap.
     queries.push(
       prisma.chat.findMany({
-        where: { id: { in: chatIds } },
+        where: organizationId
+          ? {
+              id: { in: chatIds },
+              members: {
+                some: {
+                  user: { orgMemberships: { some: { organizationId } } },
+                },
+              },
+            }
+          : { id: { in: chatIds } },
         select: { id: true, name: true, type: true },
       }).then((rows: Array<{ id: string; name: string | null; type: string }>) => {
         for (const ch of rows) {
-          // Privacy guard: never include DM chats as linked entities
           if (ch.type === "dm") continue;
           result.set(`chat:${ch.id}`, {
             type: "chat", id: ch.id,
@@ -697,7 +728,9 @@ async function batchFetchLinkedEntities(
   if (ticketIds?.length) {
     queries.push(
       prisma.ticket.findMany({
-        where: { id: { in: ticketIds } },
+        where: organizationId
+          ? { id: { in: ticketIds }, organizationId }
+          : { id: { in: ticketIds } },
         select: { id: true, title: true, status: true, priority: true, labels: true },
       }).then((rows: Array<{ id: string; title: string; status: string; priority: string | null; labels: string[] }>) => {
         for (const t of rows) {
@@ -714,7 +747,9 @@ async function batchFetchLinkedEntities(
   if (projectIds?.length) {
     queries.push(
       prisma.project.findMany({
-        where: { id: { in: projectIds } },
+        where: organizationId
+          ? { id: { in: projectIds }, organizationId }
+          : { id: { in: projectIds } },
         select: { id: true, name: true },
       }).then((rows: Array<{ id: string; name: string }>) => {
         for (const p of rows) {
@@ -1222,7 +1257,10 @@ async function fetchSummaries(input: {
 // Actor resolution
 // ---------------------------------------------------------------------------
 
-async function resolveActors(events: AgentEvent[]): Promise<ContextActor[]> {
+async function resolveActors(
+  events: AgentEvent[],
+  organizationId?: string,
+): Promise<ContextActor[]> {
   const actorIds = new Set<string>();
   for (const event of events) {
     if (event.actorId) actorIds.add(event.actorId);
@@ -1230,8 +1268,15 @@ async function resolveActors(events: AgentEvent[]): Promise<ContextActor[]> {
 
   if (actorIds.size === 0) return [];
 
+  // Scope user lookups to the current organization so a crafted cross-org
+  // actorId cannot pull another org's user name into the agent context.
   const users = await prisma.user.findMany({
-    where: { id: { in: [...actorIds] } },
+    where: organizationId
+      ? {
+          id: { in: [...actorIds] },
+          orgMemberships: { some: { organizationId } },
+        }
+      : { id: { in: [...actorIds] } },
     select: { id: true, name: true },
   });
 
@@ -1333,6 +1378,36 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
   const scopeEntity = await fetchScopeEntity(scopeType, organizationId, scopeId);
   if (scopeEntity) {
     recordSection("scopeEntity", estimateObjectTokens(scopeEntity.data));
+  }
+
+  // Defense in depth: verify the triggering user has access to the scope
+  // before building agent context. Prevents a spoofed event or a stale
+  // mention from an ex-member from dragging the agent into a private space.
+  if (
+    triggerEvent.actorType === "user" &&
+    triggerEvent.actorId &&
+    (scopeType === "chat" || scopeType === "channel")
+  ) {
+    const actorId = triggerEvent.actorId;
+    let actorHasAccess = false;
+    if (scopeType === "chat") {
+      const member = await prisma.chatMember.findFirst({
+        where: { chatId: scopeId, userId: actorId, leftAt: null },
+        select: { chatId: true },
+      });
+      actorHasAccess = member !== null;
+    } else {
+      const member = await prisma.channelMember.findFirst({
+        where: { channelId: scopeId, userId: actorId, leftAt: null },
+        select: { channelId: true },
+      });
+      actorHasAccess = member !== null;
+    }
+    if (!actorHasAccess) {
+      throw new Error(
+        `Agent refused to process event: trigger user ${actorId} is not a member of ${scopeType}:${scopeId}`,
+      );
+    }
   }
 
   // --- 5. Event batch ---
@@ -1473,7 +1548,10 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
   recordSection("recentSignals", estimateObjectTokens(recentSignals));
 
   // --- 9. Actors ---
-  const actors = await resolveActors([...events, ...recentTruncated]);
+  const actors = await resolveActors(
+    [...events, ...recentTruncated],
+    input.batch.organizationId,
+  );
   recordSection("actors", estimateObjectTokens(actors));
 
   return {

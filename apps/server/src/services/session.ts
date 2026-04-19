@@ -832,6 +832,16 @@ export class SessionService {
       : null;
   }
 
+  /** Return the runtime instance ID that a session is targeted at, or null. */
+  async getSessionRuntimeInstanceId(sessionId: string): Promise<string | null> {
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { connection: true },
+    });
+    if (!session) return null;
+    return this.getConnectionRuntimeInstanceId(session.connection);
+  }
+
   private async resolveLinkedCheckoutRuntime(
     sessionGroupId: string,
     repoId: string,
@@ -1000,8 +1010,11 @@ export class SessionService {
     });
   }
 
-  async get(id: string) {
-    return prisma.session.findUnique({ where: { id }, include: SESSION_INCLUDE });
+  async get(id: string, organizationId: string) {
+    return prisma.session.findFirst({
+      where: { id, organizationId },
+      include: SESSION_INCLUDE,
+    });
   }
 
   async listByUser(organizationId: string, userId: string, agentStatus?: string | null) {
@@ -1455,12 +1468,12 @@ export class SessionService {
 
   async run(
     id: string,
-    prompt?: string | null,
-    interactionMode?: string,
-    access?: { userId: string; organizationId: string },
+    prompt: string | null | undefined,
+    interactionMode: string | undefined,
+    access: { userId: string; organizationId: string },
   ) {
-    const session = await prisma.session.findUniqueOrThrow({
-      where: { id },
+    const session = await prisma.session.findFirstOrThrow({
+      where: { id, organizationId: access.organizationId },
       include: SESSION_INCLUDE,
     });
     const conn = this.parseConnection(session.connection);
@@ -1475,21 +1488,16 @@ export class SessionService {
         ? await getSessionStartMetadata(id)
         : null;
 
-    const runtimeBinding = access
-      ? await this.resolveAccessibleLocalRuntimeBinding({
-          sessionId: id,
-          sessionGroupId: session.sessionGroupId,
-          organizationId: access.organizationId,
-          userId: access.userId,
-          hosting: session.hosting,
-          tool: session.tool,
-          repoId: session.repoId,
-          connection: session.connection,
-        })
-      : {
-          runtimeId: conn.runtimeInstanceId ?? null,
-          runtimeLabel: conn.runtimeLabel ?? null,
-        };
+    const runtimeBinding = await this.resolveAccessibleLocalRuntimeBinding({
+      sessionId: id,
+      sessionGroupId: session.sessionGroupId,
+      organizationId: access.organizationId,
+      userId: access.userId,
+      hosting: session.hosting,
+      tool: session.tool,
+      repoId: session.repoId,
+      connection: session.connection,
+    });
 
     // If session has a read-only workspace and the mode explicitly switched away from ask,
     // upgrade to a full worktree before running
@@ -1682,14 +1690,40 @@ export class SessionService {
     return updated;
   }
 
-  async terminate(id: string, actorType: ActorType = "system", actorId: string = "system") {
-    return this.terminateWithStatus(id, "stopped", "Session stopped", actorType, actorId);
+  async terminate(
+    id: string,
+    actorType: ActorType = "system",
+    actorId: string = "system",
+    organizationId: string,
+  ) {
+    return this.terminateWithStatus(
+      id,
+      "stopped",
+      "Session stopped",
+      actorType,
+      actorId,
+      organizationId,
+      undefined,
+    );
   }
 
-  async dismiss(id: string, actorType: ActorType = "system", actorId: string = "system") {
-    return this.terminateWithStatus(id, "done", "Session stopped", actorType, actorId, {
-      reason: "manual_stop",
-    });
+  async dismiss(
+    id: string,
+    actorType: ActorType = "system",
+    actorId: string = "system",
+    organizationId: string,
+  ) {
+    return this.terminateWithStatus(
+      id,
+      "done",
+      "Session stopped",
+      actorType,
+      actorId,
+      organizationId,
+      {
+        reason: "manual_stop",
+      },
+    );
   }
 
   private async terminateWithStatus(
@@ -1698,10 +1732,11 @@ export class SessionService {
     resolution: string,
     actorType: ActorType,
     actorId: string,
+    organizationId: string,
     payloadExtras?: Record<string, unknown>,
   ) {
-    const session = await prisma.session.findUniqueOrThrow({
-      where: { id },
+    const session = await prisma.session.findFirstOrThrow({
+      where: { id, organizationId },
       select: { organizationId: true },
     });
     await inboxService.resolveBySource({
@@ -1721,9 +1756,14 @@ export class SessionService {
     );
   }
 
-  async delete(id: string, actorType: ActorType = "system", actorId: string = "system") {
-    const session = await prisma.session.findUnique({
-      where: { id },
+  async delete(
+    id: string,
+    actorType: ActorType = "system",
+    actorId: string = "system",
+    organizationId: string,
+  ) {
+    const session = await prisma.session.findFirst({
+      where: { id, organizationId },
       include: SESSION_INCLUDE,
     });
     if (!session) throw new Error("Session not found or already deleted");
@@ -1812,7 +1852,7 @@ export class SessionService {
     });
 
     for (const session of sessions) {
-      await this.delete(session.id, actorType, actorId);
+      await this.delete(session.id, actorType, actorId, organizationId);
     }
 
     // If no sessions existed, the group won't have been cascade-deleted, so delete it directly
@@ -2365,6 +2405,7 @@ export class SessionService {
     actorId,
     interactionMode,
     clientMutationId,
+    organizationId,
   }: {
     sessionId: string;
     text: string;
@@ -2373,6 +2414,7 @@ export class SessionService {
     actorId: string;
     interactionMode?: string;
     clientMutationId?: string;
+    organizationId: string;
   }) {
     if (imageKeys?.length) {
       for (const key of imageKeys) {
@@ -2382,8 +2424,8 @@ export class SessionService {
       }
     }
 
-    const session = await prisma.session.findUniqueOrThrow({
-      where: { id: sessionId },
+    const session = await prisma.session.findFirstOrThrow({
+      where: { id: sessionId, organizationId },
       select: {
         organizationId: true,
         agentStatus: true,
@@ -2833,12 +2875,17 @@ export class SessionService {
     if (!popped) return false;
 
     try {
+      const session = await prisma.session.findUniqueOrThrow({
+        where: { id: sessionId },
+        select: { organizationId: true },
+      });
       await this.sendMessage({
         sessionId,
         text: popped.text,
         actorType: "user",
         actorId: popped.createdById,
         interactionMode: popped.interactionMode ?? undefined,
+        organizationId: session.organizationId,
       });
     } catch (error) {
       // Re-insert the message so it's not lost

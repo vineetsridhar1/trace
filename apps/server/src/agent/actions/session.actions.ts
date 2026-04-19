@@ -188,10 +188,15 @@ export const sessionDispatchers: Record<string, ActionDispatcher> = {
     });
   },
 
-  "session.run": (services, args) => {
+  "session.run": (services, args, ctx) => {
     return services.sessionService.run(
       args.sessionId as string,
       args.prompt as string | undefined,
+      undefined,
+      {
+        userId: ctx.agentId,
+        organizationId: ctx.organizationId,
+      },
     );
   },
 
@@ -202,26 +207,42 @@ export const sessionDispatchers: Record<string, ActionDispatcher> = {
       text: args.text as string,
       actorType,
       actorId,
+      organizationId: ctx.organizationId,
     });
   },
 
   "session.terminate": (services, args, ctx) => {
     const { actorType, actorId } = actorInfo(ctx);
-    return services.sessionService.terminate(args.sessionId as string, actorType, actorId);
+    return services.sessionService.terminate(
+      args.sessionId as string,
+      actorType,
+      actorId,
+      ctx.organizationId,
+    );
   },
 
   "session.dismiss": (services, args, ctx) => {
     const { actorType, actorId } = actorInfo(ctx);
-    return services.sessionService.dismiss(args.sessionId as string, actorType, actorId);
+    return services.sessionService.dismiss(
+      args.sessionId as string,
+      actorType,
+      actorId,
+      ctx.organizationId,
+    );
   },
 
   "session.delete": (services, args, ctx) => {
     const { actorType, actorId } = actorInfo(ctx);
-    return services.sessionService.delete(args.sessionId as string, actorType, actorId);
+    return services.sessionService.delete(
+      args.sessionId as string,
+      actorType,
+      actorId,
+      ctx.organizationId,
+    );
   },
 
-  "session.get": (services, args) => {
-    return services.sessionService.get(args.sessionId as string);
+  "session.get": (services, args, ctx) => {
+    return services.sessionService.get(args.sessionId as string, ctx.organizationId);
   },
 
   "session.list": (services, args, ctx) => {

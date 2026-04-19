@@ -4,6 +4,25 @@ import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 
 export class ChannelGroupService {
+  private async assertActorOrgMembership(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    if (actorType === "system") return;
+
+    await tx.orgMember.findUniqueOrThrow({
+      where: {
+        userId_organizationId: {
+          userId: actorId,
+          organizationId,
+        },
+      },
+      select: { userId: true },
+    });
+  }
+
   async list(organizationId: string) {
     return prisma.channelGroup.findMany({
       where: { organizationId },
@@ -12,18 +31,29 @@ export class ChannelGroupService {
     });
   }
 
-  async create(input: { organizationId: string; name: string; position?: number | null }, actorType: ActorType, actorId: string) {
+  async create(
+    organizationId: string,
+    input: { organizationId: string; name: string; position?: number | null },
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    if (input.organizationId !== organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
+
     const [group] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await this.assertActorOrgMembership(tx, organizationId, actorType, actorId);
+
       // If no position specified, append after all top-level items (ungrouped channels + groups)
       let position = input.position ?? null;
       if (position === null) {
         const lastGroup = await tx.channelGroup.findFirst({
-          where: { organizationId: input.organizationId },
+          where: { organizationId },
           orderBy: { position: "desc" },
           select: { position: true },
         });
         const lastUngroupedChannel = await tx.channel.findFirst({
-          where: { organizationId: input.organizationId, groupId: null },
+          where: { organizationId, groupId: null },
           orderBy: { position: "desc" },
           select: { position: true },
         });
@@ -35,15 +65,15 @@ export class ChannelGroupService {
         data: {
           name: input.name,
           position,
-          organizationId: input.organizationId,
+          organizationId,
         },
         include: { channels: true },
       });
 
       await eventService.create({
-        organizationId: input.organizationId,
+        organizationId,
         scopeType: "system",
-        scopeId: input.organizationId,
+        scopeId: organizationId,
         eventType: "channel_group_created",
         payload: { channelGroup: { id: group.id, name: group.name, position: group.position, isCollapsed: group.isCollapsed } },
         actorType,
@@ -56,8 +86,21 @@ export class ChannelGroupService {
     return group;
   }
 
-  async update(id: string, input: { name?: string | null; position?: number | null; isCollapsed?: boolean | null }, actorType: ActorType, actorId: string) {
+  async update(
+    id: string,
+    organizationId: string,
+    input: { name?: string | null; position?: number | null; isCollapsed?: boolean | null },
+    actorType: ActorType,
+    actorId: string,
+  ) {
     const [group] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await this.assertActorOrgMembership(tx, organizationId, actorType, actorId);
+
+      await tx.channelGroup.findFirstOrThrow({
+        where: { id, organizationId },
+        select: { id: true },
+      });
+
       const data: Record<string, unknown> = {};
       if (input.name != null) data.name = input.name;
       if (input.position != null) data.position = input.position;
@@ -85,9 +128,13 @@ export class ChannelGroupService {
     return group;
   }
 
-  async delete(id: string, actorType: ActorType, actorId: string) {
+  async delete(id: string, organizationId: string, actorType: ActorType, actorId: string) {
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const group = await tx.channelGroup.findUniqueOrThrow({ where: { id } });
+      await this.assertActorOrgMembership(tx, organizationId, actorType, actorId);
+
+      const group = await tx.channelGroup.findFirstOrThrow({
+        where: { id, organizationId },
+      });
 
       // Find channels in this group before ungrouping
       const affectedChannels = await tx.channel.findMany({
@@ -121,8 +168,27 @@ export class ChannelGroupService {
     return true;
   }
 
-  async moveChannel(input: { channelId: string; groupId?: string | null; position: number }, actorType: ActorType, actorId: string) {
+  async moveChannel(
+    organizationId: string,
+    input: { channelId: string; groupId?: string | null; position: number },
+    actorType: ActorType,
+    actorId: string,
+  ) {
     const [channel] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await this.assertActorOrgMembership(tx, organizationId, actorType, actorId);
+
+      if (input.groupId) {
+        await tx.channelGroup.findFirstOrThrow({
+          where: { id: input.groupId, organizationId },
+          select: { id: true },
+        });
+      }
+
+      await tx.channel.findFirstOrThrow({
+        where: { id: input.channelId, organizationId },
+        select: { id: true },
+      });
+
       const channel = await tx.channel.update({
         where: { id: input.channelId },
         data: {
@@ -149,6 +215,17 @@ export class ChannelGroupService {
 
   async reorderGroups(organizationId: string, groupIds: string[], actorType: ActorType, actorId: string) {
     const groups = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await this.assertActorOrgMembership(tx, organizationId, actorType, actorId);
+
+      const uniqueGroupIds = [...new Set(groupIds)];
+      const existingGroups = await tx.channelGroup.findMany({
+        where: { id: { in: uniqueGroupIds }, organizationId },
+        select: { id: true },
+      });
+      if (existingGroups.length !== uniqueGroupIds.length) {
+        throw new Error("One or more channel groups are not in this organization");
+      }
+
       const updated = await Promise.all(
         groupIds.map((id, index) =>
           tx.channelGroup.update({
@@ -175,8 +252,32 @@ export class ChannelGroupService {
     return groups;
   }
 
-  async reorderChannels(groupId: string | null, channelIds: string[], actorType: ActorType, actorId: string) {
+  async reorderChannels(
+    organizationId: string,
+    groupId: string | null,
+    channelIds: string[],
+    actorType: ActorType,
+    actorId: string,
+  ) {
     const channels = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await this.assertActorOrgMembership(tx, organizationId, actorType, actorId);
+
+      if (groupId) {
+        await tx.channelGroup.findFirstOrThrow({
+          where: { id: groupId, organizationId },
+          select: { id: true },
+        });
+      }
+
+      const uniqueChannelIds = [...new Set(channelIds)];
+      const existingChannels = await tx.channel.findMany({
+        where: { id: { in: uniqueChannelIds }, organizationId },
+        select: { id: true },
+      });
+      if (existingChannels.length !== uniqueChannelIds.length) {
+        throw new Error("One or more channels are not in this organization");
+      }
+
       const updated = await Promise.all(
         channelIds.map((id, index) =>
           tx.channel.update({
@@ -188,7 +289,6 @@ export class ChannelGroupService {
 
       if (updated.length === 0) return [];
 
-      const organizationId = updated[0].organizationId;
       await eventService.create({
         organizationId,
         scopeType: "system",

@@ -1202,14 +1202,15 @@ describe("SessionService", () => {
 
   describe("dismiss", () => {
     it("stops the current run without making the session terminal", async () => {
-      prismaMock.session.findUniqueOrThrow
-        .mockResolvedValueOnce({ organizationId: "org-1" })
-        .mockResolvedValueOnce(
-          makeSession({
-            agentStatus: "done",
-            sessionStatus: "in_progress",
-          }),
-        );
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce({
+        organizationId: "org-1",
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "done",
+          sessionStatus: "in_progress",
+        }),
+      );
       prismaMock.session.update.mockResolvedValueOnce(
         makeSession({
           agentStatus: "done",
@@ -1239,14 +1240,15 @@ describe("SessionService", () => {
     });
 
     it("clears needs_input when dismissing a session waiting for user input", async () => {
-      prismaMock.session.findUniqueOrThrow
-        .mockResolvedValueOnce({ organizationId: "org-1" })
-        .mockResolvedValueOnce(
-          makeSession({
-            agentStatus: "active",
-            sessionStatus: "needs_input",
-          }),
-        );
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce({
+        organizationId: "org-1",
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "active",
+          sessionStatus: "needs_input",
+        }),
+      );
       prismaMock.session.update.mockResolvedValueOnce(
         makeSession({
           agentStatus: "done",
@@ -1278,7 +1280,7 @@ describe("SessionService", () => {
 
   describe("run", () => {
     it("queues checkpoint context when the initial run waits for workspace preparation", async () => {
-      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({
           agentStatus: "not_started",
           sessionStatus: "in_progress",
@@ -1303,7 +1305,10 @@ describe("SessionService", () => {
         }),
       );
 
-      await service.run("session-1", "Ship it");
+      await service.run("session-1", "Ship it", undefined, {
+        userId: "user-1",
+        organizationId: "org-1",
+      });
 
       expect(prismaMock.session.update).toHaveBeenCalledWith({
         where: { id: "session-1" },
@@ -1346,6 +1351,7 @@ describe("SessionService", () => {
           canMove: true,
         },
       });
+      prismaMock.session.findFirstOrThrow.mockResolvedValue(session);
       prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
       prismaMock.session.update.mockResolvedValue(session);
       sessionRouterMock.send.mockReturnValue("delivered");
@@ -1359,6 +1365,7 @@ describe("SessionService", () => {
         text: "hello",
         actorType: "user",
         actorId: "user-1",
+        organizationId: "org-1",
       });
 
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
@@ -1388,7 +1395,7 @@ describe("SessionService", () => {
       // home runtime isn't currently registered. sendMessage must queue the
       // message as pendingRun, persist the failure with autoRetryable: false,
       // and emit a connection_lost event.
-      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({
           agentStatus: "done",
           sessionStatus: "in_progress",
@@ -1424,6 +1431,7 @@ describe("SessionService", () => {
         text: "hello from laptop B",
         actorType: "user",
         actorId: "user-1",
+        organizationId: "org-1",
       });
 
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
@@ -1678,7 +1686,7 @@ describe("SessionService", () => {
 
   describe("delete", () => {
     it("removes the session group when the last session is deleted", async () => {
-      prismaMock.session.findUnique.mockResolvedValueOnce(makeSession());
+      prismaMock.session.findFirst.mockResolvedValueOnce(makeSession());
       prismaMock.session.count.mockResolvedValueOnce(0);
 
       const result = await service.delete("session-1");
@@ -2039,7 +2047,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
     });
 
-    it("only allows the user who owns the session group's local runtime", async () => {
+    it("only allows users who have bridge access to the session group's local runtime", async () => {
       prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
         id: "group-1",
@@ -2074,11 +2082,14 @@ describe("SessionService", () => {
             }
           : null,
       );
+      runtimeAccessServiceMock.assertAccess.mockRejectedValueOnce(
+        new Error("Access denied: you do not have permission to use this local bridge"),
+      );
 
       await expect(
         service.getLinkedCheckoutStatus("group-1", "repo-1", "org-1", "user-1"),
       ).rejects.toThrow(
-        "Linked checkout is only available on session groups backed by your local runtime.",
+        "Linked checkout is only available on session groups backed by a bridge you can access.",
       );
       expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
     });

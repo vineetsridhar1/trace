@@ -1,11 +1,15 @@
 import type { Context } from "../context.js";
 import type { ScopeInput, EventType } from "@trace/gql";
 import { eventService } from "../services/event.js";
+import { prisma } from "../lib/db.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { filterAsyncIterator } from "../lib/async-iterator.js";
 import { assertChannelAccess, assertChatAccess } from "../services/access.js";
 import { requireOrgContext } from "../lib/require-org.js";
 
+// Events scoped to a channel that require membership to view. We default to
+// ALWAYS checking membership for channel-scoped events; the message subset is
+// kept only for its existing semantics in the events() query helper below.
 const CHANNEL_MESSAGE_EVENTS = new Set<EventType>([
   "message_sent",
   "message_edited",
@@ -48,6 +52,69 @@ function canViewSystemEvent(
   return false;
 }
 
+async function isOrgMember(userId: string, organizationId: string): Promise<boolean> {
+  const membership = await prisma.orgMember.findUnique({
+    where: { userId_organizationId: { userId, organizationId } },
+    select: { userId: true },
+  });
+  return membership !== null;
+}
+
+async function isChannelMember(userId: string, channelId: string): Promise<boolean> {
+  const membership = await prisma.channelMember.findFirst({
+    where: { channelId, userId, leftAt: null },
+    select: { channelId: true },
+  });
+  return membership !== null;
+}
+
+async function isChatMember(userId: string, chatId: string): Promise<boolean> {
+  const membership = await prisma.chatMember.findFirst({
+    where: { chatId, userId, leftAt: null },
+    select: { chatId: true },
+  });
+  return membership !== null;
+}
+
+async function getSessionAccessState(
+  organizationId: string,
+  sessionId: string,
+): Promise<{ channelId: string | null; createdById: string } | null> {
+  return prisma.session.findFirst({
+    where: { id: sessionId, organizationId },
+    select: { channelId: true, createdById: true },
+  });
+}
+
+async function hasSessionAccess(
+  userId: string,
+  organizationId: string,
+  sessionId: string,
+): Promise<boolean> {
+  const session = await getSessionAccessState(organizationId, sessionId);
+  if (!session) return false;
+  if (session.createdById === userId) return true;
+  if (!session.channelId) return false;
+  return isChannelMember(userId, session.channelId);
+}
+
+async function assertSessionAccess(
+  userId: string,
+  organizationId: string,
+  sessionId: string,
+): Promise<void> {
+  const session = await getSessionAccessState(organizationId, sessionId);
+  if (!session) {
+    throw new Error("Not authorized for this session");
+  }
+  if (session.createdById === userId) return;
+  if (session.channelId) {
+    await assertChannelAccess(session.channelId, userId);
+    return;
+  }
+  throw new Error("Not authorized for this session");
+}
+
 export const eventQueries = {
   events: async (
     _: unknown,
@@ -73,6 +140,9 @@ export const eventQueries = {
     if (args.scope?.type === "channel") {
       await assertChannelAccess(args.scope.id, ctx.userId);
     }
+    if (args.scope?.type === "session") {
+      await assertSessionAccess(ctx.userId, orgId, args.scope.id);
+    }
 
     const events = await eventService.query(args.organizationId, {
       scopeType: args.scope?.type,
@@ -91,15 +161,29 @@ export const eventQueries = {
     // Batch-check membership instead of per-event N+1 queries
     const chatIds = new Set<string>();
     const channelIds = new Set<string>();
+    const sessionIds = new Set<string>();
     for (const event of events) {
       if (event.scopeType === "chat") {
         chatIds.add(event.scopeId);
-      } else if (event.scopeType === "channel" && CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)) {
+      } else if (event.scopeType === "channel") {
         channelIds.add(event.scopeId);
+      } else if (event.scopeType === "session") {
+        sessionIds.add(event.scopeId);
       }
     }
 
-    // Two batch queries instead of N individual queries
+    const sessions = sessionIds.size > 0
+      ? await prisma.session.findMany({
+          where: { id: { in: [...sessionIds] }, organizationId: orgId },
+          select: { id: true, channelId: true, createdById: true },
+        })
+      : [];
+    for (const session of sessions) {
+      if (session.channelId) {
+        channelIds.add(session.channelId);
+      }
+    }
+
     const [chatMembership, channelMembership] = await Promise.all([
       chatIds.size > 0
         ? Promise.all([...chatIds].map((id) => ctx.chatMembershipLoader.load(id)))
@@ -118,6 +202,13 @@ export const eventQueries = {
             })
         : Promise.resolve(new Map<string, boolean>()),
     ]);
+    const sessionAccess = new Map(
+      sessions.map((session) => [
+        session.id,
+        session.createdById === ctx.userId ||
+        (!!session.channelId && (channelMembership.get(session.channelId) ?? false)),
+      ]),
+    );
 
     return events.filter((event: { scopeType: string; scopeId: string; eventType: string; payload?: unknown }) => {
       if (!canViewSystemEvent(event, ctx.userId)) {
@@ -126,8 +217,11 @@ export const eventQueries = {
       if (event.scopeType === "chat") {
         return chatMembership.get(event.scopeId) ?? false;
       }
-      if (event.scopeType === "channel" && CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)) {
+      if (event.scopeType === "channel") {
         return channelMembership.get(event.scopeId) ?? false;
+      }
+      if (event.scopeType === "session") {
+        return sessionAccess.get(event.scopeId) ?? false;
       }
       return true;
     });
@@ -136,14 +230,46 @@ export const eventQueries = {
 
 export const eventSubscriptions = {
   orgEvents: {
-    subscribe: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+    subscribe: async (_: unknown, args: { organizationId: string }, ctx: Context) => {
       const orgId = requireOrgContext(ctx);
       if (orgId !== args.organizationId) {
         throw new Error("Not authorized for this organization");
       }
+      // Confirm the caller is still a member of the org at subscribe time.
+      const orgMember = await prisma.orgMember.findUnique({
+        where: { userId_organizationId: { userId: ctx.userId, organizationId: orgId } },
+        select: { userId: true },
+      });
+      if (!orgMember) {
+        throw new Error("Not a member of this organization");
+      }
 
-      // Per-connection membership cache to avoid per-event DB calls
-      const membershipCache = new Map<string, boolean>();
+      // Short TTL cache to avoid per-event DB lookups while still catching
+      // membership revocations within seconds.
+      const MEMBERSHIP_TTL_MS = 5_000;
+      const membershipCache = new Map<string, { value: boolean; expiresAt: number }>();
+      const readCache = (key: string) => {
+        const entry = membershipCache.get(key);
+        if (!entry) return undefined;
+        if (entry.expiresAt < Date.now()) {
+          membershipCache.delete(key);
+          return undefined;
+        }
+        return entry.value;
+      };
+      const writeCache = (key: string, value: boolean) => {
+        membershipCache.set(key, { value, expiresAt: Date.now() + MEMBERSHIP_TTL_MS });
+      };
+      const readThrough = async (
+        key: string,
+        loader: () => Promise<boolean>,
+      ): Promise<boolean> => {
+        const cached = readCache(key);
+        if (cached !== undefined) return cached;
+        const value = await loader();
+        writeCache(key, value);
+        return value;
+      };
 
       return filterAsyncIterator(
         pubsub.asyncIterator<{
@@ -151,7 +277,8 @@ export const eventSubscriptions = {
             scopeType: string;
             scopeId: string;
             eventType: EventType;
-            payload?: unknown;
+            actorId?: string;
+            payload?: Record<string, unknown>;
           };
         }>(
           topics.orgEvents(args.organizationId),
@@ -163,31 +290,50 @@ export const eventSubscriptions = {
             return false;
           }
 
-          // Invalidate cache on membership changes
+          if (
+            event.eventType === "member_left" &&
+            event.payload?.userId === ctx.userId
+          ) {
+            return "end";
+          }
+
+          const stillMember = await readThrough(
+            `org:${orgId}:${ctx.userId}`,
+            () => isOrgMember(ctx.userId, orgId),
+          );
+          if (!stillMember) {
+            return "end";
+          }
+
+          // Membership mutations invalidate cached access immediately.
           if (
             event.eventType === "channel_member_added" ||
             event.eventType === "channel_member_removed" ||
             event.eventType === "chat_member_added" ||
-            event.eventType === "chat_member_removed"
+            event.eventType === "chat_member_removed" ||
+            event.eventType === "member_left" ||
+            event.eventType === "member_joined"
           ) {
-            membershipCache.delete(`${event.scopeType}:${event.scopeId}`);
+            membershipCache.clear();
           }
 
           if (event.scopeType === "chat") {
-            const cacheKey = `chat:${event.scopeId}`;
-            const cached = membershipCache.get(cacheKey);
-            if (cached !== undefined) return cached;
-            const result = await ctx.chatMembershipLoader.load(event.scopeId);
-            membershipCache.set(cacheKey, result);
-            return result;
+            return readThrough(
+              `chat:${event.scopeId}`,
+              () => isChatMember(ctx.userId, event.scopeId),
+            );
           }
-          if (event.scopeType === "channel" && CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)) {
-            const cacheKey = `channel:${event.scopeId}`;
-            const cached = membershipCache.get(cacheKey);
-            if (cached !== undefined) return cached;
-            const result = await ctx.channelMembershipLoader.load(event.scopeId);
-            membershipCache.set(cacheKey, result);
-            return result;
+          if (event.scopeType === "channel") {
+            return readThrough(
+              `channel:${event.scopeId}`,
+              () => isChannelMember(ctx.userId, event.scopeId),
+            );
+          }
+          if (event.scopeType === "session") {
+            return readThrough(
+              `session:${event.scopeId}`,
+              () => hasSessionAccess(ctx.userId, orgId, event.scopeId),
+            );
           }
           return true;
         },
@@ -205,12 +351,21 @@ export const eventSubscriptions = {
   },
 
   sessionEvents: {
-    subscribe: (_: unknown, args: { sessionId: string; organizationId: string }, ctx: Context) => {
+    subscribe: async (_: unknown, args: { sessionId: string; organizationId: string }, ctx: Context) => {
       const orgId = requireOrgContext(ctx);
       if (orgId !== args.organizationId) {
         throw new Error("Not authorized for this organization");
       }
-      return pubsub.asyncIterator(topics.sessionEvents(args.sessionId));
+      await assertSessionAccess(ctx.userId, orgId, args.sessionId);
+      return filterAsyncIterator(
+        pubsub.asyncIterator(topics.sessionEvents(args.sessionId)),
+        async () => {
+          if (!(await isOrgMember(ctx.userId, orgId))) {
+            return "end";
+          }
+          return (await hasSessionAccess(ctx.userId, orgId, args.sessionId)) ? "keep" : "end";
+        },
+      );
     },
   },
 };

@@ -31,9 +31,9 @@ interface TerminalEntry {
  */
 class TerminalRelay {
   /** If no frontend attaches within this window, kill the orphaned terminal. */
-  private static ORPHAN_TIMEOUT_MS = 30 * 60 * 1000;
+  private static ORPHAN_TIMEOUT_MS = 5 * 60 * 1000;
   /** Max scrollback buffer size in bytes — older output is trimmed from the front. */
-  private static MAX_SCROLLBACK_BYTES = 50 * 1024;
+  private static MAX_SCROLLBACK_BYTES = 10 * 1024;
 
   private terminals = new Map<string, TerminalEntry>();
   /** Reverse index: sessionId → Set<terminalId> for bulk cleanup */
@@ -267,6 +267,11 @@ class TerminalRelay {
   }
 
   /** Forward a message from the bridge to the attached frontend WebSocket. */
+  getSessionIdForTerminal(terminalId: string): string | null {
+    const entry = this.terminals.get(terminalId);
+    return entry?.sessionId ?? null;
+  }
+
   relayFromBridge(msg: { type: string; terminalId: string; [key: string]: unknown }): void {
     const entry = this.terminals.get(msg.terminalId);
     if (!entry) return;

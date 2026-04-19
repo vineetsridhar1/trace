@@ -138,12 +138,14 @@ describe("ActionExecutor", () => {
       { status: "in_progress" },
       "agent",
       "agent-1",
+      "org-1",
     );
     expect(services.ticketService.addComment).toHaveBeenCalledWith(
       "ticket-1",
       "done",
       "agent",
       "agent-1",
+      "org-1",
     );
     expect(services.ticketService.link).toHaveBeenCalledWith({
       ticketId: "ticket-1",
@@ -151,6 +153,7 @@ describe("ActionExecutor", () => {
       entityId: "session-1",
       actorType: "agent",
       actorId: "agent-1",
+      organizationId: "org-1",
     });
     expect(services.chatService.sendMessage).toHaveBeenCalledWith({
       chatId: "chat-1",

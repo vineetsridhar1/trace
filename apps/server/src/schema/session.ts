@@ -28,12 +28,21 @@ export const sessionQueries = {
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.getGroup(args.id, requireOrgContext(ctx));
   },
-  sessions: (_: unknown, args: { organizationId: string; filters?: SessionFilters }) => {
+  sessions: (
+    _: unknown,
+    args: { organizationId: string; filters?: SessionFilters },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    if (orgId !== args.organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
     const filters = args.filters ? { ...args.filters } : undefined;
-    return sessionService.list(args.organizationId, filters);
+    return sessionService.list(orgId, filters);
   },
-  session: (_: unknown, args: { id: string }) => {
-    return sessionService.get(args.id);
+  session: async (_: unknown, args: { id: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return sessionService.get(args.id, orgId);
   },
   mySessions: (
     _: unknown,
@@ -211,7 +220,7 @@ export const sessionMutations = {
       createdById: ctx.userId,
     });
   },
-  runSession: (
+  runSession: async (
     _: unknown,
     args: { id: string; prompt?: string | null; interactionMode?: string | null },
     ctx: Context,
@@ -222,14 +231,17 @@ export const sessionMutations = {
       organizationId: requireOrgContext(ctx),
     });
   },
-  terminateSession: (_: unknown, args: { id: string }, ctx: Context) => {
-    return sessionService.terminate(args.id, ctx.actorType, ctx.userId);
+  terminateSession: async (_: unknown, args: { id: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return sessionService.terminate(args.id, ctx.actorType, ctx.userId, orgId);
   },
-  dismissSession: (_: unknown, args: { id: string }, ctx: Context) => {
-    return sessionService.dismiss(args.id, ctx.actorType, ctx.userId);
+  dismissSession: async (_: unknown, args: { id: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return sessionService.dismiss(args.id, ctx.actorType, ctx.userId, orgId);
   },
-  deleteSession: (_: unknown, args: { id: string }, ctx: Context) => {
-    return sessionService.delete(args.id, ctx.actorType, ctx.userId);
+  deleteSession: async (_: unknown, args: { id: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return sessionService.delete(args.id, ctx.actorType, ctx.userId, orgId);
   },
   archiveSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.archiveGroup(args.id, requireOrgContext(ctx), ctx.actorType, ctx.userId);
@@ -261,7 +273,7 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
-  sendSessionMessage: (
+  sendSessionMessage: async (
     _: unknown,
     args: {
       sessionId: string;
@@ -272,6 +284,7 @@ export const sessionMutations = {
     },
     ctx: Context,
   ) => {
+    const orgId = requireOrgContext(ctx);
     return sessionService.sendMessage({
       sessionId: args.sessionId,
       text: args.text,
@@ -280,6 +293,7 @@ export const sessionMutations = {
       actorId: ctx.userId,
       interactionMode: args.interactionMode ?? undefined,
       clientMutationId: args.clientMutationId ?? undefined,
+      organizationId: orgId,
     });
   },
   retrySessionConnection: (_: unknown, args: { sessionId: string }, ctx: Context) => {
@@ -388,17 +402,18 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
-  queueSessionMessage: (
+  queueSessionMessage: async (
     _: unknown,
     args: { sessionId: string; text: string; interactionMode?: string | null },
     ctx: Context,
   ) => {
+    const orgId = requireOrgContext(ctx);
     return sessionService.queueMessage({
       sessionId: args.sessionId,
       text: args.text,
       actorId: ctx.userId,
       interactionMode: args.interactionMode ?? undefined,
-      organizationId: requireOrgContext(ctx),
+      organizationId: orgId,
     });
   },
   removeQueuedMessage: (_: unknown, args: { id: string }, ctx: Context) => {
@@ -470,14 +485,48 @@ export const sessionTypeResolvers = {
   },
 };
 
+async function assertSubscriptionSessionAccess(
+  ctx: Context,
+  args: { sessionId: string; organizationId: string },
+): Promise<void> {
+  const orgId = requireOrgContext(ctx);
+  if (orgId !== args.organizationId) {
+    throw new Error("Not authorized for this organization");
+  }
+  const session = await prisma.session.findFirst({
+    where: { id: args.sessionId, organizationId: orgId },
+    select: { id: true, channelId: true, createdById: true },
+  });
+  if (!session) {
+    throw new Error("Not authorized for this session");
+  }
+  if (session.createdById === ctx.userId) return;
+  if (session.channelId) {
+    const { assertChannelAccess } = await import("../services/access.js");
+    await assertChannelAccess(session.channelId, ctx.userId);
+    return;
+  }
+  throw new Error("Not authorized for this session");
+}
+
 export const sessionSubscriptions = {
   sessionPortsChanged: {
-    subscribe: (_: unknown, args: { sessionId: string; organizationId: string }) => {
+    subscribe: async (
+      _: unknown,
+      args: { sessionId: string; organizationId: string },
+      ctx: Context,
+    ) => {
+      await assertSubscriptionSessionAccess(ctx, args);
       return pubsub.asyncIterator(topics.sessionPorts(args.sessionId));
     },
   },
   sessionStatusChanged: {
-    subscribe: (_: unknown, args: { sessionId: string; organizationId: string }) => {
+    subscribe: async (
+      _: unknown,
+      args: { sessionId: string; organizationId: string },
+      ctx: Context,
+    ) => {
+      await assertSubscriptionSessionAccess(ctx, args);
       return pubsub.asyncIterator(topics.sessionStatus(args.sessionId));
     },
   },

@@ -33,12 +33,23 @@ export interface ResolveAutonomyInput {
   prefetchedAiMode?: AutonomyMode | null;
 }
 
-export async function getChatAutonomyContext(chatId: string): Promise<{
+export async function getChatAutonomyContext(chatId: string, organizationId: string): Promise<{
   isDm: boolean;
   aiMode: AutonomyMode | null;
 }> {
-  const chat = await prisma.chat.findUnique({
-    where: { id: chatId },
+  const chat = await prisma.chat.findFirst({
+    where: {
+      id: chatId,
+      members: {
+        some: {
+          user: {
+            orgMemberships: {
+              some: { organizationId },
+            },
+          },
+        },
+      },
+    },
     select: { type: true, aiMode: true },
   });
 
@@ -56,10 +67,10 @@ export async function getChatAutonomyContext(chatId: string): Promise<{
 export async function resolveAutonomyMode(input: ResolveAutonomyInput): Promise<AutonomyMode> {
   const { scopeType, scopeId, organizationId, isDm, orgDefault, prefetchedAiMode } = input;
 
-  // 1. Scope-level override
+  // 1. Scope-level override (org-scoped to prevent cross-org leakage)
   const scopeOverride = prefetchedAiMode !== undefined
     ? prefetchedAiMode
-    : await getScopeAiMode(scopeType, scopeId);
+    : await getScopeAiMode(scopeType, scopeId, organizationId);
   if (scopeOverride) return scopeOverride;
 
   // 2. Project-level override (if scope belongs to a project)
@@ -79,25 +90,43 @@ export async function resolveAutonomyMode(input: ResolveAutonomyInput): Promise<
  * Read the aiMode directly set on a scope entity.
  * Returns null if the scope type doesn't support aiMode or if it's not set.
  */
-async function getScopeAiMode(scopeType: AutonomyScopeType, scopeId: string): Promise<AutonomyMode | null> {
+async function getScopeAiMode(
+  scopeType: AutonomyScopeType,
+  scopeId: string,
+  organizationId?: string,
+): Promise<AutonomyMode | null> {
   switch (scopeType) {
     case "chat": {
-      const chat = await prisma.chat.findUnique({
-        where: { id: scopeId },
+      if (!organizationId) return null;
+
+      const chat = await prisma.chat.findFirst({
+        where: {
+          id: scopeId,
+          members: {
+            some: {
+              user: {
+                orgMemberships: {
+                  some: { organizationId },
+                },
+              },
+            },
+          },
+        },
         select: { aiMode: true },
       });
-      return chat?.aiMode ?? null;
+      if (!chat) return null;
+      return chat.aiMode ?? null;
     }
     case "ticket": {
-      const ticket = await prisma.ticket.findUnique({
-        where: { id: scopeId },
+      const ticket = await prisma.ticket.findFirst({
+        where: organizationId ? { id: scopeId, organizationId } : { id: scopeId },
         select: { aiMode: true },
       });
       return ticket?.aiMode ?? null;
     }
     case "channel": {
-      const channel = await prisma.channel.findUnique({
-        where: { id: scopeId },
+      const channel = await prisma.channel.findFirst({
+        where: organizationId ? { id: scopeId, organizationId } : { id: scopeId },
         select: { aiMode: true },
       });
       return channel?.aiMode ?? null;
@@ -197,21 +226,50 @@ export async function updateScopeAiMode(input: {
   organizationId: string;
 }): Promise<void> {
   await orgMemberService.assertAdmin(input.userId, input.organizationId);
-  const { scopeType, scopeId, aiMode } = input;
+  const { scopeType, scopeId, aiMode, organizationId } = input;
 
   switch (scopeType) {
-    case "chat":
+    case "chat": {
+      // Chats are not directly org-scoped; verify via user membership overlap.
+      const chat = await prisma.chat.findFirst({
+        where: {
+          id: scopeId,
+          members: {
+            some: {
+              user: { orgMemberships: { some: { organizationId } } },
+            },
+          },
+        },
+        select: { id: true },
+      });
+      if (!chat) throw new Error("Chat not in this organization");
       await prisma.chat.update({ where: { id: scopeId }, data: { aiMode } });
       break;
-    case "ticket":
-      await prisma.ticket.update({ where: { id: scopeId }, data: { aiMode } });
+    }
+    case "ticket": {
+      const updated = await prisma.ticket.updateMany({
+        where: { id: scopeId, organizationId },
+        data: { aiMode },
+      });
+      if (updated.count === 0) throw new Error("Ticket not in this organization");
       break;
-    case "channel":
-      await prisma.channel.update({ where: { id: scopeId }, data: { aiMode } });
+    }
+    case "channel": {
+      const updated = await prisma.channel.updateMany({
+        where: { id: scopeId, organizationId },
+        data: { aiMode },
+      });
+      if (updated.count === 0) throw new Error("Channel not in this organization");
       break;
-    case "project":
-      await prisma.project.update({ where: { id: scopeId }, data: { aiMode } });
+    }
+    case "project": {
+      const updated = await prisma.project.updateMany({
+        where: { id: scopeId, organizationId },
+        data: { aiMode },
+      });
+      if (updated.count === 0) throw new Error("Project not in this organization");
       break;
+    }
     default:
       throw new Error(`Cannot set aiMode on scope type: ${scopeType as string}`);
   }

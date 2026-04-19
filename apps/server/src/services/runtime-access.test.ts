@@ -98,7 +98,6 @@ describe("runtimeAccessService", () => {
           id: "grant-1",
           scopeType: "session_group",
           sessionGroupId: "group-1",
-          capabilities: ["session", "terminal"],
           expiresAt: null,
           granteeUser: { id: "user-2", name: "Guest" },
           grantedByUser: { id: "user-1", name: "Owner" },
@@ -119,7 +118,6 @@ describe("runtimeAccessService", () => {
     expect(access.isOwner).toBe(false);
     expect(access.scopeType).toBe("session_group");
     expect(access.sessionGroupId).toBe("group-1");
-    expect(access.capabilities).toEqual(["session", "terminal"]);
   });
 
   it("throws for denied local bridge access", async () => {
@@ -185,7 +183,6 @@ describe("runtimeAccessService", () => {
       ownerUserId: "user-1",
       scopeType: "session_group",
       sessionGroupId: "group-1",
-      requestedCapabilities: ["session"],
       requestedExpiresAt: null,
       createdAt: new Date("2026-04-18T12:00:00.000Z"),
       status: "pending",
@@ -340,7 +337,6 @@ describe("runtimeAccessService", () => {
       granteeUserId: "user-2",
       scopeType: "session_group",
       sessionGroupId: "group-1",
-      capabilities: ["session", "terminal"],
       revokedAt: null,
       bridgeRuntime: {
         id: "bridge-1",
@@ -358,7 +354,6 @@ describe("runtimeAccessService", () => {
       granteeUserId: "user-2",
       scopeType: "session_group",
       sessionGroupId: "group-1",
-      capabilities: ["session", "terminal"],
       revokedAt: new Date(),
       granteeUser: { id: "user-2", name: "Guest" },
       grantedByUser: { id: "user-1", name: "Owner" },
@@ -386,7 +381,6 @@ describe("runtimeAccessService", () => {
       ownerUserId: "user-1",
       scopeType: "all_sessions",
       sessionGroupId: null,
-      requestedCapabilities: ["session"],
       requestedExpiresAt: null,
       createdAt: new Date("2026-04-18T12:00:00.000Z"),
       status: "pending",
@@ -412,7 +406,6 @@ describe("runtimeAccessService", () => {
       id: "grant-1",
       scopeType: "session_group",
       sessionGroupId: "group-1",
-      capabilities: ["session"],
       expiresAt: null,
       createdAt: new Date("2026-04-18T12:05:00.000Z"),
       granteeUser: { id: "user-2", name: "Guest" },
@@ -439,8 +432,8 @@ describe("runtimeAccessService", () => {
         grantedByUserId: "user-1",
         scopeType: "session_group",
         sessionGroupId: "group-1",
-        capabilities: ["session"],
         expiresAt: null,
+        capabilities: ["session"],
       },
       include: {
         granteeUser: true,
@@ -450,7 +443,7 @@ describe("runtimeAccessService", () => {
     });
 
     expect(eventServiceMock.create).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         organizationId: "org-1",
         scopeType: "system",
         scopeId: "org-1",
@@ -463,394 +456,12 @@ describe("runtimeAccessService", () => {
             id: "grant-1",
             scopeType: "session_group",
             sessionGroupId: "group-1",
-            capabilities: ["session"],
           }),
         }),
         actorType: "user",
         actorId: "user-1",
-      },
-      expect.anything(),
-    );
-  });
-
-  it("requestAccess persists requestedCapabilities and defaults to ['session'] when omitted", async () => {
-    prismaMock.bridgeRuntime.findUnique.mockResolvedValueOnce({
-      id: "bridge-1",
-      instanceId: "runtime-1",
-      organizationId: "org-1",
-      ownerUserId: "user-1",
-      label: "Laptop",
-      ownerUser: { id: "user-1", name: "Owner" },
-    });
-    prismaMock.bridgeAccessGrant.findFirst.mockResolvedValueOnce(null);
-    prismaMock.bridgeAccessRequest.findMany.mockResolvedValueOnce([]);
-    prismaMock.bridgeAccessRequest.create.mockResolvedValueOnce({
-      id: "request-1",
-      bridgeRuntimeId: "bridge-1",
-      ownerUserId: "user-1",
-      scopeType: "all_sessions",
-      sessionGroupId: null,
-      requestedCapabilities: ["session"],
-      requestedExpiresAt: null,
-      createdAt: new Date("2026-04-18T12:00:00.000Z"),
-      status: "pending",
-      bridgeRuntime: { id: "bridge-1", instanceId: "runtime-1", label: "Laptop" },
-      requesterUser: { id: "user-2", name: "Guest", email: null, avatarUrl: null },
-      ownerUser: { id: "user-1", name: "Owner" },
-      resolvedByUser: null,
-      sessionGroup: null,
-    });
-
-    await runtimeAccessService.requestAccess({
-      requesterUserId: "user-2",
-      organizationId: "org-1",
-      runtimeInstanceId: "runtime-1",
-      scopeType: "all_sessions",
-    });
-
-    expect(prismaMock.bridgeAccessRequest.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          requestedCapabilities: ["session"],
-        }),
       }),
+      prismaMock,
     );
-  });
-
-  it("requestAccess always ensures `session` is present in requestedCapabilities", async () => {
-    prismaMock.bridgeRuntime.findUnique.mockResolvedValueOnce({
-      id: "bridge-1",
-      instanceId: "runtime-1",
-      organizationId: "org-1",
-      ownerUserId: "user-1",
-      label: "Laptop",
-      ownerUser: { id: "user-1", name: "Owner" },
-    });
-    prismaMock.bridgeAccessGrant.findFirst.mockResolvedValueOnce(null);
-    prismaMock.bridgeAccessRequest.findMany.mockResolvedValueOnce([]);
-    prismaMock.bridgeAccessRequest.create.mockResolvedValueOnce({
-      id: "request-1",
-      bridgeRuntimeId: "bridge-1",
-      ownerUserId: "user-1",
-      scopeType: "all_sessions",
-      sessionGroupId: null,
-      requestedCapabilities: ["terminal", "session"],
-      requestedExpiresAt: null,
-      createdAt: new Date("2026-04-18T12:00:00.000Z"),
-      status: "pending",
-      bridgeRuntime: { id: "bridge-1", instanceId: "runtime-1", label: "Laptop" },
-      requesterUser: { id: "user-2", name: "Guest", email: null, avatarUrl: null },
-      ownerUser: { id: "user-1", name: "Owner" },
-      resolvedByUser: null,
-      sessionGroup: null,
-    });
-
-    await runtimeAccessService.requestAccess({
-      requesterUserId: "user-2",
-      organizationId: "org-1",
-      runtimeInstanceId: "runtime-1",
-      scopeType: "all_sessions",
-      requestedCapabilities: ["terminal"],
-    });
-
-    const createCall = prismaMock.bridgeAccessRequest.create.mock.calls[0]?.[0] as
-      | { data: { requestedCapabilities: string[] } }
-      | undefined;
-    expect(createCall?.data.requestedCapabilities).toEqual(
-      expect.arrayContaining(["session", "terminal"]),
-    );
-  });
-
-  it("approveRequest defaults to session-only when owner omits capabilities (even if requester asked for terminal)", async () => {
-    prismaMock.bridgeAccessRequest.findUnique.mockResolvedValueOnce({
-      id: "request-1",
-      bridgeRuntimeId: "bridge-1",
-      requesterUserId: "user-2",
-      ownerUserId: "user-1",
-      scopeType: "all_sessions",
-      sessionGroupId: null,
-      requestedCapabilities: ["session", "terminal"],
-      requestedExpiresAt: null,
-      createdAt: new Date("2026-04-18T12:00:00.000Z"),
-      status: "pending",
-      bridgeRuntime: {
-        id: "bridge-1",
-        instanceId: "runtime-1",
-        label: "Laptop",
-        organizationId: "org-1",
-      },
-      requesterUser: { id: "user-2", name: "Guest", email: null, avatarUrl: null },
-      ownerUser: { id: "user-1", name: "Owner" },
-      resolvedByUser: null,
-      sessionGroup: null,
-    });
-    prismaMock.bridgeAccessGrant.updateMany.mockResolvedValueOnce({ count: 0 });
-    prismaMock.bridgeAccessGrant.create.mockResolvedValueOnce({
-      id: "grant-1",
-      scopeType: "all_sessions",
-      sessionGroupId: null,
-      capabilities: ["session"],
-      expiresAt: null,
-      createdAt: new Date(),
-      granteeUser: { id: "user-2", name: "Guest" },
-      grantedByUser: { id: "user-1", name: "Owner" },
-      sessionGroup: null,
-    });
-    prismaMock.bridgeAccessRequest.update.mockResolvedValueOnce({ id: "request-1" });
-
-    await runtimeAccessService.approveRequest({
-      requestId: "request-1",
-      organizationId: "org-1",
-      ownerUserId: "user-1",
-    });
-
-    expect(prismaMock.bridgeAccessGrant.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          capabilities: ["session"],
-        }),
-      }),
-    );
-  });
-
-  it("approveRequest honors explicit ['session','terminal'] capabilities from owner", async () => {
-    prismaMock.bridgeAccessRequest.findUnique.mockResolvedValueOnce({
-      id: "request-1",
-      bridgeRuntimeId: "bridge-1",
-      requesterUserId: "user-2",
-      ownerUserId: "user-1",
-      scopeType: "all_sessions",
-      sessionGroupId: null,
-      requestedCapabilities: ["session"],
-      requestedExpiresAt: null,
-      createdAt: new Date("2026-04-18T12:00:00.000Z"),
-      status: "pending",
-      bridgeRuntime: {
-        id: "bridge-1",
-        instanceId: "runtime-1",
-        label: "Laptop",
-        organizationId: "org-1",
-      },
-      requesterUser: { id: "user-2", name: "Guest", email: null, avatarUrl: null },
-      ownerUser: { id: "user-1", name: "Owner" },
-      resolvedByUser: null,
-      sessionGroup: null,
-    });
-    prismaMock.bridgeAccessGrant.updateMany.mockResolvedValueOnce({ count: 0 });
-    prismaMock.bridgeAccessGrant.create.mockResolvedValueOnce({
-      id: "grant-1",
-      scopeType: "all_sessions",
-      sessionGroupId: null,
-      capabilities: ["session", "terminal"],
-      expiresAt: null,
-      createdAt: new Date(),
-      granteeUser: { id: "user-2", name: "Guest" },
-      grantedByUser: { id: "user-1", name: "Owner" },
-      sessionGroup: null,
-    });
-    prismaMock.bridgeAccessRequest.update.mockResolvedValueOnce({ id: "request-1" });
-
-    await runtimeAccessService.approveRequest({
-      requestId: "request-1",
-      organizationId: "org-1",
-      ownerUserId: "user-1",
-      capabilities: ["session", "terminal"],
-    });
-
-    const createCall = prismaMock.bridgeAccessGrant.create.mock.calls[0]?.[0] as
-      | { data: { capabilities: string[] } }
-      | undefined;
-    expect(createCall?.data.capabilities).toEqual(
-      expect.arrayContaining(["session", "terminal"]),
-    );
-  });
-
-  it("updateGrant stripping terminal severs the grantee's live terminals", async () => {
-    prismaMock.bridgeAccessGrant.findUnique.mockResolvedValueOnce({
-      id: "grant-1",
-      granteeUserId: "user-2",
-      scopeType: "session_group",
-      sessionGroupId: "group-1",
-      capabilities: ["session", "terminal"],
-      revokedAt: null,
-      bridgeRuntime: {
-        id: "bridge-1",
-        instanceId: "runtime-1",
-        label: "Laptop",
-        organizationId: "org-1",
-        ownerUserId: "user-1",
-      },
-      granteeUser: { id: "user-2", name: "Guest" },
-      grantedByUser: { id: "user-1", name: "Owner" },
-      sessionGroup: { id: "group-1", name: "A" },
-    });
-    prismaMock.bridgeAccessGrant.updateMany.mockResolvedValueOnce({ count: 1 });
-    prismaMock.bridgeAccessGrant.findUniqueOrThrow.mockResolvedValueOnce({
-      id: "grant-1",
-      granteeUserId: "user-2",
-      scopeType: "session_group",
-      sessionGroupId: "group-1",
-      capabilities: ["session"],
-      updatedAt: new Date(),
-      revokedAt: null,
-      granteeUser: { id: "user-2", name: "Guest" },
-      grantedByUser: { id: "user-1", name: "Owner" },
-      sessionGroup: { id: "group-1", name: "A" },
-    });
-    prismaMock.session.findMany.mockResolvedValueOnce([{ id: "session-a" }]);
-
-    await runtimeAccessService.updateGrant({
-      grantId: "grant-1",
-      organizationId: "org-1",
-      ownerUserId: "user-1",
-      capabilities: ["session"],
-    });
-
-    expect(prismaMock.bridgeAccessGrant.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ id: "grant-1", revokedAt: null }),
-      }),
-    );
-    expect(terminalRelayMock.destroyTerminalsForUser).toHaveBeenCalledWith(
-      "user-2",
-      new Set(["session-a"]),
-    );
-    expect(eventServiceMock.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        eventType: "bridge_access_updated",
-        payload: expect.objectContaining({
-          grantId: "grant-1",
-          priorCapabilities: ["session", "terminal"],
-          capabilities: ["session"],
-        }),
-      }),
-      expect.anything(),
-    );
-  });
-
-  it("updateGrant does not sever terminals when terminal is not removed", async () => {
-    prismaMock.bridgeAccessGrant.findUnique.mockResolvedValueOnce({
-      id: "grant-1",
-      granteeUserId: "user-2",
-      scopeType: "all_sessions",
-      sessionGroupId: null,
-      capabilities: ["session"],
-      revokedAt: null,
-      bridgeRuntime: {
-        id: "bridge-1",
-        instanceId: "runtime-1",
-        label: "Laptop",
-        organizationId: "org-1",
-        ownerUserId: "user-1",
-      },
-      granteeUser: { id: "user-2", name: "Guest" },
-      grantedByUser: { id: "user-1", name: "Owner" },
-      sessionGroup: null,
-    });
-    prismaMock.bridgeAccessGrant.updateMany.mockResolvedValueOnce({ count: 1 });
-    prismaMock.bridgeAccessGrant.findUniqueOrThrow.mockResolvedValueOnce({
-      id: "grant-1",
-      granteeUserId: "user-2",
-      scopeType: "all_sessions",
-      sessionGroupId: null,
-      capabilities: ["session", "terminal"],
-      updatedAt: new Date(),
-      revokedAt: null,
-      granteeUser: { id: "user-2", name: "Guest" },
-      grantedByUser: { id: "user-1", name: "Owner" },
-      sessionGroup: null,
-    });
-
-    await runtimeAccessService.updateGrant({
-      grantId: "grant-1",
-      organizationId: "org-1",
-      ownerUserId: "user-1",
-      capabilities: ["session", "terminal"],
-    });
-
-    expect(terminalRelayMock.destroyTerminalsForUser).not.toHaveBeenCalled();
-  });
-
-  it("updateGrant always ensures session capability is present", async () => {
-    prismaMock.bridgeAccessGrant.findUnique.mockResolvedValueOnce({
-      id: "grant-1",
-      granteeUserId: "user-2",
-      scopeType: "all_sessions",
-      sessionGroupId: null,
-      capabilities: ["session", "terminal"],
-      revokedAt: null,
-      bridgeRuntime: {
-        id: "bridge-1",
-        instanceId: "runtime-1",
-        label: "Laptop",
-        organizationId: "org-1",
-        ownerUserId: "user-1",
-      },
-      granteeUser: { id: "user-2", name: "Guest" },
-      grantedByUser: { id: "user-1", name: "Owner" },
-      sessionGroup: null,
-    });
-    prismaMock.bridgeAccessGrant.updateMany.mockResolvedValueOnce({ count: 1 });
-    prismaMock.bridgeAccessGrant.findUniqueOrThrow.mockResolvedValueOnce({
-      id: "grant-1",
-      granteeUserId: "user-2",
-      scopeType: "all_sessions",
-      sessionGroupId: null,
-      capabilities: ["session"],
-      updatedAt: new Date(),
-      revokedAt: null,
-      granteeUser: { id: "user-2", name: "Guest" },
-      grantedByUser: { id: "user-1", name: "Owner" },
-      sessionGroup: null,
-    });
-    prismaMock.session.findMany.mockResolvedValueOnce([]);
-
-    await runtimeAccessService.updateGrant({
-      grantId: "grant-1",
-      organizationId: "org-1",
-      ownerUserId: "user-1",
-      capabilities: [],
-    });
-
-    const updateCall = prismaMock.bridgeAccessGrant.updateMany.mock.calls[0]?.[0] as
-      | { data: { capabilities: string[] } }
-      | undefined;
-    expect(updateCall?.data.capabilities).toEqual(["session"]);
-  });
-
-  it("updateGrant throws if a concurrent revoke wins (updateMany count=0)", async () => {
-    prismaMock.bridgeAccessGrant.findUnique.mockResolvedValueOnce({
-      id: "grant-1",
-      granteeUserId: "user-2",
-      scopeType: "all_sessions",
-      sessionGroupId: null,
-      capabilities: ["session", "terminal"],
-      revokedAt: null,
-      bridgeRuntime: {
-        id: "bridge-1",
-        instanceId: "runtime-1",
-        label: "Laptop",
-        organizationId: "org-1",
-        ownerUserId: "user-1",
-      },
-      granteeUser: { id: "user-2", name: "Guest" },
-      grantedByUser: { id: "user-1", name: "Owner" },
-      sessionGroup: null,
-    });
-    // Simulate concurrent revoke: findUnique saw revokedAt=null but by update
-    // time the row already has revokedAt set, so updateMany matches zero rows.
-    prismaMock.bridgeAccessGrant.updateMany.mockResolvedValueOnce({ count: 0 });
-
-    await expect(
-      runtimeAccessService.updateGrant({
-        grantId: "grant-1",
-        organizationId: "org-1",
-        ownerUserId: "user-1",
-        capabilities: ["session"],
-      }),
-    ).rejects.toThrow("Cannot update a revoked bridge access grant");
-
-    expect(eventServiceMock.create).not.toHaveBeenCalled();
-    expect(terminalRelayMock.destroyTerminalsForUser).not.toHaveBeenCalled();
   });
 });

@@ -21,6 +21,7 @@ const eventServiceMock = eventService as any;
 describe("OrganizationService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "user-1" });
   });
 
   it("deduplicates repos by remote url within an org", async () => {
@@ -34,6 +35,7 @@ describe("OrganizationService", () => {
           name: "trace",
           remoteUrl: "https://github.com/acme/trace.git",
         } as any,
+        "org-1",
         "user",
         "user-1",
       ),
@@ -60,6 +62,7 @@ describe("OrganizationService", () => {
         name: "trace",
         remoteUrl: "https://github.com/acme/trace.git",
       } as any,
+      "org-1",
       "user",
       "user-1",
     );
@@ -89,6 +92,7 @@ describe("OrganizationService", () => {
 
   it("updates repos, creates projects, and links entities", async () => {
     prismaMock.repo.findFirstOrThrow.mockResolvedValueOnce({ id: "repo-1" });
+    prismaMock.repo.findFirstOrThrow.mockResolvedValueOnce({ id: "repo-1" });
     prismaMock.repo.update.mockResolvedValueOnce({
       id: "repo-1",
       organizationId: "org-1",
@@ -102,9 +106,10 @@ describe("OrganizationService", () => {
       organizationId: "org-1",
       name: "Roadmap",
     });
-    prismaMock.project.findUniqueOrThrow
+    prismaMock.project.findFirstOrThrow
       .mockResolvedValueOnce({ organizationId: "org-1" })
       .mockResolvedValueOnce({ id: "project-1", name: "Roadmap" });
+    prismaMock.session.findFirstOrThrow.mockResolvedValueOnce({ id: "session-1" });
 
     const service = new OrganizationService();
     await service.updateRepo(
@@ -116,17 +121,55 @@ describe("OrganizationService", () => {
     );
     await service.createProject(
       { organizationId: "org-1", name: "Roadmap", repoId: "repo-1" } as any,
+      "org-1",
       "user",
       "user-1",
     );
-    await service.linkEntityToProject("session", "session-1", "project-1", "user", "user-1");
+    await service.linkEntityToProject(
+      "session",
+      "session-1",
+      "project-1",
+      "org-1",
+      "user",
+      "user-1",
+    );
 
     expect(prismaMock.sessionProject.create).toHaveBeenCalledWith({
       data: { sessionId: "session-1", projectId: "project-1" },
     });
     await expect(
-      service.linkEntityToProject("chat", "chat-1", "project-1", "user", "user-1"),
+      service.linkEntityToProject("chat", "chat-1", "project-1", "org-1", "user", "user-1"),
     ).rejects.toThrow("Chats cannot be linked to projects");
+  });
+
+  it("rejects cross-org repo and linked entity IDs when creating or linking projects", async () => {
+    prismaMock.repo.findFirstOrThrow.mockRejectedValueOnce(new Error("No record found"));
+    prismaMock.project.findFirstOrThrow.mockResolvedValueOnce({ organizationId: "org-1" });
+    prismaMock.session.findFirstOrThrow.mockRejectedValueOnce(new Error("No record found"));
+
+    const service = new OrganizationService();
+
+    await expect(
+      service.createProject(
+        { organizationId: "org-1", name: "Roadmap", repoId: "repo-org-b" } as any,
+        "org-1",
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow();
+
+    await expect(
+      service.linkEntityToProject(
+        "session",
+        "session-org-b",
+        "project-1",
+        "org-1",
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow();
+
+    expect(prismaMock.sessionProject.create).not.toHaveBeenCalled();
   });
 
   it("searches users outside the active organization only", async () => {
