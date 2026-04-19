@@ -1,0 +1,24 @@
+import { setPlatform } from "@trace/client-core";
+import * as SecureStore from "expo-secure-store";
+import { createMMKV } from "react-native-mmkv";
+
+const storage = createMMKV({ id: "trace" });
+const TOKEN_KEY = "trace_token";
+
+setPlatform({
+  apiUrl: process.env.EXPO_PUBLIC_API_URL ?? "",
+  storage: {
+    getItem: (k) => storage.getString(k) ?? null,
+    setItem: (k, v) => storage.set(k, v),
+    removeItem: (k) => {
+      storage.remove(k);
+    },
+  },
+  secureStorage: {
+    getToken: () => SecureStore.getItemAsync(TOKEN_KEY),
+    setToken: (t) => SecureStore.setItemAsync(TOKEN_KEY, t),
+    clearToken: () => SecureStore.deleteItemAsync(TOKEN_KEY),
+  },
+  fetch: global.fetch,
+  createWebSocket: (url, protocols) => new WebSocket(url, protocols),
+});
