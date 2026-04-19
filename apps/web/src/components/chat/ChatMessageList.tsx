@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { ChatMessage } from "./ChatMessage";
 import { ChatMessageErrorBoundary } from "./ChatMessageErrorBoundary";
-import { useEntityStore, type EntityState } from "../../stores/entity";
+import { useEntityStore, type EntityState } from "@trace/client-core";
 import { useShallow } from "zustand/react/shallow";
 import { Loader2 } from "lucide-react";
 

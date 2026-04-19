@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { MessageCircle } from "lucide-react";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
 import { SidebarMenuItem, SidebarMenuButton } from "../ui/sidebar";

@@ -5,7 +5,7 @@ import { shortSha } from "@trace/shared";
 import { GitCommitHorizontal, RotateCcw } from "lucide-react";
 import { client } from "../../lib/urql";
 import { START_SESSION_MUTATION } from "../../lib/mutations";
-import { useEntityField, useEntityStore, type SessionGroupEntity, type SessionEntity } from "../../stores/entity";
+import { useEntityField, useEntityStore, type SessionGroupEntity, type SessionEntity } from "@trace/client-core";
 import { navigateToSession } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { getSessionGroupChannelId } from "../../lib/session-group";

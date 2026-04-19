@@ -12,7 +12,7 @@ import {
   Minimize2,
   X,
 } from "lucide-react";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import { useDetailPanelStore } from "../../stores/detail-panel";
 import {

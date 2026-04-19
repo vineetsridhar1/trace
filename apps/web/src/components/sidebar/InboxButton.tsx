@@ -1,5 +1,5 @@
 import { Inbox } from "lucide-react";
-import { useEntityIds } from "../../stores/entity";
+import { useEntityIds } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import type { InboxItemStatus } from "@trace/gql";
 import { cn } from "../../lib/utils";

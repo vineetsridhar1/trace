@@ -13,7 +13,7 @@ import {
   getFirstCollision,
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
-import { useEntityStore } from "../stores/entity";
+import { useEntityStore } from "@trace/client-core";
 import { client } from "../lib/urql";
 import { gql } from "@urql/core";
 import type { TopLevelItem } from "./useSidebarData";

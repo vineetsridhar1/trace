@@ -9,7 +9,7 @@ import {
   rollbackOptimisticSession,
 } from "./optimistic-session";
 import { usePreferencesStore } from "../stores/preferences";
-import { useEntityStore } from "../stores/entity";
+import { useEntityStore } from "@trace/client-core";
 import {
   useUIStore,
   navigateToSession,

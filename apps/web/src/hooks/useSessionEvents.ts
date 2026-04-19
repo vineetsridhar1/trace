@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { gql } from "@urql/core";
 import type { Event } from "@trace/gql";
 import { client } from "../lib/urql";
-import { useScopedEventIds, eventScopeKey } from "../stores/entity";
+import { useScopedEventIds, eventScopeKey } from "@trace/client-core";
 import { useAuthStore } from "../stores/auth";
 import { HIDDEN_SESSION_PAYLOAD_TYPES } from "../lib/session-event-filters";
 import {

@@ -1,8 +1,8 @@
 import { useState, useCallback } from "react";
 import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react";
 import type { Channel } from "@trace/gql";
-import { useEntityIds, useEntityField } from "../../stores/entity";
-import type { EntityTableMap } from "../../stores/entity";
+import { useEntityIds, useEntityField } from "@trace/client-core";
+import type { EntityTableMap } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { UPDATE_CHANNEL_MUTATION } from "../../lib/mutations";
 import { Button } from "../ui/button";

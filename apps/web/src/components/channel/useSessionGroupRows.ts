@@ -1,6 +1,6 @@
 import { useStoreWithEqualityFn } from "zustand/traditional";
-import { useEntityStore, type EntityState } from "../../stores/entity";
-import type { SessionGroupEntity, SessionEntity } from "../../stores/entity";
+import { useEntityStore, type EntityState } from "@trace/client-core";
+import type { SessionGroupEntity, SessionEntity } from "@trace/client-core";
 import { getSessionGroupChannelId } from "../../lib/session-group";
 import {
   getSessionGroupDisplayStatus,

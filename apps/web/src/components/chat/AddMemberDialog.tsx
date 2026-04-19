@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { UserPlus } from "lucide-react";
 import { useAuthStore, type AuthState } from "../../stores/auth";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { ORG_MEMBERS_QUERY } from "../../lib/mutations";

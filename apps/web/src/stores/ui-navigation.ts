@@ -1,6 +1,6 @@
 import type { ActivePage, ChannelSubPage } from "./ui";
-import { useEntityStore } from "./entity";
-import type { SessionEntity } from "./entity";
+import { useEntityStore } from "@trace/client-core";
+import type { SessionEntity } from "@trace/client-core";
 import { getSessionChannelId, getSessionGroupChannelId } from "../lib/session-group";
 
 export function buildPath(

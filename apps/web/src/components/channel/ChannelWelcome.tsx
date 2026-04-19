@@ -1,5 +1,5 @@
 import { Hash } from "lucide-react";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 
 export function ChannelWelcome({ channelId }: { channelId: string }) {
   const name = useEntityField("channels", channelId, "name");

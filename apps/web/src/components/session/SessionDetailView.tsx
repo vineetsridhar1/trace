@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { gql } from "@urql/core";
 import type { GitCheckpoint, QueuedMessage } from "@trace/gql";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
-import { useEntityStore, useEntityField, useScopedEvents, eventScopeKey, type SessionEntity, type SessionGroupEntity } from "../../stores/entity";
+import { useEntityStore, useEntityField, useScopedEvents, eventScopeKey, type SessionEntity, type SessionGroupEntity } from "@trace/client-core";
 import { EventScopeContext } from "./EventScopeContext";
 import { SessionMessageList } from "./SessionMessageList";
 import { SessionHeader } from "./SessionHeader";

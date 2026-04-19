@@ -7,7 +7,7 @@ import {
   useEntityField,
   useSessionIdsByGroup,
   type SessionEntity,
-} from "../../stores/entity";
+} from "@trace/client-core";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { getSessionChannelId, getSessionGroupChannelId } from "../../lib/session-group";

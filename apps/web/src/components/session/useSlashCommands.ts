@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { BUILTIN_SLASH_COMMANDS } from "@trace/shared";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { SESSION_SLASH_COMMANDS_QUERY } from "../../lib/mutations";
 import type { SlashCommandItem } from "../chat/ChatEditor";

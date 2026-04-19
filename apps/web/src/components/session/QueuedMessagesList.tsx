@@ -1,5 +1,5 @@
 import { X, Trash2 } from "lucide-react";
-import { useEntityField, useQueuedMessageIdsForSession } from "../../stores/entity";
+import { useEntityField, useQueuedMessageIdsForSession } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { REMOVE_QUEUED_MESSAGE_MUTATION, CLEAR_QUEUED_MESSAGES_MUTATION } from "../../lib/mutations";
 import { toast } from "sonner";

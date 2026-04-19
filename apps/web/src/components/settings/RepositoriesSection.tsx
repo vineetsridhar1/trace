@@ -1,8 +1,8 @@
 import { useEffect, useCallback, useState } from "react";
 import type { Repo } from "@trace/gql";
 import { useAuthStore } from "../../stores/auth";
-import { useEntityStore, useEntityIds } from "../../stores/entity";
-import type { EntityTableMap } from "../../stores/entity";
+import { useEntityStore, useEntityIds } from "@trace/client-core";
+import type { EntityTableMap } from "@trace/client-core";
 import { useOnboardingStore } from "../../stores/onboarding";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
