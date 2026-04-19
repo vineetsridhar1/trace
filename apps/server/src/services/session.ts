@@ -4138,11 +4138,11 @@ export class SessionService {
         .listRuntimes()
         .find(
           (runtime) =>
-            runtime.hostingMode === "cloud" ||
-            (accessibleRuntimeIds.has(runtime.id) && runtime.registeredRepoIds.includes(repoId)),
+            (runtime.hostingMode === "cloud" || accessibleRuntimeIds.has(runtime.id)) &&
+            runtime.registeredRepoIds.includes(repoId),
         )?.id;
     }
-    if (!runtimeId) throw new Error("No connected runtime available for this repo");
+    if (!runtimeId) throw new Error("Repo not cloned on any connected runtime");
     return sessionRouter.listBranches(runtimeId, repoId);
   }
 
