@@ -683,11 +683,10 @@ These are on top of the principles already stated in §6.
 ### 12.1 Hydration sequence
 
 On app launch (post-auth):
-1. `me` query → user + org memberships
-2. `organization(id)` → user, active channels, channel groups
-3. `mySessions(organizationId)` → all user's sessions (any status) — seeds Home tab
-4. Subscribe to `orgEvents(organizationId)` (ambient)
-5. App is interactive.
+1. `me` query → user + org memberships (via REST `/auth/me`, handled in the auth store)
+2. In parallel: `organization(id)` → org + channels, `channelGroups(organizationId)` → channel groups, `mySessions(organizationId)` → all user's sessions (any status). `channelGroups` is its own root query because the GraphQL `Organization` type does not expose a `channelGroups` field.
+3. Subscribe to `orgEvents(organizationId)` (ambient)
+4. App is interactive.
 
 On screen focus:
 - Coding channel: query `sessionGroups(channelId)` for the currently-visible tab (active | merged | archived)

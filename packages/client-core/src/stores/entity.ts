@@ -73,6 +73,8 @@ interface EntityActions {
   upsertManyScopedEvents: (scopeKey: string, items: Array<Event & { id: string }>) => void;
   /** Remove an entire scoped bucket (for eviction) */
   removeScopedEvents: (scopeKey: string) => void;
+  /** Reset all entity tables and indices — used on sign-out / org switch. */
+  reset: () => void;
 }
 
 export type EntityState = Tables & {
@@ -296,6 +298,28 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
     set((state: EntityState) => {
       const { [scopeKey]: _, ...rest } = state.eventsByScope;
       return { eventsByScope: rest };
+    }),
+
+  reset: () =>
+    set({
+      organizations: {},
+      users: {},
+      repos: {},
+      projects: {},
+      channels: {},
+      channelGroups: {},
+      sessionGroups: {},
+      chats: {},
+      sessions: {},
+      tickets: {},
+      inboxItems: {},
+      messages: {},
+      queuedMessages: {},
+      eventsByScope: {},
+      _sessionIdsByGroup: {},
+      _messageIdsByScope: {},
+      _eventIdsByParentId: {},
+      _queuedMessageIdsBySession: {},
     }),
 }));
 

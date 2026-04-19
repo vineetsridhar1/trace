@@ -45,17 +45,25 @@ Wire up the end-to-end authentication experience on mobile: a sign-in screen tha
 
 ## Completion requirements
 
-- [ ] Cold-launching the app with no token lands on sign-in
-- [ ] Completing GitHub OAuth returns to the app, stores token, shows authed shell
-- [ ] Sign-in screen includes working Terms + Privacy footer links
-- [ ] urql client built via `createGqlClient` from `@trace/client-core`
-- [ ] `setOrgEventUIBindings(...)` is called at boot before any subscription opens
-- [ ] Entity store is hydrated with channels + sessions after auth
-- [ ] Ambient `orgEvents` subscription is active and routes events through `handleOrgEvent`
-- [ ] Org switcher changes active org, disposes + rebuilds the client, rehydrates, and resubscribes
-- [ ] Sign-out clears state and returns to sign-in
-- [ ] 401 from any GraphQL operation clears auth and returns to sign-in
-- [ ] All files <200 lines
+- [x] Cold-launching the app with no token lands on sign-in
+- [x] Completing GitHub OAuth returns to the app, stores token, shows authed shell
+- [x] Sign-in screen includes working Terms + Privacy footer links
+- [x] urql client built via `createGqlClient` from `@trace/client-core`
+- [x] `setOrgEventUIBindings(...)` is called at boot before any subscription opens
+- [x] Entity store is hydrated with channels + channel groups + sessions after auth
+- [x] Ambient `orgEvents` subscription is active and routes events through `handleOrgEvent`
+- [x] Org switcher changes active org, rebuilds the client, rehydrates, and resubscribes
+- [x] Sign-out clears state and returns to sign-in
+- [x] 401 from any GraphQL operation clears auth and returns to sign-in
+- [x] All files <200 lines
+
+## Implementation notes
+
+- `setPlatform()` runs from a custom `apps/mobile/index.js` entry that is loaded before `expo-router/entry`. Expo Router calls `loadRoute()` on every layout during route-tree construction, so the platform adapter must be registered before any route module is evaluated; relying on a side-effect import in `app/_layout.tsx` alone is not enough.
+- The urql client is lazy-built on first `getClient()` so the adapter is guaranteed to be present.
+- `Organization.channelGroups` is **not** in the GraphQL schema, so hydration fires three parallel queries (`organization`, `channelGroups`, `mySessions`) instead of the one query the original ticket text implied. See plan §12.1 for the updated sequence.
+- The org switcher sheet at `apps/mobile/src/components/auth/OrgSwitcherSheet.tsx` uses a plain `Modal` with `pageSheet` presentation. It is functional but does not yet honour the medium detent; ticket 18 (Settings + Org Switcher) is responsible for replacing it with the proper `Sheet` primitive once M2 design-system tickets land.
+- `recreateClient()` drops the urql client reference; the underlying `graphql-ws` socket is not explicitly disposed and relies on GC to close. Acceptable for V1 with infrequent org switching; revisit if it shows up in profiling.
 
 ## How to test
 

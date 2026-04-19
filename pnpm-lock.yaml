@@ -104,6 +104,9 @@ importers:
       '@trace/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@urql/core':
+        specifier: ^5.1.1
+        version: 5.2.0(graphql@16.13.1)
       expo:
         specifier: ~54.0.33
         version: 54.0.33(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(graphql@16.13.1)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
