@@ -6,6 +6,13 @@ import { client } from "../../lib/urql";
 import { REPO_BRANCHES_QUERY } from "../../lib/mutations";
 import { cn } from "../../lib/utils";
 
+function describeBranchError(message: string | undefined): string {
+  if (message && /Repo not cloned/i.test(message)) {
+    return "Repo not cloned on any connected bridge yet.";
+  }
+  return "Could not load branches";
+}
+
 interface BranchComboboxProps {
   repoId: string;
   /** Optional — if omitted, the server picks an available runtime for the repo. */
@@ -43,10 +50,10 @@ export function BranchCombobox({
         sessionGroupId: sessionGroupId ?? null,
       })
       .toPromise()
-      .then((result: { error?: unknown; data?: { repoBranches?: string[] } }) => {
+      .then((result: { error?: { message?: string } | null; data?: { repoBranches?: string[] } }) => {
         if (result.error) {
           setBranches([]);
-          setError("Could not load branches");
+          setError(describeBranchError(result.error.message));
         } else {
           setBranches(result.data?.repoBranches ?? []);
         }

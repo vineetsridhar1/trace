@@ -2148,5 +2148,37 @@ describe("SessionService", () => {
       expect(branches).toEqual(["main", "feat/x"]);
       expect(runtimeAccessServiceMock.assertAccess).toHaveBeenCalled();
     });
+
+    it("auto-selects the runtime that has the repo registered, not a cloud runtime without it", async () => {
+      // Regression guard: previously a cloud runtime always won the find()
+      // even when it hadn't cloned the repo, causing "Repo not cloned".
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-a" });
+      runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds.mockResolvedValueOnce(
+        new Set(["local-1"]),
+      );
+      sessionRouterMock.listRuntimes.mockReturnValueOnce([
+        { id: "cloud-1", hostingMode: "cloud", registeredRepoIds: [] },
+        { id: "local-1", hostingMode: "local", registeredRepoIds: ["repo-a"] },
+      ] as unknown as ReturnType<typeof sessionRouterMock.listRuntimes>);
+      sessionRouterMock.listBranches.mockResolvedValueOnce(["main"]);
+
+      const branches = await service.listBranches("repo-a", "org-1", "user-2");
+
+      expect(sessionRouterMock.listBranches).toHaveBeenCalledWith("local-1", "repo-a");
+      expect(branches).toEqual(["main"]);
+    });
+
+    it("throws when no connected runtime has the repo registered", async () => {
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-a" });
+      runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds.mockResolvedValueOnce(new Set());
+      sessionRouterMock.listRuntimes.mockReturnValueOnce([
+        { id: "cloud-1", hostingMode: "cloud", registeredRepoIds: [] },
+      ] as unknown as ReturnType<typeof sessionRouterMock.listRuntimes>);
+
+      await expect(service.listBranches("repo-a", "org-1", "user-2")).rejects.toThrow(
+        "Repo not cloned on any connected runtime",
+      );
+      expect(sessionRouterMock.listBranches).not.toHaveBeenCalled();
+    });
   });
 });

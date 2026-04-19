@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
-import { Code, FolderPlus, MessageSquare, Plus } from "lucide-react";
-import type { ChannelType } from "@trace/gql";
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, Code, FolderPlus, MessageSquare, Plus } from "lucide-react";
+import type { ChannelType, CodingTool, SessionRuntimeInstance } from "@trace/gql";
 import { gql } from "@urql/core";
 import { BranchCombobox } from "../channel/BranchCombobox";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { AVAILABLE_RUNTIMES_QUERY } from "../../lib/mutations";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -41,6 +42,8 @@ const CREATE_GROUP_MUTATION = gql`
     }
   }
 `;
+
+const CODING_CHANNEL_TOOL: CodingTool = "claude_code";
 
 const ALL_TYPE_OPTIONS: Array<{
   value: ChannelType;
@@ -85,6 +88,7 @@ export function CreateChannelDialog({
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const repoIds = useEntityIds("repos");
   const isMobile = useIsMobile();
+  const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -96,6 +100,37 @@ export function CreateChannelDialog({
     setBaseBranch("");
     setError(null);
   }, [open, defaultGroupId]);
+
+  useEffect(() => {
+    if (!open || channelType !== "coding") return;
+    let cancelled = false;
+    client
+      .query(AVAILABLE_RUNTIMES_QUERY, { tool: CODING_CHANNEL_TOOL, sessionGroupId: null })
+      .toPromise()
+      .then((result: { data?: { availableRuntimes?: SessionRuntimeInstance[] } }) => {
+        if (cancelled) return;
+        setRuntimes(result.data?.availableRuntimes ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setRuntimes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, channelType]);
+
+  // Repos already cloned on at least one connected local bridge. When no local
+  // bridge is connected we skip the filter so cloud-only users can still pick
+  // any repo (cloud clones on demand).
+  const clonedRepoIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const runtime of runtimes) {
+      for (const id of runtime.registeredRepoIds) set.add(id);
+    }
+    return set;
+  }, [runtimes]);
+  const hasLocalBridge = runtimes.length > 0;
+  const isRepoCloned = (id: string) => !hasLocalBridge || clonedRepoIds.has(id);
 
   async function handleCreateChannel(e: React.FormEvent) {
     e.preventDefault();
@@ -274,7 +309,11 @@ export function CreateChannelDialog({
               {channelType === "coding" && (
                 <div>
                   <label className="mb-1.5 block text-sm text-muted-foreground">Repository</label>
-                  {repoIds.length > 0 ? (
+                  {repoIds.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Link a repository to your organization first.
+                    </p>
+                  ) : (
                     <Select
                       value={repoId ?? "__none__"}
                       onValueChange={(value: string | null) => {
@@ -291,14 +330,10 @@ export function CreateChannelDialog({
                       <SelectContent>
                         <SelectItem value="__none__">Select a repo...</SelectItem>
                         {repoIds.map((id) => (
-                          <RepoOptionItem key={id} id={id} />
+                          <RepoOptionItem key={id} id={id} disabled={!isRepoCloned(id)} />
                         ))}
                       </SelectContent>
                     </Select>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Link a repository to your organization first.
-                    </p>
                   )}
                 </div>
               )}
@@ -363,7 +398,19 @@ function SelectedRepoValue({ id }: { id: string | undefined }) {
   return <>{id ? name ?? id : "Select a repo..."}</>;
 }
 
-function RepoOptionItem({ id }: { id: string }) {
+function RepoOptionItem({ id, disabled }: { id: string; disabled?: boolean }) {
   const name = useEntityField("repos", id, "name");
-  return <SelectItem value={id}>{name ?? id}</SelectItem>;
+  return (
+    <SelectItem value={id} disabled={disabled}>
+      <span className="flex items-center gap-1.5">
+        {name ?? id}
+        {disabled && (
+          <span className="flex items-center gap-0.5 text-xs text-amber-500">
+            <AlertTriangle size={10} />
+            not cloned
+          </span>
+        )}
+      </span>
+    </SelectItem>
+  );
 }

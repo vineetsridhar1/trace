@@ -31,7 +31,13 @@ import {
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
-import { ensureRepo, createWorktree, removeWorktree, getRepoPath } from "./workspace.js";
+import {
+  ensureRepo,
+  createWorktree,
+  removeWorktree,
+  getRepoPath,
+  listClonedRepoIds,
+} from "./workspace.js";
 import { ensureToolReady } from "./tool-auth.js";
 import { TerminalManager } from "@trace/shared/adapters";
 
@@ -140,7 +146,7 @@ export class ContainerBridge implements IBridgeClient {
         label: `cloud-machine-${this.machineId}`,
         hostingMode: "cloud",
         supportedTools: ["claude_code", "codex"],
-        registeredRepoIds: [], // Cloud bridges clone on-demand — all repos supported
+        registeredRepoIds: listClonedRepoIds(),
         activeTerminals: this.terminalManager.getActiveTerminals(),
       });
 
@@ -332,6 +338,7 @@ export class ContainerBridge implements IBridgeClient {
         (async () => {
           try {
             await ensureRepo(repoId, repoRemoteUrl);
+            this.send({ type: "repo_linked", repoId });
 
             if (readOnly) {
               // Read-only mode: skip worktree, use the bare repo path directly
@@ -379,6 +386,7 @@ export class ContainerBridge implements IBridgeClient {
         (async () => {
           try {
             await ensureRepo(repoId, repoRemoteUrl);
+            this.send({ type: "repo_linked", repoId });
             const { workdir, slug: worktreeSlug } = await createWorktree({
               repoId,
               sessionId,

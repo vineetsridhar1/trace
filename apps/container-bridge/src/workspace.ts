@@ -15,6 +15,15 @@ export function getRepoPath(repoId: string): string | undefined {
   return fs.existsSync(p) ? p : undefined;
 }
 
+/** List repoIds that are already cloned on disk at /repos/{repoId}. */
+export function listClonedRepoIds(): string[] {
+  if (!fs.existsSync(REPOS_DIR)) return [];
+  return fs
+    .readdirSync(REPOS_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && fs.existsSync(`${REPOS_DIR}/${entry.name}/.git`))
+    .map((entry) => entry.name);
+}
+
 /**
  * Ensure a bare repo exists at /repos/{repoId}.
  * Clones if missing, fetches if already present.
