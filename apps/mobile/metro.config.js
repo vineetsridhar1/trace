@@ -14,4 +14,26 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, "node_modules"),
 ];
 
+// Workspace packages (@trace/*) ship TypeScript source and use the ESM
+// convention of explicit `.js` import specifiers that TypeScript rewrites at
+// compile time. Metro doesn't perform that rewrite, so strip the suffix on
+// relative imports and let Metro resolve against `.ts`/`.tsx` via sourceExts.
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (
+    moduleName.endsWith(".js") &&
+    (moduleName.startsWith("./") || moduleName.startsWith("../"))
+  ) {
+    try {
+      return context.resolveRequest(
+        context,
+        moduleName.replace(/\.js$/, ""),
+        platform,
+      );
+    } catch {
+      // fall through to default resolution to surface the real error
+    }
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 module.exports = config;

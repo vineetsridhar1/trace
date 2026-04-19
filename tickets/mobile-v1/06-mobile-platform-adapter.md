@@ -36,6 +36,7 @@ Implement the `Platform` interface for mobile using `expo-secure-store` (token s
   ```
   `apiUrl` is required by the `Platform` contract — `@trace/client-core` builds absolute URLs (`${apiUrl}/auth/me`, etc.) so the mobile app must inject it. Use whatever Expo env var the app already exposes for the server URL. Note: in mmkv v4 the `MMKV` export is a type, not a constructor — use `createMMKV(...)`. The delete method is `remove`, not `delete`.
 - Import this file at the top of `apps/mobile/app/_layout.tsx` — before any client-core usage.
+- Update `apps/mobile/metro.config.js` so Metro can resolve the workspace TypeScript sources. `@trace/client-core` ships TS source with ESM-style `.js` import specifiers (e.g. `from "./platform.js"`), which TypeScript rewrites at compile time but Metro does not. Add a `resolver.resolveRequest` hook that strips the `.js` suffix on relative imports and lets Metro resolve against `.ts`/`.tsx` via `sourceExts`. Without this, the first Metro bundle that touches client-core fails with "Unable to resolve module ./platform.js".
 - Replace the placeholder screen with a `useEffect` that calls `fetchMe()` and logs the result (proves end-to-end wiring works; will be replaced in next ticket).
 - Document in `apps/mobile/README.md` that the platform init must run before any client-core import executes.
 
