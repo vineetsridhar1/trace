@@ -238,8 +238,13 @@
   text-align: left;
 }
 
-.tool-cmd-button:hover {
+.tool-cmd-button:hover:not(:disabled) {
   background: rgba(var(--th-hover-rgb), 0.8);
+}
+
+.tool-cmd-button:disabled {
+  cursor: default;
+  opacity: 1;
 }
 
 .tool-cmd-chevron {

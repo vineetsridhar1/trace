@@ -26,7 +26,7 @@ const BUCKET_TRANSPARENT_TYPES = new Set(["result"]);
  * assistant events whose only text blocks are whitespace.
  */
 function isEmptySessionOutput(payload: JsonObject | undefined): boolean {
-  if (!payload) return false;
+  if (!payload) return true;
   const type = payload.type;
   if (type !== "assistant" && type !== "user") return false;
   const message = asJsonObject(payload.message);
@@ -263,7 +263,7 @@ export function buildSessionNodes(
 
       // Skip events that render to nothing — e.g. user messages containing only
       // tool_result blocks (already displayed inline inside the matching ToolCallRow).
-      // Otherwise they occupy a virtualized row with pb-3 and produce empty gaps.
+      // Otherwise they occupy a row that contributes spacing between adjacent items.
       if (isEmptySessionOutput(payload)) {
         continue;
       }
