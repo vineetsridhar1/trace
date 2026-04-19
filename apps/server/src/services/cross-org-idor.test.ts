@@ -110,7 +110,12 @@ describe("sessionService.run (F13)", () => {
     );
 
     const svc = new SessionService();
-    await expect(svc.run("sess_b", null, undefined, "orgA")).rejects.toThrow();
+    await expect(
+      svc.run("sess_b", null, undefined, {
+        userId: "user_a",
+        organizationId: "orgA",
+      }),
+    ).rejects.toThrow();
   });
 });
 

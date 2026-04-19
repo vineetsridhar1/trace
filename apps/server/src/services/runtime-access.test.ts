@@ -433,6 +433,7 @@ describe("runtimeAccessService", () => {
         scopeType: "session_group",
         sessionGroupId: "group-1",
         expiresAt: null,
+        capabilities: ["session"],
       },
       include: {
         granteeUser: true,
