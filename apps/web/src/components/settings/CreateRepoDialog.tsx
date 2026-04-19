@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FolderOpen, Plus } from "lucide-react";
 import { useIsMobile } from "../../hooks/use-mobile";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import {

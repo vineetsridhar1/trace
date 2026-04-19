@@ -1,6 +1,6 @@
 import { Settings, LogOut, Bot } from "lucide-react";
 import { motion } from "framer-motion";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { features } from "../../lib/features";

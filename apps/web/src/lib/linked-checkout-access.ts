@@ -1,4 +1,4 @@
-import { useAuthStore } from "../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 import { useEntityStore, type SessionEntity, type SessionGroupEntity } from "@trace/client-core";
 
 function asRecord(value: unknown): Record<string, unknown> | null {

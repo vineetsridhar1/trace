@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useAuthStore, type AuthState } from "../stores/auth";
+import { useAuthStore, type AuthState } from "@trace/client-core";
 import { useEntityStore } from "@trace/client-core";
 import { useOnboardingStore } from "../stores/onboarding";
 

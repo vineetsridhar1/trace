@@ -1,6 +1,6 @@
 import { createClient, fetchExchange, subscriptionExchange } from "@urql/core";
 import { createClient as createWSClient } from "graphql-ws";
-import { getAuthHeaders } from "../stores/auth";
+import { getAuthHeaders, useAuthStore } from "@trace/client-core";
 import { useConnectionStore } from "../stores/connection";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
@@ -12,11 +12,10 @@ const wsBase = API_URL
 const wsClient = createWSClient({
   url: `${wsBase}/ws`,
   connectionParams: () => {
-    const token = localStorage.getItem("trace_token");
-    const organizationId = localStorage.getItem("trace_active_org");
+    const { token, activeOrgId } = useAuthStore.getState();
     return {
       ...(token ? { token } : {}),
-      ...(organizationId ? { organizationId } : {}),
+      ...(activeOrgId ? { organizationId: activeOrgId } : {}),
     };
   },
   shouldRetry: () => true,

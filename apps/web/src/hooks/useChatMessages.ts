@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { gql } from "@urql/core";
 import type { Event, Message } from "@trace/gql";
-import { useAuthStore } from "../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 import { upsertFetchedChatMessagesWithOptimisticResolution } from "../lib/optimistic-message";
 import { upsertScopedMessageFromEvent } from "./message-event-utils";
 import { useScopedMessages } from "./useScopedMessages";

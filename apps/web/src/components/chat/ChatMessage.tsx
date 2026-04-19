@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { Actor } from "@trace/gql";
 import { useMessageField } from "@trace/client-core";
-import { useAuthStore, type AuthState } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "@trace/client-core";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { client } from "../../lib/urql";
 import {

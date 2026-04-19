@@ -1,3 +1,4 @@
+import "./lib/platform-web";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { Provider } from "urql";

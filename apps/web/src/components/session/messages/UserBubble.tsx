@@ -2,10 +2,10 @@ import { useState, type ReactNode } from "react";
 import { Image as ImageIcon } from "lucide-react";
 import { formatTime } from "./utils";
 import { stripPromptWrapping } from "../interactionModes";
-import { useAuthStore } from "../../../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 import { Markdown } from "../../ui/Markdown";
 import { ImageLightbox } from "../ImageLightbox";
-import { getAuthHeaders } from "../../../stores/auth";
+import { getAuthHeaders } from "@trace/client-core";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 

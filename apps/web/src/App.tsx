@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAuthStore, type AuthState } from "./stores/auth";
+import { useAuthStore, type AuthState } from "@trace/client-core";
 import { useUIStore, type UIState } from "./stores/ui";
 import { useDetailPanelStore, type DetailPanelState } from "./stores/detail-panel";
 import { AppSidebar } from "./components/AppSidebar";
@@ -38,17 +38,17 @@ export function App() {
     fetchMe();
   }, [fetchMe]);
 
+  const token = useAuthStore((s: AuthState) => s.token);
   useEffect(() => {
     if (!window.trace?.setBridgeAuthContext) return;
 
-    const token = localStorage.getItem("trace_token");
     if (!user || !token || !activeOrgId) {
       void window.trace.setBridgeAuthContext(null, null);
       return;
     }
 
     void window.trace.setBridgeAuthContext(token, activeOrgId);
-  }, [activeOrgId, user]);
+  }, [activeOrgId, user, token]);
 
   if (loading) {
     return (
@@ -187,12 +187,15 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
 
 function LoginPage() {
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
-  const setToken = useAuthStore((s: AuthState) => s.setToken);
+  const signInWithToken = useAuthStore((s: AuthState) => s.signInWithToken);
 
   useEffect(() => {
     function handleAuthSuccess(token?: string) {
-      if (token) setToken(token);
-      fetchMe();
+      if (token) {
+        void signInWithToken(token);
+      } else {
+        void fetchMe();
+      }
     }
 
     // Primary: postMessage from the OAuth popup (works when window.opener is intact)
@@ -231,7 +234,7 @@ function LoginPage() {
       window.removeEventListener("storage", onStorage);
       bc?.close();
     };
-  }, [fetchMe, setToken]);
+  }, [fetchMe, signInWithToken]);
 
   function openGithubLogin() {
     const w = 500;

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Copy, LogOut, RefreshCw, Check } from "lucide-react";
-import { useAuthStore, type AuthState } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Button } from "../ui/button";
 
 export function NoOrgWelcome() {

@@ -1,4 +1,4 @@
-import { getAuthHeaders } from "../stores/auth";
+import { getAuthHeaders } from "@trace/client-core";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;

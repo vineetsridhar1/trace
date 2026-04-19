@@ -3,7 +3,7 @@ import { gql } from "@urql/core";
 import type { Event } from "@trace/gql";
 import { client } from "../lib/urql";
 import { useScopedEventIds, eventScopeKey } from "@trace/client-core";
-import { useAuthStore } from "../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 import { HIDDEN_SESSION_PAYLOAD_TYPES } from "../lib/session-event-filters";
 import {
   upsertFetchedSessionEventsWithOptimisticResolution,

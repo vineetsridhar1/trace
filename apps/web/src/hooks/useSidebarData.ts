@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { Channel, ChannelGroup, Chat, Repo, InboxItem } from "@trace/gql";
-import { useAuthStore } from "../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 import { useEntityStore, useEntityIds } from "@trace/client-core";
 import type { EntityTableMap } from "@trace/client-core";
 import { useUIStore } from "../stores/ui";

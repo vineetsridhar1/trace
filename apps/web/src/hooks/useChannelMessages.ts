@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { gql } from "@urql/core";
 import type { Event } from "@trace/gql";
-import { useAuthStore } from "../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 import { upsertScopedMessageFromEvent } from "./message-event-utils";
 import { useScopedMessages } from "./useScopedMessages";
 

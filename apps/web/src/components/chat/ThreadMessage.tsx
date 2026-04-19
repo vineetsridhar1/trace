@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { useMessageField } from "@trace/client-core";
-import { useAuthStore, type AuthState } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import {
   DELETE_CHAT_MESSAGE_MUTATION,

@@ -3,7 +3,7 @@ import type { User } from "@trace/gql";
 import { client } from "../lib/urql";
 import { ORG_MEMBERS_QUERY } from "../lib/mutations";
 import { useEntityStore } from "@trace/client-core";
-import { useAuthStore } from "../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 
 type OrgMember = {
   id: string;
