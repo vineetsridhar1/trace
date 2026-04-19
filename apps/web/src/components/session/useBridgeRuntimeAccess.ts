@@ -36,6 +36,19 @@ export type BridgeRuntimeAccessInfo = {
   pendingRequest?: BridgePendingRequest | null;
 };
 
+// Owner and offline short-circuit the permission prompt: owners implicitly
+// have access, and an offline bridge is handled by the recovery panel
+// instead of being misrepresented as a permission problem.
+export function isBridgeInteractionAllowed(
+  access: BridgeRuntimeAccessInfo | null | undefined,
+): boolean {
+  if (!access) return true;
+  if (access.hostingMode !== "local") return true;
+  if (access.allowed || access.isOwner) return true;
+  if (!access.connected) return true;
+  return false;
+}
+
 function buildFallbackAccess(runtimeInstanceId: string): BridgeRuntimeAccessInfo {
   const hostingMode = isCloudMachineRuntimeId(runtimeInstanceId) ? "cloud" : "local";
   const allowed = hostingMode !== "local";

@@ -12,7 +12,7 @@ import { PlanResponseBar } from "./PlanResponseBar";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
-import { useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
+import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { Loader2, AlertCircle } from "lucide-react";
 import { StickyTodoList, extractLatestTodos } from "./StickyTodoList";
@@ -173,8 +173,7 @@ export function SessionDetailView({
     runtimeInstanceId,
     sessionGroupId ?? null,
   );
-  const bridgeInteractionAllowed =
-    !bridgeAccess || bridgeAccess.hostingMode !== "local" || bridgeAccess.allowed;
+  const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess);
   const setupStatus = useEntityField("sessionGroups", sessionGroupId ?? "", "setupStatus") as
     | "idle"
     | "running"
