@@ -31,10 +31,7 @@ export class PushTokenService {
 
   async listActiveTokensForUser(userId: string, organizationId: string | null) {
     return prisma.pushToken.findMany({
-      where: {
-        userId,
-        OR: [{ organizationId }, { organizationId: null }],
-      },
+      where: { userId, organizationId },
       orderBy: { lastSeenAt: "desc" },
     });
   }

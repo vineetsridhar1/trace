@@ -72,10 +72,9 @@ describe("PushTokenService", () => {
     await expect(service.unregister({ userId: "u-1", token: "missing" })).resolves.toBe(false);
   });
 
-  it("listActiveTokensForUser returns tokens scoped to user, ordered by recency", async () => {
+  it("listActiveTokensForUser scopes strictly to (userId, organizationId) — excludes null-org tokens", async () => {
     const rows = [
       { id: "pt-1", userId: "u-1", token: "tok-a", platform: "ios", organizationId: "o-1" },
-      { id: "pt-2", userId: "u-1", token: "tok-b", platform: "android", organizationId: null },
     ];
     prismaMock.pushToken.findMany.mockResolvedValueOnce(rows);
 
@@ -83,10 +82,19 @@ describe("PushTokenService", () => {
     await expect(service.listActiveTokensForUser("u-1", "o-1")).resolves.toEqual(rows);
 
     expect(prismaMock.pushToken.findMany).toHaveBeenCalledWith({
-      where: {
-        userId: "u-1",
-        OR: [{ organizationId: "o-1" }, { organizationId: null }],
-      },
+      where: { userId: "u-1", organizationId: "o-1" },
+      orderBy: { lastSeenAt: "desc" },
+    });
+  });
+
+  it("listActiveTokensForUser with null org only returns null-org tokens", async () => {
+    prismaMock.pushToken.findMany.mockResolvedValueOnce([]);
+
+    const service = new PushTokenService();
+    await service.listActiveTokensForUser("u-1", null);
+
+    expect(prismaMock.pushToken.findMany).toHaveBeenCalledWith({
+      where: { userId: "u-1", organizationId: null },
       orderBy: { lastSeenAt: "desc" },
     });
   });
