@@ -18,8 +18,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.80.0",
-    "@apollo/server": "^4.11.3",
+    "@anthropic-ai/sdk": "^0.81.0",
+    "@apollo/server": "^5.5.0",
     "@as-integrations/express5": "^1.1.2",
     "@aws-sdk/client-s3": "^3.1014.0",
     "@aws-sdk/s3-request-presigner": "^3.1014.0",
@@ -38,7 +38,7 @@
     "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.3",
     "openai": "^6.32.0",
-    "sanitize-html": "^2.17.2",
+    "sanitize-html": "^2.17.3",
     "ws": "^8.18.0"
   },
   "devDependencies": {

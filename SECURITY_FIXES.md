@@ -49,3 +49,11 @@ Source: `SECURITY_AUDIT.md` (36 findings). Each item is checked off after the fi
 - [x] **F34** Upload key path check uses `includes("..")`, not normalization
 - [x] **F35** Agent `observe` mode permits memory write + summary side effects
 - [x] **F36** JWT echoed into HTML on OAuth callback (redundant with F7 fix)
+
+## Follow-on hardening (post-audit)
+
+- [x] Service-layer defense-in-depth: `sessionService.{get,run,terminate,dismiss,delete,sendMessage}` and `ticketService.{get,update,addComment,assign,unassign,link,unlink}` now accept an optional `organizationId` and filter via `findFirst({ where: { id, organizationId } })` so cross-org access is blocked even when a caller skips the resolver-level assertion.
+- [x] Regression tests (`cross-org-idor.test.ts`) lock in F1/F3/F4/F13 at the service layer.
+- [x] Rate limiting: per-IP limits on `/auth/*` (20/60s for start/callback/logout, 120/60s for `/auth/me`) and 600/60s on `/graphql`, backed by Redis with in-memory fallback.
+- [x] Dependency CVE sweep: bumped `@apollo/server` → v5, `@anthropic-ai/sdk` → 0.81, `sanitize-html` → 2.17.3, `dompurify` → 3.4; added pnpm overrides for `path-to-regexp`, `picomatch`, `lodash-es`, `defu`, `brace-expansion`, `yaml`, `effect`. Remaining advisories are confined to `shadcn`/`vite` (dev build tools) and `quill` 2.0.3 (no upstream patch; web-side XSS sanitization already wraps quill output with DOMPurify).
+- [x] SSRF audit: every outbound `fetch` targets a fixed host (GitHub OAuth, Fly Machines API) or an env-configured base URL (embedding provider). No user-supplied URL is ever fetched server-side.
