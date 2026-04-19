@@ -19,6 +19,32 @@ export interface BuildSessionNodesResult {
 /** Payload types that render content but should not break a Read/Glob bucket */
 const BUCKET_TRANSPARENT_TYPES = new Set(["result"]);
 
+/**
+ * Returns true when an assistant/user session_output payload would render to nothing.
+ * These are typically user events carrying only tool_result blocks (already collected
+ * in toolResultByUseId and rendered inline inside the matching ToolCallRow) or
+ * assistant events whose only text blocks are whitespace.
+ */
+function isEmptySessionOutput(payload: JsonObject | undefined): boolean {
+  if (!payload) return false;
+  const type = payload.type;
+  if (type !== "assistant" && type !== "user") return false;
+  const message = asJsonObject(payload.message);
+  const blocks = message?.content;
+  if (!Array.isArray(blocks)) return true;
+  for (const raw of blocks) {
+    const block = asJsonObject(raw);
+    if (!block) continue;
+    if (block.type === "tool_result") continue;
+    if (block.type === "text") {
+      if (typeof block.text === "string" && block.text.trim()) return false;
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
 export type SessionNode =
   | { kind: "event"; id: string }
   | {
@@ -234,6 +260,14 @@ export function buildSessionNodes(
 
     if (event.eventType === "session_output") {
       const payload = asJsonObject(event.payload);
+
+      // Skip events that render to nothing — e.g. user messages containing only
+      // tool_result blocks (already displayed inline inside the matching ToolCallRow).
+      // Otherwise they occupy a virtualized row with pb-3 and produce empty gaps.
+      if (isEmptySessionOutput(payload)) {
+        continue;
+      }
+
       const commandStart = extractCommandStart(payload, event.timestamp, id);
       if (commandStart) {
         const nextId = eventIds[index + 1];
