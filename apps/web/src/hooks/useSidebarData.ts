@@ -6,6 +6,7 @@ import { useEntityStore, useEntityIds } from "../stores/entity";
 import type { EntityTableMap } from "../stores/entity";
 import { useUIStore } from "../stores/ui";
 import { client } from "../lib/urql";
+import { features } from "../lib/features";
 import { gql } from "@urql/core";
 
 const CHANNELS_QUERY = gql`
@@ -154,7 +155,7 @@ export function useSidebarData() {
 
   const allChannelIds = useEntityIds(
     "channels",
-    undefined,
+    features.messaging ? undefined : (c) => c.type !== "text",
     (a, b) => {
       const ac = a as EntityTableMap["channels"];
       const bc = b as EntityTableMap["channels"];

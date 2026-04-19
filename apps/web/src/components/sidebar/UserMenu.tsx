@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { features } from "../../lib/features";
 import { getInitials } from "../../lib/utils";
 
 export function UserMenu() {
@@ -41,13 +42,15 @@ export function UserMenu() {
           <Settings size={16} className="text-muted-foreground" />
           Settings
         </button>
-        <button
-          onClick={() => setActivePage("agent-debug")}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-surface-hover"
-        >
-          <Bot size={16} className="text-muted-foreground" />
-          Agent Debug
-        </button>
+        {features.agentDebug && (
+          <button
+            onClick={() => setActivePage("agent-debug")}
+            className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-surface-hover"
+          >
+            <Bot size={16} className="text-muted-foreground" />
+            Agent Debug
+          </button>
+        )}
         <button
           onClick={logout}
           className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive transition-colors hover:bg-surface-hover"
