@@ -46,6 +46,18 @@ export const sessionQueries = {
       args.agentStatus ?? undefined,
     );
   },
+  searchSessions: (
+    _: unknown,
+    args: { organizationId: string; query: string; channelId?: string | null },
+    ctx: Context,
+  ) => {
+    requireOrgContext(ctx);
+    return sessionService.search(
+      args.organizationId,
+      args.query,
+      args.channelId ?? undefined,
+    );
+  },
   availableSessionRuntimes: (_: unknown, args: { sessionId: string }, ctx: Context) => {
     if (!ctx.userId) throw new AuthenticationError();
     const orgId = requireOrgContext(ctx);
