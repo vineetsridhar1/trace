@@ -2,6 +2,7 @@ import { useEffect, useCallback, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSidebarData } from "../../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../../hooks/useSidebarTabScroll";
+import { features } from "../../lib/features";
 import { useUIStore } from "../../stores/ui";
 import { SidebarChannelsPane } from "./SidebarChannelsPane";
 import { SidebarDirectMessagesPane } from "./SidebarDirectMessagesPane";
@@ -85,39 +86,59 @@ export function PeekOverlay({
             margin: "8px",
             height: "calc(100% - 16px)",
             borderRadius: "12px",
-            backgroundColor: `color-mix(in srgb, var(--sidebar) ${tabProgress * 100}%, var(--sidebar-dm))`,
+            backgroundColor: `color-mix(in srgb, var(--sidebar) ${(features.messaging ? tabProgress : 1) * 100}%, var(--sidebar-dm))`,
           }}
         >
           <div className="flex flex-1 flex-col overflow-hidden rounded-xl">
-            <div
-              ref={viewportRef}
-              className="no-scrollbar flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain"
-              onScroll={handleScroll}
-            >
-              <SidebarDirectMessagesPane
-                activeChatId={activeChatId}
-                chatIds={sidebarData.chatIds}
-                chatsLoading={sidebarData.chatsLoading}
-                onChatClick={handleChatClick}
-              />
-              <SidebarChannelsPane
-                activeChannelId={activeChannelId}
-                activeOrgId={sidebarData.activeOrgId}
-                allChannelIds={sidebarData.allChannelIds}
-                channelGroupsById={sidebarData.channelGroupsById}
-                channelIdsByGroup={sidebarData.channelIdsByGroup}
-                channelsById={sidebarData.channelsById}
-                channelsLoading={sidebarData.channelsLoading}
-                groupIds={sidebarData.groupIds}
-                onChannelClick={handleChannelClick}
-                onDragActiveChange={handleDragActiveChange}
-                topLevelItems={sidebarData.topLevelItems}
-              />
-            </div>
+            {features.messaging ? (
+              <div
+                ref={viewportRef}
+                className="no-scrollbar flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain"
+                onScroll={handleScroll}
+              >
+                <SidebarDirectMessagesPane
+                  activeChatId={activeChatId}
+                  chatIds={sidebarData.chatIds}
+                  chatsLoading={sidebarData.chatsLoading}
+                  onChatClick={handleChatClick}
+                />
+                <SidebarChannelsPane
+                  activeChannelId={activeChannelId}
+                  activeOrgId={sidebarData.activeOrgId}
+                  allChannelIds={sidebarData.allChannelIds}
+                  channelGroupsById={sidebarData.channelGroupsById}
+                  channelIdsByGroup={sidebarData.channelIdsByGroup}
+                  channelsById={sidebarData.channelsById}
+                  channelsLoading={sidebarData.channelsLoading}
+                  groupIds={sidebarData.groupIds}
+                  onChannelClick={handleChannelClick}
+                  onDragActiveChange={handleDragActiveChange}
+                  topLevelItems={sidebarData.topLevelItems}
+                />
+              </div>
+            ) : (
+              <div className="flex min-h-0 flex-1">
+                <SidebarChannelsPane
+                  activeChannelId={activeChannelId}
+                  activeOrgId={sidebarData.activeOrgId}
+                  allChannelIds={sidebarData.allChannelIds}
+                  channelGroupsById={sidebarData.channelGroupsById}
+                  channelIdsByGroup={sidebarData.channelIdsByGroup}
+                  channelsById={sidebarData.channelsById}
+                  channelsLoading={sidebarData.channelsLoading}
+                  groupIds={sidebarData.groupIds}
+                  onChannelClick={handleChannelClick}
+                  onDragActiveChange={handleDragActiveChange}
+                  topLevelItems={sidebarData.topLevelItems}
+                />
+              </div>
+            )}
 
-            <div className="px-3 py-2">
-              <SidebarTabSwitcher tabProgress={tabProgress} onTabClick={selectTab} />
-            </div>
+            {features.messaging && (
+              <div className="px-3 py-2">
+                <SidebarTabSwitcher tabProgress={tabProgress} onTabClick={selectTab} />
+              </div>
+            )}
             <div className="border-t border-border">
               <UserMenu />
             </div>

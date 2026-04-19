@@ -1,3 +1,5 @@
+import { features } from "../../lib/features";
+
 export const DM_TAB_INDEX = 0;
 export const MAIN_TAB_INDEX = 1;
 
@@ -17,6 +19,7 @@ export function getPreferredSidebarTab(
   activePage: string,
   currentTab: SidebarTab,
 ) {
+  if (!features.messaging) return "main";
   if (activeChatId) return "dm";
   if (activeChannelId || activePage === "inbox" || activePage === "tickets") return "main";
   return currentTab;
