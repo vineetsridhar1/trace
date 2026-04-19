@@ -13,6 +13,7 @@ export interface AgentToolResult {
 export interface BuildSessionNodesResult {
   nodes: SessionNode[];
   completedAgentTools: Map<string, AgentToolResult>;
+  toolResultByUseId: Map<string, unknown>;
 }
 
 /** Payload types that render content but should not break a Read/Glob bucket */
@@ -169,6 +170,7 @@ export function buildSessionNodes(
 ): BuildSessionNodesResult {
   const result: SessionNode[] = [];
   const completedAgentTools = new Map<string, AgentToolResult>();
+  const toolResultByUseId = new Map<string, unknown>();
   let bucket: ReadGlobItem[] = [];
 
   const flushBucket = () => {
@@ -181,9 +183,10 @@ export function buildSessionNodes(
     bucket = [];
   };
 
-  // First pass: collect agent/task tool_result blocks from ALL events (including children).
-  // A subagent that spawns its own subagent will carry the inner agent's tool_result on a
-  // child event — we still need it in the map so the nested SubagentRow can render "done".
+  // First pass: collect all tool_result blocks across ALL events.
+  // Agent/task results power SubagentRow; all others power ToolCallRow inline output.
+  // tool_use blocks live in assistant events; matching tool_result blocks live in the
+  // subsequent user event — they must be correlated here before per-event rendering.
   for (const id of eventIds) {
     const event = events[id];
     if (!event || event.eventType !== "session_output") continue;
@@ -195,10 +198,13 @@ export function buildSessionNodes(
     for (const raw of blocks) {
       const block = asJsonObject(raw);
       if (!block || block.type !== "tool_result") continue;
+      const toolUseId = typeof block.tool_use_id === "string" ? block.tool_use_id : undefined;
+      if (!toolUseId) continue;
       const name = typeof block.name === "string" ? block.name.toLowerCase() : "";
-      if (!AGENT_NAMES.has(name)) continue;
-      if (typeof block.tool_use_id === "string") {
-        completedAgentTools.set(block.tool_use_id, { content: block.content });
+      if (AGENT_NAMES.has(name)) {
+        completedAgentTools.set(toolUseId, { content: block.content });
+      } else {
+        toolResultByUseId.set(toolUseId, block.content ?? block.output);
       }
     }
   }
@@ -288,7 +294,7 @@ export function buildSessionNodes(
   // Questions run first — they need immediate interaction and take precedence
   // if both a QuestionBlock and PlanBlock appear in the same event.
   const withQuestions = detectQuestionNodes(deduped, events);
-  return { nodes: detectPlanReviewNodes(withQuestions, events), completedAgentTools };
+  return { nodes: detectPlanReviewNodes(withQuestions, events), completedAgentTools, toolResultByUseId };
 }
 
 /** Remove duplicate consecutive "result" session_output events */

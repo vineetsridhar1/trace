@@ -17,6 +17,7 @@ export interface SessionMessageListProps {
   loadingOlder?: boolean;
   onLoadOlder?: () => void;
   completedAgentTools: Map<string, AgentToolResult>;
+  toolResultByUseId: Map<string, unknown>;
   scrollToEventId?: string | null;
   onScrollComplete?: () => void;
 }
@@ -28,6 +29,7 @@ export function SessionMessageList({
   loadingOlder,
   onLoadOlder,
   completedAgentTools,
+  toolResultByUseId,
   scrollToEventId,
   onScrollComplete,
 }: SessionMessageListProps) {
@@ -289,6 +291,7 @@ export function SessionMessageList({
                     id={node.id}
                     gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
                     completedAgentTools={completedAgentTools}
+                    toolResultByUseId={toolResultByUseId}
                   />
                 </div>
               ) : node.kind === "command-execution" ? (

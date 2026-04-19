@@ -57,23 +57,12 @@ function renderAssistantContent(
   ts: string,
   scopeKey: string,
   completedAgentTools: Map<string, AgentToolResult>,
+  toolResultByUseId: Map<string, unknown>,
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>,
 ) {
   const message = asJsonObject(payload.message);
   const contentBlocks = message?.content;
   if (!Array.isArray(contentBlocks)) return null;
-
-  // Build a map of tool_use_id → output from tool_result blocks so we can
-  // render results inline inside the matching ToolCallRow accordion.
-  const toolResultByUseId = new Map<string, string | Record<string, unknown>>();
-  for (const raw of contentBlocks) {
-    const block = asJsonObject(raw);
-    if (!block || block.type !== "tool_result") continue;
-    const id = typeof block.tool_use_id === "string" ? block.tool_use_id : undefined;
-    if (!id) continue;
-    const out = asOutput(block.content ?? block.output);
-    if (out != null) toolResultByUseId.set(id, out);
-  }
 
   const elements: React.ReactNode[] = [];
   for (let i = 0; i < contentBlocks.length; i++) {
@@ -100,23 +89,24 @@ function renderAssistantContent(
             toolUseId={toolUseId}
             scopeKey={scopeKey}
             completedAgentTools={completedAgentTools}
+            toolResultByUseId={toolResultByUseId}
             gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
           />,
         );
       } else {
-        const output = toolUseId ? toolResultByUseId.get(toolUseId) : undefined;
+        const rawOutput = toolUseId ? toolResultByUseId.get(toolUseId) : undefined;
         elements.push(
           <ToolCallRow
             key={i}
             name={name}
             input={asJsonObject(block.input)}
-            output={output}
+            output={asOutput(rawOutput)}
             timestamp={ts}
           />,
         );
       }
     } else if (block.type === "tool_result") {
-      // Results are now rendered inline inside the matching ToolCallRow — skip standalone rows.
+      // Results are rendered inline inside the matching ToolCallRow — skip standalone rows.
     }
   }
 
@@ -128,6 +118,7 @@ function renderSessionOutput(
   ts: string,
   scopeKey: string,
   completedAgentTools: Map<string, AgentToolResult>,
+  toolResultByUseId: Map<string, unknown>,
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>,
 ) {
   const type = payload.type;
@@ -139,6 +130,7 @@ function renderSessionOutput(
       ts,
       scopeKey,
       completedAgentTools,
+      toolResultByUseId,
       gitCheckpointsByPromptEventId,
     );
   }
@@ -158,10 +150,12 @@ export const SessionMessage = memo(function SessionMessage({
   id,
   gitCheckpointsByPromptEventId,
   completedAgentTools,
+  toolResultByUseId,
 }: {
   id: string;
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
   completedAgentTools: Map<string, AgentToolResult>;
+  toolResultByUseId: Map<string, unknown>;
 }) {
   const scopeKey = useEventScopeKey();
   const eventType = useScopedEventField(scopeKey, id, "eventType");
@@ -196,6 +190,7 @@ export const SessionMessage = memo(function SessionMessage({
             timestamp,
             scopeKey,
             completedAgentTools,
+            toolResultByUseId,
             gitCheckpointsByPromptEventId,
           )
         : null;

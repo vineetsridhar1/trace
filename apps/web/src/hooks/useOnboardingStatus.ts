@@ -22,10 +22,12 @@ export function useOnboardingStatus(): OnboardingStatus {
   const tokensLoaded = useOnboardingStore((s) => s.tokensLoaded);
   const tokensLoading = useOnboardingStore((s) => s.tokensLoading);
   const reposLoadedForOrg = useOnboardingStore((s) => s.reposLoadedForOrg);
+  const repoCount = useOnboardingStore((s) => s.repoCount);
   const fetchApiTokens = useOnboardingStore((s) => s.fetchApiTokens);
   const ensureReposLoaded = useOnboardingStore((s) => s.ensureReposLoaded);
 
-  const repoCount = useEntityStore((s) => Object.keys(s.repos).length);
+  // Channels are populated by the org subscription (useOrgEvents) which is org-scoped,
+  // so entity store channels reliably reflect the active org.
   const channelCount = useEntityStore((s) => Object.keys(s.channels).length);
 
   useEffect(() => {

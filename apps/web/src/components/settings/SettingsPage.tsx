@@ -44,12 +44,11 @@ export function SettingsPage() {
   const setActivePage = useUIStore((s) => s.setActivePage);
   const settingsInitialTab = useUIStore((s) => s.settingsInitialTab);
   const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
-  const [activeTab, setActiveTab] = useState<SettingsTab>(
-    isSettingsTab(settingsInitialTab) ? settingsInitialTab : "repositories",
-  );
+  const [activeTab, setActiveTab] = useState<SettingsTab>("repositories");
 
   useEffect(() => {
-    if (settingsInitialTab !== null) {
+    if (isSettingsTab(settingsInitialTab)) {
+      setActiveTab(settingsInitialTab);
       setSettingsInitialTab(null);
     }
   }, [settingsInitialTab, setSettingsInitialTab]);
