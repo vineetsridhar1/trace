@@ -6,7 +6,7 @@ import {
   UPDATE_REPO_MUTATION,
   REGISTER_REPO_WEBHOOK_MUTATION,
   UNREGISTER_REPO_WEBHOOK_MUTATION,
-} from "../../lib/mutations";
+} from "@trace/client-core";
 import { Button } from "../ui/button";
 import { BranchCombobox } from "../channel/BranchCombobox";
 import { RepoDesktopSection } from "./RepoDesktopSection";

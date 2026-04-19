@@ -1,5 +1,5 @@
 /**
- * UUIDv4 generator that works in non-secure contexts.
+ * UUIDv4 generator that works in non-secure contexts and on React Native.
  * `crypto.randomUUID` is only available in secure contexts (HTTPS/localhost),
  * but `crypto.getRandomValues` works over plain HTTP, so we build the UUID
  * ourselves when `randomUUID` isn't exposed.
@@ -19,7 +19,6 @@ export function generateUUID(): string {
     for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
   }
 
-  // Set the version (4) and variant (10xx) bits.
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
 

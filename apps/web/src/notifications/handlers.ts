@@ -1,9 +1,8 @@
 import { createElement } from "react";
 import { toast } from "sonner";
-import type { Event, EventType, ScopeType, AgentStatus, BridgeAccessCapability } from "@trace/gql";
+import type { Event, EventType, ScopeType, BridgeAccessCapability } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
-import { useEntityStore } from "@trace/client-core";
-import { useAuthStore } from "@trace/client-core";
+import { registerHandler, useAuthStore, useEntityStore } from "@trace/client-core";
 import { useUIStore, navigateToSession } from "../stores/ui";
 import { agentStatusLabel } from "../components/session/sessionStatus";
 import { showNativeNotification } from "./native";
@@ -22,25 +21,6 @@ function parseCapabilityArray(value: unknown): BridgeAccessCapability[] {
     }
   }
   return caps;
-}
-
-/** Notification handler for a specific event type. */
-type NotificationHandler = (event: Event) => void;
-
-const handlers = new Map<EventType, NotificationHandler[]>();
-
-/** Register a notification handler for a given event type. */
-export function registerHandler(eventType: EventType, handler: NotificationHandler) {
-  handlers.set(eventType, [...(handlers.get(eventType) ?? []), handler]);
-}
-
-/** Run all registered handlers for an event. Called from useOrgEvents. */
-export function notifyForEvent(event: Event) {
-  const eventHandlers = handlers.get(event.eventType);
-  if (!eventHandlers) return;
-  for (const handler of eventHandlers) {
-    handler(event);
-  }
 }
 
 /**

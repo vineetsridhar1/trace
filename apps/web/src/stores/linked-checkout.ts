@@ -9,7 +9,7 @@ import {
   RESTORE_LINKED_CHECKOUT_MUTATION,
   SET_LINKED_CHECKOUT_AUTO_SYNC_MUTATION,
   SYNC_LINKED_CHECKOUT_MUTATION,
-} from "../lib/mutations";
+} from "@trace/client-core";
 
 export interface LinkedCheckoutSyncRequest extends DesktopLinkedCheckoutSyncInput {
   runtimeInstanceId: string;

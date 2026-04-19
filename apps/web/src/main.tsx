@@ -1,4 +1,6 @@
 import "./lib/platform-web";
+import "./lib/event-bindings";
+import "./notifications/handlers";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { Provider } from "urql";

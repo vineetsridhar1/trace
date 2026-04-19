@@ -11,7 +11,7 @@ import {
   TERMINATE_SESSION_MUTATION,
   ACCEPT_AGENT_SUGGESTION_MUTATION,
   DISMISS_AGENT_SUGGESTION_MUTATION,
-} from "../../lib/mutations";
+} from "@trace/client-core";
 import { useEntityField } from "@trace/client-core";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";

@@ -9,7 +9,7 @@ import {
   EDIT_CHAT_MESSAGE_MUTATION,
   DELETE_CHANNEL_MESSAGE_MUTATION,
   EDIT_CHANNEL_MESSAGE_MUTATION,
-} from "../../lib/mutations";
+} from "@trace/client-core";
 import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 import { MessageActionsSheet } from "./MessageActionsSheet";
 import { MessageActionBar } from "./MessageActionBar";

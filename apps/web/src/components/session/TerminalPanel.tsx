@@ -8,7 +8,7 @@ import {
   SESSION_TERMINALS_QUERY,
   CREATE_TERMINAL_MUTATION,
   DESTROY_TERMINAL_MUTATION,
-} from "../../lib/mutations";
+} from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import type { Terminal } from "@trace/gql";
 

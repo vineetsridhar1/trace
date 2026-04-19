@@ -4,7 +4,7 @@ import type { Channel } from "@trace/gql";
 import { useEntityIds, useEntityField } from "@trace/client-core";
 import type { EntityTableMap } from "@trace/client-core";
 import { client } from "../../lib/urql";
-import { UPDATE_CHANNEL_MUTATION } from "../../lib/mutations";
+import { UPDATE_CHANNEL_MUTATION } from "@trace/client-core";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { Input } from "../ui/input";
