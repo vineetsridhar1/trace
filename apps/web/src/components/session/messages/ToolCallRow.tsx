@@ -68,11 +68,17 @@ export function ToolCallRow({ name, input, output, timestamp }: ToolCallRowProps
             />
           ) : (
             input && !command && (
-              <pre className="tool-cmd-output">{serializeUnknown(input)}</pre>
+              <>
+                {output != null && <div className="tool-cmd-section-label">Input</div>}
+                <pre className="tool-cmd-output">{serializeUnknown(input)}</pre>
+              </>
             )
           )}
           {output != null && (
-            <pre className="tool-cmd-output">{serializeUnknown(output)}</pre>
+            <>
+              <div className="tool-cmd-section-label">Output</div>
+              <pre className="tool-cmd-output">{serializeUnknown(output)}</pre>
+            </>
           )}
         </div>
       </div>
