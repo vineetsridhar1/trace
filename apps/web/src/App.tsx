@@ -186,16 +186,47 @@ function LoginPage() {
   const setToken = useAuthStore((s: AuthState) => s.setToken);
 
   useEffect(() => {
+    function handleAuthSuccess(token?: string) {
+      if (token) setToken(token);
+      fetchMe();
+    }
+
+    // Primary: postMessage from the OAuth popup (works when window.opener is intact)
     function onMessage(e: MessageEvent) {
       if (e.data?.type === "auth:success") {
-        if (e.data.token) {
-          setToken(e.data.token);
-        }
-        fetchMe();
+        handleAuthSuccess(e.data.token as string | undefined);
       }
     }
     window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
+
+    // Fallback 1: BroadcastChannel — works even when window.opener is
+    // severed by cross-origin navigation (GitHub OAuth redirect in Electron).
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel("trace_auth");
+      bc.onmessage = (e: MessageEvent) => {
+        if (e.data?.type === "auth:success") {
+          handleAuthSuccess(e.data.token as string | undefined);
+        }
+      };
+    } catch {
+      // BroadcastChannel not supported — localStorage fallback below still works
+    }
+
+    // Fallback 2: storage event — fires when the popup writes trace_token
+    // to localStorage (same origin, different window).
+    function onStorage(e: StorageEvent) {
+      if (e.key === "trace_token" && e.newValue) {
+        handleAuthSuccess(e.newValue);
+      }
+    }
+    window.addEventListener("storage", onStorage);
+
+    return () => {
+      window.removeEventListener("message", onMessage);
+      window.removeEventListener("storage", onStorage);
+      bc?.close();
+    };
   }, [fetchMe, setToken]);
 
   function openGithubLogin() {

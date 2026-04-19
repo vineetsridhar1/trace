@@ -131,14 +131,24 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
     // Use origin from OAuth state param if available, otherwise fall back to WEB_URL
     const redirectOrigin = (req.query.state as string) || WEB_URL;
 
-    // Signal the opener window and close the popup
+    // Signal the opener window and close the popup.
+    // Always store the token in localStorage first — window.opener can be
+    // null after cross-origin navigation (GitHub OAuth redirect) in
+    // Chromium/Electron, so postMessage alone is unreliable.  localStorage
+    // is shared across same-origin windows, and the storage event plus
+    // BroadcastChannel give the main window two independent fallback
+    // signals that work even when the opener reference is severed.
     res.send(`<!DOCTYPE html><html><body><script>
+      try { localStorage.setItem("trace_token", "${token}"); } catch(e) {}
+      try {
+        var bc = new BroadcastChannel("trace_auth");
+        bc.postMessage({ type: "auth:success", token: "${token}" });
+        bc.close();
+      } catch(e) {}
       if (window.opener) {
         window.opener.postMessage({ type: "auth:success", token: "${token}" }, "${redirectOrigin}");
-        window.close();
-      } else {
-        window.location.href = "${redirectOrigin}";
       }
+      window.close();
     </script></body></html>`);
   } catch (err) {
     console.error("GitHub OAuth error:", err);
@@ -189,7 +199,11 @@ router.get("/auth/me", async (req: Request, res: Response) => {
       return res.status(401).json({ error: "User not found" });
     }
 
-    res.json({ user });
+    // Include the session token so the client can store it in localStorage.
+    // This is necessary when the user authenticated via httpOnly cookie
+    // (e.g. after an OAuth popup where window.opener was severed) and the
+    // client-side JS doesn't have the raw JWT for the desktop bridge.
+    res.json({ user, token });
   } catch {
     return res.status(401).json({ error: "Invalid token" });
   }

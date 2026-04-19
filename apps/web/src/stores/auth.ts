@@ -62,8 +62,15 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
         set({ user: null, activeOrgId: null, orgMemberships: [], loading: false });
         return;
       }
-      const data = await res.json();
+      const data = await res.json() as { user: Record<string, unknown>; token?: string };
       const { orgMemberships: memberships, ...userFields } = data.user;
+
+      // Ensure the session token is in localStorage — it may be missing
+      // when the user authenticated via httpOnly cookie (OAuth popup with
+      // severed window.opener in Electron).
+      if (data.token && !localStorage.getItem(TOKEN_KEY)) {
+        localStorage.setItem(TOKEN_KEY, data.token);
+      }
 
       const user = userFields as User;
       const orgMemberships = (memberships ?? []) as OrgMembership[];
