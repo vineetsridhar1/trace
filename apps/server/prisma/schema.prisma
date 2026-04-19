@@ -588,6 +588,48 @@ model SessionGroup {
   @@index([repoId, branch, updatedAt])
 }
 
+model Session {
+  id             String       @id @default(uuid())
+  name           String
+  agentStatus    AgentStatus   @default(not_started)
+  sessionStatus  SessionStatus @default(in_progress)
+  tool           CodingTool
+  model          String?
+  toolChangedAt      DateTime?
+  lastUserMessageAt  DateTime?
+  lastMessageAt      DateTime?
+  hosting        HostingMode
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdById    String
+  createdBy      User         @relation("SessionCreator", fields: [createdById], references: [id])
+  repoId         String?
+  repo           Repo?        @relation(fields: [repoId], references: [id])
+  branch         String?
+  channelId      String?
+  channel        Channel?     @relation(fields: [channelId], references: [id])
+  sessionGroupId String?
+  sessionGroup   SessionGroup? @relation(fields: [sessionGroupId], references: [id])
+  workdir         String?
+  toolSessionId   String?
+  pendingRun      Json?
+  endpoints       Json?
+  connection      Json?
+  prUrl           String?
+  worktreeDeleted Boolean      @default(false)
+  readOnlyWorkspace Boolean    @default(false)
+
+  projects        SessionProject[]
+  queuedMessages  QueuedMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sessionGroupId, updatedAt])
+  @@index([organizationId, agentStatus])
+  @@index([channelId, updatedAt])
+}
+
 model QueuedMessage {
   id              String   @id @default(uuid())
   sessionId       String
