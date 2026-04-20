@@ -1,0 +1,73 @@
+diff --git a/ios/RepresentableView.swift b/ios/RepresentableView.swift
+index 09adaca401c716dd6c47590ffc7fe5646de2e50b..9d878fe3576967b5163974ccaa3ad71803807a22 100644
+--- a/ios/RepresentableView.swift
++++ b/ios/RepresentableView.swift
+@@ -30,3 +30,54 @@ struct RepresentableView: PlatformViewRepresentable {
+ 
+ #endif
+ }
++
++#if !os(macOS)
++extension UIView {
++  /// BFS search for the first UIScrollView descendant. Used to bridge React
++  /// Native's scroll-view hierarchy into UIKit's tab-bar minimize detection,
++  /// which relies on `UIViewController.contentScrollView(for:)`.
++  func findDescendantScrollView() -> UIScrollView? {
++    var queue: [UIView] = subviews.reversed()
++    while !queue.isEmpty {
++      let view = queue.removeLast()
++      if let scrollView = view as? UIScrollView {
++        return scrollView
++      }
++      queue.insert(contentsOf: view.subviews, at: 0)
++    }
++    return nil
++  }
++}
++
++@available(iOS 15.0, *)
++enum ScrollViewBridging {
++  private static var installed = false
++
++  static func install() {
++    guard !installed else { return }
++    installed = true
++
++    let original = class_getInstanceMethod(
++      UIViewController.self,
++      #selector(UIViewController.contentScrollView(for:))
++    )
++    let swizzled = class_getInstanceMethod(
++      UIViewController.self,
++      #selector(UIViewController.rntabs_contentScrollView(for:))
++    )
++    if let original, let swizzled {
++      method_exchangeImplementations(original, swizzled)
++    }
++  }
++}
++
++@available(iOS 15.0, *)
++extension UIViewController {
++  @objc func rntabs_contentScrollView(for edge: NSDirectionalRectEdge) -> UIScrollView? {
++    if let original = rntabs_contentScrollView(for: edge) {
++      return original
++    }
++    return view.findDescendantScrollView()
++  }
++}
++#endif
+diff --git a/ios/TabViewImpl.swift b/ios/TabViewImpl.swift
+index 72938be90540ea3a483d7db9a80fb74c04d31272..8bb0bd7708009b60e9557511586c902c221b5254 100644
+--- a/ios/TabViewImpl.swift
++++ b/ios/TabViewImpl.swift
+@@ -62,6 +62,9 @@ struct TabViewImpl: View {
+       #endif
+       .introspectTabView { tabController in
+ #if !os(macOS)
++        if #available(iOS 15.0, *) {
++          ScrollViewBridging.install()
++        }
+         tabController.view.backgroundColor = .clear
+         tabController.viewControllers?.forEach { $0.view.backgroundColor = .clear }
+ #endif
