@@ -443,7 +443,7 @@ Full-screen modals for:
 
 **Polish:**
 - Segmented control at top if the org has a large number of channels: "All", "Mine" (where user has recent sessions).
-- Search bar pinned at top, pull-to-reveal (native iOS pattern).
+- Native iOS pull-to-reveal search bar (Mail / Settings pattern): hidden at rest, revealed when the large-title header is pulled down. Use `headerSearchBarOptions` with the default `hideWhenScrolling: true`.
 
 ---
 

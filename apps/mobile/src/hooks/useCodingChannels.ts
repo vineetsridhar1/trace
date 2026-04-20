@@ -32,12 +32,19 @@ export function useCodingChannelKeys({
   );
 }
 
-/** Derive how many non-merged sessions are attached to a single channel. */
+/**
+ * Derive how many *actively working* sessions are attached to a single
+ * channel. "Active" means the user can still influence the session:
+ * `in_progress` (agent working) or `needs_input` (waiting on the user).
+ * Completed (`merged`), archived, or stuck (`failed`, `in_review`)
+ * sessions do not count.
+ */
 export function useChannelActiveSessionCount(channelId: string): number {
   return useEntityStore((state: EntityState) => {
     let count = 0;
     for (const session of Object.values(state.sessions) as SessionEntity[]) {
-      if (session.channel?.id === channelId && session.sessionStatus !== "merged") {
+      if (session.channel?.id !== channelId) continue;
+      if (session.sessionStatus === "in_progress" || session.sessionStatus === "needs_input") {
         count += 1;
       }
     }

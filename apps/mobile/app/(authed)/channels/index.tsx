@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { Stack } from "expo-router";
 import { FlashList } from "@shopify/flash-list";
-import { useAuthStore, type AuthState } from "@trace/client-core";
+import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import { EmptyState, Screen, SegmentedControl } from "@/components/design-system";
 import { ChannelListRow } from "@/components/channels/ChannelListRow";
 import { ChannelGroupHeader } from "@/components/channels/ChannelGroupHeader";
@@ -13,6 +13,7 @@ import {
   type ChannelListItemKey,
 } from "@/hooks/useCodingChannels";
 import { refreshOrgData } from "@/hooks/useHydrate";
+import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
 
 const SEGMENTS = ["All", "Mine"] as const;
@@ -20,6 +21,7 @@ const SEGMENTS = ["All", "Mine"] as const;
 export default function ChannelsIndex() {
   const theme = useTheme();
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
+  const logout = useAuthStore((s: AuthState) => s.logout);
 
   const [segmentIndex, setSegmentIndex] = useState(0);
   const [search, setSearch] = useState("");
@@ -28,10 +30,11 @@ export default function ChannelsIndex() {
   const filter: ChannelFilter = segmentIndex === 1 ? "mine" : "all";
   const keys = useCodingChannelKeys({ filter, search });
 
+  // Native iOS pull-to-reveal: hidden on initial scroll offset, revealed
+  // when the user drags the large-title header down. Matches Mail / Settings.
   const searchBarOptions = useMemo(
     () => ({
       placeholder: "Search channels",
-      hideWhenScrolling: false,
       onChangeText: (e: { nativeEvent: { text: string } }) => setSearch(e.nativeEvent.text),
       onCancelButtonPress: () => setSearch(""),
     }),
@@ -40,13 +43,18 @@ export default function ChannelsIndex() {
 
   const handleRefresh = useCallback(async () => {
     if (!activeOrgId) return;
+    void haptic.medium();
     setRefreshing(true);
     try {
-      await refreshOrgData(activeOrgId);
+      const ok = await refreshOrgData(activeOrgId);
+      if (!ok) {
+        useEntityStore.getState().reset();
+        await logout();
+      }
     } finally {
       setRefreshing(false);
     }
-  }, [activeOrgId]);
+  }, [activeOrgId, logout]);
 
   const listHeader = useMemo(
     () => (
