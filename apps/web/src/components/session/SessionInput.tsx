@@ -29,7 +29,7 @@ import { useDraftsStore } from "../../stores/drafts";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 
-const EMPTY_IMAGES = Object.freeze([] as ImageAttachment[]) as ImageAttachment[];
+const EMPTY_IMAGES: ImageAttachment[] = [];
 
 const MAX_IMAGES = 5;
 
@@ -60,16 +60,15 @@ export function SessionInput({
   const images = useDraftsStore(
     (s) => s.drafts[sessionId]?.images ?? EMPTY_IMAGES,
   );
-  const mode = useDraftsStore((s) => s.drafts[sessionId]?.mode ?? "code");
   const setDraftImages = useDraftsStore((s) => s.setDraftImages);
   const setDraftText = useDraftsStore((s) => s.setDraftText);
-  const setDraftMode = useDraftsStore((s) => s.setDraftMode);
   const [initialDraftHtml] = useState(
     () => useDraftsStore.getState().drafts[sessionId]?.html ?? "",
   );
   const [hasContent, setHasContent] = useState(
     () => (useDraftsStore.getState().drafts[sessionId]?.text ?? "").trim().length > 0,
   );
+  const [mode, setMode] = useState<InteractionMode>("code");
   const [isSending, setIsSending] = useState(false);
   const isSendingRef = useRef(false);
   const editorRef = useRef<ChatEditorHandle>(null);
@@ -92,10 +91,11 @@ export function SessionInput({
   const slashCommands = useSlashCommands(sessionId);
 
   const cycleMode = useCallback(() => {
-    const current = useDraftsStore.getState().drafts[sessionId]?.mode ?? "code";
-    const idx = MODE_CYCLE.indexOf(current);
-    setDraftMode(sessionId, MODE_CYCLE[(idx + 1) % MODE_CYCLE.length]);
-  }, [sessionId, setDraftMode]);
+    setMode((prev: InteractionMode) => {
+      const idx = MODE_CYCLE.indexOf(prev);
+      return MODE_CYCLE[(idx + 1) % MODE_CYCLE.length];
+    });
+  }, []);
 
   const handleImagePaste = useCallback((files: File[]) => {
     if (isSendingRef.current) return;
