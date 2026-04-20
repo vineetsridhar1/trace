@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { FlatList, RefreshControl } from "react-native";
+import { RefreshControl, ScrollView } from "react-native";
 import { EmptyState, Screen } from "@/components/design-system";
 import { SessionGroupRow } from "@/components/channels/SessionGroupRow";
 import { MergedArchivedHeader } from "@/components/channels/MergedArchivedHeader";
@@ -36,35 +36,27 @@ export default function MergedArchived() {
   return (
     <Screen edges={["left", "right"]}>
       <Stack.Screen options={{ title: "Merged & Archived" }} />
-      <FlatList
-        // Re-mount on segment change so scroll resets to the top instead of
+      <ScrollView
+        // Re-mount on segment change so scroll resets to zero instead of
         // carrying over from the previous (often differently-sized) list.
         key={segment}
-        data={ids}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        // FlatList's underlying UIScrollView is what iOS 26's tab-bar
-        // minimize behavior hooks into; FlashList wraps its scroll view in
-        // extra layout views that the auto-detection misses.
+        // Plain ScrollView matches the home page shape that iOS 26's
+        // tab-bar minimize behavior reliably picks up. Merged/archived
+        // counts stay in the dozens, no need to virtualize.
         contentInsetAdjustmentBehavior="automatic"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
-        ListHeaderComponent={
-          <MergedArchivedHeader segment={segment} onSegmentChange={setSegment} />
-        }
-        ListEmptyComponent={<MergedArchivedEmpty segment={segment} />}
-      />
+      >
+        <MergedArchivedHeader segment={segment} onSegmentChange={setSegment} />
+        {ids.length === 0 ? (
+          <MergedArchivedEmpty segment={segment} />
+        ) : (
+          ids.map((id) => <SessionGroupRow key={id} groupId={id} />)
+        )}
+      </ScrollView>
     </Screen>
   );
-}
-
-function renderItem({ item }: { item: string }) {
-  return <SessionGroupRow groupId={item} />;
-}
-
-function keyExtractor(item: string): string {
-  return item;
 }
 
 function MergedArchivedEmpty({ segment }: { segment: MergedArchivedSegment }) {

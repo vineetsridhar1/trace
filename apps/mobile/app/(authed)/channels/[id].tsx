@@ -7,10 +7,10 @@ import {
   type AuthState,
 } from "@trace/client-core";
 import {
-  FlatList,
   LayoutAnimation,
   Platform,
   RefreshControl,
+  ScrollView,
   UIManager,
   View,
   type LayoutAnimationConfig,
@@ -143,11 +143,12 @@ export default function ChannelDetail() {
     return out;
   }, [sections, collapsed]);
 
-  const renderItem = useCallback(
-    ({ item }: { item: ListItem }) => {
+  const renderListItem = useCallback(
+    (item: ListItem) => {
       if (item.kind === "header") {
         return (
           <SessionGroupSectionHeader
+            key={`h:${item.status}`}
             status={item.status}
             count={item.count}
             collapsed={item.collapsed}
@@ -157,6 +158,7 @@ export default function ChannelDetail() {
       }
       return (
         <Animated.View
+          key={`r:${item.groupId}`}
           entering={FadeIn.duration(160)}
           exiting={FadeOut.duration(120)}
         >
@@ -186,33 +188,25 @@ export default function ChannelDetail() {
         }}
       />
       <RNALayoutAnimationConfig skipEntering={skipInitialEntering}>
-        <FlatList
-          // Re-mount on segment change so scroll position resets to the top
+        <ScrollView
+          // Re-mount on segment change so scroll position resets to zero
           // instead of carrying over from the previous (often longer) list.
           key={scope}
-          data={items}
-          renderItem={renderItem}
-          keyExtractor={keyExtractor}
-          // FlatList renders its own UIScrollView directly (not wrapped behind
-          // FlashList's extra layout views), which iOS 26's tab-bar minimize
-          // behavior auto-detects. Channel groups stay in the dozens, so we
-          // don't need FlashList's recycler perf here.
+          // Plain ScrollView is the same shape as the home page's scroller,
+          // which iOS 26's bottom-tab minimize behavior reliably picks up
+          // through `UIViewController.contentScrollView(for:)`. Channel groups
+          // stay in the dozens, so we don't need virtualization here.
           contentInsetAdjustmentBehavior="automatic"
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
           }
-          ListHeaderComponent={
-            <SessionGroupsHeader segment={scope} onSegmentChange={setScope} />
-          }
-          ListEmptyComponent={<ActiveEmpty scope={scope} />}
-        />
+        >
+          <SessionGroupsHeader segment={scope} onSegmentChange={setScope} />
+          {items.length === 0 ? <ActiveEmpty scope={scope} /> : items.map(renderListItem)}
+        </ScrollView>
       </RNALayoutAnimationConfig>
     </Screen>
   );
-}
-
-function keyExtractor(item: ListItem): string {
-  return item.kind === "header" ? `h:${item.status}` : `r:${item.groupId}`;
 }
 
 function ActiveEmpty({ scope }: { scope: ActiveSegment }) {
