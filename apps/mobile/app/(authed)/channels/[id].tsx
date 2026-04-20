@@ -76,14 +76,15 @@ export default function ChannelDetail() {
               accessibilityRole="button"
               accessibilityLabel="Merged & archived"
               onPress={handleOpenArchive}
-              hitSlop={8}
+              hitSlop={12}
               style={headerButtonStyles.container}
             >
               <SymbolView
                 name="archivebox"
-                size={22}
+                size={20}
                 tintColor={theme.colors.foreground}
                 resizeMode="scaleAspectFit"
+                style={headerButtonStyles.icon}
               />
             </Pressable>
           ),
@@ -119,11 +120,21 @@ function keyExtractor(item: string): string {
 }
 
 const headerButtonStyles = StyleSheet.create({
+  // Let the Pressable size to its content (icon + symmetric padding) instead
+  // of fixing 32x32 — iOS 26's auto glass chrome wraps the Pressable, so a
+  // larger Pressable than the icon biases the chrome's vertical centerline.
   container: {
-    width: 32,
-    height: 32,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
     alignItems: "center",
     justifyContent: "center",
+  },
+  // SF Symbol `archivebox` has more whitespace above the lid than below the
+  // box, so the geometric center sits visually high. Nudge down ~1pt.
+  icon: {
+    width: 20,
+    height: 20,
+    marginTop: 1,
   },
 });
 
