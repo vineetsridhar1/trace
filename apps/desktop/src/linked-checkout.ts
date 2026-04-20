@@ -93,7 +93,7 @@ async function resolveRefCommitSha(repoPath: string, ref: string): Promise<strin
   return runGit(repoPath, ["rev-parse", `${ref}^{commit}`]);
 }
 
-async function resolveTargetCommitSha(
+export async function resolveTargetCommitSha(
   repoPath: string,
   branch: string,
   commitSha?: string | null,
@@ -105,7 +105,13 @@ async function resolveTargetCommitSha(
   }
 
   assertSafeGitRef(branch);
-  return runGit(repoPath, ["rev-parse", `${branch}^{commit}`]);
+  const localSha = await resolveRefCommitSha(repoPath, branch);
+  if (localSha) return localSha;
+
+  const remoteSha = await resolveRefCommitSha(repoPath, `origin/${branch}`);
+  if (remoteSha) return remoteSha;
+
+  throw new Error(`Branch not found: ${branch}`);
 }
 
 async function switchToDetachedCommit(repoPath: string, commitSha: string): Promise<void> {

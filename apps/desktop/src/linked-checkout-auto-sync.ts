@@ -14,7 +14,11 @@ import {
   isSafeGitRef,
   runGit,
 } from "./git-utils.js";
-import { pauseExistingAttachment, withRepoLock } from "./linked-checkout.js";
+import {
+  pauseExistingAttachment,
+  resolveTargetCommitSha,
+  withRepoLock,
+} from "./linked-checkout.js";
 import { runtimeDebug } from "./runtime-debug.js";
 
 // Match stderr fragments from git fetch that indicate transient network
@@ -69,7 +73,6 @@ export interface LinkedCheckoutAutoSyncDeps {
   /** Async git runner. Returns stdout trimmed. Overrideable for tests. */
   fetch: (repoPath: string, branch: string) => Promise<void>;
   revParseHead: (repoPath: string) => Promise<string>;
-  resolveOriginSha: (repoPath: string, branch: string) => Promise<string>;
   hasTrackedChanges: (repoPath: string) => Promise<boolean>;
   switchDetached: (repoPath: string, sha: string) => Promise<void>;
   getCurrentBranch: (repoPath: string) => Promise<string | null>;
@@ -85,8 +88,6 @@ const defaultDeps: LinkedCheckoutAutoSyncDeps = {
     });
   },
   revParseHead: (repoPath) => runGit(repoPath, ["rev-parse", "HEAD"]),
-  resolveOriginSha: (repoPath, branch) =>
-    runGit(repoPath, ["rev-parse", `origin/${branch}^{commit}`]),
   hasTrackedChanges: async (repoPath) => {
     const status = await runGit(repoPath, ["status", "--porcelain", "--untracked-files=no"]);
     return status.length > 0;
@@ -208,7 +209,7 @@ export class LinkedCheckoutAutoSyncManager {
 
       let targetSha: string;
       try {
-        targetSha = await this.deps.resolveOriginSha(repoPath, targetBranch);
+        targetSha = await resolveTargetCommitSha(repoPath, targetBranch);
       } catch (error) {
         await this.pause(repoId, formatGitError(error));
         return;
