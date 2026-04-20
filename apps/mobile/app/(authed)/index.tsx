@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
 import {
   useAuthStore,
   useEntityIds,
@@ -8,6 +9,7 @@ import {
 import { OrgSwitcherSheet } from "@/components/auth/OrgSwitcherSheet";
 
 export default function AuthedHome() {
+  const router = useRouter();
   const user = useAuthStore((s: AuthState) => s.user);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const memberships = useAuthStore((s: AuthState) => s.orgMemberships);
@@ -36,6 +38,16 @@ export default function AuthedHome() {
       </View>
 
       <OrgSwitcherSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} />
+
+      {__DEV__ && (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/(dev)/design-system")}
+          style={({ pressed }) => [styles.devButton, pressed && styles.pressed]}
+        >
+          <Text style={styles.devButtonText}>Design System</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -80,5 +92,18 @@ const styles = StyleSheet.create({
   stat: {
     color: "#666",
     fontSize: 13,
+  },
+  devButton: {
+    marginTop: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+  devButtonText: {
+    color: "#888",
+    fontSize: 12,
+    fontFamily: "Menlo",
   },
 });
