@@ -24,10 +24,7 @@ export default function AuthedHome() {
     >
       <Text style={styles.heading}>Trace Mobile</Text>
       {user && <Text style={styles.subtle}>Signed in as {user.name}</Text>}
-
-      <View style={styles.orgPill}>
-        <Text style={styles.orgPillText}>{activeOrg?.organization.name ?? "No org"}</Text>
-      </View>
+      <Text style={styles.subtle}>{activeOrg?.organization.name ?? "No org"}</Text>
 
       <View style={styles.stats}>
         <Text style={styles.stat}>Channels: {channelIds.length}</Text>
@@ -84,17 +81,6 @@ const styles = StyleSheet.create({
   subtle: {
     color: "#888",
     fontSize: 14,
-  },
-  orgPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: "#161616",
-  },
-  orgPillText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "500",
   },
   pressed: {
     opacity: 0.7,

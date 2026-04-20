@@ -1,7 +1,7 @@
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { Alert, ScrollView, StyleSheet, View } from "react-native";
-import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
+import { useAuthStore, type AuthState } from "@trace/client-core";
 import {
   Avatar,
   ListRow,
@@ -44,14 +44,13 @@ export default function SettingsScreen() {
     ]);
   }
 
-  // Order matters: logout unmounts `AuthedLayout` via `<Redirect>` (user=null),
-  // which tears down `useHydrate` and the orgEvents subscription — so no
-  // in-flight events can repopulate the store between reset and navigation.
+  // Do mobile-only cleanup first, while this component is still mounted —
+  // `await logout()` sets user=null which immediately triggers `<Redirect>`
+  // in `AuthedLayout`. The entity store reset lives inside `logout()` itself.
   async function handleSignOut() {
-    await logout();
-    useEntityStore.getState().reset();
     useMobileUIStore.getState().reset();
     recreateClient();
+    await logout();
   }
 
   return (
@@ -96,6 +95,7 @@ export default function SettingsScreen() {
             subtitle={activeOrg?.organization.name ?? "No active organization"}
             disclosureIndicator
             onPress={openOrgSwitcher}
+            // Hide the bottom separator when the dev row below isn't rendered.
             separator={__DEV__}
           />
           {__DEV__ ? (

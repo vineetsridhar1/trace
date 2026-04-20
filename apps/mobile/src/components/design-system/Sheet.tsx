@@ -46,7 +46,7 @@ const DEFAULT_DETENTS: SheetDetent[] = ["medium", "large"];
 export function Sheet({
   children,
   detents = DEFAULT_DETENTS,
-  showGrabber = true,
+  showGrabber,
   swipeToDismiss = true,
   padding = "lg",
   style,
@@ -55,13 +55,16 @@ export function Sheet({
   const insets = useSafeAreaInsets();
 
   const allowed = detents.map((d) => DETENT_FRACTION[d]);
+  // Default grabber to visible only when there's more than one detent — a
+  // grabber on a single-detent sheet implies draggability that doesn't exist.
+  const grabberVisible = showGrabber ?? detents.length > 1;
 
   return (
     <>
       <Stack.Screen
         options={{
           sheetAllowedDetents: allowed,
-          sheetGrabberVisible: showGrabber,
+          sheetGrabberVisible: grabberVisible,
           sheetCornerRadius: theme.radius.xl,
           gestureEnabled: swipeToDismiss,
         }}

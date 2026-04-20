@@ -122,14 +122,19 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
     try {
       await platform.secureStorage.clearToken();
       await platform.storage.removeItem(ACTIVE_ORG_KEY);
+      // Time-box the server call: clearing local state doesn't require a
+      // successful response, and without a cap a slow/offline network would
+      // leave the UI stuck on "Sign out" for the fetch default (30s+).
       await platform.fetch(`${platform.apiUrl}/auth/logout`, {
         method: "POST",
         credentials: "include",
         headers,
+        signal: AbortSignal.timeout(5000),
       });
     } catch (err) {
       console.warn("[auth] logout failed", err);
     } finally {
+      useEntityStore.getState().reset();
       set({
         user: null,
         activeOrgId: null,

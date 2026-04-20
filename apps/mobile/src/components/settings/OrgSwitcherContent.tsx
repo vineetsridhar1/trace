@@ -72,7 +72,7 @@ export function OrgSwitcherContent() {
                 ) : undefined
               }
               onPress={() => handleSelect(membership.organizationId)}
-              haptic="selection"
+              haptic={active ? "none" : "selection"}
               separator={index < memberships.length - 1}
             />
           );
