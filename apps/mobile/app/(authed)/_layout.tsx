@@ -36,6 +36,16 @@ function selectNeedsInputCount(state: EntityState): number {
   return count;
 }
 
+function selectHasActiveSessions(state: EntityState): boolean {
+  for (const id in state.sessions) {
+    const s = state.sessions[id];
+    if (s.agentStatus === "active" || s.sessionStatus === "needs_input") return true;
+  }
+  return false;
+}
+
+const renderAccessory = () => <ActiveSessionsAccessory />;
+
 const homeIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
   sfSymbol: "bolt.horizontal",
 });
@@ -53,13 +63,14 @@ export default function AuthedLayout() {
   useHydrate(activeOrgId);
 
   const needsInputCount = useEntityStore(selectNeedsInputCount);
+  const hasActiveSessions = useEntityStore(selectHasActiveSessions);
 
   if (!user) return <Redirect href="/(auth)/sign-in" />;
 
   return (
     <NativeTabs
       minimizeBehavior="onScrollDown"
-      renderBottomAccessoryView={() => <ActiveSessionsAccessory />}
+      {...(hasActiveSessions ? { renderBottomAccessoryView: renderAccessory } : null)}
     >
       <NativeTabs.Screen
         name="(home)"
