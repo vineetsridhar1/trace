@@ -8,7 +8,7 @@ Replace the `FakeSessionAccessory` stub wired in ticket 15 with a real, data-dri
 
 - **Data selector** (Zustand):
   - A `selectActiveSessions(state)` selector over `useEntityStore` returns sessions where `agentStatus === "active"` (optionally including `needs_input`), sorted by `_sortTimestamp` descending. Memoize via `useShallow`.
-  - When `activeSessions.length === 0`, the `(authed)/_layout.tsx` tab bar **omits** the `renderBottomAccessoryView` prop entirely (via spread). `react-native-bottom-tabs` keeps the accessory slot mounted at its native height as long as the prop is present — returning `null` from the render fn is not enough to collapse it.
+  - When `activeSessions.length === 0`, the accessory component returns `null`. Keep `renderBottomAccessoryView` **always passed** (and identity-stable) on `NativeTabs` — toggling the prop on/off crashes with `UIViewControllerHierarchyInconsistency` because `react-native-bottom-tabs` rebuilds the native `TabHostingController` while a child `RNSNavigationController` is still attached.
 - **Shared pager index** (Zustand UI store):
   - Add `activeAccessoryIndex: number` to `useMobileUIStore` with `setActiveAccessoryIndex(i)` action.
   - This is the single source of truth for which session is shown in the accessory *and* in the expanded player (ticket 15b) — pulling in the player must not reset or fork pager position.
@@ -31,7 +31,7 @@ Replace the `FakeSessionAccessory` stub wired in ticket 15 with a real, data-dri
 ## Completion requirements
 
 - [ ] `ActiveSessionsAccessory` renders one pager card per active session, driven off the entity store
-- [ ] Accessory slot collapses (prop omitted in `_layout.tsx`) when there are no active sessions
+- [ ] Accessory returns `null` when no active sessions (prop stays passed to avoid a native-VC rebuild crash)
 - [ ] `activeAccessoryIndex` lives in `useMobileUIStore` and is updated by pager scroll
 - [ ] Tap on a session invokes the placeholder player open handler (real wiring in 15b)
 - [ ] `FakeSessionAccessory.tsx` deleted

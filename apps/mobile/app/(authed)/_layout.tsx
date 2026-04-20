@@ -36,14 +36,12 @@ function selectNeedsInputCount(state: EntityState): number {
   return count;
 }
 
-function selectHasActiveSessions(state: EntityState): boolean {
-  for (const id in state.sessions) {
-    const s = state.sessions[id];
-    if (s.agentStatus === "active" || s.sessionStatus === "needs_input") return true;
-  }
-  return false;
-}
-
+// IMPORTANT: keep this identity-stable and always passed on `NativeTabs`.
+// Toggling `renderBottomAccessoryView` on/off causes
+// `react-native-bottom-tabs` to rebuild the native TabHostingController and
+// crashes with UIViewControllerHierarchyInconsistency when the previous
+// RNSNavigationController is still attached. The component itself handles
+// the empty-list case by rendering `null` internally.
 const renderAccessory = () => <ActiveSessionsAccessory />;
 
 const homeIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
@@ -63,14 +61,13 @@ export default function AuthedLayout() {
   useHydrate(activeOrgId);
 
   const needsInputCount = useEntityStore(selectNeedsInputCount);
-  const hasActiveSessions = useEntityStore(selectHasActiveSessions);
 
   if (!user) return <Redirect href="/(auth)/sign-in" />;
 
   return (
     <NativeTabs
       minimizeBehavior="onScrollDown"
-      {...(hasActiveSessions ? { renderBottomAccessoryView: renderAccessory } : null)}
+      renderBottomAccessoryView={renderAccessory}
     >
       <NativeTabs.Screen
         name="(home)"
