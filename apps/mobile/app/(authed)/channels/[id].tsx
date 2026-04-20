@@ -142,7 +142,6 @@ export default function ChannelDetail() {
           ),
         }}
       />
-      <SessionGroupsHeader segment={scope} onSegmentChange={setScope} />
       <FlashList
         // Re-mount on segment change so scroll position resets to the top
         // instead of carrying over from the previous (often longer) list.
@@ -153,9 +152,15 @@ export default function ChannelDetail() {
         getItemType={getItemType}
         // `automatic` is required for the native bottom-tab accessory to
         // collapse on scroll-down and for the last row to clear the tab bar.
+        // The native tab bar only listens to the top-most scroll view in the
+        // screen, so the filter bar must live inside the list as the header
+        // — putting it above the FlashList breaks scroll-driven collapse.
         contentInsetAdjustmentBehavior="automatic"
         onRefresh={handleRefresh}
         refreshing={refreshing}
+        ListHeaderComponent={
+          <SessionGroupsHeader segment={scope} onSegmentChange={setScope} />
+        }
         ListEmptyComponent={<ActiveEmpty scope={scope} />}
       />
     </Screen>

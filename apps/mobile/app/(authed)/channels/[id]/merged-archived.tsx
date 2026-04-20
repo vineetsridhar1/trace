@@ -36,7 +36,6 @@ export default function MergedArchived() {
   return (
     <Screen edges={["left", "right"]}>
       <Stack.Screen options={{ title: "Merged & Archived" }} />
-      <MergedArchivedHeader segment={segment} onSegmentChange={setSegment} />
       <FlashList
         // Re-mount on segment change so scroll resets to the top instead of
         // carrying over from the previous (often differently-sized) list.
@@ -45,10 +44,15 @@ export default function MergedArchived() {
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         // `automatic` lets iOS hand bottom-tab accessory height + nav-bar
-        // collapse interactions to the FlashList's scroll events.
+        // collapse interactions to the FlashList's scroll events. The
+        // segmented control needs to live inside the list for that to fire —
+        // a sibling above the FlashList breaks the scroll-event chain.
         contentInsetAdjustmentBehavior="automatic"
         onRefresh={handleRefresh}
         refreshing={refreshing}
+        ListHeaderComponent={
+          <MergedArchivedHeader segment={segment} onSegmentChange={setSegment} />
+        }
         ListEmptyComponent={<MergedArchivedEmpty segment={segment} />}
       />
     </Screen>
