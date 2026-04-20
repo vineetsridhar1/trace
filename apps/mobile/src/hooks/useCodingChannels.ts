@@ -1,14 +1,10 @@
 import { useShallow } from "zustand/react/shallow";
 import {
-  useAuthStore,
   useEntityStore,
-  type AuthState,
   type EntityState,
   type SessionEntity,
 } from "@trace/client-core";
 import type { Channel, ChannelGroup } from "@trace/gql";
-
-export type ChannelFilter = "all" | "mine";
 
 /**
  * A stable, primitive item-key for the channels list. `"channel:<id>"` for
@@ -18,18 +14,13 @@ export type ChannelFilter = "all" | "mine";
 export type ChannelListItemKey = string;
 
 export interface UseCodingChannelKeysArgs {
-  filter: ChannelFilter;
   search: string;
 }
 
 export function useCodingChannelKeys({
-  filter,
   search,
 }: UseCodingChannelKeysArgs): ChannelListItemKey[] {
-  const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
-  return useEntityStore(
-    useShallow((state: EntityState) => buildKeys(state, currentUserId, filter, search)),
-  );
+  return useEntityStore(useShallow((state: EntityState) => buildKeys(state, search)));
 }
 
 /**
@@ -56,32 +47,18 @@ export function parseItemKey(
   key: ChannelListItemKey,
 ): { kind: "channel" | "group"; id: string } {
   const colon = key.indexOf(":");
+  if (colon === -1) return { kind: "channel", id: key };
   const kind = key.slice(0, colon) as "channel" | "group";
   const id = key.slice(colon + 1);
   return { kind, id };
 }
 
-function buildKeys(
-  state: EntityState,
-  currentUserId: string | undefined,
-  filter: ChannelFilter,
-  search: string,
-): ChannelListItemKey[] {
+function buildKeys(state: EntityState, search: string): ChannelListItemKey[] {
   const coding = (Object.values(state.channels) as Channel[]).filter((c) => c.type === "coding");
-
-  const mineChannelIds = new Set<string>();
-  if (filter === "mine" && currentUserId) {
-    for (const s of Object.values(state.sessions) as SessionEntity[]) {
-      if (s.channel?.id && s.createdBy?.id === currentUserId) {
-        mineChannelIds.add(s.channel.id);
-      }
-    }
-  }
 
   const q = search.trim().toLowerCase();
   const visible = coding
     .filter((c) => (q ? c.name.toLowerCase().includes(q) : true))
-    .filter((c) => (filter === "mine" ? mineChannelIds.has(c.id) : true))
     .sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.name.localeCompare(b.name));
 
   const groups = Object.values(state.channelGroups) as ChannelGroup[];
@@ -90,6 +67,7 @@ function buildKeys(
     return visible.map((c) => `channel:${c.id}`);
   }
 
+  // Partition by groupId; `null` is ungrouped.
   const byGroup = new Map<string | null, Channel[]>();
   for (const c of visible) {
     const key = c.groupId ?? null;
@@ -99,9 +77,13 @@ function buildKeys(
   }
 
   const keys: ChannelListItemKey[] = [];
+
+  // Ungrouped channels first (no header).
   const ungrouped = byGroup.get(null) ?? [];
   for (const c of ungrouped) keys.push(`channel:${c.id}`);
+  byGroup.delete(null);
 
+  // Known groups in order, consuming their buckets as we go.
   const sortedGroups = [...groups].sort(
     (a, b) => (a.position ?? 0) - (b.position ?? 0) || a.name.localeCompare(b.name),
   );
@@ -110,6 +92,16 @@ function buildKeys(
     if (!arr || arr.length === 0) continue;
     keys.push(`group:${g.id}`);
     for (const c of arr) keys.push(`channel:${c.id}`);
+    byGroup.delete(g.id);
   }
+
+  // Orphan buckets: channels whose `groupId` points at a group that hasn't
+  // hydrated yet (or was deleted). Surface them as ungrouped rather than
+  // drop them — the group event typically arrives within ~1 subscription
+  // tick after the channel event, and either way users shouldn't lose rows.
+  for (const arr of byGroup.values()) {
+    for (const c of arr) keys.push(`channel:${c.id}`);
+  }
+
   return keys;
 }

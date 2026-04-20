@@ -122,10 +122,13 @@ function isUnauthorized(error: unknown): boolean {
  * Fetch org data (channels, groups, sessions) and upsert into the entity store.
  * Returns true on success, false if the server returned a 401-equivalent.
  * Shared between initial hydration and manual pull-to-refresh.
+ *
+ * Guards against stale writes: if the active org changes (or the user signs
+ * out) while queries are in flight, the upserts are skipped so the store
+ * doesn't get repopulated with the previous org's data after a reset.
  */
 export async function refreshOrgData(activeOrgId: string): Promise<boolean> {
   const client = getClient();
-  const upsertMany = useEntityStore.getState().upsertMany;
 
   const [orgResult, groupsResult, sessionsResult] = await Promise.all([
     client.query(ORGANIZATION_QUERY, { id: activeOrgId }).toPromise(),
@@ -139,6 +142,12 @@ export async function refreshOrgData(activeOrgId: string): Promise<boolean> {
   ) {
     return false;
   }
+
+  // Bail if the user switched orgs or signed out while we were fetching.
+  if (useAuthStore.getState().activeOrgId !== activeOrgId) return true;
+
+  const upsertMany = useEntityStore.getState().upsertMany;
+
   const channels = (orgResult.data?.organization?.channels ?? []) as Array<
     Channel & { id: string }
   >;

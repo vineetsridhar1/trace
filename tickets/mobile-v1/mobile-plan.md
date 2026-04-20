@@ -442,8 +442,8 @@ Full-screen modals for:
 - Tap → `/channels/[id]`.
 
 **Polish:**
-- Segmented control at top if the org has a large number of channels: "All", "Mine" (where user has recent sessions).
 - Native iOS pull-to-reveal search bar (Mail / Settings pattern): hidden at rest, revealed when the large-title header is pulled down. Use `headerSearchBarOptions` with the default `hideWhenScrolling: true`.
+- No "All / Mine" segmented filter on channels — channels don't have ownership, and "channels I've recently worked in" is a session concern, not a channel concern. A similar filter lives on the session-level screens (home, session groups).
 
 ---
 
