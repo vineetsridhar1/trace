@@ -39,11 +39,17 @@ Build the primitives screens use to display data: rows, chips, status indicators
 
 ## Completion requirements
 
-- [ ] All 7 primitives exported from `components/design-system/index.ts`
-- [ ] Each file <200 lines
-- [ ] All colors/spacing from theme
-- [ ] Active-status pulse animation runs on the UI thread (verify with Reanimated devtools)
-- [ ] Avatar falls back to initials gracefully
+- [x] All 7 primitives exported from `components/design-system/index.ts`
+- [x] Each file <200 lines
+- [x] All colors/spacing from theme
+- [x] Active-status pulse animation runs on the UI thread (verify with Reanimated devtools)
+- [x] Avatar falls back to initials gracefully
+
+## Implementation notes (landed)
+
+- **Chip variant → session-status mapping**: `Chip` exposes `active` as the in-progress variant. Session groups (see §10.4, ticket 17) use `in_progress` in their data contract — consumers map `in_progress → "active"` at the boundary.
+- **Skeleton shimmer**: implemented as a translating highlight band (not a true gradient) to avoid adding `expo-linear-gradient`. Visual intent matches the plan; re-evaluate in the M6 polish pass if motion feels off on real devices.
+- **Pulse cancellation**: when `Chip.variant` / `StatusDot.status` transitions away from `active`, the effect resets `opacity.value = 1`. If layering becomes visible, add `cancelAnimation(opacity)` before the reassign in ticket 30.
 
 ## How to test
 
