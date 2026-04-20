@@ -8,6 +8,7 @@ import {
 } from "@trace/client-core";
 import { useHydrate } from "@/hooks/useHydrate";
 import { TabBar, type TabDef } from "@/components/navigation/TabBar";
+import { useTheme } from "@/theme";
 
 function selectNeedsInputCount(state: EntityState): number {
   let count = 0;
@@ -18,6 +19,7 @@ function selectNeedsInputCount(state: EntityState): number {
 }
 
 export default function AuthedLayout() {
+  const theme = useTheme();
   const user = useAuthStore((s: AuthState) => s.user);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   useHydrate(activeOrgId);
@@ -39,7 +41,9 @@ export default function AuthedLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        sceneStyle: { backgroundColor: theme.colors.background },
         tabBarStyle: {
+          position: "absolute",
           backgroundColor: "transparent",
           borderTopWidth: 0,
           elevation: 0,
