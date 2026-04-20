@@ -10,14 +10,18 @@ export interface SheetProps {
   children: ReactNode;
   detents?: SheetDetent[];
   showGrabber?: boolean;
-  dismissOnBackdropTap?: boolean;
+  /**
+   * Enables the native swipe-down gesture to dismiss. iOS backdrop-tap
+   * dismissal is always on for dimmed detents and is not toggleable here.
+   */
+  swipeToDismiss?: boolean;
   padding?: keyof ThemeSpacing;
   style?: ViewStyle;
 }
 
 /**
- * Maps the ticket's semantic detents to fractional heights understood by
- * `react-native-screens`. `small` has no native equivalent on iOS, so it is
+ * Maps the plan's semantic detents to fractional heights understood by
+ * `react-native-screens`. `small` has no native iOS equivalent so it is
  * approximated at ~35% of screen height.
  */
 const DETENT_FRACTION: Record<SheetDetent, number> = {
@@ -29,16 +33,21 @@ const DETENT_FRACTION: Record<SheetDetent, number> = {
 const DEFAULT_DETENTS: SheetDetent[] = ["medium", "large"];
 
 /**
- * Layout primitive for expo-router form-sheet routes. Render this as the root
- * of the route component — it applies the route's sheet-presentation options
- * via `Stack.Screen` and wraps content with consistent padding, a background,
- * and a safe-area-aware bottom inset.
+ * Layout primitive for expo-router form-sheet routes. The parent layout must
+ * register the route with `presentation: 'formSheet'` — that option must be
+ * declared at route-tree registration time and cannot be set dynamically from
+ * inside the screen body (expo-router's inline `Stack.Screen` calls
+ * `setOptions` after mount, which is too late for `presentation`).
+ *
+ * This primitive dynamically configures the sheet's allowed detents, grabber
+ * visibility, corner radius, and swipe-to-dismiss, and wraps content with the
+ * theme surface color + safe-area-aware bottom inset.
  */
 export function Sheet({
   children,
   detents = DEFAULT_DETENTS,
   showGrabber = true,
-  dismissOnBackdropTap = true,
+  swipeToDismiss = true,
   padding = "lg",
   style,
 }: SheetProps) {
@@ -51,12 +60,10 @@ export function Sheet({
     <>
       <Stack.Screen
         options={{
-          presentation: "formSheet",
           sheetAllowedDetents: allowed,
           sheetGrabberVisible: showGrabber,
           sheetCornerRadius: theme.radius.xl,
-          gestureEnabled: dismissOnBackdropTap,
-          contentStyle: { backgroundColor: theme.colors.surface },
+          gestureEnabled: swipeToDismiss,
         }}
       />
       <View
