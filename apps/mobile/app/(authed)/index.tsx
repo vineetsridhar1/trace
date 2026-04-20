@@ -1,191 +1,84 @@
-/**
- * SCRATCH: ticket-13 primitive preview. Revert before merging ticket 13.
- * The permanent design-system dev route lands in ticket 14.
- */
-import { useState, type ReactNode } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
-import { SymbolView } from "expo-symbols";
+import { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
-  Avatar,
-  Chip,
-  EmptyState,
-  ListRow,
-  Screen,
-  SegmentedControl,
-  Skeleton,
-  StatusDot,
-  Text,
-  type ChipVariant,
-  type StatusDotStatus,
-} from "@/components/design-system";
-import { useTheme } from "@/theme";
+  useAuthStore,
+  useEntityIds,
+  type AuthState,
+} from "@trace/client-core";
+import { OrgSwitcherSheet } from "@/components/auth/OrgSwitcherSheet";
 
-const CHIP_VARIANTS: { variant: ChipVariant; label: string }[] = [
-  { variant: "inProgress", label: "In progress" },
-  { variant: "needsInput", label: "Needs input" },
-  { variant: "inReview", label: "In review" },
-  { variant: "done", label: "Done" },
-  { variant: "merged", label: "Merged" },
-  { variant: "failed", label: "Failed" },
-];
+export default function AuthedHome() {
+  const user = useAuthStore((s: AuthState) => s.user);
+  const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
+  const memberships = useAuthStore((s: AuthState) => s.orgMemberships);
+  const channelIds = useEntityIds("channels");
+  const sessionIds = useEntityIds("sessions");
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-const DOT_STATUSES: StatusDotStatus[] = ["active", "done", "failed", "stopped"];
-
-export default function DesignSystemPreview() {
-  const theme = useTheme();
-  const [segment, setSegment] = useState(0);
-  const [chipShown, setChipShown] = useState(true);
+  const activeOrg = memberships.find((m) => m.organizationId === activeOrgId);
 
   return (
-    <Screen>
-      <ScrollView
-        contentContainerStyle={{
-          padding: theme.spacing.lg,
-          gap: theme.spacing.xl,
-          paddingBottom: theme.spacing.xxxl,
-        }}
+    <View style={styles.container}>
+      <Text style={styles.heading}>Trace Mobile</Text>
+      {user && <Text style={styles.subtle}>Signed in as {user.name}</Text>}
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => setSheetOpen(true)}
+        style={({ pressed }) => [styles.orgPill, pressed && styles.pressed]}
       >
-        <Text variant="largeTitle">Ticket 13 preview</Text>
+        <Text style={styles.orgPillText}>{activeOrg?.organization.name ?? "No org"}</Text>
+      </Pressable>
 
-        <Section title="Chips (all variants)">
-          <View style={styles.row}>
-            {CHIP_VARIANTS.map((c) => (
-              <Chip key={c.variant} label={c.label} variant={c.variant} />
-            ))}
-          </View>
-          <View style={{ marginTop: theme.spacing.md }}>
-            <ListRow
-              title={chipShown ? "Hide inProgress chip" : "Show inProgress chip"}
-              subtitle="Tap to unmount and re-mount — verifies pulse cancellation"
-              onPress={() => setChipShown((v) => !v)}
-              separator={false}
-            />
-            {chipShown ? (
-              <View style={{ marginTop: theme.spacing.sm }}>
-                <Chip label="In progress (live)" variant="inProgress" />
-              </View>
-            ) : null}
-          </View>
-        </Section>
+      <View style={styles.stats}>
+        <Text style={styles.stat}>Channels: {channelIds.length}</Text>
+        <Text style={styles.stat}>Sessions: {sessionIds.length}</Text>
+      </View>
 
-        <Section title="StatusDot (all statuses)">
-          <View style={styles.row}>
-            {DOT_STATUSES.map((s) => (
-              <View key={s} style={styles.dotLabel}>
-                <StatusDot status={s} />
-                <Text variant="caption1" color="mutedForeground">
-                  {s}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </Section>
-
-        <Section title="Avatar (xs / sm / md / lg + fallback)">
-          <View style={styles.row}>
-            <Avatar name="Vineet Sridhar" size="xs" />
-            <Avatar name="Ada Lovelace" size="sm" />
-            <Avatar name="Grace Hopper" size="md" />
-            <Avatar name="Linus Torvalds" size="lg" />
-            <Avatar
-              name="Bad URL"
-              size="md"
-              uri="https://invalid.example.com/nope.png"
-            />
-          </View>
-        </Section>
-
-        <Section title="ListRow (variants)">
-          <View style={styles.card}>
-            <ListRow
-              title="Basic row"
-              subtitle="subtitle"
-              onPress={() => {}}
-              disclosureIndicator
-            />
-            <ListRow
-              title="With leading icon"
-              leading={
-                <SymbolView
-                  name="bell.fill"
-                  size={20}
-                  tintColor={theme.colors.accent}
-                />
-              }
-              trailing={<Chip label="New" variant="needsInput" />}
-              onPress={() => {}}
-              disclosureIndicator
-            />
-            <ListRow
-              title="Destructive"
-              subtitle="Sign out"
-              destructive
-              onPress={() => {}}
-            />
-            <ListRow title="Plain, no press" separator={false} />
-          </View>
-        </Section>
-
-        <Section title="Skeleton">
-          <Skeleton height={20} />
-          <View style={{ height: theme.spacing.sm }} />
-          <Skeleton height={14} width="60%" />
-          <View style={{ height: theme.spacing.sm }} />
-          <Skeleton height={14} width="40%" />
-        </Section>
-
-        <Section title="SegmentedControl">
-          <SegmentedControl
-            segments={["Active", "Merged", "Archived"]}
-            selectedIndex={segment}
-            onChange={setSegment}
-          />
-          <Text
-            variant="footnote"
-            color="mutedForeground"
-            style={{ marginTop: theme.spacing.sm }}
-          >
-            selected: {segment}
-          </Text>
-        </Section>
-
-        <Section title="EmptyState">
-          <EmptyState
-            icon="tray"
-            title="All clear"
-            subtitle="Sessions that need you will show up here."
-            action={{ label: "Refresh", onPress: () => {} }}
-          />
-        </Section>
-      </ScrollView>
-    </Screen>
-  );
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <View style={styles.section}>
-      <Text variant="headline" color="mutedForeground" style={styles.sectionTitle}>
-        {title}
-      </Text>
-      {children}
+      <OrgSwitcherSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { gap: 8 },
-  sectionTitle: { textTransform: "uppercase", letterSpacing: 0.5 },
-  row: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
-  dotLabel: {
-    flexDirection: "row",
+  container: {
+    flex: 1,
     alignItems: "center",
-    gap: 6,
-    marginRight: 12,
+    justifyContent: "center",
+    backgroundColor: "#000",
+    gap: 16,
+    paddingHorizontal: 24,
   },
-  card: {
-    borderRadius: 14,
-    overflow: "hidden",
-    backgroundColor: "#171717",
+  heading: {
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: "600",
+  },
+  subtle: {
+    color: "#888",
+    fontSize: 14,
+  },
+  orgPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: "#161616",
+  },
+  orgPillText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  pressed: {
+    opacity: 0.7,
+  },
+  stats: {
+    alignItems: "center",
+    gap: 4,
+    marginTop: 12,
+  },
+  stat: {
+    color: "#666",
+    fontSize: 13,
   },
 });
