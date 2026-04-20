@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { StyleSheet, View, type ViewStyle } from "react-native";
+import type { ViewStyle } from "react-native";
 import { BlurView, type BlurTint } from "expo-blur";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import {
@@ -42,7 +42,6 @@ export function Glass({
   const theme = useTheme();
   const config = theme.glass[preset];
   const radius = shapeRadius(config.shape, theme);
-  const tintColor = tint ?? config.tint;
 
   const baseStyle: ViewStyle = {
     borderRadius: radius,
@@ -53,7 +52,7 @@ export function Glass({
     return (
       <GlassView
         glassEffectStyle="regular"
-        tintColor={tintColor}
+        tintColor={tint ?? config.tint}
         colorScheme={theme.scheme === "dark" ? "dark" : "light"}
         style={[baseStyle, style]}
       >
@@ -62,18 +61,15 @@ export function Glass({
     );
   }
 
+  // Pre-iOS 26 / Android: native BlurView with its own tint enum. Per-preset
+  // intensity still differentiates tabBar vs card vs input.
   return (
     <BlurView
       tint={FALLBACK_TINT}
       intensity={config.intensity}
       style={[baseStyle, style]}
     >
-      <View style={[styles.fill, { backgroundColor: tintColor }]} />
       {children}
     </BlurView>
   );
 }
-
-const styles = StyleSheet.create({
-  fill: StyleSheet.absoluteFillObject,
-});

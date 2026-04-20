@@ -60,11 +60,11 @@ function CardSurface({ children, containerStyle, glass, theme }: CardSurfaceProp
   return (
     <View
       style={[
-        containerStyle,
         {
           backgroundColor: theme.colors.surfaceElevated,
           borderRadius: theme.radius.lg,
         },
+        containerStyle,
       ]}
     >
       {children}

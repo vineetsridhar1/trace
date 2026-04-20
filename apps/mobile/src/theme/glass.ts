@@ -1,14 +1,16 @@
 /**
  * Liquid Glass presets per use-case. Consumed by the `Glass` primitive
- * (added in ticket 12) which wraps `expo-glass-effect` on iOS 26+ and falls
- * back to `expo-blur` elsewhere.
+ * which uses `expo-glass-effect`'s `GlassView` on iOS 26+ and falls back to
+ * `expo-blur`'s `BlurView` on iOS <26 and Android.
  *
- * - `tint`      — the color laid over the blurred backdrop. Only read on
- *                 iOS; the Android `BlurView` fallback uses its own tint
- *                 enum (`systemThinMaterialDark` etc.) and ignores this.
- * - `intensity` — 0-100; higher is a stronger blur / more opaque glass
+ * - `tint`      — the color applied to the glass on iOS 26+ (via
+ *                 `GlassView.tintColor`). The `BlurView` fallback uses its
+ *                 own native `BlurTint` enum (`systemThinMaterialDark`) and
+ *                 ignores this value.
+ * - `intensity` — 0-100; higher is a stronger blur. Drives `BlurView` only;
+ *                 `GlassView` renders at a system-managed intensity.
  * - `shape`     — how the container's edges are finished; `capsule` rounds
- *                 to the container's height, `pill` matches the radius scale
+ *                 to the container's height.
  */
 export type GlassShape = "rect" | "roundedSm" | "roundedMd" | "roundedLg" | "capsule";
 
