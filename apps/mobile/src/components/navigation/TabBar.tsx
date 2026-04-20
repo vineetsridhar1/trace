@@ -17,12 +17,13 @@ export interface TabDef {
 
 export interface TabBarProps extends BottomTabBarProps {
   tabs: TabDef[];
+  onSearch?: () => void;
 }
 
-const ACTIVE_GLYPH = 24;
-const INACTIVE_GLYPH = 22;
+const PILL_HEIGHT = 64;
+const GLYPH = 22;
 
-export function TabBar({ state, navigation, tabs }: TabBarProps) {
+export function TabBar({ state, navigation, tabs, onSearch }: TabBarProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const tabsByName = useMemo(() => {
@@ -31,48 +32,72 @@ export function TabBar({ state, navigation, tabs }: TabBarProps) {
     return map;
   }, [tabs]);
 
+  function handleSearch() {
+    void haptic.selection();
+    onSearch?.();
+  }
+
   return (
-    <Glass
-      preset="tabBar"
-      style={{
-        ...styles.container,
-        paddingBottom: insets.bottom,
-        borderTopColor: theme.colors.borderMuted,
-      }}
+    <View
+      pointerEvents="box-none"
+      style={[styles.wrapper, { paddingBottom: insets.bottom + 8 }]}
     >
       <View style={styles.row}>
-        {state.routes.map((route, index) => {
-          const def = tabsByName[route.name];
-          if (!def) return null;
+        <Glass preset="tabBar" style={styles.mainPill}>
+          <View style={styles.items}>
+            {state.routes.map((route, index) => {
+              const def = tabsByName[route.name];
+              if (!def) return null;
 
-          const isFocused = state.index === index;
+              const isFocused = state.index === index;
 
-          function onPress() {
-            void haptic.selection();
-            const event = navigation.emit({
-              type: "tabPress",
-              target: route.key,
-              canPreventDefault: true,
-            });
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name, route.params);
-            }
-          }
+              function onPress() {
+                void haptic.selection();
+                const event = navigation.emit({
+                  type: "tabPress",
+                  target: route.key,
+                  canPreventDefault: true,
+                });
+                if (!isFocused && !event.defaultPrevented) {
+                  navigation.navigate(route.name, route.params);
+                }
+              }
 
-          return (
-            <TabBarItem
-              key={route.key}
-              label={def.label}
-              symbol={def.symbol}
-              badge={def.badge ?? 0}
-              focused={isFocused}
-              onPress={onPress}
-              theme={theme}
+              return (
+                <TabBarItem
+                  key={route.key}
+                  label={def.label}
+                  symbol={def.symbol}
+                  badge={def.badge ?? 0}
+                  focused={isFocused}
+                  onPress={onPress}
+                  theme={theme}
+                />
+              );
+            })}
+          </View>
+        </Glass>
+
+        <Glass preset="tabBar" style={styles.searchPill}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Search"
+            onPress={handleSearch}
+            style={({ pressed }) => [
+              styles.searchItem,
+              pressed && { opacity: 0.6 },
+            ]}
+          >
+            <SymbolView
+              name="magnifyingglass"
+              size={GLYPH}
+              tintColor={theme.colors.foreground}
+              weight="medium"
             />
-          );
-        })}
+          </Pressable>
+        </Glass>
       </View>
-    </Glass>
+    </View>
   );
 }
 
@@ -93,12 +118,18 @@ function TabBarItem({ label, symbol, badge, focused, onPress, theme }: TabBarIte
       accessibilityLabel={label}
       accessibilityState={{ selected: focused }}
       onPress={onPress}
-      style={({ pressed }) => [styles.item, pressed && { opacity: 0.6 }]}
+      style={({ pressed }) => [
+        styles.item,
+        focused && {
+          backgroundColor: theme.colors.accentMuted,
+        },
+        pressed && { opacity: 0.7 },
+      ]}
     >
       <View style={styles.iconWrap}>
         <SymbolView
           name={symbol}
-          size={focused ? ACTIVE_GLYPH : INACTIVE_GLYPH}
+          size={GLYPH}
           tintColor={tint}
           weight={focused ? "semibold" : "regular"}
         />
@@ -106,7 +137,7 @@ function TabBarItem({ label, symbol, badge, focused, onPress, theme }: TabBarIte
           <View style={[styles.badge, { backgroundColor: theme.colors.accent }]}>
             <Text
               variant="caption2"
-              style={{ color: theme.colors.accentForeground, fontSize: 11, lineHeight: 14 }}
+              style={{ color: theme.colors.accentForeground, fontSize: 10, lineHeight: 12 }}
             >
               {badge > 99 ? "99+" : String(badge)}
             </Text>
@@ -115,7 +146,7 @@ function TabBarItem({ label, symbol, badge, focused, onPress, theme }: TabBarIte
       </View>
       <Text
         variant="caption2"
-        style={{ color: tint, fontSize: 10, marginTop: 2 }}
+        style={{ color: tint, fontSize: 10, marginTop: 2, fontWeight: focused ? "600" : "400" }}
       >
         {label}
       </Text>
@@ -124,21 +155,44 @@ function TabBarItem({ label, symbol, badge, focused, onPress, theme }: TabBarIte
 }
 
 const styles = StyleSheet.create({
-  container: {
-    borderTopWidth: StyleSheet.hairlineWidth,
+  wrapper: {
+    paddingHorizontal: 12,
   },
   row: {
     flexDirection: "row",
-    paddingTop: 6,
+    alignItems: "center",
+    gap: 8,
+  },
+  mainPill: {
+    flex: 1,
+    height: PILL_HEIGHT,
+    justifyContent: "center",
+  },
+  searchPill: {
+    width: PILL_HEIGHT,
+    height: PILL_HEIGHT,
+  },
+  items: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    height: "100%",
   },
   item: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 4,
+    paddingVertical: 6,
+    marginHorizontal: 2,
+    borderRadius: 999,
   },
   iconWrap: {
     position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  searchItem: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },

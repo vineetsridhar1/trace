@@ -37,7 +37,15 @@ export default function AuthedLayout() {
 
   return (
     <Tabs
-      screenOptions={{ headerShown: false }}
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          position: "absolute",
+          backgroundColor: "transparent",
+          borderTopWidth: 0,
+          elevation: 0,
+        },
+      }}
       tabBar={(props) => <TabBar {...props} tabs={tabs} />}
     >
       <Tabs.Screen name="(home)" options={{ title: "Home" }} />
