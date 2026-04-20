@@ -29,11 +29,11 @@ Build the surface primitives that establish depth and hierarchy: elevated cards,
 
 ## Completion requirements
 
-- [ ] `Glass` renders correctly on iOS 26+ with real Liquid Glass
-- [ ] `Glass` falls back cleanly to `BlurView` on iOS 17–25 (no visual breakage)
-- [ ] `Card` renders with correct elevation shadows
-- [ ] `Sheet` layout primitive composes with expo-router modal routes
-- [ ] All files <200 lines
+- [x] `Glass` renders correctly on iOS 26+ with real Liquid Glass
+- [x] `Glass` falls back cleanly to `BlurView` on iOS 17–25 (no visual breakage)
+- [x] `Card` renders with correct elevation shadows
+- [x] `Sheet` layout primitive composes with expo-router modal routes
+- [x] All files <200 lines
 
 ## How to test
 
