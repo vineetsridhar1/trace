@@ -16,7 +16,7 @@ import {
   type EntityState,
 } from "@trace/client-core";
 import { useHydrate } from "@/hooks/useHydrate";
-import { FakeSessionAccessory } from "@/components/navigation/FakeSessionAccessory";
+import { ActiveSessionsAccessory } from "@/components/navigation/ActiveSessionsAccessory";
 
 const BottomTabNavigator = createNativeBottomTabNavigator().Navigator;
 const NativeTabs = withLayoutContext<
@@ -35,6 +35,14 @@ function selectNeedsInputCount(state: EntityState): number {
   }
   return count;
 }
+
+// IMPORTANT: keep this identity-stable and always passed on `NativeTabs`.
+// Toggling `renderBottomAccessoryView` on/off causes
+// `react-native-bottom-tabs` to rebuild the native TabHostingController and
+// crashes with UIViewControllerHierarchyInconsistency when the previous
+// RNSNavigationController is still attached. The component itself handles
+// the empty-list case by rendering `null` internally.
+const renderAccessory = () => <ActiveSessionsAccessory />;
 
 const homeIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
   sfSymbol: "bolt.horizontal",
@@ -59,7 +67,7 @@ export default function AuthedLayout() {
   return (
     <NativeTabs
       minimizeBehavior="onScrollDown"
-      renderBottomAccessoryView={() => <FakeSessionAccessory />}
+      renderBottomAccessoryView={renderAccessory}
     >
       <NativeTabs.Screen
         name="(home)"

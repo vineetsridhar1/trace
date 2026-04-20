@@ -24,6 +24,7 @@ Tap the Active Sessions accessory (ticket 15a) to expand into a full-screen "Ses
 - **State** (Zustand UI store):
   - Extend `useMobileUIStore` with `playerOpen: boolean`, `playerDetent: "player" | "playerAndList"`, and setters.
   - Reuse `activeAccessoryIndex` from 15a — do not fork a separate player index.
+- **Tap-to-open wiring:** `ActiveSessionsAccessory.tsx` ships a `TODO(15b)` placeholder (`openSessionPlayer(_sessionId)` in `src/components/navigation/ActiveSessionsAccessory.tsx`). Replace that body with the `setPlayerOpen(true)` call (plus any index seeding) — the accessory row already emits a `haptic.light()` before invoking it.
 
 ## Open questions to confirm before implementing
 
