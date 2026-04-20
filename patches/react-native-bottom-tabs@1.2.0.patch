@@ -1,8 +1,8 @@
 diff --git a/ios/RepresentableView.swift b/ios/RepresentableView.swift
-index 09adaca401c716dd6c47590ffc7fe5646de2e50b..c123cd9d16f6fc696c55dc82ec70741d3a7126e4 100644
+index 09adaca401c716dd6c47590ffc7fe5646de2e50b..cff29f901e2101f46f5eca076f9919742295060d 100644
 --- a/ios/RepresentableView.swift
 +++ b/ios/RepresentableView.swift
-@@ -30,3 +30,104 @@ struct RepresentableView: PlatformViewRepresentable {
+@@ -30,3 +30,109 @@ struct RepresentableView: PlatformViewRepresentable {
  
  #endif
  }
@@ -86,9 +86,14 @@ index 09adaca401c716dd6c47590ffc7fe5646de2e50b..c123cd9d16f6fc696c55dc82ec70741d
 +    // Prefer a scroll view inside the VC that just appeared — that is the
 +    // topmost in the nested stack. Fall back to whatever the selected tab
 +    // exposes (e.g. when a container VC appears before its children).
-+    let scrollView =
++    guard let scrollView =
 +      self.view.findDescendantScrollView()
 +      ?? tabBarController.selectedViewController?.view.findDescendantScrollView()
++    else {
++      // Never clear an existing binding; UIKit would stop observing and the
++      // tab bar would stop minimizing until a tab re-selection re-queries.
++      return
++    }
 +
 +    // Publish on every link in the chain that UIKit might ask so the
 +    // minimize observer rebinds regardless of which VC it queries first.
