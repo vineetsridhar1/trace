@@ -2,7 +2,7 @@
 
 ## Summary
 
-Wire up the full route tree from the plan (§9): authed tab group with Home / Channels / Settings, plus the nested routes for channels, session groups, and session streams. Customize the tab bar with Liquid Glass, SF Symbol icons, and badge support. Every route renders a placeholder — subsequent tickets fill them in.
+Wire up the full route tree from the plan (§9): authed tab group with Home / Channels / Settings, plus the nested routes for channels, session groups, and session streams. Use **`NativeBottomTabs`** (`react-navigation`'s native iOS tab bar — wraps the real `UITabBarController` / `UITabBar`) so we get genuine Apple chrome, free Liquid Glass on iOS 26+, and the `bottomAccessory` slot used by ticket 15a. Every route renders a placeholder — subsequent tickets fill them in.
 
 ## What needs to happen
 
@@ -14,7 +14,7 @@ Wire up the full route tree from the plan (§9): authed tab group with Home / Ch
       _layout.tsx
       sign-in.tsx                            — already exists from ticket 09
     (authed)/
-      _layout.tsx                            — tabs layout
+      _layout.tsx                            — NativeBottomTabs layout
       index.tsx                              — Home placeholder
       channels/
         index.tsx                            — Channels list placeholder
@@ -23,16 +23,18 @@ Wire up the full route tree from the plan (§9): authed tab group with Home / Ch
         [groupId].tsx                        — Session group placeholder
         [groupId]/[sessionId].tsx            — Session stream placeholder
       settings.tsx                           — Settings placeholder
+      (modal)/
+        session-player.tsx                   — placeholder for ticket 15b
   ```
-- Custom tab bar (`apps/mobile/src/components/navigation/TabBar.tsx`, <200 lines):
-  - Three tabs: Home (`bolt.horizontal`), Channels (`tray`), Settings (`gearshape`)
-  - Background uses `Glass` primitive with `preset="tabBar"` (Liquid Glass on iOS 26+)
-  - Active tab: accent tint; inactive: muted
-  - Tap haptic: `selection`
-  - Badge support (pass count prop; shown when >0)
-  - Home tab badge is wired to the current `needs_input` count from the store; Channels and Settings stay unbadged in V1
-- Configure expo-router stack headers per route:
-  - Home: `largeTitle` mode (native iOS title collapse behavior via `react-native-screens`)
+- Tabs (`apps/mobile/src/components/navigation/AuthedTabsLayout.tsx`, <200 lines) using `NativeBottomTabs` (or expo-router's `NativeTabs` sugar):
+  - Three tabs: Home (`bolt.horizontal`), Channels (`tray`), Settings (`gearshape`) — passed as SF Symbol names so UIKit renders them natively.
+  - **Liquid Glass and tab-bar morph behavior come from UITabBar automatically** on iOS 26+. We do **not** wrap the tab bar in our `Glass` primitive.
+  - Active tint: theme `accent`. Inactive: system default (UIKit picks an appropriate muted tone).
+  - Tab tap haptic: `selection` (wired via `tabPress` event).
+  - Badge support: pass numeric badges through the `NativeBottomTabs` API. Home tab badge mirrors the current `needs_input` count from the entity store; Channels and Settings stay unbadged in V1.
+  - `bottomAccessory` slot wired up to render `<ActiveSessionsAccessory placement={placement} />` from ticket 15a (returns `null` when no active sessions, so the slot collapses cleanly).
+- Configure stack headers per route:
+  - Home: `largeTitle` mode (native iOS title collapse via `react-native-screens`)
   - Channels list: `largeTitle` mode + search bar slot (search implementation in ticket 16)
   - Coding channel detail: regular title, back chevron
   - Session group: regular title, back chevron
@@ -42,27 +44,31 @@ Wire up the full route tree from the plan (§9): authed tab group with Home / Ch
   - Scheme: `trace`
   - Future: add `ios.associatedDomains` for universal links (ticket 28)
 - Ensure swipe-back gesture works on all stacks (native, via `react-native-screens`).
+- iOS 26+ note: confirm `NativeBottomTabs` exposes `bottomAccessory`, `tabBarMinimizeBehavior`, and SF Symbol icons. If a gap exists during the spike, fall back to the previously-planned custom tab bar with `Glass preset="tabBar"` and surface the gap in the ticket comment so 15a can adapt.
 
 ## Dependencies
 
 - [09 — Sign-in Flow](09-sign-in-flow-and-hydration.md)
-- [12 — Surface Primitives (Glass)](12-surface-primitives-glass-sheet.md)
 - [13 — Data Primitives (for tab icons)](13-data-primitives.md)
+- Install: `react-native-screens` (already required), confirm version supports `NativeBottomTabs` + `bottomAccessory`
 
 ## Completion requirements
 
 - [ ] All routes exist with placeholder content
-- [ ] Tab bar uses Liquid Glass on iOS 26+
-- [ ] Tab switching works with haptic
+- [ ] Tabs render via `NativeBottomTabs` (real `UITabBar`); Liquid Glass appears automatically on iOS 26+
+- [ ] Tab switching works with `selection` haptic
 - [ ] Home tab badge reflects the current `needs_input` count; other tabs remain unbadged
+- [ ] `bottomAccessory` slot exists and renders the placeholder from ticket 15a (or `null` when no active sessions)
 - [ ] Stack pushes and pops with native iOS transitions
 - [ ] Swipe-back gesture works on every stack screen
 - [ ] Navigation files total <200 lines each
 
 ## How to test
 
-1. Launch app, verify three tabs at the bottom with glass effect.
-2. Put one session into `needs_input` and verify the Home tab badge increments while the other tabs stay unbadged.
-3. Tap each tab — haptic fires, content switches, title changes.
-4. Navigate Channels → [id] → Session group → Session stream; swipe back works at each level.
-5. Session stream URL deep link via `xcrun simctl openurl booted trace://sessions/test-group/test-session` opens the stream screen.
+1. Launch app on iOS 26 simulator/device — verify three tabs at the bottom rendered by UIKit (genuine Liquid Glass, not our Glass primitive).
+2. Launch app on iOS 17–25 — verify tabs still render with the system's pre-Liquid-Glass appearance (no breakage).
+3. Put one session into `needs_input` and verify the Home tab badge increments while the other tabs stay unbadged.
+4. Tap each tab — haptic fires, content switches, title changes.
+5. Navigate Channels → [id] → Session group → Session stream; swipe back works at each level.
+6. Session stream URL deep link via `xcrun simctl openurl booted trace://sessions/test-group/test-session` opens the stream screen.
+7. With at least one active session, verify the `bottomAccessory` placeholder appears above the tab bar.

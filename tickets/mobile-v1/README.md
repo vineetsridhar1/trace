@@ -41,7 +41,9 @@ Build the primitives. Every screen that comes later inherits polish by default.
 
 | # | Ticket | What it does |
 |---|--------|-------------|
-| 15 | [Navigation Skeleton](15-navigation-tabs.md) | Expo Router route tree, tab bar with Liquid Glass, stack headers |
+| 15 | [Navigation Skeleton](15-navigation-tabs.md) | Expo Router route tree using `NativeBottomTabs` (real `UITabBar` + free Liquid Glass on iOS 26+), stack headers |
+| 15a | [Active Sessions Tab Bar Accessory](15a-active-sessions-tab-bar-accessory.md) | Mini-player above the tab bar via `bottomAccessory`; horizontal swipe scrubs between in-progress sessions |
+| 15b | [Session Player (Expanded Modal)](15b-session-player-expanded-view.md) | Tap-to-expand modal with horizontal scrub + pull-down-for-list; Apple Music–style |
 | 16 | [Channels List](16-channels-list-screen.md) | Coding-channels tab with search + All/Mine segmented filter |
 | 17 | [Coding Channel → Session Groups](17-coding-channel-session-groups.md) | Session groups list with Active / Merged / Archived segments |
 | 18 | [Settings + Org Switcher](18-settings-and-org-switcher.md) | Settings screen and org switcher sheet |
@@ -109,7 +111,9 @@ M2 — Design System (can run in parallel with M1 once 05 lands)
 └─ 14 Haptics + Motion + Dev Route  (needs 11, 12, 13)
 
 M3 — Navigation + Channels  (needs M1 complete, M2 mostly complete)
-15 Navigation Skeleton  (needs 09, 12, 13)
+15 Navigation Skeleton  (needs 09, 13)
+├─ 15a Active Sessions Tab Bar Accessory  (needs 15, 13, 09)
+│  └─ 15b Session Player (Expanded Modal)  (needs 15a, 13, 12; soft-deps 22, 24)
 ├─ 16 Channels List  (needs 15, 13)
 │  └─ 17 Session Groups List  (needs 16)
 └─ 18 Settings + Org Switcher  (needs 15, 12, 13)
@@ -144,6 +148,8 @@ M7 — Beta  (needs M6 complete)
 
 - Server tickets (07, 08, 27) can land on their own timeline and are not blocked by client tickets.
 - M1 and M2 overlap heavily — once the mobile scaffold (05) exists, design-system work can run in parallel with auth work.
+- 15a depends on 15 but is independent of 16/17/18 — can land mid-M3.
+- 15b depends on 15a and benefits from (but is not blocked by) the M4 work that produces the active todo strip (22) and session-action helpers (24); stub those in 15b until they land.
 - Within M4, tickets 21/22/23/24 can be worked in parallel after 20 lands.
 - M6 tickets 30/31/32 are independent and can be tackled in any order / in parallel.
 
@@ -153,8 +159,8 @@ M7 — Beta  (needs M6 complete)
 - `§4 Tech stack`, `§5 Monorepo structure`, and `§7 Shared code strategy` are covered by tickets 01-06.
 - `§6 Architecture`, `§12 State management rules`, and `§13 Event handling` are covered by tickets 02-04, 09, 20-24, 29, and 32.
 - `§8 Authentication` is covered by tickets 06-09 and 18.
-- `§9 Navigation structure` is covered by tickets 15, 18, 28, and 29.
-- `§10 Screens` is covered by tickets 09, 15-25.
+- `§9 Navigation structure` is covered by tickets 15, 15a, 18, 28, and 29.
+- `§10 Screens` is covered by tickets 09, 15-25, plus 15b for the expanded session player modal (§10.8).
 - `§11 Design system` is covered by tickets 10-14, 30, and 31.
 - `§14 Push notifications` is covered by tickets 08 and 26-29.
 - `§15 Milestones` maps directly to the milestone grouping in this README (M0-M7).

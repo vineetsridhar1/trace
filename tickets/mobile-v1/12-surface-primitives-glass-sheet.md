@@ -9,7 +9,8 @@ Build the surface primitives that establish depth and hierarchy: elevated cards,
 - **`Glass.tsx`** — Liquid Glass wrapper:
   - Uses `expo-glass-effect` on iOS 26+ (check at runtime via `Platform.Version`).
   - Falls back to `expo-blur` `<BlurView tint="systemThinMaterialDark" intensity={80}>` on iOS <26.
-  - Props: `preset?: 'tabBar' | 'navBar' | 'input' | 'pinnedBar' | 'card'` (pulls config from `theme.glass`), `children`, `style?`.
+  - Props: `preset?: 'navBar' | 'input' | 'pinnedBar' | 'card' | 'sessionPlayer'` (pulls config from `theme.glass`), `children`, `style?`.
+  - The `tabBar` preset defined in `theme/glass.ts` (ticket 10) is retained as a token but **not consumed here** — the tab bar uses `NativeBottomTabs` (see ticket 15), which gets Liquid Glass from UIKit directly.
   - If `expo-glass-effect` does not satisfy all presets adequately during spike in M2, fall back to writing a small custom Expo Module in `apps/mobile/native-modules/glass-effect/` wrapping `UIGlassEffect` directly. Budget: 1 day.
 - **`Card.tsx`**:
   - Elevated surface: rounded corners (from theme), subtle shadow (from theme), background `surfaceElevated`

@@ -319,7 +319,7 @@ Per §15 (Milestones): `client-core` is extracted in milestone M0 **before** any
 
 ### 9.2 Tab bar
 
-Three tabs, persistent at the bottom. Liquid Glass background on iOS 26+.
+Three tabs, persistent at the bottom. Implemented via **`NativeBottomTabs`** (`react-navigation`'s native iOS tab bar — wraps the real `UITabBarController` / `UITabBar`). Liquid Glass on iOS 26+ comes from UIKit automatically; we do not paint it ourselves.
 
 1. **Home** — icon: `bolt.horizontal`. A single feed of sessions needing the user's attention (needs_input + recently-updated active). Default tab.
 2. **Channels** — icon: `tray`. Coding channels list; drill down into a channel shows its session groups table.
@@ -328,6 +328,18 @@ Three tabs, persistent at the bottom. Liquid Glass background on iOS 26+.
 Badges:
 - Home tab: count of sessions in `needs_input` belonging to current user
 - Channels tab: none in V1
+
+### 9.2.1 Tab bar bottom accessory ("session player" mini)
+
+When the user has at least one **in-progress session** (`agentStatus === 'active' || sessionStatus === 'needs_input'`), a Liquid Glass mini-bar appears above the tab bar — rendered via `NativeBottomTabs`'s `bottomAccessory` slot (iOS 26+ only). Inspired by Apple Music's now-playing mini-player.
+
+- **Content per page:** status dot, session name, current todo / last activity preview, trailing chevron.
+- **Horizontal swipe:** scrub between in-progress sessions (most recent first).
+- **Tap:** opens the expanded session player modal (§10.8).
+- **Long-press:** native context menu — Stop session, Open PR (if `prUrl`), Copy link.
+- **Hidden when there are no in-progress sessions** — UITabBar animates the appearance/disappearance for free.
+- **Two placements provided by UIKit:** `regular` (full bar above the tab bar) and `inline` (compact, when the tab bar collapses on scroll). The component is rendered twice; shared state (active index) lives in the Zustand UI store so the two stay in sync.
+- **iOS <26:** `bottomAccessory` is a no-op. Users still reach in-progress sessions via Home and Channels.
 
 ### 9.3 Modal/sheet usage
 
@@ -576,6 +588,48 @@ Full-screen modals for:
 
 ---
 
+### 10.8 Session Player (Expanded Modal) — `app/(authed)/(modal)/session-player.tsx`
+
+**Purpose:** A glance/control surface for in-progress sessions, opened by tapping the tab bar accessory (§9.2.1). Modeled after Apple Music's now-playing screen.
+
+**Data:**
+- Reads from `useActiveSessions()` — the same selector that drives the accessory.
+- Subscribes to `sessionEvents` for **only** the currently centered session (one subscription at a time). Other cards render from the entity store snapshot.
+
+**Layout:**
+- Drag handle (grabber) at top
+- Horizontal pager of expanded session cards:
+  - Session name + branch (mono)
+  - Status chip + animated `StatusDot`
+  - Active todo strip (shared renderer with §10.6's `ActiveTodoStrip`)
+  - Last 1–2 events preview
+  - Quick actions: `Stop`, `Open PR` (if `prUrl`), `Open full session` (primary)
+- A revealable **active sessions list panel** below the pager (initially hidden)
+
+**Interaction model — three sheet detents:**
+1. *Player only* (initial state after tap)
+2. *Player + list* (after a downward drag past the first threshold)
+3. *Dismissed* (after a downward drag from state 2, or from the drag handle in state 1)
+
+Velocity-based snap decisions, identical to native iOS sheet physics. Implemented with Reanimated + gesture-handler on the UI thread.
+
+**Actions:**
+- Horizontal swipe → scrub between in-progress sessions (writes to shared `activeAccessoryIndex`).
+- Pull down on pager → reveal session list (snap detent).
+- Pull down on list → dismiss modal.
+- Tap row in list → switch active page; reveal animates back to *Player only*.
+- Tap "Open full session" → navigate to §10.6 stream screen and dismiss.
+- Tap "Stop" → confirmation sheet → `dismissSession`.
+
+**Polish:**
+- `selection` haptic on horizontal page change; `light` on list reveal snap; `medium` on dismiss.
+- Status dot pulses on active sessions.
+- Liquid Glass on the list panel (preset `sessionPlayer`); UITabBar handles the accessory's glass.
+
+**iOS <26:** the route is reachable, but in V1 the only entry point is the accessory (which only exists on iOS 26+). On older iOS the modal is effectively dormant.
+
+---
+
 ## 11. Design System
 
 ### 11.1 Design principles
@@ -636,13 +690,17 @@ Built once, used everywhere. Each is one file, <200 lines.
 
 ### 11.5 Liquid Glass usage
 
-Where to use:
-- Tab bar background
+Where our `Glass` primitive is used:
 - Navigation bar (when content scrolls beneath)
 - Input composer container
 - Pinned pending-input bar
 - Queued-messages strip
 - Session header when `largeTitle` collapses
+- Session player modal — list panel + drag handle (preset `sessionPlayer`)
+
+Where Liquid Glass comes **from UIKit, not our primitive**:
+- Tab bar background (rendered by `NativeBottomTabs` / `UITabBar`)
+- Tab bar bottom accessory (the mini session player) — UIKit applies glass to the accessory contentView automatically
 
 Where NOT to use:
 - List row backgrounds
@@ -650,7 +708,7 @@ Where NOT to use:
 - Buttons
 - Empty states
 
-On iOS <26 / Android: `expo-blur` with `tint="systemThinMaterialDark"` (or light variant based on theme).
+On iOS <26 / Android: our `Glass` primitive falls back to `expo-blur` with `tint="systemThinMaterialDark"` (or light variant based on theme). On iOS <26, UIKit-provided surfaces (tab bar, accessory) render as plain blurred bars without the Liquid Glass refraction — this is acceptable.
 
 ### 11.6 Haptic map
 
@@ -825,12 +883,16 @@ The app badge reflects the count of sessions in `needs_input` across the active 
 - Motion tokens + helpers implemented.
 - **Exit criteria:** every primitive renders correctly in the V1 dark theme on iOS 17 and iOS 26, with no layout jank, and the token structure remains ready for a future light theme.
 
-### M3 — Channels & session group list
+### M3 — Navigation, accessory, and channels
 
+- `NativeBottomTabs` shell (real `UITabBar`).
+- Tab bar bottom accessory (mini session player) — see §9.2.1.
+- Expanded session player modal — see §10.8.
 - Channels list screen.
 - Coding channel screen with session group list.
+- Settings + org switcher.
 - Status chips, live updates from `orgEvents`.
-- **Exit criteria:** can browse to a session group from the Channels tab.
+- **Exit criteria:** can browse to a session group from the Channels tab; the bottom accessory shows in-progress sessions and expands into the session player.
 
 ### M4 — Session stream (the big one)
 
