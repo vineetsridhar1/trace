@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  text: { flex: 1, minWidth: 0, paddingBottom: 1 },
+  text: { flex: 1, minWidth: 0, paddingTop: 2, paddingBottom: 2 },
   title: { fontWeight: "600" },
   metaRow: {
     flexDirection: "row",
