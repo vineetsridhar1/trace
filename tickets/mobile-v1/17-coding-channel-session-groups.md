@@ -18,7 +18,7 @@ The coding channel detail screen — the user's landing page when drilling into 
   - Pulls fields via `useEntityField('sessionGroups', id, 'name')`, etc.
   - Tap → navigate to `/sessions/[groupId]`
   - Long-press → native context menu: "Archive workspace" (if not archived) → `archiveSessionGroup` mutation, "Copy link" → `Clipboard.setStringAsync('trace://sessions/' + id)`
-- **Status-to-chip mapping**: session-group statuses in the data contract (`in_progress, needs_input, in_review, merged, failed`) map to `Chip` variants as: `in_progress → "active"`, `needs_input → "needsInput"`, `in_review → "inReview"`, `merged → "merged"`, `failed → "failed"`. Centralize this mapping in `SessionGroupRow.tsx` (or a tiny helper) so subsequent tickets don't duplicate the string translation.
+- **Status-to-chip mapping**: session-group statuses in the data contract (`in_progress, needs_input, in_review, merged, failed`) map to `Chip` variants by camelCasing: `in_progress → "inProgress"`, `needs_input → "needsInput"`, `in_review → "inReview"`, `merged → "merged"`, `failed → "failed"`. Centralize this translation in `SessionGroupRow.tsx` (or a tiny helper) so subsequent tickets don't duplicate it.
 - `FlashList` virtualized list of rows, sorted by `_sortTimestamp` desc.
 - Empty state per segment: "No active sessions in this channel" / "Nothing merged yet" / "Nothing archived".
 - Live updates: entity store updates from ambient subscription; list reacts via Zustand selector.

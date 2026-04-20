@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { type ViewStyle } from "react-native";
 import Animated, {
+  cancelAnimation,
   Easing,
   useAnimatedStyle,
   useSharedValue,
@@ -41,7 +42,8 @@ export function StatusDot({ status, size = "md", style }: StatusDotProps) {
 
   useEffect(() => {
     if (status !== "active") {
-      opacity.value = 1;
+      cancelAnimation(opacity);
+      opacity.value = withTiming(1, { duration: theme.motion.durations.fast });
       return;
     }
     opacity.value = withRepeat(
@@ -52,7 +54,7 @@ export function StatusDot({ status, size = "md", style }: StatusDotProps) {
       -1,
       true,
     );
-  }, [status, opacity]);
+  }, [status, opacity, theme.motion.durations.fast]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,

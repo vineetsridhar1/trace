@@ -1,17 +1,18 @@
 import { useEffect, type ReactNode } from "react";
 import { StyleSheet, View, type ViewStyle } from "react-native";
 import Animated, {
+  cancelAnimation,
   Easing,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { useTheme, type Theme } from "@/theme";
+import { alpha, useTheme, type Theme } from "@/theme";
 import { Text } from "./Text";
 
 export type ChipVariant =
-  | "active"
+  | "inProgress"
   | "needsInput"
   | "done"
   | "failed"
@@ -32,28 +33,19 @@ interface VariantPalette {
 
 function variantPalette(theme: Theme, variant: ChipVariant): VariantPalette {
   switch (variant) {
-    case "active":
-      return { fg: theme.colors.statusActive, bg: withAlpha(theme.colors.statusActive, 0.16) };
+    case "inProgress":
+      return { fg: theme.colors.statusActive, bg: alpha(theme.colors.statusActive, 0.16) };
     case "needsInput":
-      return { fg: theme.colors.statusNeedsInput, bg: withAlpha(theme.colors.statusNeedsInput, 0.16) };
+      return { fg: theme.colors.statusNeedsInput, bg: alpha(theme.colors.statusNeedsInput, 0.16) };
     case "done":
-      return { fg: theme.colors.statusDone, bg: withAlpha(theme.colors.statusDone, 0.16) };
+      return { fg: theme.colors.statusDone, bg: alpha(theme.colors.statusDone, 0.16) };
     case "failed":
-      return { fg: theme.colors.statusFailed, bg: withAlpha(theme.colors.statusFailed, 0.16) };
+      return { fg: theme.colors.statusFailed, bg: alpha(theme.colors.statusFailed, 0.16) };
     case "merged":
-      return { fg: theme.colors.statusMerged, bg: withAlpha(theme.colors.statusMerged, 0.16) };
+      return { fg: theme.colors.statusMerged, bg: alpha(theme.colors.statusMerged, 0.16) };
     case "inReview":
-      return { fg: theme.colors.statusInReview, bg: withAlpha(theme.colors.statusInReview, 0.16) };
+      return { fg: theme.colors.statusInReview, bg: alpha(theme.colors.statusInReview, 0.16) };
   }
-}
-
-function withAlpha(hex: string, alpha: number): string {
-  if (hex.startsWith("rgba")) return hex;
-  const clean = hex.replace("#", "");
-  const r = parseInt(clean.substring(0, 2), 16);
-  const g = parseInt(clean.substring(2, 4), 16);
-  const b = parseInt(clean.substring(4, 6), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 export function Chip({ label, variant, icon, style }: ChipProps) {
@@ -62,8 +54,9 @@ export function Chip({ label, variant, icon, style }: ChipProps) {
   const opacity = useSharedValue(1);
 
   useEffect(() => {
-    if (variant !== "active") {
-      opacity.value = 1;
+    if (variant !== "inProgress") {
+      cancelAnimation(opacity);
+      opacity.value = withTiming(1, { duration: theme.motion.durations.fast });
       return;
     }
     opacity.value = withRepeat(
@@ -74,7 +67,7 @@ export function Chip({ label, variant, icon, style }: ChipProps) {
       -1,
       true,
     );
-  }, [variant, opacity]);
+  }, [variant, opacity, theme.motion.durations.fast]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -88,7 +81,7 @@ export function Chip({ label, variant, icon, style }: ChipProps) {
           backgroundColor: palette.bg,
           borderRadius: theme.radius.full,
           paddingHorizontal: theme.spacing.md,
-          paddingVertical: 4,
+          paddingVertical: theme.spacing.xs,
         },
         animatedStyle,
         style,

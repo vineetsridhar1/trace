@@ -1,4 +1,3 @@
-import { useCallback } from "react";
 import { type ViewStyle } from "react-native";
 import NativeSegmentedControl from "@react-native-segmented-control/segmented-control";
 import * as Haptics from "expo-haptics";
@@ -21,14 +20,11 @@ export function SegmentedControl({
 }: SegmentedControlProps) {
   const theme = useTheme();
 
-  const handleChange = useCallback(
-    (index: number) => {
-      if (index === selectedIndex) return;
-      void Haptics.selectionAsync();
-      onChange(index);
-    },
-    [selectedIndex, onChange],
-  );
+  function handleChange(index: number) {
+    if (index === selectedIndex) return;
+    void Haptics.selectionAsync();
+    onChange(index);
+  }
 
   return (
     <NativeSegmentedControl

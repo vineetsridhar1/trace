@@ -44,9 +44,8 @@ export function ListRow({
     : "foreground";
 
   function handlePress(e: GestureResponderEvent) {
-    if (!onPress) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onPress(e);
+    onPress?.(e);
   }
 
   const content = (
