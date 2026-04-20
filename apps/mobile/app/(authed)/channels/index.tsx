@@ -48,15 +48,15 @@ export default function ChannelsIndex() {
     }
   }, [activeOrgId]);
 
-  return (
-    <Screen edges={["left", "right"]}>
-      <Stack.Screen options={{ headerSearchBarOptions: searchBarOptions }} />
+  const listHeader = useMemo(
+    () => (
       <View
         style={[
           styles.segmentContainer,
           {
             paddingHorizontal: theme.spacing.lg,
-            paddingVertical: theme.spacing.sm,
+            paddingTop: theme.spacing.sm,
+            paddingBottom: theme.spacing.md,
             backgroundColor: theme.colors.background,
           },
         ]}
@@ -67,6 +67,13 @@ export default function ChannelsIndex() {
           onChange={setSegmentIndex}
         />
       </View>
+    ),
+    [theme, segmentIndex],
+  );
+
+  return (
+    <Screen edges={["left", "right"]}>
+      <Stack.Screen options={{ headerSearchBarOptions: searchBarOptions }} />
       <FlashList
         data={keys}
         renderItem={renderItem}
@@ -75,6 +82,7 @@ export default function ChannelsIndex() {
         contentInsetAdjustmentBehavior="automatic"
         onRefresh={handleRefresh}
         refreshing={refreshing}
+        ListHeaderComponent={listHeader}
         ListEmptyComponent={<ChannelsEmpty filter={filter} search={search} />}
       />
     </Screen>
