@@ -54,13 +54,15 @@ Wire up the full route tree from the plan (§9): authed tab group with Home / Ch
 
 ## Completion requirements
 
-- [ ] All routes exist with placeholder content
-- [ ] Tab bar uses Liquid Glass on iOS 26+
-- [ ] Tab switching works with haptic
-- [ ] Home tab badge reflects the current `needs_input` count; other tabs remain unbadged
-- [ ] Stack pushes and pops with native iOS transitions
-- [ ] Swipe-back gesture works on every stack screen
-- [ ] Navigation files total <200 lines each
+- [x] All routes exist with placeholder content
+- [x] Tab bar uses Liquid Glass on iOS 26+
+- [x] Tab switching works with haptic
+- [x] Home tab badge reflects the current `needs_input` count; other tabs remain unbadged
+- [x] Stack pushes and pops with native iOS transitions (channels + sessions segments)
+- [x] Swipe-back gesture works on every stack screen
+- [x] Navigation files total <200 lines each
+- [ ] Home tab uses `largeTitle` header (currently `headerShown: false` at Tabs level and no inner Stack — follow-up required)
+- [ ] Settings tab uses `largeTitle` header (same as above)
 
 ## How to test
 
