@@ -1498,7 +1498,6 @@ export type QueryResolvedAiModeArgs = {
 
 export type QuerySearchSessionsArgs = {
   channelId?: InputMaybe<Scalars['ID']['input']>;
-  organizationId: Scalars['ID']['input'];
   query: Scalars['String']['input'];
 };
 

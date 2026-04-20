@@ -1019,7 +1019,7 @@ export class SessionService {
     query: string,
     channelId?: string | null,
   ) {
-    const trimmed = query.trim();
+    const trimmed = query.trim().slice(0, 200);
     if (trimmed.length < 2) return { sessions: [], sessionGroups: [] };
 
     const sessionWhere: Prisma.SessionWhereInput = {
@@ -1028,6 +1028,7 @@ export class SessionService {
     };
     if (channelId) sessionWhere.channelId = channelId;
 
+    // Intentionally includes archived groups so users can find past work.
     const groupWhere: Prisma.SessionGroupWhereInput = {
       organizationId,
       OR: [

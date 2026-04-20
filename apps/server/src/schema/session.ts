@@ -48,15 +48,11 @@ export const sessionQueries = {
   },
   searchSessions: (
     _: unknown,
-    args: { organizationId: string; query: string; channelId?: string | null },
+    args: { query: string; channelId?: string | null },
     ctx: Context,
   ) => {
-    requireOrgContext(ctx);
-    return sessionService.search(
-      args.organizationId,
-      args.query,
-      args.channelId ?? undefined,
-    );
+    const orgId = requireOrgContext(ctx);
+    return sessionService.search(orgId, args.query, args.channelId ?? undefined);
   },
   availableSessionRuntimes: (_: unknown, args: { sessionId: string }, ctx: Context) => {
     if (!ctx.userId) throw new AuthenticationError();

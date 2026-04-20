@@ -1499,7 +1499,6 @@ export type QueryResolvedAiModeArgs = {
 
 export type QuerySearchSessionsArgs = {
   channelId?: InputMaybe<Scalars['ID']['input']>;
-  organizationId: Scalars['ID']['input'];
   query: Scalars['String']['input'];
 };
 
@@ -2837,7 +2836,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   repoBranches?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType, RequireFields<QueryRepoBranchesArgs, 'repoId'>>;
   repos?: Resolver<Array<ResolversTypes['Repo']>, ParentType, ContextType, RequireFields<QueryReposArgs, 'organizationId'>>;
   resolvedAiMode?: Resolver<ResolversTypes['AutonomyMode'], ParentType, ContextType, RequireFields<QueryResolvedAiModeArgs, 'organizationId' | 'scopeId' | 'scopeType'>>;
-  searchSessions?: Resolver<ResolversTypes['SessionSearchResults'], ParentType, ContextType, RequireFields<QuerySearchSessionsArgs, 'organizationId' | 'query'>>;
+  searchSessions?: Resolver<ResolversTypes['SessionSearchResults'], ParentType, ContextType, RequireFields<QuerySearchSessionsArgs, 'query'>>;
   searchUsers?: Resolver<Array<ResolversTypes['User']>, ParentType, ContextType, RequireFields<QuerySearchUsersArgs, 'query'>>;
   session?: Resolver<Maybe<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerySessionArgs, 'id'>>;
   sessionGroup?: Resolver<Maybe<ResolversTypes['SessionGroup']>, ParentType, ContextType, RequireFields<QuerySessionGroupArgs, 'id'>>;

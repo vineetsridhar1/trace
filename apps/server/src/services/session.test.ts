@@ -335,6 +335,92 @@ describe("SessionService", () => {
     });
   });
 
+  describe("search", () => {
+    it("returns empty results when the trimmed query is shorter than 2 chars", async () => {
+      const result = await service.search("org-1", "  a  ");
+
+      expect(result).toEqual({ sessions: [], sessionGroups: [] });
+      expect(prismaMock.session.findMany).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.findMany).not.toHaveBeenCalled();
+    });
+
+    it("matches sessions by name and groups by name or slug, scoped to the org", async () => {
+      const matchingSession = makeSession({ id: "session-match", name: "Deploy dashboard" });
+      const matchingGroup = makeSessionGroup({
+        id: "group-match",
+        name: "Deploy pipeline",
+        sessions: [makeSession({ id: "session-in-group" })],
+      });
+
+      prismaMock.session.findMany.mockResolvedValueOnce([matchingSession]);
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([matchingGroup]);
+
+      const result = await service.search("org-1", "deploy");
+
+      expect(prismaMock.session.findMany).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-1",
+          name: { contains: "deploy", mode: "insensitive" },
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 20,
+        include: expect.any(Object),
+      });
+      expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-1",
+          OR: [
+            { name: { contains: "deploy", mode: "insensitive" } },
+            { slug: { contains: "deploy", mode: "insensitive" } },
+          ],
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 20,
+        include: expect.any(Object),
+      });
+      expect(result.sessions.map((session) => session.id)).toEqual(["session-match"]);
+      expect(result.sessionGroups.map((group) => group.id)).toEqual(["group-match"]);
+      // Derived status + sorted sessions should be present on the snapshot
+      expect(result.sessionGroups[0]?.status).toBeDefined();
+    });
+
+    it("narrows to a channel when channelId is provided", async () => {
+      prismaMock.session.findMany.mockResolvedValueOnce([]);
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([]);
+
+      await service.search("org-1", "deploy", "channel-1");
+
+      expect(prismaMock.session.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            organizationId: "org-1",
+            channelId: "channel-1",
+          }),
+        }),
+      );
+      expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            organizationId: "org-1",
+            channelId: "channel-1",
+          }),
+        }),
+      );
+    });
+
+    it("trims whitespace and caps query length at 200 chars", async () => {
+      prismaMock.session.findMany.mockResolvedValueOnce([]);
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([]);
+
+      const longInput = `  ${"a".repeat(500)}  `;
+      await service.search("org-1", longInput);
+
+      const sessionCall = prismaMock.session.findMany.mock.calls[0]?.[0];
+      const sessionWhere = sessionCall?.where as { name?: { contains?: string } };
+      expect(sessionWhere.name?.contains?.length).toBe(200);
+    });
+  });
+
   describe("start", () => {
     it("creates a new session group for a channel entrypoint", async () => {
       const sessionGroup = makeSessionGroup();
