@@ -7,6 +7,7 @@ import {
   useEntityStore,
   type AuthState,
 } from "@trace/client-core";
+import { View } from "react-native";
 import { EmptyState, IconButton, Screen } from "@/components/design-system";
 import { SessionGroupRow } from "@/components/channels/SessionGroupRow";
 import { SessionGroupsHeader } from "@/components/channels/SessionGroupsHeader";
@@ -129,13 +130,15 @@ export default function ChannelDetail() {
         options={{
           title: channelName ?? "Channel",
           headerRight: () => (
-            <IconButton
-              symbol="archivebox"
-              size="sm"
-              color="foreground"
-              onPress={handleOpenArchive}
-              accessibilityLabel="Merged & archived"
-            />
+            <View style={{ marginLeft: 4 }}>
+              <IconButton
+                symbol="archivebox"
+                size="sm"
+                color="foreground"
+                onPress={handleOpenArchive}
+                accessibilityLabel="Merged & archived"
+              />
+            </View>
           ),
         }}
       />
