@@ -5,28 +5,26 @@ import {
   type ListRenderItem,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  Pressable,
   StyleSheet,
   View,
 } from "react-native";
-import { SymbolView } from "expo-symbols";
 import { useShallow } from "zustand/react/shallow";
-import { useEntityStore, type EntityState, type SessionEntity } from "@trace/client-core";
-import { Text } from "@/components/design-system/Text";
+import { useEntityStore, type EntityState } from "@trace/client-core";
 import { haptic } from "@/lib/haptics";
 import { useMobileUIStore } from "@/stores/ui";
-import { useTheme, type Theme } from "@/theme";
+import { useTheme } from "@/theme";
+import { ActiveSessionsAccessoryRow } from "./ActiveSessionsAccessoryRow";
 
-const EMPTY_SESSIONS: readonly SessionEntity[] = Object.freeze([]);
+const EMPTY_IDS: readonly string[] = Object.freeze([]);
 
 /**
- * Any session the user is still interacting with — everything except
- * `merged` (shipped), `failed` (errored), and sessions whose group has been
- * archived. `in_progress`, `needs_input`, `in_review`, `done`, `not_started`,
- * and `stopped` all qualify. Wrap callers in `useShallow`.
+ * IDs of every session the user is still interacting with — everything except
+ * `merged` (shipped), `failed` (errored), and sessions whose group is archived.
+ * Sorted by `_sortTimestamp` desc. Wrap callers in `useShallow`. Returns IDs
+ * (not entities) so rows re-render only when their own fields change.
  */
-export function selectActiveSessions(state: EntityState): readonly SessionEntity[] {
-  let out: SessionEntity[] | null = null;
+export function selectActiveSessionIds(state: EntityState): readonly string[] {
+  let out: Array<{ id: string; ts: string }> | null = null;
   for (const id in state.sessions) {
     const s = state.sessions[id];
     if (s.sessionStatus === "merged") continue;
@@ -35,31 +33,26 @@ export function selectActiveSessions(state: EntityState): readonly SessionEntity
       const g = state.sessionGroups[s.sessionGroupId];
       if (g && (g.archivedAt || g.status === "archived")) continue;
     }
-    (out ??= []).push(s);
+    (out ??= []).push({ id, ts: s._sortTimestamp ?? "" });
   }
-  if (!out) return EMPTY_SESSIONS;
-  out.sort((a, b) => {
-    const at = a._sortTimestamp ?? "";
-    const bt = b._sortTimestamp ?? "";
-    if (at === bt) return 0;
-    return at < bt ? 1 : -1;
-  });
-  return out;
+  if (!out) return EMPTY_IDS;
+  out.sort((a, b) => (a.ts === b.ts ? 0 : a.ts < b.ts ? 1 : -1));
+  return out.map((e) => e.id);
 }
 
-function keyExtractor(s: SessionEntity) {
-  return s.id;
-}
+const keyExtractor = (id: string) => id;
 
 export function ActiveSessionsAccessory() {
-  const sessions = useEntityStore(useShallow(selectActiveSessions));
+  const ids = useEntityStore(useShallow(selectActiveSessionIds));
   const index = useMobileUIStore((s) => s.activeAccessoryIndex);
   const setIndex = useMobileUIStore((s) => s.setActiveAccessoryIndex);
   const theme = useTheme();
-  const listRef = useRef<FlatList<SessionEntity>>(null);
+  const listRef = useRef<FlatList<string>>(null);
   // "self" = our own onMomentumScrollEnd pushed the index, so the sync effect
   // should skip scrolling (the list is already there). "external" = 15b swipe.
   const indexSource = useRef<"self" | "external">("external");
+  // First sync-scroll after layout shouldn't animate — nothing to animate from.
+  const hasScrolledRef = useRef(false);
   const [width, setWidth] = useState(0);
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
@@ -67,27 +60,28 @@ export function ActiveSessionsAccessory() {
     setWidth((prev) => (prev === w ? prev : w));
   }, []);
 
-  // Clamp the shared index whenever the active-sessions list shrinks beneath it
-  // (e.g. a session finishes and drops out of the pager).
+  // Clamp the shared index whenever the list shrinks beneath it.
   useEffect(() => {
-    if (sessions.length === 0) {
+    if (ids.length === 0) {
       if (index !== 0) setIndex(0);
       return;
     }
-    const max = sessions.length - 1;
+    const max = ids.length - 1;
     if (index > max) setIndex(max);
-  }, [sessions.length, index, setIndex]);
+  }, [ids.length, index, setIndex]);
 
-  // Keep the scroll position in sync when the index is driven from elsewhere
+  // Keep scroll position in sync when the index is driven from elsewhere
   // (e.g. horizontal swipe inside the expanded Session Player in 15b).
   useEffect(() => {
     if (indexSource.current === "self") {
       indexSource.current = "external";
       return;
     }
-    if (width === 0 || sessions.length === 0) return;
-    listRef.current?.scrollToOffset({ offset: index * width, animated: true });
-  }, [index, width, sessions.length]);
+    if (width === 0 || ids.length === 0) return;
+    const animated = hasScrolledRef.current;
+    hasScrolledRef.current = true;
+    listRef.current?.scrollToOffset({ offset: index * width, animated });
+  }, [index, width, ids.length]);
 
   const onMomentumScrollEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -102,19 +96,19 @@ export function ActiveSessionsAccessory() {
     [width, index, setIndex],
   );
 
-  const renderItem: ListRenderItem<SessionEntity> = useCallback(
-    ({ item }) => <SessionRow session={item} width={width} theme={theme} />,
+  const renderItem: ListRenderItem<string> = useCallback(
+    ({ item }) => <ActiveSessionsAccessoryRow sessionId={item} width={width} theme={theme} />,
     [width, theme],
   );
 
-  if (sessions.length === 0) return null;
+  if (ids.length === 0) return null;
 
   return (
     <View style={styles.container} onLayout={onLayout}>
       {width > 0 ? (
         <FlatList
           ref={listRef}
-          data={sessions}
+          data={ids}
           keyExtractor={keyExtractor}
           renderItem={renderItem}
           horizontal
@@ -129,71 +123,6 @@ export function ActiveSessionsAccessory() {
   );
 }
 
-// TODO(15b): open the Session Player sheet with this session focused.
-function openSessionPlayer(_sessionId: string) {}
-
-function SessionRow({
-  session,
-  width,
-  theme,
-}: { session: SessionEntity; width: number; theme: Theme }) {
-  const subtitle = `${toolLabel(session.tool)} · ${statusLabel(session)}`;
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Open session player — ${session.name}`}
-      style={[styles.page, { width }]}
-      onPress={() => {
-        haptic.light();
-        openSessionPlayer(session.id);
-      }}
-    >
-      <View style={[styles.symbolWrap, { backgroundColor: theme.colors.accentMuted }]}>
-        <SymbolView
-          name="bolt.horizontal.fill"
-          size={16}
-          tintColor={theme.colors.accent}
-          weight="semibold"
-        />
-      </View>
-      <View style={styles.text}>
-        <Text variant="body" numberOfLines={1} style={styles.title}>
-          {session.name}
-        </Text>
-        <Text variant="caption1" color="mutedForeground" numberOfLines={1}>
-          {subtitle}
-        </Text>
-      </View>
-      <SymbolView
-        name="chevron.up"
-        size={14}
-        tintColor={theme.colors.mutedForeground}
-        weight="medium"
-      />
-    </Pressable>
-  );
-}
-
-function toolLabel(t: SessionEntity["tool"]): string {
-  return t === "claude_code" ? "Claude" : t === "codex" ? "Codex" : "Agent";
-}
-
-function statusLabel(s: SessionEntity): string {
-  if (s.sessionStatus === "needs_input") return "needs input";
-  if (s.sessionStatus === "in_review") return "in review";
-  return s.agentStatus.replace(/_/g, " ");
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  page: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12 },
-  symbolWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  text: { flex: 1 },
-  title: { fontWeight: "600" },
 });
