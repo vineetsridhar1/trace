@@ -31,12 +31,26 @@ The coding channel detail screen — the user's landing page when drilling into 
 
 ## Completion requirements
 
-- [ ] Session groups list renders correctly with status chips
-- [ ] Segmented filter switches between active / merged / archived
-- [ ] Archived segment loads archived groups via separate query
-- [ ] Status chip colors match plan (§11.2)
-- [ ] Long-press archives via mutation → optimistic removal on ambient event
-- [ ] All files <200 lines
+- [x] Session groups list renders correctly with status chips
+- [x] Segmented filter switches between active / merged / archived
+- [x] Archived segment loads archived groups via separate query
+- [x] Status chip colors match plan (§11.2)
+- [x] Long-press archives via mutation → optimistic removal on ambient event
+- [x] All files <200 lines
+
+## Implementation notes (landed)
+
+- **Stable-ID selector**: `useChannelSessionGroupIds(channelId, segment)` (in `apps/mobile/src/hooks/useChannelSessionGroups.ts`) returns a sorted `string[]` of group IDs and uses `useShallow` so the FlashList only re-renders when the visible set changes. Same primitive-key pattern that ticket 16 settled on for channels.
+- **Segment → server query**: `active` queries with `archived: false`, `merged` queries with `archived: false, status: "merged"`, `archived` queries with `archived: true`. The `active` segment additionally filters out `merged` client-side from the store so it doesn't show stale merged groups that the user already moved past. Only the active segment fetches on first mount; switching tabs triggers a focused refetch for that segment.
+- **Status → chip mapping** is centralized in `apps/mobile/src/lib/sessionGroupStatus.ts` so subsequent tickets (home screen, session detail header) reuse the camelCase translation. `archived` returns `null` (no chip) since archived rows live in their own segment and the segment label conveys the state.
+- **Last-event preview** is sourced from the latest session in the group (`_sessionIdsByGroup[groupId]` → pick most recent by `_sortTimestamp` / `lastMessageAt`). The session's `_lastEventPreview` is a derived client field populated by ambient `session_output` events; freshly-queried groups won't have it until the first event lands, so the row hides the preview line gracefully when missing.
+- **Pull-to-refresh** runs the focused `sessionGroups` query for the current segment in parallel with `refreshOrgData(orgId)` from ticket 16's shared helper. 401 still resets the entity store and signs the user out, mirroring the channels-list behavior.
+- **Context menu**: tapped via `react-native-context-menu-view` on long-press. The "Archive workspace" item is omitted from the menu when the group is already archived, so the index handler shifts accordingly. Archive fires `ARCHIVE_SESSION_GROUP_MUTATION` and returns immediately — the row disappears from the Active segment when the `session_group_archived` event arrives via the ambient subscription (~1s).
+- **Copy link** uses `expo-clipboard` (newly added in this ticket) with `trace://sessions/<groupId>`. Deep-link resolution lands in ticket 28; for now copying the URL is enough that the user can paste it in another app.
+- **Glass header** (`SessionGroupsHeader`) sits above the FlashList, not inside it — the segmented control swap re-runs the data effect. Liquid Glass background matches the channel-list large-title aesthetic; the SegmentedControl is the design-system primitive (no per-screen restyle).
+- **Time formatting** lives in `apps/mobile/src/lib/time.ts` — same breakpoints as `apps/web/src/lib/utils.ts#timeAgo` so a row reads identically on both platforms. Reuse from future mobile lists (home, session header) instead of re-deriving.
+- **Sorting**: `_sortTimestamp` desc, fallback to `updatedAt` then `createdAt`. The handler in `packages/client-core/src/events/handlers.ts` already bumps `_sortTimestamp` on session activity and on archive, so live updates re-order rows automatically.
+- **Empty states**: `bolt.horizontal` + "No active sessions in this channel" (active), `checkmark.seal` + "Nothing merged yet" (merged), `archivebox` + "Nothing archived" (archived). The active state nudges the user toward the web app since session creation is V2 (per plan §2 Non-Goals).
 
 ## How to test
 
