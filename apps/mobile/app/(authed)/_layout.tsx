@@ -1,3 +1,4 @@
+import { View } from "react-native";
 import { Redirect, Stack } from "expo-router";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { SessionPlayerOverlay } from "@/components/navigation/SessionPlayerOverlay";
@@ -11,12 +12,12 @@ export default function AuthedLayout() {
   if (!user) return <Redirect href="/(auth)/sign-in" />;
 
   return (
-    <>
+    <View style={{ flex: 1 }}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="sessions" options={{ headerShown: false }} />
       </Stack>
       <SessionPlayerOverlay />
-    </>
+    </View>
   );
 }
