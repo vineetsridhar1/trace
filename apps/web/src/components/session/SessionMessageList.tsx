@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import type { GitCheckpoint } from "@trace/gql";
 import { SessionMessage } from "./SessionMessage";
 import { ReadGlobGroup } from "./messages/ReadGlobGroup";
@@ -242,6 +242,23 @@ export function SessionMessageList({
   }, [onLoadOlder]);
 
   const virtualItems = virtualizer.getVirtualItems();
+  const isEmpty = nodes.length === 0 && !loadingOlder;
+
+  if (isEmpty) {
+    return (
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-4 max-h-full">
+        <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/40">
+            <Sparkles size={20} className="text-muted-foreground/70" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-foreground">New session</p>
+            <p className="text-xs text-muted-foreground">Send a message below to get started.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-4 max-h-full">
