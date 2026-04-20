@@ -33,14 +33,27 @@ export function useSlashCommands(sessionId: string): { commands: SlashCommandIte
     setCommands(shouldSeedBuiltins ? BUILTIN_FALLBACK : []);
     setLoading(true);
     client
-      .query(SESSION_SLASH_COMMANDS_QUERY, { sessionId })
+      .query(SESSION_SLASH_COMMANDS_QUERY, { sessionId }, { requestPolicy: "network-only" })
       .toPromise()
       .then((result: { error?: unknown; data?: Record<string, unknown> }) => {
         if (cancelled) return;
         if (result.error || !result.data?.sessionSlashCommands) {
           return;
         }
-        const mapped: SlashCommandItem[] = (result.data.sessionSlashCommands as Array<{ name: string; description: string; source: string; category: string }>).map(
+        const raw = result.data.sessionSlashCommands as Array<{
+          name: string;
+          description: string;
+          source: string;
+          category: string;
+        }>;
+        // The server returns [] when session.tool !== "claude_code". If the
+        // client-side tool is claude_code, an empty response means the tool
+        // mutation hasn't committed yet — keep the optimistic builtins rather
+        // than clearing them.
+        if (shouldSeedBuiltins && raw.length === 0) {
+          return;
+        }
+        const mapped: SlashCommandItem[] = raw.map(
           (cmd: { name: string; description: string; source: string; category: string }) => ({
             id: cmd.name,
             value: cmd.name,
