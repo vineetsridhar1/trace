@@ -9,12 +9,12 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import type { SessionGroupStatus } from "@trace/gql";
+import type { SessionGroupStatus, SessionStatus } from "@trace/gql";
 import { statusIndicatorColor } from "@/lib/sessionGroupStatus";
 import { useTheme } from "@/theme";
 
 export interface SessionStatusIndicatorProps {
-  status: SessionGroupStatus | null | undefined;
+  status: SessionGroupStatus | SessionStatus | null | undefined;
   /** Latest session's `agentStatus` — drives the spinner/X overlay. */
   agentStatus: string | null | undefined;
   size?: number;
@@ -23,7 +23,7 @@ export interface SessionStatusIndicatorProps {
 type IndicatorKind = "dot" | "spinner" | "x";
 
 function indicatorKind(
-  status: SessionGroupStatus | null | undefined,
+  status: SessionGroupStatus | SessionStatus | null | undefined,
   agentStatus: string | null | undefined,
 ): IndicatorKind {
   // Terminal display states force a static dot regardless of agent state —
