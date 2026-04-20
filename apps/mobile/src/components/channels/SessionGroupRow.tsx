@@ -105,59 +105,63 @@ export const SessionGroupRow = memo(function SessionGroupRow({
             paddingHorizontal: theme.spacing.lg,
             paddingVertical: theme.spacing.md,
             borderBottomWidth: StyleSheet.hairlineWidth,
-            borderBottomColor: theme.colors.border,
+            borderBottomColor: theme.colors.borderMuted,
             backgroundColor: pressed ? theme.colors.surfaceElevated : "transparent",
           },
         ]}
       >
-        <View style={styles.headerLine}>
-          <Text variant="headline" color="foreground" numberOfLines={1} style={styles.title}>
+        <View style={styles.main}>
+          <Text variant="body" color="foreground" numberOfLines={1} style={styles.title}>
             {name}
           </Text>
-          {chipVariant ? (
-            <Chip
-              label={CHIP_LABELS[chipVariant]}
-              variant={chipVariant}
-              style={styles.chip}
-            />
+          {branch ? (
+            <Text
+              numberOfLines={1}
+              style={[styles.branch, theme.typography.mono, { color: theme.colors.dimForeground, fontSize: 12 }]}
+            >
+              {branch}
+            </Text>
+          ) : null}
+          {lastEventPreview ? (
+            <Text
+              variant="footnote"
+              color="mutedForeground"
+              numberOfLines={1}
+              style={styles.preview}
+            >
+              {lastEventPreview}
+            </Text>
           ) : null}
         </View>
-        {branch ? (
-          <Text
-            variant="caption1"
-            color="mutedForeground"
-            numberOfLines={1}
-            style={[styles.branch, theme.typography.mono, { fontSize: 12 }]}
-          >
-            {branch}
-          </Text>
-        ) : null}
-        {lastEventPreview ? (
-          <Text
-            variant="footnote"
-            color="mutedForeground"
-            numberOfLines={1}
-            style={styles.preview}
-          >
-            {lastEventPreview}
-          </Text>
-        ) : null}
-        {timestamp ? (
-          <Text variant="caption2" color="dimForeground" style={styles.timestamp}>
-            {timeAgo(timestamp)}
-          </Text>
-        ) : null}
+        <View style={styles.accessory}>
+          {chipVariant ? (
+            <Chip label={CHIP_LABELS[chipVariant]} variant={chipVariant} />
+          ) : null}
+          {timestamp ? (
+            <Text variant="caption2" color="dimForeground" style={styles.timestamp}>
+              {timeAgo(timestamp)}
+            </Text>
+          ) : null}
+        </View>
       </Pressable>
     </ContextMenu>
   );
 });
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "column" },
-  headerLine: { flexDirection: "row", alignItems: "center", gap: 8 },
-  title: { flex: 1, minWidth: 0 },
-  chip: { marginLeft: 8 },
-  branch: { marginTop: 4 },
-  preview: { marginTop: 2 },
-  timestamp: { marginTop: 4 },
+  row: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    minHeight: 60,
+  },
+  main: { flex: 1, minWidth: 0 },
+  title: { fontWeight: "600" },
+  branch: { marginTop: 2 },
+  preview: { marginTop: 4 },
+  accessory: {
+    marginLeft: 12,
+    alignItems: "flex-end",
+    gap: 6,
+  },
+  timestamp: {},
 });
