@@ -20,6 +20,8 @@ export interface MobileUIState {
    */
   activeAccessoryIndex: number;
   setActiveAccessoryIndex: (i: number) => void;
+  sessionPlayerOpen: boolean;
+  setSessionPlayerOpen: (open: boolean) => void;
 
   channelDoneBadges: Record<string, boolean>;
   sessionDoneBadges: Record<string, boolean>;
@@ -41,6 +43,7 @@ const initial = {
   activeSessionId: null as string | null,
   activeSessionGroupId: null as string | null,
   activeAccessoryIndex: 0,
+  sessionPlayerOpen: false,
   channelDoneBadges: {} as Record<string, boolean>,
   sessionDoneBadges: {} as Record<string, boolean>,
   sessionGroupDoneBadges: {} as Record<string, boolean>,
@@ -54,6 +57,7 @@ export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUISta
   setActiveSessionGroupId: (id) => set({ activeSessionGroupId: id }),
 
   setActiveAccessoryIndex: (i) => set({ activeAccessoryIndex: i }),
+  setSessionPlayerOpen: (open) => set({ sessionPlayerOpen: open }),
 
   markChannelDone: (id) =>
     set((s) => ({ channelDoneBadges: { ...s.channelDoneBadges, [id]: true } })),

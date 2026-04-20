@@ -1,5 +1,6 @@
 import { Redirect, Stack } from "expo-router";
 import { useAuthStore, type AuthState } from "@trace/client-core";
+import { SessionPlayerOverlay } from "@/components/navigation/SessionPlayerOverlay";
 import { useHydrate } from "@/hooks/useHydrate";
 
 export default function AuthedLayout() {
@@ -10,9 +11,12 @@ export default function AuthedLayout() {
   if (!user) return <Redirect href="/(auth)/sign-in" />;
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="sessions" options={{ headerShown: false }} />
-    </Stack>
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="sessions" options={{ headerShown: false }} />
+      </Stack>
+      <SessionPlayerOverlay />
+    </>
   );
 }

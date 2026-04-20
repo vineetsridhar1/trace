@@ -5,11 +5,9 @@ import { useEntityField } from "@trace/client-core";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { Text } from "@/components/design-system/Text";
 import { haptic } from "@/lib/haptics";
+import { tryOpenSessionPlayer } from "@/lib/sessionPlayer";
 import { timeAgo } from "@/lib/time";
 import { type Theme } from "@/theme";
-
-// TODO(15b): open the Session Player sheet with this session focused.
-function openSessionPlayer(_sessionId: string) {}
 
 export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryRow({
   sessionId,
@@ -28,7 +26,7 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
 
   const onPress = useCallback(() => {
     haptic.light();
-    openSessionPlayer(sessionId);
+    tryOpenSessionPlayer(sessionId);
   }, [sessionId]);
 
   if (!name) return null;
