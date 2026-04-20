@@ -77,6 +77,12 @@ export function IconButton({
         name={symbol}
         size={GLYPH_SIZE[size]}
         tintColor={theme.colors[color]}
+        resizeMode="scaleAspectFit"
+        // Force a square render box so flexbox centering operates on
+        // glyph-equivalent bounds, not the SF Symbol's intrinsic content
+        // size (which is often wider than tall and biases the icon off-axis
+        // inside the Pressable's center).
+        style={{ width: GLYPH_SIZE[size], height: GLYPH_SIZE[size] }}
       />
     </Pressable>
   );
