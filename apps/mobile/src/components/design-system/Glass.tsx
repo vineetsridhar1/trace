@@ -49,10 +49,11 @@ export function Glass({
   };
 
   if (isLiquidGlassAvailable()) {
+    const resolvedTint = tint ?? config.tint;
     return (
       <GlassView
         glassEffectStyle="regular"
-        tintColor={tint ?? config.tint}
+        {...(resolvedTint ? { tintColor: resolvedTint } : {})}
         colorScheme={theme.scheme === "dark" ? "dark" : "light"}
         style={[baseStyle, style]}
       >

@@ -2,7 +2,7 @@ import { Stack } from "expo-router";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { TopBarPill } from "@/components/navigation/TopBarPill";
 
-export default function ChannelsLayout() {
+export default function HomeLayout() {
   const user = useAuthStore((s: AuthState) => s.user);
 
   return (
@@ -10,12 +10,9 @@ export default function ChannelsLayout() {
       <Stack.Screen
         name="index"
         options={{
-          title: "Channels",
+          title: "Home",
           headerLargeTitle: true,
           headerLargeTitleShadowVisible: false,
-          headerSearchBarOptions: {
-            placeholder: "Search channels",
-          },
           headerRight: () => (
             <TopBarPill
               avatar={
@@ -29,13 +26,6 @@ export default function ChannelsLayout() {
               }
             />
           ),
-        }}
-      />
-      <Stack.Screen
-        name="[id]"
-        options={{
-          title: "Channel",
-          headerBackTitle: "Channels",
         }}
       />
     </Stack>

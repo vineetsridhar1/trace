@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
   useAuthStore,
@@ -20,7 +20,11 @@ export default function AuthedHome() {
   const activeOrg = memberships.find((m) => m.organizationId === activeOrgId);
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.container}
+      contentInsetAdjustmentBehavior="automatic"
+    >
       <Text style={styles.heading}>Trace Mobile</Text>
       {user && <Text style={styles.subtle}>Signed in as {user.name}</Text>}
 
@@ -48,18 +52,38 @@ export default function AuthedHome() {
           <Text style={styles.devButtonText}>Design System</Text>
         </Pressable>
       )}
-    </View>
+
+      {Array.from({ length: 30 }).map((_, i) => (
+        <View key={i} style={styles.filler}>
+          <Text style={styles.fillerText}>Scroll filler row {i + 1}</Text>
+        </View>
+      ))}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scroll: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
     backgroundColor: "#000",
+  },
+  container: {
+    alignItems: "center",
     gap: 16,
     paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 160,
+  },
+  filler: {
+    alignSelf: "stretch",
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#222",
+  },
+  fillerText: {
+    color: "#888",
+    fontSize: 14,
   },
   heading: {
     color: "#fff",
