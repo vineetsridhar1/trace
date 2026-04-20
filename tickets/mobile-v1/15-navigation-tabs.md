@@ -46,7 +46,6 @@ Wire up the full route tree from the plan (§9): authed tab group with Home / Ch
 ## Dependencies
 
 - [09 — Sign-in Flow](09-sign-in-flow-and-hydration.md)
-- [11a — IconButton SF Symbols + Context Menu](11a-iconbutton-sf-symbols-context-menu.md) — tab-bar icons use SF Symbol names
 - [12 — Surface Primitives (Glass)](12-surface-primitives-glass-sheet.md)
 - [13 — Data Primitives (for tab icons)](13-data-primitives.md)
 

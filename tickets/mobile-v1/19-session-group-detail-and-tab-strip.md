@@ -30,7 +30,6 @@ The session group detail screen is a thin wrapper that immediately routes the us
 ## Dependencies
 
 - [17 — Session Groups List](17-coding-channel-session-groups.md)
-- [11a — IconButton SF Symbols + Context Menu](11a-iconbutton-sf-symbols-context-menu.md) — overflow menu relies on the `menuItems` prop
 - [13 — Data Primitives (Chip, StatusDot)](13-data-primitives.md)
 - [12 — Glass](12-surface-primitives-glass-sheet.md)
 

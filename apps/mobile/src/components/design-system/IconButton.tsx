@@ -1,34 +1,35 @@
-import { useCallback } from "react";
-import { Pressable, StyleSheet } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Pressable, StyleSheet, type NativeSyntheticEvent } from "react-native";
+import { SymbolView, type SFSymbol } from "expo-symbols";
+import ContextMenu, {
+  type ContextMenuAction,
+  type ContextMenuOnPressNativeEvent,
+} from "react-native-context-menu-view";
 import * as Haptics from "expo-haptics";
 import { useTheme, type Theme } from "@/theme";
 
 export type IconButtonSize = "sm" | "md" | "lg";
-export type IconSymbol = keyof typeof Ionicons.glyphMap;
 export type HapticStrength = "light" | "medium" | "heavy";
 
+export interface IconMenuItem {
+  title: string;
+  systemIcon?: SFSymbol;
+  destructive?: boolean;
+  onPress: () => void;
+}
+
 export interface IconButtonProps {
-  symbol: IconSymbol;
+  symbol: SFSymbol;
   onPress: () => void;
   accessibilityLabel: string;
   size?: IconButtonSize;
   color?: keyof Theme["colors"];
   disabled?: boolean;
   haptic?: HapticStrength;
+  menuItems?: IconMenuItem[];
 }
 
-const GLYPH_SIZE: Record<IconButtonSize, number> = {
-  sm: 18,
-  md: 22,
-  lg: 28,
-};
-
-const HIT_SIZE: Record<IconButtonSize, number> = {
-  sm: 32,
-  md: 40,
-  lg: 48,
-};
+const GLYPH_SIZE: Record<IconButtonSize, number> = { sm: 18, md: 22, lg: 28 };
+const HIT_SIZE: Record<IconButtonSize, number> = { sm: 32, md: 40, lg: 48 };
 
 const HAPTIC_MAP: Record<HapticStrength, Haptics.ImpactFeedbackStyle> = {
   light: Haptics.ImpactFeedbackStyle.Light,
@@ -44,17 +45,18 @@ export function IconButton({
   color = "foreground",
   disabled = false,
   haptic = "light",
+  menuItems,
 }: IconButtonProps) {
   const theme = useTheme();
   const hitSize = HIT_SIZE[size];
 
-  const handlePress = useCallback(() => {
+  function handlePress() {
     if (disabled) return;
     void Haptics.impactAsync(HAPTIC_MAP[haptic]);
     onPress();
-  }, [disabled, haptic, onPress]);
+  }
 
-  return (
+  const button = (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
@@ -71,12 +73,32 @@ export function IconButton({
         },
       ]}
     >
-      <Ionicons
+      <SymbolView
         name={symbol}
         size={GLYPH_SIZE[size]}
-        color={theme.colors[color]}
+        tintColor={theme.colors[color]}
       />
     </Pressable>
+  );
+
+  if (!menuItems || menuItems.length === 0) return button;
+
+  const actions: ContextMenuAction[] = menuItems.map((m) => ({
+    title: m.title,
+    systemIcon: m.systemIcon,
+    destructive: m.destructive,
+  }));
+
+  function handleMenuPress(
+    e: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>,
+  ) {
+    menuItems?.[e.nativeEvent.index]?.onPress();
+  }
+
+  return (
+    <ContextMenu actions={actions} onPress={handleMenuPress}>
+      {button}
+    </ContextMenu>
   );
 }
 

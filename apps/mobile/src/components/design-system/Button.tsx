@@ -1,5 +1,5 @@
-import { useCallback, useMemo, type ReactNode } from "react";
-import { Pressable, StyleSheet, View, type ViewStyle } from "react-native";
+import type { ReactNode } from "react";
+import { Pressable, StyleSheet, type ViewStyle } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -24,7 +24,6 @@ export interface ButtonProps {
   icon?: ReactNode;
   haptic?: HapticStrength;
   accessibilityLabel?: string;
-  fullWidth?: boolean;
 }
 
 const PRESSED_SCALE = 0.98;
@@ -83,12 +82,11 @@ export function Button({
   icon,
   haptic,
   accessibilityLabel,
-  fullWidth = false,
 }: ButtonProps) {
   const theme = useTheme();
   const scale = useSharedValue(1);
 
-  const palette = useMemo(() => variantColors(theme, variant), [theme, variant]);
+  const palette = variantColors(theme, variant);
   const spec = SIZE_SPEC[size];
   const inactive = disabled || loading;
   const effectiveHaptic = haptic ?? DEFAULT_HAPTIC[variant];
@@ -97,20 +95,20 @@ export function Button({
     transform: [{ scale: scale.value }],
   }));
 
-  const handlePressIn = useCallback(() => {
+  function handlePressIn() {
     if (inactive) return;
     scale.value = withSpring(PRESSED_SCALE, theme.motion.springs.snap);
-  }, [inactive, scale, theme.motion.springs.snap]);
+  }
 
-  const handlePressOut = useCallback(() => {
+  function handlePressOut() {
     scale.value = withSpring(1, theme.motion.springs.snap);
-  }, [scale, theme.motion.springs.snap]);
+  }
 
-  const handlePress = useCallback(() => {
+  function handlePress() {
     if (inactive) return;
     void Haptics.impactAsync(HAPTIC_MAP[effectiveHaptic]);
     onPress?.();
-  }, [effectiveHaptic, inactive, onPress]);
+  }
 
   const containerStyle: ViewStyle = {
     backgroundColor: palette.bg,
@@ -119,7 +117,6 @@ export function Button({
     minHeight: spec.minHeight,
     borderRadius: theme.radius.full,
     opacity: disabled ? 0.5 : 1,
-    alignSelf: fullWidth ? "stretch" : "flex-start",
   };
 
   const spinnerColor: keyof Theme["colors"] =
@@ -143,7 +140,7 @@ export function Button({
           <Spinner size="small" color={spinnerColor} />
         ) : (
           <>
-            {icon ? <View style={styles.icon}>{icon}</View> : null}
+            {icon}
             <Text variant={spec.textVariant} color={palette.fg} align="center">
               {title}
             </Text>
@@ -160,8 +157,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-  },
-  icon: {
-    marginRight: 0,
   },
 });

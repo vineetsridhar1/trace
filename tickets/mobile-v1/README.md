@@ -33,7 +33,6 @@ Build the primitives. Every screen that comes later inherits polish by default.
 |---|--------|-------------|
 | 10 | [Theme Tokens](10-theme-tokens.md) | Colors, typography, spacing, radius, motion, shadows, glass presets |
 | 11 | [Core Primitives](11-core-primitives.md) | Screen, Text, Button, IconButton, Spinner |
-| 11a | [IconButton: SF Symbols + Context Menu](11a-iconbutton-sf-symbols-context-menu.md) | Upgrade IconButton to native SF Symbols + native iOS context menu |
 | 12 | [Surface Primitives](12-surface-primitives-glass-sheet.md) | Card, Glass (Liquid Glass + fallback), Sheet |
 | 13 | [Data Primitives](13-data-primitives.md) | ListRow, Chip, StatusDot, Avatar, Skeleton, SegmentedControl, EmptyState |
 | 14 | [Haptics, Motion, Dev Route](14-haptics-motion-dev-route.md) | Haptic helper, motion helpers, in-app design-system dev screen |
@@ -105,24 +104,23 @@ M1 — Mobile Shell + Auth (can run in parallel with M0 once 01 lands)
 M2 — Design System (can run in parallel with M1 once 05 lands)
 10 Theme Tokens  (needs 05)
 ├─ 11 Core Primitives  (needs 10)
-│  ├─ 11a IconButton SF Symbols + Context Menu  (needs 11)
 │  ├─ 12 Surface Primitives  (needs 11)
 │  └─ 13 Data Primitives  (needs 11)
-└─ 14 Haptics + Motion + Dev Route  (needs 11, 11a, 12, 13)
+└─ 14 Haptics + Motion + Dev Route  (needs 11, 12, 13)
 
 M3 — Navigation + Channels  (needs M1 complete, M2 mostly complete)
-15 Navigation Skeleton  (needs 09, 11a, 12, 13)
+15 Navigation Skeleton  (needs 09, 12, 13)
 ├─ 16 Channels List  (needs 15, 13)
 │  └─ 17 Session Groups List  (needs 16)
 └─ 18 Settings + Org Switcher  (needs 15, 12, 13)
 
 M4 — Session Stream  (needs M3 complete)
-19 Group Detail + Tab Strip  (needs 17, 11a, 13, 12)
+19 Group Detail + Tab Strip  (needs 17, 13, 12)
 └─ 20 Stream Shell + Virtualization  (needs 19, 04)
    ├─ 21 Node Renderers  (needs 20)
    ├─ 22 Pending-Input + Todo Bars  (needs 20, 12)
    ├─ 23 Input Composer + Queued  (needs 20, 22)
-   └─ 24 Actions + Connection  (needs 19, 11a, 21, 23)
+   └─ 24 Actions + Connection  (needs 19, 21, 23)
 
 M5 — Home + Push  (needs M4 complete)
 25 Home Screen  (needs 09, 15, 13)
@@ -157,7 +155,7 @@ M7 — Beta  (needs M6 complete)
 - `§8 Authentication` is covered by tickets 06-09 and 18.
 - `§9 Navigation structure` is covered by tickets 15, 18, 28, and 29.
 - `§10 Screens` is covered by tickets 09, 15-25.
-- `§11 Design system` is covered by tickets 10-14 (incl. 11a), 30, and 31.
+- `§11 Design system` is covered by tickets 10-14, 30, and 31.
 - `§14 Push notifications` is covered by tickets 08 and 26-29.
 - `§15 Milestones` maps directly to the milestone grouping in this README (M0-M7).
 - `§16 Performance requirements` is covered by tickets 20, 30, and 34.

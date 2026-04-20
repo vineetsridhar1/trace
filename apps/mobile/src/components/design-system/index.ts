@@ -12,5 +12,5 @@ export {
   IconButton,
   type IconButtonProps,
   type IconButtonSize,
-  type IconSymbol,
+  type IconMenuItem,
 } from "./IconButton";
