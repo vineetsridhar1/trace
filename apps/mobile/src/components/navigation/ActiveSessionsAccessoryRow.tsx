@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     minWidth: 0,
     minHeight: 16,
-    marginTop: 1,
+    marginTop: -1,
   },
   branch: { flexShrink: 1, lineHeight: 16 },
   timestamp: { lineHeight: 16 },
