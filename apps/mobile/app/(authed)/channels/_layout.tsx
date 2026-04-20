@@ -38,6 +38,13 @@ export default function ChannelsLayout() {
           headerBackTitle: "Channels",
         }}
       />
+      <Stack.Screen
+        name="[id]/merged-archived"
+        options={{
+          title: "Merged & Archived",
+          headerBackTitle: "Back",
+        }}
+      />
     </Stack>
   );
 }

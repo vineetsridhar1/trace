@@ -1,122 +1,49 @@
 import { useCallback, useEffect, useState } from "react";
-import { Stack, useLocalSearchParams } from "expo-router";
-import { gql } from "@urql/core";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Pressable } from "react-native";
+import { SymbolView } from "expo-symbols";
 import { FlashList } from "@shopify/flash-list";
 import {
   useAuthStore,
   useEntityField,
   useEntityStore,
   type AuthState,
-  type SessionEntity,
-  type SessionGroupEntity,
 } from "@trace/client-core";
-import type { Session, SessionGroup } from "@trace/gql";
 import { EmptyState, Screen } from "@/components/design-system";
 import { SessionGroupRow } from "@/components/channels/SessionGroupRow";
 import { SessionGroupsHeader } from "@/components/channels/SessionGroupsHeader";
 import {
-  useChannelSessionGroupIds,
-  type SessionGroupSegment,
+  useActiveSessionGroupIds,
+  type ActiveSegment,
 } from "@/hooks/useChannelSessionGroups";
+import { fetchChannelSessionGroups } from "@/hooks/useChannelSessionGroupsQuery";
 import { refreshOrgData } from "@/hooks/useHydrate";
-import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
-
-const SESSION_GROUPS_QUERY = gql`
-  query MobileChannelSessionGroups(
-    $channelId: ID!
-    $archived: Boolean
-    $status: SessionGroupStatus
-  ) {
-    sessionGroups(channelId: $channelId, archived: $archived, status: $status) {
-      id
-      name
-      slug
-      status
-      branch
-      prUrl
-      worktreeDeleted
-      archivedAt
-      createdAt
-      updatedAt
-      channel { id }
-      sessions {
-        id
-        name
-        agentStatus
-        sessionStatus
-        tool
-        model
-        hosting
-        branch
-        prUrl
-        worktreeDeleted
-        sessionGroupId
-        lastMessageAt
-        lastUserMessageAt
-        createdBy { id name avatarUrl }
-        repo { id name }
-        channel { id }
-        createdAt
-        updatedAt
-      }
-    }
-  }
-`;
-
-function variablesForSegment(
-  channelId: string,
-  segment: SessionGroupSegment,
-): Record<string, unknown> {
-  if (segment === "archived") return { channelId, archived: true };
-  if (segment === "merged") return { channelId, archived: false, status: "merged" };
-  return { channelId, archived: false };
-}
-
-async function fetchSegment(
-  channelId: string,
-  segment: SessionGroupSegment,
-): Promise<void> {
-  const client = getClient();
-  const variables = variablesForSegment(channelId, segment);
-  const result = await client.query(SESSION_GROUPS_QUERY, variables).toPromise();
-  if (result.error || !result.data?.sessionGroups) return;
-  const groups = result.data.sessionGroups as Array<SessionGroup & { id: string }>;
-  const upsertMany = useEntityStore.getState().upsertMany;
-  const sessions = groups.flatMap((g) => g.sessions ?? []) as Array<Session & { id: string }>;
-  upsertMany(
-    "sessionGroups",
-    groups.map((g) => ({
-      ...g,
-      _sortTimestamp:
-        g.sessions?.[0]?.lastMessageAt
-        ?? g.sessions?.[0]?.updatedAt
-        ?? g.updatedAt,
-    })) as Array<SessionGroupEntity & { id: string }>,
-  );
-  if (sessions.length > 0) upsertMany("sessions", sessions as Array<SessionEntity & { id: string }>);
-}
+import { useTheme } from "@/theme";
 
 export default function ChannelDetail() {
   const { id: channelId } = useLocalSearchParams<{ id: string }>();
-  const [segment, setSegment] = useState<SessionGroupSegment>("active");
+  const router = useRouter();
+  const theme = useTheme();
+  const [scope, setScope] = useState<ActiveSegment>("all");
   const [refreshing, setRefreshing] = useState(false);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
+  const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
   const logout = useAuthStore((s: AuthState) => s.logout);
   const channelName = useEntityField("channels", channelId, "name");
-  const ids = useChannelSessionGroupIds(channelId, segment);
+  const ids = useActiveSessionGroupIds(channelId, scope, userId);
 
   useEffect(() => {
     if (!channelId) return;
-    void fetchSegment(channelId, segment);
-  }, [channelId, segment]);
+    void fetchChannelSessionGroups(channelId, "active");
+  }, [channelId]);
 
   const handleRefresh = useCallback(async () => {
     if (!channelId) return;
     void haptic.medium();
     setRefreshing(true);
     try {
-      const tasks: Promise<unknown>[] = [fetchSegment(channelId, segment)];
+      const tasks: Promise<unknown>[] = [fetchChannelSessionGroups(channelId, "active")];
       if (activeOrgId) {
         tasks.push(
           refreshOrgData(activeOrgId).then((ok) => {
@@ -132,15 +59,38 @@ export default function ChannelDetail() {
     } finally {
       setRefreshing(false);
     }
-  }, [channelId, segment, activeOrgId, logout]);
+  }, [channelId, activeOrgId, logout]);
+
+  const handleOpenArchive = useCallback(() => {
+    void haptic.light();
+    router.push(`/channels/${channelId}/merged-archived`);
+  }, [router, channelId]);
 
   return (
     <Screen edges={["left", "right"]}>
-      <Stack.Screen options={{ title: channelName ?? "Channel" }} />
+      <Stack.Screen
+        options={{
+          title: channelName ?? "Channel",
+          headerRight: () => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Merged & archived"
+              onPress={handleOpenArchive}
+              hitSlop={8}
+            >
+              <SymbolView
+                name="archivebox"
+                size={20}
+                tintColor={theme.colors.foreground}
+              />
+            </Pressable>
+          ),
+        }}
+      />
       <SessionGroupsHeader
         channelId={channelId}
-        segment={segment}
-        onSegmentChange={setSegment}
+        segment={scope}
+        onSegmentChange={setScope}
       />
       <FlashList
         data={ids}
@@ -149,7 +99,7 @@ export default function ChannelDetail() {
         contentInsetAdjustmentBehavior="automatic"
         onRefresh={handleRefresh}
         refreshing={refreshing}
-        ListEmptyComponent={<SessionGroupsEmpty segment={segment} />}
+        ListEmptyComponent={<ActiveEmpty scope={scope} />}
       />
     </Screen>
   );
@@ -163,12 +113,15 @@ function keyExtractor(item: string): string {
   return item;
 }
 
-function SessionGroupsEmpty({ segment }: { segment: SessionGroupSegment }) {
-  if (segment === "merged") {
-    return <EmptyState icon="checkmark.seal" title="Nothing merged yet" />;
-  }
-  if (segment === "archived") {
-    return <EmptyState icon="archivebox" title="Nothing archived" />;
+function ActiveEmpty({ scope }: { scope: ActiveSegment }) {
+  if (scope === "mine") {
+    return (
+      <EmptyState
+        icon="person"
+        title="No sessions you started"
+        subtitle="Switch to All to see everything happening in this channel."
+      />
+    );
   }
   return (
     <EmptyState

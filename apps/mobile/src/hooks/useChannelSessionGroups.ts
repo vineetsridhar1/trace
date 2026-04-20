@@ -6,7 +6,8 @@ import {
   type SessionGroupEntity,
 } from "@trace/client-core";
 
-export type SessionGroupSegment = "active" | "merged" | "archived";
+export type ActiveSegment = "all" | "mine";
+export type MergedArchivedSegment = "merged" | "archived";
 
 interface ChannelSessionGroupCounts {
   active: number;
@@ -17,11 +18,8 @@ function isArchived(group: SessionGroupEntity): boolean {
   return Boolean(group.archivedAt) || group.status === "archived";
 }
 
-function matchesSegment(group: SessionGroupEntity, segment: SessionGroupSegment): boolean {
-  if (segment === "archived") return isArchived(group);
-  if (isArchived(group)) return false;
-  if (segment === "merged") return group.status === "merged";
-  return group.status !== "merged";
+function isActive(group: SessionGroupEntity): boolean {
+  return !isArchived(group) && group.status !== "merged";
 }
 
 function sortTimestamp(group: SessionGroupEntity): number {
@@ -31,20 +29,50 @@ function sortTimestamp(group: SessionGroupEntity): number {
 }
 
 /**
- * Stable, sorted list of session-group IDs that belong to this channel
- * within the active segment. Returning primitive IDs keeps `useShallow`
- * referentially stable across renders (same pattern as `useCodingChannelKeys`).
+ * The "owner" of a session group is whoever started it — the user who
+ * created the earliest session in the group. Mirrors the web app's
+ * `createdBySession` derivation in `useSessionGroupRows`.
  */
-export function useChannelSessionGroupIds(
+function ownerUserId(state: EntityState, groupId: string): string | null {
+  const ids = state._sessionIdsByGroup[groupId];
+  if (!ids || ids.length === 0) return null;
+  let bestSession: SessionEntity | null = null;
+  let bestTs = Infinity;
+  for (const id of ids) {
+    const session = state.sessions[id] as SessionEntity | undefined;
+    if (!session) continue;
+    const ts = session.createdAt ? new Date(session.createdAt).getTime() : Infinity;
+    if (ts < bestTs) {
+      bestTs = ts;
+      bestSession = session;
+    }
+  }
+  const createdBy = bestSession?.createdBy as { id?: string } | undefined;
+  return typeof createdBy?.id === "string" ? createdBy.id : null;
+}
+
+/**
+ * Active session groups for a channel — non-archived, non-merged.
+ * `scope: 'mine'` further restricts to groups whose earliest session was
+ * started by `currentUserId`. Returning sorted primitive IDs keeps
+ * `useShallow` referentially stable across renders.
+ */
+export function useActiveSessionGroupIds(
   channelId: string,
-  segment: SessionGroupSegment,
+  scope: ActiveSegment,
+  currentUserId: string | null,
 ): string[] {
   return useEntityStore(
     useShallow((state: EntityState) => {
       const groups = Object.values(state.sessionGroups) as SessionGroupEntity[];
       const visible = groups
         .filter((g) => g.channel?.id === channelId)
-        .filter((g) => matchesSegment(g, segment))
+        .filter(isActive)
+        .filter((g) => {
+          if (scope === "all") return true;
+          if (!currentUserId) return false;
+          return ownerUserId(state, g.id) === currentUserId;
+        })
         .sort((a, b) => sortTimestamp(b) - sortTimestamp(a) || a.id.localeCompare(b.id));
       return visible.map((g) => g.id);
     }),
@@ -52,7 +80,30 @@ export function useChannelSessionGroupIds(
 }
 
 /**
- * Counts for the channel header subtitle: how many non-archived, non-merged
+ * Merged-or-archived groups for a channel. Lives on its own screen so the
+ * primary channel landing stays focused on what's still in flight.
+ */
+export function useMergedArchivedSessionGroupIds(
+  channelId: string,
+  scope: MergedArchivedSegment,
+): string[] {
+  return useEntityStore(
+    useShallow((state: EntityState) => {
+      const groups = Object.values(state.sessionGroups) as SessionGroupEntity[];
+      const visible = groups
+        .filter((g) => g.channel?.id === channelId)
+        .filter((g) => {
+          if (scope === "archived") return isArchived(g);
+          return !isArchived(g) && g.status === "merged";
+        })
+        .sort((a, b) => sortTimestamp(b) - sortTimestamp(a) || a.id.localeCompare(b.id));
+      return visible.map((g) => g.id);
+    }),
+  );
+}
+
+/**
+ * Counts for the active screen subtitle: how many non-archived, non-merged
  * groups exist in this channel and how many of those are waiting on the user.
  */
 export function useChannelSessionGroupCounts(channelId: string): ChannelSessionGroupCounts {
@@ -62,8 +113,7 @@ export function useChannelSessionGroupCounts(channelId: string): ChannelSessionG
       let needsInput = 0;
       for (const group of Object.values(state.sessionGroups) as SessionGroupEntity[]) {
         if (group.channel?.id !== channelId) continue;
-        if (isArchived(group)) continue;
-        if (group.status === "merged") continue;
+        if (!isActive(group)) continue;
         active += 1;
         if (group.status === "needs_input") needsInput += 1;
       }

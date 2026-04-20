@@ -3,15 +3,15 @@ import { StyleSheet, View } from "react-native";
 import { SegmentedControl, Text } from "@/components/design-system";
 import { useChannelSessionGroupCounts } from "@/hooks/useChannelSessionGroups";
 import { useTheme } from "@/theme";
-import type { SessionGroupSegment } from "@/hooks/useChannelSessionGroups";
+import type { ActiveSegment } from "@/hooks/useChannelSessionGroups";
 
-const SEGMENTS: SessionGroupSegment[] = ["active", "merged", "archived"];
-const SEGMENT_LABELS = ["Active", "Merged", "Archived"];
+const SEGMENTS: ActiveSegment[] = ["all", "mine"];
+const SEGMENT_LABELS = ["All", "Mine"];
 
 export interface SessionGroupsHeaderProps {
   channelId: string;
-  segment: SessionGroupSegment;
-  onSegmentChange: (segment: SessionGroupSegment) => void;
+  segment: ActiveSegment;
+  onSegmentChange: (segment: ActiveSegment) => void;
 }
 
 export const SessionGroupsHeader = memo(function SessionGroupsHeader({
