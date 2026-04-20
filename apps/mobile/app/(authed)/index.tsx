@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
 import {
   useAuthStore,
   useEntityIds,
@@ -17,7 +16,6 @@ export default function AuthedHome() {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const activeOrg = memberships.find((m) => m.organizationId === activeOrgId);
-  const router = useRouter();
 
   return (
     <View style={styles.container}>
@@ -36,14 +34,6 @@ export default function AuthedHome() {
         <Text style={styles.stat}>Channels: {channelIds.length}</Text>
         <Text style={styles.stat}>Sessions: {sessionIds.length}</Text>
       </View>
-
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => router.push("/ticket-12-preview")}
-        style={({ pressed }) => [styles.orgPill, pressed && styles.pressed]}
-      >
-        <Text style={styles.orgPillText}>Preview ticket 12 primitives</Text>
-      </Pressable>
 
       <OrgSwitcherSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} />
     </View>

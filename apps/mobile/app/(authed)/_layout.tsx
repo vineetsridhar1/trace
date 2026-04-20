@@ -9,12 +9,5 @@ export default function AuthedLayout() {
   useHydrate(activeOrgId);
 
   if (!user) return <Redirect href="/(auth)/sign-in" />;
-  return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen
-        name="sheets/ticket-12-demo"
-        options={{ presentation: "formSheet" }}
-      />
-    </Stack>
-  );
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
