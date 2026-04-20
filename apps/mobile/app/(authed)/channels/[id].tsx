@@ -102,7 +102,9 @@ export default function ChannelDetail() {
         data={ids}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        contentInsetAdjustmentBehavior="never"
+        // `automatic` is required for the native bottom-tab accessory to
+        // collapse on scroll-down and for the last row to clear the tab bar.
+        contentInsetAdjustmentBehavior="automatic"
         onRefresh={handleRefresh}
         refreshing={refreshing}
         ListEmptyComponent={<ActiveEmpty scope={scope} />}

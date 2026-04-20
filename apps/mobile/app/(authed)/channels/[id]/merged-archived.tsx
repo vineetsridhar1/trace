@@ -44,7 +44,9 @@ export default function MergedArchived() {
         data={ids}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        contentInsetAdjustmentBehavior="never"
+        // `automatic` lets iOS hand bottom-tab accessory height + nav-bar
+        // collapse interactions to the FlashList's scroll events.
+        contentInsetAdjustmentBehavior="automatic"
         onRefresh={handleRefresh}
         refreshing={refreshing}
         ListEmptyComponent={<MergedArchivedEmpty segment={segment} />}
