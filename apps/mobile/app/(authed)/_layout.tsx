@@ -57,7 +57,10 @@ export default function AuthedLayout() {
   if (!user) return <Redirect href="/(auth)/sign-in" />;
 
   return (
-    <NativeTabs renderBottomAccessoryView={() => <FakeSessionAccessory />}>
+    <NativeTabs
+      minimizeBehavior="onScrollDown"
+      renderBottomAccessoryView={() => <FakeSessionAccessory />}
+    >
       <NativeTabs.Screen
         name="(home)"
         options={{
