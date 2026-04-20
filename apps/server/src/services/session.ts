@@ -1014,6 +1014,60 @@ export class SessionService {
     });
   }
 
+  async search(
+    organizationId: string,
+    query: string,
+    channelId?: string | null,
+  ) {
+    const trimmed = query.trim().slice(0, 200);
+    if (trimmed.length < 2) return { sessions: [], sessionGroups: [] };
+
+    const sessionWhere: Prisma.SessionWhereInput = {
+      organizationId,
+      name: { contains: trimmed, mode: "insensitive" },
+    };
+    if (channelId) sessionWhere.channelId = channelId;
+
+    // Intentionally includes archived groups so users can find past work.
+    const groupWhere: Prisma.SessionGroupWhereInput = {
+      organizationId,
+      OR: [
+        { name: { contains: trimmed, mode: "insensitive" } },
+        { slug: { contains: trimmed, mode: "insensitive" } },
+      ],
+    };
+    if (channelId) groupWhere.channelId = channelId;
+
+    const [sessions, groups] = await Promise.all([
+      prisma.session.findMany({
+        where: sessionWhere,
+        orderBy: { updatedAt: "desc" },
+        take: 20,
+        include: SESSION_INCLUDE,
+      }),
+      prisma.sessionGroup.findMany({
+        where: groupWhere,
+        orderBy: { updatedAt: "desc" },
+        take: 20,
+        include: SESSION_GROUP_INCLUDE,
+      }),
+    ]);
+
+    type SessionGroupWithSessions = SessionGroupSummary & {
+      sessions: SessionWithTimestamps[];
+    };
+
+    const sessionGroups = (groups as SessionGroupWithSessions[]).map((group) => {
+      const groupSessions = sortSessionsByRecency<SessionWithTimestamps>(group.sessions);
+      return {
+        ...buildSessionGroupSnapshot(group, groupSessions),
+        sessions: groupSessions,
+      };
+    });
+
+    return { sessions, sessionGroups };
+  }
+
   async listGitCheckpointsForSession(sessionId: string) {
     return prisma.gitCheckpoint.findMany({
       where: { sessionId },
