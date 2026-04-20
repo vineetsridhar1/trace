@@ -23,7 +23,10 @@ Wire up the full route tree from the plan (§9): authed tab group with Home / Ch
         [groupId].tsx                        — Session group placeholder
         [groupId]/[sessionId].tsx            — Session stream placeholder
       settings.tsx                           — Settings placeholder
+      sheets/
+        _layout.tsx                          — registers every sheet child with `presentation: 'formSheet'`
   ```
+  The `sheets/` segment's `_layout.tsx` declares `presentation: 'formSheet'` at route registration time because the `Sheet` layout primitive (ticket 12) can only dynamically update sheet options (`sheetAllowedDetents`, `sheetGrabberVisible`, etc.) via `setOptions` — `presentation` itself must be set when the route is registered. Sheet route files for subsequent tickets (e.g. `sheets/org-switcher.tsx` in ticket 18) go inside this segment.
 - Custom tab bar (`apps/mobile/src/components/navigation/TabBar.tsx`, <200 lines):
   - Three tabs: Home (`bolt.horizontal`), Channels (`tray`), Settings (`gearshape`)
   - Background uses `Glass` primitive with `preset="tabBar"` (Liquid Glass on iOS 26+)
