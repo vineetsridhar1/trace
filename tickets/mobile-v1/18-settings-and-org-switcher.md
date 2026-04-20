@@ -12,7 +12,8 @@ A minimal settings screen: user info, active org switcher (opens native sheet), 
   - "Sign out" `ListRow`: destructive variant. Tap: opens confirmation sheet (simple native alert-style). Confirm: clears Keychain token, clears entity store, navigates to `(auth)/sign-in`.
   - Footer: app version + build number (from Expo constants), tiny footnote caption.
   - Dev-only: in `__DEV__`, show an extra ListRow "Design System" linking to `/(dev)/design-system`.
-- Org switcher sheet (`app/(authed)/sheets/org-switcher.tsx` + `OrgSwitcherContent.tsx`):
+- Org switcher sheet (`app/sheets/org-switcher.tsx` + `OrgSwitcherContent.tsx`):
+  - Sheet routes live at `app/sheets/` (root-level), not under `(authed)/`. Nesting sheets inside the native tab navigator causes expo-router to treat `sheets` as a tab and prevents the native sheet presentation from layering correctly over the tabs. The auth guard is re-applied inside `sheets/_layout.tsx`.
   - Presented as native iOS sheet with `.medium` detent via expo-router's modal presentation.
   - Uses `Sheet` layout primitive.
   - Lists each membership as a `ListRow`: org name, role subtitle, checkmark on active.

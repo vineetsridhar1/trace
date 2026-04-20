@@ -72,7 +72,7 @@ export function Sheet({
           {
             backgroundColor: theme.colors.surface,
             paddingHorizontal: theme.spacing[padding],
-            paddingTop: theme.spacing[padding],
+            paddingTop: insets.top + theme.spacing[padding],
             paddingBottom: insets.bottom + theme.spacing[padding],
           },
           style,

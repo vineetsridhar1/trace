@@ -78,7 +78,6 @@ export default function AuthedLayout() {
         options={{ title: "Settings", tabBarIcon: settingsIcon }}
       />
       <NativeTabs.Screen name="sessions" options={hidden} />
-      <NativeTabs.Screen name="sheets" options={hidden} />
     </NativeTabs>
   );
 }
