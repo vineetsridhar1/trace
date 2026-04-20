@@ -47,7 +47,7 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
         <SessionStatusIndicator status={sessionStatus} agentStatus={agentStatus} size={10} />
       </View>
       <View style={styles.text}>
-        <Text variant="body" numberOfLines={1} style={styles.title}>
+        <Text variant="callout" numberOfLines={1} style={styles.title}>
           {name}
         </Text>
         {branch || lastSentLabel ? (
