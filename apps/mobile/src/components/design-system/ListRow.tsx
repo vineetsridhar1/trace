@@ -7,9 +7,11 @@ import {
   type ViewStyle,
 } from "react-native";
 import { SymbolView } from "expo-symbols";
-import * as Haptics from "expo-haptics";
+import { haptic as hapticFeedback } from "@/lib/haptics";
 import { useTheme, type Theme } from "@/theme";
 import { Text } from "./Text";
+
+export type ListRowHaptic = "light" | "selection" | "none";
 
 export interface ListRowProps {
   title: string;
@@ -21,6 +23,7 @@ export interface ListRowProps {
   destructive?: boolean;
   disclosureIndicator?: boolean;
   separator?: boolean;
+  haptic?: ListRowHaptic;
   accessibilityLabel?: string;
   style?: ViewStyle;
 }
@@ -35,6 +38,7 @@ export function ListRow({
   destructive = false,
   disclosureIndicator = false,
   separator = true,
+  haptic = "light",
   accessibilityLabel,
   style,
 }: ListRowProps) {
@@ -44,7 +48,8 @@ export function ListRow({
     : "foreground";
 
   function handlePress(e: GestureResponderEvent) {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (haptic === "light") void hapticFeedback.light();
+    if (haptic === "selection") void hapticFeedback.selection();
     onPress?.(e);
   }
 

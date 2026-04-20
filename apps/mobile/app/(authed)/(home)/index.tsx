@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
@@ -6,7 +5,6 @@ import {
   useEntityIds,
   type AuthState,
 } from "@trace/client-core";
-import { OrgSwitcherSheet } from "@/components/auth/OrgSwitcherSheet";
 
 export default function AuthedHome() {
   const router = useRouter();
@@ -15,7 +13,6 @@ export default function AuthedHome() {
   const memberships = useAuthStore((s: AuthState) => s.orgMemberships);
   const channelIds = useEntityIds("channels");
   const sessionIds = useEntityIds("sessions");
-  const [sheetOpen, setSheetOpen] = useState(false);
 
   const activeOrg = memberships.find((m) => m.organizationId === activeOrgId);
 
@@ -28,20 +25,14 @@ export default function AuthedHome() {
       <Text style={styles.heading}>Trace Mobile</Text>
       {user && <Text style={styles.subtle}>Signed in as {user.name}</Text>}
 
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => setSheetOpen(true)}
-        style={({ pressed }) => [styles.orgPill, pressed && styles.pressed]}
-      >
+      <View style={styles.orgPill}>
         <Text style={styles.orgPillText}>{activeOrg?.organization.name ?? "No org"}</Text>
-      </Pressable>
+      </View>
 
       <View style={styles.stats}>
         <Text style={styles.stat}>Channels: {channelIds.length}</Text>
         <Text style={styles.stat}>Sessions: {sessionIds.length}</Text>
       </View>
-
-      <OrgSwitcherSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} />
 
       {__DEV__ && (
         <Pressable

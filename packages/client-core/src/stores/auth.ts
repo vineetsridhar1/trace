@@ -117,17 +117,27 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
   logout: async () => {
     const platform = getPlatform();
     const token = useAuthStore.getState().token;
-    await platform.secureStorage.clearToken();
-    await platform.storage.removeItem(ACTIVE_ORG_KEY);
-
     const headers: Record<string, string> = {};
     if (token) headers.Authorization = `Bearer ${token}`;
-    await platform.fetch(`${platform.apiUrl}/auth/logout`, {
-      method: "POST",
-      credentials: "include",
-      headers,
-    });
-    set({ user: null, activeOrgId: null, orgMemberships: [], token: null });
+    try {
+      await platform.secureStorage.clearToken();
+      await platform.storage.removeItem(ACTIVE_ORG_KEY);
+      await platform.fetch(`${platform.apiUrl}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+        headers,
+      });
+    } catch (err) {
+      console.warn("[auth] logout failed", err);
+    } finally {
+      set({
+        user: null,
+        activeOrgId: null,
+        orgMemberships: [],
+        token: null,
+        loading: false,
+      });
+    }
   },
 
   setActiveOrg: (orgId: string) => {
