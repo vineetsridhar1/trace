@@ -16,17 +16,28 @@ export default function ChannelsLayout() {
           headerSearchBarOptions: {
             placeholder: "Search channels",
           },
-          headerRight: () =>
-            user ? (
-              <TopBarPill
-                avatar={{
-                  name: user.name ?? user.email ?? "?",
-                  uri: user.avatarUrl,
-                  accessibilityLabel: "Account",
+          headerRight: () => (
+            <TopBarPill
+              actions={[
+                {
+                  id: "filter",
+                  accessibilityLabel: "Filter",
+                  symbol: "line.3.horizontal.decrease",
                   onPress: () => {},
-                }}
-              />
-            ) : null,
+                },
+              ]}
+              avatar={
+                user
+                  ? {
+                      name: user.name ?? user.email ?? "?",
+                      uri: user.avatarUrl,
+                      accessibilityLabel: "Account",
+                      onPress: () => {},
+                    }
+                  : undefined
+              }
+            />
+          ),
         }}
       />
       <Stack.Screen

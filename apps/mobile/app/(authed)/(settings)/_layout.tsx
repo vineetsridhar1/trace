@@ -13,17 +13,28 @@ export default function SettingsLayout() {
           title: "Settings",
           headerLargeTitle: true,
           headerLargeTitleShadowVisible: false,
-          headerRight: () =>
-            user ? (
-              <TopBarPill
-                avatar={{
-                  name: user.name ?? user.email ?? "?",
-                  uri: user.avatarUrl,
-                  accessibilityLabel: "Account",
+          headerRight: () => (
+            <TopBarPill
+              actions={[
+                {
+                  id: "notifications",
+                  accessibilityLabel: "Notifications",
+                  symbol: "bell",
                   onPress: () => {},
-                }}
-              />
-            ) : null,
+                },
+              ]}
+              avatar={
+                user
+                  ? {
+                      name: user.name ?? user.email ?? "?",
+                      uri: user.avatarUrl,
+                      accessibilityLabel: "Account",
+                      onPress: () => {},
+                    }
+                  : undefined
+              }
+            />
+          ),
         }}
       />
     </Stack>
