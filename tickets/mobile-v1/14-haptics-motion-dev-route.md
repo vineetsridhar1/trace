@@ -27,6 +27,11 @@ Finalize the polish infrastructure: a typed haptic helper so callers use a tiny 
   - Sections: Typography, Buttons, IconButtons, Cards, Glass, Chips, Status dots, ListRows, Avatars, Skeletons, SegmentedControl, EmptyState, Sheet.
   - Acts as the internal Storybook — a single-file index of everything, used for visual regression during M6 polish.
   - Access via a dev-only entry in Settings (only visible when `__DEV__`).
+  - QA checks to include while wiring this up:
+    - Chip `active` variant pulses; flipping to any non-active variant stops immediately with no visual beat.
+    - StatusDot `active` pulses; `stopped` renders in `dimForeground`.
+    - Skeleton shimmer is a translating highlight band (no true gradient); confirm the sweep looks smooth and the track color matches `surfaceElevated`.
+    - Avatar falls back from a 404 URI to the colored-initials view without a perceptible flash on first render.
 - Exclude the dev route from production bundle via Metro config or route guard.
 
 ## Dependencies

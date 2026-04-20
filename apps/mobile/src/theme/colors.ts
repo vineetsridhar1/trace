@@ -85,3 +85,36 @@ const dark: ThemeColors = {
 };
 
 export const colors = { dark } as const;
+
+/**
+ * Returns `color` at the given alpha (0..1). Accepts 3-digit hex (`#abc`),
+ * 6-digit hex (`#aabbcc`), or `rgba(...)` / `hsl(...)` (passed through
+ * unchanged — callers that already specify alpha own it). Any other format
+ * throws, which fails loud in development rather than silently rendering as
+ * transparent.
+ */
+export function alpha(color: string, a: number): string {
+  if (color.startsWith("rgba") || color.startsWith("hsla")) return color;
+  if (color.startsWith("hsl") || color.startsWith("rgb")) return color;
+
+  if (color.startsWith("#")) {
+    const hex = color.slice(1);
+    let r: number;
+    let g: number;
+    let b: number;
+    if (hex.length === 3) {
+      r = parseInt(hex[0]! + hex[0]!, 16);
+      g = parseInt(hex[1]! + hex[1]!, 16);
+      b = parseInt(hex[2]! + hex[2]!, 16);
+    } else if (hex.length === 6) {
+      r = parseInt(hex.slice(0, 2), 16);
+      g = parseInt(hex.slice(2, 4), 16);
+      b = parseInt(hex.slice(4, 6), 16);
+    } else {
+      throw new Error(`alpha(): unsupported hex length in "${color}"`);
+    }
+    return `rgba(${r},${g},${b},${a})`;
+  }
+
+  throw new Error(`alpha(): unsupported color format "${color}"`);
+}

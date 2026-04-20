@@ -1,5 +1,5 @@
 import { useColorScheme } from "react-native";
-import { colors, type ThemeColors } from "./colors";
+import { colors, alpha, type ThemeColors } from "./colors";
 import { typography, type ThemeTypography } from "./typography";
 import { spacing, type ThemeSpacing } from "./spacing";
 import { radius, type ThemeRadius } from "./radius";
@@ -44,7 +44,7 @@ export function useTheme(): Theme {
   return darkTheme;
 }
 
-export { colors, typography, spacing, radius, motion, glass, makeShadows };
+export { colors, alpha, typography, spacing, radius, motion, glass, makeShadows };
 export type {
   ThemeColors,
   ThemeTypography,
