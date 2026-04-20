@@ -15,6 +15,11 @@ import {
   View,
   type LayoutAnimationConfig,
 } from "react-native";
+import Animated, {
+  FadeIn,
+  FadeOut,
+  LayoutAnimationConfig as RNALayoutAnimationConfig,
+} from "react-native-reanimated";
 import { EmptyState, IconButton, Screen } from "@/components/design-system";
 import { SessionGroupRow } from "@/components/channels/SessionGroupRow";
 import { SessionGroupsHeader } from "@/components/channels/SessionGroupsHeader";
@@ -62,6 +67,14 @@ export default function ChannelDetail() {
   const [collapsed, setCollapsed] = useState<Set<SessionGroupSectionStatus>>(
     () => new Set(DEFAULT_COLLAPSED),
   );
+  // Suppress row FadeIn on the first frame so opening the channel doesn't
+  // cascade-fade every visible row. Subsequent expand/collapse toggles play
+  // entering/exiting normally.
+  const [skipInitialEntering, setSkipInitialEntering] = useState(true);
+  useEffect(() => {
+    const handle = requestAnimationFrame(() => setSkipInitialEntering(false));
+    return () => cancelAnimationFrame(handle);
+  }, []);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
   const logout = useAuthStore((s: AuthState) => s.logout);
@@ -142,7 +155,14 @@ export default function ChannelDetail() {
           />
         );
       }
-      return <SessionGroupRow groupId={item.groupId} hideStatusChip />;
+      return (
+        <Animated.View
+          entering={FadeIn.duration(160)}
+          exiting={FadeOut.duration(120)}
+        >
+          <SessionGroupRow groupId={item.groupId} hideStatusChip />
+        </Animated.View>
+      );
     },
     [handleToggleSection],
   );
@@ -165,26 +185,28 @@ export default function ChannelDetail() {
           ),
         }}
       />
-      <FlatList
-        // Re-mount on segment change so scroll position resets to the top
-        // instead of carrying over from the previous (often longer) list.
-        key={scope}
-        data={items}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        // FlatList renders its own UIScrollView directly (not wrapped behind
-        // FlashList's extra layout views), which iOS 26's tab-bar minimize
-        // behavior auto-detects. Channel groups stay in the dozens, so we
-        // don't need FlashList's recycler perf here.
-        contentInsetAdjustmentBehavior="automatic"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
-        ListHeaderComponent={
-          <SessionGroupsHeader segment={scope} onSegmentChange={setScope} />
-        }
-        ListEmptyComponent={<ActiveEmpty scope={scope} />}
-      />
+      <RNALayoutAnimationConfig skipEntering={skipInitialEntering}>
+        <FlatList
+          // Re-mount on segment change so scroll position resets to the top
+          // instead of carrying over from the previous (often longer) list.
+          key={scope}
+          data={items}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          // FlatList renders its own UIScrollView directly (not wrapped behind
+          // FlashList's extra layout views), which iOS 26's tab-bar minimize
+          // behavior auto-detects. Channel groups stay in the dozens, so we
+          // don't need FlashList's recycler perf here.
+          contentInsetAdjustmentBehavior="automatic"
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
+          ListHeaderComponent={
+            <SessionGroupsHeader segment={scope} onSegmentChange={setScope} />
+          }
+          ListEmptyComponent={<ActiveEmpty scope={scope} />}
+        />
+      </RNALayoutAnimationConfig>
     </Screen>
   );
 }
