@@ -6,7 +6,7 @@ A minimal settings screen: user info, active org switcher (opens native sheet), 
 
 ## What needs to happen
 
-- `app/(authed)/settings.tsx` (<150 lines):
+- `app/(authed)/(settings)/index.tsx` (<150 lines — the route group `(settings)` hosts the tab's `Stack` per ticket 15's native-tab layout):
   - User row at top: `Avatar` + name + email. Tap: no-op for V1.
   - "Active organization" `ListRow`: shows current org name, chevron right. Tap: opens org switcher sheet.
   - "Sign out" `ListRow`: destructive variant. Tap: opens confirmation sheet (simple native alert-style). Confirm: clears Keychain token, clears entity store, navigates to `(auth)/sign-in`.

@@ -44,12 +44,14 @@ export default function SettingsScreen() {
     ]);
   }
 
+  // Order matters: logout unmounts `AuthedLayout` via `<Redirect>` (user=null),
+  // which tears down `useHydrate` and the orgEvents subscription — so no
+  // in-flight events can repopulate the store between reset and navigation.
   async function handleSignOut() {
+    await logout();
     useEntityStore.getState().reset();
     useMobileUIStore.getState().reset();
-    await logout();
     recreateClient();
-    router.replace("/(auth)/sign-in");
   }
 
   return (
