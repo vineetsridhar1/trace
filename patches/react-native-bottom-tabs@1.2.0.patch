@@ -1,9 +1,9 @@
 diff --git a/ios/RepresentableView.swift b/ios/RepresentableView.swift
-index 09adaca401c716dd6c47590ffc7fe5646de2e50b..7c9c2f5d9d9f36c6f2e07cf3f4c7b8e4b0a1b4f3 100644
+index 09adaca401c716dd6c47590ffc7fe5646de2e50b..c123cd9d16f6fc696c55dc82ec70741d3a7126e4 100644
 --- a/ios/RepresentableView.swift
 +++ b/ios/RepresentableView.swift
-@@ -30,3 +30,87 @@ struct RepresentableView: PlatformViewRepresentable {
-
+@@ -30,3 +30,104 @@ struct RepresentableView: PlatformViewRepresentable {
+ 
  #endif
  }
 +
@@ -17,10 +17,10 @@ index 09adaca401c716dd6c47590ffc7fe5646de2e50b..7c9c2f5d9d9f36c6f2e07cf3f4c7b8e4
 +  /// screen freshly pushed on top of a nested navigation stack wins over a
 +  /// lingering background screen that may still be attached.
 +  func findDescendantScrollView() -> UIScrollView? {
++    if let scroll = self as? UIScrollView {
++      return scroll
++    }
 +    for subview in subviews.reversed() {
-+      if let scrollView = subview as? UIScrollView {
-+        return scrollView
-+      }
 +      if let found = subview.findDescendantScrollView() {
 +        return found
 +      }
@@ -73,20 +73,37 @@ index 09adaca401c716dd6c47590ffc7fe5646de2e50b..7c9c2f5d9d9f36c6f2e07cf3f4c7b8e4
 +  }
 +
 +  /// After a view controller becomes visible inside a tab bar, re-publish
-+  /// the current topmost scroll view to the tab's selected controller.
-+  /// UIKit caches the scroll view it observes for `tabBarMinimizeBehavior`
-+  /// and does not re-query when a nested navigation stack pushes or pops,
-+  /// so without this nudge the minimize behavior stays bound to whichever
-+  /// scroll view happened to be mounted on the initial tab render.
++  /// the current topmost scroll view up the responder chain. UIKit caches
++  /// the scroll view it observes for `tabBarMinimizeBehavior` and does not
++  /// re-query when a nested navigation stack pushes or pops, so without
++  /// this nudge the minimize behavior stays bound to whichever scroll view
++  /// happened to be mounted on the initial tab render.
 +  @objc func rntabs_viewDidAppear(_ animated: Bool) {
 +    rntabs_viewDidAppear(animated)
 +
-+    guard let tabBarController = self.tabBarController,
-+          let selected = tabBarController.selectedViewController
-+    else { return }
++    guard let tabBarController = self.tabBarController else { return }
 +
-+    let scrollView = selected.view.findDescendantScrollView()
-+    selected.setContentScrollView(scrollView, for: .bottom)
++    // Prefer a scroll view inside the VC that just appeared — that is the
++    // topmost in the nested stack. Fall back to whatever the selected tab
++    // exposes (e.g. when a container VC appears before its children).
++    let scrollView =
++      self.view.findDescendantScrollView()
++      ?? tabBarController.selectedViewController?.view.findDescendantScrollView()
++
++    // Publish on every link in the chain that UIKit might ask so the
++    // minimize observer rebinds regardless of which VC it queries first.
++    if let selected = tabBarController.selectedViewController {
++      selected.setContentScrollView(scrollView, for: .bottom)
++    }
++    tabBarController.setContentScrollView(scrollView, for: .bottom)
++
++    var ancestor: UIViewController? = self.parent
++    while let current = ancestor, current !== tabBarController {
++      if current is UINavigationController {
++        current.setContentScrollView(scrollView, for: .bottom)
++      }
++      ancestor = current.parent
++    }
 +  }
 +}
 +#endif
