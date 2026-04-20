@@ -49,7 +49,10 @@ export function useSlashCommands(sessionId: string): { commands: SlashCommandIte
         // The server returns [] when session.tool !== "claude_code". If the
         // client-side tool is claude_code, an empty response means the tool
         // mutation hasn't committed yet — keep the optimistic builtins rather
-        // than clearing them.
+        // than clearing them. Trade-off: bridge-provided skills (user/project
+        // skills from a local Claude Code bridge) won't appear until the hook
+        // re-runs (e.g., next navigation). Acceptable because builtins are the
+        // common case and bridge skills are an enhancement.
         if (shouldSeedBuiltins && raw.length === 0) {
           return;
         }
