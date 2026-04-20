@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { gql } from "@urql/core";
+import { useStoreWithEqualityFn } from "zustand/traditional";
 import {
   type EntityState,
   useEntityStore,
-  useSessionIdsByGroup,
   type SessionEntity,
   type SessionGroupEntity,
 } from "@trace/client-core";
@@ -108,6 +108,16 @@ function sessionTime(session: SessionEntity | undefined): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+const EMPTY_IDS: string[] = [];
+
+function areIdsEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 export async function fetchSessionGroupDetail(groupId: string): Promise<void> {
   const result = await getClient()
     .query(SESSION_GROUP_DETAIL_QUERY, { id: groupId })
@@ -161,13 +171,18 @@ export function useEnsureSessionGroupDetail(groupId: string | undefined): boolea
 }
 
 export function useSessionGroupSessionIds(groupId: string): string[] {
-  const ids = useSessionIdsByGroup(groupId);
-  return useEntityStore((state: EntityState) =>
-    ids
-      .slice()
-      .sort((a, b) => {
-        const diff = sessionTime(state.sessions[b]) - sessionTime(state.sessions[a]);
-        return diff !== 0 ? diff : a.localeCompare(b);
-      }),
+  return useStoreWithEqualityFn(
+    useEntityStore,
+    (state: EntityState): string[] => {
+      const ids = state._sessionIdsByGroup[groupId];
+      if (!ids || ids.length === 0) return EMPTY_IDS;
+      return ids
+        .slice()
+        .sort((a, b) => {
+          const diff = sessionTime(state.sessions[b]) - sessionTime(state.sessions[a]);
+          return diff !== 0 ? diff : a.localeCompare(b);
+        });
+    },
+    areIdsEqual,
   );
 }
