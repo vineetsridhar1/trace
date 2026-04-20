@@ -1,4 +1,4 @@
-import type { SessionGroupStatus } from "@trace/gql";
+import type { SessionGroupStatus, SessionStatus } from "@trace/gql";
 import type { ChipVariant } from "@/components/design-system";
 import type { Theme } from "@/theme";
 
@@ -9,7 +9,7 @@ import type { Theme } from "@/theme";
  */
 export function statusIndicatorColor(
   theme: Theme,
-  status: SessionGroupStatus | null | undefined,
+  status: SessionGroupStatus | SessionStatus | null | undefined,
 ): string {
   switch (status) {
     case "needs_input":
