@@ -18,21 +18,12 @@ export default function ChannelsLayout() {
           },
           headerRight: () => (
             <TopBarPill
-              actions={[
-                {
-                  id: "filter",
-                  accessibilityLabel: "Filter",
-                  symbol: "line.3.horizontal.decrease",
-                  onPress: () => {},
-                },
-              ]}
               avatar={
                 user
                   ? {
                       name: user.name ?? user.email ?? "?",
                       uri: user.avatarUrl,
                       accessibilityLabel: "Account",
-                      onPress: () => {},
                     }
                   : undefined
               }

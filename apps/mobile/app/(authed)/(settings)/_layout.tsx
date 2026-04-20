@@ -15,21 +15,12 @@ export default function SettingsLayout() {
           headerLargeTitleShadowVisible: false,
           headerRight: () => (
             <TopBarPill
-              actions={[
-                {
-                  id: "notifications",
-                  accessibilityLabel: "Notifications",
-                  symbol: "bell",
-                  onPress: () => {},
-                },
-              ]}
               avatar={
                 user
                   ? {
                       name: user.name ?? user.email ?? "?",
                       uri: user.avatarUrl,
                       accessibilityLabel: "Account",
-                      onPress: () => {},
                     }
                   : undefined
               }
