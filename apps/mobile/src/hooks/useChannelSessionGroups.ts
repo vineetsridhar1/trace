@@ -30,11 +30,6 @@ const SECTION_ORDER: SessionGroupSectionStatus[] = [
   "stopped",
 ];
 
-interface ChannelSessionGroupCounts {
-  active: number;
-  needsInput: number;
-}
-
 function isArchived(group: SessionGroupEntity): boolean {
   return Boolean(group.archivedAt) || group.status === "archived";
 }
@@ -195,26 +190,6 @@ export function useMergedArchivedSessionGroupIds(
         })
         .sort((a, b) => sortTimestamp(b) - sortTimestamp(a) || a.id.localeCompare(b.id));
       return visible.map((g) => g.id);
-    }),
-  );
-}
-
-/**
- * Counts for the active screen subtitle: how many non-archived, non-merged
- * groups exist in this channel and how many of those are waiting on the user.
- */
-export function useChannelSessionGroupCounts(channelId: string): ChannelSessionGroupCounts {
-  return useEntityStore(
-    useShallow((state: EntityState) => {
-      let active = 0;
-      let needsInput = 0;
-      for (const group of Object.values(state.sessionGroups) as SessionGroupEntity[]) {
-        if (group.channel?.id !== channelId) continue;
-        if (!isActive(group)) continue;
-        active += 1;
-        if (group.status === "needs_input") needsInput += 1;
-      }
-      return { active, needsInput };
     }),
   );
 }

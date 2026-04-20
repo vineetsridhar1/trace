@@ -142,11 +142,7 @@ export default function ChannelDetail() {
           ),
         }}
       />
-      <SessionGroupsHeader
-        channelId={channelId}
-        segment={scope}
-        onSegmentChange={setScope}
-      />
+      <SessionGroupsHeader segment={scope} onSegmentChange={setScope} />
       <FlashList
         // Re-mount on segment change so scroll position resets to the top
         // instead of carrying over from the previous (often longer) list.
