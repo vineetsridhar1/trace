@@ -7,8 +7,8 @@ Replace the `FakeSessionAccessory` stub wired in ticket 15 with a real, data-dri
 ## What needs to happen
 
 - **Data selector** (Zustand):
-  - A `selectActiveSessions(state)` selector over `useEntityStore` returns sessions where `agentStatus === "active"` (optionally including `needs_input`), sorted by `_sortTimestamp` descending. Memoize via `useShallow`.
-  - When `activeSessions.length === 0`, the accessory component returns `null`. Keep `renderBottomAccessoryView` **always passed** (and identity-stable) on `NativeTabs` — toggling the prop on/off crashes with `UIViewControllerHierarchyInconsistency` because `react-native-bottom-tabs` rebuilds the native `TabHostingController` while a child `RNSNavigationController` is still attached.
+  - A `selectActiveSessions(state)` selector over `useEntityStore` returns every session the user is still interacting with: **exclude `sessionStatus === "merged"`, `agentStatus === "failed"`, and sessions whose `sessionGroup` is archived**. Include everything else (`in_progress`, `needs_input`, `in_review`, `done`, `not_started`, `stopped`). Sort by `_sortTimestamp` descending. Memoize via `useShallow`.
+  - When `activeSessions.length === 0`, the accessory component returns `null`. Keep `renderBottomAccessoryView` **always passed** (and identity-stable) on `NativeTabs` — toggling the prop on/off crashes with `UIViewControllerHierarchyInconsistency` because `react-native-bottom-tabs` rebuilds the native `TabHostingController` while a child `RNSNavigationController` is still attached. Library limitation: when JS returns `null`, the native slot still reserves its default height; with the broader filter above, the empty case is rare enough to live with in V1.
 - **Shared pager index** (Zustand UI store):
   - Add `activeAccessoryIndex: number` to `useMobileUIStore` with `setActiveAccessoryIndex(i)` action.
   - This is the single source of truth for which session is shown in the accessory *and* in the expanded player (ticket 15b) — pulling in the player must not reset or fork pager position.

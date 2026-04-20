@@ -20,17 +20,22 @@ import { useTheme, type Theme } from "@/theme";
 const EMPTY_SESSIONS: readonly SessionEntity[] = Object.freeze([]);
 
 /**
- * Active = agent is working (`active`) or the session is waiting on the user
- * (`needs_input`). These are the states where a live view is meaningful.
- * Wrap callers in `useShallow` so identical-content arrays don't re-render.
+ * Any session the user is still interacting with — everything except
+ * `merged` (shipped), `failed` (errored), and sessions whose group has been
+ * archived. `in_progress`, `needs_input`, `in_review`, `done`, `not_started`,
+ * and `stopped` all qualify. Wrap callers in `useShallow`.
  */
 export function selectActiveSessions(state: EntityState): readonly SessionEntity[] {
   let out: SessionEntity[] | null = null;
   for (const id in state.sessions) {
     const s = state.sessions[id];
-    if (s.agentStatus === "active" || s.sessionStatus === "needs_input") {
-      (out ??= []).push(s);
+    if (s.sessionStatus === "merged") continue;
+    if (s.agentStatus === "failed") continue;
+    if (s.sessionGroupId) {
+      const g = state.sessionGroups[s.sessionGroupId];
+      if (g && (g.archivedAt || g.status === "archived")) continue;
     }
+    (out ??= []).push(s);
   }
   if (!out) return EMPTY_SESSIONS;
   out.sort((a, b) => {
@@ -132,8 +137,7 @@ function SessionRow({
   width,
   theme,
 }: { session: SessionEntity; width: number; theme: Theme }) {
-  const tool = session.tool === "claude_code" ? "Claude" : session.tool === "codex" ? "Codex" : "Agent";
-  const status = session.sessionStatus === "needs_input" ? "needs input" : session.agentStatus;
+  const subtitle = `${toolLabel(session.tool)} · ${statusLabel(session)}`;
   return (
     <Pressable
       accessibilityRole="button"
@@ -157,7 +161,7 @@ function SessionRow({
           {session.name}
         </Text>
         <Text variant="caption1" color="mutedForeground" numberOfLines={1}>
-          {`${tool} · ${status}`}
+          {subtitle}
         </Text>
       </View>
       <SymbolView
@@ -170,16 +174,19 @@ function SessionRow({
   );
 }
 
+function toolLabel(t: SessionEntity["tool"]): string {
+  return t === "claude_code" ? "Claude" : t === "codex" ? "Codex" : "Agent";
+}
+
+function statusLabel(s: SessionEntity): string {
+  if (s.sessionStatus === "needs_input") return "needs input";
+  if (s.sessionStatus === "in_review") return "in review";
+  return s.agentStatus.replace(/_/g, " ");
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  page: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 12,
-  },
+  container: { flex: 1 },
+  page: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12 },
   symbolWrap: {
     width: 30,
     height: 30,
@@ -187,10 +194,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  text: {
-    flex: 1,
-  },
-  title: {
-    fontWeight: "600",
-  },
+  text: { flex: 1 },
+  title: { fontWeight: "600" },
 });
