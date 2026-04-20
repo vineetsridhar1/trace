@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { Pressable, StyleSheet } from "react-native";
-import { SymbolView } from "expo-symbols";
 import { FlashList } from "@shopify/flash-list";
 import {
   useAuthStore,
@@ -9,7 +7,7 @@ import {
   useEntityStore,
   type AuthState,
 } from "@trace/client-core";
-import { EmptyState, Screen } from "@/components/design-system";
+import { EmptyState, IconButton, Screen } from "@/components/design-system";
 import { SessionGroupRow } from "@/components/channels/SessionGroupRow";
 import { SessionGroupsHeader } from "@/components/channels/SessionGroupsHeader";
 import {
@@ -19,12 +17,10 @@ import {
 import { fetchChannelSessionGroups } from "@/hooks/useChannelSessionGroupsQuery";
 import { refreshOrgData } from "@/hooks/useHydrate";
 import { haptic } from "@/lib/haptics";
-import { useTheme } from "@/theme";
 
 export default function ChannelDetail() {
   const { id: channelId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const theme = useTheme();
   const [scope, setScope] = useState<ActiveSegment>("all");
   const [refreshing, setRefreshing] = useState(false);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
@@ -72,21 +68,13 @@ export default function ChannelDetail() {
         options={{
           title: channelName ?? "Channel",
           headerRight: () => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Merged & archived"
+            <IconButton
+              symbol="tray.full.fill"
+              size="sm"
+              color="foreground"
               onPress={handleOpenArchive}
-              hitSlop={12}
-              style={headerButtonStyles.container}
-            >
-              <SymbolView
-                name="archivebox.fill"
-                size={18}
-                tintColor={theme.colors.foreground}
-                weight="medium"
-                style={headerButtonStyles.icon}
-              />
-            </Pressable>
+              accessibilityLabel="Merged & archived"
+            />
           ),
         }}
       />
@@ -120,19 +108,6 @@ function renderItem({ item }: { item: string }) {
 function keyExtractor(item: string): string {
   return item;
 }
-
-const headerButtonStyles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  icon: {
-    width: 18,
-    height: 18,
-  },
-});
 
 function ActiveEmpty({ scope }: { scope: ActiveSegment }) {
   if (scope === "mine") {
