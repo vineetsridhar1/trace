@@ -93,6 +93,26 @@ async function resolveRefCommitSha(repoPath: string, ref: string): Promise<strin
   return runGit(repoPath, ["rev-parse", `${ref}^{commit}`]);
 }
 
+async function isAncestorCommit(
+  repoPath: string,
+  ancestorSha: string,
+  descendantSha: string,
+): Promise<boolean> {
+  assertValidCommitSha(ancestorSha);
+  assertValidCommitSha(descendantSha);
+  return execFileAsync("git", ["merge-base", "--is-ancestor", ancestorSha, descendantSha], {
+    cwd: repoPath,
+    maxBuffer: GIT_MAX_BUFFER,
+  }).then(
+    () => true,
+    (error: unknown) => {
+      const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : null;
+      if (code === 1) return false;
+      throw error;
+    },
+  );
+}
+
 export async function resolveTargetCommitSha(
   repoPath: string,
   branch: string,
@@ -106,9 +126,16 @@ export async function resolveTargetCommitSha(
 
   assertSafeGitRef(branch);
   const localSha = await resolveRefCommitSha(repoPath, branch);
-  if (localSha) return localSha;
-
   const remoteSha = await resolveRefCommitSha(repoPath, `origin/${branch}`);
+
+  if (localSha && remoteSha) {
+    if (localSha === remoteSha) return localSha;
+    if (await isAncestorCommit(repoPath, localSha, remoteSha)) return remoteSha;
+    if (await isAncestorCommit(repoPath, remoteSha, localSha)) return localSha;
+    throw new Error(`Local and remote refs diverged for branch: ${branch}`);
+  }
+
+  if (localSha) return localSha;
   if (remoteSha) return remoteSha;
 
   throw new Error(`Branch not found: ${branch}`);
