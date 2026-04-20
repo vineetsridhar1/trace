@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import {
   Pressable,
   ScrollView,
@@ -8,12 +8,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useShallow } from "zustand/react/shallow";
-import { useEntityField, useEntityStore } from "@trace/client-core";
+import { useEntityStore } from "@trace/client-core";
 import Animated, {
   interpolate,
   runOnJS,
   useAnimatedStyle,
-  useDerivedValue,
   useSharedValue,
   withSpring,
   withTiming,
@@ -31,13 +30,6 @@ import { SessionPlayerSelectedCard } from "./SessionPlayerSelectedCard";
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 800;
 
-interface Frame {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
 export function SessionPlayerOverlay() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -45,20 +37,15 @@ export function SessionPlayerOverlay() {
   const open = useMobileUIStore((s) => s.sessionPlayerOpen);
   const index = useMobileUIStore((s) => s.activeAccessoryIndex);
   const setIndex = useMobileUIStore((s) => s.setActiveAccessoryIndex);
-  const anchor = useMobileUIStore((s) => s.sessionPlayerAnchor);
   const ids = useEntityStore(useShallow(selectActiveSessionIds));
 
   const progress = useSharedValue(0);
   const dragY = useSharedValue(0);
 
-  const heroRef = useRef<View>(null);
-  const [heroFrame, setHeroFrame] = useState<Frame | null>(null);
-
   useEffect(() => {
     if (open) {
       dragY.value = 0;
       progress.value = withSpring(1, theme.motion.springs.gentle);
-      setHeroFrame(null);
     } else {
       dragY.value = withTiming(0, { duration: theme.motion.durations.base });
       progress.value = withTiming(0, {
@@ -121,32 +108,6 @@ export function SessionPlayerOverlay() {
     };
   });
 
-  const hasAnchor = !!anchor;
-  const hasHero = !!heroFrame;
-  const realTitleOpacity = useDerivedValue(() => {
-    if (!hasAnchor) return 1;
-    if (!hasHero) return 0;
-    return interpolate(progress.value, [0.85, 1], [0, 1], "clamp");
-  });
-
-  const flyingTitleStyle = useAnimatedStyle(() => {
-    if (!anchor || !heroFrame) return { opacity: 0 };
-    const p = progress.value;
-    return {
-      opacity: interpolate(p, [0, 0.85, 1], [1, 1, 0], "clamp"),
-      left: interpolate(p, [0, 1], [anchor.x, heroFrame.x]),
-      top: interpolate(p, [0, 1], [anchor.y, heroFrame.y]),
-      width: interpolate(p, [0, 1], [anchor.width, heroFrame.width]),
-      transform: [{ scale: interpolate(p, [0, 1], [0.72, 1]) }],
-    };
-  });
-
-  const measureHero = useCallback(() => {
-    heroRef.current?.measureInWindow((x, y, width, height) => {
-      setHeroFrame({ x, y, width, height });
-    });
-  }, []);
-
   if (ids.length === 0 && !open) return null;
 
   return (
@@ -202,11 +163,7 @@ export function SessionPlayerOverlay() {
               <View style={styles.closeRowSpacer} />
             </View>
             {sessionId ? (
-              <SessionPlayerSelectedCard
-                ref={heroRef}
-                sessionId={sessionId}
-                titleOpacity={realTitleOpacity}
-              />
+              <SessionPlayerSelectedCard sessionId={sessionId} />
             ) : null}
           </View>
         </GestureDetector>
@@ -251,40 +208,7 @@ export function SessionPlayerOverlay() {
           </View>
         ) : null}
       </Animated.View>
-
-      {sessionId && anchor ? (
-        <FlyingTitle
-          sessionId={sessionId}
-          style={flyingTitleStyle}
-          onMounted={measureHero}
-        />
-      ) : null}
     </View>
-  );
-}
-
-function FlyingTitle({
-  sessionId,
-  style,
-  onMounted,
-}: {
-  sessionId: string;
-  style: ReturnType<typeof useAnimatedStyle>;
-  onMounted: () => void;
-}) {
-  const name = useEntityField("sessions", sessionId, "name");
-
-  useEffect(() => {
-    const raf = requestAnimationFrame(onMounted);
-    return () => cancelAnimationFrame(raf);
-  }, [onMounted, name]);
-
-  return (
-    <Animated.View style={[styles.flyingTitle, style]} pointerEvents="none">
-      <Text variant="title2" numberOfLines={2} align="center">
-        {name ?? "Session"}
-      </Text>
-    </Animated.View>
   );
 }
 
@@ -334,9 +258,5 @@ const styles = StyleSheet.create({
   queueCard: {
     borderRadius: 16,
     overflow: "hidden",
-  },
-  flyingTitle: {
-    position: "absolute",
-    alignItems: "center",
   },
 });
