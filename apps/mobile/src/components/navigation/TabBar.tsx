@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView, type SFSymbol } from "expo-symbols";
@@ -24,6 +25,11 @@ const INACTIVE_GLYPH = 22;
 export function TabBar({ state, navigation, tabs }: TabBarProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const tabsByName = useMemo(() => {
+    const map: Record<string, TabDef> = {};
+    for (const t of tabs) map[t.name] = t;
+    return map;
+  }, [tabs]);
 
   return (
     <Glass
@@ -36,7 +42,7 @@ export function TabBar({ state, navigation, tabs }: TabBarProps) {
     >
       <View style={styles.row}>
         {state.routes.map((route, index) => {
-          const def = tabs.find((t) => t.name === route.name);
+          const def = tabsByName[route.name];
           if (!def) return null;
 
           const isFocused = state.index === index;

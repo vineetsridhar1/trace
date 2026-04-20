@@ -9,6 +9,9 @@ export default function ChannelsLayout() {
           title: "Channels",
           headerLargeTitle: true,
           headerLargeTitleShadowVisible: false,
+          headerSearchBarOptions: {
+            placeholder: "Search channels",
+          },
         }}
       />
       <Stack.Screen
