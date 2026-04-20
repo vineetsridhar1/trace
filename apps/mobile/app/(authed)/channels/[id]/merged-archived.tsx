@@ -38,10 +38,13 @@ export default function MergedArchived() {
       <Stack.Screen options={{ title: "Merged & Archived" }} />
       <MergedArchivedHeader segment={segment} onSegmentChange={setSegment} />
       <FlashList
+        // Re-mount on segment change so scroll resets to the top instead of
+        // carrying over from the previous (often differently-sized) list.
+        key={segment}
         data={ids}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        contentInsetAdjustmentBehavior="automatic"
+        contentInsetAdjustmentBehavior="never"
         onRefresh={handleRefresh}
         refreshing={refreshing}
         ListEmptyComponent={<MergedArchivedEmpty segment={segment} />}

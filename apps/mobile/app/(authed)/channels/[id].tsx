@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { Pressable } from "react-native";
+import { Pressable, StyleSheet } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { FlashList } from "@shopify/flash-list";
 import {
@@ -77,11 +77,13 @@ export default function ChannelDetail() {
               accessibilityLabel="Merged & archived"
               onPress={handleOpenArchive}
               hitSlop={8}
+              style={headerButtonStyles.container}
             >
               <SymbolView
                 name="archivebox"
-                size={20}
+                size={22}
                 tintColor={theme.colors.foreground}
+                resizeMode="scaleAspectFit"
               />
             </Pressable>
           ),
@@ -93,10 +95,13 @@ export default function ChannelDetail() {
         onSegmentChange={setScope}
       />
       <FlashList
+        // Re-mount on segment change so scroll position resets to the top
+        // instead of carrying over from the previous (often longer) list.
+        key={scope}
         data={ids}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        contentInsetAdjustmentBehavior="automatic"
+        contentInsetAdjustmentBehavior="never"
         onRefresh={handleRefresh}
         refreshing={refreshing}
         ListEmptyComponent={<ActiveEmpty scope={scope} />}
@@ -112,6 +117,15 @@ function renderItem({ item }: { item: string }) {
 function keyExtractor(item: string): string {
   return item;
 }
+
+const headerButtonStyles = StyleSheet.create({
+  container: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
 
 function ActiveEmpty({ scope }: { scope: ActiveSegment }) {
   if (scope === "mine") {
