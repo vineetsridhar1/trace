@@ -15,7 +15,7 @@
 export type GlassShape = "rect" | "roundedSm" | "roundedMd" | "roundedLg" | "capsule";
 
 export interface GlassPreset {
-  tint: string;
+  tint?: string;
   intensity: number;
   shape: GlassShape;
 }
@@ -30,7 +30,7 @@ export type GlassUseCase =
 export type ThemeGlass = Record<GlassUseCase, GlassPreset>;
 
 export const glass: ThemeGlass = {
-  tabBar: { tint: "rgba(10,10,10,0.55)", intensity: 80, shape: "capsule" },
+  tabBar: { intensity: 80, shape: "capsule" },
   navBar: { tint: "rgba(10,10,10,0.68)", intensity: 70, shape: "rect" },
   input: { tint: "rgba(23,23,23,0.64)", intensity: 60, shape: "capsule" },
   pinnedBar: { tint: "rgba(23,23,23,0.70)", intensity: 70, shape: "roundedMd" },
