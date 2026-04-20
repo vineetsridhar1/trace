@@ -118,6 +118,53 @@ function isUnauthorized(error: unknown): boolean {
   return typeof e.message === "string" && /\b401\b|unauthor/i.test(e.message);
 }
 
+/**
+ * Fetch org data (channels, groups, sessions) and upsert into the entity store.
+ * Returns true on success, false if the server returned a 401-equivalent.
+ * Shared between initial hydration and manual pull-to-refresh.
+ *
+ * Guards against stale writes: if the active org changes (or the user signs
+ * out) while queries are in flight, the upserts are skipped so the store
+ * doesn't get repopulated with the previous org's data after a reset.
+ */
+export async function refreshOrgData(activeOrgId: string): Promise<boolean> {
+  const client = getClient();
+
+  const [orgResult, groupsResult, sessionsResult] = await Promise.all([
+    client.query(ORGANIZATION_QUERY, { id: activeOrgId }).toPromise(),
+    client.query(CHANNEL_GROUPS_QUERY, { organizationId: activeOrgId }).toPromise(),
+    client.query(MY_SESSIONS_QUERY, { organizationId: activeOrgId }).toPromise(),
+  ]);
+  if (
+    isUnauthorized(orgResult.error) ||
+    isUnauthorized(groupsResult.error) ||
+    isUnauthorized(sessionsResult.error)
+  ) {
+    return false;
+  }
+
+  // Bail if the user switched orgs or signed out while we were fetching.
+  if (useAuthStore.getState().activeOrgId !== activeOrgId) return true;
+
+  const upsertMany = useEntityStore.getState().upsertMany;
+
+  const channels = (orgResult.data?.organization?.channels ?? []) as Array<
+    Channel & { id: string }
+  >;
+  if (channels.length > 0) upsertMany("channels", channels);
+
+  const channelGroups = (groupsResult.data?.channelGroups ?? []) as Array<
+    ChannelGroup & { id: string }
+  >;
+  if (channelGroups.length > 0) upsertMany("channelGroups", channelGroups);
+
+  const sessions = (sessionsResult.data?.mySessions ?? []) as Array<Session & { id: string }>;
+  if (sessions.length > 0) upsertMany("sessions", sessions);
+
+  void getPlatform().storage.setItem(ME_REFRESH_KEY, String(Date.now()));
+  return true;
+}
+
 export function useHydrate(activeOrgId: string | null): void {
   const logout = useAuthStore((s: AuthState) => s.logout);
 
@@ -125,7 +172,6 @@ export function useHydrate(activeOrgId: string | null): void {
     if (!activeOrgId) return;
     let cancelled = false;
     const client = getClient();
-    const upsertMany = useEntityStore.getState().upsertMany;
 
     async function handle401() {
       useEntityStore.getState().reset();
@@ -133,36 +179,9 @@ export function useHydrate(activeOrgId: string | null): void {
     }
 
     void (async () => {
-      const [orgResult, groupsResult, sessionsResult] = await Promise.all([
-        client.query(ORGANIZATION_QUERY, { id: activeOrgId }).toPromise(),
-        client.query(CHANNEL_GROUPS_QUERY, { organizationId: activeOrgId }).toPromise(),
-        client.query(MY_SESSIONS_QUERY, { organizationId: activeOrgId }).toPromise(),
-      ]);
+      const ok = await refreshOrgData(activeOrgId);
       if (cancelled) return;
-      if (
-        isUnauthorized(orgResult.error) ||
-        isUnauthorized(groupsResult.error) ||
-        isUnauthorized(sessionsResult.error)
-      ) {
-        await handle401();
-        return;
-      }
-      const channels = (orgResult.data?.organization?.channels ?? []) as Array<
-        Channel & { id: string }
-      >;
-      if (channels.length > 0) upsertMany("channels", channels);
-
-      const channelGroups = (groupsResult.data?.channelGroups ?? []) as Array<
-        ChannelGroup & { id: string }
-      >;
-      if (channelGroups.length > 0) upsertMany("channelGroups", channelGroups);
-
-      const sessions = (sessionsResult.data?.mySessions ?? []) as Array<
-        Session & { id: string }
-      >;
-      if (sessions.length > 0) upsertMany("sessions", sessions);
-
-      void getPlatform().storage.setItem(ME_REFRESH_KEY, String(Date.now()));
+      if (!ok) await handle401();
     })();
 
     const subscription = client
