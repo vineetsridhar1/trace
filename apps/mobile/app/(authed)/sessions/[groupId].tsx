@@ -1,13 +1,46 @@
-import { useLocalSearchParams } from "expo-router";
-import { Screen, Text } from "@/components/design-system";
+import { useEffect } from "react";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { StyleSheet, View } from "react-native";
+import { EmptyState, Spinner } from "@/components/design-system";
+import { useLatestSessionIdForGroup } from "@/hooks/useChannelSessionGroups";
+import { useEnsureSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
+import { useTheme } from "@/theme";
 
-export default function SessionGroupScreen() {
+export default function SessionGroupRedirectScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
+  const router = useRouter();
+  const theme = useTheme();
+  const loading = useEnsureSessionGroupDetail(groupId);
+  const latestSessionId = useLatestSessionIdForGroup(groupId);
+
+  useEffect(() => {
+    if (!groupId || !latestSessionId) return;
+    router.replace(`/sessions/${groupId}/${latestSessionId}`);
+  }, [groupId, latestSessionId, router]);
+
   return (
-    <Screen>
-      <Text variant="body" color="mutedForeground" style={{ padding: 16 }}>
-        Session group {groupId} (ticket 19)
-      </Text>
-    </Screen>
+    <>
+      <Stack.Screen options={{ title: "Session Group" }} />
+      <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
+        {loading || latestSessionId ? (
+          <Spinner size="small" color="mutedForeground" />
+        ) : (
+          <EmptyState
+            icon="bolt.horizontal"
+            title="No sessions in this group"
+            subtitle="This workspace has not started a session yet."
+          />
+        )}
+      </View>
+    </>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+});
