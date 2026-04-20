@@ -2,7 +2,8 @@ import { memo, useCallback } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { Text } from "@/components/design-system";
-import { useTheme, type Theme } from "@/theme";
+import { useTheme } from "@/theme";
+import { statusIndicatorColor } from "@/lib/sessionGroupStatus";
 import type { SessionGroupSectionStatus } from "@/hooks/useChannelSessionGroups";
 
 const SECTION_LABELS: Record<SessionGroupSectionStatus, string> = {
@@ -12,21 +13,6 @@ const SECTION_LABELS: Record<SessionGroupSectionStatus, string> = {
   failed: "Failed",
   stopped: "Stopped",
 };
-
-function sectionColor(theme: Theme, status: SessionGroupSectionStatus): string {
-  switch (status) {
-    case "needs_input":
-      return theme.colors.statusNeedsInput;
-    case "in_review":
-      return theme.colors.statusInReview;
-    case "in_progress":
-      return theme.colors.statusActive;
-    case "failed":
-      return theme.colors.statusFailed;
-    case "stopped":
-      return theme.colors.dimForeground;
-  }
-}
 
 export interface SessionGroupSectionHeaderProps {
   status: SessionGroupSectionStatus;
@@ -42,7 +28,7 @@ export const SessionGroupSectionHeader = memo(function SessionGroupSectionHeader
   onToggle,
 }: SessionGroupSectionHeaderProps) {
   const theme = useTheme();
-  const color = sectionColor(theme, status);
+  const color = statusIndicatorColor(theme, status);
   const label = SECTION_LABELS[status];
 
   const handlePress = useCallback(() => {

@@ -11,6 +11,7 @@ import {
   useEntityField,
 } from "@trace/client-core";
 import { Chip, Text } from "@/components/design-system";
+import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
@@ -37,6 +38,7 @@ export const SessionGroupRow = memo(function SessionGroupRow({
   const latestSessionId = useLatestSessionIdForGroup(groupId);
   const lastMessageAt = useEntityField("sessions", latestSessionId ?? "", "lastMessageAt");
   const updatedAt = useEntityField("sessions", latestSessionId ?? "", "updatedAt");
+  const agentStatus = useEntityField("sessions", latestSessionId ?? "", "agentStatus");
   const lastEventPreview = useEntityField(
     "sessions",
     latestSessionId ?? "",
@@ -113,9 +115,17 @@ export const SessionGroupRow = memo(function SessionGroupRow({
         ]}
       >
         <View style={styles.main}>
-          <Text variant="body" color="foreground" numberOfLines={1} style={styles.title}>
-            {name}
-          </Text>
+          <View style={styles.titleRow}>
+            <SessionStatusIndicator status={status} agentStatus={agentStatus} />
+            <Text
+              variant="body"
+              color="foreground"
+              numberOfLines={1}
+              style={[styles.title, styles.titleText]}
+            >
+              {name}
+            </Text>
+          </View>
           {branch ? (
             <Text
               numberOfLines={1}
@@ -157,7 +167,14 @@ const styles = StyleSheet.create({
     minHeight: 60,
   },
   main: { flex: 1, minWidth: 0 },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minWidth: 0,
+  },
   title: { fontWeight: "600" },
+  titleText: { flex: 1, minWidth: 0 },
   branch: { marginTop: 2 },
   preview: { marginTop: 4 },
   accessory: {
