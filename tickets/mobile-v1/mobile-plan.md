@@ -77,6 +77,7 @@ The app is built on the same event-driven, service-layer-owned, event-sourced ar
 
 - **expo-router** (file-based, built on react-navigation)
 - **react-native-screens** (real UINavigationController/stack)
+- **react-native-bottom-tabs** + **@bottom-tabs/react-navigation** — native `UITabBarController` (real iOS tab bar). Paired with `expo-router`'s `withLayoutContext` so file-based routes drive a native navigator. iOS 26 Liquid Glass, tab-switch animations, native haptics, minimize-on-scroll, and `.tabViewBottomAccessory` all come from UIKit.
 
 ### State & Data
 
@@ -325,15 +326,25 @@ Per §15 (Milestones): `client-core` is extracted in milestone M0 **before** any
 
 ### 9.2 Tab bar
 
-Three tabs, persistent at the bottom. Liquid Glass background on iOS 26+.
+Three tabs, persistent at the bottom, rendered by the **native `UITabBarController`** via `react-native-bottom-tabs` + `@bottom-tabs/react-navigation`. We do not hand-roll a tab bar in JS. iOS 26 Liquid Glass, tab-switch animations, haptics, and minimize-on-scroll come from UIKit.
 
-1. **Home** — icon: `bolt.horizontal`. A single feed of sessions needing the user's attention (needs_input + recently-updated active). Default tab.
-2. **Channels** — icon: `tray`. Coding channels list; drill down into a channel shows its session groups table.
-3. **Settings** — icon: `gearshape`. User, org switcher, sign out.
+1. **Home** — SF Symbol `bolt.horizontal`. A single feed of sessions needing the user's attention (needs_input + recently-updated active). Default tab.
+2. **Channels** — SF Symbol `tray`. Coding channels list; drill down into a channel shows its session groups table.
+3. **Settings** — SF Symbol `gearshape`. User, org switcher, sign out.
 
 Badges:
-- Home tab: count of sessions in `needs_input` belonging to current user
+- Home tab: count of sessions in `needs_input` belonging to current user (wired via `tabBarBadge: String(count)`)
 - Channels tab: none in V1
+
+Non-tab routes (e.g. `sessions/[groupId]`, `sheets/*`) are declared with `tabBarItemHidden: true` so they're routable via push without showing in the bar.
+
+Per-tab iOS `largeTitle` headers live inside pathless route groups (`(home)`, `(settings)`) so each tab has its own Stack without changing URL paths.
+
+### 9.2.1 Bottom accessory slot
+
+The iOS 26 `.tabViewBottomAccessory` slot (exposed by `react-native-bottom-tabs` as `renderBottomAccessoryView`) carries an "active sessions" mini-strip: a horizontal pager over the user's currently-in-progress sessions that taps to expand into the full Session Player (§10.8). The accessory returns `null` when no sessions are active, collapsing UITabBar back to normal height. `minimizeBehavior="onScrollDown"` collapses the tab bar + accessory together as the active screen scrolls.
+
+The accessory and the expanded player read from a single shared `activeAccessoryIndex` in `useMobileUIStore` so swiping in one updates the other.
 
 ### 9.3 Modal/sheet usage
 
@@ -582,6 +593,25 @@ Full-screen modals for:
 
 ---
 
+### 10.8 Session Player — `app/(authed)/sheets/session-player.tsx`
+
+**Purpose:** Expand the Active Sessions bottom-accessory (§9.2.1) into a full-screen, gesture-driven player that previews currently-in-progress sessions without leaving whatever tab the user was on.
+
+**UI structure:**
+1. **Player card** — session name, agent status, small stop action (if `active`). No composer — full send/queue flow stays on the session stream screen (§10.6).
+2. **In-progress list** (revealed at the `"playerAndList"` detent) — one row per active session; tap snaps the player to that session.
+
+**Gesture model (Reanimated, UI thread):**
+- Detents: `"player"` → `"playerAndList"` → `"dismissed"`.
+- Pull-down from player advances the detent; second pull-down dismisses.
+- Horizontal swipe inside the player updates `activeAccessoryIndex` (shared with the accessory).
+
+**Single-subscription invariant:** only the session pointed to by `activeAccessoryIndex` has an active `sessionEvents` subscription; switching sessions tears down the previous subscription before starting the new one.
+
+**V1 scope guardrails:** no composer, no recently-done sessions in the list, no branching/ticketing surfaces.
+
+---
+
 ## 11. Design System
 
 ### 11.1 Design principles
@@ -642,12 +672,17 @@ Built once, used everywhere. Each is one file, <200 lines.
 
 ### 11.5 Liquid Glass usage
 
-Where to use:
-- Tab bar background
-- Navigation bar (when content scrolls beneath)
+System-provided (we don't wrap these in our `Glass` primitive — UIKit does it):
+- **Tab bar** — native `UITabBarController` via `react-native-bottom-tabs` (§9.2)
+- **Bottom accessory slot** — content passed to `renderBottomAccessoryView` is composited inside the tab bar's glass material (§9.2.1)
+- **Native-stack `headerRight`** — iOS 26 wraps trailing bar-button content in a glass pill automatically (used by `TopBarPill`)
+
+Where to use our `Glass` primitive:
+- Navigation bar when content scrolls beneath (custom pinned bars above the stack header)
 - Input composer container
 - Pinned pending-input bar
 - Queued-messages strip
+- Session Player card and list surfaces (§10.8)
 - Session header when `largeTitle` collapses
 
 Where NOT to use:
@@ -655,8 +690,12 @@ Where NOT to use:
 - Message bubbles
 - Buttons
 - Empty states
+- The bottom tab bar (UITabBar material only — do not nest a `Glass` wrapper inside `renderBottomAccessoryView`)
+- Native header right slots (iOS 26 double-wraps)
 
-On iOS <26 / Android: `expo-blur` with `tint="systemThinMaterialDark"` (or light variant based on theme).
+On iOS <26 / Android: our `Glass` falls back to `expo-blur` with `tint="systemThinMaterialDark"` (or light variant based on theme). The native UITabBar gracefully falls back to its pre-iOS-26 tab bar appearance.
+
+Theme note: `glass.ts` no longer ships a `tabBar` preset (removed in ticket 15) — the surviving presets are `navBar`, `input`, `pinnedBar`, and `card`. A `sessionPlayer` preset will be added in ticket 15b.
 
 ### 11.6 Haptic map
 
@@ -841,12 +880,16 @@ The app badge reflects the count of sessions in `needs_input` across the active 
 - Motion tokens + helpers implemented.
 - **Exit criteria:** every primitive renders correctly in the V1 dark theme on iOS 17 and iOS 26, with no layout jank, and the token structure remains ready for a future light theme.
 
-### M3 — Channels & session group list
+### M3 — Navigation, Channels & session group list
 
+- Native-tab navigation skeleton (§9.2) and stack headers (ticket 15).
+- Active Sessions bottom-accessory over iOS 26 `.tabViewBottomAccessory` (ticket 15a, §9.2.1).
+- Expanded Session Player modal with three-detent gestures (ticket 15b, §10.8).
 - Channels list screen.
 - Coding channel screen with session group list.
+- Settings + Org switcher (ticket 18).
 - Status chips, live updates from `orgEvents`.
-- **Exit criteria:** can browse to a session group from the Channels tab.
+- **Exit criteria:** can browse to a session group from the Channels tab; the bottom accessory reflects live active sessions and expands into the player.
 
 ### M4 — Session stream (the big one)
 
