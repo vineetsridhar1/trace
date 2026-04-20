@@ -1,16 +1,24 @@
 import { useEffect } from "react";
-import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useShallow } from "zustand/react/shallow";
 import { useEntityStore } from "@trace/client-core";
 import Animated, {
   interpolate,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
   withTiming,
 } from "react-native-reanimated";
-import { Glass, IconButton, ListRow, Text } from "@/components/design-system";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { IconButton, Text } from "@/components/design-system";
 import { selectActiveSessionIds } from "@/lib/activeSessions";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { haptic } from "@/lib/haptics";
@@ -18,6 +26,9 @@ import { useMobileUIStore } from "@/stores/ui";
 import { alpha, useTheme } from "@/theme";
 import { SessionPlayerRow } from "./SessionPlayerRow";
 import { SessionPlayerSelectedCard } from "./SessionPlayerSelectedCard";
+
+const DISMISS_DISTANCE = 120;
+const DISMISS_VELOCITY = 800;
 
 export function SessionPlayerOverlay() {
   const theme = useTheme();
@@ -27,13 +38,24 @@ export function SessionPlayerOverlay() {
   const index = useMobileUIStore((s) => s.activeAccessoryIndex);
   const setIndex = useMobileUIStore((s) => s.setActiveAccessoryIndex);
   const ids = useEntityStore(useShallow(selectActiveSessionIds));
+
   const progress = useSharedValue(0);
+  const dragY = useSharedValue(0);
 
   useEffect(() => {
-    progress.value = open
-      ? withSpring(1, theme.motion.springs.gentle)
-      : withTiming(0, { duration: theme.motion.durations.base });
-  }, [open, progress, theme.motion.durations.base, theme.motion.springs.gentle]);
+    if (open) {
+      dragY.value = 0;
+      progress.value = withSpring(1, theme.motion.springs.gentle);
+    } else {
+      progress.value = withTiming(0, { duration: theme.motion.durations.base });
+    }
+  }, [
+    open,
+    progress,
+    dragY,
+    theme.motion.durations.base,
+    theme.motion.springs.gentle,
+  ]);
 
   useEffect(() => {
     if (ids.length === 0 && open) closeSessionPlayer();
@@ -46,27 +68,50 @@ export function SessionPlayerOverlay() {
   }, [ids.length, index, setIndex]);
 
   const sessionId = ids[index] ?? ids[0] ?? null;
+  const queueIds = ids.filter((_, i) => i !== index);
 
-  const backdropStyle = useAnimatedStyle(() => ({
-    opacity: progress.value * 0.42,
-  }));
+  const pan = Gesture.Pan()
+    .enabled(open)
+    .activeOffsetY([-16, 16])
+    .failOffsetX([-12, 12])
+    .onChange((event) => {
+      dragY.value = Math.max(0, event.translationY);
+    })
+    .onEnd((event) => {
+      if (
+        event.translationY > DISMISS_DISTANCE ||
+        event.velocityY > DISMISS_VELOCITY
+      ) {
+        runOnJS(closeSessionPlayer)();
+      } else {
+        dragY.value = withSpring(0, theme.motion.springs.smooth);
+      }
+    });
 
-  const panelStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 1], [0.94, 1]),
-    transform: [
-      { translateY: interpolate(progress.value, [0, 1], [height, 0]) },
-      { scale: interpolate(progress.value, [0, 1], [0.97, 1]) },
-    ],
-  }));
+  const backdropStyle = useAnimatedStyle(() => {
+    const dragFade = Math.max(0, 1 - dragY.value / (height * 0.7));
+    return { opacity: progress.value * 0.72 * dragFade };
+  });
+
+  const panelStyle = useAnimatedStyle(() => {
+    const translate =
+      interpolate(progress.value, [0, 1], [height, 0]) + dragY.value;
+    return { transform: [{ translateY: translate }] };
+  });
 
   if (ids.length === 0 && !open) return null;
 
+  const panelTop = insets.top + 8;
+
   return (
-    <Animated.View pointerEvents={open ? "auto" : "none"} style={styles.overlay}>
+    <View
+      pointerEvents={open ? "auto" : "none"}
+      style={styles.overlay}
+    >
       <Animated.View
         style={[
           styles.backdrop,
-          { backgroundColor: alpha(theme.colors.background, 0.88) },
+          { backgroundColor: "#000" },
           backdropStyle,
         ]}
       >
@@ -80,55 +125,86 @@ export function SessionPlayerOverlay() {
           }}
         />
       </Animated.View>
+
       <Animated.View
         style={[
           styles.panel,
           panelStyle,
           {
-            paddingTop: insets.top + theme.spacing.sm,
-            paddingBottom: Math.max(insets.bottom, theme.spacing.lg),
-            paddingHorizontal: theme.spacing.lg,
+            top: panelTop,
+            backgroundColor: theme.colors.surfaceElevated,
           },
         ]}
       >
-        <Glass preset="card" style={styles.surface}>
-          <View
-            style={[
-              styles.handle,
-              { backgroundColor: alpha(theme.colors.foreground, 0.28) },
-            ]}
-          />
-          <View style={styles.header}>
-            <Text variant="headline">Session Player</Text>
-            <IconButton
-              symbol="xmark"
-              size="md"
-              color="mutedForeground"
-              accessibilityLabel="Close session player"
-              onPress={() => closeSessionPlayer()}
-            />
-          </View>
-          {sessionId ? <SessionPlayerSelectedCard sessionId={sessionId} /> : null}
-          <Text variant="caption1" color="dimForeground" style={styles.sectionLabel}>
-            ACTIVE SESSIONS
-          </Text>
-          <ScrollView contentContainerStyle={{ paddingBottom: theme.spacing.lg }}>
-            {ids.map((id, rowIndex) => (
-              <SessionPlayerRow
-                key={id}
-                sessionId={id}
-                active={rowIndex === index}
-                onPress={() => {
-                  if (rowIndex === index) return;
-                  void haptic.selection();
-                  setIndex(rowIndex);
-                }}
+        <GestureDetector gesture={pan}>
+          <View style={styles.dragRegion}>
+            <View style={styles.grabberRow}>
+              <View
+                style={[
+                  styles.grabber,
+                  {
+                    backgroundColor: alpha(theme.colors.foreground, 0.28),
+                  },
+                ]}
               />
-            ))}
-          </ScrollView>
-        </Glass>
+            </View>
+            <View style={styles.closeRow}>
+              <IconButton
+                symbol="chevron.down"
+                size="sm"
+                color="mutedForeground"
+                accessibilityLabel="Close session player"
+                onPress={() => closeSessionPlayer()}
+              />
+              <View style={styles.closeRowSpacer} />
+            </View>
+            {sessionId ? (
+              <SessionPlayerSelectedCard sessionId={sessionId} />
+            ) : null}
+          </View>
+        </GestureDetector>
+
+        {queueIds.length > 0 ? (
+          <View style={styles.queue}>
+            <Text
+              variant="caption1"
+              color="mutedForeground"
+              style={styles.queueLabel}
+            >
+              UP NEXT
+            </Text>
+            <ScrollView
+              contentContainerStyle={{
+                paddingBottom: Math.max(insets.bottom, 24),
+              }}
+              showsVerticalScrollIndicator={false}
+            >
+              <View
+                style={[
+                  styles.queueCard,
+                  { backgroundColor: alpha(theme.colors.foreground, 0.04) },
+                ]}
+              >
+                {queueIds.map((id, i) => {
+                  const rowIndex = ids.indexOf(id);
+                  return (
+                    <SessionPlayerRow
+                      key={id}
+                      sessionId={id}
+                      showSeparator={i < queueIds.length - 1}
+                      onPress={() => {
+                        void haptic.selection();
+                        setIndex(rowIndex);
+                      }}
+                    />
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+        ) : null}
       </Animated.View>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -141,29 +217,48 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   panel: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  surface: {
-    flex: 1,
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     overflow: "hidden",
   },
-  handle: {
-    alignSelf: "center",
-    width: 44,
-    height: 5,
-    borderRadius: 999,
-    marginTop: 8,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
+  dragRegion: {
     paddingTop: 8,
   },
-  sectionLabel: {
-    marginHorizontal: 16,
+  grabberRow: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  grabber: {
+    width: 36,
+    height: 5,
+    borderRadius: 999,
+  },
+  closeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    paddingHorizontal: 8,
+    marginTop: 4,
+  },
+  closeRowSpacer: {
+    flex: 1,
+  },
+  queue: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  queueLabel: {
+    marginLeft: 6,
     marginBottom: 8,
-    letterSpacing: 1,
+    letterSpacing: 1.2,
+    fontWeight: "600",
+  },
+  queueCard: {
+    borderRadius: 16,
+    overflow: "hidden",
   },
 });
