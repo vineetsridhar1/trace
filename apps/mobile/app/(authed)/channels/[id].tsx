@@ -69,7 +69,7 @@ export default function ChannelDetail() {
           title: channelName ?? "Channel",
           headerRight: () => (
             <IconButton
-              symbol="tray.full.fill"
+              symbol="archivebox"
               size="sm"
               color="foreground"
               onPress={handleOpenArchive}
