@@ -20,7 +20,7 @@ import Animated, {
   FadeOut,
   LayoutAnimationConfig as RNALayoutAnimationConfig,
 } from "react-native-reanimated";
-import { EmptyState, IconButton, Screen } from "@/components/design-system";
+import { EmptyState, IconButton } from "@/components/design-system";
 import { SessionGroupRow } from "@/components/channels/SessionGroupRow";
 import { SessionGroupsHeader } from "@/components/channels/SessionGroupsHeader";
 import { SessionGroupSectionHeader } from "@/components/channels/SessionGroupSectionHeader";
@@ -32,6 +32,7 @@ import {
 import { fetchChannelSessionGroups } from "@/hooks/useChannelSessionGroupsQuery";
 import { refreshOrgData } from "@/hooks/useHydrate";
 import { haptic } from "@/lib/haptics";
+import { useTheme } from "@/theme";
 
 type ListItem =
   | { kind: "header"; status: SessionGroupSectionStatus; count: number; collapsed: boolean }
@@ -62,6 +63,7 @@ const SECTION_TOGGLE_ANIMATION: LayoutAnimationConfig = {
 export default function ChannelDetail() {
   const { id: channelId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const theme = useTheme();
   const [scope, setScope] = useState<ActiveSegment>("all");
   const [refreshing, setRefreshing] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<SessionGroupSectionStatus>>(
@@ -170,7 +172,7 @@ export default function ChannelDetail() {
   );
 
   return (
-    <Screen edges={["left", "right"]}>
+    <>
       <Stack.Screen
         options={{
           title: channelName ?? "Channel",
@@ -192,10 +194,10 @@ export default function ChannelDetail() {
           // Re-mount on segment change so scroll position resets to zero
           // instead of carrying over from the previous (often longer) list.
           key={scope}
-          // Plain ScrollView is the same shape as the home page's scroller,
-          // which iOS 26's bottom-tab minimize behavior reliably picks up
-          // through `UIViewController.contentScrollView(for:)`. Channel groups
-          // stay in the dozens, so we don't need virtualization here.
+          // Keep the ScrollView as the root native view on the screen. The
+          // home tab collapses correctly with this shape, while wrapping the
+          // list in our SafeAreaView-based Screen shell does not.
+          style={{ flex: 1, backgroundColor: theme.colors.background }}
           contentInsetAdjustmentBehavior="automatic"
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
@@ -205,7 +207,7 @@ export default function ChannelDetail() {
           {items.length === 0 ? <ActiveEmpty scope={scope} /> : items.map(renderListItem)}
         </ScrollView>
       </RNALayoutAnimationConfig>
-    </Screen>
+    </>
   );
 }
 
