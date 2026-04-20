@@ -69,7 +69,7 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
                 variant="caption2"
                 color="dimForeground"
                 numberOfLines={1}
-                style={branch ? styles.timestampWithBranch : undefined}
+                style={[styles.timestamp, branch ? styles.timestampWithBranch : undefined]}
               >
                 {lastSentLabel}
               </Text>
@@ -82,7 +82,6 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
         size={14}
         tintColor={theme.colors.mutedForeground}
         weight="medium"
-        style={styles.chevron}
       />
     </Pressable>
   );
@@ -91,25 +90,26 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
 const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 10,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
   leading: {
     width: 16,
-    paddingTop: 4,
     alignItems: "center",
+    justifyContent: "center",
   },
-  text: { flex: 1, minWidth: 0 },
+  text: { flex: 1, minWidth: 0, paddingBottom: 1 },
   title: { fontWeight: "600" },
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
     minWidth: 0,
-    marginTop: 2,
+    minHeight: 16,
+    marginTop: 1,
   },
-  branch: { flexShrink: 1 },
+  branch: { flexShrink: 1, lineHeight: 16 },
+  timestamp: { lineHeight: 16 },
   timestampWithBranch: { marginLeft: 10 },
-  chevron: { marginTop: 4 },
 });
