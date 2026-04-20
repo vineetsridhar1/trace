@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { FlashList } from "@shopify/flash-list";
+import { FlatList, RefreshControl } from "react-native";
 import { EmptyState, Screen } from "@/components/design-system";
 import { SessionGroupRow } from "@/components/channels/SessionGroupRow";
 import { MergedArchivedHeader } from "@/components/channels/MergedArchivedHeader";
@@ -36,20 +36,20 @@ export default function MergedArchived() {
   return (
     <Screen edges={["left", "right"]}>
       <Stack.Screen options={{ title: "Merged & Archived" }} />
-      <FlashList
+      <FlatList
         // Re-mount on segment change so scroll resets to the top instead of
         // carrying over from the previous (often differently-sized) list.
         key={segment}
         data={ids}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        // `automatic` lets iOS hand bottom-tab accessory height + nav-bar
-        // collapse interactions to the FlashList's scroll events. The
-        // segmented control needs to live inside the list for that to fire —
-        // a sibling above the FlashList breaks the scroll-event chain.
+        // FlatList's underlying UIScrollView is what iOS 26's tab-bar
+        // minimize behavior hooks into; FlashList wraps its scroll view in
+        // extra layout views that the auto-detection misses.
         contentInsetAdjustmentBehavior="automatic"
-        onRefresh={handleRefresh}
-        refreshing={refreshing}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
         ListHeaderComponent={
           <MergedArchivedHeader segment={segment} onSegmentChange={setSegment} />
         }

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { FlashList } from "@shopify/flash-list";
 import {
   useAuthStore,
   useEntityField,
@@ -8,8 +7,10 @@ import {
   type AuthState,
 } from "@trace/client-core";
 import {
+  FlatList,
   LayoutAnimation,
   Platform,
+  RefreshControl,
   UIManager,
   View,
   type LayoutAnimationConfig,
@@ -164,22 +165,21 @@ export default function ChannelDetail() {
           ),
         }}
       />
-      <FlashList
+      <FlatList
         // Re-mount on segment change so scroll position resets to the top
         // instead of carrying over from the previous (often longer) list.
         key={scope}
         data={items}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        getItemType={getItemType}
-        // `automatic` is required for the native bottom-tab accessory to
-        // collapse on scroll-down and for the last row to clear the tab bar.
-        // The native tab bar only listens to the top-most scroll view in the
-        // screen, so the filter bar must live inside the list as the header
-        // — putting it above the FlashList breaks scroll-driven collapse.
+        // FlatList renders its own UIScrollView directly (not wrapped behind
+        // FlashList's extra layout views), which iOS 26's tab-bar minimize
+        // behavior auto-detects. Channel groups stay in the dozens, so we
+        // don't need FlashList's recycler perf here.
         contentInsetAdjustmentBehavior="automatic"
-        onRefresh={handleRefresh}
-        refreshing={refreshing}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
         ListHeaderComponent={
           <SessionGroupsHeader segment={scope} onSegmentChange={setScope} />
         }
@@ -191,10 +191,6 @@ export default function ChannelDetail() {
 
 function keyExtractor(item: ListItem): string {
   return item.kind === "header" ? `h:${item.status}` : `r:${item.groupId}`;
-}
-
-function getItemType(item: ListItem): string {
-  return item.kind;
 }
 
 function ActiveEmpty({ scope }: { scope: ActiveSegment }) {
