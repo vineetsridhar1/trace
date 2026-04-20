@@ -31,6 +31,13 @@ The scaffold of the main session screen: the session header, the virtualized `Fl
 - [04 — Event Handlers in client-core](04-extract-events-and-mutations.md)
 - Install (if not already): `@shopify/flash-list`
 
+## Pre-work carried over from ticket 19
+
+Resolve these before wiring the stream — the shell landed in ticket 19 but left two unresolved choices that affect how the stream plugs in:
+
+- Overflow menu must open on tap. Either add `dropdownMenuMode` support to `IconButton` (preferred — downstream tickets will reuse the pattern) or render `ContextMenu` directly from `SessionGroupHeader`.
+- Pick the header strategy and apply it. Either move to native large-title on `sessions/_layout.tsx` (matching `(tabs)/channels/_layout.tsx`) and relocate `SessionTabStrip` to a pinned accessory, or render the custom Glass header above `FlashList` (outside the scroll view) and drive the solid-on-scroll state from `FlashList`'s scroll offset. In either direction, remove the group-name duplication between the native `Stack.Screen` title and the custom header.
+
 ## Completion requirements
 
 - [ ] Session stream renders a placeholder per event
