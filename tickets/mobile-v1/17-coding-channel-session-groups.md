@@ -22,6 +22,7 @@ The coding channel detail screen — the user's landing page when drilling into 
 - `FlashList` virtualized list of rows, sorted by `_sortTimestamp` desc.
 - Empty state per segment: "No active sessions in this channel" / "Nothing merged yet" / "Nothing archived".
 - Live updates: entity store updates from ambient subscription; list reacts via Zustand selector.
+- Pull-to-refresh should call `refreshOrgData(orgId)` from `apps/mobile/src/hooks/useHydrate.ts` (shared helper added in ticket 16) plus a focused `sessionGroups(channelId, archived)` refetch for the current segment.
 
 ## Dependencies
 

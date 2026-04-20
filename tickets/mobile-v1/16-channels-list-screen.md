@@ -26,13 +26,23 @@ Implement the Channels tab screen: lists all coding channels the user has access
 
 ## Completion requirements
 
-- [ ] Channels list renders from entity store
-- [ ] Only coding channels shown (text channels filtered)
-- [ ] Search filters in real time
-- [ ] Segmented "All / Mine" toggle works
-- [ ] Pull-to-refresh re-hydrates
-- [ ] Live channel creates/renames reflect without refresh
-- [ ] File <200 lines (use selector hook + FlashList item renderer component if needed)
+- [x] Channels list renders from entity store
+- [x] Only coding channels shown (text channels filtered)
+- [x] Search filters in real time
+- [x] Segmented "All / Mine" toggle works
+- [x] Pull-to-refresh re-hydrates
+- [x] Live channel creates/renames reflect without refresh
+- [x] File <200 lines (use selector hook + FlashList item renderer component if needed)
+
+## Implementation notes (landed)
+
+- **Stable-key selector pattern**: the top-level selector hook (`useCodingChannelKeys` in `apps/mobile/src/hooks/useCodingChannels.ts`) returns a flat `string[]` of keys shaped as `"channel:<id>"` or `"group:<id>"`. Returning primitive keys (instead of hydrated objects) keeps `useShallow` referentially stable across renders; earlier drafts that returned freshly-constructed objects tripped Zustand's `useSyncExternalStore` snapshot check and caused a render loop.
+- **Fine-grained row subscriptions**: `ChannelListRow` and `ChannelGroupHeader` each pull their own fields via `useEntityField`. A per-channel `useChannelActiveSessionCount(channelId)` selector derives the subtitle count. This matches CLAUDE.md's "components take IDs, use `useEntityField`" rule and means a channel rename re-renders only that row.
+- **Shared `refreshOrgData(orgId)`**: `apps/mobile/src/hooks/useHydrate.ts` now exports a standalone `refreshOrgData` helper that runs the same org + channelGroups + mySessions queries used at launch. `useHydrate` calls it once on mount; pull-to-refresh on this screen calls it again. Reuse it from any other tab that needs pull-to-refresh (home in 25, channel detail in 17) instead of re-declaring the queries.
+- **Segmented control in the list header**: the `SegmentedControl` sits inside `FlashList`'s `ListHeaderComponent`, not above the list. Rendering it outside the scroll view put it at `y=0` where it peeked through the translucent native large-title header around the Dynamic Island. Putting it in the header anchors it below the large title and lets it scroll with the list. Declarative `<Stack.Screen options={{ headerSearchBarOptions }} />` is used instead of imperative `navigation.setOptions` because expo-router's `useNavigation()` doesn't return a stable reference across renders.
+- **Empty-state variants**: in addition to the "no coding channels yet" state called out in the ticket, the screen renders distinct variants for "search returned nothing" (`magnifyingglass`) and "Mine filter returned nothing" (`person.crop.circle`) so the filter UX is legible when the user has narrowed the list.
+- **Plan clarification needed**: mobile-plan §10.3 says the search bar is both "pinned at top" and "pull-to-reveal (native iOS pattern)." The implementation currently uses `hideWhenScrolling: false` (pinned). Flip to the default (`true`) if we want the Mail/Settings-style pull-to-reveal behavior.
+- **Active-session count semantics**: the subtitle counts any session whose `sessionStatus !== "merged"` (so `in_progress`, `needs_input`, `in_review`, and `failed` all count). Narrow to just `in_progress` / `needs_input` if we want "actively working" rather than "not finished."
 
 ## How to test
 

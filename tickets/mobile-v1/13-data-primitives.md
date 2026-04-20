@@ -51,6 +51,7 @@ Build the primitives screens use to display data: rows, chips, status indicators
 - **Skeleton shimmer**: implemented as a translating highlight band (not a true gradient) to avoid adding `expo-linear-gradient`. Visual intent matches the plan; re-evaluate in the M6 polish pass if motion feels off on real devices.
 - **Pulse cancellation**: `Chip` and `StatusDot` both call `cancelAnimation(opacity)` and tween back to 1 when the pulsing state ends — no visible beat when a row transitions out of `inProgress`/`active`.
 - **Alpha helper**: `alpha(color, a)` lives in `theme/colors.ts` and is exported via `@/theme`. Handles 3- and 6-digit hex and passes through `rgba`/`hsl` unchanged; used by Chip for muted backgrounds derived from status colors.
+- **SegmentedControl iOS-26 pill clip (added during ticket 16)**: iOS 26's native `UISegmentedControl` draws a capsule selection indicator inside a less-rounded rectangular track, which reads as mismatched shapes. The primitive now wraps the native control in a clip `View` with `borderRadius: height/2` + `overflow: "hidden"` so the outer track matches the indicator. The primitive also fixes `height` at 32pt to make the pill radius deterministic.
 
 ## How to test
 

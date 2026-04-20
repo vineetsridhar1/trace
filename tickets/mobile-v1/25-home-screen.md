@@ -22,7 +22,7 @@ The Home tab — the user's daily driver. A single scrollable feed with three se
   - Sticky header with section title + count badge.
   - Liquid Glass pinned variant.
 - Empty state: all sections empty → centered `EmptyState` — icon `checkmark.seal`, title "All clear", subtitle "Sessions that need you will show up here."
-- Pull-to-refresh: refetches `mySessions`.
+- Pull-to-refresh: call `refreshOrgData(orgId)` from `apps/mobile/src/hooks/useHydrate.ts` (shared helper landed in ticket 16) so the refresh stays consistent across tabs.
 - Live updates: entity store updates from ambient `orgEvents` → list reorders via Reanimated layout animations on `FlashList` cells.
 
 ## Dependencies
