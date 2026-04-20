@@ -7,7 +7,13 @@ import {
   useEntityStore,
   type AuthState,
 } from "@trace/client-core";
-import { View } from "react-native";
+import {
+  LayoutAnimation,
+  Platform,
+  UIManager,
+  View,
+  type LayoutAnimationConfig,
+} from "react-native";
 import { EmptyState, IconButton, Screen } from "@/components/design-system";
 import { SessionGroupRow } from "@/components/channels/SessionGroupRow";
 import { SessionGroupsHeader } from "@/components/channels/SessionGroupsHeader";
@@ -31,6 +37,21 @@ const DEFAULT_COLLAPSED: ReadonlySet<SessionGroupSectionStatus> = new Set([
   "failed",
   "stopped",
 ]);
+
+// LayoutAnimation is opt-in on Android; iOS already has it enabled.
+if (
+  Platform.OS === "android"
+  && UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const SECTION_TOGGLE_ANIMATION: LayoutAnimationConfig = {
+  duration: 200,
+  create: { type: "easeOut", property: "opacity" },
+  update: { type: "easeInEaseOut" },
+  delete: { type: "easeIn", property: "opacity" },
+};
 
 export default function ChannelDetail() {
   const { id: channelId } = useLocalSearchParams<{ id: string }>();
@@ -81,6 +102,7 @@ export default function ChannelDetail() {
 
   const handleToggleSection = useCallback((status: SessionGroupSectionStatus) => {
     void haptic.light();
+    LayoutAnimation.configureNext(SECTION_TOGGLE_ANIMATION);
     setCollapsed((prev) => {
       const next = new Set(prev);
       if (next.has(status)) next.delete(status);

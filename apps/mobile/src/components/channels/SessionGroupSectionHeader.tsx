@@ -1,6 +1,12 @@
 import { memo, useCallback } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
+import Animated, {
+  useAnimatedStyle,
+  useDerivedValue,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
 import { Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
 import { statusIndicatorColor } from "@/lib/sessionGroupStatus";
@@ -35,6 +41,17 @@ export const SessionGroupSectionHeader = memo(function SessionGroupSectionHeader
     onToggle(status);
   }, [onToggle, status]);
 
+  // Rotate the chevron between collapsed (right, 0°) and expanded (down, 90°).
+  const rotation = useDerivedValue(() =>
+    withTiming(collapsed ? 0 : 90, {
+      duration: 180,
+      easing: Easing.out(Easing.cubic),
+    }),
+  );
+  const chevronStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -63,13 +80,15 @@ export const SessionGroupSectionHeader = memo(function SessionGroupSectionHeader
         {count}
       </Text>
       <View style={styles.spacer} />
-      <SymbolView
-        name={collapsed ? "chevron.right" : "chevron.down"}
-        size={11}
-        tintColor={theme.colors.dimForeground}
-        resizeMode="scaleAspectFit"
-        style={styles.chevron}
-      />
+      <Animated.View style={[styles.chevron, chevronStyle]}>
+        <SymbolView
+          name="chevron.right"
+          size={11}
+          tintColor={theme.colors.dimForeground}
+          resizeMode="scaleAspectFit"
+          style={styles.chevron}
+        />
+      </Animated.View>
     </Pressable>
   );
 });
