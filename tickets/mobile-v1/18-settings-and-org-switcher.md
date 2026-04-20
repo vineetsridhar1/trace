@@ -27,11 +27,11 @@ A minimal settings screen: user info, active org switcher (opens native sheet), 
 
 ## Completion requirements
 
-- [ ] Settings renders user info + active org + sign out
-- [ ] Org switcher sheet presents with native iOS detent
-- [ ] Switching org rehydrates the store (visible: channels change)
-- [ ] Sign out clears state and returns to sign-in
-- [ ] All files <200 lines
+- [x] Settings renders user info + active org + sign out
+- [x] Org switcher sheet presents with native iOS detent
+- [x] Switching org rehydrates the store (visible: channels change)
+- [x] Sign out clears state and returns to sign-in
+- [x] All files <200 lines
 
 ## How to test
 
