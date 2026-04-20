@@ -130,7 +130,7 @@ export default function ChannelDetail() {
         options={{
           title: channelName ?? "Channel",
           headerRight: () => (
-            <View style={{ marginLeft: 4 }}>
+            <View style={{ marginLeft: 2 }}>
               <IconButton
                 symbol="archivebox"
                 size="sm"
