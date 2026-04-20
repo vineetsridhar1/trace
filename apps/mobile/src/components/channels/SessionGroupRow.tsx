@@ -20,10 +20,12 @@ import { timeAgo } from "@/lib/time";
 
 export interface SessionGroupRowProps {
   groupId: string;
+  hideStatusChip?: boolean;
 }
 
 export const SessionGroupRow = memo(function SessionGroupRow({
   groupId,
+  hideStatusChip = false,
 }: SessionGroupRowProps) {
   const router = useRouter();
   const theme = useTheme();
@@ -134,7 +136,7 @@ export const SessionGroupRow = memo(function SessionGroupRow({
           ) : null}
         </View>
         <View style={styles.accessory}>
-          {chipVariant ? (
+          {!hideStatusChip && chipVariant ? (
             <Chip label={CHIP_LABELS[chipVariant]} variant={chipVariant} />
           ) : null}
           {timestamp ? (

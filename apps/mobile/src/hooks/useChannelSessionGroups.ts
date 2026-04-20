@@ -1,4 +1,5 @@
 import { useShallow } from "zustand/react/shallow";
+import { useStoreWithEqualityFn } from "zustand/traditional";
 import {
   useEntityStore,
   type EntityState,
@@ -8,6 +9,26 @@ import {
 
 export type ActiveSegment = "all" | "mine";
 export type MergedArchivedSegment = "merged" | "archived";
+
+export type SessionGroupSectionStatus =
+  | "needs_input"
+  | "in_review"
+  | "in_progress"
+  | "failed"
+  | "stopped";
+
+export interface SessionGroupSection {
+  status: SessionGroupSectionStatus;
+  ids: string[];
+}
+
+const SECTION_ORDER: SessionGroupSectionStatus[] = [
+  "needs_input",
+  "in_review",
+  "in_progress",
+  "failed",
+  "stopped",
+];
 
 interface ChannelSessionGroupCounts {
   active: number;
@@ -76,6 +97,82 @@ export function useActiveSessionGroupIds(
         .sort((a, b) => sortTimestamp(b) - sortTimestamp(a) || a.id.localeCompare(b.id));
       return visible.map((g) => g.id);
     }),
+  );
+}
+
+function sectionForStatus(
+  status: string | null | undefined,
+): SessionGroupSectionStatus {
+  if (status === "needs_input") return "needs_input";
+  if (status === "in_review") return "in_review";
+  if (status === "failed") return "failed";
+  if (status === "stopped") return "stopped";
+  return "in_progress";
+}
+
+function areSectionsEqual(
+  a: SessionGroupSection[],
+  b: SessionGroupSection[],
+): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const sa = a[i]!;
+    const sb = b[i]!;
+    if (sa.status !== sb.status) return false;
+    if (sa.ids.length !== sb.ids.length) return false;
+    for (let j = 0; j < sa.ids.length; j++) {
+      if (sa.ids[j] !== sb.ids[j]) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Active session groups bucketed by display status, in priority order
+ * (`needs_input` → `in_review` → `in_progress` → `failed` → `stopped`).
+ * Empty sections are omitted. Uses a custom equality fn so downstream
+ * consumers only re-render when membership actually changes.
+ */
+export function useChannelSessionGroupSections(
+  channelId: string,
+  scope: ActiveSegment,
+  currentUserId: string | null,
+): SessionGroupSection[] {
+  return useStoreWithEqualityFn(
+    useEntityStore,
+    (state: EntityState): SessionGroupSection[] => {
+      const buckets: Record<SessionGroupSectionStatus, SessionGroupEntity[]> = {
+        needs_input: [],
+        in_review: [],
+        in_progress: [],
+        failed: [],
+        stopped: [],
+      };
+
+      for (const group of Object.values(state.sessionGroups) as SessionGroupEntity[]) {
+        if (group.channel?.id !== channelId) continue;
+        if (!isActive(group)) continue;
+        if (scope === "mine") {
+          if (!currentUserId) continue;
+          if (ownerUserId(state, group.id) !== currentUserId) continue;
+        }
+        const section = sectionForStatus(group.status as string | null | undefined);
+        buckets[section].push(group);
+      }
+
+      const sections: SessionGroupSection[] = [];
+      for (const status of SECTION_ORDER) {
+        const groups = buckets[status];
+        if (groups.length === 0) continue;
+        groups.sort(
+          (a, b) => sortTimestamp(b) - sortTimestamp(a) || a.id.localeCompare(b.id),
+        );
+        sections.push({ status, ids: groups.map((g) => g.id) });
+      }
+
+      return sections;
+    },
+    areSectionsEqual,
   );
 }
 
