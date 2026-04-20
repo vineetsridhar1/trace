@@ -1,5 +1,9 @@
-import { memo } from "react";
+import { forwardRef, memo } from "react";
 import { StyleSheet, View } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  type SharedValue,
+} from "react-native-reanimated";
 import { useEntityField } from "@trace/client-core";
 import type { SessionGroupStatus, SessionStatus } from "@trace/gql";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
@@ -34,60 +38,73 @@ function statusLabel(
   }
 }
 
-export const SessionPlayerSelectedCard = memo(function SessionPlayerSelectedCard({
-  sessionId,
-}: { sessionId: string }) {
-  const theme = useTheme();
-  const name = useEntityField("sessions", sessionId, "name");
-  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus");
-  const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
-  const branch = useEntityField("sessions", sessionId, "branch");
-  const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt");
-  const updatedAt = useEntityField("sessions", sessionId, "updatedAt");
+interface SessionPlayerSelectedCardProps {
+  sessionId: string;
+  titleOpacity?: SharedValue<number>;
+}
 
-  const color = statusIndicatorColor(theme, sessionStatus);
-  const timeRaw = lastMessageAt ?? updatedAt;
-  const timeLabel = timeRaw ? timeAgo(timeRaw) : null;
-  const meta = [branch, timeLabel].filter(Boolean).join("  ·  ");
+export const SessionPlayerSelectedCard = memo(
+  forwardRef<View, SessionPlayerSelectedCardProps>(
+    function SessionPlayerSelectedCard({ sessionId, titleOpacity }, ref) {
+      const theme = useTheme();
+      const name = useEntityField("sessions", sessionId, "name");
+      const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus");
+      const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
+      const branch = useEntityField("sessions", sessionId, "branch");
+      const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt");
+      const updatedAt = useEntityField("sessions", sessionId, "updatedAt");
 
-  return (
-    <View style={styles.container}>
-      <View
-        style={[
-          styles.artwork,
-          {
-            backgroundColor: alpha(color, 0.14),
-            borderColor: alpha(color, 0.32),
-          },
-        ]}
-      >
-        <SessionStatusIndicator
-          status={sessionStatus}
-          agentStatus={agentStatus}
-          size={44}
-        />
-        <Text variant="headline" style={styles.artworkLabel}>
-          {statusLabel(sessionStatus, agentStatus)}
-        </Text>
-      </View>
+      const color = statusIndicatorColor(theme, sessionStatus);
+      const timeRaw = lastMessageAt ?? updatedAt;
+      const timeLabel = timeRaw ? timeAgo(timeRaw) : null;
+      const meta = [branch, timeLabel].filter(Boolean).join("  ·  ");
 
-      <Text variant="title2" numberOfLines={2} align="center" style={styles.name}>
-        {name ?? "Session"}
-      </Text>
-      {meta ? (
-        <Text
-          variant="footnote"
-          color="mutedForeground"
-          numberOfLines={1}
-          align="center"
-          style={styles.meta}
-        >
-          {meta}
-        </Text>
-      ) : null}
-    </View>
-  );
-});
+      const titleStyle = useAnimatedStyle(() => ({
+        opacity: titleOpacity ? titleOpacity.value : 1,
+      }));
+
+      return (
+        <View style={styles.container}>
+          <View
+            style={[
+              styles.artwork,
+              {
+                backgroundColor: alpha(color, 0.14),
+                borderColor: alpha(color, 0.32),
+              },
+            ]}
+          >
+            <SessionStatusIndicator
+              status={sessionStatus}
+              agentStatus={agentStatus}
+              size={44}
+            />
+            <Text variant="headline" style={styles.artworkLabel}>
+              {statusLabel(sessionStatus, agentStatus)}
+            </Text>
+          </View>
+
+          <Animated.View ref={ref} style={[styles.titleAnchor, titleStyle]}>
+            <Text variant="title2" numberOfLines={2} align="center" style={styles.name}>
+              {name ?? "Session"}
+            </Text>
+          </Animated.View>
+          {meta ? (
+            <Text
+              variant="footnote"
+              color="mutedForeground"
+              numberOfLines={1}
+              align="center"
+              style={styles.meta}
+            >
+              {meta}
+            </Text>
+          ) : null}
+        </View>
+      );
+    },
+  ),
+);
 
 const styles = StyleSheet.create({
   container: {
@@ -108,6 +125,10 @@ const styles = StyleSheet.create({
   },
   artworkLabel: {
     fontWeight: "600",
+  },
+  titleAnchor: {
+    alignSelf: "stretch",
+    alignItems: "center",
   },
   name: {
     marginBottom: 4,

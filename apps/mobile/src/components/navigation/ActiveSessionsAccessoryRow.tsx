@@ -1,4 +1,4 @@
-import { memo, useCallback } from "react";
+import { memo, useCallback, useRef } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { useEntityField } from "@trace/client-core";
@@ -24,9 +24,18 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
   const updatedAt = useEntityField("sessions", sessionId, "updatedAt");
   const groupBranch = useEntityField("sessionGroups", sessionGroupId ?? "", "branch");
 
+  const rowRef = useRef<View>(null);
+
   const onPress = useCallback(() => {
     haptic.light();
-    tryOpenSessionPlayer(sessionId);
+    const node = rowRef.current;
+    if (!node) {
+      tryOpenSessionPlayer(sessionId);
+      return;
+    }
+    node.measureInWindow((x, y, w, h) => {
+      tryOpenSessionPlayer(sessionId, { x, y, width: w, height: h });
+    });
   }, [sessionId]);
 
   if (!name) return null;
@@ -36,6 +45,7 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
 
   return (
     <Pressable
+      ref={rowRef}
       accessibilityRole="button"
       accessibilityLabel={`Open session player — ${name}`}
       style={[styles.row, { width }]}

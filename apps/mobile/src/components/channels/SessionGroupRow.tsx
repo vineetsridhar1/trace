@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useMemo, useRef } from "react";
 import { Pressable, StyleSheet, View, type NativeSyntheticEvent } from "react-native";
 import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
@@ -46,9 +46,21 @@ export const SessionGroupRow = memo(function SessionGroupRow({
     "_lastEventPreview",
   );
 
+  const rowRef = useRef<View>(null);
+
   const handlePress = useCallback(() => {
-    if (tryOpenSessionPlayer(latestSessionId)) return;
-    router.push(`/sessions/${groupId}`);
+    const node = rowRef.current;
+    const tryOpenAt = (anchor?: { x: number; y: number; width: number; height: number }) => {
+      if (tryOpenSessionPlayer(latestSessionId, anchor)) return;
+      router.push(`/sessions/${groupId}`);
+    };
+    if (!node) {
+      tryOpenAt();
+      return;
+    }
+    node.measureInWindow((x, y, w, h) => {
+      tryOpenAt({ x, y, width: w, height: h });
+    });
   }, [groupId, latestSessionId, router]);
 
   const handleArchive = useCallback(async () => {
@@ -102,6 +114,7 @@ export const SessionGroupRow = memo(function SessionGroupRow({
   return (
     <ContextMenu actions={actions} onPress={handleMenuPress} preview={null}>
       <Pressable
+        ref={rowRef}
         accessibilityRole="button"
         accessibilityLabel={name}
         onPress={handlePress}

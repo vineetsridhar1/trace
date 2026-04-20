@@ -1,5 +1,12 @@
 import { create } from "zustand";
 
+export interface SessionPlayerAnchor {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 /**
  * Minimal mobile UI state that backs the org-event UI bindings. Tracks
  * the currently focused channel/session/group so handlers can clear them
@@ -22,6 +29,8 @@ export interface MobileUIState {
   setActiveAccessoryIndex: (i: number) => void;
   sessionPlayerOpen: boolean;
   setSessionPlayerOpen: (open: boolean) => void;
+  sessionPlayerAnchor: SessionPlayerAnchor | null;
+  setSessionPlayerAnchor: (a: SessionPlayerAnchor | null) => void;
 
   channelDoneBadges: Record<string, boolean>;
   sessionDoneBadges: Record<string, boolean>;
@@ -44,6 +53,7 @@ const initial = {
   activeSessionGroupId: null as string | null,
   activeAccessoryIndex: 0,
   sessionPlayerOpen: false,
+  sessionPlayerAnchor: null as SessionPlayerAnchor | null,
   channelDoneBadges: {} as Record<string, boolean>,
   sessionDoneBadges: {} as Record<string, boolean>,
   sessionGroupDoneBadges: {} as Record<string, boolean>,
@@ -58,6 +68,7 @@ export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUISta
 
   setActiveAccessoryIndex: (i) => set({ activeAccessoryIndex: i }),
   setSessionPlayerOpen: (open) => set({ sessionPlayerOpen: open }),
+  setSessionPlayerAnchor: (a) => set({ sessionPlayerAnchor: a }),
 
   markChannelDone: (id) =>
     set((s) => ({ channelDoneBadges: { ...s.channelDoneBadges, [id]: true } })),

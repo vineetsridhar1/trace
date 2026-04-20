@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -8,11 +8,12 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useShallow } from "zustand/react/shallow";
-import { useEntityStore } from "@trace/client-core";
+import { useEntityField, useEntityStore } from "@trace/client-core";
 import Animated, {
   interpolate,
   runOnJS,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
   withSpring,
   withTiming,
@@ -30,24 +31,39 @@ import { SessionPlayerSelectedCard } from "./SessionPlayerSelectedCard";
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 800;
 
+interface Frame {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export function SessionPlayerOverlay() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const open = useMobileUIStore((s) => s.sessionPlayerOpen);
   const index = useMobileUIStore((s) => s.activeAccessoryIndex);
   const setIndex = useMobileUIStore((s) => s.setActiveAccessoryIndex);
+  const anchor = useMobileUIStore((s) => s.sessionPlayerAnchor);
   const ids = useEntityStore(useShallow(selectActiveSessionIds));
 
   const progress = useSharedValue(0);
   const dragY = useSharedValue(0);
 
+  const heroRef = useRef<View>(null);
+  const [heroFrame, setHeroFrame] = useState<Frame | null>(null);
+
   useEffect(() => {
     if (open) {
       dragY.value = 0;
       progress.value = withSpring(1, theme.motion.springs.gentle);
+      setHeroFrame(null);
     } else {
-      progress.value = withTiming(0, { duration: theme.motion.durations.base });
+      dragY.value = withTiming(0, { duration: theme.motion.durations.base });
+      progress.value = withTiming(0, {
+        duration: theme.motion.durations.base,
+      });
     }
   }, [
     open,
@@ -89,19 +105,85 @@ export function SessionPlayerOverlay() {
     });
 
   const backdropStyle = useAnimatedStyle(() => {
-    const dragFade = Math.max(0, 1 - dragY.value / (height * 0.7));
-    return { opacity: progress.value * 0.72 * dragFade };
+    const dragFade = Math.max(0, 1 - dragY.value / (screenHeight * 0.7));
+    return { opacity: progress.value * 0.86 * dragFade };
   });
 
   const panelStyle = useAnimatedStyle(() => {
-    const translate =
-      interpolate(progress.value, [0, 1], [height, 0]) + dragY.value;
-    return { transform: [{ translateY: translate }] };
+    const p = progress.value;
+    if (!anchor) {
+      return {
+        transform: [
+          {
+            translateY:
+              interpolate(p, [0, 1], [screenHeight, 0]) + dragY.value,
+          },
+        ],
+        borderRadius: 0,
+      };
+    }
+    const anchorCenterX = anchor.x + anchor.width / 2;
+    const anchorCenterY = anchor.y + anchor.height / 2;
+    const screenCenterX = screenWidth / 2;
+    const screenCenterY = screenHeight / 2;
+    return {
+      transform: [
+        {
+          translateX: interpolate(p, [0, 1], [anchorCenterX - screenCenterX, 0]),
+        },
+        {
+          translateY:
+            interpolate(p, [0, 1], [anchorCenterY - screenCenterY, 0]) +
+            dragY.value,
+        },
+        { scaleX: interpolate(p, [0, 1], [anchor.width / screenWidth, 1]) },
+        { scaleY: interpolate(p, [0, 1], [anchor.height / screenHeight, 1]) },
+      ],
+      borderRadius: interpolate(p, [0, 1], [14, 0]),
+    };
   });
 
-  if (ids.length === 0 && !open) return null;
+  const contentStyle = useAnimatedStyle(() => {
+    if (!anchor) return { opacity: 1 };
+    return {
+      opacity: interpolate(progress.value, [0.35, 0.95], [0, 1], "clamp"),
+    };
+  });
 
-  const panelTop = insets.top + 8;
+  // Real title fades in at the tail of the morph, once the flying title has
+  // landed on the hero frame. If there's no anchor to fly from, the title
+  // stays visible from the start.
+  const hasAnchor = !!anchor;
+  const hasHero = !!heroFrame;
+  const realTitleOpacity = useDerivedValue(() => {
+    if (!hasAnchor) return 1;
+    if (!hasHero) return 0;
+    return interpolate(progress.value, [0.9, 1], [0, 1], "clamp");
+  });
+
+  const flyingTitleStyle = useAnimatedStyle(() => {
+    if (!anchor || !heroFrame) return { opacity: 0 };
+    const p = progress.value;
+    return {
+      opacity: interpolate(p, [0, 0.9, 1], [1, 1, 0], "clamp"),
+      left: interpolate(p, [0, 1], [anchor.x, heroFrame.x]),
+      top: interpolate(p, [0, 1], [anchor.y, heroFrame.y]),
+      width: interpolate(p, [0, 1], [anchor.width, heroFrame.width]),
+      transform: [
+        {
+          scale: interpolate(p, [0, 1], [anchor.height / heroFrame.height, 1]),
+        },
+      ],
+    };
+  });
+
+  const measureHero = useCallback(() => {
+    heroRef.current?.measureInWindow((x, y, width, height) => {
+      setHeroFrame({ x, y, width, height });
+    });
+  }, []);
+
+  if (ids.length === 0 && !open) return null;
 
   return (
     <View
@@ -130,81 +212,118 @@ export function SessionPlayerOverlay() {
         style={[
           styles.panel,
           panelStyle,
-          {
-            top: panelTop,
-            backgroundColor: theme.colors.surfaceElevated,
-          },
+          { backgroundColor: theme.colors.background },
         ]}
       >
-        <GestureDetector gesture={pan}>
-          <View style={styles.dragRegion}>
-            <View style={styles.grabberRow}>
-              <View
-                style={[
-                  styles.grabber,
-                  {
-                    backgroundColor: alpha(theme.colors.foreground, 0.28),
-                  },
-                ]}
-              />
-            </View>
-            <View style={styles.closeRow}>
-              <IconButton
-                symbol="chevron.down"
-                size="sm"
-                color="mutedForeground"
-                accessibilityLabel="Close session player"
-                onPress={() => closeSessionPlayer()}
-              />
-              <View style={styles.closeRowSpacer} />
-            </View>
-            {sessionId ? (
-              <SessionPlayerSelectedCard sessionId={sessionId} />
-            ) : null}
-          </View>
-        </GestureDetector>
-
-        {queueIds.length > 0 ? (
-          <View style={styles.queue}>
-            <Text
-              variant="caption1"
-              color="mutedForeground"
-              style={styles.queueLabel}
-            >
-              UP NEXT
-            </Text>
-            <ScrollView
-              contentContainerStyle={{
-                paddingBottom: Math.max(insets.bottom, 24),
-              }}
-              showsVerticalScrollIndicator={false}
-            >
-              <View
-                style={[
-                  styles.queueCard,
-                  { backgroundColor: alpha(theme.colors.foreground, 0.04) },
-                ]}
-              >
-                {queueIds.map((id, i) => {
-                  const rowIndex = ids.indexOf(id);
-                  return (
-                    <SessionPlayerRow
-                      key={id}
-                      sessionId={id}
-                      showSeparator={i < queueIds.length - 1}
-                      onPress={() => {
-                        void haptic.selection();
-                        setIndex(rowIndex);
-                      }}
-                    />
-                  );
-                })}
+        <Animated.View style={[styles.panelContent, contentStyle]}>
+          <GestureDetector gesture={pan}>
+            <View style={[styles.dragRegion, { paddingTop: insets.top }]}>
+              <View style={styles.grabberRow}>
+                <View
+                  style={[
+                    styles.grabber,
+                    {
+                      backgroundColor: alpha(theme.colors.foreground, 0.28),
+                    },
+                  ]}
+                />
               </View>
-            </ScrollView>
-          </View>
-        ) : null}
+              <View style={styles.closeRow}>
+                <IconButton
+                  symbol="chevron.down"
+                  size="sm"
+                  color="mutedForeground"
+                  accessibilityLabel="Close session player"
+                  onPress={() => closeSessionPlayer()}
+                />
+                <View style={styles.closeRowSpacer} />
+              </View>
+              {sessionId ? (
+                <SessionPlayerSelectedCard
+                  ref={heroRef}
+                  sessionId={sessionId}
+                  titleOpacity={realTitleOpacity}
+                />
+              ) : null}
+            </View>
+          </GestureDetector>
+
+          {queueIds.length > 0 ? (
+            <View style={styles.queue}>
+              <Text
+                variant="caption1"
+                color="mutedForeground"
+                style={styles.queueLabel}
+              >
+                UP NEXT
+              </Text>
+              <ScrollView
+                contentContainerStyle={{
+                  paddingBottom: Math.max(insets.bottom, 24),
+                }}
+                showsVerticalScrollIndicator={false}
+              >
+                <View
+                  style={[
+                    styles.queueCard,
+                    { backgroundColor: alpha(theme.colors.foreground, 0.04) },
+                  ]}
+                >
+                  {queueIds.map((id, i) => {
+                    const rowIndex = ids.indexOf(id);
+                    return (
+                      <SessionPlayerRow
+                        key={id}
+                        sessionId={id}
+                        showSeparator={i < queueIds.length - 1}
+                        onPress={() => {
+                          void haptic.selection();
+                          setIndex(rowIndex);
+                        }}
+                      />
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            </View>
+          ) : null}
+        </Animated.View>
       </Animated.View>
+
+      {sessionId && anchor ? (
+        <FlyingTitle
+          sessionId={sessionId}
+          style={flyingTitleStyle}
+          onLayoutReady={measureHero}
+        />
+      ) : null}
     </View>
+  );
+}
+
+function FlyingTitle({
+  sessionId,
+  style,
+  onLayoutReady,
+}: {
+  sessionId: string;
+  style: ReturnType<typeof useAnimatedStyle>;
+  onLayoutReady: () => void;
+}) {
+  const name = useEntityField("sessions", sessionId, "name");
+
+  useEffect(() => {
+    // Wait one frame for the hero title to layout before measuring.
+    const raf = requestAnimationFrame(() => onLayoutReady());
+    return () => cancelAnimationFrame(raf);
+  }, [onLayoutReady, name]);
+
+  return (
+    <Animated.View style={[styles.flyingTitle, style]} pointerEvents="none">
+      <Text variant="title2" numberOfLines={2} align="center">
+        {name ?? "Session"}
+      </Text>
+    </Animated.View>
   );
 }
 
@@ -217,20 +336,17 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   panel: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    ...StyleSheet.absoluteFillObject,
     overflow: "hidden",
   },
-  dragRegion: {
-    paddingTop: 8,
+  panelContent: {
+    flex: 1,
   },
+  dragRegion: {},
   grabberRow: {
     alignItems: "center",
     justifyContent: "center",
+    paddingTop: 8,
   },
   grabber: {
     width: 36,
@@ -260,5 +376,9 @@ const styles = StyleSheet.create({
   queueCard: {
     borderRadius: 16,
     overflow: "hidden",
+  },
+  flyingTitle: {
+    position: "absolute",
+    alignItems: "center",
   },
 });
