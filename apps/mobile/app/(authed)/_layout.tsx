@@ -1,5 +1,14 @@
-import { useMemo } from "react";
-import { Redirect, Tabs } from "expo-router";
+import type { ComponentProps } from "react";
+import { Redirect, withLayoutContext } from "expo-router";
+import {
+  createNativeBottomTabNavigator,
+  type NativeBottomTabNavigationEventMap,
+  type NativeBottomTabNavigationOptions,
+} from "@bottom-tabs/react-navigation";
+import type {
+  ParamListBase,
+  TabNavigationState,
+} from "@react-navigation/native";
 import {
   useAuthStore,
   useEntityStore,
@@ -7,8 +16,16 @@ import {
   type EntityState,
 } from "@trace/client-core";
 import { useHydrate } from "@/hooks/useHydrate";
-import { TabBar, type TabDef } from "@/components/navigation/TabBar";
-import { useTheme } from "@/theme";
+
+const BottomTabNavigator = createNativeBottomTabNavigator().Navigator;
+const NativeTabs = withLayoutContext<
+  NativeBottomTabNavigationOptions,
+  typeof BottomTabNavigator,
+  TabNavigationState<ParamListBase>,
+  NativeBottomTabNavigationEventMap
+>(BottomTabNavigator);
+
+type ScreenProps = ComponentProps<typeof NativeTabs.Screen>;
 
 function selectNeedsInputCount(state: EntityState): number {
   let count = 0;
@@ -18,44 +35,46 @@ function selectNeedsInputCount(state: EntityState): number {
   return count;
 }
 
+const homeIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
+  sfSymbol: "bolt.horizontal",
+});
+const channelsIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
+  sfSymbol: "tray",
+});
+const settingsIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
+  sfSymbol: "gearshape",
+});
+const hidden: ScreenProps["options"] = { tabBarItemHidden: true };
+
 export default function AuthedLayout() {
-  const theme = useTheme();
   const user = useAuthStore((s: AuthState) => s.user);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   useHydrate(activeOrgId);
 
   const needsInputCount = useEntityStore(selectNeedsInputCount);
 
-  const tabs = useMemo<TabDef[]>(
-    () => [
-      { name: "(home)", label: "Home", symbol: "bolt.horizontal", badge: needsInputCount },
-      { name: "channels", label: "Channels", symbol: "tray" },
-      { name: "(settings)", label: "Settings", symbol: "gearshape" },
-    ],
-    [needsInputCount],
-  );
-
   if (!user) return <Redirect href="/(auth)/sign-in" />;
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        sceneStyle: { backgroundColor: theme.colors.background },
-        tabBarStyle: {
-          position: "absolute",
-          backgroundColor: "transparent",
-          borderTopWidth: 0,
-          elevation: 0,
-        },
-      }}
-      tabBar={(props) => <TabBar {...props} tabs={tabs} />}
-    >
-      <Tabs.Screen name="(home)" options={{ title: "Home" }} />
-      <Tabs.Screen name="channels" options={{ title: "Channels" }} />
-      <Tabs.Screen name="(settings)" options={{ title: "Settings" }} />
-      <Tabs.Screen name="sessions" options={{ href: null }} />
-      <Tabs.Screen name="sheets" options={{ href: null }} />
-    </Tabs>
+    <NativeTabs>
+      <NativeTabs.Screen
+        name="(home)"
+        options={{
+          title: "Home",
+          tabBarIcon: homeIcon,
+          tabBarBadge: needsInputCount > 0 ? String(needsInputCount) : undefined,
+        }}
+      />
+      <NativeTabs.Screen
+        name="channels"
+        options={{ title: "Channels", tabBarIcon: channelsIcon }}
+      />
+      <NativeTabs.Screen
+        name="(settings)"
+        options={{ title: "Settings", tabBarIcon: settingsIcon }}
+      />
+      <NativeTabs.Screen name="sessions" options={hidden} />
+      <NativeTabs.Screen name="sheets" options={hidden} />
+    </NativeTabs>
   );
 }

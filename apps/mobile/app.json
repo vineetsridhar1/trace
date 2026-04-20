@@ -31,7 +31,8 @@
       "expo-router",
       "expo-dev-client",
       "expo-secure-store",
-      "expo-notifications"
+      "expo-notifications",
+      "react-native-bottom-tabs"
     ],
     "experiments": {
       "typedRoutes": true
