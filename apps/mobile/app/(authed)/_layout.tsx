@@ -16,7 +16,7 @@ import {
   type EntityState,
 } from "@trace/client-core";
 import { useHydrate } from "@/hooks/useHydrate";
-import { FakeSessionAccessory } from "@/components/navigation/FakeSessionAccessory";
+import { ActiveSessionsAccessory } from "@/components/navigation/ActiveSessionsAccessory";
 
 const BottomTabNavigator = createNativeBottomTabNavigator().Navigator;
 const NativeTabs = withLayoutContext<
@@ -59,7 +59,7 @@ export default function AuthedLayout() {
   return (
     <NativeTabs
       minimizeBehavior="onScrollDown"
-      renderBottomAccessoryView={() => <FakeSessionAccessory />}
+      renderBottomAccessoryView={() => <ActiveSessionsAccessory />}
     >
       <NativeTabs.Screen
         name="(home)"

@@ -13,6 +13,14 @@ export interface MobileUIState {
   setActiveSessionId: (id: string | null) => void;
   setActiveSessionGroupId: (id: string | null) => void;
 
+  /**
+   * Shared pager index for the active-sessions accessory (§9.2.1) and the
+   * expanded Session Player (§10.8). Swiping in either surface updates this
+   * so the other stays in sync.
+   */
+  activeAccessoryIndex: number;
+  setActiveAccessoryIndex: (i: number) => void;
+
   channelDoneBadges: Record<string, boolean>;
   sessionDoneBadges: Record<string, boolean>;
   sessionGroupDoneBadges: Record<string, boolean>;
@@ -32,6 +40,7 @@ const initial = {
   activeChannelId: null as string | null,
   activeSessionId: null as string | null,
   activeSessionGroupId: null as string | null,
+  activeAccessoryIndex: 0,
   channelDoneBadges: {} as Record<string, boolean>,
   sessionDoneBadges: {} as Record<string, boolean>,
   sessionGroupDoneBadges: {} as Record<string, boolean>,
@@ -43,6 +52,8 @@ export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUISta
   setActiveChannelId: (id) => set({ activeChannelId: id }),
   setActiveSessionId: (id) => set({ activeSessionId: id }),
   setActiveSessionGroupId: (id) => set({ activeSessionGroupId: id }),
+
+  setActiveAccessoryIndex: (i) => set({ activeAccessoryIndex: i }),
 
   markChannelDone: (id) =>
     set((s) => ({ channelDoneBadges: { ...s.channelDoneBadges, [id]: true } })),
