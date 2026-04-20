@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
@@ -6,7 +5,6 @@ import {
   useEntityIds,
   type AuthState,
 } from "@trace/client-core";
-import { OrgSwitcherSheet } from "@/components/auth/OrgSwitcherSheet";
 
 export default function AuthedHome() {
   const router = useRouter();
@@ -15,7 +13,6 @@ export default function AuthedHome() {
   const memberships = useAuthStore((s: AuthState) => s.orgMemberships);
   const channelIds = useEntityIds("channels");
   const sessionIds = useEntityIds("sessions");
-  const [sheetOpen, setSheetOpen] = useState(false);
 
   const activeOrg = memberships.find((m) => m.organizationId === activeOrgId);
 
@@ -27,21 +24,12 @@ export default function AuthedHome() {
     >
       <Text style={styles.heading}>Trace Mobile</Text>
       {user && <Text style={styles.subtle}>Signed in as {user.name}</Text>}
-
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => setSheetOpen(true)}
-        style={({ pressed }) => [styles.orgPill, pressed && styles.pressed]}
-      >
-        <Text style={styles.orgPillText}>{activeOrg?.organization.name ?? "No org"}</Text>
-      </Pressable>
+      <Text style={styles.subtle}>{activeOrg?.organization.name ?? "No org"}</Text>
 
       <View style={styles.stats}>
         <Text style={styles.stat}>Channels: {channelIds.length}</Text>
         <Text style={styles.stat}>Sessions: {sessionIds.length}</Text>
       </View>
-
-      <OrgSwitcherSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} />
 
       {__DEV__ && (
         <Pressable
@@ -93,17 +81,6 @@ const styles = StyleSheet.create({
   subtle: {
     color: "#888",
     fontSize: 14,
-  },
-  orgPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: "#161616",
-  },
-  orgPillText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "500",
   },
   pressed: {
     opacity: 0.7,
