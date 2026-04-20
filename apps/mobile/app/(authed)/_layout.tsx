@@ -16,6 +16,7 @@ import {
   type EntityState,
 } from "@trace/client-core";
 import { useHydrate } from "@/hooks/useHydrate";
+import { FakeSessionAccessory } from "@/components/navigation/FakeSessionAccessory";
 
 const BottomTabNavigator = createNativeBottomTabNavigator().Navigator;
 const NativeTabs = withLayoutContext<
@@ -56,7 +57,7 @@ export default function AuthedLayout() {
   if (!user) return <Redirect href="/(auth)/sign-in" />;
 
   return (
-    <NativeTabs>
+    <NativeTabs renderBottomAccessoryView={() => <FakeSessionAccessory />}>
       <NativeTabs.Screen
         name="(home)"
         options={{
