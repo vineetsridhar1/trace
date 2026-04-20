@@ -10,45 +10,64 @@ import type { Channel, ChannelGroup } from "@trace/gql";
 
 export type ChannelFilter = "all" | "mine";
 
-export type ChannelListItem =
-  | { kind: "group"; key: string; groupName: string }
-  | { kind: "channel"; key: string; channelId: string; name: string; subtitle: string };
+/**
+ * A stable, primitive item-key for the channels list. `"channel:<id>"` for
+ * channel rows, `"group:<id>"` for group headers. Primitives keep `useShallow`
+ * referentially stable across renders, avoiding a React re-render loop.
+ */
+export type ChannelListItemKey = string;
 
-export interface UseCodingChannelsArgs {
+export interface UseCodingChannelKeysArgs {
   filter: ChannelFilter;
   search: string;
 }
 
-/**
- * Derives the Channels tab list items from the entity store: applies the
- * coding-only filter, the "All / Mine" toggle, and the search term, then
- * flattens groups + channels into a single FlashList-friendly array.
- */
-export function useCodingChannels({ filter, search }: UseCodingChannelsArgs): ChannelListItem[] {
+export function useCodingChannelKeys({
+  filter,
+  search,
+}: UseCodingChannelKeysArgs): ChannelListItemKey[] {
   const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
   return useEntityStore(
-    useShallow((state: EntityState) => buildItems(state, currentUserId, filter, search)),
+    useShallow((state: EntityState) => buildKeys(state, currentUserId, filter, search)),
   );
 }
 
-function buildItems(
+/** Derive how many non-merged sessions are attached to a single channel. */
+export function useChannelActiveSessionCount(channelId: string): number {
+  return useEntityStore((state: EntityState) => {
+    let count = 0;
+    for (const session of Object.values(state.sessions) as SessionEntity[]) {
+      if (session.channel?.id === channelId && session.sessionStatus !== "merged") {
+        count += 1;
+      }
+    }
+    return count;
+  });
+}
+
+export function parseItemKey(
+  key: ChannelListItemKey,
+): { kind: "channel" | "group"; id: string } {
+  const colon = key.indexOf(":");
+  const kind = key.slice(0, colon) as "channel" | "group";
+  const id = key.slice(colon + 1);
+  return { kind, id };
+}
+
+function buildKeys(
   state: EntityState,
   currentUserId: string | undefined,
   filter: ChannelFilter,
   search: string,
-): ChannelListItem[] {
+): ChannelListItemKey[] {
   const coding = (Object.values(state.channels) as Channel[]).filter((c) => c.type === "coding");
 
-  const activeCountByChannel = new Map<string, number>();
   const mineChannelIds = new Set<string>();
-  for (const s of Object.values(state.sessions) as SessionEntity[]) {
-    const channelId = s.channel?.id;
-    if (!channelId) continue;
-    if (s.sessionStatus !== "merged") {
-      activeCountByChannel.set(channelId, (activeCountByChannel.get(channelId) ?? 0) + 1);
-    }
-    if (currentUserId && s.createdBy?.id === currentUserId) {
-      mineChannelIds.add(channelId);
+  if (filter === "mine" && currentUserId) {
+    for (const s of Object.values(state.sessions) as SessionEntity[]) {
+      if (s.channel?.id && s.createdBy?.id === currentUserId) {
+        mineChannelIds.add(s.channel.id);
+      }
     }
   }
 
@@ -61,7 +80,7 @@ function buildItems(
   const groups = Object.values(state.channelGroups) as ChannelGroup[];
   const hasAnyGroupAssignments = visible.some((c) => c.groupId);
   if (groups.length === 0 || !hasAnyGroupAssignments) {
-    return visible.map((c) => toChannelItem(c, activeCountByChannel.get(c.id) ?? 0));
+    return visible.map((c) => `channel:${c.id}`);
   }
 
   const byGroup = new Map<string | null, Channel[]>();
@@ -72,9 +91,9 @@ function buildItems(
     byGroup.set(key, arr);
   }
 
-  const items: ChannelListItem[] = [];
+  const keys: ChannelListItemKey[] = [];
   const ungrouped = byGroup.get(null) ?? [];
-  for (const c of ungrouped) items.push(toChannelItem(c, activeCountByChannel.get(c.id) ?? 0));
+  for (const c of ungrouped) keys.push(`channel:${c.id}`);
 
   const sortedGroups = [...groups].sort(
     (a, b) => (a.position ?? 0) - (b.position ?? 0) || a.name.localeCompare(b.name),
@@ -82,24 +101,8 @@ function buildItems(
   for (const g of sortedGroups) {
     const arr = byGroup.get(g.id);
     if (!arr || arr.length === 0) continue;
-    items.push({ kind: "group", key: `group:${g.id}`, groupName: g.name });
-    for (const c of arr) items.push(toChannelItem(c, activeCountByChannel.get(c.id) ?? 0));
+    keys.push(`group:${g.id}`);
+    for (const c of arr) keys.push(`channel:${c.id}`);
   }
-  return items;
-}
-
-function toChannelItem(channel: Channel, activeCount: number): ChannelListItem {
-  return {
-    kind: "channel",
-    key: `channel:${channel.id}`,
-    channelId: channel.id,
-    name: channel.name,
-    subtitle: formatSubtitle(activeCount),
-  };
-}
-
-function formatSubtitle(activeCount: number): string {
-  if (activeCount === 0) return "No active sessions";
-  if (activeCount === 1) return "1 active session";
-  return `${activeCount} active sessions`;
+  return keys;
 }

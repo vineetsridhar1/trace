@@ -1,14 +1,16 @@
-import { useCallback, useLayoutEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { useNavigation } from "expo-router";
+import { Stack } from "expo-router";
 import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, type AuthState } from "@trace/client-core";
-import { EmptyState, Screen, SegmentedControl, Text } from "@/components/design-system";
+import { EmptyState, Screen, SegmentedControl } from "@/components/design-system";
 import { ChannelListRow } from "@/components/channels/ChannelListRow";
+import { ChannelGroupHeader } from "@/components/channels/ChannelGroupHeader";
 import {
-  useCodingChannels,
+  parseItemKey,
+  useCodingChannelKeys,
   type ChannelFilter,
-  type ChannelListItem,
+  type ChannelListItemKey,
 } from "@/hooks/useCodingChannels";
 import { refreshOrgData } from "@/hooks/useHydrate";
 import { useTheme } from "@/theme";
@@ -17,7 +19,6 @@ const SEGMENTS = ["All", "Mine"] as const;
 
 export default function ChannelsIndex() {
   const theme = useTheme();
-  const navigation = useNavigation();
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
 
   const [segmentIndex, setSegmentIndex] = useState(0);
@@ -25,18 +26,17 @@ export default function ChannelsIndex() {
   const [refreshing, setRefreshing] = useState(false);
 
   const filter: ChannelFilter = segmentIndex === 1 ? "mine" : "all";
-  const items = useCodingChannels({ filter, search });
+  const keys = useCodingChannelKeys({ filter, search });
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerSearchBarOptions: {
-        placeholder: "Search channels",
-        hideWhenScrolling: false,
-        onChangeText: (e: { nativeEvent: { text: string } }) => setSearch(e.nativeEvent.text),
-        onCancelButtonPress: () => setSearch(""),
-      },
-    });
-  }, [navigation]);
+  const searchBarOptions = useMemo(
+    () => ({
+      placeholder: "Search channels",
+      hideWhenScrolling: false,
+      onChangeText: (e: { nativeEvent: { text: string } }) => setSearch(e.nativeEvent.text),
+      onCancelButtonPress: () => setSearch(""),
+    }),
+    [],
+  );
 
   const handleRefresh = useCallback(async () => {
     if (!activeOrgId) return;
@@ -48,44 +48,9 @@ export default function ChannelsIndex() {
     }
   }, [activeOrgId]);
 
-  const renderItem = useCallback(
-    ({ item }: { item: ChannelListItem }) => {
-      if (item.kind === "group") {
-        return (
-          <View
-            style={[
-              styles.groupHeader,
-              {
-                paddingHorizontal: theme.spacing.lg,
-                paddingTop: theme.spacing.lg,
-                paddingBottom: theme.spacing.xs,
-                backgroundColor: theme.colors.background,
-              },
-            ]}
-          >
-            <Text
-              variant="footnote"
-              color="mutedForeground"
-              style={styles.groupHeaderText}
-            >
-              {item.groupName.toUpperCase()}
-            </Text>
-          </View>
-        );
-      }
-      return (
-        <ChannelListRow
-          channelId={item.channelId}
-          name={item.name}
-          subtitle={item.subtitle}
-        />
-      );
-    },
-    [theme],
-  );
-
   return (
     <Screen edges={["left", "right"]}>
+      <Stack.Screen options={{ headerSearchBarOptions: searchBarOptions }} />
       <View
         style={[
           styles.segmentContainer,
@@ -103,7 +68,7 @@ export default function ChannelsIndex() {
         />
       </View>
       <FlashList
-        data={items}
+        data={keys}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         getItemType={getItemType}
@@ -116,12 +81,18 @@ export default function ChannelsIndex() {
   );
 }
 
-function keyExtractor(item: ChannelListItem): string {
-  return item.key;
+function renderItem({ item }: { item: ChannelListItemKey }) {
+  const { kind, id } = parseItemKey(item);
+  if (kind === "group") return <ChannelGroupHeader groupId={id} />;
+  return <ChannelListRow channelId={id} />;
 }
 
-function getItemType(item: ChannelListItem): string {
-  return item.kind;
+function keyExtractor(item: ChannelListItemKey): string {
+  return item;
+}
+
+function getItemType(item: ChannelListItemKey): string {
+  return item.startsWith("group:") ? "group" : "channel";
 }
 
 function ChannelsEmpty({ filter, search }: { filter: ChannelFilter; search: string }) {
@@ -155,11 +126,5 @@ function ChannelsEmpty({ filter, search }: { filter: ChannelFilter; search: stri
 const styles = StyleSheet.create({
   segmentContainer: {
     width: "100%",
-  },
-  groupHeader: {
-    width: "100%",
-  },
-  groupHeaderText: {
-    letterSpacing: 0.5,
   },
 });
