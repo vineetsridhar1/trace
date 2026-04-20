@@ -17,18 +17,22 @@ import { haptic } from "@/lib/haptics";
 import { useMobileUIStore } from "@/stores/ui";
 import { useTheme, type Theme } from "@/theme";
 
+const EMPTY_SESSIONS: readonly SessionEntity[] = Object.freeze([]);
+
 /**
  * Active = agent is working (`active`) or the session is waiting on the user
  * (`needs_input`). These are the states where a live view is meaningful.
+ * Wrap callers in `useShallow` so identical-content arrays don't re-render.
  */
-export function selectActiveSessions(state: EntityState): SessionEntity[] {
-  const out: SessionEntity[] = [];
+export function selectActiveSessions(state: EntityState): readonly SessionEntity[] {
+  let out: SessionEntity[] | null = null;
   for (const id in state.sessions) {
     const s = state.sessions[id];
     if (s.agentStatus === "active" || s.sessionStatus === "needs_input") {
-      out.push(s);
+      (out ??= []).push(s);
     }
   }
+  if (!out) return EMPTY_SESSIONS;
   out.sort((a, b) => {
     const at = a._sortTimestamp ?? "";
     const bt = b._sortTimestamp ?? "";
@@ -48,6 +52,9 @@ export function ActiveSessionsAccessory() {
   const setIndex = useMobileUIStore((s) => s.setActiveAccessoryIndex);
   const theme = useTheme();
   const listRef = useRef<FlatList<SessionEntity>>(null);
+  // "self" = our own onMomentumScrollEnd pushed the index, so the sync effect
+  // should skip scrolling (the list is already there). "external" = 15b swipe.
+  const indexSource = useRef<"self" | "external">("external");
   const [width, setWidth] = useState(0);
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
@@ -69,6 +76,10 @@ export function ActiveSessionsAccessory() {
   // Keep the scroll position in sync when the index is driven from elsewhere
   // (e.g. horizontal swipe inside the expanded Session Player in 15b).
   useEffect(() => {
+    if (indexSource.current === "self") {
+      indexSource.current = "external";
+      return;
+    }
     if (width === 0 || sessions.length === 0) return;
     listRef.current?.scrollToOffset({ offset: index * width, animated: true });
   }, [index, width, sessions.length]);
@@ -78,6 +89,7 @@ export function ActiveSessionsAccessory() {
       if (width === 0) return;
       const next = Math.round(e.nativeEvent.contentOffset.x / width);
       if (next !== index) {
+        indexSource.current = "self";
         setIndex(next);
         haptic.selection();
       }
@@ -119,11 +131,7 @@ function SessionRow({
   session,
   width,
   theme,
-}: {
-  session: SessionEntity;
-  width: number;
-  theme: Theme;
-}) {
+}: { session: SessionEntity; width: number; theme: Theme }) {
   const tool = session.tool === "claude_code" ? "Claude" : session.tool === "codex" ? "Codex" : "Agent";
   const status = session.sessionStatus === "needs_input" ? "needs input" : session.agentStatus;
   return (
