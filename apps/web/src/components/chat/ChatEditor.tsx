@@ -52,7 +52,7 @@ interface ChatEditorProps {
   slashCommands?: SlashCommandItem[];
   onSlashCommandSelect?: (cmd: SlashCommandItem) => void;
   onShiftTab?: () => void;
-  onChange?: (text: string) => void;
+  onChange?: (text: string, html: string) => void;
   onImagePaste?: (files: File[]) => void;
   hasAttachments?: boolean;
 }
@@ -127,7 +127,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
       editor.setText("");
     }
     setValue("");
-    onChangeRef.current?.("");
+    onChangeRef.current?.("", "");
   }, []);
 
   const isMentionMenuOpen = useCallback(() => {
@@ -156,8 +156,9 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
       editor.setSelection(cursorIndex + replacement.length, 0, "silent");
     }
 
-    setValue(editor.root.innerHTML);
-    onChangeRef.current?.(editor.getText().replace(/\n$/, ""));
+    const nextHtml = editor.root.innerHTML;
+    setValue(nextHtml);
+    onChangeRef.current?.(editor.getText().replace(/\n$/, ""), nextHtml);
   }, []);
 
   const modules = useMemo(
@@ -311,7 +312,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
       if (onChangeRef.current) {
         const editor = quillRef.current?.getEditor();
         const text = editor?.getText().replace(/\n$/, "") ?? "";
-        onChangeRef.current(text);
+        onChangeRef.current(text, content);
       }
     },
     [],
