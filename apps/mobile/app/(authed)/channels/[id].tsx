@@ -80,10 +80,10 @@ export default function ChannelDetail() {
               style={headerButtonStyles.container}
             >
               <SymbolView
-                name="archivebox"
-                size={20}
+                name="archivebox.fill"
+                size={18}
                 tintColor={theme.colors.foreground}
-                resizeMode="scaleAspectFit"
+                weight="medium"
                 style={headerButtonStyles.icon}
               />
             </Pressable>
@@ -122,21 +122,15 @@ function keyExtractor(item: string): string {
 }
 
 const headerButtonStyles = StyleSheet.create({
-  // Let the Pressable size to its content (icon + symmetric padding) instead
-  // of fixing 32x32 — iOS 26's auto glass chrome wraps the Pressable, so a
-  // larger Pressable than the icon biases the chrome's vertical centerline.
   container: {
     paddingHorizontal: 6,
     paddingVertical: 6,
     alignItems: "center",
     justifyContent: "center",
   },
-  // SF Symbol `archivebox` has more whitespace above the lid than below the
-  // box, so the geometric center sits visually high. Nudge down ~1pt.
   icon: {
-    width: 20,
-    height: 20,
-    marginTop: 1,
+    width: 18,
+    height: 18,
   },
 });
 
