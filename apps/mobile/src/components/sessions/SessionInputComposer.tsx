@@ -17,7 +17,7 @@ import {
 } from "@trace/client-core";
 import type { CodingTool } from "@trace/gql";
 import { getDefaultModel, getModelLabel, getModelsForTool } from "@trace/shared";
-import { Glass, Text } from "@/components/design-system";
+import { Glass, GlassGroup, Text } from "@/components/design-system";
 import { MODE_CYCLE, useComposerModePalette } from "@/hooks/useComposerModePalette";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
 import { haptic } from "@/lib/haptics";
@@ -127,16 +127,16 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const actionClusterAnimatedStyle = useAnimatedStyle(() => ({
     width: ACTION_SIZE + (ACTION_SIZE + ACTION_GAP) * stopProgress.value,
   }));
-  const stopActionAnimatedStyle = useAnimatedStyle(() => {
+  const stopSlotAnimatedStyle = useAnimatedStyle(() => {
     const p = stopProgress.value;
     const e = stopEmerge.value;
-    // At p=0, translateX = -(ACTION_SIZE + GAP) pins the stop button
-    // exactly on top of the send button. As p→1 it slides into its own slot.
-    const translateX = -(ACTION_SIZE + ACTION_GAP) * (1 - p);
-    const scale = 0.35 + 0.65 * e;
+    // Animate the layout `left` (not translateX) so GlassContainer can
+    // observe the frame change and update the merge bridge between the
+    // two glass views each frame.
     return {
+      left: (ACTION_SIZE + ACTION_GAP) * p,
       opacity: Math.min(1, p * 1.6),
-      transform: [{ translateX }, { scale }],
+      transform: [{ scale: 0.35 + 0.65 * e }],
     };
   });
   const sendPulseAnimatedStyle = useAnimatedStyle(() => {
@@ -343,8 +343,8 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
           </Glass>
 
           <Animated.View style={[styles.actionCluster, actionClusterAnimatedStyle]}>
-            <View style={styles.actionGlassContainer}>
-              <Animated.View style={sendPulseAnimatedStyle}>
+            <GlassGroup style={styles.actionGlassContainer} spacing={ACTION_SIZE}>
+              <Animated.View style={[styles.sendSlot, sendPulseAnimatedStyle]}>
                 <Pressable
                   onPress={handleSend}
                   disabled={!canSubmit}
@@ -372,7 +372,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
 
               <Animated.View
                 pointerEvents={isActive ? "auto" : "none"}
-                style={[styles.stopActionSlot, stopActionAnimatedStyle]}
+                style={[styles.stopSlot, stopSlotAnimatedStyle]}
               >
                 <Pressable
                   onPress={handleStop}
@@ -399,7 +399,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
                   )}
                 </Pressable>
               </Animated.View>
-            </View>
+            </GlassGroup>
           </Animated.View>
         </View>
 
@@ -493,8 +493,6 @@ const styles = StyleSheet.create({
   actionGlassContainer: {
     width: ACTION_CLUSTER_WIDTH,
     height: ACTION_SIZE,
-    flexDirection: "row",
-    gap: ACTION_GAP,
   },
   actionPressable: {
     width: ACTION_SIZE,
@@ -510,7 +508,16 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   sendIcon: { width: 16, height: 16 },
-  stopActionSlot: {
+  sendSlot: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    width: ACTION_SIZE,
+    height: ACTION_SIZE,
+  },
+  stopSlot: {
+    position: "absolute",
+    top: 0,
     width: ACTION_SIZE,
     height: ACTION_SIZE,
   },
