@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Stack } from "expo-router";
 import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
-import { EmptyState } from "@/components/design-system";
+import { EmptyState, Screen } from "@/components/design-system";
 import { ChannelListRow } from "@/components/channels/ChannelListRow";
 import { ChannelGroupHeader } from "@/components/channels/ChannelGroupHeader";
 import {
@@ -49,7 +49,7 @@ export default function ChannelsIndex() {
   }, [activeOrgId, logout]);
 
   return (
-    <>
+    <Screen edges={["left", "right"]}>
       <Stack.Screen options={{ headerSearchBarOptions: searchBarOptions }} />
       <FlashList
         data={keys}
@@ -61,7 +61,7 @@ export default function ChannelsIndex() {
         refreshing={refreshing}
         ListEmptyComponent={<ChannelsEmpty search={search} />}
       />
-    </>
+    </Screen>
   );
 }
 
