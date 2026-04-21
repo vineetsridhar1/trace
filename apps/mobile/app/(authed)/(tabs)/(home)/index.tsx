@@ -2,7 +2,8 @@ import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
-import { EmptyState, Screen } from "@/components/design-system";
+import { EmptyState } from "@/components/design-system";
+import { useTheme } from "@/theme";
 import { HomeSectionHeader } from "@/components/home/HomeSectionHeader";
 import { HomeSessionRow } from "@/components/home/HomeSessionRow";
 import { useHomeSections, type HomeSectionKind } from "@/hooks/useHomeSections";
@@ -14,6 +15,7 @@ type HomeListItem =
   | { kind: "row"; sessionId: string };
 
 export default function AuthedHome() {
+  const theme = useTheme();
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
   const logout = useAuthStore((s: AuthState) => s.logout);
@@ -47,18 +49,17 @@ export default function AuthedHome() {
   }, [activeOrgId, logout]);
 
   return (
-    <Screen edges={["left", "right"]}>
-      <FlashList
-        data={items}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        getItemType={getItemType}
-        contentInsetAdjustmentBehavior="automatic"
-        onRefresh={handleRefresh}
-        refreshing={refreshing}
-        ListEmptyComponent={<HomeEmpty />}
-      />
-    </Screen>
+    <FlashList
+      data={items}
+      renderItem={renderItem}
+      keyExtractor={keyExtractor}
+      getItemType={getItemType}
+      contentInsetAdjustmentBehavior="automatic"
+      onRefresh={handleRefresh}
+      refreshing={refreshing}
+      ListEmptyComponent={<HomeEmpty />}
+      style={{ flex: 1, backgroundColor: theme.colors.background }}
+    />
   );
 }
 
