@@ -1,4 +1,5 @@
-import { Check } from "lucide-react";
+import { useState } from "react";
+import { Check, ChevronDown } from "lucide-react";
 import type { Event } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
 
@@ -45,14 +46,25 @@ export function extractLatestTodos(
 }
 
 export function StickyTodoList({ todos }: { todos: TodoItem[] }) {
+  const [collapsed, setCollapsed] = useState(false);
   const hasActive = todos.some((t) => t.status !== "completed");
   if (!hasActive) return null;
 
   return (
     <div className="sticky-todo-list border-t border-border bg-background px-4 py-2.5">
-      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        Tasks
-      </div>
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        className="mb-1.5 flex w-full items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+        aria-expanded={!collapsed}
+      >
+        <span>Tasks</span>
+        <ChevronDown
+          className={`h-3 w-3 transition-transform ${collapsed ? "-rotate-90" : ""}`}
+          aria-hidden="true"
+        />
+      </button>
+      {collapsed ? null : (
       <ul className="space-y-1">
         {todos.map((t, i) => (
           <li key={i} className="flex items-center gap-2 text-xs">
@@ -98,6 +110,7 @@ export function StickyTodoList({ todos }: { todos: TodoItem[] }) {
           </li>
         ))}
       </ul>
+      )}
     </div>
   );
 }
