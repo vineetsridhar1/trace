@@ -21,7 +21,9 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  type AnimatedProps,
 } from "react-native-reanimated";
+import type { ComponentProps } from "react";
 import { Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { alpha, useTheme } from "@/theme";
@@ -37,6 +39,8 @@ export interface ComposerMorphPillItem {
   onPress?: () => void;
 }
 
+type GlassAnimatedProps = AnimatedProps<ComponentProps<typeof GlassView>>;
+
 interface ComposerMorphPillProps {
   label: string;
   accessibilityLabel: string;
@@ -46,6 +50,8 @@ interface ComposerMorphPillProps {
   align?: "left" | "right";
   minWidth?: number;
   style?: StyleProp<ViewStyle>;
+  /** Animated glass tint props shared with the composer mode palette. */
+  tintAnimatedProps?: GlassAnimatedProps;
 }
 
 const PILL_HEIGHT = 38;
@@ -64,6 +70,7 @@ export function ComposerMorphPill({
   minWidth = 92,
   style,
   systemIcon,
+  tintAnimatedProps,
 }: ComposerMorphPillProps) {
   if (!isLiquidGlassAvailable()) {
     return (
@@ -89,6 +96,7 @@ export function ComposerMorphPill({
       minWidth={minWidth}
       style={style}
       systemIcon={systemIcon}
+      tintAnimatedProps={tintAnimatedProps}
     />
   );
 }
@@ -102,8 +110,9 @@ function MorphingPill({
   minWidth,
   style,
   systemIcon,
+  tintAnimatedProps,
 }: Required<Pick<ComposerMorphPillProps, "accessibilityLabel" | "align" | "items" | "label" | "minWidth">> &
-  Pick<ComposerMorphPillProps, "disabled" | "style" | "systemIcon">) {
+  Pick<ComposerMorphPillProps, "disabled" | "style" | "systemIcon" | "tintAnimatedProps">) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -183,6 +192,7 @@ function MorphingPill({
           isInteractive
           glassEffectStyle="regular"
           colorScheme={theme.scheme === "dark" ? "dark" : "light"}
+          animatedProps={tintAnimatedProps}
           style={[styles.glass, anchorEdge, glassStyle]}
         >
           {mounted ? (
