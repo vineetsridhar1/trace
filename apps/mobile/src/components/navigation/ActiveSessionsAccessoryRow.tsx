@@ -5,7 +5,7 @@ import { useEntityField } from "@trace/client-core";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { Text } from "@/components/design-system/Text";
 import { haptic } from "@/lib/haptics";
-import { tryOpenSessionPlayer } from "@/lib/sessionPlayer";
+import { prefetchSessionPlayer, tryOpenSessionPlayer } from "@/lib/sessionPlayer";
 import { timeAgo } from "@/lib/time";
 import { type Theme } from "@/theme";
 
@@ -29,6 +29,12 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
     tryOpenSessionPlayer(sessionId);
   }, [sessionId]);
 
+  // Prefetch group + session detail on touch-down so the overlay has data
+  // in Zustand before the spring lands. See SessionGroupRow for rationale.
+  const onPressIn = useCallback(() => {
+    prefetchSessionPlayer(sessionId);
+  }, [sessionId]);
+
   if (!name) return null;
   const branch = sessionBranch ?? groupBranch ?? null;
   const lastSentAt = lastMessageAt ?? lastUserMessageAt ?? updatedAt ?? null;
@@ -40,6 +46,7 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
       accessibilityLabel={`Open session player — ${name}`}
       style={[styles.row, { width }]}
       onPress={onPress}
+      onPressIn={onPressIn}
     >
       <View style={styles.leading}>
         <SessionStatusIndicator status={sessionStatus} agentStatus={agentStatus} size={10} />
