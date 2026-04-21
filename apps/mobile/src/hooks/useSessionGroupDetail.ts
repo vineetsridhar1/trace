@@ -118,7 +118,7 @@ function areIdsEqual(a: string[], b: string[]): boolean {
   return true;
 }
 
-export async function fetchSessionGroupDetail(groupId: string): Promise<void> {
+async function doFetchSessionGroupDetail(groupId: string): Promise<void> {
   const result = await getClient()
     .query(SESSION_GROUP_DETAIL_QUERY, { id: groupId })
     .toPromise();
@@ -152,13 +152,38 @@ export async function fetchSessionGroupDetail(groupId: string): Promise<void> {
   }
 }
 
+/**
+ * In-flight requests keyed by groupId. Callers that fire while a fetch is
+ * already pending receive the same promise, so prefetch-on-press and
+ * overlay-mount hooks coalesce into a single network round-trip regardless
+ * of timing.
+ */
+const inflightGroupFetches = new Map<string, Promise<void>>();
+
+export function fetchSessionGroupDetail(groupId: string): Promise<void> {
+  const existing = inflightGroupFetches.get(groupId);
+  if (existing) return existing;
+  const promise = doFetchSessionGroupDetail(groupId).finally(() => {
+    inflightGroupFetches.delete(groupId);
+  });
+  inflightGroupFetches.set(groupId, promise);
+  return promise;
+}
+
 export function useEnsureSessionGroupDetail(groupId: string | undefined): boolean {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!groupId) return;
+    // Skip the spinner when the group is already hydrated (e.g. a prefetch on
+    // row touch-down landed before the overlay mounted, or the user is
+    // reopening the same group). Without this, `SessionSurface`'s spinner
+    // branch fires for one frame and remounts the whole tree mid-animation.
+    const alreadyHydrated = Boolean(
+      useEntityStore.getState().sessionGroups[groupId],
+    );
     let cancelled = false;
-    setLoading(true);
+    if (!alreadyHydrated) setLoading(true);
     fetchSessionGroupDetail(groupId).finally(() => {
       if (!cancelled) setLoading(false);
     });

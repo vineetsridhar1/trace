@@ -7,6 +7,7 @@ import {
 } from "@trace/client-core";
 import type { QueuedMessage, Session } from "@trace/gql";
 import { getClient } from "@/lib/urql";
+import { fetchSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 
 /**
  * Loads per-session hydration that the list-level queries don't provide:
@@ -94,7 +95,7 @@ type FetchedSession = Session & {
   sessionGroup?: SessionGroupEntity;
 };
 
-export async function fetchSessionDetail(sessionId: string): Promise<void> {
+async function doFetchSessionDetail(sessionId: string): Promise<void> {
   const result = await getClient()
     .query(SESSION_DETAIL_QUERY, { id: sessionId })
     .toPromise();
@@ -142,6 +143,34 @@ export async function fetchSessionDetail(sessionId: string): Promise<void> {
       },
     };
   });
+
+  // Entry points like deep links and push-notification taps hit this fetcher
+  // before the session's parent group is in the store. Chain the group
+  // detail fetch so the Session Player has its header data without waiting
+  // for overlay mount. `fetchSessionGroupDetail` is itself deduped, so this
+  // is a no-op if the group has already been fetched.
+  const groupIdAfterUpsert =
+    fetched.sessionGroupId ?? fetched.sessionGroup?.id ?? null;
+  if (groupIdAfterUpsert) {
+    void fetchSessionGroupDetail(groupIdAfterUpsert);
+  }
+}
+
+/**
+ * In-flight requests keyed by sessionId. Callers that fire while a fetch is
+ * already pending receive the same promise, so prefetch-on-press and
+ * overlay-mount hooks coalesce into a single network round-trip.
+ */
+const inflightSessionFetches = new Map<string, Promise<void>>();
+
+export function fetchSessionDetail(sessionId: string): Promise<void> {
+  const existing = inflightSessionFetches.get(sessionId);
+  if (existing) return existing;
+  const promise = doFetchSessionDetail(sessionId).finally(() => {
+    inflightSessionFetches.delete(sessionId);
+  });
+  inflightSessionFetches.set(sessionId, promise);
+  return promise;
 }
 
 export function useSessionDetail(sessionId: string): void {
