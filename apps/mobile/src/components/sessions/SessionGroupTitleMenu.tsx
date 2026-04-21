@@ -19,6 +19,7 @@ import {
 } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { haptic } from "@/lib/haptics";
+import { useMobileUIStore } from "@/stores/ui";
 import { useTheme } from "@/theme";
 import { LinkedCheckoutPanelSection } from "./LinkedCheckoutPanelSection";
 
@@ -95,6 +96,20 @@ function MorphingTitle({ groupId, sessionId, fullWidth }: SessionGroupTitleMenuP
       });
     }
   }, [open, progress, theme.motion.springs.morph.open, theme.motion.springs.morph.close]);
+
+  // Register a close callback so the Session Player's body-area scrim can
+  // dismiss this menu. In-header taps are still handled by the local
+  // backdropHit Pressable below.
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    useMobileUIStore.getState().setActiveMenuClose(close);
+    return () => {
+      if (useMobileUIStore.getState().activeMenuClose === close) {
+        useMobileUIStore.getState().setActiveMenuClose(null);
+      }
+    };
+  }, [open]);
 
   const startWidth = triggerWidth || PILL_HEIGHT;
   const endWidth = Math.max(fullWidth, startWidth);

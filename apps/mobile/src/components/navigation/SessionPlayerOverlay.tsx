@@ -47,6 +47,7 @@ export function SessionPlayerOverlay() {
   const open = useMobileUIStore((s) => s.sessionPlayerOpen);
   const sessionId = useMobileUIStore((s) => s.overlaySessionId);
   const setOverlaySessionId = useMobileUIStore((s) => s.setOverlaySessionId);
+  const activeMenuClose = useMobileUIStore((s) => s.activeMenuClose);
   const headerGroupId = useEntityField("sessions", sessionId ?? "", "sessionGroupId") as
     | string
     | null
@@ -157,6 +158,14 @@ export function SessionPlayerOverlay() {
           )}
         </View>
 
+        {activeMenuClose ? (
+          <Pressable
+            accessibilityLabel="Dismiss menu"
+            onPress={activeMenuClose}
+            style={styles.menuScrim}
+          />
+        ) : null}
+
         <View
           style={styles.topInset}
           onLayout={handleTopInsetLayout}
@@ -201,6 +210,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
+  },
+  menuScrim: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 5,
   },
   dragHandle: {
     overflow: "visible",
