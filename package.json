@@ -43,9 +43,7 @@
       "@prisma/engines",
       "prisma"
     ],
-    "patchedDependencies": {
-      "react-native-bottom-tabs@1.2.0": "patches/react-native-bottom-tabs@1.2.0.patch"
-    }
+    "patchedDependencies": {}
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
