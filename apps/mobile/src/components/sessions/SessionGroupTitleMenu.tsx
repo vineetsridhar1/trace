@@ -186,9 +186,11 @@ function MorphingTitle({ groupId, sessionId, fullWidth }: SessionGroupTitleMenuP
 function TitleRow({
   groupId,
   sessionId,
+  nameLines = 1,
 }: {
   groupId: string;
   sessionId?: string;
+  nameLines?: number;
 }) {
   const theme = useTheme();
   const name = useEntityField("sessionGroups", groupId, "name") as
@@ -224,7 +226,7 @@ function TitleRow({
       />
       <View style={styles.textBlock}>
         {name ? (
-          <Text variant="headline" numberOfLines={1}>
+          <Text variant="headline" numberOfLines={nameLines}>
             {name}
           </Text>
         ) : (
@@ -253,9 +255,10 @@ function PanelContent({
   groupId: string;
   sessionId?: string;
 }) {
+  const theme = useTheme();
   return (
-    <View style={styles.panelTitleSlot}>
-      <TitleRow groupId={groupId} sessionId={sessionId} />
+    <View style={[styles.panelTitleSlot, { paddingVertical: theme.spacing.sm }]}>
+      <TitleRow groupId={groupId} sessionId={sessionId} nameLines={2} />
     </View>
   );
 }
@@ -331,7 +334,7 @@ const styles = StyleSheet.create({
     left: 0,
   },
   panelTitleSlot: {
-    height: PILL_HEIGHT,
+    minHeight: PILL_HEIGHT,
     justifyContent: "center",
   },
   fallbackPill: {
