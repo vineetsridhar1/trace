@@ -3,14 +3,12 @@ import { SymbolView, type SFSymbol } from "expo-symbols";
 import { Card, Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
 import { haptic } from "@/lib/haptics";
-import { formatTime } from "./utils";
 
 export type PRCardKind = "opened" | "merged" | "closed";
 
 interface PRCardProps {
   kind: PRCardKind;
   prUrl: string | null;
-  timestamp: string;
 }
 
 function labelFor(kind: PRCardKind): string {
@@ -41,7 +39,7 @@ function iconFor(kind: PRCardKind): SFSymbol {
  * `session_pr_closed` events — web currently renders nothing for these, so
  * this is new surface area on mobile.
  */
-export function PRCard({ kind, prUrl, timestamp }: PRCardProps) {
+export function PRCard({ kind, prUrl }: PRCardProps) {
   const theme = useTheme();
   const tint =
     kind === "merged"
@@ -93,9 +91,6 @@ export function PRCard({ kind, prUrl, timestamp }: PRCardProps) {
           {prUrl}
         </Text>
       ) : null}
-      <Text variant="caption2" color="dimForeground" style={styles.time}>
-        {formatTime(timestamp)}
-      </Text>
     </Card>
   );
 }
@@ -108,5 +103,4 @@ const styles = StyleSheet.create({
   },
   icon: { width: 18, height: 18 },
   url: { flex: 1 },
-  time: { marginLeft: "auto" },
 });

@@ -10,7 +10,6 @@ interface SubagentRowProps {
   subagentType: string;
   isLoading: boolean;
   result?: string;
-  timestamp: string;
 }
 
 const PREVIEW_LEN = 80;

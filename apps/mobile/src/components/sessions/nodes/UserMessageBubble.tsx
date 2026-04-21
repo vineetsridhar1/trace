@@ -11,11 +11,10 @@ import { alpha, useTheme } from "@/theme";
 import { haptic } from "@/lib/haptics";
 import { CheckpointMarker } from "./CheckpointMarker";
 import { Markdown } from "./Markdown";
-import { COPY_CONTEXT_MENU, formatTime, stripPromptWrapping } from "./utils";
+import { COPY_CONTEXT_MENU, stripPromptWrapping } from "./utils";
 
 interface UserMessageBubbleProps {
   text: string;
-  timestamp: string;
   actorId?: string;
   actorName?: string | null;
   checkpoints?: GitCheckpoint[];
@@ -28,7 +27,6 @@ interface UserMessageBubbleProps {
  */
 export function UserMessageBubble({
   text,
-  timestamp,
   actorId,
   actorName,
   checkpoints,
@@ -69,9 +67,6 @@ export function UserMessageBubble({
             <View style={styles.meta}>
               <Text variant="caption1" style={{ color: theme.colors.accent, fontWeight: "600" }}>
                 {displayName}
-              </Text>
-              <Text variant="caption2" color="mutedForeground">
-                {formatTime(timestamp)}
               </Text>
             </View>
             <Markdown>{displayText}</Markdown>

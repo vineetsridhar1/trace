@@ -3,16 +3,14 @@ import { SymbolView } from "expo-symbols";
 import { Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
 import { Markdown } from "./Markdown";
-import { formatTime } from "./utils";
 
 interface CompletionRowProps {
-  timestamp: string;
   result?: string;
   isUserStop?: boolean;
 }
 
 /** Session end marker — `result` vs `error` payloads on `session_output`. */
-export function CompletionRow({ timestamp, result, isUserStop }: CompletionRowProps) {
+export function CompletionRow({ result, isUserStop }: CompletionRowProps) {
   const theme = useTheme();
 
   if (isUserStop) {
@@ -27,9 +25,6 @@ export function CompletionRow({ timestamp, result, isUserStop }: CompletionRowPr
         />
         <Text variant="caption1" color="mutedForeground">
           Stopped by user
-        </Text>
-        <Text variant="caption2" color="dimForeground" style={styles.time}>
-          {formatTime(timestamp)}
         </Text>
       </View>
     );
@@ -48,9 +43,6 @@ export function CompletionRow({ timestamp, result, isUserStop }: CompletionRowPr
         <Text variant="footnote" style={{ color: theme.colors.foreground, fontWeight: "600" }}>
           Run ended
         </Text>
-        <Text variant="caption2" color="dimForeground" style={styles.time}>
-          {formatTime(timestamp)}
-        </Text>
       </View>
       {result ? (
         <View style={styles.result}>
@@ -66,6 +58,5 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center" },
   icon10: { width: 10, height: 10 },
   icon14: { width: 14, height: 14 },
-  time: { marginLeft: "auto" },
   result: { paddingLeft: 22 },
 });

@@ -12,25 +12,23 @@ const AGENT_NAMES = new Set(["agent", "task"]);
 /** Dispatch the block array inside an assistant/user session_output payload. */
 export function renderSessionOutput(
   payload: JsonObject,
-  timestamp: string,
   context: NodeRenderContext,
   isLast: boolean,
 ): ReactNode {
   const type = payload.type;
   if (type === "assistant" || type === "user") {
-    return renderAssistantContent(payload, timestamp, context, isLast);
+    return renderAssistantContent(payload, context, isLast);
   }
-  if (type === "result") return <CompletionRow timestamp={timestamp} />;
+  if (type === "result") return <CompletionRow />;
   if (type === "error") {
     const message = typeof payload.message === "string" ? payload.message : "Error";
-    return <CompletionRow timestamp={timestamp} result={message} isUserStop />;
+    return <CompletionRow result={message} isUserStop />;
   }
   return null;
 }
 
 function renderAssistantContent(
   payload: JsonObject,
-  timestamp: string,
   context: NodeRenderContext,
   isLast: boolean,
 ): ReactNode {
@@ -59,7 +57,6 @@ function renderAssistantContent(
         <AssistantMessage
           key={i}
           text={block.text}
-          timestamp={timestamp}
           streaming={isLast && context.sessionActive && i === lastTextIndex}
         />,
       );
@@ -79,7 +76,6 @@ function renderAssistantContent(
             subagentType={asStr(input?.subagent_type) || "agent"}
             isLoading={!agentResult}
             result={agentResult ? agentResultToString(agentResult.content) : undefined}
-            timestamp={timestamp}
           />,
         );
       } else {
@@ -90,7 +86,6 @@ function renderAssistantContent(
             name={name}
             input={asJsonObject(block.input)}
             output={asOutput(rawOutput)}
-            timestamp={timestamp}
           />,
         );
       }

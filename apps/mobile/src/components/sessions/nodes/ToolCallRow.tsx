@@ -5,13 +5,12 @@ import { asJsonObject } from "@trace/shared";
 import { Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
 import { ToolResultRow } from "./ToolResultRow";
-import { formatCommandLabel, formatTime, serializeUnknown, truncate } from "./utils";
+import { formatCommandLabel, serializeUnknown, truncate } from "./utils";
 
 interface ToolCallRowProps {
   name: string;
   input?: Record<string, unknown>;
   output?: string | Record<string, unknown>;
-  timestamp: string;
 }
 
 const PREVIEW_LEN = 60;
@@ -22,7 +21,7 @@ const PREVIEW_LEN = 60;
  * command invocations render via `CommandExecutionRow` — this component
  * handles every other tool name.
  */
-export function ToolCallRow({ name, input, output, timestamp }: ToolCallRowProps) {
+export function ToolCallRow({ name, input, output }: ToolCallRowProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
 
@@ -81,9 +80,6 @@ export function ToolCallRow({ name, input, output, timestamp }: ToolCallRowProps
             {truncate(preview, PREVIEW_LEN)}
           </Text>
         ) : null}
-        <Text variant="caption2" color="dimForeground" style={styles.time}>
-          {formatTime(timestamp)}
-        </Text>
       </Pressable>
       {open && hasBody ? (
         <View
@@ -126,7 +122,6 @@ const styles = StyleSheet.create({
   },
   chevron: { width: 10, height: 10 },
   preview: { flex: 1 },
-  time: { marginLeft: "auto" },
   body: {
     borderWidth: StyleSheet.hairlineWidth,
     marginTop: 4,

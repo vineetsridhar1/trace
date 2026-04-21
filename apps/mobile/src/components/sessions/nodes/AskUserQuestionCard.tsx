@@ -2,11 +2,9 @@ import { StyleSheet, View } from "react-native";
 import type { Question } from "@trace/shared";
 import { Card, Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
-import { formatTime } from "./utils";
 
 interface AskUserQuestionCardProps {
   questions: Question[];
-  timestamp: string;
 }
 
 /**
@@ -14,7 +12,7 @@ interface AskUserQuestionCardProps {
  * affordance ships as the pending-input bar in ticket 22; this component
  * only surfaces the question in the stream.
  */
-export function AskUserQuestionCard({ questions, timestamp }: AskUserQuestionCardProps) {
+export function AskUserQuestionCard({ questions }: AskUserQuestionCardProps) {
   const theme = useTheme();
   return (
     <Card
@@ -51,9 +49,6 @@ export function AskUserQuestionCard({ questions, timestamp }: AskUserQuestionCar
           ) : null}
         </View>
       ))}
-      <Text variant="caption2" color="dimForeground" style={styles.time}>
-        {formatTime(timestamp)}
-      </Text>
     </Card>
   );
 }
@@ -62,5 +57,4 @@ const styles = StyleSheet.create({
   card: { width: "100%", gap: 6 },
   question: { gap: 2 },
   options: { gap: 2, marginTop: 2 },
-  time: { marginTop: 4 },
 });

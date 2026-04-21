@@ -34,7 +34,6 @@ export function renderNode(props: RenderNodeProps): ReactNode {
         <CommandExecutionRow
           command={node.command}
           output={node.output}
-          timestamp={node.timestamp}
           exitCode={node.exitCode}
         />
       );
@@ -45,11 +44,10 @@ export function renderNode(props: RenderNodeProps): ReactNode {
         <PlanReviewCard
           planContent={node.planContent}
           planFilePath={node.planFilePath}
-          timestamp={node.timestamp}
         />
       );
     case "ask-user-question":
-      return <AskUserQuestionCard questions={node.questions} timestamp={node.timestamp} />;
+      return <AskUserQuestionCard questions={node.questions} />;
     case "event":
       return <EventNode id={node.id} context={context} isLast={isLast} />;
   }
@@ -71,10 +69,9 @@ const EventNode = memo(function EventNode({ id, context, isLast }: EventNodeProp
   const scopeKey = eventScopeKey("session", context.sessionId);
   const eventType = useScopedEventField(scopeKey, id, "eventType");
   const payload = asJsonObject(useScopedEventField(scopeKey, id, "payload"));
-  const timestamp = useScopedEventField(scopeKey, id, "timestamp");
   const actor = useScopedEventField(scopeKey, id, "actor");
 
-  if (!eventType || !timestamp) return null;
+  if (!eventType) return null;
 
   const checkpoints = context.gitCheckpointsByPromptEventId.get(id);
 
@@ -84,7 +81,6 @@ const EventNode = memo(function EventNode({ id, context, isLast }: EventNodeProp
         return (
           <UserMessageBubble
             text={payload.prompt}
-            timestamp={timestamp}
             actorId={actor?.id}
             actorName={actor?.name}
             checkpoints={checkpoints}
@@ -97,7 +93,6 @@ const EventNode = memo(function EventNode({ id, context, isLast }: EventNodeProp
       return (
         <UserMessageBubble
           text={typeof payload?.text === "string" ? payload.text : ""}
-          timestamp={timestamp}
           actorId={actor?.id}
           actorName={actor?.name}
           checkpoints={checkpoints}
@@ -105,14 +100,14 @@ const EventNode = memo(function EventNode({ id, context, isLast }: EventNodeProp
       );
 
     case "session_output":
-      return payload ? renderSessionOutput(payload, timestamp, context, isLast) : null;
+      return payload ? renderSessionOutput(payload, context, isLast) : null;
 
     case "session_pr_opened":
-      return <PRCard kind="opened" prUrl={prUrlFrom(payload)} timestamp={timestamp} />;
+      return <PRCard kind="opened" prUrl={prUrlFrom(payload)} />;
     case "session_pr_merged":
-      return <PRCard kind="merged" prUrl={prUrlFrom(payload)} timestamp={timestamp} />;
+      return <PRCard kind="merged" prUrl={prUrlFrom(payload)} />;
     case "session_pr_closed":
-      return <PRCard kind="closed" prUrl={prUrlFrom(payload)} timestamp={timestamp} />;
+      return <PRCard kind="closed" prUrl={prUrlFrom(payload)} />;
 
     default:
       return null;

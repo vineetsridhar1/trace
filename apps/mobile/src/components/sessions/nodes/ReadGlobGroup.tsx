@@ -4,7 +4,6 @@ import { SymbolView } from "expo-symbols";
 import type { ReadGlobItem } from "@trace/client-core";
 import { Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
-import { formatTime } from "./utils";
 
 interface ReadGlobGroupProps {
   items: ReadGlobItem[];
@@ -20,8 +19,6 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
   const [open, setOpen] = useState(false);
 
   if (items.length === 0) return null;
-  const first = items[0];
-  const last = items[items.length - 1];
 
   return (
     <View style={styles.wrapper}>
@@ -49,10 +46,6 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
         />
         <Text variant="caption1" color="mutedForeground" style={{ fontFamily: "Menlo" }}>
           {items.length} file scan{items.length === 1 ? "" : "s"} (Read/Glob)
-        </Text>
-        <Text variant="caption2" color="dimForeground" style={styles.time}>
-          {formatTime(first.timestamp)}
-          {items.length > 1 ? ` – ${formatTime(last.timestamp)}` : ""}
         </Text>
       </Pressable>
       {open ? (
@@ -86,9 +79,6 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
               >
                 {item.filePath || "—"}
               </Text>
-              <Text variant="caption2" color="dimForeground" style={styles.time}>
-                {formatTime(item.timestamp)}
-              </Text>
             </View>
           ))}
         </View>
@@ -101,7 +91,6 @@ const styles = StyleSheet.create({
   wrapper: { width: "100%", paddingVertical: 2 },
   header: { flexDirection: "row", alignItems: "center" },
   chevron: { width: 10, height: 10 },
-  time: { marginLeft: "auto" },
   body: {
     borderWidth: StyleSheet.hairlineWidth,
     marginTop: 4,

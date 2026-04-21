@@ -2,12 +2,10 @@ import { StyleSheet } from "react-native";
 import { Card, Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
 import { Markdown } from "./Markdown";
-import { formatTime } from "./utils";
 
 interface PlanReviewCardProps {
   planContent: string;
   planFilePath: string;
-  timestamp: string;
 }
 
 /**
@@ -15,7 +13,7 @@ interface PlanReviewCardProps {
  * affordance ships with ticket 22's pending-input bar, so this component
  * intentionally exposes no actions.
  */
-export function PlanReviewCard({ planContent, planFilePath, timestamp }: PlanReviewCardProps) {
+export function PlanReviewCard({ planContent, planFilePath }: PlanReviewCardProps) {
   const theme = useTheme();
   return (
     <Card
@@ -37,9 +35,6 @@ export function PlanReviewCard({ planContent, planFilePath, timestamp }: PlanRev
         </Text>
       ) : null}
       <Markdown>{planContent || "(empty plan)"}</Markdown>
-      <Text variant="caption2" color="dimForeground" style={styles.time}>
-        {formatTime(timestamp)}
-      </Text>
     </Card>
   );
 }
@@ -49,5 +44,4 @@ const styles = StyleSheet.create({
     width: "100%",
     gap: 6,
   },
-  time: { marginTop: 4 },
 });

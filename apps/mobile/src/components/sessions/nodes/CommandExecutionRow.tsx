@@ -3,12 +3,11 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
-import { formatCommandLabel, formatTime, getCommandPrefix, serializeUnknown } from "./utils";
+import { formatCommandLabel, getCommandPrefix, serializeUnknown } from "./utils";
 
 interface CommandExecutionRowProps {
   command: string;
   output?: string | Record<string, unknown>;
-  timestamp: string;
   exitCode?: number;
 }
 
@@ -19,7 +18,6 @@ interface CommandExecutionRowProps {
 export function CommandExecutionRow({
   command,
   output,
-  timestamp,
   exitCode,
 }: CommandExecutionRowProps) {
   const theme = useTheme();
@@ -67,9 +65,6 @@ export function CommandExecutionRow({
         >
           {display}
         </Text>
-        <Text variant="caption2" color="dimForeground" style={styles.time}>
-          {formatTime(timestamp)}
-        </Text>
       </Pressable>
       {open && hasBody ? (
         <View
@@ -106,7 +101,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center" },
   chevron: { width: 10, height: 10 },
   command: { flex: 1 },
-  time: { marginLeft: "auto" },
   body: {
     borderWidth: StyleSheet.hairlineWidth,
     marginTop: 4,
