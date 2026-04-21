@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { ScrollView, View } from "react-native";
+import { ScrollView, View, type ViewStyle } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme, type TypographyVariant } from "@/theme";
 import {
@@ -35,9 +35,14 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Row({ children }: { children: ReactNode }) {
+function Row({ children, style }: { children: ReactNode; style?: ViewStyle }) {
   return (
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+    <View
+      style={[
+        { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
+        style,
+      ]}
+    >
       {children}
     </View>
   );

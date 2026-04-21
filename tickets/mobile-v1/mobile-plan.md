@@ -502,7 +502,7 @@ Full-screen modals for:
 
 **Polish:**
 - Tab strip uses Reanimated underline indicator.
-- Header collapses on scroll (native iOS large-title behavior, implemented via `react-native-screens` `largeTitle` mode).
+- Header collapses on scroll. The shell shipped in ticket 19 with a custom Liquid Glass header that toggles to solid on scroll; ticket 20 must either (a) replace it with native iOS large-title behavior (`headerLargeTitle: true` on `sessions/_layout.tsx`, matching `(tabs)/channels/_layout.tsx` and `(tabs)/(home)/_layout.tsx`) with the tab strip as a pinned accessory, or (b) move the custom header above the list (outside the scroll view) so `pinnedBar` glass is actually pinned and `solid` is driven by the list's scroll offset. Either way, remove the duplicate group name between the native `Stack.Screen` title and the custom header.
 
 ---
 

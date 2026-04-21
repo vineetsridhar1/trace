@@ -14,6 +14,7 @@ import { Chip, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
+import { tryOpenSessionPlayer } from "@/lib/sessionPlayer";
 import { useTheme } from "@/theme";
 import { useLatestSessionIdForGroup } from "@/hooks/useChannelSessionGroups";
 import { CHIP_LABELS, mapStatusToChipVariant } from "@/lib/sessionGroupStatus";
@@ -46,8 +47,9 @@ export const SessionGroupRow = memo(function SessionGroupRow({
   );
 
   const handlePress = useCallback(() => {
+    if (tryOpenSessionPlayer(latestSessionId)) return;
     router.push(`/sessions/${groupId}`);
-  }, [router, groupId]);
+  }, [groupId, latestSessionId, router]);
 
   const handleArchive = useCallback(async () => {
     void haptic.medium();

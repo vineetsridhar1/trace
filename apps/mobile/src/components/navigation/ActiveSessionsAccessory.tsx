@@ -9,36 +9,12 @@ import {
   View,
 } from "react-native";
 import { useShallow } from "zustand/react/shallow";
-import { useEntityStore, type EntityState } from "@trace/client-core";
+import { useEntityStore } from "@trace/client-core";
 import { haptic } from "@/lib/haptics";
+import { selectActiveSessionIds } from "@/lib/activeSessions";
 import { useMobileUIStore } from "@/stores/ui";
 import { useTheme } from "@/theme";
 import { ActiveSessionsAccessoryRow } from "./ActiveSessionsAccessoryRow";
-
-const EMPTY_IDS: readonly string[] = Object.freeze([]);
-
-/**
- * IDs of every session the user is still interacting with — everything except
- * `merged` (shipped), `failed` (errored), and sessions whose group is archived.
- * Sorted by `_sortTimestamp` desc. Wrap callers in `useShallow`. Returns IDs
- * (not entities) so rows re-render only when their own fields change.
- */
-export function selectActiveSessionIds(state: EntityState): readonly string[] {
-  let out: Array<{ id: string; ts: string }> | null = null;
-  for (const id in state.sessions) {
-    const s = state.sessions[id];
-    if (s.sessionStatus === "merged") continue;
-    if (s.agentStatus === "failed") continue;
-    if (s.sessionGroupId) {
-      const g = state.sessionGroups[s.sessionGroupId];
-      if (g && (g.archivedAt || g.status === "archived")) continue;
-    }
-    (out ??= []).push({ id, ts: s._sortTimestamp ?? "" });
-  }
-  if (!out) return EMPTY_IDS;
-  out.sort((a, b) => (a.ts === b.ts ? 0 : a.ts < b.ts ? 1 : -1));
-  return out.map((e) => e.id);
-}
 
 const keyExtractor = (id: string) => id;
 
