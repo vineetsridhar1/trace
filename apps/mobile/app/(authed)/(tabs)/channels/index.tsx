@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Stack } from "expo-router";
 import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
-import { EmptyState, Screen } from "@/components/design-system";
+import { EmptyState } from "@/components/design-system";
 import { ChannelListRow } from "@/components/channels/ChannelListRow";
 import { ChannelGroupHeader } from "@/components/channels/ChannelGroupHeader";
 import {
@@ -12,8 +12,10 @@ import {
 } from "@/hooks/useCodingChannels";
 import { refreshOrgData } from "@/hooks/useHydrate";
 import { haptic } from "@/lib/haptics";
+import { useTheme } from "@/theme";
 
 export default function ChannelsIndex() {
+  const theme = useTheme();
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const logout = useAuthStore((s: AuthState) => s.logout);
 
@@ -52,7 +54,7 @@ export default function ChannelsIndex() {
   }, [activeOrgId, logout]);
 
   return (
-    <Screen edges={["left", "right"]}>
+    <>
       <Stack.Screen options={{ headerSearchBarOptions: searchBarOptions }} />
       <FlashList
         data={keys}
@@ -63,8 +65,9 @@ export default function ChannelsIndex() {
         onRefresh={handleRefresh}
         refreshing={refreshing}
         ListEmptyComponent={<ChannelsEmpty search={search} />}
+        style={{ flex: 1, backgroundColor: theme.colors.background }}
       />
-    </Screen>
+    </>
   );
 }
 
