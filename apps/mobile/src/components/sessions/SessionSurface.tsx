@@ -154,12 +154,14 @@ export function SessionSurface({
         />
       )}
       {hideHeader ? null : <ActiveTodoStrip sessionId={sessionId} />}
-      <SessionStream
-        key={sessionId}
-        sessionId={sessionId}
-        topInset={topInset}
-        bottomInset={composerHeight}
-      />
+      <View style={[styles.streamWrapper, { marginBottom: overlayBottom }]}>
+        <SessionStream
+          key={sessionId}
+          sessionId={sessionId}
+          topInset={topInset}
+          bottomInset={composerHeight}
+        />
+      </View>
       <View
         style={[styles.overlay, { bottom: overlayBottom }]}
         onLayout={handleComposerLayout}
@@ -213,6 +215,9 @@ const styles = StyleSheet.create({
   },
   headerLayer: {
     zIndex: 10,
+  },
+  streamWrapper: {
+    flex: 1,
   },
   overlay: {
     position: "absolute",
