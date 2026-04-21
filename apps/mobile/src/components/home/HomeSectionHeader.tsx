@@ -5,9 +5,9 @@ import { useTheme, type Theme } from "@/theme";
 import type { HomeSectionKind } from "@/hooks/useHomeSections";
 
 const SECTION_LABELS: Record<HomeSectionKind, string> = {
-  needs_input: "Needs you",
+  needs_input: "Needs input",
   working_now: "In progress",
-  recently_done: "Recently done",
+  recently_done: "Most recent",
 };
 
 function sectionColor(theme: Theme, kind: HomeSectionKind): string {
