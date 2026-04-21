@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Alert, Linking, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { useRouter } from "expo-router";
 import {
   ARCHIVE_SESSION_GROUP_MUTATION,
   useEntityField,
@@ -18,30 +17,14 @@ interface SessionGroupHeaderProps {
   sessionId?: string;
 }
 
-/**
- * Sentinel id for `useEntityField("sessions", …)` when no session is
- * selected. Never matches a real session id, so the selector returns
- * undefined without a real store lookup.
- */
-const MISSING_SESSION_ID = "__none__";
-
 export function SessionGroupHeader({
   groupId,
   sessionId,
 }: SessionGroupHeaderProps) {
   const theme = useTheme();
-  const router = useRouter();
   const prUrl = useEntityField("sessionGroups", groupId, "prUrl");
   const status = useEntityField("sessionGroups", groupId, "status");
   const archivedAt = useEntityField("sessionGroups", groupId, "archivedAt");
-  // `sessionId` is optional (the header is rendered before a session is
-  // selected on some entry points). Pass a sentinel id when absent so the
-  // hook call count stays stable and no real entity is ever keyed by "".
-  const agentStatus = useEntityField(
-    "sessions",
-    sessionId ?? MISSING_SESSION_ID,
-    "agentStatus",
-  );
 
   const [rowWidth, setRowWidth] = useState(0);
   const handleRowLayout = useCallback((e: LayoutChangeEvent) => {
@@ -91,25 +74,8 @@ export function SessionGroupHeader({
     void haptic.success();
   }, [groupId, sessionId]);
 
-  const handleStopSession = useCallback(() => {
-    if (!sessionId) return;
-    void haptic.medium();
-    router.push({
-      pathname: "/sheets/confirm-stop-session",
-      params: { sessionId },
-    });
-  }, [router, sessionId]);
-
   const menuItems = useMemo(() => {
     const items: SessionMenuAction[] = [];
-    if (sessionId && agentStatus === "active") {
-      items.push({
-        title: "Stop session",
-        systemIcon: "stop.circle",
-        destructive: true,
-        onPress: handleStopSession,
-      });
-    }
     if (prUrl) items.push({ title: "Open PR", systemIcon: "arrow.up.forward.square", onPress: handleOpenPr });
     items.push({ title: "Copy link", systemIcon: "link", onPress: handleCopyLink });
     if (!archivedAt && status !== "archived") {
@@ -122,14 +88,11 @@ export function SessionGroupHeader({
     }
     return items;
   }, [
-    agentStatus,
     archivedAt,
     handleArchive,
     handleCopyLink,
     handleOpenPr,
-    handleStopSession,
     prUrl,
-    sessionId,
     status,
   ]);
 

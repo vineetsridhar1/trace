@@ -2,20 +2,17 @@
 
 ## Summary
 
-The remaining session-screen actions: the header overflow menu (stop, copy link, open PR), confirmation sheets for destructive actions, and surfaced connection-state banners with retry. Completes the session-interaction loop.
+The remaining session-screen actions: the header overflow menu (copy link, open PR, archive), and surfaced connection-state banners with retry. Completes the session-interaction loop.
+
+**Descoped from V1 of this ticket:** the Stop-session menu item + its confirmation sheet. The overflow menu was the wrong surface for a destructive mid-turn action, and a follow-up PR will reintroduce Stop in a more discoverable spot (likely adjacent to the composer while `agentStatus === 'active'`).
 
 ## What needs to happen
 
 - **Overflow menu on session header** (extends `SessionGroupHeader` from ticket 19):
   - Reuses the native context menu component; items vary by session state:
-    - "Stop session" (destructive) — visible when `agentStatus === 'active'`
     - "Open PR" — visible when `prUrl` is set
     - "Copy link" — always visible: copies `trace://sessions/{groupId}/{sessionId}`
     - "Archive workspace" (destructive) — archives the entire group (at group screen level, not session)
-- **Stop confirmation sheet** (`app/(authed)/sheets/confirm-stop-session.tsx`):
-  - Native iOS-style confirmation sheet (small detent).
-  - Title: "Stop this session?", subtitle: "The agent will stop working. You can't resume after stopping.", two buttons: "Stop" (destructive, haptic heavy) and "Cancel".
-  - Confirm: dispatches `dismissSession` mutation (V1 uses `dismiss` rather than `terminate` — matches the behavior web's SessionInput uses in the corresponding flow).
 - **Connection-lost / restored handling**:
   - The `ConnectionLostBanner` node (from ticket 21) is one representation.
   - Additionally, when `session.connection.state === 'lost'`, the composer input is **disabled** and shows "Session offline — retry to reconnect" caption above the input.
@@ -34,12 +31,12 @@ The remaining session-screen actions: the header overflow menu (stop, copy link,
 
 ## Completion requirements
 
-- [x] Overflow menu shows correct items per state (Stop session appears only when `agentStatus === 'active'`; Open PR only when `prUrl` is set; Copy link always; Archive workspace on non-archived groups)
-- [x] Stop confirmation sheet dispatches `dismissSession` on confirm (new `app/sheets/confirm-stop-session.tsx`, small detent, heavy haptic)
+- [x] Overflow menu shows correct items per state (Open PR when `prUrl` is set; Copy link always; Archive workspace on non-archived groups)
+- [ ] Stop-session affordance (descoped — follow-up PR will land it adjacent to the composer, not in the overflow menu)
 - [x] Composer disables when connection lost; re-enables when restored (`canInteract` now gates on `connection.state === 'disconnected'`)
 - [x] Retry action triggers reconnection mutation (`ComposerConnectionNotice` + `SessionErrorCard` both fire `retrySessionConnection`; disabled + error tint when `canRetry === false`)
 - [x] Error card surfaces `connection.lastError` and allows retry (new `SessionErrorCard`, tap-to-dismiss locally, suppressed when already disconnected to avoid duplicating the in-stream banner and composer notice)
-- [x] All files <200 lines (new/modified: `ComposerConnectionNotice` 112, `SessionErrorCard` 151, `confirm-stop-session` 68, `SessionInputComposer` 191, `SessionGroupHeader` 164, `useSessionEvents` 185, `useHydrate` 196; `SessionSurface` remains at 233 per ticket 23, grew by 5 lines here)
+- [x] All files <200 lines (new/modified: `ComposerConnectionNotice` 112, `SessionErrorCard` 151, `SessionInputComposer` 191, `SessionGroupHeader` 127, `useSessionEvents` 185, `useHydrate` 196; `SessionSurface` remains at 233 per ticket 23, grew by 5 lines here)
 
 ## Implementation notes
 
@@ -49,7 +46,7 @@ The remaining session-screen actions: the header overflow menu (stop, copy link,
 
 ## How to test
 
-1. Active session → overflow → Stop → confirm sheet → Stop → session moves to `done`, composer disables.
+1. Overflow menu shows Open PR (when set), Copy link, Archive workspace — no Stop.
 2. Force connection loss on server → mobile shows connection-lost banner + composer disabled + retry action.
 3. Tap Retry → `retrySessionConnection` fires → connection restored → composer re-enables.
 4. Simulate a runtime error (server returns `lastError`) → error card appears → tap retry → mutation fires.
