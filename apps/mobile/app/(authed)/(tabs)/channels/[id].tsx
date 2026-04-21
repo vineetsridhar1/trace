@@ -116,6 +116,11 @@ export default function ChannelDetail() {
     router.push(`/channels/${channelId}/merged-archived`);
   }, [router, channelId]);
 
+  const handleCreateSession = useCallback(() => {
+    void haptic.light();
+    router.push(`/sheets/create-session?channelId=${channelId}`);
+  }, [router, channelId]);
+
   const handleToggleSection = useCallback((status: SessionGroupSectionStatus) => {
     void haptic.light();
     LayoutAnimation.configureNext(SECTION_TOGGLE_ANIMATION);
@@ -179,7 +184,14 @@ export default function ChannelDetail() {
           headerLargeTitle: true,
           headerLargeTitleShadowVisible: false,
           headerRight: () => (
-            <View style={{ marginLeft: 2 }}>
+            <View style={{ flexDirection: "row", marginLeft: 2, gap: 4 }}>
+              <IconButton
+                symbol="plus"
+                size="sm"
+                color="foreground"
+                onPress={handleCreateSession}
+                accessibilityLabel="New session"
+              />
               <IconButton
                 symbol="archivebox"
                 size="sm"
