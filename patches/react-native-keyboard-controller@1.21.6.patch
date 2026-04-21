@@ -1,0 +1,14 @@
+diff --git a/package.json b/package.json
+index 6433ade23898a4d6a063f59d9e91b7a775ce119c..34c8579daf32bdb1ce5e49c6e9e4e5854cb24f28 100644
+--- a/package.json
++++ b/package.json
+@@ -196,6 +196,9 @@
+         "KeyboardExtender": "KeyboardExtender",
+         "ClippingScrollViewDecoratorView": "ClippingScrollViewDecoratorView",
+         "KeyboardToolbarGroupView": "KeyboardToolbarGroupView"
++      },
++      "modulesProvider": {
++        "KeyboardController": "KeyboardController"
+       }
+     }
+   },
