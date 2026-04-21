@@ -107,23 +107,44 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
 
   const inputHeight = useSharedValue(MIN_INPUT_HEIGHT);
   const stopProgress = useSharedValue(isActive ? 1 : 0);
+  const stopEmerge = useSharedValue(isActive ? 1 : 0);
   useEffect(() => {
     inputHeight.value = withTiming(height, { duration: theme.motion.durations.fast });
   }, [height, inputHeight, theme.motion.durations.fast]);
   useEffect(() => {
-    stopProgress.value = withTiming(isActive ? 1 : 0, { duration: 240 });
-  }, [isActive, stopProgress]);
+    // Mitosis: stop emerges from inside send, then separates.
+    // stopProgress drives layout (translate + cluster width) smoothly;
+    // stopEmerge drives scale with a spring so the daughter "pops" out.
+    if (isActive) {
+      stopProgress.value = withTiming(1, { duration: 320 });
+      stopEmerge.value = withSpring(1, { damping: 11, stiffness: 170, mass: 0.7 });
+    } else {
+      stopProgress.value = withTiming(0, { duration: theme.motion.durations.base });
+      stopEmerge.value = withTiming(0, { duration: theme.motion.durations.base });
+    }
+  }, [isActive, stopProgress, stopEmerge, theme.motion.durations.base]);
   const inputAnimatedStyle = useAnimatedStyle(() => ({ height: inputHeight.value }));
   const actionClusterAnimatedStyle = useAnimatedStyle(() => ({
     width: ACTION_SIZE + (ACTION_SIZE + ACTION_GAP) * stopProgress.value,
   }));
-  const stopActionAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: stopProgress.value,
-    transform: [
-      { translateX: (1 - stopProgress.value) * -18 },
-      { scale: 0.74 + stopProgress.value * 0.26 },
-    ],
-  }));
+  const stopActionAnimatedStyle = useAnimatedStyle(() => {
+    const p = stopProgress.value;
+    const e = stopEmerge.value;
+    // At p=0, translateX = -(ACTION_SIZE + GAP) pins the stop button
+    // exactly on top of the send button. As p→1 it slides into its own slot.
+    const translateX = -(ACTION_SIZE + ACTION_GAP) * (1 - p);
+    const scale = 0.35 + 0.65 * e;
+    return {
+      opacity: Math.min(1, p * 1.6),
+      transform: [{ translateX }, { scale }],
+    };
+  });
+  const sendPulseAnimatedStyle = useAnimatedStyle(() => {
+    // Subtle bulge mid-split: sin() peaks at p=0.5 and returns to 1 at both ends.
+    const p = Math.max(0, Math.min(1, stopProgress.value));
+    const pulse = Math.sin(p * Math.PI);
+    return { transform: [{ scale: 1 + pulse * 0.08 }] };
+  });
 
   const handleChangeText = useCallback((next: string) => {
     // §16 budget: <16ms from keystroke to next painted frame.
@@ -323,29 +344,31 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
 
           <Animated.View style={[styles.actionCluster, actionClusterAnimatedStyle]}>
             <View style={styles.actionGlassContainer}>
-              <Pressable
-                onPress={handleSend}
-                disabled={!canSubmit}
-                accessibilityRole="button"
-                accessibilityLabel={isActive ? "Queue message" : "Send message"}
-                style={styles.actionPressable}
-              >
-                {({ pressed }) => (
-                  <Glass
-                    preset="input"
-                    tint="rgba(0,0,0,0)"
-                    animatedProps={glassAnimatedProps}
-                    interactive
-                    style={[
-                      styles.actionGlass,
-                      cardBorderAnimatedStyle,
-                      { opacity: canSubmit ? (pressed ? 0.82 : 1) : 0.35 },
-                    ]}
-                  >
-                    <SymbolView name="paperplane.fill" size={16} tintColor={theme.colors.accentForeground} resizeMode="scaleAspectFit" style={styles.sendIcon} />
-                  </Glass>
-                )}
-              </Pressable>
+              <Animated.View style={sendPulseAnimatedStyle}>
+                <Pressable
+                  onPress={handleSend}
+                  disabled={!canSubmit}
+                  accessibilityRole="button"
+                  accessibilityLabel={isActive ? "Queue message" : "Send message"}
+                  style={styles.actionPressable}
+                >
+                  {({ pressed }) => (
+                    <Glass
+                      preset="input"
+                      tint="rgba(0,0,0,0)"
+                      animatedProps={glassAnimatedProps}
+                      interactive
+                      style={[
+                        styles.actionGlass,
+                        cardBorderAnimatedStyle,
+                        { opacity: canSubmit ? (pressed ? 0.82 : 1) : 0.35 },
+                      ]}
+                    >
+                      <SymbolView name="paperplane.fill" size={16} tintColor={theme.colors.accentForeground} resizeMode="scaleAspectFit" style={styles.sendIcon} />
+                    </Glass>
+                  )}
+                </Pressable>
+              </Animated.View>
 
               <Animated.View
                 pointerEvents={isActive ? "auto" : "none"}
