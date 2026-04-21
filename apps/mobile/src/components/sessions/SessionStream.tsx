@@ -103,13 +103,10 @@ export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStream
     ({
       item,
       index,
-      extraData: ed,
     }: {
       item: SessionNode;
       index: number;
-      extraData?: { lastIndex: number; context: NodeRenderContext };
     }) => {
-      if (!ed) return null;
       // Stable View root — FlashList v2 recycles by cell shape, so every row
       // must resolve to the same element tree. `useSessionNodes` already
       // filters out event nodes the dispatcher can't render.
@@ -117,13 +114,13 @@ export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStream
         <View style={[styles.row, { paddingHorizontal: horizontalPadding }]}>
           {renderNode({
             node: item,
-            context: ed.context,
-            isLast: index === ed.lastIndex,
+            context: renderContext,
+            isLast: index === nodes.length - 1,
           })}
         </View>
       );
     },
-    [horizontalPadding],
+    [horizontalPadding, nodes.length, renderContext],
   );
 
   const keyExtractor = useCallback((item: SessionNode) => nodeKey(item), []);
@@ -164,6 +161,10 @@ export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStream
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         getItemType={getItemType}
+        // Keep virtualization, but do not let FlashList reuse native-backed
+        // session rows across Fabric mounts. The stream mixes ContextMenu,
+        // SymbolView, Markdown, and rapidly changing agent output.
+        maxItemsInRecyclePool={0}
         inverted={false}
         onScroll={handleScroll}
         scrollEventThrottle={16}
