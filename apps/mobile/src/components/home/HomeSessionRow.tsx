@@ -18,6 +18,7 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
   const theme = useTheme();
   const name = useEntityField("sessions", sessionId, "name");
   const branch = useEntityField("sessions", sessionId, "branch");
+  const channel = useEntityField("sessions", sessionId, "channel");
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId");
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus");
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
@@ -41,6 +42,7 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
   if (!name) return null;
 
   const timestamp = lastMessageAt ?? updatedAt ?? null;
+  const channelName = (channel as { name?: string } | null | undefined)?.name ?? null;
 
   return (
     <ContextMenu actions={actions} onPress={onMenuPress} preview={null}>
@@ -98,6 +100,11 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
           {timestamp ? (
             <Text variant="caption2" color="dimForeground" style={styles.timestamp}>
               {timeAgo(timestamp)}
+            </Text>
+          ) : null}
+          {channelName ? (
+            <Text variant="caption2" color="dimForeground" numberOfLines={1}>
+              #{channelName}
             </Text>
           ) : null}
         </View>

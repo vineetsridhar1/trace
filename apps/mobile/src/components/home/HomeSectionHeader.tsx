@@ -6,7 +6,7 @@ import type { HomeSectionKind } from "@/hooks/useHomeSections";
 
 const SECTION_LABELS: Record<HomeSectionKind, string> = {
   needs_input: "Needs you",
-  working_now: "Working now",
+  working_now: "In progress",
   recently_done: "Recently done",
 };
 
@@ -17,7 +17,7 @@ function sectionColor(theme: Theme, kind: HomeSectionKind): string {
     case "working_now":
       return theme.colors.statusActive;
     case "recently_done":
-      return theme.colors.statusActive;
+      return theme.colors.statusDone;
   }
 }
 
@@ -47,7 +47,6 @@ export const HomeSectionHeader = memo(function HomeSectionHeader({
         },
       ]}
     >
-      <View style={[styles.dot, { backgroundColor: color }]} />
       <Text variant="footnote" style={[styles.label, { color, fontWeight: "600" }]}>
         {label}
       </Text>
@@ -64,11 +63,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     minHeight: 32,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
   },
   label: {},
 });
