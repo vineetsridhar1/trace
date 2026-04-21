@@ -6,7 +6,7 @@ import {
   useEntityField,
 } from "@trace/client-core";
 import type { ChipVariant, IconMenuItem } from "@/components/design-system";
-import { Chip, Glass, IconButton, Spinner, Text } from "@/components/design-system";
+import { Chip, IconButton, Spinner, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
@@ -106,37 +106,39 @@ export function SessionGroupHeader({
     return items;
   }, [archivedAt, handleArchive, handleCopyLink, handleOpenPr, prUrl, status]);
 
-  const content = (
+  const chip = prChip(prUrl, status);
+
+  return (
     <View
       style={[
-        styles.content,
+        styles.container,
         {
-          paddingHorizontal: theme.spacing.lg,
-          paddingVertical: theme.spacing.md,
+          backgroundColor: solid ? theme.colors.surface : theme.colors.background,
           borderBottomColor: theme.colors.borderMuted,
+          paddingHorizontal: theme.spacing.lg,
+          paddingVertical: theme.spacing.sm,
         },
       ]}
     >
       <View style={styles.headerRow}>
         <View style={styles.textBlock}>
           {name ? (
-            <>
-              <Text variant="title1" numberOfLines={2}>
-                {name}
-              </Text>
-              {branch ? (
-                <Text variant="mono" numberOfLines={1} color="mutedForeground">
-                  {branch}
-                </Text>
-              ) : null}
-            </>
+            <Text variant="headline" numberOfLines={1}>
+              {name}
+            </Text>
           ) : (
             <Spinner size="small" color="mutedForeground" />
           )}
+          {branch ? (
+            <Text variant="caption1" numberOfLines={1} color="mutedForeground" style={styles.branch}>
+              {branch}
+            </Text>
+          ) : null}
         </View>
+        {chip ? <Chip label={chip.label} variant={chip.variant} /> : null}
         <IconButton
           symbol="ellipsis.circle"
-          size="lg"
+          size="md"
           color="mutedForeground"
           onPress={() => {}}
           accessibilityLabel="Session group actions"
@@ -144,50 +146,25 @@ export function SessionGroupHeader({
           dropdownMenuMode
         />
       </View>
-      {(() => {
-        const chip = prChip(prUrl, status);
-        return chip ? <Chip label={chip.label} variant={chip.variant} /> : null;
-      })()}
     </View>
-  );
-
-  if (solid) {
-    return (
-      <View
-        style={{
-          backgroundColor: theme.colors.surface,
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: theme.colors.borderMuted,
-        }}
-      >
-        {content}
-      </View>
-    );
-  }
-
-  return (
-    <Glass preset="pinnedBar" style={styles.glass}>
-      {content}
-    </Glass>
   );
 }
 
 const styles = StyleSheet.create({
-  glass: {
+  container: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  content: {
-    gap: 10,
   },
   headerRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
+    alignItems: "center",
+    gap: 10,
   },
   textBlock: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+  },
+  branch: {
+    marginTop: 1,
+    fontFamily: "Menlo",
   },
 });
