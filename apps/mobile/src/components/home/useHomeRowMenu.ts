@@ -33,7 +33,7 @@ export function useHomeRowMenu({
   isActive,
 }: HomeRowMenuParams): HomeRowMenu {
   const handleStop = useCallback(async () => {
-    void haptic.medium();
+    void haptic.heavy();
     const result = await getClient()
       .mutation(DISMISS_SESSION_MUTATION, { id: sessionId })
       .toPromise();

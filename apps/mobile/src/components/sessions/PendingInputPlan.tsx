@@ -42,10 +42,12 @@ export function PendingInputPlan({
   const hasAnswer = selected || trimmed.length > 0;
 
   const dispatch = useCallback(
-    async (text: string, interactionMode?: string) => {
+    async (text: string, interactionMode?: string, kind: "approve" | "revise" = "revise") => {
       if (sending) return;
       setSending(true);
-      void haptic.light();
+      // §11.6: approve plan → success; revise (and any other follow-up) → light.
+      if (kind === "approve") void haptic.success();
+      else void haptic.light();
       try {
         await getClient()
           .mutation(SEND_SESSION_MESSAGE_MUTATION, {
@@ -65,9 +67,9 @@ export function PendingInputPlan({
 
   const handleSend = useCallback(() => {
     if (selected && !trimmed) {
-      void dispatch(APPROVE_TEXT);
+      void dispatch(APPROVE_TEXT, undefined, "approve");
     } else if (trimmed) {
-      void dispatch(`Please revise the plan: ${trimmed}`, "plan");
+      void dispatch(`Please revise the plan: ${trimmed}`, "plan", "revise");
     }
   }, [dispatch, selected, trimmed]);
 

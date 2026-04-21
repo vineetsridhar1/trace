@@ -13,6 +13,7 @@ import { Glass, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { MODE_CYCLE, useComposerModePalette } from "@/hooks/useComposerModePalette";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
+import { recordPerf } from "@/lib/perf";
 import { alpha, useTheme } from "@/theme";
 import { ComposerConnectionNotice } from "./ComposerConnectionNotice";
 
@@ -114,7 +115,16 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
         <Animated.View style={[styles.inputWrapper, inputAnimatedStyle]}>
           <TextInput
             value={text}
-            onChangeText={setText}
+            onChangeText={(next) => {
+              // §16 budget: <16ms from keystroke to next painted frame.
+              // Stamp the callback start, then sample at the next animation
+              // frame to capture state-set + React commit + paint setup.
+              const start = performance.now();
+              setText(next);
+              requestAnimationFrame(() => {
+                recordPerf("input-latency", performance.now() - start);
+              });
+            }}
             onContentSizeChange={(e) => {
               const h = e.nativeEvent.contentSize.height;
               const next = Math.min(MAX_INPUT_HEIGHT, Math.max(MIN_INPUT_HEIGHT, h));

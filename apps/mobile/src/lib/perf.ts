@@ -25,8 +25,11 @@ export type PerfMetric =
 
 interface PerfSample {
   metric: PerfMetric;
+  /** Duration of the measured event, in milliseconds. */
   ms: number;
+  /** Wall-clock timestamp of when the sample was recorded. */
   at: number;
+  /** Optional tag — e.g. eventType for `event-ingest` samples. */
   meta?: string;
 }
 
@@ -74,6 +77,10 @@ export function markAppForegrounded(): void {
   if (lastBackgroundedAt == null) return;
   const start = lastBackgroundedAt;
   lastBackgroundedAt = null;
+  // We want "interactive" not just "JS thread free", so wait until any
+  // pending interactions have flushed before stamping the warm-start. On a
+  // healthy device this fires within a frame; on a janky one the delay is
+  // exactly the bug we want to surface.
   InteractionManager.runAfterInteractions(() => {
     recordPerf("warm-start", nowMs() - start);
   });
@@ -83,7 +90,9 @@ export function markAppForegrounded(): void {
  * Wrap an event handler so the time from when this function is invoked to
  * when the handler returns is reported as an event-ingest sample. The handler
  * runs synchronously — store mutations in `client-core` are sync — so the
- * elapsed time is the JS-thread cost of routing + upserting.
+ * elapsed time is the JS-thread cost of routing + upserting. The `finally`
+ * deliberately records even when the handler throws so a perpetually-bad
+ * payload still shows up as an outlier instead of silently dropping samples.
  */
 export function timedEventIngest<T>(eventType: string, handler: () => T): T {
   const start = nowMs();

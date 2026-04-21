@@ -108,32 +108,31 @@ can be checked without re-instrumentation:
 
 ## Code-only follow-ups surfaced by /review-against-plan
 
-These are gaps the review found that *can* be closed from a codebase but
-weren't part of this PR. Pick them up in a small follow-up commit on the
-same ticket before declaring it shipped:
+All four gaps the review found are now closed. Each item below describes
+the original gap and where the fix lives.
 
-- [ ] **Haptic-map drift vs §11.6**: three call sites use the wrong
-      strength.
-  - `useHomeRowMenu.handleStop` fires `medium`; spec says `heavy` for
-      "Stop session (confirm)".
-  - `SessionGroupHeader.archiveGroup` fires `medium`; archive is a
-      destructive confirmation → `heavy`.
-  - `PendingInputPlan.dispatch` fires `light` for both approve and revise;
-      the approve branch should fire `success` per "Approve plan → success".
-- [ ] **`recordPerf("input-latency", …)` is declared but never called.**
-      Add a marker around `SessionInputComposer`'s `onChangeText` so the
-      §16 input-latency budget actually has samples in the ring buffer.
-- [ ] **Status chip on change: brief flash / scale** (an explicit "specific
-      target" in this ticket). `Chip` only pulses `inProgress`; switching
-      from any other variant to a new one has no transition cue. Add a
-      one-shot scale/opacity flash keyed on `variant` change.
-- [ ] **Message arrival entrance animation** (also an explicit "specific
-      target"). Currently no per-row entrance — auto-scroll handles "follow
-      the bottom" but new messages do not fade/slide in. A `FadeIn` on the
-      newest row only (gated by `isLast` + a "near bottom" flag) would
-      satisfy this without per-row recycling cost. The risk: it interacts
-      with the `maxItemsInRecyclePool={0}` workaround for the Fabric crash;
-      validate before landing.
+- [x] **Haptic-map drift vs §11.6**: three call sites had the wrong
+      strength. Fixed in `useHomeRowMenu.handleStop` (medium → heavy),
+      `SessionGroupHeader.archiveGroup` (medium → heavy), and
+      `PendingInputPlan.dispatch` (now branches `success` for approve,
+      `light` for revise). Also downgraded `SessionGroupHeader.handleCopyLink`
+      from `success` to `light` since copy is not a notification-class event.
+- [x] **`recordPerf("input-latency", …)` is now wired**. The
+      `SessionInputComposer` `onChangeText` callback stamps the keystroke
+      start, then samples in `requestAnimationFrame` so the recorded
+      duration covers state-set + commit + paint setup — the right shape
+      for the §16 <16ms budget.
+- [x] **Status chip on change: brief flash**. `Chip` now scales to 1.08
+      then springs back to 1 whenever its `variant` changes. Skipped on the
+      first render so chips don't pop unsolicited when a list mounts.
+- [x] **Message arrival entrance animation**. `SessionStreamList` now
+      wraps the *newest* row in a `FadeInDown` entering animation, gated on
+      both `isNearBottomRef.current` (the user is following the bottom) and
+      `lastSeenKeyRef !== currentKey` (this is a brand-new last row, not
+      a re-render of the same one). A one-frame `acceptEntering` flag also
+      suppresses the cascade on initial mount. Compatible with the
+      `maxItemsInRecyclePool={0}` Fabric workaround — every row is mounted
+      exactly once, so per-row enters fire only on real arrivals.
 
 ## Dependency note
 

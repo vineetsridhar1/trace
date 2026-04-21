@@ -155,6 +155,7 @@ export function SessionStream({ sessionId, topInset, bottomInset }: SessionStrea
             initialScrollIndex={initialScrollIndex}
             topInset={topInset}
             bottomInset={bottomInset}
+            isNearBottomRef={isNearBottomRef}
             onScroll={handleScroll}
             fetchOlderEvents={fetchOlderEvents}
           />

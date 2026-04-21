@@ -34,9 +34,10 @@ export default function SignInScreen() {
 
   async function handleSignIn() {
     if (loading) return;
-    void haptic.light();
     setError(null);
     if (!isApiUrlConfigured()) {
+      // Validation fails before the request even goes out — fire only the
+      // error haptic so the user doesn't feel a confusing tap+error pair.
       setError(
         "EXPO_PUBLIC_API_URL is not configured. Restart Metro with " +
           "EXPO_PUBLIC_API_URL=http://<host>:4000.",
@@ -44,6 +45,7 @@ export default function SignInScreen() {
       void haptic.error();
       return;
     }
+    void haptic.light();
     setLoading(true);
     try {
       const result = await WebBrowser.openAuthSessionAsync(
