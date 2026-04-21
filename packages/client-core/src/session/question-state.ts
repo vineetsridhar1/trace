@@ -5,6 +5,14 @@ interface QuestionNode {
   questions: Question[];
 }
 
+/**
+ * State machine for the multi-question pending-input bar (web + mobile).
+ * Tracks per-question selections and free-form text, exposes pagination,
+ * and builds a combined "{header}: {answer}" response from all answered
+ * questions.
+ *
+ * Pure React + business logic — no DOM, no platform APIs.
+ */
 export function useQuestionState(node: QuestionNode) {
   const total = node.questions.length;
   const [page, setPage] = useState(0);
@@ -29,7 +37,7 @@ export function useQuestionState(node: QuestionNode) {
 
   const toggleOption = useCallback(
     (label: string) => {
-      setSelections((prev: Record<number, Set<string>>) => {
+      setSelections((prev) => {
         const current = prev[page] ?? new Set<string>();
         const next = new Set(current);
         if (q.multiSelect) {
@@ -50,23 +58,24 @@ export function useQuestionState(node: QuestionNode) {
 
   const setCustomText = useCallback(
     (text: string) => {
-      setCustomTexts((prev: Record<number, string>) => ({ ...prev, [page]: text }));
+      setCustomTexts((prev) => ({ ...prev, [page]: text }));
     },
     [page],
   );
 
   const goNext = useCallback(() => {
-    if (!isLastPage) setPage((p: number) => p + 1);
+    if (!isLastPage) setPage((p) => p + 1);
   }, [isLastPage]);
 
   const goPrev = useCallback(() => {
-    if (!isFirstPage) setPage((p: number) => p - 1);
+    if (!isFirstPage) setPage((p) => p - 1);
   }, [isFirstPage]);
 
   const buildResponse = useCallback((): string | null => {
     const parts: string[] = [];
     for (let i = 0; i < total; i++) {
       const qi = node.questions[i];
+      if (!qi) continue;
       const selected = selections[i];
       const custom = (customTexts[i] ?? "").trim();
       if (custom) {
