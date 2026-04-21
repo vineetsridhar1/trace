@@ -151,13 +151,21 @@ export function SessionPlayerOverlay() {
         </View>
 
         <View
-          style={[styles.topInset, { paddingTop: insets.top }]}
+          style={styles.topInset}
           onLayout={handleTopInsetLayout}
           pointerEvents="box-none"
         >
           <GestureDetector gesture={pan}>
             <View style={styles.dragHandle}>
-              <View style={styles.grabberRow}>
+              <View
+                style={[
+                  styles.grabberRow,
+                  {
+                    paddingTop: insets.top + 8,
+                    backgroundColor: theme.colors.background,
+                  },
+                ]}
+              >
                 <View
                   style={[
                     styles.grabber,
@@ -208,7 +216,6 @@ const styles = StyleSheet.create({
   grabberRow: {
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 8,
     paddingBottom: 6,
   },
   grabber: {
