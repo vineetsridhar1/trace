@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView } from "expo-symbols";
 import { useEntityField } from "@trace/client-core";
-import { Text } from "@/components/design-system";
+import { Glass, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
 import { alpha, useTheme, type Theme } from "@/theme";
@@ -82,13 +82,12 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
     : isActive ? "Queue a message…" : "Send a message…";
 
   return (
-    <View style={[styles.container, {
-      backgroundColor: theme.colors.surface,
-      borderTopColor: theme.colors.border,
+    <Glass preset="pinnedBar" style={{
+      borderRadius: 0,
       paddingHorizontal: theme.spacing.md,
       paddingTop: theme.spacing.sm,
       paddingBottom: theme.spacing.sm + insets.bottom,
-    }]}>
+    }}>
       {errorDraft ? (
         <Pressable onPress={handleRetry} accessibilityRole="button" accessibilityLabel="Retry send" style={styles.retryRow}>
           <Text variant="caption1" style={{ color: theme.colors.destructive }}>
@@ -141,12 +140,11 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
           <SymbolView name="paperplane.fill" size={14} tintColor={theme.colors.accentForeground} resizeMode="scaleAspectFit" style={styles.sendIcon} />
         </Pressable>
       </View>
-    </View>
+    </Glass>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { borderTopWidth: StyleSheet.hairlineWidth },
   row: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   modePill: { height: MIN_HEIGHT, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   input: { flex: 1, minHeight: MIN_HEIGHT, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, fontSize: 15, lineHeight: 20 },
