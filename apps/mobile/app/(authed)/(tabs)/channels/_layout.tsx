@@ -28,6 +28,10 @@ export default function ChannelsLayout() {
           headerLargeTitleShadowVisible: false,
           headerSearchBarOptions: {
             placeholder: "Search channels",
+            // See channels/index.tsx — pull-to-reveal fights iOS 26 tab bar
+            // minimize for the same scroll view. Keep the bar always visible
+            // so the tab bar + bottom accessory collapse on scroll.
+            hideWhenScrolling: false,
           },
           headerRight: () => (
             <TopBarPill

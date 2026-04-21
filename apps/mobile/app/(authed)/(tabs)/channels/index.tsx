@@ -22,11 +22,14 @@ export default function ChannelsIndex() {
 
   const keys = useCodingChannelKeys({ search });
 
-  // Native iOS pull-to-reveal: hidden on initial scroll offset, revealed
-  // when the user drags the large-title header down. Matches Mail / Settings.
+  // hideWhenScrolling is disabled because the pull-to-reveal observation
+  // (UISearchController + hidesSearchBarWhenScrolling=YES) conflicts with
+  // the tab bar's iOS 26 minimize-on-scroll binding on the same scroll
+  // view, stopping the tab bar and bottom accessory from collapsing.
   const searchBarOptions = useMemo(
     () => ({
       placeholder: "Search channels",
+      hideWhenScrolling: false,
       onChangeText: (e: { nativeEvent: { text: string } }) => setSearch(e.nativeEvent.text),
       onCancelButtonPress: () => setSearch(""),
     }),
