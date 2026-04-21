@@ -207,7 +207,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
 const styles = StyleSheet.create({
   card: { borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, gap: 6 },
   inputWrapper: { overflow: "hidden" },
-  input: { flex: 1, fontSize: 16, lineHeight: 21, paddingHorizontal: 2, paddingVertical: 2, textAlignVertical: "top" },
+  input: { fontSize: 16, lineHeight: 21, paddingHorizontal: 2, paddingVertical: 2, textAlignVertical: "top" },
   controlsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 },
   optionsGroup: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 },
   chip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth },
