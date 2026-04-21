@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  KeyboardAvoidingView,
+  Keyboard,
+  LayoutAnimation,
   Platform,
   StyleSheet,
+  UIManager,
   View,
   type LayoutChangeEvent,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   eventScopeKey,
   useEntityField,
@@ -79,10 +82,42 @@ export function SessionSurface({
     () => findMostRecentPendingInput(eventIds, events),
     [eventIds, events],
   );
+  const insets = useSafeAreaInsets();
   const [composerHeight, setComposerHeight] = useState(0);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
     setComposerHeight(e.nativeEvent.layout.height);
   }, []);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const animate = (duration: number | undefined) => {
+      if (Platform.OS === "ios" && duration) {
+        LayoutAnimation.configureNext({
+          duration,
+          update: { type: LayoutAnimation.Types.keyboard },
+        });
+      } else if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+        UIManager.setLayoutAnimationEnabledExperimental(true);
+      }
+    };
+    const show = Keyboard.addListener(showEvent, (e) => {
+      animate(e.duration);
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hide = Keyboard.addListener(hideEvent, (e) => {
+      animate(e.duration);
+      setKeyboardHeight(0);
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  // iOS's keyboard height already includes the home-indicator safe-area, so
+  // offset by insets.bottom to avoid double-padding the composer.
+  const overlayBottom = keyboardHeight > 0 ? Math.max(0, keyboardHeight - insets.bottom) : 0;
 
   useEffect(() => {
     if (!groupId) return;
@@ -105,10 +140,7 @@ export function SessionSurface({
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={[styles.root, { backgroundColor: theme.colors.background }]}
-    >
+    <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
       {hideHeader ? null : (
         <View style={styles.headerLayer}>
           <SessionGroupHeader groupId={groupId} sessionId={sessionId} />
@@ -128,7 +160,11 @@ export function SessionSurface({
         topInset={topInset}
         bottomInset={composerHeight}
       />
-      <View style={styles.overlay} onLayout={handleComposerLayout} pointerEvents="box-none">
+      <View
+        style={[styles.overlay, { bottom: overlayBottom }]}
+        onLayout={handleComposerLayout}
+        pointerEvents="box-none"
+      >
         {pendingInput ? (
           <PendingInputBar sessionId={sessionId} />
         ) : (
@@ -138,7 +174,7 @@ export function SessionSurface({
           </>
         )}
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
