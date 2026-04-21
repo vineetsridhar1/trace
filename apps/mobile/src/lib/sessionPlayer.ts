@@ -33,39 +33,27 @@ export function closeSessionPlayer(): void {
 }
 
 /**
- * Tracks in-flight prefetches so rapid presses coalesce into one network
- * round-trip per session/group. Entries clear once the request settles.
- */
-const inFlightSessionFetches = new Set<string>();
-const inFlightGroupFetches = new Set<string>();
-
-/**
  * Warms the Zustand entity store with the data the Session Player needs
  * before it mounts. Intended to be called on `onPressIn` of session rows so
  * the ~150–300 ms between touch-down and the spring landing overlaps with
- * the network round-trip. When the overlay mounts, `useEnsureSessionGroupDetail`
- * and `useSessionDetail` find cached data in the store and skip the
- * loading-spinner → content swap that causes first-open lag.
+ * the network round-trip. When the overlay mounts, its fetch hooks reuse
+ * the in-flight promise (dedup lives in the fetch helpers) and the spinner
+ * branch short-circuits if the group has already hydrated.
  *
- * Fire-and-forget. Errors are swallowed — the real fetches inside the
- * overlay hooks will retry and surface their own error states.
+ * Fire-and-forget. A prefetch failure only logs a warning — the overlay's
+ * own fetch will run and surface the canonical error state.
  */
-export function prefetchSessionPlayer(sessionId: string | null | undefined): void {
-  if (!sessionId) return;
+export function prefetchSessionPlayer(sessionId: string): void {
+  void fetchSessionDetail(sessionId).catch((error) => {
+    console.warn("[prefetchSessionPlayer] session detail failed", error);
+  });
 
-  if (!inFlightSessionFetches.has(sessionId)) {
-    inFlightSessionFetches.add(sessionId);
-    void fetchSessionDetail(sessionId).finally(() => {
-      inFlightSessionFetches.delete(sessionId);
+  const groupId = useEntityStore.getState().sessions[sessionId]?.sessionGroupId;
+  if (groupId) {
+    void fetchSessionGroupDetail(groupId).catch((error) => {
+      console.warn("[prefetchSessionPlayer] group detail failed", error);
     });
   }
-
-  const session = useEntityStore.getState().sessions[sessionId];
-  const groupId = session?.sessionGroupId;
-  if (groupId && !inFlightGroupFetches.has(groupId)) {
-    inFlightGroupFetches.add(groupId);
-    void fetchSessionGroupDetail(groupId).finally(() => {
-      inFlightGroupFetches.delete(groupId);
-    });
-  }
+  // If groupId isn't in the store yet (deep link / push tap), the session
+  // fetch chains the group fetch itself once the response lands.
 }
