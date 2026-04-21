@@ -31,8 +31,9 @@ interface SessionStreamProps {
 }
 
 const NEAR_BOTTOM_THRESHOLD = 120;
-const TIMESTAMP_REVEAL_ACTIVATION = 10;
-const TIMESTAMP_REVEAL_FAIL_Y = 24;
+const TIMESTAMP_REVEAL_ACTIVATION = 24;
+// Fraction of finger travel that maps to reveal distance; lower = more resistance.
+const TIMESTAMP_REVEAL_RESISTANCE = 0.5;
 
 /** In-memory scroll offset per sessionId — preserved across re-mounts within a session. */
 const scrollOffsetMemory = new Map<string, number>();
@@ -96,18 +97,21 @@ export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStream
     listRef.current?.scrollToEnd({ animated: true });
   }, [clearNewActivity]);
 
-  const timestampRevealGesture = Gesture.Pan()
-    .activeOffsetX([-TIMESTAMP_REVEAL_ACTIVATION, TIMESTAMP_REVEAL_ACTIVATION])
-    .failOffsetY([-TIMESTAMP_REVEAL_FAIL_Y, TIMESTAMP_REVEAL_FAIL_Y])
-    .onChange((event) => {
-      timestampRevealX.value = Math.min(
-        TIMESTAMP_REVEAL_DISTANCE,
-        Math.max(0, -event.translationX),
-      );
-    })
-    .onFinalize(() => {
-      timestampRevealX.value = withSpring(0, theme.motion.springs.smooth);
-    });
+  const timestampRevealGesture = Gesture.Simultaneous(
+    Gesture.Pan()
+      .activeOffsetX([-TIMESTAMP_REVEAL_ACTIVATION, TIMESTAMP_REVEAL_ACTIVATION])
+      .onChange((event) => {
+        const overshoot = Math.max(0, -event.translationX - TIMESTAMP_REVEAL_ACTIVATION);
+        timestampRevealX.value = Math.min(
+          TIMESTAMP_REVEAL_DISTANCE,
+          overshoot * TIMESTAMP_REVEAL_RESISTANCE,
+        );
+      })
+      .onFinalize(() => {
+        timestampRevealX.value = withSpring(0, theme.motion.springs.smooth);
+      }),
+    Gesture.Native(),
+  );
 
   const initialScrollIndex = useMemo(() => {
     if (nodes.length === 0) return undefined;
