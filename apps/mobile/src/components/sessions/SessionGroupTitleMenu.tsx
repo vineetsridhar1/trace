@@ -152,7 +152,7 @@ function MorphingTitle({ groupId, sessionId, fullWidth }: SessionGroupTitleMenuP
       >
         <GlassView
           isInteractive
-          glassEffectStyle="clear"
+          glassEffectStyle="regular"
           colorScheme={theme.scheme === "dark" ? "dark" : "light"}
           style={styles.inlinePill}
         >
@@ -185,7 +185,7 @@ function MorphingTitle({ groupId, sessionId, fullWidth }: SessionGroupTitleMenuP
         {triggerPos ? (
           <AnimatedGlassView
             isInteractive
-            glassEffectStyle="clear"
+            glassEffectStyle="regular"
             colorScheme={theme.scheme === "dark" ? "dark" : "light"}
             style={[
               styles.portalGlass,
