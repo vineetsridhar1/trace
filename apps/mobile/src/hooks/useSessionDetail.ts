@@ -119,26 +119,29 @@ async function fetchSessionDetail(sessionId: string): Promise<void> {
   }
 
   const queued = fetched.queuedMessages ?? [];
-  if (queued.length > 0) {
-    // Also refresh the `_queuedMessageIdsBySession` index so ticket-23's
-    // queued-messages strip renders in the right order without waiting for a
-    // mutation-driven update.
-    useEntityStore.setState((current) => {
-      const qmTable = { ...current.queuedMessages };
-      const ids: string[] = [];
-      for (const qm of queued) {
-        qmTable[qm.id] = qm;
-        ids.push(qm.id);
-      }
-      return {
-        queuedMessages: qmTable,
-        _queuedMessageIdsBySession: {
-          ...current._queuedMessageIdsBySession,
-          [sessionId]: ids,
-        },
-      };
-    });
-  }
+  // Refresh the authoritative queue index even when the server returns an empty
+  // queue, so backgrounded clients don't keep stale queued-message chips.
+  useEntityStore.setState((current) => {
+    const qmTable = { ...current.queuedMessages };
+    const previousIds = current._queuedMessageIdsBySession[sessionId] ?? [];
+    const ids: string[] = [];
+    const nextIds = new Set<string>();
+    for (const qm of queued) {
+      qmTable[qm.id] = qm;
+      ids.push(qm.id);
+      nextIds.add(qm.id);
+    }
+    for (const id of previousIds) {
+      if (!nextIds.has(id)) delete qmTable[id];
+    }
+    return {
+      queuedMessages: qmTable,
+      _queuedMessageIdsBySession: {
+        ...current._queuedMessageIdsBySession,
+        [sessionId]: ids,
+      },
+    };
+  });
 }
 
 export function useSessionDetail(sessionId: string): void {

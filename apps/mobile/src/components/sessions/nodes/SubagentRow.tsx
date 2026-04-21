@@ -40,8 +40,8 @@ export function SubagentRow({
         style={[
           styles.header,
           {
-            backgroundColor: alpha(tint, 0.1),
-            borderColor: alpha(tint, 0.3),
+            backgroundColor: "rgba(38,38,38,0.4)",
+            borderColor: "rgba(255,255,255,0.05)",
             borderRadius: theme.radius.sm,
             paddingVertical: theme.spacing.xs,
             paddingHorizontal: theme.spacing.sm,
