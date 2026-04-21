@@ -36,6 +36,21 @@ export type BridgeRuntimeAccessInfo = {
   pendingRequest?: BridgePendingRequest | null;
 };
 
+// Owners implicitly have access, so the permission prompt should never
+// render for them. Offline handling is the caller's job: a session's
+// recovery panel takes over when the owner's bridge is unreachable, while
+// non-owners without a grant still get the permission prompt so they can
+// request access even while the bridge is offline (requests are durable
+// and the owner can approve them on reconnect).
+export function isBridgeInteractionAllowed(
+  access: BridgeRuntimeAccessInfo | null,
+): boolean {
+  if (!access) return true;
+  if (access.hostingMode !== "local") return true;
+  if (access.allowed || access.isOwner) return true;
+  return false;
+}
+
 function buildFallbackAccess(runtimeInstanceId: string): BridgeRuntimeAccessInfo {
   const hostingMode = isCloudMachineRuntimeId(runtimeInstanceId) ? "cloud" : "local";
   const allowed = hostingMode !== "local";

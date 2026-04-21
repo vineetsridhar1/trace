@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Send, Square, Cloud, Monitor } from "lucide-react";
 import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
@@ -25,8 +25,11 @@ import { ImageAttachmentBar, type ImageAttachment } from "./ImageAttachmentBar";
 import { uploadImage } from "../../lib/upload";
 import { generateUUID } from "@trace/client-core";
 import { useAuthStore } from "@trace/client-core";
+import { useDraftsStore } from "../../stores/drafts";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
-import type { BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
+import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
+
+const EMPTY_IMAGES: ImageAttachment[] = [];
 
 const MAX_IMAGES = 5;
 
@@ -54,26 +57,26 @@ export function SessionInput({
     | boolean
     | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
-  const [hasContent, setHasContent] = useState(false);
-  const [mode, setMode] = useState<"code" | "plan" | "ask">("code");
-  const [images, setImages] = useState<ImageAttachment[]>([]);
+  const images = useDraftsStore(
+    (s) => s.drafts[sessionId]?.images ?? EMPTY_IMAGES,
+  );
+  const setDraftImages = useDraftsStore((s) => s.setDraftImages);
+  const setDraftText = useDraftsStore((s) => s.setDraftText);
+  const [initialDraftHtml] = useState(
+    () => useDraftsStore.getState().drafts[sessionId]?.html ?? "",
+  );
+  const [hasContent, setHasContent] = useState(
+    () => (useDraftsStore.getState().drafts[sessionId]?.text ?? "").trim().length > 0,
+  );
+  const [mode, setMode] = useState<InteractionMode>("code");
   const [isSending, setIsSending] = useState(false);
   const isSendingRef = useRef(false);
   const editorRef = useRef<ChatEditorHandle>(null);
-  const imagesRef = useRef(images);
-  imagesRef.current = images;
-
-  useEffect(() => {
-    return () => {
-      for (const img of imagesRef.current) URL.revokeObjectURL(img.previewUrl);
-    };
-  }, []);
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
   const disconnected = isDisconnected(connection);
   const canQueue = canQueueMessage(agentStatus, worktreeDeleted);
-  const bridgeInteractionAllowed =
-    !bridgeAccess || bridgeAccess.hostingMode !== "local" || bridgeAccess.allowed;
+  const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess);
   const canSend =
     bridgeInteractionAllowed &&
     !isOptimistic &&
@@ -96,25 +99,27 @@ export function SessionInput({
 
   const handleImagePaste = useCallback((files: File[]) => {
     if (isSendingRef.current) return;
-    const remaining = MAX_IMAGES - images.length;
-    if (remaining <= 0) return;
-    const newImages: ImageAttachment[] = files.slice(0, remaining).map((file) => ({
-      id: generateUUID(),
-      file,
-      previewUrl: URL.createObjectURL(file),
-      s3Key: null,
-      uploading: false,
-    }));
-    setImages((prev) => [...prev, ...newImages]);
-  }, [images.length]);
+    setDraftImages(sessionId, (prev) => {
+      const remaining = MAX_IMAGES - prev.length;
+      if (remaining <= 0) return prev;
+      const newImages: ImageAttachment[] = files.slice(0, remaining).map((file) => ({
+        id: generateUUID(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        s3Key: null,
+        uploading: false,
+      }));
+      return [...prev, ...newImages];
+    });
+  }, [sessionId, setDraftImages]);
 
   const handleRemoveImage = useCallback((id: string) => {
-    setImages((prev) => {
+    setDraftImages(sessionId, (prev) => {
       const img = prev.find((i) => i.id === id);
       if (img) URL.revokeObjectURL(img.previewUrl);
       return prev.filter((i) => i.id !== id);
     });
-  }, []);
+  }, [sessionId, setDraftImages]);
 
   const handleSubmit = useCallback(async (_html: string, text: string) => {
     if (isSendingRef.current) return;
@@ -158,14 +163,18 @@ export function SessionInput({
       let imageKeys: string[] = [];
       if (savedImages.length > 0) {
         const savedIds = new Set(savedImages.map((img) => img.id));
-        setImages((prev) => prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: true } : img)));
+        setDraftImages(sessionId, (prev) =>
+          prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: true } : img)),
+        );
         const orgId = useAuthStore.getState().activeOrgId;
         try {
           imageKeys = await Promise.all(
             savedImages.map((img) => uploadImage(img.file, orgId ?? undefined)),
           );
         } catch (error) {
-          setImages((prev) => prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: false } : img)));
+          setDraftImages(sessionId, (prev) =>
+            prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: false } : img)),
+          );
           toast.error(error instanceof Error ? error.message : "Failed to upload image");
           throw error;
         }
@@ -178,7 +187,7 @@ export function SessionInput({
       );
 
       const savedIds = new Set(savedImages.map((img) => img.id));
-      setImages((prev) => prev.filter((img) => !savedIds.has(img.id)));
+      setDraftImages(sessionId, (prev) => prev.filter((img) => !savedIds.has(img.id)));
 
       try {
         const result = await client
@@ -204,7 +213,10 @@ export function SessionInput({
         for (const img of savedImages) URL.revokeObjectURL(img.previewUrl);
       } catch (error) {
         removeOptimisticSessionMessage(sessionId, tempEventId);
-        setImages((prev) => [...savedImages.map((img) => ({ ...img, uploading: false })), ...prev]);
+        setDraftImages(sessionId, (prev) => [
+          ...savedImages.map((img) => ({ ...img, uploading: false })),
+          ...prev,
+        ]);
         toast.error(error instanceof Error ? error.message : "Failed to send message");
         throw error;
       }
@@ -213,6 +225,14 @@ export function SessionInput({
       setIsSending(false);
     }
   }, [sessionId, mode, canSend, canQueue, images]);
+
+  // If the user has bridge access (owner or granted), a disconnected session
+  // belongs to the recovery panel — not the permission prompt. Non-owners
+  // without access always see the permission prompt so they can request
+  // access, whether the bridge is online or offline.
+  if (bridgeInteractionAllowed && disconnected && !isNotStarted) {
+    return <SessionRecoveryPanel sessionId={sessionId} connection={connection} />;
+  }
 
   if (!bridgeInteractionAllowed) {
     return (
@@ -224,11 +244,6 @@ export function SessionInput({
         />
       </div>
     );
-  }
-
-  // Show recovery panel when disconnected — but not for not_started sessions
-  if (disconnected && !isNotStarted) {
-    return <SessionRecoveryPanel sessionId={sessionId} connection={connection} />;
   }
   const placeholder = worktreeDeleted
     ? "Worktree deleted. This session is read-only."
@@ -279,6 +294,7 @@ export function SessionInput({
           <div className="session-editor">
             <ChatEditor
               ref={editorRef}
+              initialHtml={initialDraftHtml}
               onSubmit={handleSubmit}
               placeholder={placeholder}
               disabled={!canSend || isSending}
@@ -286,8 +302,9 @@ export function SessionInput({
               onShiftTab={cycleMode}
               onImagePaste={handleImagePaste}
               hasAttachments={images.length > 0}
-              onChange={(text: string) => {
+              onChange={(text: string, html: string) => {
                 setHasContent(text.trim().length > 0);
+                setDraftText(sessionId, text, html);
               }}
             />
           </div>

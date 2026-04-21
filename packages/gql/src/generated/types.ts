@@ -1312,6 +1312,7 @@ export type Query = {
   repoBranches: Array<Scalars['String']['output']>;
   repos: Array<Repo>;
   resolvedAiMode: AutonomyMode;
+  searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
   session?: Maybe<Session>;
   sessionGroup?: Maybe<SessionGroup>;
@@ -1507,6 +1508,12 @@ export type QueryResolvedAiModeArgs = {
   organizationId: Scalars['ID']['input'];
   scopeId: Scalars['ID']['input'];
   scopeType: Scalars['String']['input'];
+};
+
+
+export type QuerySearchSessionsArgs = {
+  channelId?: InputMaybe<Scalars['ID']['input']>;
+  query: Scalars['String']['input'];
 };
 
 
@@ -1744,6 +1751,12 @@ export type SessionRuntimeInstance = {
   registeredRepoIds: Array<Scalars['ID']['output']>;
   sessionCount: Scalars['Int']['output'];
   supportedTools: Array<CodingTool>;
+};
+
+export type SessionSearchResults = {
+  __typename?: 'SessionSearchResults';
+  sessionGroups: Array<SessionGroup>;
+  sessions: Array<Session>;
 };
 
 export type SessionStatus =

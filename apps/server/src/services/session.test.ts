@@ -209,7 +209,6 @@ describe("SessionService", () => {
     sessionRouterMock.getRuntimeForSession.mockReturnValue(null);
     sessionRouterMock.getRuntime.mockReturnValue(null);
     sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
-    sessionRouterMock.getDefaultRuntime?.mockReturnValue?.(null);
     sessionRouterMock.destroyRuntime.mockResolvedValue(undefined);
     prismaMock.sessionGroup.findUnique.mockResolvedValue({
       ...makeSessionGroup(),
@@ -333,6 +332,92 @@ describe("SessionService", () => {
         include: expect.any(Object),
       });
       expect(result[0]?.status).toBe("archived");
+    });
+  });
+
+  describe("search", () => {
+    it("returns empty results when the trimmed query is shorter than 2 chars", async () => {
+      const result = await service.search("org-1", "  a  ");
+
+      expect(result).toEqual({ sessions: [], sessionGroups: [] });
+      expect(prismaMock.session.findMany).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.findMany).not.toHaveBeenCalled();
+    });
+
+    it("matches sessions by name and groups by name or slug, scoped to the org", async () => {
+      const matchingSession = makeSession({ id: "session-match", name: "Deploy dashboard" });
+      const matchingGroup = makeSessionGroup({
+        id: "group-match",
+        name: "Deploy pipeline",
+        sessions: [makeSession({ id: "session-in-group" })],
+      });
+
+      prismaMock.session.findMany.mockResolvedValueOnce([matchingSession]);
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([matchingGroup]);
+
+      const result = await service.search("org-1", "deploy");
+
+      expect(prismaMock.session.findMany).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-1",
+          name: { contains: "deploy", mode: "insensitive" },
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 20,
+        include: expect.any(Object),
+      });
+      expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-1",
+          OR: [
+            { name: { contains: "deploy", mode: "insensitive" } },
+            { slug: { contains: "deploy", mode: "insensitive" } },
+          ],
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 20,
+        include: expect.any(Object),
+      });
+      expect(result.sessions.map((session) => session.id)).toEqual(["session-match"]);
+      expect(result.sessionGroups.map((group) => group.id)).toEqual(["group-match"]);
+      // Derived status + sorted sessions should be present on the snapshot
+      expect(result.sessionGroups[0]?.status).toBeDefined();
+    });
+
+    it("narrows to a channel when channelId is provided", async () => {
+      prismaMock.session.findMany.mockResolvedValueOnce([]);
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([]);
+
+      await service.search("org-1", "deploy", "channel-1");
+
+      expect(prismaMock.session.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            organizationId: "org-1",
+            channelId: "channel-1",
+          }),
+        }),
+      );
+      expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            organizationId: "org-1",
+            channelId: "channel-1",
+          }),
+        }),
+      );
+    });
+
+    it("trims whitespace and caps query length at 200 chars", async () => {
+      prismaMock.session.findMany.mockResolvedValueOnce([]);
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([]);
+
+      const longInput = `  ${"a".repeat(500)}  `;
+      await service.search("org-1", longInput);
+
+      const sessionCall = prismaMock.session.findMany.mock.calls[0]?.[0];
+      const sessionWhere = sessionCall?.where as { name?: { contains?: string } };
+      expect(sessionWhere.name?.contains?.length).toBe(200);
     });
   });
 
@@ -1497,9 +1582,6 @@ describe("SessionService", () => {
       sessionRouterMock.getRuntime.mockImplementation((id: string) =>
         id === "runtime-a" ? null : { id, label: id, ws: { readyState: 1, OPEN: 1 } },
       );
-      sessionRouterMock.getDefaultRuntime = vi
-        .fn()
-        .mockReturnValue({ id: "runtime-b", label: "Laptop B", ws: { readyState: 1, OPEN: 1 } });
 
       await service.retryConnection("session-1", "org-1", "user", "user-1");
 
@@ -1585,6 +1667,13 @@ describe("SessionService", () => {
           agentStatus: "not_started",
           sessionStatus: "in_progress",
           workdir: "/tmp/trace/workspace",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
         }),
       );
       prismaMock.channel.findUnique.mockResolvedValueOnce({ setupScript: "pnpm install" });
@@ -1602,6 +1691,7 @@ describe("SessionService", () => {
       expect(terminalRelayMock.executeCommand).toHaveBeenCalledWith(
         "session-1",
         "group-1",
+        "runtime-1",
         "pnpm install",
         "/tmp/trace/workspace",
       );
@@ -1637,8 +1727,16 @@ describe("SessionService", () => {
         workdir: "/tmp/trace/workspace",
         worktreeDeleted: false,
         setupStatus: "failed",
+        connection: { runtimeInstanceId: "runtime-1" },
         channel: { setupScript: "pnpm install" },
-        sessions: [{ id: "session-1", hosting: "cloud", createdById: "user-1" }],
+        sessions: [
+          {
+            id: "session-1",
+            hosting: "cloud",
+            createdById: "user-1",
+            connection: { runtimeInstanceId: "runtime-1" },
+          },
+        ],
       });
       prismaMock.sessionGroup.update
         .mockResolvedValueOnce(
@@ -1661,6 +1759,7 @@ describe("SessionService", () => {
       expect(terminalRelayMock.executeCommand).toHaveBeenCalledWith(
         "session-1",
         "group-1",
+        "runtime-1",
         "pnpm install",
         "/tmp/trace/workspace",
       );

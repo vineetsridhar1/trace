@@ -1315,6 +1315,7 @@ export type Query = {
   repoBranches: Array<Scalars['String']['output']>;
   repos: Array<Repo>;
   resolvedAiMode: AutonomyMode;
+  searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
   session?: Maybe<Session>;
   sessionGroup?: Maybe<SessionGroup>;
@@ -1510,6 +1511,12 @@ export type QueryResolvedAiModeArgs = {
   organizationId: Scalars['ID']['input'];
   scopeId: Scalars['ID']['input'];
   scopeType: Scalars['String']['input'];
+};
+
+
+export type QuerySearchSessionsArgs = {
+  channelId?: InputMaybe<Scalars['ID']['input']>;
+  query: Scalars['String']['input'];
 };
 
 
@@ -1747,6 +1754,12 @@ export type SessionRuntimeInstance = {
   registeredRepoIds: Array<Scalars['ID']['output']>;
   sessionCount: Scalars['Int']['output'];
   supportedTools: Array<CodingTool>;
+};
+
+export type SessionSearchResults = {
+  __typename?: 'SessionSearchResults';
+  sessionGroups: Array<SessionGroup>;
+  sessions: Array<Session>;
 };
 
 export type SessionStatus =
@@ -2165,6 +2178,7 @@ export type ResolversTypes = ResolversObject<{
   SessionGroup: ResolverTypeWrapper<SessionGroup>;
   SessionGroupStatus: SessionGroupStatus;
   SessionRuntimeInstance: ResolverTypeWrapper<SessionRuntimeInstance>;
+  SessionSearchResults: ResolverTypeWrapper<SessionSearchResults>;
   SessionStatus: SessionStatus;
   SetApiTokenInput: SetApiTokenInput;
   SetupStatus: SetupStatus;
@@ -2260,6 +2274,7 @@ export type ResolversParentTypes = ResolversObject<{
   SessionFilters: SessionFilters;
   SessionGroup: SessionGroup;
   SessionRuntimeInstance: SessionRuntimeInstance;
+  SessionSearchResults: SessionSearchResults;
   SetApiTokenInput: SetApiTokenInput;
   SlashCommand: SlashCommand;
   StartSessionInput: StartSessionInput;
@@ -2841,6 +2856,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   repoBranches?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType, RequireFields<QueryRepoBranchesArgs, 'repoId'>>;
   repos?: Resolver<Array<ResolversTypes['Repo']>, ParentType, ContextType, RequireFields<QueryReposArgs, 'organizationId'>>;
   resolvedAiMode?: Resolver<ResolversTypes['AutonomyMode'], ParentType, ContextType, RequireFields<QueryResolvedAiModeArgs, 'organizationId' | 'scopeId' | 'scopeType'>>;
+  searchSessions?: Resolver<ResolversTypes['SessionSearchResults'], ParentType, ContextType, RequireFields<QuerySearchSessionsArgs, 'query'>>;
   searchUsers?: Resolver<Array<ResolversTypes['User']>, ParentType, ContextType, RequireFields<QuerySearchUsersArgs, 'query'>>;
   session?: Resolver<Maybe<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerySessionArgs, 'id'>>;
   sessionGroup?: Resolver<Maybe<ResolversTypes['SessionGroup']>, ParentType, ContextType, RequireFields<QuerySessionGroupArgs, 'id'>>;
@@ -2960,6 +2976,12 @@ export type SessionRuntimeInstanceResolvers<ContextType = Context, ParentType ex
   registeredRepoIds?: Resolver<Array<ResolversTypes['ID']>, ParentType, ContextType>;
   sessionCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   supportedTools?: Resolver<Array<ResolversTypes['CodingTool']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type SessionSearchResultsResolvers<ContextType = Context, ParentType extends ResolversParentTypes['SessionSearchResults'] = ResolversParentTypes['SessionSearchResults']> = ResolversObject<{
+  sessionGroups?: Resolver<Array<ResolversTypes['SessionGroup']>, ParentType, ContextType>;
+  sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3103,6 +3125,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   SessionEndpoints?: SessionEndpointsResolvers<ContextType>;
   SessionGroup?: SessionGroupResolvers<ContextType>;
   SessionRuntimeInstance?: SessionRuntimeInstanceResolvers<ContextType>;
+  SessionSearchResults?: SessionSearchResultsResolvers<ContextType>;
   SlashCommand?: SlashCommandResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;
   Terminal?: TerminalResolvers<ContextType>;

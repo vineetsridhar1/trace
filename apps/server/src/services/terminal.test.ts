@@ -76,6 +76,7 @@ describe("TerminalService", () => {
       expect(terminalRelayMock.createTerminal).toHaveBeenCalledWith(
         "session-1",
         "group-1",
+        "runtime-1",
         80,
         24,
         "/workspace",
@@ -232,6 +233,7 @@ describe("TerminalService", () => {
       expect(terminalRelayMock.createTerminal).toHaveBeenCalledWith(
         "session-1",
         "group-1",
+        "runtime-1",
         120,
         40,
         undefined,
@@ -347,6 +349,7 @@ describe("TerminalService", () => {
         sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
       });
       terminalRelayMock.getTerminalsForSessionGroup.mockReturnValueOnce(["term-1", "term-2"]);
       terminalRelayMock.getSessionId.mockImplementation((terminalId: string) => {
@@ -355,8 +358,18 @@ describe("TerminalService", () => {
         return undefined;
       });
       prismaMock.session.findMany.mockResolvedValueOnce([
-        { id: "session-1", hosting: "cloud", createdById: "user-1" },
-        { id: "session-2", hosting: "cloud", createdById: "user-2" },
+        {
+          id: "session-1",
+          hosting: "cloud",
+          createdById: "user-1",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+        {
+          id: "session-2",
+          hosting: "cloud",
+          createdById: "user-2",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
       ]);
 
       const result = await terminalService.listForSession({
@@ -441,22 +454,56 @@ describe("TerminalService", () => {
     });
 
     it("filters out local terminals owned by a different user in the same group", async () => {
-      prismaMock.session.findFirst.mockResolvedValueOnce({
-        id: "session-1",
-        sessionGroupId: "group-1",
-        hosting: "cloud",
-        createdById: "user-1",
-      });
+      // mockResolvedValueOnce queues persist across tests (vi.clearAllMocks
+      // only clears call history). Use mockImplementation (not -Once) so the
+      // implementation doesn't get consumed by a leftover queued value from a
+      // previous `it` block.
+      prismaMock.session.findFirst.mockReset();
+      prismaMock.session.findMany.mockReset();
+      prismaMock.session.findFirst.mockImplementation(() =>
+        Promise.resolve({
+          id: "session-1",
+          organizationId: "org-1",
+          sessionGroupId: "group-1",
+          hosting: "cloud",
+          createdById: "user-1",
+          connection: { runtimeInstanceId: "runtime-1" },
+        }),
+      );
       terminalRelayMock.getTerminalsForSessionGroup.mockReturnValueOnce(["term-1", "term-2"]);
       terminalRelayMock.getSessionId.mockImplementation((terminalId: string) => {
         if (terminalId === "term-1") return "session-1";
         if (terminalId === "term-2") return "session-2";
         return undefined;
       });
-      prismaMock.session.findMany.mockResolvedValueOnce([
-        { id: "session-1", hosting: "cloud", createdById: "user-1" },
-        { id: "session-2", hosting: "local", createdById: "user-2" },
-      ]);
+      prismaMock.session.findMany.mockImplementation(() =>
+        Promise.resolve([
+          {
+            id: "session-1",
+            organizationId: "org-1",
+            sessionGroupId: "group-1",
+            connection: { runtimeInstanceId: "runtime-1" },
+            sessionGroup: { connection: null },
+          },
+          {
+            id: "session-2",
+            organizationId: "org-1",
+            sessionGroupId: "group-1",
+            connection: { runtimeInstanceId: "runtime-2" },
+            sessionGroup: { connection: null },
+          },
+        ]),
+      );
+      // user-1 allowed on their own session-1 runtime; denied on session-2's local bridge.
+      runtimeAccessServiceMock.assertAccess.mockReset();
+      runtimeAccessServiceMock.assertAccess.mockImplementation(
+        (input: { runtimeInstanceId: string }) => {
+          if (input.runtimeInstanceId === "runtime-2") {
+            return Promise.reject(new Error("Access denied"));
+          }
+          return Promise.resolve(undefined);
+        },
+      );
 
       const result = await terminalService.listForSession({
         sessionId: "session-1",
@@ -475,6 +522,7 @@ describe("TerminalService", () => {
         id: "session-1",
         hosting: "cloud",
         createdById: "user-1",
+        connection: { runtimeInstanceId: "runtime-1" },
       });
 
       const result = await terminalService.destroy({

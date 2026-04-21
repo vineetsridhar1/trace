@@ -17,7 +17,7 @@ import { CheckpointOpenContext } from "./CheckpointOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
 import { SidebarPanel } from "./SidebarPanel";
 import type { SidebarTab } from "./SidebarPanel";
-import { useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
+import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useSessionGroupSessions } from "./useSessionGroupSessions";
 import { useTerminalActions } from "./useTerminalActions";
 import { useFileActions } from "./useFileActions";
@@ -325,8 +325,7 @@ export function SessionGroupDetailView({
     groupRuntimeInstanceId,
     sessionGroupId,
   );
-  const bridgeInteractionAllowed =
-    !bridgeAccess || bridgeAccess.hostingMode !== "local" || bridgeAccess.allowed;
+  const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess);
   const linkedCheckoutAllowed =
     bridgeInteractionAllowed &&
     !!groupRuntimeInstanceId &&

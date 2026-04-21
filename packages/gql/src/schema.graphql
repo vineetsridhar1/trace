@@ -391,6 +391,11 @@ type QueuedMessage {
   createdAt: DateTime!
 }
 
+type SessionSearchResults {
+  sessions: [Session!]!
+  sessionGroups: [SessionGroup!]!
+}
+
 type GitCheckpoint {
   id: ID!
   sessionId: ID!
@@ -996,6 +1001,7 @@ type Query {
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
   mySessions(organizationId: ID!, agentStatus: AgentStatus): [Session!]!
+  searchSessions(query: String!, channelId: ID): SessionSearchResults!
   tickets(organizationId: ID!, filters: TicketFilters): [Ticket!]!
   ticket(id: ID!): Ticket
   events(
