@@ -18,8 +18,6 @@ import { alpha, useTheme } from "@/theme";
 
 interface SessionInputComposerProps { sessionId: string }
 
-const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
-
 const MODE_CYCLE: ComposerMode[] = ["code", "plan", "ask"];
 const MODE_LABEL: Record<ComposerMode, string> = { code: "Code", plan: "Plan", ask: "Ask" };
 const MIN_INPUT_HEIGHT = 28;
@@ -142,20 +140,22 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             <Text variant="caption1" style={{ color: theme.colors.destructive }}>Failed to send. Tap to retry.</Text>
           </Pressable>
         ) : null}
-        <AnimatedTextInput
-          value={text}
-          onChangeText={setText}
-          onContentSizeChange={(e) => {
-            const h = e.nativeEvent.contentSize.height;
-            const next = Math.min(MAX_INPUT_HEIGHT, Math.max(MIN_INPUT_HEIGHT, h));
-            if (next !== height) setHeight(next);
-          }}
-          editable={canInteract}
-          multiline
-          placeholder={placeholder}
-          placeholderTextColor={theme.colors.dimForeground}
-          style={[styles.input, { color: theme.colors.foreground }, inputAnimatedStyle]}
-        />
+        <Animated.View style={[styles.inputWrapper, inputAnimatedStyle]}>
+          <TextInput
+            value={text}
+            onChangeText={setText}
+            onContentSizeChange={(e) => {
+              const h = e.nativeEvent.contentSize.height;
+              const next = Math.min(MAX_INPUT_HEIGHT, Math.max(MIN_INPUT_HEIGHT, h));
+              if (next !== height) setHeight(next);
+            }}
+            editable={canInteract}
+            multiline
+            placeholder={placeholder}
+            placeholderTextColor={theme.colors.dimForeground}
+            style={[styles.input, { color: theme.colors.foreground }]}
+          />
+        </Animated.View>
         <View style={styles.controlsRow}>
           <View style={styles.optionsGroup}>
             <Pressable
@@ -206,7 +206,8 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
 
 const styles = StyleSheet.create({
   card: { borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, gap: 6 },
-  input: { fontSize: 16, lineHeight: 21, minHeight: MIN_INPUT_HEIGHT, paddingHorizontal: 2, paddingVertical: 2, textAlignVertical: "top" },
+  inputWrapper: { overflow: "hidden" },
+  input: { flex: 1, fontSize: 16, lineHeight: 21, paddingHorizontal: 2, paddingVertical: 2, textAlignVertical: "top" },
   controlsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 },
   optionsGroup: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 },
   chip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth },
