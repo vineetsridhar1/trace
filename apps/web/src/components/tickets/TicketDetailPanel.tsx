@@ -1,7 +1,7 @@
 import { useEffect, useCallback } from "react";
 import { X } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { TicketDetailsSection } from "./TicketDetailsSection";
 import { TICKET_DETAIL_PANEL_WIDTH } from "./tickets-table-types";
 

@@ -13,5 +13,9 @@
     "declarationMap": false
   },
   "include": ["src"],
-  "references": [{ "path": "../../packages/shared" }, { "path": "../../packages/gql" }]
+  "references": [
+    { "path": "../../packages/shared" },
+    { "path": "../../packages/gql" },
+    { "path": "../../packages/client-core" }
+  ]
 }

@@ -1,6 +1,6 @@
 import { Circle } from "lucide-react";
 import { ExternalLink } from "lucide-react";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import {
   agentStatusColor,
   getDisplayAgentStatus,

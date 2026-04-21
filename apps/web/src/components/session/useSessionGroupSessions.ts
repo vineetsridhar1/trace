@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { useEntitiesByIds, useSessionIdsByGroup } from "../../stores/entity";
-import type { SessionEntity } from "../../stores/entity";
+import { useEntitiesByIds, useSessionIdsByGroup } from "@trace/client-core";
+import type { SessionEntity } from "@trace/client-core";
 
 export function useSessionGroupSessions(
   sessionGroupId: string,

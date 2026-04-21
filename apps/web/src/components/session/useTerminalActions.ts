@@ -4,7 +4,7 @@ import {
   CREATE_TERMINAL_MUTATION,
   DESTROY_TERMINAL_MUTATION,
   SESSION_TERMINALS_QUERY,
-} from "../../lib/mutations";
+} from "@trace/client-core";
 import { useTerminalStore } from "../../stores/terminal";
 import { useUIStore } from "../../stores/ui";
 import type { Terminal } from "@trace/gql";

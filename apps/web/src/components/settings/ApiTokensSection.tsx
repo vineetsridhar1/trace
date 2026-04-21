@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Key, Trash2, Check, Eye, EyeOff } from "lucide-react";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 import { useOnboardingStore } from "../../stores/onboarding";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";

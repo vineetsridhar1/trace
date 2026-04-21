@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Trace",
+    "slug": "trace-mobile",
+    "version": "0.0.1",
+    "scheme": "trace",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "bundleIdentifier": "com.trace.mobile",
+      "supportsTablet": false,
+      "associatedDomains": ["applinks:trace.app"]
+    },
+    "android": {
+      "package": "com.trace.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#000000"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      "expo-dev-client",
+      "expo-secure-store",
+      "expo-notifications",
+      "react-native-bottom-tabs"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

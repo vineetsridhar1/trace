@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { GitBranch, Pencil, Check, X } from "lucide-react";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import {
   UPDATE_REPO_MUTATION,
   REGISTER_REPO_WEBHOOK_MUTATION,
   UNREGISTER_REPO_WEBHOOK_MUTATION,
-} from "../../lib/mutations";
+} from "@trace/client-core";
 import { Button } from "../ui/button";
 import { BranchCombobox } from "../channel/BranchCombobox";
 import { RepoDesktopSection } from "./RepoDesktopSection";

@@ -2,7 +2,7 @@ import { memo, useMemo } from "react";
 import { MessageSquare, Code } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import { SidebarMenuItem, SidebarMenuButton } from "../ui/sidebar";
 

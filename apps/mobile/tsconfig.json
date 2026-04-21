@@ -1,0 +1,13 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@trace/client-core": ["../../packages/client-core/src/index.ts"],
+      "@trace/gql": ["../../packages/gql/dist/index.d.ts"],
+      "@trace/shared": ["../../packages/shared/dist/index.d.ts"]
+    }
+  },
+  "include": ["app/**/*", "src/**/*", ".expo/types/**/*.ts", "expo-env.d.ts"]
+}

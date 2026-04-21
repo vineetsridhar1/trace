@@ -1,7 +1,12 @@
 import type { SessionRuntimeInstance } from "@trace/gql";
 import { toast } from "sonner";
 import { client } from "./urql";
-import { START_SESSION_MUTATION, AVAILABLE_RUNTIMES_QUERY } from "./mutations";
+import {
+  START_SESSION_MUTATION,
+  AVAILABLE_RUNTIMES_QUERY,
+  generateUUID,
+  useEntityStore,
+} from "@trace/client-core";
 import {
   optimisticallyInsertSession,
   optimisticallyInsertSessionGroup,
@@ -9,7 +14,6 @@ import {
   rollbackOptimisticSession,
 } from "./optimistic-session";
 import { usePreferencesStore } from "../stores/preferences";
-import { useEntityStore } from "../stores/entity";
 import {
   useUIStore,
   navigateToSession,
@@ -18,7 +22,6 @@ import {
   registerOptimisticSessionRedirect,
 } from "../stores/ui";
 import { getDefaultModel } from "../components/session/modelOptions";
-import { generateUUID } from "./uuid";
 
 /**
  * Resolve the best runtime for a new session based on user preference.

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 import { UserProfileCard } from "./UserProfileCard";
 import { StartDirectMessageButton } from "./StartDirectMessageButton";
 

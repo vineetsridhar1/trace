@@ -1,5 +1,5 @@
-import { useAuthStore } from "../stores/auth";
-import { useEntityStore, type SessionEntity, type SessionGroupEntity } from "../stores/entity";
+import { useAuthStore } from "@trace/client-core";
+import { useEntityStore, type SessionEntity, type SessionGroupEntity } from "@trace/client-core";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;

@@ -1,5 +1,5 @@
-import { useEntityStore } from "../stores/entity";
-import type { EntityTableMap, EntityType } from "../stores/entity";
+import { useEntityStore } from "@trace/client-core";
+import type { EntityTableMap, EntityType } from "@trace/client-core";
 
 type PatchSpec<T extends EntityType> = {
   type: T;

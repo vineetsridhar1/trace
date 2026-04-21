@@ -77,6 +77,7 @@ The app is built on the same event-driven, service-layer-owned, event-sourced ar
 
 - **expo-router** (file-based, built on react-navigation)
 - **react-native-screens** (real UINavigationController/stack)
+- **react-native-bottom-tabs** + **@bottom-tabs/react-navigation** — native `UITabBarController` (real iOS tab bar). Paired with `expo-router`'s `withLayoutContext` so file-based routes drive a native navigator. iOS 26 Liquid Glass, tab-switch animations, native haptics, minimize-on-scroll, and `.tabViewBottomAccessory` all come from UIKit.
 
 ### State & Data
 
@@ -93,7 +94,7 @@ The app is built on the same event-driven, service-layer-owned, event-sourced ar
 - **expo-glass-effect** (or custom Expo module wrapping `UIGlassEffect`) — Liquid Glass on iOS 26+
 - **@shopify/flash-list** — virtualized lists (all session/message lists)
 - **@gorhom/bottom-sheet** OR `react-native-screens` native bottomSheet presentation (prefer native)
-- **react-native-keyboard-controller** — keyboard avoidance that actually works
+- **React Native core `Keyboard` + `LayoutAnimation`** — keyboard avoidance (ticket 23 landed on this after evaluating `react-native-keyboard-controller`; the native listeners match the iOS keyboard curve cleanly without the extra native module)
 - **react-native-safe-area-context** — safe area insets
 - **react-native-context-menu-view** — native long-press menus
 
@@ -182,6 +183,8 @@ packages/
 
 **Rule:** `packages/client-core` has **zero** imports from `react-dom`, `window`, `document`, `localStorage`. Enforced by ESLint rule `no-restricted-imports` + a CI check.
 
+**Dependency coexistence:** Mobile and web share the monorepo, so their React type trees must stay unified. The root `package.json` pins `@types/react` via `pnpm.overrides` to match the React version RN ships with (currently `~19.1.0` for RN 0.81). Without the pin, mobile resolves `@types/react@19.1.x` while web resolves `19.2.x`, producing two incompatible React type trees and breaking `apps/web`'s `tsc` build. Bump this override in lockstep whenever the mobile RN version changes.
+
 ---
 
 ## 6. Architecture
@@ -233,12 +236,15 @@ Extracted from `apps/web/src/` in a preparatory refactor **before** mobile devel
 
 - `stores/entity.ts` → entire entity store, selectors, scoped-event utilities
 - `stores/auth.ts` → refactored to accept a `Platform` adapter for storage
-- `hooks/useOrgEvents.ts` → split: the handler logic (pure function: event → store patch) moves to `client-core/events/handlers.ts`; the `useSubscription` hook wrapper stays in each app
-- `hooks/useSessionEvents.ts` → same split
+- `hooks/useOrgEvents.ts` → split: the event-to-store logic (`handleOrgEvent`) moves to `client-core/events/handlers.ts`; the `useSubscription` hook wrapper stays in each app
+- `hooks/useSessionEvents.ts` → same split (`handleSessionEvent`)
 - `lib/optimistic-message.ts` → all of it
 - `lib/mutations.ts` → all of it (mutations are platform-free)
+- `lib/urql.ts` → only the **factory** (`createGqlClient({ httpUrl, wsUrl, onConnectionChange })`); each app constructs its own client and passes it to the urql `Provider`
 - GraphQL operation definitions (queries/subs) → all of them, re-exported from `@trace/gql` if not already
 - Utility helpers: scope key builders, sort timestamp logic, etc.
+- `notifications/registry.ts` — `registerHandler` / `notifyForEvent`; per-platform notification delivery (sonner / expo-notifications) stays in the apps
+- `events/ui-bindings.ts` — `OrgEventUIBindings` registry the handlers call into for UI side effects (badge marking, active-session/channel/group navigation, session-tab opening). Each platform installs an impl via `setOrgEventUIBindings()` at boot. Mobile uses no-op or platform-appropriate impls for web-only concerns (e.g. `openSessionTab`).
 
 ### 7.2 What stays platform-specific
 
@@ -253,6 +259,7 @@ Extracted from `apps/web/src/` in a preparatory refactor **before** mobile devel
 ```ts
 // packages/client-core/src/platform.ts
 export interface Platform {
+  apiUrl: string;
   storage: {
     getItem(key: string): string | null | Promise<string | null>;
     setItem(key: string, value: string): void | Promise<void>;
@@ -268,7 +275,7 @@ export interface Platform {
 }
 ```
 
-Each app instantiates `client-core` with its platform impl at boot. Web uses a web-platform.ts; mobile uses `apps/mobile/src/lib/platform.ts` that wraps `expo-secure-store`, `MMKV`, and the RN fetch/WebSocket globals.
+Each app instantiates `client-core` with its platform impl at boot. Web uses `apps/web/src/lib/platform-web.ts` (passes `import.meta.env.VITE_API_URL`); mobile uses `apps/mobile/src/lib/platform-mobile.ts` (passes `process.env.EXPO_PUBLIC_API_URL`) that wraps `expo-secure-store`, `MMKV`, and the RN fetch/WebSocket globals. `apiUrl` lives on the platform because `@trace/client-core` builds absolute URLs for `/auth/me`, `/auth/logout`, and uploads — neither side has a sane default.
 
 ### 7.4 Extraction timing
 
@@ -319,15 +326,25 @@ Per §15 (Milestones): `client-core` is extracted in milestone M0 **before** any
 
 ### 9.2 Tab bar
 
-Three tabs, persistent at the bottom. Liquid Glass background on iOS 26+.
+Three tabs, persistent at the bottom, rendered by the **native `UITabBarController`** via `react-native-bottom-tabs` + `@bottom-tabs/react-navigation`. We do not hand-roll a tab bar in JS. iOS 26 Liquid Glass, tab-switch animations, haptics, and minimize-on-scroll come from UIKit.
 
-1. **Home** — icon: `bolt.horizontal`. A single feed of sessions needing the user's attention (needs_input + recently-updated active). Default tab.
-2. **Channels** — icon: `tray`. Coding channels list; drill down into a channel shows its session groups table.
-3. **Settings** — icon: `gearshape`. User, org switcher, sign out.
+1. **Home** — SF Symbol `bolt.horizontal`. A single feed of sessions needing the user's attention (needs_input + recently-updated active). Default tab.
+2. **Channels** — SF Symbol `tray`. Coding channels list; drill down into a channel shows its session groups table.
+3. **Settings** — SF Symbol `gearshape`. User, org switcher, sign out.
 
 Badges:
-- Home tab: count of sessions in `needs_input` belonging to current user
+- Home tab: count of sessions in `needs_input` belonging to current user (wired via `tabBarBadge: String(count)`)
 - Channels tab: none in V1
+
+Non-tab routes (e.g. `sessions/[groupId]`, `sheets/*`) are declared with `tabBarItemHidden: true` so they're routable via push without showing in the bar.
+
+Per-tab iOS `largeTitle` headers live inside pathless route groups (`(home)`, `(settings)`) so each tab has its own Stack without changing URL paths.
+
+### 9.2.1 Bottom accessory slot
+
+The iOS 26 `.tabViewBottomAccessory` slot (exposed by `react-native-bottom-tabs` as `renderBottomAccessoryView`) carries an "active sessions" mini-strip: a horizontal pager over the user's currently-in-progress sessions that taps to open the Session Player (§10.8) pointing at that session. The accessory returns `null` when no sessions are active, collapsing UITabBar back to normal height. `minimizeBehavior="onScrollDown"` collapses the tab bar + accessory together as the active screen scrolls.
+
+The accessory tracks its own pager position in `activeAccessoryIndex`. Tapping a card sets `overlaySessionId` to that session and opens the Player. The Player does not drive the accessory's pager position directly — the accessory is the "scrub between parallel active sessions" surface, and the Player is the "view one session in depth" surface.
 
 ### 9.3 Modal/sheet usage
 
@@ -344,7 +361,7 @@ Full-screen modals for:
 - Scheme: `trace://`
 - Universal links: `https://trace.app/m/...` (configured via Apple App Site Association)
 - Supported paths:
-  - `trace://sessions/:groupId/:sessionId` — opens session stream
+  - `trace://sessions/:groupId/:sessionId` — opens the Session Player (§10.8) pointing at that session
   - `trace://channels/:id` — opens coding channel
   - `trace://auth/callback?token=...` — OAuth callback (internal only)
 - Push notifications carry a `data.deepLink` field; tapping routes through the deep-link handler.
@@ -425,8 +442,8 @@ Full-screen modals for:
 - Tap → `/channels/[id]`.
 
 **Polish:**
-- Segmented control at top if the org has a large number of channels: "All", "Mine" (where user has recent sessions).
-- Search bar pinned at top, pull-to-reveal (native iOS pattern).
+- Native iOS pull-to-reveal search bar (Mail / Settings pattern): hidden at rest, revealed when the large-title header is pulled down. Use `headerSearchBarOptions` with the default `hideWhenScrolling: true`.
+- No "All / Mine" segmented filter on channels — channels don't have ownership, and "channels I've recently worked in" is a session concern, not a channel concern. A similar filter lives on the session-level screens (home, session groups).
 
 ---
 
@@ -463,9 +480,9 @@ Full-screen modals for:
 
 ---
 
-### 10.5 Session Group Detail — `app/(authed)/sessions/[groupId].tsx`
+### 10.5 Session Group Detail
 
-**Purpose:** Entry screen for a session group. In V1, this screen is **thin** — it immediately routes to the most-recent session within the group. If the group has multiple sessions, a tab strip appears at the top to switch.
+**Purpose:** Entry point for a session group. In V1 there is no dedicated group-detail screen — tapping a session group row opens the Session Player (§10.8) pointing at the group's most-recent session, with the group header + sibling tab strip rendered inside the Player. The stack route `app/(authed)/sessions/[groupId].tsx` remains only as a deep-link redirect: on mount it opens the Player and pops itself.
 
 **Data:**
 - Query `sessionGroup(id)` — full group + sibling sessions + checkpoints.
@@ -485,13 +502,13 @@ Full-screen modals for:
 
 **Polish:**
 - Tab strip uses Reanimated underline indicator.
-- Header collapses on scroll (native iOS large-title behavior, implemented via `react-native-screens` `largeTitle` mode).
+- Header collapses on scroll. The shell shipped in ticket 19 with a custom Liquid Glass header that toggles to solid on scroll; ticket 20 must either (a) replace it with native iOS large-title behavior (`headerLargeTitle: true` on `sessions/_layout.tsx`, matching `(tabs)/channels/_layout.tsx` and `(tabs)/(home)/_layout.tsx`) with the tab strip as a pinned accessory, or (b) move the custom header above the list (outside the scroll view) so `pinnedBar` glass is actually pinned and `solid` is driven by the list's scroll offset. Either way, remove the duplicate group name between the native `Stack.Screen` title and the custom header.
 
 ---
 
-### 10.6 Session Stream Screen — `app/(authed)/sessions/[groupId]/[sessionId].tsx`
+### 10.6 Session Stream Screen
 
-**This is the single most important screen in V1.** It is where the user spends most of their time.
+**This is the single most important surface in V1.** It is where the user spends most of their time. It is **rendered inside the Session Player (§10.8)**, not as a dedicated full-screen route. The stack route `app/(authed)/sessions/[groupId]/[sessionId].tsx` is retained only as a deep-link target and renders the same composition (`SessionSurface`) inline.
 
 **Purpose:** View the message/event stream for a specific session and interact with it.
 
@@ -503,10 +520,10 @@ Full-screen modals for:
 
 **UI structure (top-to-bottom):**
 1. **Header** — session name, agent status dot (active/done/failed/stopped), overflow menu.
-2. **Pending-input bar** (conditional, pinned below header) — appears when `sessionStatus === "needs_input"`:
-   - If `question_pending`: renders the question + answer buttons inline.
-   - If `plan_pending`: renders a compact plan card with "Accept" and "Send feedback" actions.
-3. **Active todo strip** (conditional) — if the agent is active and has a current todo list, a single-line sticky strip shows the current todo ("✓ 3 of 7 · Refactoring auth middleware").
+2. **Active todo strip** (conditional, directly below the tab strip) — if the agent is active and has a current todo list, a single-line Liquid Glass strip shows the current todo and "N of M" progress (e.g. "Refactoring auth middleware · 3 of 7").
+3. **Pending-input bar** (conditional, pinned at the bottom, replacing the composer) — appears when `sessionStatus === "needs_input"` and takes over the composer's bottom slot (same replace-not-stack model as web's `AskUserQuestionBar` / `PlanResponseBar`, not a stacked bar under the header):
+   - If `question_pending`: renders the question + option pills + inline "Other…" input with multi-question paging.
+   - If `plan_pending`: renders an "Approve" preset pill + inline revise input; approving sends `"Approved. Implement this plan."`, revising sends `"Please revise the plan: …"` with `interactionMode: "plan"`.
 4. **Message stream** — virtualized scroll list (`FlashList`) of nodes derived from events. Node renderers:
    - `UserMessageBubble` — right-aligned, user avatar
    - `AssistantMessage` — markdown-rendered with rich blocks
@@ -546,7 +563,7 @@ Full-screen modals for:
 - Auto-scroll to bottom when new events arrive *and* user is already near the bottom. If user has scrolled up, do not yank them — instead show a "New activity" pill floating above the input that taps to jump down.
 - Haptic `light` on send/queue; `medium` on stop confirmation.
 - Assistant message "typing" effect when the most recent event is streaming: subtle cursor block at end of text.
-- Keyboard-avoiding via `react-native-keyboard-controller` — the input rises smoothly, stream adjusts, no jank.
+- Keyboard-avoiding via native `Keyboard` listeners + `LayoutAnimation.keyboard` (ticket 23) — the input rises smoothly, stream adjusts, no jank.
 - Liquid Glass on the input container and any pinned bars (pending-input, queued strip) on iOS 26+.
 - Long-press on a message bubble → native context menu: "Copy".
 
@@ -573,6 +590,45 @@ Full-screen modals for:
 - App version + build footer
 
 **Out of scope:** theme, notifications config, profile edit.
+
+---
+
+### 10.8 Session Player — primary session surface
+
+**Purpose:** The Session Player is the primary surface for viewing and interacting with a session. It is a full-screen bottom-sheet-style modal that slides up over whichever tab the user is on, and it renders the complete session experience — not a preview. Any entry point that previously would have pushed the session stream as its own stack screen opens the Player instead.
+
+> **Change from earlier drafts:** The Session Player was originally scoped as a "preview-only" overlay on top of currently-active sessions. V1 now unifies the Player and the Session Stream: tapping a session group row opens the Player, tapping a card in the bottom accessory opens the Player, and all downstream session surfaces (pending-input bar, active-todo strip, queued-messages strip, input composer) mount inside it. The stack route `/sessions/:groupId/:sessionId` is retained only for deep-link compatibility and renders the same composition.
+
+**Entry points:**
+- Tap any session-group row in Channels (§10.4) — opens the Player pointing at the group's latest session.
+- Tap a card in the bottom accessory pager (§9.2.1) — opens the Player pointing at that active session.
+- Deep link `trace://sessions/:groupId/:sessionId` (§9.4) — opens the Player pointing at that session.
+- Push notification tap (§14) — opens the Player.
+
+**UI structure (top-to-bottom, rendered inside the Player):**
+1. **Grabber + dismiss affordance** — pull-down-to-dismiss gesture on the top region, plus a small chevron-down close button.
+2. **Session group header** (§10.5) — group name, branch, PR chip, overflow menu. Solidifies on scroll of the inner FlashList.
+3. **Session tab strip** — sibling sessions in the group; tap switches the Player's shown session without closing.
+4. **Session stream** (§10.6) — the FlashList of events.
+5. **Pending-input bar / active-todo strip / queued-messages strip / input composer** — all of §10.6's surfaces mount here as their tickets (22/23/24) land.
+
+**State model:**
+- `useMobileUIStore.overlaySessionId: string | null` — the session currently shown by the Player. `null` = Player closed.
+- `useMobileUIStore.activeAccessoryIndex: number` — purely the bottom-accessory pager's visible index; kept in sync with `overlaySessionId` when the Player is open *and* the shown session is in the active-sessions list.
+- Setting `overlaySessionId` to non-null mounts the Player; clearing it (or setting `sessionPlayerOpen = false`) dismisses.
+
+**Gesture model (V1):**
+- Single detent: Player is either fully open or fully dismissed.
+- Pull-down past threshold (120pt or velocity > 800) dismisses.
+- Horizontal swipe across sessions is a V2 evolution (the tab strip handles sibling switching within a group; the bottom accessory handles scrubbing across parallel active sessions while the Player is closed).
+- The `"playerAndList"` "Up Next" detent from earlier drafts is **dropped** — the bottom accessory already provides the across-sessions scrub surface.
+
+**Single-subscription invariant:** only the session pointed to by `overlaySessionId` has an active `sessionEvents` + `sessionStatusChanged` subscription; switching sessions tears down the previous subscription before starting the new one. Same behavior as the earlier Player spec — it just now applies to every session entry point, not just active ones.
+
+**Scope guardrails (updated):**
+- Works for sessions of any status the user can access, not just `active`. Done / merged / failed / needs-input sessions all open the Player.
+- Composer is **in scope** (lands in ticket 23) because the Player is the session surface, not a preview.
+- New-session creation is still out of scope for V1.
 
 ---
 
@@ -636,12 +692,17 @@ Built once, used everywhere. Each is one file, <200 lines.
 
 ### 11.5 Liquid Glass usage
 
-Where to use:
-- Tab bar background
-- Navigation bar (when content scrolls beneath)
+System-provided (we don't wrap these in our `Glass` primitive — UIKit does it):
+- **Tab bar** — native `UITabBarController` via `react-native-bottom-tabs` (§9.2)
+- **Bottom accessory slot** — content passed to `renderBottomAccessoryView` is composited inside the tab bar's glass material (§9.2.1)
+- **Native-stack `headerRight`** — iOS 26 wraps trailing bar-button content in a glass pill automatically (used by `TopBarPill`)
+
+Where to use our `Glass` primitive:
+- Navigation bar when content scrolls beneath (custom pinned bars above the stack header)
 - Input composer container
 - Pinned pending-input bar
 - Queued-messages strip
+- Session Player card and list surfaces (§10.8)
 - Session header when `largeTitle` collapses
 
 Where NOT to use:
@@ -649,8 +710,12 @@ Where NOT to use:
 - Message bubbles
 - Buttons
 - Empty states
+- The bottom tab bar (UITabBar material only — do not nest a `Glass` wrapper inside `renderBottomAccessoryView`)
+- Native header right slots (iOS 26 double-wraps)
 
-On iOS <26 / Android: `expo-blur` with `tint="systemThinMaterialDark"` (or light variant based on theme).
+On iOS <26 / Android: our `Glass` falls back to `expo-blur` with `tint="systemThinMaterialDark"` (or light variant based on theme). The native UITabBar gracefully falls back to its pre-iOS-26 tab bar appearance.
+
+Theme note: `glass.ts` no longer ships a `tabBar` preset (removed in ticket 15) — the surviving presets are `navBar`, `input`, `pinnedBar`, and `card`. A `sessionPlayer` preset will be added in ticket 15b.
 
 ### 11.6 Haptic map
 
@@ -677,11 +742,10 @@ These are on top of the principles already stated in §6.
 ### 12.1 Hydration sequence
 
 On app launch (post-auth):
-1. `me` query → user + org memberships
-2. `organization(id)` → user, active channels, channel groups
-3. `mySessions(organizationId)` → all user's sessions (any status) — seeds Home tab
-4. Subscribe to `orgEvents(organizationId)` (ambient)
-5. App is interactive.
+1. `me` query → user + org memberships (via REST `/auth/me`, handled in the auth store)
+2. In parallel: `organization(id)` → org + channels, `channelGroups(organizationId)` → channel groups, `mySessions(organizationId)` → all user's sessions (any status). `channelGroups` is its own root query because the GraphQL `Organization` type does not expose a `channelGroups` field.
+3. Subscribe to `orgEvents(organizationId)` (ambient)
+4. App is interactive.
 
 On screen focus:
 - Coding channel: query `sessionGroups(channelId)` for the currently-visible tab (active | merged | archived)
@@ -754,6 +818,17 @@ From `EventType` enum in `schema.graphql`:
 - `inbox_item_created`, `inbox_item_resolved`
 - `ticket_*`
 - `channel_member_*`
+- `chat_*` (`chat_created`, `chat_renamed`, `chat_member_*`)
+
+### 13.2 UI bindings registry
+
+The shared handlers in `client-core/events/handlers.ts` perform store mutations purely, but a few branches need to call into UI state (mark a session/channel/group as "done", redirect away from a deleted session, follow a continuation session into a new tab). They reach this via the `OrgEventUIBindings` interface from `client-core/events/ui-bindings.ts`. **Each app must call `setOrgEventUIBindings(...)` at boot — before the first `orgEvents` subscription opens** — or the handler will silently no-op those side effects.
+
+Mobile bindings:
+- `getActive*Id`/`setActive*Id` — read/write the mobile UI store (Zustand) keys for active session, session group, and channel.
+- `markChannelDone` / `markSessionDone` / `markSessionGroupDone` — push into the badge state used by the Home tab.
+- `openSessionTab` — no-op on mobile (no tab strip).
+- `navigateToSession(channelId, groupId, sessionId)` — call `router.push("/sessions/${groupId}/${sessionId}")`.
 
 ---
 
@@ -825,12 +900,16 @@ The app badge reflects the count of sessions in `needs_input` across the active 
 - Motion tokens + helpers implemented.
 - **Exit criteria:** every primitive renders correctly in the V1 dark theme on iOS 17 and iOS 26, with no layout jank, and the token structure remains ready for a future light theme.
 
-### M3 — Channels & session group list
+### M3 — Navigation, Channels & session group list
 
+- Native-tab navigation skeleton (§9.2) and stack headers (ticket 15).
+- Active Sessions bottom-accessory over iOS 26 `.tabViewBottomAccessory` (ticket 15a, §9.2.1).
+- Expanded Session Player modal with three-detent gestures (ticket 15b, §10.8).
 - Channels list screen.
 - Coding channel screen with session group list.
+- Settings + Org switcher (ticket 18).
 - Status chips, live updates from `orgEvents`.
-- **Exit criteria:** can browse to a session group from the Channels tab.
+- **Exit criteria:** can browse to a session group from the Channels tab; the bottom accessory reflects live active sessions and expands into the player.
 
 ### M4 — Session stream (the big one)
 
@@ -880,7 +959,11 @@ The app badge reflects the count of sessions in `needs_input` across the active 
 - **Input keystroke latency:** <16ms from touch to glyph rendered.
 - **Memory:** <200MB RSS with a session of 1000 events loaded.
 
-Instrumented via `expo-performance` or equivalent; checked in M6.
+Instrumented via `apps/mobile/src/lib/perf.ts` (a dependency-free
+`expo-performance` equivalent landed in ticket 30): cold-start, warm-start,
+event-ingest, and input-latency markers; samples are kept in a 200-entry
+ring buffer and logged in `__DEV__`. Read via `recentPerfSamples()` from a
+dev overlay or console. Checked on real devices in M6.
 
 ---
 

@@ -1,6 +1,6 @@
 import { useRef, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useEntityIds } from "../../stores/entity";
+import { useEntityIds } from "@trace/client-core";
 import type { InboxItemStatus } from "@trace/gql";
 import { InboxItemRow } from "./InboxItemRow";
 import { Inbox } from "lucide-react";

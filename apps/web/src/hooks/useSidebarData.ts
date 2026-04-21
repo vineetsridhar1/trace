@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { Channel, ChannelGroup, Chat, Repo, InboxItem } from "@trace/gql";
-import { useAuthStore } from "../stores/auth";
-import { useEntityStore, useEntityIds } from "../stores/entity";
-import type { EntityTableMap } from "../stores/entity";
+import { useAuthStore } from "@trace/client-core";
+import { useEntityStore, useEntityIds } from "@trace/client-core";
+import type { EntityTableMap } from "@trace/client-core";
 import { useUIStore } from "../stores/ui";
 import { client } from "../lib/urql";
 import { features } from "../lib/features";
@@ -95,7 +95,7 @@ export function useSidebarData() {
   const upsertMany = useEntityStore((s: { upsertMany: <T extends keyof EntityTableMap>(entityType: T, items: Array<EntityTableMap[T] & { id: string }>) => void }) => s.upsertMany);
   const refreshTick = useUIStore((s: { refreshTick: number }) => s.refreshTick);
   const [channelsLoading, setChannelsLoading] = useState(true);
-  const [chatsLoading, setChatsLoading] = useState(true);
+  const [chatsLoading, setChatsLoading] = useState(features.messaging);
 
   const fetchChannels = useCallback(async () => {
     if (!activeOrgId) return;
@@ -143,9 +143,19 @@ export function useSidebarData() {
   useEffect(() => {
     fetchChannels();
     fetchChannelGroups();
-    fetchChats();
+    if (features.messaging) {
+      fetchChats();
+    }
     fetchRepos();
   }, [fetchChannels, fetchChannelGroups, fetchChats, fetchRepos]);
+
+  useEffect(() => {
+    if (features.messaging) return;
+    const { activeChatId } = useUIStore.getState();
+    if (activeChatId) {
+      useUIStore.getState().setActiveChatId(null);
+    }
+  }, []);
 
   useEffect(() => {
     fetchInboxItems();
@@ -165,6 +175,16 @@ export function useSidebarData() {
 
   useEffect(() => {
     if (channelsLoading) return;
+    if (!features.messaging) {
+      const { activeChannelId } = useUIStore.getState();
+      if (activeChannelId) {
+        const activeChannel = useEntityStore.getState().channels[activeChannelId];
+        if (activeChannel?.type === "text") {
+          useUIStore.getState().setActiveChannelId(allChannelIds[0] ?? null);
+          return;
+        }
+      }
+    }
     const { activeChannelId, activeChatId, activePage } = useUIStore.getState();
     if (activeChannelId || activeChatId || activePage !== "main") return;
     if (allChannelIds.length > 0) {

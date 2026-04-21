@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { ChevronsUpDown, Check, Loader2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
-import { REPO_BRANCHES_QUERY } from "../../lib/mutations";
+import { REPO_BRANCHES_QUERY } from "@trace/client-core";
 import { cn } from "../../lib/utils";
 
 function describeBranchError(message: string | undefined): string {

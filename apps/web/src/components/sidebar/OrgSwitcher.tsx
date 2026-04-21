@@ -1,5 +1,5 @@
 import { ChevronDown, Check } from "lucide-react";
-import { useAuthStore, type OrgMembership } from "../../stores/auth";
+import { useAuthStore, type OrgMembership } from "@trace/client-core";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { getInitials } from "../../lib/utils";
 

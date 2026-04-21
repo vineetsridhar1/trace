@@ -3,7 +3,7 @@ import { MessageSquare } from "lucide-react";
 import { gql } from "@urql/core";
 import { toast } from "sonner";
 import { client } from "../../lib/urql";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import { Button } from "../ui/button";
 

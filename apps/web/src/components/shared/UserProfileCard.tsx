@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { getInitials } from "../../lib/utils";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { EntityPreview, type EntityPreviewMode } from "./EntityPreview";
 import { EntityPreviewCard } from "./EntityPreviewCard";
 

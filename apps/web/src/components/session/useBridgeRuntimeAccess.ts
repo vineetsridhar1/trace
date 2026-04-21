@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { client } from "../../lib/urql";
-import { BRIDGE_RUNTIME_ACCESS_QUERY } from "../../lib/mutations";
+import { BRIDGE_RUNTIME_ACCESS_QUERY } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import { isCloudMachineRuntimeId } from "@trace/shared";
 import type { BridgeAccessCapability } from "@trace/gql";

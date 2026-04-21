@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, X, TerminalSquare } from "lucide-react";
 import { useSessionGroupTerminals, useTerminalStore, type TerminalEntry } from "../../stores/terminal";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { TerminalInstance } from "./TerminalInstance";
 import { client } from "../../lib/urql";
 import {
   SESSION_TERMINALS_QUERY,
   CREATE_TERMINAL_MUTATION,
   DESTROY_TERMINAL_MUTATION,
-} from "../../lib/mutations";
+} from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import type { Terminal } from "@trace/gql";
 

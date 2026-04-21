@@ -23,8 +23,8 @@ Build the bottom-layer UI primitives every screen uses. Each primitive is one fi
   - On press: haptic fires, scale-down animation (`0.98` via Reanimated), spring-back
   - Loading state replaces label with `Spinner`, disables interaction
 - **`IconButton.tsx`**:
-  - Uses SF Symbols via `react-native-sfsymbols` (or a similar package)
-  - Props: `symbol` (string), `size`, `color`, `onPress`, `haptic?`, `accessibilityLabel` required
+  - Uses native SF Symbols via `expo-symbols`
+  - Props: `symbol` (typed as `SFSymbol`), `size`, `color`, `onPress`, `haptic?`, `accessibilityLabel` required
   - Context menu support via `react-native-context-menu-view` (optional `menuItems` prop)
 - **`Spinner.tsx`**:
   - Native `UIActivityIndicator` via `ActivityIndicator` from RN
@@ -34,16 +34,17 @@ Build the bottom-layer UI primitives every screen uses. Each primitive is one fi
 ## Dependencies
 
 - [10 — Theme Tokens](10-theme-tokens.md)
-- Install: `react-native-reanimated`, `react-native-gesture-handler`, `react-native-safe-area-context`, `expo-status-bar`, `expo-haptics`, `react-native-sfsymbols` (or alt), `react-native-context-menu-view`
+- Install: `react-native-reanimated`, `react-native-gesture-handler`, `react-native-safe-area-context`, `expo-status-bar`, `expo-haptics`, `expo-symbols`, `react-native-context-menu-view`
 
 ## Completion requirements
 
-- [ ] All 5 primitives exported from `components/design-system/index.ts`
-- [ ] Each file <200 lines
-- [ ] No hard-coded colors or font sizes — all from theme
-- [ ] Button haptic fires on press (verifiable on device)
-- [ ] Text respects Dynamic Type on device
-- [ ] No `any` types
+- [x] All 5 primitives exported from `components/design-system/index.ts`
+- [x] Each file <200 lines
+- [x] No hard-coded colors or font sizes — all from theme
+- [x] Button haptic fires on press (verifiable on device)
+- [x] Text respects Dynamic Type on device
+- [x] `IconButton` renders native SF Symbols and supports an optional `menuItems` context menu
+- [x] No `any` types
 
 ## How to test
 

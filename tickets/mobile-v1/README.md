@@ -41,7 +41,9 @@ Build the primitives. Every screen that comes later inherits polish by default.
 
 | # | Ticket | What it does |
 |---|--------|-------------|
-| 15 | [Navigation Skeleton](15-navigation-tabs.md) | Expo Router route tree, tab bar with Liquid Glass, stack headers |
+| 15 | [Navigation Skeleton](15-navigation-tabs.md) | Expo Router route tree, **native UITabBar** via `react-native-bottom-tabs`, per-tab stack headers, bottom-accessory slot wired with a stub |
+| 15a | [Active Sessions Accessory](15a-active-sessions-accessory.md) | Real `renderBottomAccessoryView` content: horizontal pager of in-progress sessions, shared `activeAccessoryIndex` state |
+| 15b | [Session Player (Expanded Modal)](15b-session-player-expanded.md) | Tap-to-expand modal with three Reanimated detents, horizontal scrub, single-subscription invariant |
 | 16 | [Channels List](16-channels-list-screen.md) | Coding-channels tab with search + All/Mine segmented filter |
 | 17 | [Coding Channel → Session Groups](17-coding-channel-session-groups.md) | Session groups list with Active / Merged / Archived segments |
 | 18 | [Settings + Org Switcher](18-settings-and-org-switcher.md) | Settings screen and org switcher sheet |
@@ -85,6 +87,14 @@ The single most important feature surface. Built in composable pieces, all files
 | 34 | [CI + EAS Preview Builds](34-ci-and-eas-preview-builds.md) | CI runs typecheck/lint/test, file-size guardrail, EAS preview on PRs, smoke test |
 | 35 | [TestFlight Beta Launch](35-testflight-beta-launch.md) | App Store Connect, TestFlight groups, QA checklist, ship V1 |
 
+## Post-V1 Follow-ups
+
+Explicitly scoped out of V1 per `mobile-plan.md` §21 (cloud-only, model pinned at creation). Scheduled after V1 ships.
+
+| # | Ticket | What it does |
+|---|--------|-------------|
+| 36 | [Composer Model & Runtime Pickers](36-composer-model-and-runtime-pickers.md) | Make the model and hosting chips tappable; reuse `UPDATE_SESSION_CONFIG_MUTATION` + `AVAILABLE_RUNTIMES_QUERY` with the same gating web uses |
+
 ## Dependency graph
 
 ```
@@ -110,6 +120,8 @@ M2 — Design System (can run in parallel with M1 once 05 lands)
 
 M3 — Navigation + Channels  (needs M1 complete, M2 mostly complete)
 15 Navigation Skeleton  (needs 09, 12, 13)
+├─ 15a Active Sessions Accessory  (needs 15, 04)
+│  └─ 15b Session Player Modal  (needs 15a, 12, 14)
 ├─ 16 Channels List  (needs 15, 13)
 │  └─ 17 Session Groups List  (needs 16)
 └─ 18 Settings + Org Switcher  (needs 15, 12, 13)
@@ -144,6 +156,7 @@ M7 — Beta  (needs M6 complete)
 
 - Server tickets (07, 08, 27) can land on their own timeline and are not blocked by client tickets.
 - M1 and M2 overlap heavily — once the mobile scaffold (05) exists, design-system work can run in parallel with auth work.
+- Within M3, 15a and 16 can run in parallel after 15 lands. 15b requires 15a's shared `activeAccessoryIndex`.
 - Within M4, tickets 21/22/23/24 can be worked in parallel after 20 lands.
 - M6 tickets 30/31/32 are independent and can be tackled in any order / in parallel.
 
@@ -153,8 +166,8 @@ M7 — Beta  (needs M6 complete)
 - `§4 Tech stack`, `§5 Monorepo structure`, and `§7 Shared code strategy` are covered by tickets 01-06.
 - `§6 Architecture`, `§12 State management rules`, and `§13 Event handling` are covered by tickets 02-04, 09, 20-24, 29, and 32.
 - `§8 Authentication` is covered by tickets 06-09 and 18.
-- `§9 Navigation structure` is covered by tickets 15, 18, 28, and 29.
-- `§10 Screens` is covered by tickets 09, 15-25.
+- `§9 Navigation structure` (incl. §9.2, §9.2.1) is covered by tickets 15, 15a, 15b, 18, 28, and 29.
+- `§10 Screens` (incl. §10.8 Session Player) is covered by tickets 09, 15-25, 15a, and 15b.
 - `§11 Design system` is covered by tickets 10-14, 30, and 31.
 - `§14 Push notifications` is covered by tickets 08 and 26-29.
 - `§15 Milestones` maps directly to the milestone grouping in this README (M0-M7).

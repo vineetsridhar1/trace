@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { Actor } from "@trace/gql";
-import { useMessageField } from "../../stores/entity";
-import { useAuthStore, type AuthState } from "../../stores/auth";
+import { useMessageField } from "@trace/client-core";
+import { useAuthStore, type AuthState } from "@trace/client-core";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { client } from "../../lib/urql";
 import {
@@ -9,7 +9,7 @@ import {
   EDIT_CHAT_MESSAGE_MUTATION,
   DELETE_CHANNEL_MESSAGE_MUTATION,
   EDIT_CHANNEL_MESSAGE_MUTATION,
-} from "../../lib/mutations";
+} from "@trace/client-core";
 import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 import { MessageActionsSheet } from "./MessageActionsSheet";
 import { MessageActionBar } from "./MessageActionBar";

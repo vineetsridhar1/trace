@@ -2,8 +2,7 @@ import { create } from "zustand";
 import { gql } from "@urql/core";
 import type { ApiTokenProvider, Repo } from "@trace/gql";
 import { client } from "../lib/urql";
-import { useAuthStore } from "./auth";
-import { useEntityStore } from "./entity";
+import { useAuthStore, useEntityStore } from "@trace/client-core";
 
 const API_TOKENS_QUERY = gql`
   query OnboardingApiTokens {

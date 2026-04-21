@@ -1,5 +1,5 @@
 import { MessageSquare } from "lucide-react";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { useChannelMessages } from "../../hooks/useChannelMessages";
 import { useIsMobile } from "../../hooks/use-mobile";
