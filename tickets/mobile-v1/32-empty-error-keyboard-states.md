@@ -19,6 +19,7 @@ Ensure every screen handles empty data, load failures, network errors, and keybo
   - Auth error (401): redirect to sign-in (already covered in ticket 09)
   - Rate-limit / 429: "Too many requests, try again shortly" with a backoff
   - Session-specific error: `lastError` card (covered in ticket 24)
+  - Reconnect retry failure: the `ComposerConnectionNotice` and `SessionErrorCard` Retry buttons currently swallow mutation errors silently. Audit these two surfaces so a failed `retrySessionConnection` produces at least a haptic + transient message (no new UI needed; reuse existing card copy).
   - Offline send/queue failure: keep the current draft visible in the session composer, mark it failed inline, and offer retry while the screen stays mounted (no cross-launch persistence in V1)
   - Push registration failure: silent retry, no user-facing error
 - **Keyboard-up behavior** — per screen:
