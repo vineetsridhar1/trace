@@ -48,6 +48,7 @@ export function CommandExecutionRow({
         style={[
           styles.header,
           {
+            backgroundColor: alpha(theme.colors.surfaceElevated, 0.5),
             paddingVertical: theme.spacing.xs,
             paddingHorizontal: theme.spacing.sm,
             gap: theme.spacing.xs,
