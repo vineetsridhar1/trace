@@ -40,7 +40,7 @@ export function CommandExecutionRow({
         style={[
           styles.header,
           {
-            backgroundColor: "rgba(255,255,255,0.05)",
+            backgroundColor: "rgba(38,38,38,0.4)",
             paddingVertical: theme.spacing.xs,
             paddingHorizontal: theme.spacing.sm,
             gap: theme.spacing.xs,

@@ -21,7 +21,7 @@ export function CheckpointMarker({ checkpoint }: CheckpointMarkerProps) {
       style={[
         styles.chip,
         {
-          backgroundColor: "rgba(255,255,255,0.05)",
+          backgroundColor: "rgba(38,38,38,0.4)",
           borderColor: "rgba(255,255,255,0.05)",
           paddingHorizontal: theme.spacing.sm,
           paddingVertical: theme.spacing.xs,
