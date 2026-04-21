@@ -137,7 +137,10 @@ function MorphingTitle({ groupId, sessionId, fullWidth }: SessionGroupTitleMenuP
         />
       ) : null}
 
-      <View style={styles.anchor} onLayout={handleTriggerLayout}>
+      <View
+        style={[styles.anchor, open ? styles.anchorActive : null]}
+        onLayout={handleTriggerLayout}
+      >
         <AnimatedGlassView
           isInteractive
           glassEffectStyle="regular"
@@ -287,13 +290,16 @@ const styles = StyleSheet.create({
     minWidth: 0,
     height: PILL_HEIGHT,
   },
+  // Lift the title morph above the actions-menu sibling only while it's
+  // open, so whichever menu the user just opened renders on top.
+  anchorActive: {
+    zIndex: 60,
+  },
   morphingGlass: {
     position: "absolute",
     top: 0,
     left: 0,
     overflow: "hidden",
-    // Keep the morph above the SessionActionsMenu sibling when expanded.
-    zIndex: 60,
   },
   triggerLayer: {
     position: "absolute",
