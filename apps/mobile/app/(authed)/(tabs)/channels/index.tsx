@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import { Stack } from "expo-router";
 import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
@@ -63,6 +64,7 @@ export default function ChannelsIndex() {
         onRefresh={handleRefresh}
         refreshing={refreshing}
         ListEmptyComponent={<ChannelsEmpty search={search} />}
+        ListFooterComponent={<TempFiller />}
       />
     </Screen>
   );
@@ -81,6 +83,29 @@ function keyExtractor(item: ChannelListItemKey): string {
 function getItemType(item: ChannelListItemKey): string {
   return item.startsWith("group:") ? "group" : "channel";
 }
+
+// TEMP filler rows for verifying tab-bar collapse still works. Remove once confirmed.
+function TempFiller() {
+  return (
+    <View>
+      {Array.from({ length: 30 }).map((_, i) => (
+        <View key={i} style={tempFillerStyles.row}>
+          <Text style={tempFillerStyles.text}>Filler row {i + 1}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const tempFillerStyles = StyleSheet.create({
+  row: {
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#222",
+  },
+  text: { color: "#888", fontSize: 14 },
+});
 
 function ChannelsEmpty({ search }: { search: string }) {
   if (search.trim().length > 0) {

@@ -11,6 +11,8 @@ import {
   Platform,
   RefreshControl,
   ScrollView,
+  StyleSheet,
+  Text,
   UIManager,
   View,
   type LayoutAnimationConfig,
@@ -205,11 +207,27 @@ export default function ChannelDetail() {
         >
           <SessionGroupsHeader segment={scope} onSegmentChange={setScope} />
           {items.length === 0 ? <ActiveEmpty scope={scope} /> : items.map(renderListItem)}
+          {/* TEMP filler rows for verifying tab-bar collapse works. Remove once confirmed. */}
+          {Array.from({ length: 30 }).map((_, i) => (
+            <View key={`filler-${i}`} style={tempFillerStyles.row}>
+              <Text style={tempFillerStyles.text}>Filler row {i + 1}</Text>
+            </View>
+          ))}
         </ScrollView>
       </RNALayoutAnimationConfig>
     </>
   );
 }
+
+const tempFillerStyles = StyleSheet.create({
+  row: {
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#222",
+  },
+  text: { color: "#888", fontSize: 14 },
+});
 
 function ActiveEmpty({ scope }: { scope: ActiveSegment }) {
   if (scope === "mine") {
