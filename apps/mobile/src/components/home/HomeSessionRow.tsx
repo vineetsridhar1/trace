@@ -10,6 +10,10 @@ import { timeAgo } from "@/lib/time";
 import { useTheme } from "@/theme";
 import { useHomeRowMenu } from "./useHomeRowMenu";
 
+// Passing onLongPress to Pressable suppresses onPress when the user holds
+// long enough for the native context menu to take over.
+const noop = () => {};
+
 export interface HomeSessionRowProps {
   sessionId: string;
 }
@@ -50,6 +54,8 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
         accessibilityRole="button"
         accessibilityLabel={name}
         onPress={handlePress}
+        onLongPress={noop}
+        delayLongPress={250}
         style={({ pressed }) => [
           styles.row,
           {
