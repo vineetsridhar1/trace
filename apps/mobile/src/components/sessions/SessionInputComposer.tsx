@@ -7,7 +7,6 @@ import Animated, {
   FadeOutUp,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import {
@@ -111,36 +110,30 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
 
   const inputHeight = useSharedValue(MIN_INPUT_HEIGHT);
   const stopProgress = useSharedValue(isActive ? 1 : 0);
-  const stopEmerge = useSharedValue(isActive ? 1 : 0);
   useEffect(() => {
     inputHeight.value = withTiming(height, { duration: theme.motion.durations.fast });
   }, [height, inputHeight, theme.motion.durations.fast]);
   useEffect(() => {
-    // Mitosis: stop emerges from inside send, then separates.
-    // stopProgress drives layout (translate + cluster width) smoothly;
-    // stopEmerge drives scale with a spring so the daughter "pops" out.
-    if (isActive) {
-      stopProgress.value = withTiming(1, { duration: 320 });
-      stopEmerge.value = withSpring(1, { damping: 11, stiffness: 170, mass: 0.7 });
-    } else {
-      stopProgress.value = withTiming(0, { duration: theme.motion.durations.base });
-      stopEmerge.value = withTiming(0, { duration: theme.motion.durations.base });
-    }
-  }, [isActive, stopProgress, stopEmerge, theme.motion.durations.base]);
+    // Mitosis: stop emerges from inside send via translateX; layout frame
+    // is fixed at the final position so the GlassView is always laid out
+    // at its full size (UIGlassEffect needs a real frame to render).
+    stopProgress.value = withTiming(isActive ? 1 : 0, {
+      duration: isActive ? 340 : theme.motion.durations.base,
+    });
+  }, [isActive, stopProgress, theme.motion.durations.base]);
   const inputAnimatedStyle = useAnimatedStyle(() => ({ height: inputHeight.value }));
   const actionClusterAnimatedStyle = useAnimatedStyle(() => ({
     width: ACTION_SIZE + (ACTION_SIZE + ACTION_GAP) * stopProgress.value,
   }));
   const stopSlotAnimatedStyle = useAnimatedStyle(() => {
     const p = stopProgress.value;
-    const e = stopEmerge.value;
-    // Animate the layout `left` (not translateX) so GlassContainer can
-    // observe the frame change and update the merge bridge between the
-    // two glass views each frame.
+    // Starts fully overlapping the send button (translateX = -54),
+    // slides to its own slot (translateX = 0). Scale gives the "pop".
+    const translateX = -(ACTION_SIZE + ACTION_GAP) * (1 - p);
+    const scale = 0.4 + 0.6 * p;
     return {
-      left: (ACTION_SIZE + ACTION_GAP) * p,
       opacity: Math.min(1, p * 1.6),
-      transform: [{ scale: 0.35 + 0.65 * e }],
+      transform: [{ translateX }, { scale }],
     };
   });
   const sendPulseAnimatedStyle = useAnimatedStyle(() => {
@@ -374,15 +367,11 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
 
               <Glass
                 preset="input"
-                tint={alpha(theme.colors.destructive, 0.16)}
+                tint={alpha(theme.colors.destructive, 0.22)}
                 interactive
                 style={[
                   styles.stopGlass,
-                  {
-                    borderColor: alpha(theme.colors.destructive, 0.42),
-                    opacity: canStop ? 1 : 0.45,
-                    pointerEvents: isActive ? "auto" : "none",
-                  },
+                  { borderColor: alpha(theme.colors.destructive, 0.42) },
                   stopSlotAnimatedStyle,
                 ]}
               >
@@ -508,6 +497,7 @@ const styles = StyleSheet.create({
   },
   stopGlass: {
     position: "absolute",
+    left: ACTION_SIZE + ACTION_GAP,
     top: 0,
     width: ACTION_SIZE,
     height: ACTION_SIZE,
