@@ -81,24 +81,19 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
   }, []);
 
   const menuHeight = actions.length * ITEM_HEIGHT;
+  // GlassContainer must contain both glass surfaces in its native frame for
+  // Liquid Glass pooling to render the liquid bridge between them.
+  const containerHeight = TRIGGER_SIZE + MENU_TOP_OFFSET + menuHeight;
 
-  // Menu slides down from above the trigger (where they visually "pool"
-  // inside the same GlassContainer) into its final position below.
+  // Menu lives at its final resting position; scaling from the top-right
+  // corner (nearest the trigger) lets the pooling stretch out of the trigger
+  // as the menu grows, which is the visible "morph".
   const menuAnimatedStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
-    transform: [
-      {
-        translateY:
-          // Start at the trigger's vertical center; settle just below it.
-          (1 - progress.value) * (-menuHeight / 2 + TRIGGER_SIZE / 2) +
-          progress.value * (TRIGGER_SIZE + MENU_TOP_OFFSET),
-      },
-      { scale: 0.82 + progress.value * 0.18 },
-    ],
+    transform: [{ scale: 0.2 + progress.value * 0.8 }],
   }));
 
   const triggerAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: 1 - progress.value,
     transform: [{ scale: 1 - progress.value * 0.05 }],
   }));
 
@@ -122,8 +117,17 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
       ) : null}
 
       <View style={styles.anchor}>
-        <GlassContainer spacing={28} style={styles.container}>
-          <Animated.View style={[styles.triggerWrap, triggerAnimatedStyle]} pointerEvents={open ? "none" : "auto"}>
+        <GlassContainer
+          spacing={28}
+          style={[
+            styles.container,
+            { width: MENU_WIDTH, height: containerHeight },
+          ]}
+        >
+          <Animated.View
+            style={[styles.triggerWrap, triggerAnimatedStyle]}
+            pointerEvents={open ? "none" : "auto"}
+          >
             <GlassView
               glassEffectStyle="regular"
               colorScheme={theme.scheme === "dark" ? "dark" : "light"}
@@ -259,7 +263,9 @@ const styles = StyleSheet.create({
     height: TRIGGER_SIZE,
   },
   container: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute",
+    top: 0,
+    right: 0,
     overflow: "visible",
   },
   triggerWrap: {
@@ -283,8 +289,9 @@ const styles = StyleSheet.create({
   icon: { width: 18, height: 18 },
   menuWrap: {
     position: "absolute",
-    top: 0,
+    top: TRIGGER_SIZE + MENU_TOP_OFFSET,
     right: 0,
+    transformOrigin: "top right",
   },
   menuPill: {
     width: "100%",
