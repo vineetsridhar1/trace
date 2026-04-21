@@ -45,6 +45,12 @@ interface ComposerMorphPillProps {
   label: string;
   accessibilityLabel: string;
   items: ComposerMorphPillItem[];
+  /**
+   * Optional segmented switcher rendered above the items list. Tapping a
+   * header item does NOT close the menu — use it for scoping the items
+   * below (e.g. tool switcher above model list).
+   */
+  headerItems?: ComposerMorphPillItem[];
   disabled?: boolean;
   systemIcon?: SFSymbol;
   align?: "left" | "right";
@@ -56,6 +62,7 @@ interface ComposerMorphPillProps {
 
 const PILL_HEIGHT = 38;
 const ITEM_HEIGHT = 44;
+const HEADER_HEIGHT = 46;
 const MENU_WIDTH = 220;
 const MENU_RADIUS = 18;
 const OPEN_SPRING = { damping: 14, stiffness: 120, mass: 1.2 } as const;
@@ -65,6 +72,7 @@ export function ComposerMorphPill({
   accessibilityLabel,
   align = "left",
   disabled,
+  headerItems,
   items,
   label,
   minWidth = 92,
@@ -77,6 +85,7 @@ export function ComposerMorphPill({
       <FallbackPill
         accessibilityLabel={accessibilityLabel}
         disabled={disabled}
+        headerItems={headerItems}
         items={items}
         label={label}
         minWidth={minWidth}
@@ -91,6 +100,7 @@ export function ComposerMorphPill({
       accessibilityLabel={accessibilityLabel}
       align={align}
       disabled={disabled}
+      headerItems={headerItems}
       items={items}
       label={label}
       minWidth={minWidth}
@@ -105,6 +115,7 @@ function MorphingPill({
   accessibilityLabel,
   align,
   disabled,
+  headerItems,
   items,
   label,
   minWidth,
@@ -112,14 +123,15 @@ function MorphingPill({
   systemIcon,
   tintAnimatedProps,
 }: Required<Pick<ComposerMorphPillProps, "accessibilityLabel" | "align" | "items" | "label" | "minWidth">> &
-  Pick<ComposerMorphPillProps, "disabled" | "style" | "systemIcon" | "tintAnimatedProps">) {
+  Pick<ComposerMorphPillProps, "disabled" | "headerItems" | "style" | "systemIcon" | "tintAnimatedProps">) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [triggerWidth, setTriggerWidth] = useState(minWidth);
   const progress = useSharedValue(0);
 
-  const menuHeight = Math.max(PILL_HEIGHT, items.length * ITEM_HEIGHT);
+  const headerH = headerItems && headerItems.length > 0 ? HEADER_HEIGHT : 0;
+  const menuHeight = Math.max(PILL_HEIGHT, headerH + items.length * ITEM_HEIGHT);
   const endWidth = Math.max(MENU_WIDTH, triggerWidth);
   const anchorEdge = align === "right" ? styles.alignRight : styles.alignLeft;
 
@@ -142,6 +154,12 @@ function MorphingPill({
     if (item.disabled) return;
     setOpen(false);
     void haptic.light();
+    item.onPress?.();
+  }, []);
+
+  const pickHeader = useCallback((item: ComposerMorphPillItem) => {
+    if (item.disabled || item.selected) return;
+    void haptic.selection();
     item.onPress?.();
   }, []);
 
@@ -205,7 +223,12 @@ function MorphingPill({
                 menuStyle,
               ]}
             >
-              <MenuContent items={items} onPick={pick} />
+              <MenuContent
+                headerItems={headerItems}
+                items={items}
+                onHeaderPick={pickHeader}
+                onPick={pick}
+              />
             </Animated.View>
           ) : null}
 
@@ -238,15 +261,55 @@ function MorphingPill({
 }
 
 function MenuContent({
+  headerItems,
   items,
+  onHeaderPick,
   onPick,
 }: {
+  headerItems?: ComposerMorphPillItem[];
   items: ComposerMorphPillItem[];
+  onHeaderPick: (item: ComposerMorphPillItem) => void;
   onPick: (item: ComposerMorphPillItem) => void;
 }) {
   const theme = useTheme();
   return (
     <View style={styles.menuList}>
+      {headerItems && headerItems.length > 0 ? (
+        <View
+          style={[
+            styles.segmentedHeader,
+            { borderBottomColor: theme.colors.borderMuted },
+          ]}
+        >
+          {headerItems.map((item) => (
+            <Pressable
+              key={item.key}
+              accessibilityRole="button"
+              accessibilityLabel={item.label}
+              disabled={item.disabled}
+              onPress={() => onHeaderPick(item)}
+              style={({ pressed }) => [
+                styles.segmentedToggle,
+                {
+                  backgroundColor: item.selected
+                    ? alpha(theme.colors.foreground, 0.14)
+                    : "transparent",
+                  opacity: item.disabled ? 0.42 : pressed ? 0.7 : 1,
+                },
+              ]}
+            >
+              <Text
+                variant="caption1"
+                color={item.selected ? "foreground" : "mutedForeground"}
+                numberOfLines={1}
+                style={styles.segmentedText}
+              >
+                {item.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
       {items.map((item, index) => (
         <Pressable
           key={item.key}
@@ -320,6 +383,7 @@ function PillLabel({ icon, label }: { icon?: SFSymbol; label: string }) {
 function FallbackPill({
   accessibilityLabel,
   disabled,
+  headerItems,
   items,
   label,
   minWidth,
@@ -327,10 +391,11 @@ function FallbackPill({
   systemIcon,
 }: Pick<
   ComposerMorphPillProps,
-  "accessibilityLabel" | "disabled" | "items" | "label" | "minWidth" | "style" | "systemIcon"
+  "accessibilityLabel" | "disabled" | "headerItems" | "items" | "label" | "minWidth" | "style" | "systemIcon"
 >) {
   const theme = useTheme();
-  const enabledItems = items.filter((item) => !item.disabled);
+  const combinedItems = [...(headerItems ?? []), ...items];
+  const enabledItems = combinedItems.filter((item) => !item.disabled);
   const actions: ContextMenuAction[] = enabledItems.map((item) => ({
     title: item.label,
     systemIcon: item.systemIcon,
@@ -434,6 +499,25 @@ const styles = StyleSheet.create({
   },
   menuList: {
     flex: 1,
+  },
+  segmentedHeader: {
+    height: HEADER_HEIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 6,
+    gap: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  segmentedToggle: {
+    flex: 1,
+    height: HEADER_HEIGHT - 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: (HEADER_HEIGHT - 12) / 2,
+    paddingHorizontal: 10,
+  },
+  segmentedText: {
+    fontWeight: "600",
   },
   menuItem: {
     height: ITEM_HEIGHT,
