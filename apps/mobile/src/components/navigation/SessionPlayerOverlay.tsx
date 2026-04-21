@@ -26,7 +26,7 @@ import { useSessionGroupSessionIds } from "@/hooks/useSessionGroupDetail";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { haptic } from "@/lib/haptics";
 import { useMobileUIStore } from "@/stores/ui";
-import { alpha, useTheme } from "@/theme";
+import { useTheme } from "@/theme";
 
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 800;
@@ -159,17 +159,17 @@ export function SessionPlayerOverlay() {
         >
           <GestureDetector gesture={pan}>
             <View style={styles.dragHandle}>
-              <GrabBar
-                paddingTop={insets.top + 8}
-                colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-                grabberColor={alpha(theme.colors.foreground, 0.28)}
-              />
               <View
-                style={[
-                  styles.cardTopStrip,
-                  { backgroundColor: theme.colors.background },
-                ]}
+                style={{
+                  height: insets.top + 6,
+                  backgroundColor: theme.colors.background,
+                }}
               />
+              <View style={styles.grabberRow}>
+                <FloatingGrabber
+                  colorScheme={theme.scheme === "dark" ? "dark" : "light"}
+                />
+              </View>
               {sessionId ? (
                 <SessionGroupHeader groupId={headerGroupId ?? ""} sessionId={sessionId} />
               ) : null}
@@ -188,40 +188,31 @@ export function SessionPlayerOverlay() {
   );
 }
 
-interface GrabBarProps {
-  paddingTop: number;
+interface FloatingGrabberProps {
   colorScheme: "light" | "dark";
-  grabberColor: string;
 }
 
 /**
- * Liquid-glass grab-bar strip. The grabber pill rides on a full-width
- * glass surface so messages scrolling up behind it are picked up by the
- * blur — the solid card boundary sits just below it (see `cardTopStrip`).
+ * The grabber pill itself is the only liquid-glass element — it floats
+ * over the transparent zone below the opaque card cap so messages
+ * scrolling up around it are picked up by the blur.
  */
-function GrabBar({ paddingTop, colorScheme, grabberColor }: GrabBarProps) {
-  const content = (
-    <View style={[styles.grabber, { backgroundColor: grabberColor }]} />
-  );
+function FloatingGrabber({ colorScheme }: FloatingGrabberProps) {
   if (isLiquidGlassAvailable()) {
     return (
       <GlassView
         glassEffectStyle="regular"
         colorScheme={colorScheme}
-        style={[styles.grabberRow, { paddingTop }]}
-      >
-        {content}
-      </GlassView>
+        style={styles.grabber}
+      />
     );
   }
   return (
     <BlurView
       tint={colorScheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
       intensity={50}
-      style={[styles.grabberRow, { paddingTop }]}
-    >
-      {content}
-    </BlurView>
+      style={styles.grabber}
+    />
   );
 }
 
@@ -250,15 +241,14 @@ const styles = StyleSheet.create({
   grabberRow: {
     alignItems: "center",
     justifyContent: "center",
-    paddingBottom: 6,
+    paddingTop: 4,
+    paddingBottom: 8,
   },
   grabber: {
     width: 36,
     height: 5,
     borderRadius: 999,
-  },
-  cardTopStrip: {
-    height: 10,
+    overflow: "hidden",
   },
   surface: {
     flex: 1,
