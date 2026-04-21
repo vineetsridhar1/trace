@@ -328,6 +328,14 @@ export type ChannelMessagesArgs = {
   limit?: InputMaybe<Scalars['Int']['input']>;
 };
 
+export type ChannelBridgeOption = {
+  __typename?: 'ChannelBridgeOption';
+  isOwn: Scalars['Boolean']['output'];
+  label: Scalars['String']['output'];
+  ownerUserId?: Maybe<Scalars['ID']['output']>;
+  runtimeInstanceId: Scalars['ID']['output'];
+};
+
 export type ChannelGroup = {
   __typename?: 'ChannelGroup';
   channels: Array<Channel>;
@@ -407,6 +415,13 @@ export type CreateChannelInput = {
   projectIds?: InputMaybe<Array<Scalars['ID']['input']>>;
   repoId?: InputMaybe<Scalars['ID']['input']>;
   type?: InputMaybe<ChannelType>;
+};
+
+export type CreateChannelTerminalInput = {
+  bridgeRuntimeId: Scalars['ID']['input'];
+  channelId: Scalars['ID']['input'];
+  cols: Scalars['Int']['input'];
+  rows: Scalars['Int']['input'];
 };
 
 export type CreateChatInput = {
@@ -662,6 +677,7 @@ export type Mutation = {
   createAiConversation: AiConversation;
   createChannel: Channel;
   createChannelGroup: ChannelGroup;
+  createChannelTerminal: Terminal;
   createChat: Chat;
   createProject: Project;
   createRepo: Repo;
@@ -797,6 +813,11 @@ export type MutationCreateChannelArgs = {
 
 export type MutationCreateChannelGroupArgs = {
   input: CreateChannelGroupInput;
+};
+
+
+export type MutationCreateChannelTerminalArgs = {
+  input: CreateChannelTerminalInput;
 };
 
 
@@ -1299,8 +1320,10 @@ export type Query = {
   branch?: Maybe<Branch>;
   bridgeRuntimeAccess: BridgeRuntimeAccess;
   channel?: Maybe<Channel>;
+  channelAvailableBridges: Array<ChannelBridgeOption>;
   channelGroups: Array<ChannelGroup>;
   channelMessages: Array<Message>;
+  channelTerminals: Array<Terminal>;
   channels: Array<Channel>;
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
@@ -1411,6 +1434,11 @@ export type QueryChannelArgs = {
 };
 
 
+export type QueryChannelAvailableBridgesArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
 export type QueryChannelGroupsArgs = {
   organizationId: Scalars['ID']['input'];
 };
@@ -1421,6 +1449,11 @@ export type QueryChannelMessagesArgs = {
   before?: InputMaybe<Scalars['DateTime']['input']>;
   channelId: Scalars['ID']['input'];
   limit?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryChannelTerminalsArgs = {
+  channelId: Scalars['ID']['input'];
 };
 
 
@@ -1895,8 +1928,10 @@ export type SubscriptionUserNotificationsArgs = {
 
 export type Terminal = {
   __typename?: 'Terminal';
+  bridgeRuntimeId: Scalars['ID']['output'];
+  channelId?: Maybe<Scalars['ID']['output']>;
   id: Scalars['ID']['output'];
-  sessionId: Scalars['ID']['output'];
+  sessionId?: Maybe<Scalars['ID']['output']>;
 };
 
 export type TerminalEndpoint = {

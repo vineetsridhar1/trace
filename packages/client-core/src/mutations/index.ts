@@ -582,6 +582,30 @@ export const SESSION_TERMINALS_QUERY = gql`
     sessionTerminals(sessionId: $sessionId) {
       id
       sessionId
+      channelId
+      bridgeRuntimeId
+    }
+  }
+`;
+
+export const CHANNEL_TERMINALS_QUERY = gql`
+  query ChannelTerminals($channelId: ID!) {
+    channelTerminals(channelId: $channelId) {
+      id
+      sessionId
+      channelId
+      bridgeRuntimeId
+    }
+  }
+`;
+
+export const CHANNEL_AVAILABLE_BRIDGES_QUERY = gql`
+  query ChannelAvailableBridges($channelId: ID!) {
+    channelAvailableBridges(channelId: $channelId) {
+      runtimeInstanceId
+      label
+      ownerUserId
+      isOwn
     }
   }
 `;
@@ -591,6 +615,19 @@ export const CREATE_TERMINAL_MUTATION = gql`
     createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) {
       id
       sessionId
+      channelId
+      bridgeRuntimeId
+    }
+  }
+`;
+
+export const CREATE_CHANNEL_TERMINAL_MUTATION = gql`
+  mutation CreateChannelTerminal($input: CreateChannelTerminalInput!) {
+    createChannelTerminal(input: $input) {
+      id
+      sessionId
+      channelId
+      bridgeRuntimeId
     }
   }
 `;

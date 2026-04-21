@@ -885,6 +885,7 @@ class RuntimeAccessService {
       granteeUserId: updated.granteeUserId,
       scopeType: updated.scopeType,
       sessionGroupId: updated.sessionGroupId,
+      runtimeInstanceId: grant.bridgeRuntime.instanceId,
     });
 
     return updated;
@@ -898,7 +899,7 @@ class RuntimeAccessService {
   }) {
     const nextCapabilities = ensureSessionCapability(input.capabilities);
 
-    const { updated, priorCapabilities } = await prisma.$transaction(
+    const { updated, priorCapabilities, runtimeInstanceId } = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
         // Read inside the tx so the revokedAt/authorization checks and the
         // update see a consistent snapshot — a concurrent revokeGrant between
@@ -973,7 +974,11 @@ class RuntimeAccessService {
           tx,
         );
 
-        return { updated: updatedGrant, priorCapabilities: prior };
+        return {
+          updated: updatedGrant,
+          priorCapabilities: prior,
+          runtimeInstanceId: grant.bridgeRuntime.instanceId,
+        };
       },
     );
 
@@ -987,6 +992,7 @@ class RuntimeAccessService {
         granteeUserId: updated.granteeUserId,
         scopeType: updated.scopeType,
         sessionGroupId: updated.sessionGroupId,
+        runtimeInstanceId,
       });
     }
 
@@ -1007,8 +1013,10 @@ class RuntimeAccessService {
     granteeUserId: string;
     scopeType: BridgeAccessScopeType;
     sessionGroupId: string | null;
+    /** The bridge whose grant is being revoked. Limits channel-terminal teardown to this runtime. */
+    runtimeInstanceId: string;
   }): Promise<void> {
-    let scopedSessionIds: Set<string> | undefined;
+    let scopedSessionIds: Set<string>;
     if (input.scopeType === "session_group" && input.sessionGroupId) {
       const sessions = await prisma.session.findMany({
         where: {
@@ -1026,7 +1034,13 @@ class RuntimeAccessService {
       scopedSessionIds = new Set(sessions.map((s: { id: string }) => s.id));
     }
 
-    terminalRelay.destroyTerminalsForUser(input.granteeUserId, scopedSessionIds);
+    terminalRelay.destroyTerminalsForUser(input.granteeUserId, {
+      sessionIds: scopedSessionIds,
+      runtimeInstanceId: input.runtimeInstanceId,
+      // Channel terminals only exist for all_sessions grants; a session_group
+      // revocation shouldn't touch them.
+      includeChannelTerminals: input.scopeType === "all_sessions",
+    });
   }
 }
 

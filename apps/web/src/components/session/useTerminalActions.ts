@@ -11,7 +11,7 @@ import type { Terminal } from "@trace/gql";
 
 interface TerminalActionsArgs {
   sessionGroupId: string;
-  terminals: Array<{ id: string; sessionId: string }>;
+  terminals: Array<{ id: string; sessionId: string | null }>;
 }
 
 export function useTerminalActions({ sessionGroupId, terminals }: TerminalActionsArgs) {
@@ -30,7 +30,13 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
       const restored = (result.data?.sessionTerminals as Terminal[] | undefined) ?? [];
       for (const t of restored) {
         if (!useTerminalStore.getState().terminals[t.id]) {
-          addTerminal(t.id, t.sessionId, sessionGroupId, "active");
+          addTerminal({
+            id: t.id,
+            sessionId: t.sessionId,
+            sessionGroupId,
+            bridgeRuntimeId: t.bridgeRuntimeId,
+            status: "active",
+          });
         }
       }
       return restored.map((t) => ({
@@ -57,10 +63,18 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
         .mutation(CREATE_TERMINAL_MUTATION, { sessionId: session.id, cols: 80, rows: 24 })
         .toPromise();
       if (result.data?.createTerminal) {
-        const { id } = result.data.createTerminal as { id: string };
-        addTerminal(id, session.id, sessionGroupId);
+        const created = result.data.createTerminal as {
+          id: string;
+          bridgeRuntimeId: string;
+        };
+        addTerminal({
+          id: created.id,
+          sessionId: session.id,
+          sessionGroupId,
+          bridgeRuntimeId: created.bridgeRuntimeId,
+        });
         setActiveSessionId(session.id);
-        setActiveTerminalId(id);
+        setActiveTerminalId(created.id);
       }
     },
     [addTerminal, ensureSessionTerminals, sessionGroupId, setActiveSessionId, setActiveTerminalId],

@@ -177,10 +177,15 @@ export interface BridgeSetLinkedCheckoutAutoSyncCommand {
 export interface BridgeTerminalCreateCommand {
   type: "terminal_create";
   terminalId: string;
-  sessionId: string;
+  /** Set for session-scoped terminals. Bridge resolves cwd from sessionWorkdirs[sessionId]. */
+  sessionId?: string;
+  /** Set together with repoId for channel-scoped terminals on the main worktree. */
+  channelId?: string;
+  /** Set together with channelId. Bridge resolves cwd via getRepoPath(repoId). */
+  repoId?: string;
   cols: number;
   rows: number;
-  cwd: string;
+  cwd?: string;
 }
 
 export interface BridgeTerminalInputCommand {
@@ -237,8 +242,13 @@ export interface BridgeRuntimeHello {
   /** Repo IDs this bridge has locally registered (device bridges only). Empty for cloud. */
   registeredRepoIds: string[];
   /** Active terminal ptys still running on this bridge (reported on reconnect). */
-  activeTerminals?: Array<{ terminalId: string; sessionId: string }>;
+  activeTerminals?: Array<BridgeActiveTerminal>;
 }
+
+/** Describes a still-running terminal reported by the bridge on reconnect. */
+export type BridgeActiveTerminal =
+  | { terminalId: string; sessionId: string }
+  | { terminalId: string; channelId: string; repoId: string };
 
 export interface BridgeRuntimeHeartbeat {
   type: "runtime_heartbeat";

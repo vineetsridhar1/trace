@@ -189,13 +189,24 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
           // Restore terminal relay entries from bridge-reported active terminals
           if (Array.isArray(msg.activeTerminals) && msg.activeTerminals.length > 0) {
-            const activeTerminals = (msg.activeTerminals as unknown[]).filter(
-              (t): t is { terminalId: string; sessionId: string } =>
-                typeof t === "object" &&
-                t !== null &&
-                typeof (t as Record<string, unknown>).terminalId === "string" &&
-                typeof (t as Record<string, unknown>).sessionId === "string",
-            );
+            const activeTerminals = (msg.activeTerminals as unknown[])
+              .map((t): import("@trace/shared").BridgeActiveTerminal | null => {
+                if (typeof t !== "object" || t === null) return null;
+                const raw = t as Record<string, unknown>;
+                if (typeof raw.terminalId !== "string") return null;
+                if (typeof raw.sessionId === "string") {
+                  return { terminalId: raw.terminalId, sessionId: raw.sessionId };
+                }
+                if (typeof raw.channelId === "string" && typeof raw.repoId === "string") {
+                  return {
+                    terminalId: raw.terminalId,
+                    channelId: raw.channelId,
+                    repoId: raw.repoId,
+                  };
+                }
+                return null;
+              })
+              .filter((entry): entry is import("@trace/shared").BridgeActiveTerminal => entry !== null);
             if (activeTerminals.length > 0) {
               runtimeDebug("restoring terminals from bridge", {
                 runtimeId,

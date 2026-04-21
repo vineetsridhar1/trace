@@ -12,10 +12,24 @@ export interface TerminalManagerOptions {
   defaultShell?: string;
 }
 
+/**
+ * Describes the scope a terminal belongs to. Session terminals live in a
+ * session group's side worktree; channel terminals live on the main worktree
+ * of a channel's repo.
+ */
+export type TerminalScopeDescriptor =
+  | { kind: "session"; sessionId: string }
+  | { kind: "channel"; channelId: string; repoId: string };
+
+/** Shape used in runtime_hello to reconstruct relay state after reconnect. */
+export type ActiveTerminalDescriptor =
+  | { terminalId: string; sessionId: string }
+  | { terminalId: string; channelId: string; repoId: string };
+
 export class TerminalManager {
   private terminals = new Map<string, pty.IPty>();
-  /** Maps terminalId → sessionId for session-scoped cleanup */
-  private terminalSessions = new Map<string, string>();
+  /** Scope metadata so we can rebuild the relay entry on reconnect. */
+  private terminalScopes = new Map<string, TerminalScopeDescriptor>();
   private defaultShell: string;
 
   constructor(
@@ -27,7 +41,13 @@ export class TerminalManager {
       ?? (os.platform() === "win32" ? "powershell.exe" : "/bin/bash");
   }
 
-  create(terminalId: string, sessionId: string, cwd: string, cols: number, rows: number): void {
+  create(
+    terminalId: string,
+    scope: TerminalScopeDescriptor,
+    cwd: string,
+    cols: number,
+    rows: number,
+  ): void {
     if (this.terminals.has(terminalId)) {
       this.destroy(terminalId);
     }
@@ -59,12 +79,12 @@ export class TerminalManager {
 
     terminal.onExit(({ exitCode }) => {
       this.terminals.delete(terminalId);
-      this.terminalSessions.delete(terminalId);
+      this.terminalScopes.delete(terminalId);
       this.callbacks.onExit(terminalId, exitCode);
     });
 
     this.terminals.set(terminalId, terminal);
-    this.terminalSessions.set(terminalId, sessionId);
+    this.terminalScopes.set(terminalId, scope);
   }
 
   write(terminalId: string, data: string): void {
@@ -87,7 +107,7 @@ export class TerminalManager {
       terminal.kill();
       this.terminals.delete(terminalId);
     }
-    this.terminalSessions.delete(terminalId);
+    this.terminalScopes.delete(terminalId);
   }
 
   destroyAll(): void {
@@ -101,11 +121,15 @@ export class TerminalManager {
     return this.terminals.size > 0;
   }
 
-  /** Returns all active terminals as { terminalId, sessionId } pairs. */
-  getActiveTerminals(): Array<{ terminalId: string; sessionId: string }> {
-    const result: Array<{ terminalId: string; sessionId: string }> = [];
-    for (const [terminalId, sessionId] of this.terminalSessions) {
-      result.push({ terminalId, sessionId });
+  /** Returns all active terminals scoped for runtime_hello. */
+  getActiveTerminals(): ActiveTerminalDescriptor[] {
+    const result: ActiveTerminalDescriptor[] = [];
+    for (const [terminalId, scope] of this.terminalScopes) {
+      if (scope.kind === "session") {
+        result.push({ terminalId, sessionId: scope.sessionId });
+      } else {
+        result.push({ terminalId, channelId: scope.channelId, repoId: scope.repoId });
+      }
     }
     return result;
   }
@@ -113,8 +137,8 @@ export class TerminalManager {
   /** Destroy all terminals belonging to a session and return the destroyed terminal IDs. */
   destroyForSession(sessionId: string): string[] {
     const destroyed: string[] = [];
-    for (const [terminalId, sid] of this.terminalSessions) {
-      if (sid === sessionId) {
+    for (const [terminalId, scope] of this.terminalScopes) {
+      if (scope.kind === "session" && scope.sessionId === sessionId) {
         destroyed.push(terminalId);
         this.destroy(terminalId);
       }

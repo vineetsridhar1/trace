@@ -526,10 +526,32 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "terminal_create": {
-        const { terminalId, sessionId, cols, rows, cwd } = cmd;
+        const { terminalId, sessionId, channelId, cols, rows, cwd } = cmd;
+        if (channelId) {
+          this.send({
+            type: "terminal_error",
+            terminalId,
+            error: "Channel-scoped terminals are not supported on cloud bridges",
+          });
+          break;
+        }
+        if (!sessionId) {
+          this.send({
+            type: "terminal_error",
+            terminalId,
+            error: "terminal_create missing sessionId",
+          });
+          break;
+        }
         const workdir = cwd || this.sessionWorkdirs.get(sessionId) || os.homedir();
         try {
-          this.terminalManager.create(terminalId, sessionId, workdir, cols, rows);
+          this.terminalManager.create(
+            terminalId,
+            { kind: "session", sessionId },
+            workdir,
+            cols,
+            rows,
+          );
           this.send({ type: "terminal_ready", terminalId });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);

@@ -8,6 +8,7 @@ import { useUIStore, type UIState } from "../../stores/ui";
 import { client } from "../../lib/urql";
 import { StartSessionDialog } from "./StartSessionDialog";
 import { SessionsTable } from "./SessionsTable";
+import { ChannelTerminalsPanel } from "./ChannelTerminalsPanel";
 import { MergedArchivedPage } from "./MergedArchivedPage";
 import { SidebarTrigger } from "../ui/sidebar";
 import { ConnectionStatus } from "../ConnectionStatus";
@@ -153,7 +154,12 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
             ))}
           </div>
         ) : (
-          <SessionsTable channelId={channelId} />
+          <div className="flex h-full flex-col">
+            <ChannelTerminalsPanel channelId={channelId} />
+            <div className="flex-1 overflow-auto">
+              <SessionsTable channelId={channelId} />
+            </div>
+          </div>
         )}
       </div>
     </div>

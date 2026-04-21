@@ -103,9 +103,9 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
           return;
         }
 
-        const sessionId = terminalRelay.getSessionId(terminalId);
+        const scope = terminalRelay.getScope(terminalId);
         const runtimeInstanceId = terminalRelay.getRuntimeInstanceId(terminalId);
-        if (!sessionId || !runtimeInstanceId) {
+        if (!scope || !runtimeInstanceId) {
           ws.send(JSON.stringify({ type: "error", message: "Terminal not found" }));
           return;
         }
@@ -122,37 +122,58 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
               ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
               return;
             }
-            // Check session exists and user has org membership for the session's org
-            const session = await prisma.session.findFirst({
-              where: {
-                id: sessionId,
-                organization: { orgMembers: { some: { userId: user.id } } },
-              },
-              select: {
-                id: true,
-                organizationId: true,
-                sessionGroupId: true,
-              },
-            });
-            if (!session) {
-              ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
-              return;
+
+            let organizationId: string;
+            let sessionGroupId: string | null;
+            if (scope.kind === "session") {
+              const session = await prisma.session.findFirst({
+                where: {
+                  id: scope.sessionId,
+                  organization: { orgMembers: { some: { userId: user.id } } },
+                },
+                select: {
+                  id: true,
+                  organizationId: true,
+                  sessionGroupId: true,
+                },
+              });
+              if (!session) {
+                ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
+                return;
+              }
+              organizationId = session.organizationId;
+              sessionGroupId = session.sessionGroupId;
+            } else {
+              const channel = await prisma.channel.findFirst({
+                where: {
+                  id: scope.channelId,
+                  members: { some: { userId: user.id, leftAt: null } },
+                },
+                select: { id: true, organizationId: true },
+              });
+              if (!channel) {
+                ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
+                return;
+              }
+              organizationId = channel.organizationId;
+              sessionGroupId = null;
             }
+
             try {
               // Authorize against the runtime the terminal was pinned to at
-              // creation time — NOT the session's current DB connection (which
-              // can be null or stale and would silently bypass the check).
+              // creation time — NOT any current session binding (which can be
+              // null or stale and would silently bypass the check).
               await runtimeAccessService.assertAccess({
                 userId,
-                organizationId: session.organizationId,
+                organizationId,
                 runtimeInstanceId,
-                sessionGroupId: session.sessionGroupId,
+                sessionGroupId,
                 capability: "terminal",
               });
             } catch (err) {
               if (!(err instanceof AuthorizationError)) throw err;
               console.warn(
-                `[terminal-handler] user ${userId} denied terminal access to session ${sessionId}`,
+                `[terminal-handler] user ${userId} denied terminal access (terminal ${terminalId})`,
               );
               ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
               return;

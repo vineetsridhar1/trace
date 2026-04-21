@@ -1,16 +1,24 @@
 import { randomUUID } from "crypto";
 import type WebSocket from "ws";
+import type { BridgeActiveTerminal } from "@trace/shared";
 import { prisma } from "./db.js";
 import { sessionRouter } from "./session-router.js";
 
+/**
+ * Where a terminal lives. Session-scoped terminals run in a session group's
+ * side worktree; channel-scoped terminals run on the main worktree of the
+ * channel's repo on a specific bridge.
+ */
+export type TerminalScope =
+  | { kind: "session"; sessionId: string; sessionGroupId: string | null }
+  | { kind: "channel"; channelId: string; repoId: string };
+
 interface TerminalEntry {
-  sessionId: string;
-  sessionGroupId: string | null;
+  scope: TerminalScope;
   /**
    * The runtime this terminal lives on. Every terminal command is pinned to
-   * this runtime via `expectedHomeRuntimeId` — without it, an unbound session
-   * would silently auto-bind to any connected bridge and leak the PTY to
-   * another user's machine.
+   * this runtime — without it, outbound commands could fall through to a
+   * different bridge via session-router auto-bind, leaking PTYs cross-tenant.
    */
   runtimeInstanceId: string;
   frontendWs: WebSocket | null;
@@ -47,15 +55,12 @@ class TerminalRelay {
   private sessionTerminals = new Map<string, Set<string>>();
   /** Reverse index: sessionGroupId → Set<terminalId> for group-scoped terminal tabs */
   private sessionGroupTerminals = new Map<string, Set<string>>();
+  /** Reverse index: channelId → Set<terminalId> for channel-scoped terminal tabs */
+  private channelTerminals = new Map<string, Set<string>>();
 
   /**
    * Create a terminal on the bridge for a given session.
    * Returns the terminalId that the frontend uses to attach.
-   *
-   * `runtimeInstanceId` pins the terminal to the session's home runtime so
-   * the PTY command can never fall through to a cross-tenant bridge via
-   * session-router auto-bind. The caller is responsible for authorizing the
-   * user against this runtime before we create a PTY on it.
    */
   createTerminal(
     sessionId: string,
@@ -66,28 +71,10 @@ class TerminalRelay {
     cwd?: string,
   ): string {
     const terminalId = randomUUID();
-
-    this.terminals.set(terminalId, {
-      sessionId,
-      sessionGroupId,
+    this.storeEntry(terminalId, {
+      scope: { kind: "session", sessionId, sessionGroupId },
       runtimeInstanceId,
-      frontendWs: null,
-      attachedUserId: null,
-      ready: false,
-      terminated: false,
-      buffer: [],
-      scrollback: [],
-      scrollbackBytes: 0,
-      orphanTimer: null,
     });
-    const ids = this.sessionTerminals.get(sessionId) ?? new Set();
-    ids.add(terminalId);
-    this.sessionTerminals.set(sessionId, ids);
-    if (sessionGroupId) {
-      const groupIds = this.sessionGroupTerminals.get(sessionGroupId) ?? new Set();
-      groupIds.add(terminalId);
-      this.sessionGroupTerminals.set(sessionGroupId, groupIds);
-    }
 
     // Send terminal_create command to the bridge, pinned to the authorized runtime.
     const result = sessionRouter.send(
@@ -104,7 +91,42 @@ class TerminalRelay {
     );
 
     if (result !== "delivered") {
-      // Bridge not available — buffer an error so the frontend gets feedback on attach
+      const errorMsg = JSON.stringify({ type: "error", message: `Terminal creation failed: ${result}` });
+      const entry = this.terminals.get(terminalId);
+      if (entry) entry.buffer.push(errorMsg);
+    }
+
+    return terminalId;
+  }
+
+  /**
+   * Create a terminal on a specific bridge runtime rooted in the main worktree
+   * of a channel's repo. Caller is responsible for authorization; this method
+   * just wires up the relay entry and dispatches the create command.
+   */
+  createChannelTerminal(input: {
+    channelId: string;
+    repoId: string;
+    runtimeInstanceId: string;
+    cols: number;
+    rows: number;
+  }): string {
+    const terminalId = randomUUID();
+    this.storeEntry(terminalId, {
+      scope: { kind: "channel", channelId: input.channelId, repoId: input.repoId },
+      runtimeInstanceId: input.runtimeInstanceId,
+    });
+
+    const result = sessionRouter.sendToRuntime(input.runtimeInstanceId, {
+      type: "terminal_create",
+      terminalId,
+      channelId: input.channelId,
+      repoId: input.repoId,
+      cols: input.cols,
+      rows: input.rows,
+    });
+
+    if (result !== "delivered") {
       const errorMsg = JSON.stringify({ type: "error", message: `Terminal creation failed: ${result}` });
       const entry = this.terminals.get(terminalId);
       if (entry) entry.buffer.push(errorMsg);
@@ -180,72 +202,67 @@ class TerminalRelay {
    */
   async restoreTerminals(
     runtimeInstanceId: string,
-    terminals: Array<{ terminalId: string; sessionId: string }>,
+    terminals: BridgeActiveTerminal[],
   ): Promise<void> {
-    const sessionIds = [...new Set(terminals.map(({ sessionId }) => sessionId))];
-    const sessions = sessionIds.length === 0
-      ? []
-      : await prisma.session.findMany({
-          where: { id: { in: sessionIds } },
-          select: { id: true, sessionGroupId: true },
-        });
+    const sessionIds = [
+      ...new Set(
+        terminals
+          .map((t) => ("sessionId" in t ? t.sessionId : null))
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+    const sessions =
+      sessionIds.length === 0
+        ? []
+        : await prisma.session.findMany({
+            where: { id: { in: sessionIds } },
+            select: { id: true, sessionGroupId: true },
+          });
     const sessionGroupIds = new Map<string, string | null>(
-      sessions.map((session: { id: string; sessionGroupId: string | null }) => [session.id, session.sessionGroupId ?? null]),
+      sessions.map((session: { id: string; sessionGroupId: string | null }) => [
+        session.id,
+        session.sessionGroupId ?? null,
+      ]),
     );
 
-    for (const { terminalId, sessionId } of terminals) {
-      if (this.terminals.has(terminalId)) continue;
-      const sessionGroupId = sessionGroupIds.get(sessionId) ?? null;
+    for (const entryDesc of terminals) {
+      if (this.terminals.has(entryDesc.terminalId)) continue;
+      const scope: TerminalScope =
+        "sessionId" in entryDesc
+          ? {
+              kind: "session",
+              sessionId: entryDesc.sessionId,
+              sessionGroupId: sessionGroupIds.get(entryDesc.sessionId) ?? null,
+            }
+          : {
+              kind: "channel",
+              channelId: entryDesc.channelId,
+              repoId: entryDesc.repoId,
+            };
 
-      this.terminals.set(terminalId, {
-        sessionId,
-        sessionGroupId,
+      this.storeEntry(entryDesc.terminalId, {
+        scope,
         runtimeInstanceId,
-        frontendWs: null,
-        attachedUserId: null,
         ready: true, // Bridge says it's alive, so it's ready
-        terminated: false,
-        buffer: [],
-        scrollback: [],
-        scrollbackBytes: 0,
-        orphanTimer: null,
       });
 
-      const ids = this.sessionTerminals.get(sessionId) ?? new Set();
-      ids.add(terminalId);
-      this.sessionTerminals.set(sessionId, ids);
-      if (sessionGroupId) {
-        const groupIds = this.sessionGroupTerminals.get(sessionGroupId) ?? new Set();
-        groupIds.add(terminalId);
-        this.sessionGroupTerminals.set(sessionGroupId, groupIds);
-      }
-
-      this.scheduleOrphanCleanup(terminalId);
+      this.scheduleOrphanCleanup(entryDesc.terminalId);
     }
   }
 
   /** Returns non-terminated terminal IDs for a session. */
   getTerminalsForSession(sessionId: string): string[] {
-    const ids = this.sessionTerminals.get(sessionId);
-    if (!ids) return [];
-    const result: string[] = [];
-    for (const id of ids) {
-      const entry = this.terminals.get(id);
-      if (entry && !entry.terminated) result.push(id);
-    }
-    return result;
+    return this.filterAlive(this.sessionTerminals.get(sessionId));
   }
 
   /** Returns non-terminated terminal IDs for a session group. */
   getTerminalsForSessionGroup(sessionGroupId: string): string[] {
-    const ids = this.sessionGroupTerminals.get(sessionGroupId);
-    if (!ids) return [];
-    const result: string[] = [];
-    for (const id of ids) {
-      const entry = this.terminals.get(id);
-      if (entry && !entry.terminated) result.push(id);
-    }
-    return result;
+    return this.filterAlive(this.sessionGroupTerminals.get(sessionGroupId));
+  }
+
+  /** Returns non-terminated terminal IDs for a channel. */
+  getTerminalsForChannel(channelId: string): string[] {
+    return this.filterAlive(this.channelTerminals.get(channelId));
   }
 
   /** Attach a frontend WebSocket to an existing terminal. Flushes any buffered messages. */
@@ -291,13 +308,24 @@ class TerminalRelay {
     }
   }
 
-  /** Get the sessionId for a terminal (used for auth checks). */
+  /** Get the scope for a terminal (used by handlers that need to branch on kind). */
+  getScope(terminalId: string): TerminalScope | undefined {
+    return this.terminals.get(terminalId)?.scope;
+  }
+
+  /**
+   * Get the sessionId for a session-scoped terminal. Returns undefined for
+   * channel terminals. Session-era callers that used this as a boolean check
+   * for "terminal exists" should migrate to `getScope`.
+   */
   getSessionId(terminalId: string): string | undefined {
-    return this.terminals.get(terminalId)?.sessionId;
+    const scope = this.terminals.get(terminalId)?.scope;
+    return scope?.kind === "session" ? scope.sessionId : undefined;
   }
 
   getSessionGroupId(terminalId: string): string | undefined {
-    return this.terminals.get(terminalId)?.sessionGroupId ?? undefined;
+    const scope = this.terminals.get(terminalId)?.scope;
+    return scope?.kind === "session" ? scope.sessionGroupId ?? undefined : undefined;
   }
 
   /**
@@ -374,26 +402,18 @@ class TerminalRelay {
     if (!entry) return;
 
     if (type === "input") {
-      sessionRouter.send(
-        entry.sessionId,
-        {
-          type: "terminal_input",
-          terminalId,
-          data: payload.data as string,
-        },
-        { expectedHomeRuntimeId: entry.runtimeInstanceId },
-      );
+      sessionRouter.sendToRuntime(entry.runtimeInstanceId, {
+        type: "terminal_input",
+        terminalId,
+        data: payload.data as string,
+      });
     } else if (type === "resize") {
-      sessionRouter.send(
-        entry.sessionId,
-        {
-          type: "terminal_resize",
-          terminalId,
-          cols: payload.cols as number,
-          rows: payload.rows as number,
-        },
-        { expectedHomeRuntimeId: entry.runtimeInstanceId },
-      );
+      sessionRouter.sendToRuntime(entry.runtimeInstanceId, {
+        type: "terminal_resize",
+        terminalId,
+        cols: payload.cols as number,
+        rows: payload.rows as number,
+      });
     }
   }
 
@@ -402,14 +422,10 @@ class TerminalRelay {
     const entry = this.terminals.get(terminalId);
     if (!entry) return;
 
-    sessionRouter.send(
-      entry.sessionId,
-      {
-        type: "terminal_destroy",
-        terminalId,
-      },
-      { expectedHomeRuntimeId: entry.runtimeInstanceId },
-    );
+    sessionRouter.sendToRuntime(entry.runtimeInstanceId, {
+      type: "terminal_destroy",
+      terminalId,
+    });
 
     this.removeTerminal(terminalId);
   }
@@ -418,55 +434,17 @@ class TerminalRelay {
   destroyAllForSession(sessionId: string): void {
     const ids = this.sessionTerminals.get(sessionId);
     if (!ids) return;
-    for (const terminalId of ids) {
-      const entry = this.terminals.get(terminalId);
-      if (!entry) continue;
-      // Kill the terminal process on the bridge
-      sessionRouter.send(
-        entry.sessionId,
-        { type: "terminal_destroy", terminalId },
-        { expectedHomeRuntimeId: entry.runtimeInstanceId },
-      );
-      if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
-        entry.frontendWs.send(JSON.stringify({ type: "exit", exitCode: -1 }));
-      }
-      this.cancelOrphanCleanup(terminalId);
-      if (entry.sessionGroupId) {
-        const groupIds = this.sessionGroupTerminals.get(entry.sessionGroupId);
-        if (groupIds) {
-          groupIds.delete(terminalId);
-          if (groupIds.size === 0) this.sessionGroupTerminals.delete(entry.sessionGroupId);
-        }
-      }
-      this.terminals.delete(terminalId);
+    for (const terminalId of [...ids]) {
+      this.destroyTerminalInternal(terminalId);
     }
-    this.sessionTerminals.delete(sessionId);
   }
 
   destroyAllForSessionGroup(sessionGroupId: string): void {
     const ids = this.sessionGroupTerminals.get(sessionGroupId);
     if (!ids) return;
-    for (const terminalId of ids) {
-      const entry = this.terminals.get(terminalId);
-      if (!entry) continue;
-      // Kill the terminal process on the bridge
-      sessionRouter.send(
-        entry.sessionId,
-        { type: "terminal_destroy", terminalId },
-        { expectedHomeRuntimeId: entry.runtimeInstanceId },
-      );
-      if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
-        entry.frontendWs.send(JSON.stringify({ type: "exit", exitCode: -1 }));
-      }
-      this.cancelOrphanCleanup(terminalId);
-      this.terminals.delete(terminalId);
-      const sessionIds = this.sessionTerminals.get(entry.sessionId);
-      if (sessionIds) {
-        sessionIds.delete(terminalId);
-        if (sessionIds.size === 0) this.sessionTerminals.delete(entry.sessionId);
-      }
+    for (const terminalId of [...ids]) {
+      this.destroyTerminalInternal(terminalId);
     }
-    this.sessionGroupTerminals.delete(sessionGroupId);
   }
 
   /** Detach all frontend WebSockets associated with a given WebSocket (called on /terminal WS close). */
@@ -481,17 +459,37 @@ class TerminalRelay {
   }
 
   /**
-   * Destroy terminals attached by a specific user whose session falls within
-   * the given scope. Called when a bridge access grant is revoked — closes
+   * Destroy terminals attached by a specific user whose scope matches the
+   * given filters. Called when a bridge access grant is revoked — closes
    * the grantee's frontend WS immediately and tears down the PTY on the
-   * bridge side. `sessionIds` limits the scope (for a session_group grant the
-   * caller passes the set of sessions in that group; for all_sessions it
-   * passes undefined to match all sessions).
+   * bridge side.
+   *
+   * - `sessionIds`: when set, session-scoped terminals are matched only if
+   *   their sessionId is in this set. Leave undefined to match all.
+   * - `runtimeInstanceId`: when set, only terminals pinned to this runtime
+   *   are affected. Required so revoking one bridge's grant doesn't touch
+   *   terminals on other bridges the user still has access to.
+   * - `includeChannelTerminals`: channel terminals have no session — they
+   *   only live on a runtime. Include them only when the revocation covers
+   *   the entire bridge (all_sessions scope), not a session_group scope.
    */
-  destroyTerminalsForUser(userId: string, sessionIds?: Set<string>): void {
+  destroyTerminalsForUser(
+    userId: string,
+    options: {
+      sessionIds?: Set<string>;
+      runtimeInstanceId?: string;
+      includeChannelTerminals?: boolean;
+    } = {},
+  ): void {
+    const { sessionIds, runtimeInstanceId, includeChannelTerminals } = options;
     for (const [terminalId, entry] of this.terminals) {
       if (entry.attachedUserId !== userId) continue;
-      if (sessionIds && !sessionIds.has(entry.sessionId)) continue;
+      if (runtimeInstanceId && entry.runtimeInstanceId !== runtimeInstanceId) continue;
+      if (entry.scope.kind === "session") {
+        if (sessionIds && !sessionIds.has(entry.scope.sessionId)) continue;
+      } else {
+        if (!includeChannelTerminals) continue;
+      }
       if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
         entry.frontendWs.send(
           JSON.stringify({ type: "error", message: "Bridge access revoked" }),
@@ -500,6 +498,71 @@ class TerminalRelay {
       }
       this.destroyTerminal(terminalId);
     }
+  }
+
+  private storeEntry(
+    terminalId: string,
+    init: {
+      scope: TerminalScope;
+      runtimeInstanceId: string;
+      ready?: boolean;
+    },
+  ): void {
+    this.terminals.set(terminalId, {
+      scope: init.scope,
+      runtimeInstanceId: init.runtimeInstanceId,
+      frontendWs: null,
+      attachedUserId: null,
+      ready: init.ready ?? false,
+      terminated: false,
+      buffer: [],
+      scrollback: [],
+      scrollbackBytes: 0,
+      orphanTimer: null,
+    });
+    this.addToReverseIndexes(terminalId, init.scope);
+  }
+
+  private addToReverseIndexes(terminalId: string, scope: TerminalScope): void {
+    if (scope.kind === "session") {
+      const ids = this.sessionTerminals.get(scope.sessionId) ?? new Set();
+      ids.add(terminalId);
+      this.sessionTerminals.set(scope.sessionId, ids);
+      if (scope.sessionGroupId) {
+        const groupIds = this.sessionGroupTerminals.get(scope.sessionGroupId) ?? new Set();
+        groupIds.add(terminalId);
+        this.sessionGroupTerminals.set(scope.sessionGroupId, groupIds);
+      }
+    } else {
+      const ids = this.channelTerminals.get(scope.channelId) ?? new Set();
+      ids.add(terminalId);
+      this.channelTerminals.set(scope.channelId, ids);
+    }
+  }
+
+  private filterAlive(ids: Set<string> | undefined): string[] {
+    if (!ids) return [];
+    const result: string[] = [];
+    for (const id of ids) {
+      const entry = this.terminals.get(id);
+      if (entry && !entry.terminated) result.push(id);
+    }
+    return result;
+  }
+
+  /** Shared teardown helper used by bulk destroy paths. */
+  private destroyTerminalInternal(terminalId: string): void {
+    const entry = this.terminals.get(terminalId);
+    if (!entry) return;
+    sessionRouter.sendToRuntime(entry.runtimeInstanceId, {
+      type: "terminal_destroy",
+      terminalId,
+    });
+    if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
+      entry.frontendWs.send(JSON.stringify({ type: "exit", exitCode: -1 }));
+    }
+    this.cancelOrphanCleanup(terminalId);
+    this.removeTerminal(terminalId);
   }
 
   private scheduleOrphanCleanup(terminalId: string): void {
@@ -532,16 +595,24 @@ class TerminalRelay {
     const entry = this.terminals.get(terminalId);
     if (entry) {
       this.cancelOrphanCleanup(terminalId);
-      const ids = this.sessionTerminals.get(entry.sessionId);
-      if (ids) {
-        ids.delete(terminalId);
-        if (ids.size === 0) this.sessionTerminals.delete(entry.sessionId);
-      }
-      if (entry.sessionGroupId) {
-        const groupIds = this.sessionGroupTerminals.get(entry.sessionGroupId);
-        if (groupIds) {
-          groupIds.delete(terminalId);
-          if (groupIds.size === 0) this.sessionGroupTerminals.delete(entry.sessionGroupId);
+      if (entry.scope.kind === "session") {
+        const sessionIds = this.sessionTerminals.get(entry.scope.sessionId);
+        if (sessionIds) {
+          sessionIds.delete(terminalId);
+          if (sessionIds.size === 0) this.sessionTerminals.delete(entry.scope.sessionId);
+        }
+        if (entry.scope.sessionGroupId) {
+          const groupIds = this.sessionGroupTerminals.get(entry.scope.sessionGroupId);
+          if (groupIds) {
+            groupIds.delete(terminalId);
+            if (groupIds.size === 0) this.sessionGroupTerminals.delete(entry.scope.sessionGroupId);
+          }
+        }
+      } else {
+        const channelIds = this.channelTerminals.get(entry.scope.channelId);
+        if (channelIds) {
+          channelIds.delete(terminalId);
+          if (channelIds.size === 0) this.channelTerminals.delete(entry.scope.channelId);
         }
       }
     }
