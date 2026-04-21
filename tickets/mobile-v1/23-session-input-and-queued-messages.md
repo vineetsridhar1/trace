@@ -8,6 +8,7 @@ The bottom-pinned composer: plain-text input, interaction-mode toggle (code / pl
 
 - **`SessionInputComposer.tsx`** (<200 lines):
   - Liquid Glass background (input preset).
+  - Only mounted when `sessionStatus !== 'needs_input'`. When the session is waiting on the user, `PendingInputBar` (ticket 22) owns the bottom slot and the composer is suppressed — same replace-not-stack model as web's `AskUserQuestionBar` / `PlanResponseBar`.
   - `TextInput` (multiline, grows up to 6 lines then scrolls internally).
   - Interaction-mode pill on the left: cycles `code → plan → ask → code` on tap. Visual variants per mode. Haptic `selection` on cycle.
   - Send button on the right:

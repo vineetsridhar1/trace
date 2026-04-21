@@ -520,10 +520,10 @@ Full-screen modals for:
 
 **UI structure (top-to-bottom):**
 1. **Header** — session name, agent status dot (active/done/failed/stopped), overflow menu.
-2. **Pending-input bar** (conditional, pinned below header) — appears when `sessionStatus === "needs_input"`:
-   - If `question_pending`: renders the question + answer buttons inline.
-   - If `plan_pending`: renders a compact plan card with "Accept" and "Send feedback" actions.
-3. **Active todo strip** (conditional) — if the agent is active and has a current todo list, a single-line sticky strip shows the current todo ("✓ 3 of 7 · Refactoring auth middleware").
+2. **Active todo strip** (conditional, directly below the tab strip) — if the agent is active and has a current todo list, a single-line Liquid Glass strip shows the current todo and "N of M" progress (e.g. "Refactoring auth middleware · 3 of 7").
+3. **Pending-input bar** (conditional, pinned at the bottom, replacing the composer) — appears when `sessionStatus === "needs_input"` and takes over the composer's bottom slot (same replace-not-stack model as web's `AskUserQuestionBar` / `PlanResponseBar`, not a stacked bar under the header):
+   - If `question_pending`: renders the question + option pills + inline "Other…" input with multi-question paging.
+   - If `plan_pending`: renders an "Approve" preset pill + inline revise input; approving sends `"Approved. Implement this plan."`, revising sends `"Please revise the plan: …"` with `interactionMode: "plan"`.
 4. **Message stream** — virtualized scroll list (`FlashList`) of nodes derived from events. Node renderers:
    - `UserMessageBubble` — right-aligned, user avatar
    - `AssistantMessage` — markdown-rendered with rich blocks
