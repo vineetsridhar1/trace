@@ -93,13 +93,13 @@ export function SessionSurface({
         sessionIds={sessionIds}
         onSelect={onSelectSession}
       />
-      <PendingInputBar sessionId={sessionId} />
       <ActiveTodoStrip sessionId={sessionId} />
       <SessionStream
         key={sessionId}
         sessionId={sessionId}
         onScrollOffsetChange={handleScrollOffsetChange}
       />
+      <PendingInputBar sessionId={sessionId} />
     </View>
   );
 }

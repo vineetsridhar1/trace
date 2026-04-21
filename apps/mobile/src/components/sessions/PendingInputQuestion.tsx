@@ -1,13 +1,21 @@
 import { useCallback, useState } from "react";
-import { StyleSheet, View } from "react-native";
-import { SymbolView } from "expo-symbols";
-import { SEND_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
+import { StyleSheet, TextInput, View } from "react-native";
+import {
+  SEND_SESSION_MESSAGE_MUTATION,
+  useQuestionState,
+} from "@trace/client-core";
 import type { Question } from "@trace/shared";
-import { Glass, Text } from "@/components/design-system";
+import { Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
-import { alpha, useTheme } from "@/theme";
-import { PendingInputAnswer } from "./PendingInputAnswer";
+import { useTheme } from "@/theme";
+import {
+  PendingInputPagerButton,
+  PendingInputSendButton,
+  PendingInputShell,
+  pendingInputStyles,
+} from "./PendingInputShell";
+import { QuestionOptionPill } from "./QuestionOptionPill";
 
 interface PendingInputQuestionProps {
   sessionId: string;
@@ -15,104 +23,149 @@ interface PendingInputQuestionProps {
 }
 
 /**
- * Question variant of the pending-input bar. Renders the most recent
- * question with the answer affordance below — option pills for choice
- * questions, an inline TextInput + Send for free-form.
- *
- * Multi-question payloads display the first question only with a "+N more"
- * affordance — the full pagination flow lives on web; mobile keeps the bar
- * compact by design.
+ * Question variant of the pending-input bar. Mirrors web's
+ * `AskUserQuestionBar`: option pills toggle a per-question selection
+ * without sending, an inline "Other…" input collects free-form text,
+ * pagination chevrons navigate multi-question payloads, and Send fires
+ * only after every question has an answer (built into a single combined
+ * `{header}: {answer}` message via `useQuestionState.buildResponse`).
  */
 export function PendingInputQuestion({
   sessionId,
   questions,
 }: PendingInputQuestionProps) {
   const theme = useTheme();
+  const {
+    page,
+    total,
+    question,
+    currentSelected,
+    currentCustom,
+    isFirstPage,
+    isLastPage,
+    hasAllAnswers,
+    toggleOption,
+    setCustomText,
+    goNext,
+    goPrev,
+    buildResponse,
+  } = useQuestionState({ questions });
+
   const [sending, setSending] = useState(false);
 
-  const question = questions[0];
-  const moreCount = questions.length - 1;
+  const handleSend = useCallback(async () => {
+    if (sending || !hasAllAnswers) return;
+    const response = buildResponse();
+    if (!response) return;
+    setSending(true);
+    void haptic.light();
+    try {
+      await getClient()
+        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+          sessionId,
+          text: response,
+        })
+        .toPromise();
+    } finally {
+      setSending(false);
+    }
+  }, [buildResponse, hasAllAnswers, sending, sessionId]);
 
-  const dispatchAnswer = useCallback(
-    async (answer: string) => {
-      if (sending || !question) return;
-      const trimmed = answer.trim();
-      if (!trimmed) return;
-      setSending(true);
-      void haptic.light();
-      const text = question.header
-        ? `${question.header}: ${trimmed}`
-        : trimmed;
-      try {
-        await getClient()
-          .mutation(SEND_SESSION_MESSAGE_MUTATION, { sessionId, text })
-          .toPromise();
-      } finally {
-        setSending(false);
-      }
-    },
-    [question, sending, sessionId],
-  );
+  const handleSubmit = () => {
+    if (hasAllAnswers) void handleSend();
+    else if (!isLastPage) goNext();
+  };
 
-  if (!question) return null;
+  const headerTrailing =
+    total > 1 ? (
+      <Text variant="caption2" color="mutedForeground">
+        {page + 1}/{total}
+      </Text>
+    ) : null;
 
   return (
-    <Glass
-      preset="pinnedBar"
-      style={{
-        marginHorizontal: theme.spacing.md,
-        marginBottom: theme.spacing.sm,
-        borderColor: alpha(theme.colors.statusNeedsInput, 0.32),
-        borderWidth: StyleSheet.hairlineWidth,
-        padding: theme.spacing.md,
-      }}
+    <PendingInputShell
+      header={question.header || "Question"}
+      headerTrailing={headerTrailing}
     >
-      <View style={styles.header}>
-        <SymbolView
-          name="questionmark.circle.fill"
-          size={14}
-          tintColor={theme.colors.statusNeedsInput}
-          resizeMode="scaleAspectFit"
-          style={styles.headerIcon}
-        />
-        <Text
-          variant="caption2"
-          style={{
-            color: theme.colors.statusNeedsInput,
-            fontWeight: "700",
-            letterSpacing: 0.4,
-          }}
-        >
-          {(question.header || "QUESTION").toUpperCase()}
-        </Text>
-        {moreCount > 0 ? (
-          <Text variant="caption2" color="mutedForeground" style={styles.moreCount}>
-            +{moreCount} more
-          </Text>
-        ) : null}
-      </View>
-
       <Text
         variant="footnote"
         color="foreground"
         style={styles.questionText}
-        numberOfLines={3}
+        numberOfLines={4}
       >
         {question.question}
       </Text>
 
-      <PendingInputAnswer
-        question={question}
-        sending={sending}
-        onAnswer={(text) => void dispatchAnswer(text)}
-      />
-    </Glass>
+      {question.options.length > 0 ? (
+        <View style={styles.optionsRow}>
+          {question.options.map((opt) => (
+            <QuestionOptionPill
+              key={opt.label}
+              label={opt.label}
+              selected={currentSelected.has(opt.label)}
+              multiSelect={question.multiSelect}
+              onPress={() => {
+                void haptic.selection();
+                toggleOption(opt.label);
+              }}
+            />
+          ))}
+        </View>
+      ) : null}
+
+      <View style={pendingInputStyles.bottomRow}>
+        <TextInput
+          value={currentCustom}
+          onChangeText={setCustomText}
+          onSubmitEditing={handleSubmit}
+          placeholder="Other…"
+          placeholderTextColor={theme.colors.dimForeground}
+          editable={!sending}
+          returnKeyType={hasAllAnswers ? "send" : "next"}
+          style={[
+            pendingInputStyles.input,
+            {
+              backgroundColor: theme.colors.surfaceDeep,
+              borderColor: theme.colors.border,
+              color: theme.colors.foreground,
+            },
+          ]}
+        />
+        {total > 1 ? (
+          <View style={styles.pager}>
+            <PendingInputPagerButton
+              icon="chevron.left"
+              accessibilityLabel="Previous question"
+              disabled={isFirstPage || sending}
+              onPress={goPrev}
+            />
+            <PendingInputPagerButton
+              icon="chevron.right"
+              accessibilityLabel="Next question"
+              disabled={isLastPage || sending}
+              onPress={goNext}
+            />
+          </View>
+        ) : null}
+        <PendingInputSendButton
+          enabled={hasAllAnswers}
+          loading={sending}
+          accessibilityLabel="Send answer"
+          onPress={() => void handleSend()}
+        />
+      </View>
+    </PendingInputShell>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: 6 },
-  headerIcon: { width: 14, height: 14 },
-  moreCount: { marginLeft: "auto" },
-  questionText: { marginTop: 6 },
+  questionText: { marginTop: 4 },
+  optionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 10,
+  },
+  pager: { flexDirection: "row", gap: 4 },
 });

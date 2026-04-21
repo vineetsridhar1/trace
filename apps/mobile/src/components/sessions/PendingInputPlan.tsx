@@ -1,191 +1,168 @@
 import { useCallback, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
-import { SymbolView } from "expo-symbols";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { SEND_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
-import { Glass, Text } from "@/components/design-system";
+import { Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { alpha, useTheme } from "@/theme";
+import {
+  PendingInputSendButton,
+  PendingInputShell,
+  pendingInputStyles,
+} from "./PendingInputShell";
 
 interface PendingInputPlanProps {
   sessionId: string;
   planContent: string;
   planFilePath: string;
-  /**
-   * Focus the main composer with the prefilled feedback prompt. Wired by
-   * the composer in ticket 23. When omitted the button still renders but
-   * is a no-op.
-   */
-  onRequestFeedback?: (prefill: string) => void;
 }
 
-const ACCEPT_TEXT = "Approved. Implement this plan.";
-const FEEDBACK_PREFILL = "Feedback on plan: ";
+const APPROVE_TEXT = "Approved. Implement this plan.";
+const APPROVE_PRESET = "Approve";
 
 /**
- * Plan variant of the pending-input bar. Compact card with the plan's
- * filename + a one-line preview, plus Accept (sends approval text) and
- * Send feedback (focuses the composer with a prefilled prefix).
+ * Plan variant of the pending-input bar. Mirrors web's `PlanResponseBar`:
+ * an Approve preset toggle + an inline revise input share one Send button
+ * that fires either the approval text or `Please revise the plan: …`
+ * (with `interactionMode: "plan"`) depending on which input has content.
  */
 export function PendingInputPlan({
   sessionId,
-  planContent,
+  planContent: _planContent,
   planFilePath,
-  onRequestFeedback,
 }: PendingInputPlanProps) {
   const theme = useTheme();
+  const [selected, setSelected] = useState(false);
+  const [feedback, setFeedback] = useState("");
   const [sending, setSending] = useState(false);
 
-  const handleAccept = useCallback(async () => {
-    if (sending) return;
-    setSending(true);
-    void haptic.success();
-    try {
-      await getClient()
-        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-          sessionId,
-          text: ACCEPT_TEXT,
-        })
-        .toPromise();
-    } finally {
-      setSending(false);
-    }
-  }, [sending, sessionId]);
-
-  const handleFeedback = useCallback(() => {
-    void haptic.light();
-    onRequestFeedback?.(FEEDBACK_PREFILL);
-  }, [onRequestFeedback]);
-
   const filename = planFilePath ? planFilePath.split("/").pop() : null;
-  const preview = previewText(planContent);
+  const trimmed = feedback.trim();
+  const hasAnswer = selected || trimmed.length > 0;
+
+  const dispatch = useCallback(
+    async (text: string, interactionMode?: string) => {
+      if (sending) return;
+      setSending(true);
+      void haptic.light();
+      try {
+        await getClient()
+          .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+            sessionId,
+            text,
+            interactionMode,
+          })
+          .toPromise();
+        setFeedback("");
+        setSelected(false);
+      } finally {
+        setSending(false);
+      }
+    },
+    [sending, sessionId],
+  );
+
+  const handleSend = useCallback(() => {
+    if (selected && !trimmed) {
+      void dispatch(APPROVE_TEXT);
+    } else if (trimmed) {
+      void dispatch(`Please revise the plan: ${trimmed}`, "plan");
+    }
+  }, [dispatch, selected, trimmed]);
+
+  const headerTrailing = filename ? (
+    <Text
+      variant="caption2"
+      color="mutedForeground"
+      numberOfLines={1}
+      style={styles.filename}
+    >
+      {filename}
+    </Text>
+  ) : null;
 
   return (
-    <Glass
-      preset="pinnedBar"
-      style={{
-        marginHorizontal: theme.spacing.md,
-        marginBottom: theme.spacing.sm,
-        borderColor: alpha(theme.colors.statusMerged, 0.32),
-        borderWidth: StyleSheet.hairlineWidth,
-        padding: theme.spacing.md,
-      }}
-    >
-      <View style={styles.header}>
-        <SymbolView
-          name="map.fill"
-          size={14}
-          tintColor={theme.colors.statusMerged}
-          resizeMode="scaleAspectFit"
-          style={styles.headerIcon}
-        />
-        <Text
-          variant="caption2"
-          style={{
-            color: theme.colors.statusMerged,
-            fontWeight: "700",
-            letterSpacing: 0.4,
+    <PendingInputShell header="Plan Review" headerTrailing={headerTrailing}>
+      <View style={styles.presetsRow}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={APPROVE_PRESET}
+          accessibilityState={{ selected }}
+          disabled={sending}
+          onPress={() => {
+            void haptic.selection();
+            setSelected((s) => !s);
+            if (!selected) setFeedback("");
           }}
+          style={({ pressed }) => [
+            styles.presetButton,
+            {
+              borderColor: selected ? theme.colors.accent : theme.colors.border,
+              backgroundColor: selected
+                ? alpha(theme.colors.accent, 0.18)
+                : pressed
+                  ? theme.colors.surfaceElevated
+                  : "transparent",
+              opacity: sending ? 0.5 : 1,
+            },
+          ]}
         >
-          PLAN READY FOR REVIEW
-        </Text>
-        {filename ? (
           <Text
-            variant="caption2"
-            color="mutedForeground"
-            numberOfLines={1}
-            style={styles.filename}
+            variant="footnote"
+            style={{
+              color: selected ? theme.colors.accent : theme.colors.mutedForeground,
+              fontWeight: "500",
+            }}
           >
-            {filename}
-          </Text>
-        ) : null}
-      </View>
-
-      {preview ? (
-        <Text
-          variant="footnote"
-          color="mutedForeground"
-          style={styles.preview}
-          numberOfLines={2}
-        >
-          {preview}
-        </Text>
-      ) : null}
-
-      <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Accept plan"
-          disabled={sending}
-          onPress={() => void handleAccept()}
-          style={({ pressed }) => [
-            styles.acceptButton,
-            {
-              backgroundColor: pressed
-                ? alpha(theme.colors.statusMerged, 0.85)
-                : theme.colors.statusMerged,
-              opacity: sending ? 0.6 : 1,
-            },
-          ]}
-        >
-          <Text variant="footnote" color="accentForeground" style={styles.acceptLabel}>
-            Accept
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Send feedback on plan"
-          disabled={sending}
-          onPress={handleFeedback}
-          style={({ pressed }) => [
-            styles.feedbackButton,
-            {
-              borderColor: alpha(theme.colors.statusMerged, 0.4),
-              backgroundColor: pressed
-                ? alpha(theme.colors.statusMerged, 0.12)
-                : "transparent",
-            },
-          ]}
-        >
-          <Text variant="footnote" color="foreground" style={styles.feedbackLabel}>
-            Send feedback
+            {APPROVE_PRESET}
           </Text>
         </Pressable>
       </View>
-    </Glass>
+
+      <View style={pendingInputStyles.bottomRow}>
+        <TextInput
+          value={feedback}
+          onChangeText={(text) => {
+            setFeedback(text);
+            if (text) setSelected(false);
+          }}
+          onSubmitEditing={handleSend}
+          placeholder="Suggest changes to revise the plan…"
+          placeholderTextColor={theme.colors.dimForeground}
+          editable={!sending}
+          returnKeyType="send"
+          style={[
+            pendingInputStyles.input,
+            {
+              backgroundColor: theme.colors.surfaceDeep,
+              borderColor: theme.colors.border,
+              color: theme.colors.foreground,
+            },
+          ]}
+        />
+        <PendingInputSendButton
+          enabled={hasAnswer}
+          loading={sending}
+          accessibilityLabel={selected && !trimmed ? "Approve plan" : "Send feedback"}
+          onPress={handleSend}
+        />
+      </View>
+    </PendingInputShell>
   );
 }
 
-function previewText(content: string): string {
-  // First non-empty line, with markdown headers stripped.
-  for (const raw of content.split(/\r?\n/)) {
-    const line = raw.replace(/^#+\s*/, "").trim();
-    if (line) return line;
-  }
-  return "";
-}
-
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: 6 },
-  headerIcon: { width: 14, height: 14 },
-  filename: { marginLeft: "auto", maxWidth: "55%" },
-  preview: { marginTop: 6 },
-  actions: {
+  filename: { marginLeft: "auto", maxWidth: "55%", fontFamily: "Menlo" },
+  presetsRow: {
     flexDirection: "row",
-    gap: 8,
-    marginTop: 12,
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 10,
   },
-  acceptButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
+  presetButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
   },
-  acceptLabel: { fontWeight: "600" },
-  feedbackButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  feedbackLabel: { fontWeight: "500" },
 });

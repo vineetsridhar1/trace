@@ -12,24 +12,16 @@ import { PendingInputQuestion } from "./PendingInputQuestion";
 
 interface PendingInputBarProps {
   sessionId: string;
-  /**
-   * Optional callback to focus the main composer with a prefill string.
-   * The plan variant uses this for "Send feedback"; the question variant
-   * uses it for free-form responses too long for the inline input. Wired
-   * by the composer in ticket 23 — until then the affordance no-ops.
-   */
-  onRequestComposerPrefill?: (text: string) => void;
 }
 
 /**
- * Pinned bar above the session stream that surfaces the most recent
- * `question_pending` or `plan_pending` block when the session is waiting on
- * the user. The bar dismounts itself when the session leaves `needs_input`.
+ * Bottom-pinned bar that takes over the composer area when the session is
+ * waiting on the user (`session.sessionStatus === "needs_input"`). Renders
+ * the plan-review surface or the question surface depending on the most
+ * recent pending block. The bar dismounts itself once the session leaves
+ * the needs-input state.
  */
-export function PendingInputBar({
-  sessionId,
-  onRequestComposerPrefill,
-}: PendingInputBarProps) {
+export function PendingInputBar({ sessionId }: PendingInputBarProps) {
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
     | string
     | null
@@ -50,7 +42,6 @@ export function PendingInputBar({
         sessionId={sessionId}
         planContent={pending.planContent}
         planFilePath={pending.planFilePath}
-        onRequestFeedback={onRequestComposerPrefill}
       />
     );
   }
