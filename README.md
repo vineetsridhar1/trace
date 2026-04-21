@@ -161,7 +161,7 @@ pnpm dev:desktop:prod  # Desktop → production API + local web
 
 The schema lives in `packages/gql/src/schema.graphql`. Key operations:
 
-**Queries** — `organization`, `channels`, `sessions`, `tickets`, `events`, `repos`, `projects`
+**Queries** — `organization`, `channels`, `sessions`, `searchSessions`, `tickets`, `events`, `repos`, `projects`
 
 **Mutations** — `sendMessage`, `startSession`, `pauseSession`, `resumeSession`, `terminateSession`, `createTicket`, `updateTicket`, `createChannel`, `createRepo`, `createProject`, `linkEntityToProject`
 
