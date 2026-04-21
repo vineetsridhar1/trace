@@ -1,4 +1,3 @@
-import { router } from "expo-router";
 import {
   generateUUID,
   START_SESSION_MUTATION,
@@ -11,6 +10,8 @@ import { getDefaultModel } from "@trace/shared";
 import type { CodingTool, HostingMode } from "@trace/gql";
 import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
+import { closeSessionPlayer, tryOpenSessionPlayer } from "@/lib/sessionPlayer";
+import { useMobileUIStore } from "@/stores/ui";
 
 const DEFAULT_TOOL: CodingTool = "claude_code";
 const DEFAULT_HOSTING: HostingMode = "cloud";
@@ -27,10 +28,11 @@ interface OptimisticEntities {
 
 /**
  * Mobile twin of web's `createQuickSession`: inserts optimistic session
- * entities, deep-links straight to the composer, and fires the real
- * mutation in the background. When the server responds, the temp entities
- * are swapped for the real ones and the URL is replaced in place — so
- * the user can start typing before the round-trip completes.
+ * entities, opens the Session Player (§10.8) overlay pointed at the temp
+ * session, and fires the real mutation in the background. When the server
+ * responds, the temp entities are swapped for the real ones and the
+ * overlay's target session id is updated in place — so the user can start
+ * typing before the round-trip completes.
  */
 export async function createQuickSession(channelId: string): Promise<void> {
   const channel = useEntityStore.getState().channels[channelId];
@@ -54,7 +56,7 @@ export async function createQuickSession(channelId: string): Promise<void> {
 
   insertOptimistic(optimistic);
   void haptic.light();
-  router.push(`/sessions/${tempGroupId}/${tempSessionId}`);
+  tryOpenSessionPlayer(tempSessionId);
 
   try {
     const result = await getClient()
@@ -77,14 +79,19 @@ export async function createQuickSession(channelId: string): Promise<void> {
       throw new Error("Server did not return a session id");
     }
 
+    // Swap entities first, then retarget the overlay so the SessionSurface
+    // never dereferences a deleted temp id. React batches these updates.
     reconcile(optimistic, {
       realSessionId: session.id,
       realGroupId: session.sessionGroupId,
     });
-    router.replace(`/sessions/${session.sessionGroupId}/${session.id}`);
+    const ui = useMobileUIStore.getState();
+    if (ui.overlaySessionId === tempSessionId) {
+      ui.setOverlaySessionId(session.id);
+    }
   } catch (err) {
     rollback(optimistic);
-    router.back();
+    closeSessionPlayer();
     console.error("[createQuickSession] failed", err);
   }
 }
