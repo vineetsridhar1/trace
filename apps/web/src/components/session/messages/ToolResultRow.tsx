@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
 import { formatCommandLabel, formatTime, serializeUnknown } from "./utils";
 
@@ -25,14 +26,6 @@ export function ToolResultRow({ name, output, timestamp }: ToolResultRowProps) {
     }
   }
   const [open, setOpen] = useState(false);
-  const bodyRef = useRef<HTMLDivElement>(null);
-  const [bodyHeight, setBodyHeight] = useState(0);
-
-  useEffect(() => {
-    if (bodyRef.current) {
-      setBodyHeight(bodyRef.current.scrollHeight);
-    }
-  }, [open, output]);
 
   const label = commandResult ?? `${name} completed`;
 
@@ -43,26 +36,34 @@ export function ToolResultRow({ name, output, timestamp }: ToolResultRowProps) {
         className="tool-cmd-button"
         onClick={() => setOpen(!open)}
       >
-        <span
+        <motion.span
           className="tool-cmd-chevron"
-          style={{ transform: open ? "rotate(90deg)" : undefined }}
+          animate={{ rotate: open ? 90 : 0 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
         >
           <ChevronRight size={10} />
-        </span>
+        </motion.span>
         <code className="tool-cmd-code">{label}</code>
         <span className="tool-cmd-time">{formatTime(timestamp)}</span>
       </button>
-      {renderedOutput && (
-        <div
-          className="tool-cmd-body"
-          style={{ maxHeight: open ? `${bodyHeight}px` : "0px" }}
-        >
-          <div ref={bodyRef}>
-            {commandResult && <div className="tool-cmd-section-label">Output</div>}
-            <pre className="tool-cmd-output">{serializeUnknown(renderedOutput)}</pre>
-          </div>
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {renderedOutput && open && (
+          <motion.div
+            key="body"
+            className="tool-cmd-body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ height: { duration: 0.22, ease: [0.16, 1, 0.3, 1] }, opacity: { duration: 0.18 } }}
+            style={{ overflow: "hidden" }}
+          >
+            <div>
+              {commandResult && <div className="tool-cmd-section-label">Output</div>}
+              <pre className="tool-cmd-output">{serializeUnknown(renderedOutput)}</pre>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
