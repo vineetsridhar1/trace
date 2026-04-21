@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import { useEntityField } from "@trace/client-core";
 import { Spinner, Text } from "@/components/design-system";
@@ -7,15 +7,10 @@ import { PendingInputBar } from "@/components/sessions/PendingInputBar";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
 import { SessionStream } from "@/components/sessions/SessionStream";
 import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
-import {
-  useEnsureSessionGroupDetail,
-  useSessionGroupSessionIds,
-} from "@/hooks/useSessionGroupDetail";
+import { useEnsureSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { useSessionDetail } from "@/hooks/useSessionDetail";
 import { useTheme } from "@/theme";
 import { useMobileUIStore } from "@/stores/ui";
-
-const SOLID_HEADER_THRESHOLD = 8;
 
 interface SessionSurfaceProps {
   sessionId: string;
@@ -58,12 +53,10 @@ export function SessionSurface({
   // doesn't surface — needed by CheckpointMarker (ticket 21) and the queued-
   // messages strip (ticket 23).
   useSessionDetail(sessionId);
-  const sessionIds = useSessionGroupSessionIds(groupId ?? "");
   const groupName = useEntityField("sessionGroups", groupId ?? "", "name") as
     | string
     | null
     | undefined;
-  const [solidHeader, setSolidHeader] = useState(false);
 
   useEffect(() => {
     if (!groupId) return;
@@ -77,11 +70,6 @@ export function SessionSurface({
     };
   }, [groupId, sessionId]);
 
-  const handleScrollOffsetChange = useCallback((offsetY: number) => {
-    const next = offsetY > SOLID_HEADER_THRESHOLD;
-    setSolidHeader((current) => (current === next ? current : next));
-  }, []);
-
   if (!groupId || (loading && !groupName)) {
     return (
       <View style={[styles.loading, { backgroundColor: theme.colors.background }]}>
@@ -94,23 +82,18 @@ export function SessionSurface({
     <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
       {hideHeader ? null : (
         <View style={styles.headerLayer}>
-          <SessionGroupHeader groupId={groupId} sessionId={sessionId} solid={solidHeader} />
+          <SessionGroupHeader groupId={groupId} sessionId={sessionId} />
         </View>
       )}
       {hideHeader ? null : (
         <SessionTabStrip
+          groupId={groupId}
           activeSessionId={sessionId}
-          sessionIds={sessionIds}
           onSelect={onSelectSession}
         />
       )}
       {hideHeader ? null : <ActiveTodoStrip sessionId={sessionId} />}
-      <SessionStream
-        key={sessionId}
-        sessionId={sessionId}
-        topInset={topInset}
-        onScrollOffsetChange={handleScrollOffsetChange}
-      />
+      <SessionStream key={sessionId} sessionId={sessionId} topInset={topInset} />
       <PendingInputBar sessionId={sessionId} />
     </View>
   );

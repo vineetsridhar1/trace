@@ -20,7 +20,6 @@ import { useEntityField } from "@trace/client-core";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
 import { SessionSurface, SessionSurfaceEmpty } from "@/components/sessions/SessionSurface";
 import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
-import { useSessionGroupSessionIds } from "@/hooks/useSessionGroupDetail";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { haptic } from "@/lib/haptics";
 import { useMobileUIStore } from "@/stores/ui";
@@ -28,6 +27,11 @@ import { useTheme } from "@/theme";
 
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 800;
+// Conservative header+strip seed so the first message doesn't render under the
+// absolute-positioned drag-handle before `onLayout` reports the real height.
+// Over-padding by a few points is invisible; under-padding causes a flash.
+const ESTIMATED_HEADER_HEIGHT = 56;
+const ESTIMATED_TAB_STRIP_HEIGHT = 44;
 
 /**
  * The Session Player (§10.8) — the primary session surface in V1. Renders
@@ -46,8 +50,10 @@ export function SessionPlayerOverlay() {
     | string
     | null
     | undefined;
-  const sessionIds = useSessionGroupSessionIds(headerGroupId ?? "");
-  const [topInsetHeight, setTopInsetHeight] = useState(0);
+  const [measuredTopInset, setMeasuredTopInset] = useState<number | null>(null);
+  const topInsetHeight =
+    measuredTopInset
+    ?? insets.top + ESTIMATED_HEADER_HEIGHT + ESTIMATED_TAB_STRIP_HEIGHT;
 
   const progress = useSharedValue(0);
   const dragY = useSharedValue(0);
@@ -109,7 +115,7 @@ export function SessionPlayerOverlay() {
 
   const handleTopInsetLayout = useCallback((e: LayoutChangeEvent) => {
     const height = e.nativeEvent.layout.height;
-    setTopInsetHeight((current) => (current === height ? current : height));
+    setMeasuredTopInset((current) => (current === height ? current : height));
   }, []);
 
   if (!open && !sessionId) return null;
@@ -158,18 +164,15 @@ export function SessionPlayerOverlay() {
           <GestureDetector gesture={pan}>
             <View style={styles.dragHandle}>
               <View
-                style={{
-                  height: insets.top,
-                  backgroundColor: theme.colors.background,
-                }}
+                style={{ height: insets.top, backgroundColor: theme.colors.background }}
               />
               {sessionId ? (
                 <SessionGroupHeader groupId={headerGroupId ?? ""} sessionId={sessionId} />
               ) : null}
               {sessionId ? (
                 <SessionTabStrip
+                  groupId={headerGroupId ?? ""}
                   activeSessionId={sessionId}
-                  sessionIds={sessionIds}
                   onSelect={handleSelectSession}
                 />
               ) : null}

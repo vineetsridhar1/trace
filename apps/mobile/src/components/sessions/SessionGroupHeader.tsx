@@ -15,13 +15,11 @@ interface SessionGroupHeaderProps {
   groupId: string;
   /** The session currently shown; drives the status dot's agentStatus overlay. */
   sessionId?: string;
-  solid?: boolean;
 }
 
 export function SessionGroupHeader({
   groupId,
   sessionId,
-  solid: _solid = false,
 }: SessionGroupHeaderProps) {
   const theme = useTheme();
   const prUrl = useEntityField("sessionGroups", groupId, "prUrl") as
