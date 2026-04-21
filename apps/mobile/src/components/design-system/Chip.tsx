@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { StyleSheet, View, type ViewStyle } from "react-native";
 import Animated, {
   cancelAnimation,
@@ -6,6 +6,8 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
+  withSequence,
+  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { alpha, useTheme, type Theme } from "@/theme";
@@ -52,6 +54,11 @@ export function Chip({ label, variant, icon, style }: ChipProps) {
   const theme = useTheme();
   const palette = variantPalette(theme, variant);
   const opacity = useSharedValue(1);
+  // Brief scale flash when the variant changes (per ticket 30 §11.4 "status
+  // chip on change"). Skip on the very first render so chips don't pop
+  // unsolicited when a list mounts.
+  const scale = useSharedValue(1);
+  const previousVariant = useRef(variant);
 
   useEffect(() => {
     if (variant !== "inProgress") {
@@ -69,8 +76,18 @@ export function Chip({ label, variant, icon, style }: ChipProps) {
     );
   }, [variant, opacity, theme.motion.durations.fast]);
 
+  useEffect(() => {
+    if (previousVariant.current === variant) return;
+    previousVariant.current = variant;
+    scale.value = withSequence(
+      withTiming(1.08, { duration: theme.motion.durations.instant }),
+      withSpring(1, theme.motion.springs.snap),
+    );
+  }, [variant, scale, theme.motion.durations.instant, theme.motion.springs.snap]);
+
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
+    transform: [{ scale: scale.value }],
   }));
 
   return (

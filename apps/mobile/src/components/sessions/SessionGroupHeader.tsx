@@ -43,7 +43,7 @@ export function SessionGroupHeader({
   }, [prUrl]);
 
   const archiveGroup = useCallback(async () => {
-    void haptic.medium();
+    void haptic.heavy();
     const result = await getClient()
       .mutation(ARCHIVE_SESSION_GROUP_MUTATION, { id: groupId })
       .toPromise();
@@ -71,7 +71,7 @@ export function SessionGroupHeader({
       ? `trace://sessions/${groupId}/${sessionId}`
       : `trace://sessions/${groupId}`;
     await Clipboard.setStringAsync(link);
-    void haptic.success();
+    void haptic.light();
   }, [groupId, sessionId]);
 
   const menuItems = useMemo(() => {

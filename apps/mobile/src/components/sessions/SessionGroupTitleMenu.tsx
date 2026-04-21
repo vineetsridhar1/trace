@@ -27,9 +27,6 @@ const PILL_HEIGHT = 48;
 const PANEL_HEIGHT = 320;
 const PILL_RADIUS = 14;
 const PANEL_RADIUS = 20;
-// Match the SessionActionsMenu morph so both pills feel like the same surface.
-const OPEN_SPRING = { damping: 14, stiffness: 120, mass: 1.2 } as const;
-const CLOSE_SPRING = { damping: 22, stiffness: 190, mass: 1.2 } as const;
 
 interface SessionGroupTitleMenuProps {
   groupId: string;
@@ -90,13 +87,13 @@ function MorphingTitle({ groupId, sessionId, fullWidth }: SessionGroupTitleMenuP
   useEffect(() => {
     if (open) {
       setMounted(true);
-      progress.value = withSpring(1, OPEN_SPRING);
+      progress.value = withSpring(1, theme.motion.springs.morph.open);
     } else {
-      progress.value = withSpring(0, CLOSE_SPRING, (finished) => {
+      progress.value = withSpring(0, theme.motion.springs.morph.close, (finished) => {
         if (finished) runOnJS(setMounted)(false);
       });
     }
-  }, [open, progress]);
+  }, [open, progress, theme.motion.springs.morph.open, theme.motion.springs.morph.close]);
 
   const startWidth = triggerWidth || PILL_HEIGHT;
   const endWidth = Math.max(fullWidth, startWidth);

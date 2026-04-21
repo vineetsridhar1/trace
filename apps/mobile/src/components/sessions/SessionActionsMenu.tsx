@@ -42,10 +42,6 @@ const TRIGGER_SIZE = 48;
 const MENU_WIDTH = 240;
 const ITEM_HEIGHT = 48;
 const MENU_RADIUS = 20;
-// Open: bouncy spring with a touch of overshoot. Close: snappier so the menu
-// doesn't linger on dismiss.
-const OPEN_SPRING = { damping: 14, stiffness: 120, mass: 1.2 } as const;
-const CLOSE_SPRING = { damping: 22, stiffness: 190, mass: 1.2 } as const;
 
 /**
  * Liquid Glass overflow affordance: a circular pill that morphs into a
@@ -83,13 +79,13 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
   useEffect(() => {
     if (open) {
       setMounted(true);
-      progress.value = withSpring(1, OPEN_SPRING);
+      progress.value = withSpring(1, theme.motion.springs.morph.open);
     } else {
-      progress.value = withSpring(0, CLOSE_SPRING, (finished) => {
+      progress.value = withSpring(0, theme.motion.springs.morph.close, (finished) => {
         if (finished) runOnJS(setMounted)(false);
       });
     }
-  }, [open, progress]);
+  }, [open, progress, theme.motion.springs.morph.open, theme.motion.springs.morph.close]);
 
   // Shape morph: pill -> rounded rect, anchored at the trigger's top-right
   // corner. A translateY arc dips the surface down through the middle and

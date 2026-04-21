@@ -10,6 +10,7 @@ import {
 } from "@trace/client-core";
 import type { Channel, ChannelGroup, Event, Session } from "@trace/gql";
 import { isUnauthorized } from "@/lib/auth";
+import { timedEventIngest } from "@/lib/perf";
 import { getClient } from "@/lib/urql";
 
 const ORGANIZATION_QUERY = gql`
@@ -165,7 +166,10 @@ export function useHydrate(activeOrgId: string | null): void {
           console.error("[orgEvents] subscription error:", result.error);
         }
         if (!result.data?.orgEvents) return;
-        handleOrgEvent(result.data.orgEvents);
+        const event = result.data.orgEvents;
+        timedEventIngest(event.eventType, () => {
+          handleOrgEvent(event);
+        });
       });
 
     return () => {

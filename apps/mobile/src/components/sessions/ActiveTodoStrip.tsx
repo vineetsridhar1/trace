@@ -49,8 +49,8 @@ export function ActiveTodoStrip({ sessionId }: ActiveTodoStripProps) {
       return;
     }
     fade.value = 0;
-    fade.value = withTiming(1, { duration: 220 });
-  }, [fade, focus?.label]);
+    fade.value = withTiming(1, { duration: theme.motion.durations.accordion });
+  }, [fade, focus?.label, theme.motion.durations.accordion]);
   const fadeStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
 
   if (agentStatus !== "active" || !todos || todos.length === 0 || !focus) {

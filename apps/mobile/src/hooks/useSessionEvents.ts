@@ -11,6 +11,7 @@ import {
 } from "@trace/client-core";
 import type { Event, Session } from "@trace/gql";
 import { handleUnauthorized, isUnauthorized } from "@/lib/auth";
+import { timedEventIngest } from "@/lib/perf";
 import { getClient } from "@/lib/urql";
 import {
   SESSION_EVENTS_QUERY,
@@ -109,7 +110,10 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
         if (isUnauthorized(result.error)) { void handleUnauthorized(); return; }
         if (result.error) { console.error("[sessionEvents] subscription error:", result.error); return; }
         if (!result.data?.sessionEvents) return;
-        handleSessionEvent(sessionId, result.data.sessionEvents as Event & { id: string });
+        const event = result.data.sessionEvents as Event & { id: string };
+        timedEventIngest(event.eventType, () => {
+          handleSessionEvent(sessionId, event);
+        });
       });
 
     const statusSub = client

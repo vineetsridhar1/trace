@@ -17,8 +17,6 @@ interface NewActivityPillProps {
   onPress: () => void;
 }
 
-const ENTER_SPRING = { damping: 22, stiffness: 260 };
-
 /**
  * Floating pill that appears above the session input composer when new events
  * arrive while the user has scrolled up. Tap to jump to the bottom.
@@ -29,9 +27,9 @@ export function NewActivityPill({ count, visible, onPress }: NewActivityPillProp
 
   useEffect(() => {
     progress.value = visible
-      ? withSpring(1, ENTER_SPRING)
-      : withTiming(0, { duration: 160 });
-  }, [visible, progress]);
+      ? withSpring(1, theme.motion.springs.smooth)
+      : withTiming(0, { duration: theme.motion.durations.fast });
+  }, [visible, progress, theme.motion.springs.smooth, theme.motion.durations.fast]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: progress.value,

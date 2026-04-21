@@ -1,4 +1,4 @@
-import { useCallback, useMemo, type MutableRefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import {
   StyleSheet,
   View,
@@ -8,10 +8,10 @@ import {
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import type { SessionNode } from "@trace/client-core";
 import type { Event } from "@trace/gql";
-import type { SharedValue } from "react-native-reanimated";
+import Animated, { FadeInDown, type SharedValue } from "react-native-reanimated";
 import { Text } from "@/components/design-system";
 import { nodeKey } from "@/hooks/useNewActivityTracker";
-import { useTheme } from "@/theme";
+import { motion, useTheme } from "@/theme";
 import { ConnectionLostBanner } from "./nodes/ConnectionLostBanner";
 import { renderNode, type NodeRenderContext } from "./nodes";
 import { TimestampRevealRow } from "./TimestampRevealRow";
@@ -33,6 +33,13 @@ interface SessionStreamListProps {
   topInset?: number;
   /** Extra bottom padding so content can scroll behind the composer overlay. */
   bottomInset?: number;
+  /**
+   * Mutable ref tracking whether the user is currently near the bottom of
+   * the stream. When true, brand-new last-row mounts get a brief entrance
+   * animation; when false (user has scrolled up), the row appears without
+   * fanfare so it can't yank attention.
+   */
+  isNearBottomRef: MutableRefObject<boolean>;
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   fetchOlderEvents: () => Promise<void>;
 }
@@ -51,6 +58,7 @@ export function SessionStreamList({
   initialScrollIndex,
   topInset = 0,
   bottomInset = 0,
+  isNearBottomRef,
   onScroll,
   fetchOlderEvents,
 }: SessionStreamListProps) {
@@ -60,22 +68,57 @@ export function SessionStreamList({
     () => ({ lastIndex: nodes.length - 1, context: renderContext, scopedEvents }),
     [nodes.length, renderContext, scopedEvents],
   );
+  // Suppress entrance on the initial render so the first batch doesn't
+  // cascade-fade. After one frame, brand-new last-row mounts animate in.
+  const [acceptEntering, setAcceptEntering] = useState(false);
+  useEffect(() => {
+    const handle = requestAnimationFrame(() => setAcceptEntering(true));
+    return () => cancelAnimationFrame(handle);
+  }, []);
+  // Track the most-recently-seen last-row key so we only animate when the
+  // last row is *actually new*, not just re-rendered (e.g., when its event
+  // payload changed but its identity didn't).
+  const lastSeenKeyRef = useRef<string | null>(null);
 
   const renderItem = useCallback(
-    ({ item, index }: { item: SessionNode; index: number }) => (
-      <TimestampRevealRow
-        paddingHorizontal={horizontalPadding}
-        revealX={revealX}
-        timestampLabel={timestampLabelForNode(item, scopedEvents)}
-      >
-        {renderNode({
-          node: item,
-          context: renderContext,
-          isLast: index === nodes.length - 1,
-        })}
-      </TimestampRevealRow>
-    ),
-    [horizontalPadding, nodes.length, renderContext, scopedEvents, revealX],
+    ({ item, index }: { item: SessionNode; index: number }) => {
+      const isLast = index === nodes.length - 1;
+      const key = nodeKey(item);
+      const isFreshLast =
+        isLast
+        && acceptEntering
+        && isNearBottomRef.current
+        && lastSeenKeyRef.current !== key;
+      if (isLast) lastSeenKeyRef.current = key;
+      const body = (
+        <TimestampRevealRow
+          paddingHorizontal={horizontalPadding}
+          revealX={revealX}
+          timestampLabel={timestampLabelForNode(item, scopedEvents)}
+        >
+          {renderNode({
+            node: item,
+            context: renderContext,
+            isLast,
+          })}
+        </TimestampRevealRow>
+      );
+      if (!isFreshLast) return body;
+      return (
+        <Animated.View entering={FadeInDown.duration(motion.durations.accordion)}>
+          {body}
+        </Animated.View>
+      );
+    },
+    [
+      acceptEntering,
+      horizontalPadding,
+      isNearBottomRef,
+      nodes.length,
+      renderContext,
+      scopedEvents,
+      revealX,
+    ],
   );
 
   const keyExtractor = useCallback((item: SessionNode) => nodeKey(item), []);
