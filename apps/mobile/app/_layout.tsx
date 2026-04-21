@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useAuthStore, type AuthState } from "@trace/client-core";
+import { useRegisterPushToken } from "@/hooks/useRegisterPushToken";
 
 export default function RootLayout() {
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
@@ -15,6 +16,8 @@ export default function RootLayout() {
   useEffect(() => {
     void fetchMe();
   }, [fetchMe]);
+
+  useRegisterPushToken();
 
   if (loading) {
     return (

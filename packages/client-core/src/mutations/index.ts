@@ -609,6 +609,18 @@ export const DELETE_CHANNEL_MESSAGE_MUTATION = gql`
   }
 `;
 
+export const REGISTER_PUSH_TOKEN_MUTATION = gql`
+  mutation RegisterPushToken($token: String!, $platform: PushPlatform!) {
+    registerPushToken(token: $token, platform: $platform)
+  }
+`;
+
+export const UNREGISTER_PUSH_TOKEN_MUTATION = gql`
+  mutation UnregisterPushToken($token: String!) {
+    unregisterPushToken(token: $token)
+  }
+`;
+
 export const UPDATE_CHANNEL_MUTATION = gql`
   mutation UpdateChannel($id: ID!, $input: UpdateChannelInput!) {
     updateChannel(id: $id, input: $input) {

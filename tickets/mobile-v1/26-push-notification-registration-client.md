@@ -35,12 +35,12 @@ On first authenticated app launch (and on sign-in), request push notification pe
 
 ## Completion requirements
 
-- [ ] Permission prompt appears once on first authed launch
-- [ ] Token registered with server on grant
-- [ ] Token unregistered on sign-out and re-registered after new sign-in
-- [ ] Foreground notifications do not show banners
-- [ ] Tapping a notification (with deep-link payload) routes to the correct screen
-- [ ] Badge count reflects needs-input count
+- [x] Permission prompt appears once on first authed launch
+- [x] Token registered with server on grant
+- [x] Token unregistered on sign-out and re-registered after new sign-in
+- [x] Foreground notifications do not show banners
+- [x] Tapping a notification (with deep-link payload) routes to the correct screen
+- [x] Badge count reflects needs-input count
 
 ## How to test
 
