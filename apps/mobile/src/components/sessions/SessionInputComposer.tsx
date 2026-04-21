@@ -307,8 +307,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
       <View style={styles.composerStack}>
         <View style={styles.inputActionRow}>
           <Glass
-            preset="pinnedBar"
-            tint="rgba(0,0,0,0)"
+            preset="navBar"
             animatedProps={glassAnimatedProps}
             style={[styles.inputCard, cardBorderAnimatedStyle]}
           >
