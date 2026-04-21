@@ -16,8 +16,6 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import { BlurView } from "expo-blur";
 import { useEntityField } from "@trace/client-core";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
 import { SessionSurface, SessionSurfaceEmpty } from "@/components/sessions/SessionSurface";
@@ -161,15 +159,10 @@ export function SessionPlayerOverlay() {
             <View style={styles.dragHandle}>
               <View
                 style={{
-                  height: insets.top + 6,
+                  height: insets.top,
                   backgroundColor: theme.colors.background,
                 }}
               />
-              <View style={styles.grabberRow}>
-                <FloatingGrabber
-                  colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-                />
-              </View>
               {sessionId ? (
                 <SessionGroupHeader groupId={headerGroupId ?? ""} sessionId={sessionId} />
               ) : null}
@@ -185,34 +178,6 @@ export function SessionPlayerOverlay() {
         </View>
       </Animated.View>
     </View>
-  );
-}
-
-interface FloatingGrabberProps {
-  colorScheme: "light" | "dark";
-}
-
-/**
- * The grabber pill itself is the only liquid-glass element — it floats
- * over the transparent zone below the opaque card cap so messages
- * scrolling up around it are picked up by the blur.
- */
-function FloatingGrabber({ colorScheme }: FloatingGrabberProps) {
-  if (isLiquidGlassAvailable()) {
-    return (
-      <GlassView
-        glassEffectStyle="regular"
-        colorScheme={colorScheme}
-        style={styles.grabber}
-      />
-    );
-  }
-  return (
-    <BlurView
-      tint={colorScheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
-      intensity={50}
-      style={styles.grabber}
-    />
   );
 }
 
@@ -237,18 +202,6 @@ const styles = StyleSheet.create({
   },
   dragHandle: {
     overflow: "visible",
-  },
-  grabberRow: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: 4,
-    paddingBottom: 8,
-  },
-  grabber: {
-    width: 36,
-    height: 5,
-    borderRadius: 999,
-    overflow: "hidden",
   },
   surface: {
     flex: 1,
