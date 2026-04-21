@@ -20,17 +20,15 @@ export default function AuthedHome() {
   const sections = useHomeSections(userId);
   const [refreshing, setRefreshing] = useState(false);
 
-  const { items, stickyHeaderIndices } = useMemo(() => {
+  const items = useMemo<HomeListItem[]>(() => {
     const out: HomeListItem[] = [];
-    const sticky: number[] = [];
     for (const section of sections) {
-      sticky.push(out.length);
       out.push({ kind: "header", section: section.kind, count: section.ids.length });
       for (const id of section.ids) {
         out.push({ kind: "row", sessionId: id });
       }
     }
-    return { items: out, stickyHeaderIndices: sticky };
+    return out;
   }, [sections]);
 
   const handleRefresh = useCallback(async () => {
@@ -55,7 +53,6 @@ export default function AuthedHome() {
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         getItemType={getItemType}
-        stickyHeaderIndices={stickyHeaderIndices}
         contentInsetAdjustmentBehavior="automatic"
         onRefresh={handleRefresh}
         refreshing={refreshing}
