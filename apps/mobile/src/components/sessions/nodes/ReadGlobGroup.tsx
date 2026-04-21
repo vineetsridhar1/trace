@@ -1,5 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { SymbolView } from "expo-symbols";
 import type { ReadGlobItem } from "@trace/client-core";
 import { Text } from "@/components/design-system";
@@ -9,6 +15,9 @@ interface ReadGlobGroupProps {
   items: ReadGlobItem[];
 }
 
+const ACCORDION_DURATION = 220;
+const ACCORDION_EASING = Easing.bezier(0.16, 1, 0.3, 1);
+
 /**
  * Summary row for a run of consecutive Read / Glob / Grep tool calls. Taps
  * toggle an expanded list of the file paths scanned. No file-contents view
@@ -17,6 +26,24 @@ interface ReadGlobGroupProps {
 export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
+  const [bodyHeight, setBodyHeight] = useState(0);
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withTiming(open ? 1 : 0, {
+      duration: ACCORDION_DURATION,
+      easing: ACCORDION_EASING,
+    });
+  }, [open, progress]);
+
+  const bodyStyle = useAnimatedStyle(() => ({
+    height: progress.value * bodyHeight,
+    opacity: progress.value,
+  }));
+
+  const chevronStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${progress.value * 90}deg` }],
+  }));
 
   if (items.length === 0) return null;
 
@@ -37,21 +64,28 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
           },
         ]}
       >
-        <SymbolView
-          name={open ? "chevron.down" : "chevron.right"}
-          size={10}
-          tintColor={theme.colors.mutedForeground}
-          resizeMode="scaleAspectFit"
-          style={styles.chevron}
-        />
+        <Animated.View style={[styles.chevron, chevronStyle]}>
+          <SymbolView
+            name="chevron.right"
+            size={10}
+            tintColor={theme.colors.mutedForeground}
+            resizeMode="scaleAspectFit"
+            style={styles.chevron}
+          />
+        </Animated.View>
         <Text variant="caption1" color="mutedForeground" style={{ fontFamily: "Menlo" }}>
           {items.length} file scan{items.length === 1 ? "" : "s"} (Read/Glob)
         </Text>
       </Pressable>
-      {open ? (
+      <Animated.View style={[styles.bodyClip, bodyStyle]}>
         <View
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            if (h > 0 && h !== bodyHeight) setBodyHeight(h);
+          }}
           style={[
             styles.body,
+            styles.bodyMeasure,
             {
               backgroundColor: alpha(theme.colors.surfaceElevated, 0.4),
               borderColor: theme.colors.borderMuted,
@@ -82,7 +116,7 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
             </View>
           ))}
         </View>
-      ) : null}
+      </Animated.View>
     </View>
   );
 }
@@ -91,6 +125,8 @@ const styles = StyleSheet.create({
   wrapper: { width: "100%", paddingVertical: 2 },
   header: { flexDirection: "row", alignItems: "center" },
   chevron: { width: 10, height: 10 },
+  bodyClip: { overflow: "hidden" },
+  bodyMeasure: { position: "absolute", left: 0, right: 0, top: 0 },
   body: {
     borderWidth: StyleSheet.hairlineWidth,
     marginTop: 4,
