@@ -1,28 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  BRIDGE_RUNTIME_ACCESS_QUERY,
   LINKED_CHECKOUT_STATUS_QUERY,
   RESTORE_LINKED_CHECKOUT_MUTATION,
   SET_LINKED_CHECKOUT_AUTO_SYNC_MUTATION,
   SYNC_LINKED_CHECKOUT_MUTATION,
   useEntityField,
 } from "@trace/client-core";
-import type { SessionConnection } from "@trace/gql";
+import type {
+  BridgeRuntimeAccess,
+  LinkedCheckoutActionResult,
+  LinkedCheckoutStatus,
+  Repo,
+  SessionConnection,
+} from "@trace/gql";
 import { getClient } from "@/lib/urql";
-
-export interface LinkedCheckoutStatus {
-  repoId: string;
-  repoPath: string | null;
-  isAttached: boolean;
-  attachedSessionGroupId: string | null;
-  targetBranch: string | null;
-  autoSyncEnabled: boolean;
-  currentBranch: string | null;
-  currentCommitSha: string | null;
-  lastSyncedCommitSha: string | null;
-  lastSyncError: string | null;
-  restoreBranch: string | null;
-  restoreCommitSha: string | null;
-}
 
 export type LinkedCheckoutAction = "sync" | "restore" | "toggle-auto-sync";
 
@@ -32,30 +24,32 @@ interface ActionOutcome {
 }
 
 export interface UseLinkedCheckoutResult {
-  /** True only when groupId resolves to a repo, runtime, and branch — i.e. linked-checkout could apply. */
+  /** True only when groupId resolves to a repo, runtime, branch, AND the user has bridge access. */
   available: boolean;
   loading: boolean;
+  /** Server returned a fetch error — distinct from "no link configured". */
+  fetchError: string | null;
   status: LinkedCheckoutStatus | null;
   branch: string | null;
+  /** Best-known commit on the linked checkout: last sync if present, else current worktree commit. */
+  syncedCommitSha: string | null;
   repoLinked: boolean;
   isAttachedToThisGroup: boolean;
   isAttachedElsewhere: boolean;
   pendingAction: LinkedCheckoutAction | null;
+  refresh: () => void;
   sync: () => Promise<ActionOutcome>;
   restore: () => Promise<ActionOutcome>;
   toggleAutoSync: () => Promise<ActionOutcome>;
 }
 
-interface MutationPayload {
-  ok: boolean;
-  error: string | null;
-  status: LinkedCheckoutStatus;
-}
-
-type MutationResponseData =
-  | { syncLinkedCheckout?: MutationPayload | null }
-  | { restoreLinkedCheckout?: MutationPayload | null }
-  | { setLinkedCheckoutAutoSync?: MutationPayload | null };
+type StatusQueryData = { linkedCheckoutStatus?: LinkedCheckoutStatus | null };
+type AccessQueryData = { bridgeRuntimeAccess?: BridgeRuntimeAccess | null };
+type SyncMutationData = { syncLinkedCheckout?: LinkedCheckoutActionResult | null };
+type RestoreMutationData = { restoreLinkedCheckout?: LinkedCheckoutActionResult | null };
+type AutoSyncMutationData = {
+  setLinkedCheckoutAutoSync?: LinkedCheckoutActionResult | null;
+};
 
 /**
  * Drives the sync / pause / restore controls in the mobile session-title panel.
@@ -64,10 +58,7 @@ type MutationResponseData =
  * link and triggers actions against it.
  */
 export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
-  const repo = useEntityField("sessionGroups", groupId, "repo") as
-    | { id?: string }
-    | null
-    | undefined;
+  const repo = useEntityField("sessionGroups", groupId, "repo") as Repo | null | undefined;
   const branch = useEntityField("sessionGroups", groupId, "branch") as
     | string
     | null
@@ -80,22 +71,68 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
   const repoId = repo?.id ?? null;
   const runtimeInstanceId = connection?.runtimeInstanceId ?? null;
   const connected = !!runtimeInstanceId && connection?.state !== "disconnected";
-  const available = !!repoId && !!branch && connected;
+
+  // Bridge-access gate. Optimistically allow until the access query resolves;
+  // for cloud sessions it stays allowed (no bridge to authorize against).
+  const [access, setAccess] = useState<BridgeRuntimeAccess | null>(null);
+  const [accessLoaded, setAccessLoaded] = useState(false);
+  useEffect(() => {
+    if (!runtimeInstanceId) {
+      setAccess(null);
+      setAccessLoaded(true);
+      return;
+    }
+    let cancelled = false;
+    setAccessLoaded(false);
+    void getClient()
+      .query(
+        BRIDGE_RUNTIME_ACCESS_QUERY,
+        { runtimeInstanceId, sessionGroupId: groupId },
+      )
+      .toPromise()
+      .then((result) => {
+        if (cancelled) return;
+        const next = (result.data as AccessQueryData | undefined)?.bridgeRuntimeAccess ?? null;
+        setAccess(next);
+        setAccessLoaded(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Treat a failed access fetch as allowed; the mutation will reject if
+        // the user truly lacks permission, with a clear error surfaced.
+        setAccess(null);
+        setAccessLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [groupId, runtimeInstanceId]);
+
+  const bridgeAllowed = !access || access.hostingMode !== "local" || access.allowed;
+  const available = bridgeAllowed && !!repoId && !!branch && connected;
 
   const [status, setStatus] = useState<LinkedCheckoutStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] =
     useState<LinkedCheckoutAction | null>(null);
   const pendingRef = useRef<LinkedCheckoutAction | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
-    if (!available || !repoId) {
-      setStatus(null);
-      setLoading(false);
+    if (!available || !repoId || !accessLoaded) {
+      // Don't clear status while access is still loading — that would flicker
+      // the panel between branches.
+      if (accessLoaded) {
+        setStatus(null);
+        setFetchError(null);
+        setLoading(false);
+      }
       return;
     }
     let cancelled = false;
     setLoading(true);
+    setFetchError(null);
     void getClient()
       .query(
         LINKED_CHECKOUT_STATUS_QUERY,
@@ -105,29 +142,36 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
       .toPromise()
       .then((result) => {
         if (cancelled) return;
-        const next =
-          (result.data?.linkedCheckoutStatus as LinkedCheckoutStatus | null | undefined) ??
-          null;
+        if (result.error) {
+          setFetchError(result.error.message);
+          setLoading(false);
+          return;
+        }
+        const next = (result.data as StatusQueryData | undefined)?.linkedCheckoutStatus ?? null;
         setStatus(next);
         setLoading(false);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled) return;
+        setFetchError(err instanceof Error ? err.message : String(err));
         setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [available, groupId, repoId]);
+  }, [accessLoaded, available, groupId, repoId, refreshTick]);
 
   const isAttachedToThisGroup = status?.attachedSessionGroupId === groupId;
   const isAttachedElsewhere = !!status?.isAttached && !isAttachedToThisGroup;
   const repoLinked = !!status?.repoPath;
+  const syncedCommitSha = status?.lastSyncedCommitSha ?? status?.currentCommitSha ?? null;
+
+  const refresh = useCallback(() => setRefreshTick((n) => n + 1), []);
 
   const runAction = useCallback(
     async (
       action: LinkedCheckoutAction,
-      perform: () => Promise<MutationPayload | null>,
+      perform: () => Promise<LinkedCheckoutActionResult | null>,
     ): Promise<ActionOutcome> => {
       if (pendingRef.current) return { ok: false, error: "Another action is in progress." };
       pendingRef.current = action;
@@ -136,7 +180,7 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
         const payload = await perform();
         if (!payload) return { ok: false, error: "No response from server." };
         setStatus(payload.status);
-        return { ok: payload.ok, error: payload.error };
+        return { ok: payload.ok, error: payload.error ?? null };
       } catch (err) {
         return {
           ok: false,
@@ -162,8 +206,7 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
         })
         .toPromise();
       if (result.error) throw result.error;
-      const data = result.data as MutationResponseData | undefined;
-      return (data && "syncLinkedCheckout" in data ? data.syncLinkedCheckout : null) ?? null;
+      return (result.data as SyncMutationData | undefined)?.syncLinkedCheckout ?? null;
     });
   }, [branch, groupId, repoId, runAction]);
 
@@ -177,10 +220,7 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
         })
         .toPromise();
       if (result.error) throw result.error;
-      const data = result.data as MutationResponseData | undefined;
-      return (
-        (data && "restoreLinkedCheckout" in data ? data.restoreLinkedCheckout : null) ?? null
-      );
+      return (result.data as RestoreMutationData | undefined)?.restoreLinkedCheckout ?? null;
     });
   }, [groupId, repoId, runAction]);
 
@@ -196,11 +236,8 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
         })
         .toPromise();
       if (result.error) throw result.error;
-      const data = result.data as MutationResponseData | undefined;
       return (
-        (data && "setLinkedCheckoutAutoSync" in data
-          ? data.setLinkedCheckoutAutoSync
-          : null) ?? null
+        (result.data as AutoSyncMutationData | undefined)?.setLinkedCheckoutAutoSync ?? null
       );
     });
   }, [groupId, repoId, runAction, status]);
@@ -208,12 +245,15 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
   return {
     available,
     loading,
+    fetchError,
     status,
     branch: branch ?? null,
+    syncedCommitSha,
     repoLinked,
     isAttachedToThisGroup,
     isAttachedElsewhere,
     pendingAction,
+    refresh,
     sync,
     restore,
     toggleAutoSync,

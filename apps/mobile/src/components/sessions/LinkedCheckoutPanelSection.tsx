@@ -14,6 +14,12 @@ interface LinkedCheckoutPanelSectionProps {
   groupId: string;
 }
 
+const ACTION_ALERT_TITLE: Record<LinkedCheckoutAction, string> = {
+  sync: "Sync failed",
+  restore: "Restore failed",
+  "toggle-auto-sync": "Couldn't update auto-sync",
+};
+
 export function LinkedCheckoutPanelSection({ groupId }: LinkedCheckoutPanelSectionProps) {
   const checkout = useLinkedCheckout(groupId);
   if (!checkout.available) return null;
@@ -24,23 +30,30 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
   const theme = useTheme();
   const {
     loading,
+    fetchError,
     status,
     branch,
+    syncedCommitSha,
     repoLinked,
     isAttachedToThisGroup,
     isAttachedElsewhere,
     pendingAction,
+    refresh,
     sync,
     restore,
     toggleAutoSync,
   } = checkout;
 
   const handle = useCallback(
-    async (label: string, fn: () => Promise<{ ok: boolean; error: string | null }>) => {
+    async (
+      action: LinkedCheckoutAction,
+      fn: () => Promise<{ ok: boolean; error: string | null }>,
+    ) => {
+      void haptic.light();
       const outcome = await fn();
       if (!outcome.ok) {
         void haptic.error();
-        Alert.alert(`Couldn't ${label}`, outcome.error ?? "Unknown error.");
+        Alert.alert(ACTION_ALERT_TITLE[action], outcome.error ?? "Unknown error.");
         return;
       }
       void haptic.success();
@@ -48,23 +61,12 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
     [],
   );
 
-  const onSync = useCallback(() => {
-    void haptic.light();
-    void handle("sync main worktree", sync);
-  }, [handle, sync]);
-
-  const onRestore = useCallback(() => {
-    void haptic.light();
-    void handle("restore main worktree", restore);
-  }, [handle, restore]);
-
-  const onTogglePause = useCallback(() => {
-    void haptic.light();
-    void handle(
-      status?.autoSyncEnabled ? "pause auto-sync" : "resume auto-sync",
-      toggleAutoSync,
-    );
-  }, [handle, status?.autoSyncEnabled, toggleAutoSync]);
+  const onSync = useCallback(() => void handle("sync", sync), [handle, sync]);
+  const onRestore = useCallback(() => void handle("restore", restore), [handle, restore]);
+  const onTogglePause = useCallback(
+    () => void handle("toggle-auto-sync", toggleAutoSync),
+    [handle, toggleAutoSync],
+  );
 
   if (loading) {
     return (
@@ -73,6 +75,34 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
         <Text variant="footnote" color="mutedForeground">
           Checking local checkout…
         </Text>
+      </View>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <View style={styles.container}>
+        <SectionHeader />
+        <Text variant="footnote" color="destructive" numberOfLines={2}>
+          {fetchError}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Retry"
+          onPress={refresh}
+          style={({ pressed }) => [styles.retryRow, { opacity: pressed ? 0.6 : 1 }]}
+        >
+          <SymbolView
+            name="arrow.clockwise"
+            size={14}
+            tintColor={theme.colors.accent}
+            resizeMode="scaleAspectFit"
+            style={styles.retryIcon}
+          />
+          <Text variant="footnote" color="accent">
+            Retry
+          </Text>
+        </Pressable>
       </View>
     );
   }
@@ -109,10 +139,10 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
   }
 
   const subtitle = isAttachedToThisGroup && branch
-    ? `Following ${branch}${
-        status?.lastSyncedCommitSha ? ` at ${status.lastSyncedCommitSha.slice(0, 7)}` : ""
+    ? `Main worktree following ${branch}${
+        syncedCommitSha ? ` at ${syncedCommitSha.slice(0, 7)}` : ""
       }${status?.autoSyncEnabled ? "" : " (auto-sync paused)"}`
-    : "Sync this workspace into your local checkout.";
+    : "Sync this workspace into your main worktree.";
 
   return (
     <View style={styles.container}>
@@ -286,5 +316,15 @@ const styles = StyleSheet.create({
   actionIcon: {
     width: 16,
     height: 16,
+  },
+  retryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+  },
+  retryIcon: {
+    width: 14,
+    height: 14,
   },
 });
