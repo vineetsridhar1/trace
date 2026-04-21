@@ -7,15 +7,22 @@ import Animated, {
   FadeOutUp,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
 } from "react-native-reanimated";
-import { DISMISS_SESSION_MUTATION, useEntityField } from "@trace/client-core";
-import { getModelLabel } from "@trace/shared";
+import {
+  DISMISS_SESSION_MUTATION,
+  UPDATE_SESSION_CONFIG_MUTATION,
+  useEntityField,
+} from "@trace/client-core";
+import type { CodingTool } from "@trace/gql";
+import { getDefaultModel, getModelLabel, getModelsForTool } from "@trace/shared";
 import { Glass, Text } from "@/components/design-system";
 import { MODE_CYCLE, useComposerModePalette } from "@/hooks/useComposerModePalette";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
 import { haptic } from "@/lib/haptics";
 import { recordPerf } from "@/lib/perf";
+import { applyOptimisticPatch } from "@/lib/optimisticEntity";
 import { getClient } from "@/lib/urql";
 import { alpha, useTheme } from "@/theme";
 import { ComposerConnectionNotice } from "./ComposerConnectionNotice";
@@ -152,6 +159,48 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const handleRetry = useCallback(() => {
     if (errorDraft && !isTerminal) void runSubmit(errorDraft, mode);
   }, [errorDraft, isTerminal, mode, runSubmit]);
+  const handleToolChange = useCallback(
+    async (newTool: CodingTool) => {
+      if (tool === newTool) return;
+      const newDefault = getDefaultModel(newTool) ?? null;
+      const rollback = applyOptimisticPatch("sessions", sessionId, {
+        tool: newTool,
+        model: newDefault,
+      });
+      try {
+        const result = await getClient()
+          .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
+            sessionId,
+            tool: newTool,
+            model: newDefault,
+          })
+          .toPromise();
+        if (result.error) throw result.error;
+      } catch (err) {
+        rollback();
+        void haptic.error();
+        console.warn("[updateSessionConfig] tool change failed", err);
+      }
+    },
+    [sessionId, tool],
+  );
+  const handleModelChange = useCallback(
+    async (newModel: string) => {
+      if (model === newModel) return;
+      const rollback = applyOptimisticPatch("sessions", sessionId, { model: newModel });
+      try {
+        const result = await getClient()
+          .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, model: newModel })
+          .toPromise();
+        if (result.error) throw result.error;
+      } catch (err) {
+        rollback();
+        void haptic.error();
+        console.warn("[updateSessionConfig] model change failed", err);
+      }
+    },
+    [model, sessionId],
+  );
   const handleStop = useCallback(async () => {
     if (!canStop) return;
     setStopping(true);
@@ -179,18 +228,38 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
           ? "Queue a message…"
           : "Message…";
   const bridgeIcon: SFSymbol = hosting === "cloud" ? "cloud" : "laptopcomputer";
-  const toolLabel = tool === "codex" ? "Codex" : "Claude Code";
   const modelLabel = model ? getModelLabel(model) : "Model";
   const bridgeLabel = hosting === "cloud" ? "Cloud" : (connection?.runtimeLabel ?? "Local");
   const modeIconTint = mode === "plan" ? "#8b5cf6" : mode === "ask" ? "#ea580c" : theme.colors.foreground;
 
-  const modelItems = useMemo<ComposerMorphPillItem[]>(
-    () => [
-      { key: "tool", label: toolLabel },
-      { key: "model", label: modelLabel, selected: Boolean(model) },
-    ],
-    [model, modelLabel, toolLabel],
-  );
+  const currentTool: CodingTool = tool === "codex" ? "codex" : "claude_code";
+  const modelOptions = useMemo(() => getModelsForTool(currentTool), [currentTool]);
+  const modelItems = useMemo<ComposerMorphPillItem[]>(() => {
+    const toolRows: ComposerMorphPillItem[] = [
+      {
+        key: "tool:claude_code",
+        label: "Claude Code",
+        selected: currentTool === "claude_code",
+        disabled: !canInteract,
+        onPress: () => void handleToolChange("claude_code"),
+      },
+      {
+        key: "tool:codex",
+        label: "Codex",
+        selected: currentTool === "codex",
+        disabled: !canInteract,
+        onPress: () => void handleToolChange("codex"),
+      },
+    ];
+    const modelRows: ComposerMorphPillItem[] = modelOptions.map((option) => ({
+      key: `model:${option.value}`,
+      label: option.label,
+      selected: model === option.value,
+      disabled: !canInteract,
+      onPress: () => void handleModelChange(option.value),
+    }));
+    return [...toolRows, ...modelRows];
+  }, [canInteract, currentTool, handleModelChange, handleToolChange, model, modelOptions]);
   const bridgeItems = useMemo<ComposerMorphPillItem[]>(
     () => [
       {
