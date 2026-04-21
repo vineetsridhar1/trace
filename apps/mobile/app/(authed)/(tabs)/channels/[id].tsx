@@ -7,11 +7,13 @@ import { Stack, useLocalSearchParams } from "expo-router";
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { LayoutAnimationConfig as RNALayoutAnimationConfig } from "react-native-reanimated";
 import { useEntityField } from "@trace/client-core";
+import { SessionGroupsHeader } from "@/components/channels/SessionGroupsHeader";
+import type { ActiveSegment } from "@/hooks/useChannelSessionGroups";
 
 export default function ChannelDetail() {
   const { id: channelId } = useLocalSearchParams<{ id: string }>();
   const channelName = useEntityField("channels", channelId, "name");
-  const [scope] = useState<"all" | "mine">("all");
+  const [scope, setScope] = useState<ActiveSegment>("all");
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = useCallback(() => {
@@ -32,7 +34,8 @@ export default function ChannelDetail() {
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
           }
         >
-          <Text style={styles.heading}>Detail step-3 diagnostic</Text>
+          <SessionGroupsHeader segment={scope} onSegmentChange={setScope} />
+          <Text style={styles.heading}>Detail step-4 diagnostic</Text>
           {Array.from({ length: 30 }).map((_, i) => (
             <View key={i} style={styles.filler}>
               <Text style={styles.fillerText}>Scroll filler row {i + 1}</Text>
