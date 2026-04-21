@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { Stack } from "expo-router";
 import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import { EmptyState } from "@/components/design-system";
@@ -18,9 +19,24 @@ export default function ChannelsIndex() {
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const logout = useAuthStore((s: AuthState) => s.logout);
 
+  const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
-  const keys = useCodingChannelKeys({ search: "" });
+  const keys = useCodingChannelKeys({ search });
+
+  // hideWhenScrolling is disabled because the pull-to-reveal observation
+  // (UISearchController + hidesSearchBarWhenScrolling=YES) conflicts with
+  // the tab bar's iOS 26 minimize-on-scroll binding on the same scroll
+  // view, stopping the tab bar and bottom accessory from collapsing.
+  const searchBarOptions = useMemo(
+    () => ({
+      placeholder: "Search channels",
+      hideWhenScrolling: false,
+      onChangeText: (e: { nativeEvent: { text: string } }) => setSearch(e.nativeEvent.text),
+      onCancelButtonPress: () => setSearch(""),
+    }),
+    [],
+  );
 
   const handleRefresh = useCallback(async () => {
     if (!activeOrgId) return;
@@ -38,17 +54,20 @@ export default function ChannelsIndex() {
   }, [activeOrgId, logout]);
 
   return (
-    <FlashList
-      data={keys}
-      renderItem={renderItem}
-      keyExtractor={keyExtractor}
-      getItemType={getItemType}
-      contentInsetAdjustmentBehavior="automatic"
-      onRefresh={handleRefresh}
-      refreshing={refreshing}
-      ListEmptyComponent={<ChannelsEmpty />}
-      style={{ flex: 1, backgroundColor: theme.colors.background }}
-    />
+    <>
+      <Stack.Screen options={{ headerSearchBarOptions: searchBarOptions }} />
+      <FlashList
+        data={keys}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        getItemType={getItemType}
+        contentInsetAdjustmentBehavior="automatic"
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+        ListEmptyComponent={<ChannelsEmpty search={search} />}
+        style={{ flex: 1, backgroundColor: theme.colors.background }}
+      />
+    </>
   );
 }
 
@@ -66,7 +85,16 @@ function getItemType(item: ChannelListItemKey): string {
   return item.startsWith("group:") ? "group" : "channel";
 }
 
-function ChannelsEmpty() {
+function ChannelsEmpty({ search }: { search: string }) {
+  if (search.trim().length > 0) {
+    return (
+      <EmptyState
+        icon="magnifyingglass"
+        title="No channels found"
+        subtitle={`Nothing matches "${search.trim()}".`}
+      />
+    );
+  }
   return (
     <EmptyState
       icon="tray"
