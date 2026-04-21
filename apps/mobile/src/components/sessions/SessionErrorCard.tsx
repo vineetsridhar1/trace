@@ -54,9 +54,13 @@ export function SessionErrorCard({ sessionId }: SessionErrorCardProps) {
     if (pending || !canRetry) return;
     setPending(true);
     void haptic.light();
-    await getClient()
+    const result = await getClient()
       .mutation(RETRY_SESSION_CONNECTION_MUTATION, { sessionId })
       .toPromise();
+    if (result.error) {
+      void haptic.error();
+      console.warn("[retrySessionConnection] failed", result.error);
+    }
     if (mountedRef.current) setPending(false);
   }
 

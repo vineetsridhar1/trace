@@ -18,28 +18,30 @@ interface SessionGroupHeaderProps {
   sessionId?: string;
 }
 
+/**
+ * Sentinel id for `useEntityField("sessions", …)` when no session is
+ * selected. Never matches a real session id, so the selector returns
+ * undefined without a real store lookup.
+ */
+const MISSING_SESSION_ID = "__none__";
+
 export function SessionGroupHeader({
   groupId,
   sessionId,
 }: SessionGroupHeaderProps) {
   const theme = useTheme();
   const router = useRouter();
-  const prUrl = useEntityField("sessionGroups", groupId, "prUrl") as
-    | string
-    | null
-    | undefined;
-  const status = useEntityField("sessionGroups", groupId, "status") as
-    | string
-    | null
-    | undefined;
-  const archivedAt = useEntityField("sessionGroups", groupId, "archivedAt") as
-    | string
-    | null
-    | undefined;
-  const agentStatus = useEntityField("sessions", sessionId ?? "", "agentStatus") as
-    | string
-    | null
-    | undefined;
+  const prUrl = useEntityField("sessionGroups", groupId, "prUrl");
+  const status = useEntityField("sessionGroups", groupId, "status");
+  const archivedAt = useEntityField("sessionGroups", groupId, "archivedAt");
+  // `sessionId` is optional (the header is rendered before a session is
+  // selected on some entry points). Pass a sentinel id when absent so the
+  // hook call count stays stable and no real entity is ever keyed by "".
+  const agentStatus = useEntityField(
+    "sessions",
+    sessionId ?? MISSING_SESSION_ID,
+    "agentStatus",
+  );
 
   const [rowWidth, setRowWidth] = useState(0);
   const handleRowLayout = useCallback((e: LayoutChangeEvent) => {
