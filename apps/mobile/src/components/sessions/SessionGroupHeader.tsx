@@ -11,7 +11,7 @@ import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
 
-export interface SessionGroupHeaderProps {
+interface SessionGroupHeaderProps {
   groupId: string;
   solid?: boolean;
 }
