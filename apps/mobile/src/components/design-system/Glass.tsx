@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
-import { View, type StyleProp, type ViewProps, type ViewStyle } from "react-native";
+import type { StyleProp, ViewStyle } from "react-native";
 import { BlurView, type BlurTint } from "expo-blur";
 import {
-  GlassContainer as NativeGlassContainer,
   GlassView,
   isLiquidGlassAvailable,
   type GlassViewProps,
@@ -33,10 +32,6 @@ export interface GlassProps {
 }
 
 const FALLBACK_TINT: BlurTint = "systemThinMaterialDark";
-
-interface GlassContainerProps extends ViewProps {
-  spacing?: number;
-}
 
 function shapeRadius(shape: GlassShape, theme: Theme): number {
   switch (shape) {
@@ -97,12 +92,4 @@ export function Glass({
       {children}
     </BlurView>
   );
-}
-
-export function GlassContainer({ spacing, ...props }: GlassContainerProps) {
-  if (isLiquidGlassAvailable()) {
-    return <NativeGlassContainer spacing={spacing} {...props} />;
-  }
-
-  return <View {...props} />;
 }
