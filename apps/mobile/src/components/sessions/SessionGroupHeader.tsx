@@ -22,18 +22,9 @@ export function SessionGroupHeader({
   sessionId,
 }: SessionGroupHeaderProps) {
   const theme = useTheme();
-  const prUrl = useEntityField("sessionGroups", groupId, "prUrl") as
-    | string
-    | null
-    | undefined;
-  const status = useEntityField("sessionGroups", groupId, "status") as
-    | string
-    | null
-    | undefined;
-  const archivedAt = useEntityField("sessionGroups", groupId, "archivedAt") as
-    | string
-    | null
-    | undefined;
+  const prUrl = useEntityField("sessionGroups", groupId, "prUrl");
+  const status = useEntityField("sessionGroups", groupId, "status");
+  const archivedAt = useEntityField("sessionGroups", groupId, "archivedAt");
 
   const [rowWidth, setRowWidth] = useState(0);
   const handleRowLayout = useCallback((e: LayoutChangeEvent) => {
@@ -76,13 +67,17 @@ export function SessionGroupHeader({
   }, [archiveGroup]);
 
   const handleCopyLink = useCallback(async () => {
-    await Clipboard.setStringAsync(`trace://sessions/${groupId}`);
+    const link = sessionId
+      ? `trace://sessions/${groupId}/${sessionId}`
+      : `trace://sessions/${groupId}`;
+    await Clipboard.setStringAsync(link);
     void haptic.success();
-  }, [groupId]);
+  }, [groupId, sessionId]);
 
   const menuItems = useMemo(() => {
     const items: SessionMenuAction[] = [];
     if (prUrl) items.push({ title: "Open PR", systemIcon: "arrow.up.forward.square", onPress: handleOpenPr });
+    items.push({ title: "Copy link", systemIcon: "link", onPress: handleCopyLink });
     if (!archivedAt && status !== "archived") {
       items.push({
         title: "Archive workspace",
@@ -91,9 +86,15 @@ export function SessionGroupHeader({
         onPress: handleArchive,
       });
     }
-    items.push({ title: "Copy link", systemIcon: "link", onPress: handleCopyLink });
     return items;
-  }, [archivedAt, handleArchive, handleCopyLink, handleOpenPr, prUrl, status]);
+  }, [
+    archivedAt,
+    handleArchive,
+    handleCopyLink,
+    handleOpenPr,
+    prUrl,
+    status,
+  ]);
 
   return (
     <View

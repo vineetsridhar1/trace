@@ -10,6 +10,7 @@ import {
   type AuthState,
 } from "@trace/client-core";
 import type { Event, Session } from "@trace/gql";
+import { handleUnauthorized, isUnauthorized } from "@/lib/auth";
 import { getClient } from "@/lib/urql";
 import {
   SESSION_EVENTS_QUERY,
@@ -66,6 +67,11 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
       })
       .toPromise();
 
+    if (isUnauthorized(result.error)) {
+      setLoading(false);
+      void handleUnauthorized();
+      return;
+    }
     if (result.error) {
       setError(result.error.message);
       setLoading(false);
@@ -95,33 +101,22 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
     if (!activeOrgId) return;
 
     const client = getClient();
-    // TODO(ticket-24): detect isUnauthorized and tear down + sign out,
-    // matching the pattern in useHydrate.ts. Currently mid-session token
-    // expiry silently drops live updates.
+    // On 401: sign the user out. The auth reset unmounts this screen, which
+    // triggers the useEffect cleanup below and unsubscribes both streams.
     const eventSub = client
-      .subscription(SESSION_EVENTS_SUBSCRIPTION, {
-        sessionId,
-        organizationId: activeOrgId,
-      })
+      .subscription(SESSION_EVENTS_SUBSCRIPTION, { sessionId, organizationId: activeOrgId })
       .subscribe((result: { error?: unknown; data?: { sessionEvents?: Event } }) => {
-        if (result.error) {
-          console.error("[sessionEvents] subscription error:", result.error);
-          return;
-        }
+        if (isUnauthorized(result.error)) { void handleUnauthorized(); return; }
+        if (result.error) { console.error("[sessionEvents] subscription error:", result.error); return; }
         if (!result.data?.sessionEvents) return;
         handleSessionEvent(sessionId, result.data.sessionEvents as Event & { id: string });
       });
 
     const statusSub = client
-      .subscription(SESSION_STATUS_SUBSCRIPTION, {
-        sessionId,
-        organizationId: activeOrgId,
-      })
+      .subscription(SESSION_STATUS_SUBSCRIPTION, { sessionId, organizationId: activeOrgId })
       .subscribe((result: { error?: unknown; data?: { sessionStatusChanged?: Session } }) => {
-        if (result.error) {
-          console.error("[sessionStatusChanged] subscription error:", result.error);
-          return;
-        }
+        if (isUnauthorized(result.error)) { void handleUnauthorized(); return; }
+        if (result.error) { console.error("[sessionStatusChanged] subscription error:", result.error); return; }
         const next = result.data?.sessionStatusChanged;
         if (!next?.id) return;
         useEntityStore.getState().patch("sessions", next.id, next);
@@ -156,6 +151,12 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
       })
       .toPromise();
 
+    if (isUnauthorized(result.error)) {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+      void handleUnauthorized();
+      return;
+    }
     if (result.error) {
       loadingOlderRef.current = false;
       setLoadingOlder(false);
