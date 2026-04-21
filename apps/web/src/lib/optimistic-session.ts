@@ -1,12 +1,12 @@
-import { useEntityStore } from "@trace/client-core";
-import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
+import {
+  insertOptimisticSessionPair,
+  reconcileOptimisticSessionPair,
+  rollbackOptimisticSessionPair,
+  useEntityStore,
+  type SessionEntity,
+  type SessionGroupEntity,
+} from "@trace/client-core";
 import { useUIStore } from "../stores/ui";
-
-type EntityStoreState = {
-  sessions: Record<string, SessionEntity>;
-  sessionGroups: Record<string, SessionGroupEntity>;
-  _sessionIdsByGroup: Record<string, string[]>;
-};
 
 type UIStoreState = {
   openSessionTabsByGroup: Record<string, string[]>;
@@ -14,12 +14,16 @@ type UIStoreState = {
 };
 
 /**
+ * Web wrappers around client-core's optimistic-session helpers. The pure
+ * entity-store writes live in client-core so mobile can reuse them; web adds
+ * the UI-store tab-cleanup that the web surface needs when a temp session is
+ * reconciled or rolled back.
+ */
+
+/**
  * Optimistically insert a new session into the entity store so that
  * tab navigation works immediately — before the `session_started`
  * event arrives via the org-wide subscription.
- *
- * The event stream will reconcile the entity with full server data
- * when it arrives.
  */
 export function optimisticallyInsertSession(params: {
   id: string;
@@ -79,57 +83,10 @@ export function optimisticallyInsertSessionGroup(params: {
   } as Partial<SessionGroupEntity> as SessionGroupEntity);
 }
 
-function buildSessionEntity(params: {
-  id: string;
-  sessionGroupId: string;
-  tool: string;
-  model?: string | null;
-  hosting: string;
-  channel?: { id: string } | null;
-  repo?: { id: string } | null;
-}): SessionEntity {
-  const now = new Date().toISOString();
-  return {
-    id: params.id,
-    name: "New session",
-    sessionGroupId: params.sessionGroupId,
-    agentStatus: "not_started",
-    sessionStatus: "in_progress",
-    tool: params.tool,
-    model: params.model ?? null,
-    hosting: params.hosting,
-    channel: params.channel ?? null,
-    repo: params.repo ?? null,
-    branch: null,
-    createdAt: now,
-    updatedAt: now,
-  } as Partial<SessionEntity> as SessionEntity;
-}
-
-function buildSessionGroupEntity(params: {
-  id: string;
-  channel?: { id: string } | null;
-  repo?: { id: string } | null;
-}): SessionGroupEntity {
-  const now = new Date().toISOString();
-  return {
-    id: params.id,
-    name: "New session",
-    status: "in_progress",
-    channel: params.channel ?? null,
-    repo: params.repo ?? null,
-    branch: null,
-    worktreeDeleted: false,
-    createdAt: now,
-    updatedAt: now,
-    _sortTimestamp: now,
-  } as Partial<SessionGroupEntity> as SessionGroupEntity;
-}
-
 /**
  * Reconcile optimistic session entities with server-returned IDs.
- * Removes temp entities and inserts real ones in a single atomic setState
- * to avoid intermediate states where neither entity exists.
+ * Delegates the entity-store swap to client-core, then cleans up the
+ * web-only tab state that pointed at the temp group id.
  */
 export function reconcileOptimisticSession(params: {
   tempSessionId: string;
@@ -142,49 +99,7 @@ export function reconcileOptimisticSession(params: {
   channelId: string;
   repoId?: string | null;
 }): void {
-  const realGroup = buildSessionGroupEntity({
-    id: params.realGroupId,
-    channel: { id: params.channelId },
-    repo: params.repoId ? { id: params.repoId } : null,
-  });
-
-  const realSession = buildSessionEntity({
-    id: params.realSessionId,
-    sessionGroupId: params.realGroupId,
-    tool: params.tool,
-    model: params.model,
-    hosting: params.hosting,
-    channel: { id: params.channelId },
-    repo: params.repoId ? { id: params.repoId } : null,
-  });
-
-  // Atomic: remove temp + insert real in one setState to prevent flicker
-  useEntityStore.setState((state: EntityStoreState) => {
-    // Remove temp session
-    const sessions = { ...state.sessions };
-    delete sessions[params.tempSessionId];
-    sessions[params.realSessionId] = realSession;
-
-    // Remove temp session group
-    const sessionGroups = { ...state.sessionGroups };
-    delete sessionGroups[params.tempGroupId];
-    sessionGroups[params.realGroupId] = realGroup;
-
-    // Rebuild session-by-group index
-    const idx = { ...state._sessionIdsByGroup };
-    // Remove temp session from its group bucket
-    if (idx[params.tempGroupId]) {
-      idx[params.tempGroupId] = idx[params.tempGroupId].filter((id: string) => id !== params.tempSessionId);
-      if (idx[params.tempGroupId].length === 0) delete idx[params.tempGroupId];
-    }
-    // Add real session to real group bucket
-    idx[params.realGroupId] = [
-      ...(idx[params.realGroupId] ?? []).filter((id: string) => id !== params.realSessionId),
-      params.realSessionId,
-    ];
-
-    return { sessions, sessionGroups, _sessionIdsByGroup: idx };
-  });
+  reconcileOptimisticSessionPair(params);
 
   // Clean up temp group's tab entry from UI store (closeSessionTab is a no-op
   // for single-tab groups, so we remove it directly)
@@ -199,26 +114,12 @@ export function reconcileOptimisticSession(params: {
 }
 
 /**
- * Remove optimistic temp entities on mutation failure.
+ * Remove optimistic temp entities on mutation failure, plus the web-only
+ * tab state that was seeded alongside them.
  */
 export function rollbackOptimisticSession(tempSessionId: string, tempGroupId: string): void {
-  useEntityStore.setState((state: EntityStoreState) => {
-    const sessions = { ...state.sessions };
-    delete sessions[tempSessionId];
+  rollbackOptimisticSessionPair({ tempSessionId, tempGroupId });
 
-    const sessionGroups = { ...state.sessionGroups };
-    delete sessionGroups[tempGroupId];
-
-    const idx = { ...state._sessionIdsByGroup };
-    if (idx[tempGroupId]) {
-      idx[tempGroupId] = idx[tempGroupId].filter((id: string) => id !== tempSessionId);
-      if (idx[tempGroupId].length === 0) delete idx[tempGroupId];
-    }
-
-    return { sessions, sessionGroups, _sessionIdsByGroup: idx };
-  });
-
-  // Clean up temp group's tab entry
   useUIStore.setState((s: UIStoreState) => {
     const { [tempGroupId]: _, ...rest } = s.openSessionTabsByGroup;
     const { [tempGroupId]: __, ...lastSelected } = s.lastSelectedSessionIdsByGroup;

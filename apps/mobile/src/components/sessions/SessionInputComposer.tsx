@@ -39,6 +39,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const model = useEntityField("sessions", sessionId, "model");
   const hosting = useEntityField("sessions", sessionId, "hosting");
   const connection = useEntityField("sessions", sessionId, "connection");
+  const isOptimistic = useEntityField("sessions", sessionId, "_optimistic");
   const isDisconnected = connection?.state === "disconnected";
   const canRetryConnection = connection?.canRetry === true;
 
@@ -59,7 +60,10 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const { submit: runSubmit, sending } = useComposerSubmit({ sessionId, isActive, onFailure, onSuccess });
 
   const trimmed = text.trim();
-  const canInteract = !isTerminal && !sending && !isDisconnected;
+  // While the session is optimistic (temp id, create mutation in flight), the
+  // server has no row to address — a send would fail silently and the draft
+  // would flicker. Match web's gate: let the user type, block the send.
+  const canInteract = !isTerminal && !sending && !isDisconnected && !isOptimistic;
   const canSubmit = canInteract && trimmed.length > 0;
 
   const {
@@ -91,9 +95,11 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
     ? "Worktree deleted"
     : sessionStatus === "merged"
       ? "Session merged"
-      : isActive
-        ? "Queue a message…"
-        : "Message…";
+      : isOptimistic
+        ? "Creating session…"
+        : isActive
+          ? "Queue a message…"
+          : "Message…";
   const bridgeIcon: SFSymbol = hosting === "cloud" ? "cloud" : "laptopcomputer";
 
   return (

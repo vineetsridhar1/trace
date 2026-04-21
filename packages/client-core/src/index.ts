@@ -54,6 +54,17 @@ export type {
   PendingChatEntry,
   PendingSessionEntry,
 } from "./mutations/optimistic-message.js";
+export {
+  insertOptimisticSessionPair,
+  reconcileOptimisticSessionPair,
+  rollbackOptimisticSessionPair,
+} from "./mutations/optimistic-session.js";
+export type {
+  InsertOptimisticSessionPairParams,
+  OptimisticSessionShape,
+  ReconcileOptimisticSessionPairParams,
+  RollbackOptimisticSessionPairParams,
+} from "./mutations/optimistic-session.js";
 
 export { handleOrgEvent, handleSessionEvent } from "./events/handlers.js";
 export {
