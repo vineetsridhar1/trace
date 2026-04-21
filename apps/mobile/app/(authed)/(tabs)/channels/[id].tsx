@@ -176,6 +176,8 @@ export default function ChannelDetail() {
       <Stack.Screen
         options={{
           title: channelName ?? "Channel",
+          headerLargeTitle: true,
+          headerLargeTitleShadowVisible: false,
           headerRight: () => (
             <View style={{ marginLeft: 2 }}>
               <IconButton
