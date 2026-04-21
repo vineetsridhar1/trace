@@ -77,7 +77,9 @@ export function SessionSurface({
   return (
     <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
       {hideHeader ? null : (
-        <SessionGroupHeader groupId={groupId} sessionId={sessionId} solid={solidHeader} />
+        <View style={styles.headerLayer}>
+          <SessionGroupHeader groupId={groupId} sessionId={sessionId} solid={solidHeader} />
+        </View>
       )}
       <SessionTabStrip
         activeSessionId={sessionId}
@@ -121,5 +123,8 @@ const styles = StyleSheet.create({
   },
   root: {
     flex: 1,
+  },
+  headerLayer: {
+    zIndex: 10,
   },
 });
