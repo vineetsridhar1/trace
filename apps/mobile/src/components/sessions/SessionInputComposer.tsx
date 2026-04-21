@@ -342,7 +342,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
           </Glass>
 
           <Animated.View style={[styles.actionCluster, actionClusterAnimatedStyle]}>
-            <GlassGroup style={styles.actionGlassContainer} spacing={ACTION_SIZE}>
+            <GlassGroup style={styles.actionGlassContainer} spacing={0}>
               <Glass
                 preset="input"
                 tint={alpha(theme.colors.success, 0.18)}
@@ -372,7 +372,6 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
                 style={[
                   styles.stopGlass,
                   { borderColor: alpha(theme.colors.destructive, 0.42) },
-                  stopSlotAnimatedStyle,
                 ]}
               >
                 <Pressable
