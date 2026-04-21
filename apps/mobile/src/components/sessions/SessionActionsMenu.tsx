@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -15,19 +15,11 @@ import ContextMenu, {
   type ContextMenuAction,
   type ContextMenuOnPressNativeEvent,
 } from "react-native-context-menu-view";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from "react-native-reanimated";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import { BlurView } from "expo-blur";
 import { Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
-
-const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
 
 export interface SessionMenuAction {
   title: string;
@@ -63,13 +55,6 @@ export function SessionActionsMenu({ actions, accessibilityLabel }: SessionActio
 function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    progress.value = open
-      ? withSpring(1, { damping: 18, stiffness: 220, mass: 0.9 })
-      : withTiming(0, { duration: 180 });
-  }, [open, progress]);
 
   const handleToggle = useCallback(() => {
     void haptic.light();
@@ -83,25 +68,10 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
   }, []);
 
   const menuHeight = actions.length * ITEM_HEIGHT;
-  // GlassContainer must contain both glass surfaces in its native frame for
-  // Liquid Glass pooling to render the liquid bridge between them.
+  // GlassContainer must be large enough to contain both glass surfaces in its
+  // native frame — that's the condition under which Liquid Glass morphs the
+  // new GlassView in/out of the existing one when it mounts/unmounts.
   const containerHeight = TRIGGER_SIZE + MENU_TOP_OFFSET + menuHeight;
-
-  // Menu lives at its final resting position; scaling from the top-right
-  // corner (nearest the trigger) lets the pooling stretch out of the trigger
-  // as the menu grows, which is the visible "morph".
-  const menuAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    transform: [{ scale: 0.2 + progress.value * 0.8 }],
-  }));
-
-  const triggerAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 - progress.value * 0.05 }],
-  }));
-
-  const backdropStyle = useAnimatedStyle(() => ({
-    opacity: progress.value * 0.18,
-  }));
 
   return (
     <>
@@ -110,12 +80,7 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
           accessibilityLabel="Dismiss menu"
           onPress={() => setOpen(false)}
           style={styles.backdropHit}
-        >
-          <Animated.View
-            pointerEvents="none"
-            style={[styles.backdropFill, { backgroundColor: "#000" }, backdropStyle]}
-          />
-        </Pressable>
+        />
       ) : null}
 
       <View style={styles.anchor}>
@@ -126,10 +91,10 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
             { width: MENU_WIDTH, height: containerHeight },
           ]}
         >
-          <AnimatedGlassView
+          <GlassView
             glassEffectStyle="regular"
             colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-            style={[styles.triggerPill, triggerAnimatedStyle]}
+            style={styles.triggerPill}
           >
             <Pressable
               accessibilityRole="button"
@@ -137,7 +102,6 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
               onPress={handleToggle}
               style={styles.triggerInner}
               hitSlop={8}
-              pointerEvents={open ? "none" : "auto"}
             >
               <SymbolView
                 name="ellipsis"
@@ -148,17 +112,17 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
                 style={styles.icon}
               />
             </Pressable>
-          </AnimatedGlassView>
+          </GlassView>
 
-          <AnimatedGlassView
-            glassEffectStyle="regular"
-            colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-            style={[styles.menuPill, { height: menuHeight }, menuAnimatedStyle]}
-          >
-            <View pointerEvents={open ? "auto" : "none"} style={styles.menuInner}>
+          {open ? (
+            <GlassView
+              glassEffectStyle="regular"
+              colorScheme={theme.scheme === "dark" ? "dark" : "light"}
+              style={[styles.menuPill, { height: menuHeight }]}
+            >
               <MenuList actions={actions} onPick={handleItem} />
-            </View>
-          </AnimatedGlassView>
+            </GlassView>
+          ) : null}
         </GlassContainer>
       </View>
     </>
@@ -285,11 +249,6 @@ const styles = StyleSheet.create({
     width: MENU_WIDTH,
     borderRadius: 20,
     overflow: "hidden",
-    transformOrigin: "top right",
-  },
-  menuInner: {
-    width: "100%",
-    height: "100%",
   },
   menuList: {
     flex: 1,
@@ -317,8 +276,5 @@ const styles = StyleSheet.create({
     left: -1000,
     right: -1000,
     zIndex: 50,
-  },
-  backdropFill: {
-    ...StyleSheet.absoluteFillObject,
   },
 });
