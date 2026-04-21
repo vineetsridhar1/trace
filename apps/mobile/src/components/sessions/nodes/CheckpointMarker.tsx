@@ -3,7 +3,7 @@ import type { GitCheckpoint } from "@trace/gql";
 import { shortSha } from "@trace/shared";
 import { SymbolView } from "expo-symbols";
 import { Text } from "@/components/design-system";
-import { alpha, useTheme } from "@/theme";
+import { useTheme } from "@/theme";
 
 interface CheckpointMarkerProps {
   checkpoint: GitCheckpoint;
@@ -15,45 +15,36 @@ interface CheckpointMarkerProps {
  */
 export function CheckpointMarker({ checkpoint }: CheckpointMarkerProps) {
   const theme = useTheme();
-  const count = checkpoint.filesChanged ?? 0;
-  const suffix = count === 1 ? "file" : "files";
 
   return (
     <View
       style={[
         styles.chip,
         {
-          backgroundColor: alpha(theme.colors.statusDone, 0.12),
-          borderColor: alpha(theme.colors.statusDone, 0.3),
+          backgroundColor: "rgba(255,255,255,0.05)",
+          borderColor: "rgba(255,255,255,0.05)",
           paddingHorizontal: theme.spacing.sm,
           paddingVertical: theme.spacing.xs,
-          borderRadius: theme.radius.md,
+          borderRadius: theme.radius.sm,
           gap: theme.spacing.xs,
         },
       ]}
     >
       <SymbolView
-        name="checkmark.circle.fill"
+        name="circle"
         size={12}
-        tintColor={theme.colors.statusDone}
+        tintColor={theme.colors.mutedForeground}
         resizeMode="scaleAspectFit"
         style={styles.icon}
       />
-      <Text variant="caption1" style={{ color: theme.colors.foreground, fontWeight: "600" }}>
-        Committed
-      </Text>
-      <Text variant="caption1" color="mutedForeground" numberOfLines={1} style={styles.subject}>
-        {checkpoint.subject}
-      </Text>
       <Text
         variant="caption2"
-        color="dimForeground"
-        style={{ fontFamily: "Menlo" }}
+        style={{ color: theme.colors.foreground, fontFamily: "Menlo", fontWeight: "600" }}
       >
         {shortSha(checkpoint.commitSha)}
       </Text>
-      <Text variant="caption2" color="dimForeground">
-        · {count} {suffix}
+      <Text variant="caption1" color="mutedForeground" numberOfLines={1} style={styles.subject}>
+        {checkpoint.subject}
       </Text>
     </View>
   );
@@ -65,8 +56,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderWidth: StyleSheet.hairlineWidth,
-    maxWidth: "100%",
+    maxWidth: 220,
   },
   icon: { width: 12, height: 12 },
-  subject: { flexShrink: 1, maxWidth: 140 },
+  subject: { flexShrink: 1, maxWidth: 130 },
 });

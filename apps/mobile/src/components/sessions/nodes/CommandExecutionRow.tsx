@@ -13,9 +13,8 @@ interface CommandExecutionRowProps {
 }
 
 /**
- * Merged shell-command row — renders the command in monospace with a success/
- * failure exit-code badge (green 0, red non-zero). Tap expands the full
- * stdout/stderr payload.
+ * Merged shell-command row — renders the command in monospace and expands
+ * to show the full stdout/stderr payload.
  */
 export function CommandExecutionRow({
   command,
@@ -32,11 +31,6 @@ export function CommandExecutionRow({
     (output && typeof output === "object" && Object.keys(output).length > 0);
   const hasError = exitCode != null && exitCode !== 0;
   const hasBody = hasOutput || hasError;
-  const badgeColor = hasError
-    ? theme.colors.destructive
-    : exitCode === 0
-      ? theme.colors.success
-      : theme.colors.mutedForeground;
 
   return (
     <View style={styles.wrapper}>
@@ -48,7 +42,7 @@ export function CommandExecutionRow({
         style={[
           styles.header,
           {
-            backgroundColor: "rgba(255,255,255,0.1)",
+            backgroundColor: "rgba(255,255,255,0.05)",
             paddingVertical: theme.spacing.xs,
             paddingHorizontal: theme.spacing.sm,
             gap: theme.spacing.xs,
@@ -73,22 +67,6 @@ export function CommandExecutionRow({
         >
           {display}
         </Text>
-        {exitCode != null ? (
-          <View
-            style={[
-              styles.exit,
-              {
-                backgroundColor: alpha(badgeColor, 0.18),
-                borderRadius: theme.radius.sm,
-                paddingHorizontal: 6,
-              },
-            ]}
-          >
-            <Text variant="caption2" style={{ color: badgeColor, fontFamily: "Menlo" }}>
-              {exitCode}
-            </Text>
-          </View>
-        ) : null}
         <Text variant="caption2" color="dimForeground" style={styles.time}>
           {formatTime(timestamp)}
         </Text>
@@ -128,7 +106,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center" },
   chevron: { width: 10, height: 10 },
   command: { flex: 1 },
-  exit: { paddingVertical: 1 },
   time: { marginLeft: "auto" },
   body: {
     borderWidth: StyleSheet.hairlineWidth,
