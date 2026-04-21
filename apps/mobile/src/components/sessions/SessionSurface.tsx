@@ -27,6 +27,13 @@ interface SessionSurfaceProps {
    * to pull-down-to-dismiss.
    */
   hideHeader?: boolean;
+  /**
+   * Whether this surface owns the `activeSessionId` / `activeSessionGroupId`
+   * UI state. The Session Player mounts prev/current/next surfaces to enable
+   * horizontal swipe-to-cycle, but only the visible one should claim the
+   * global "active" slot. Defaults to `true` for standalone usage.
+   */
+  isActive?: boolean;
 }
 
 /**
@@ -38,6 +45,7 @@ export function SessionSurface({
   sessionId,
   onSelectSession,
   hideHeader = false,
+  isActive = true,
 }: SessionSurfaceProps) {
   const theme = useTheme();
   const groupId = useEntityField("sessions", sessionId, "sessionGroupId") as
@@ -57,6 +65,7 @@ export function SessionSurface({
   const [solidHeader, setSolidHeader] = useState(false);
 
   useEffect(() => {
+    if (!isActive) return;
     if (!groupId) return;
     const store = useMobileUIStore.getState();
     store.setActiveSessionGroupId(groupId);
@@ -66,7 +75,7 @@ export function SessionSurface({
       if (current.activeSessionGroupId === groupId) current.setActiveSessionGroupId(null);
       if (current.activeSessionId === sessionId) current.setActiveSessionId(null);
     };
-  }, [groupId, sessionId]);
+  }, [isActive, groupId, sessionId]);
 
   const handleScrollOffsetChange = useCallback((offsetY: number) => {
     const next = offsetY > SOLID_HEADER_THRESHOLD;
