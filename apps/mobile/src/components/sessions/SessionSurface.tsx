@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Keyboard,
-  LayoutAnimation,
-  Platform,
   StyleSheet,
-  UIManager,
   View,
   type LayoutChangeEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  withTiming,
+} from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import {
   eventScopeKey,
   useEntityField,
@@ -25,6 +28,7 @@ import { SessionInputComposer } from "@/components/sessions/SessionInputComposer
 import { SessionStream } from "@/components/sessions/SessionStream";
 import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
 import { useEnsureSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
+import { useKeyboardAnimation } from "@/hooks/useKeyboardAnimation";
 import { useSessionDetail } from "@/hooks/useSessionDetail";
 import { findMostRecentPendingInput } from "@/lib/pending-input";
 import { useTheme } from "@/theme";
@@ -49,6 +53,10 @@ interface SessionSurfaceProps {
    */
   topInset?: number;
 }
+
+// Fraction of the keyboard height the user must pan past for a release to
+// commit to dismissal. Anything less springs back to the open position.
+const DISMISS_THRESHOLD = 0.35;
 
 /**
  * The complete session surface: group header + sibling tab strip + event
@@ -84,40 +92,62 @@ export function SessionSurface({
   );
   const insets = useSafeAreaInsets();
   const [composerHeight, setComposerHeight] = useState(0);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
     setComposerHeight(e.nativeEvent.layout.height);
   }, []);
 
-  useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const animate = (duration: number | undefined) => {
-      if (Platform.OS === "ios" && duration) {
-        LayoutAnimation.configureNext({
-          duration,
-          update: { type: LayoutAnimation.Types.keyboard },
-        });
-      } else if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-        UIManager.setLayoutAnimationEnabledExperimental(true);
-      }
-    };
-    const show = Keyboard.addListener(showEvent, (e) => {
-      animate(e.duration);
-      setKeyboardHeight(e.endCoordinates.height);
-    });
-    const hide = Keyboard.addListener(hideEvent, (e) => {
-      animate(e.duration);
-      setKeyboardHeight(0);
-    });
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
+  // Reanimated-driven keyboard offset. `height` is the current visual offset
+  // (follows the finger during a pan); `targetHeight` is the keyboard's
+  // resting height (used to know how far a drag-down has to go).
+  const { height: keyboardHeight, targetHeight: keyboardTarget } =
+    useKeyboardAnimation();
+
   // iOS's keyboard height already includes the home-indicator safe-area, so
-  // offset by insets.bottom to avoid double-padding the composer.
-  const overlayBottom = keyboardHeight > 0 ? Math.max(0, keyboardHeight - insets.bottom) : 0;
+  // subtract insets.bottom to avoid double-padding the composer.
+  const overlayStyle = useAnimatedStyle(() => {
+    const bottom = Math.max(0, keyboardHeight.value - insets.bottom);
+    return { transform: [{ translateY: -bottom }] };
+  });
+  const streamStyle = useAnimatedStyle(() => {
+    const bottom = Math.max(0, keyboardHeight.value - insets.bottom);
+    return { marginBottom: bottom };
+  });
+
+  // Pan gesture on the composer: while the keyboard is up, a downward drag
+  // pushes the composer (and overlay) down in sync with the finger. On
+  // release, if the user dragged past the threshold (or flicked downward)
+  // we dismiss the keyboard — which fires the hide listener and the hook
+  // cleanly animates the offset back to 0.
+  const dragDismiss = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY(8)
+        .failOffsetY(-8)
+        .onUpdate((e) => {
+          "worklet";
+          if (keyboardTarget.value <= 0) return;
+          const next = Math.max(
+            0,
+            Math.min(keyboardTarget.value, keyboardTarget.value - e.translationY),
+          );
+          keyboardHeight.value = next;
+        })
+        .onEnd((e) => {
+          "worklet";
+          if (keyboardTarget.value <= 0) return;
+          const dismissed =
+            e.translationY > keyboardTarget.value * DISMISS_THRESHOLD ||
+            e.velocityY > 800;
+          if (dismissed) {
+            runOnJS(Keyboard.dismiss)();
+          } else {
+            keyboardHeight.value = withTiming(keyboardTarget.value, {
+              duration: 180,
+            });
+          }
+        }),
+    [keyboardHeight, keyboardTarget],
+  );
 
   useEffect(() => {
     if (!groupId) return;
@@ -154,28 +184,30 @@ export function SessionSurface({
         />
       )}
       {hideHeader ? null : <ActiveTodoStrip sessionId={sessionId} />}
-      <View style={[styles.streamWrapper, { marginBottom: overlayBottom }]}>
+      <Animated.View style={[styles.streamWrapper, streamStyle]}>
         <SessionStream
           key={sessionId}
           sessionId={sessionId}
           topInset={topInset}
           bottomInset={composerHeight}
         />
-      </View>
-      <View
-        style={[styles.overlay, { bottom: overlayBottom }]}
-        onLayout={handleComposerLayout}
-        pointerEvents="box-none"
-      >
-        {pendingInput ? (
-          <PendingInputBar sessionId={sessionId} />
-        ) : (
-          <>
-            <QueuedMessagesStrip sessionId={sessionId} />
-            <SessionInputComposer sessionId={sessionId} />
-          </>
-        )}
-      </View>
+      </Animated.View>
+      <GestureDetector gesture={dragDismiss}>
+        <Animated.View
+          style={[styles.overlay, overlayStyle]}
+          onLayout={handleComposerLayout}
+          pointerEvents="box-none"
+        >
+          {pendingInput ? (
+            <PendingInputBar sessionId={sessionId} />
+          ) : (
+            <>
+              <QueuedMessagesStrip sessionId={sessionId} />
+              <SessionInputComposer sessionId={sessionId} />
+            </>
+          )}
+        </Animated.View>
+      </GestureDetector>
     </View>
   );
 }
