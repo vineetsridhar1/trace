@@ -16,6 +16,8 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
+import { BlurView } from "expo-blur";
 import { useEntityField } from "@trace/client-core";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
 import { SessionSurface, SessionSurfaceEmpty } from "@/components/sessions/SessionSurface";
@@ -157,22 +159,17 @@ export function SessionPlayerOverlay() {
         >
           <GestureDetector gesture={pan}>
             <View style={styles.dragHandle}>
+              <GrabBar
+                paddingTop={insets.top + 8}
+                colorScheme={theme.scheme === "dark" ? "dark" : "light"}
+                grabberColor={alpha(theme.colors.foreground, 0.28)}
+              />
               <View
                 style={[
-                  styles.grabberRow,
-                  {
-                    paddingTop: insets.top + 8,
-                    backgroundColor: theme.colors.background,
-                  },
+                  styles.cardTopStrip,
+                  { backgroundColor: theme.colors.background },
                 ]}
-              >
-                <View
-                  style={[
-                    styles.grabber,
-                    { backgroundColor: alpha(theme.colors.foreground, 0.28) },
-                  ]}
-                />
-              </View>
+              />
               {sessionId ? (
                 <SessionGroupHeader groupId={headerGroupId ?? ""} sessionId={sessionId} />
               ) : null}
@@ -188,6 +185,43 @@ export function SessionPlayerOverlay() {
         </View>
       </Animated.View>
     </View>
+  );
+}
+
+interface GrabBarProps {
+  paddingTop: number;
+  colorScheme: "light" | "dark";
+  grabberColor: string;
+}
+
+/**
+ * Liquid-glass grab-bar strip. The grabber pill rides on a full-width
+ * glass surface so messages scrolling up behind it are picked up by the
+ * blur — the solid card boundary sits just below it (see `cardTopStrip`).
+ */
+function GrabBar({ paddingTop, colorScheme, grabberColor }: GrabBarProps) {
+  const content = (
+    <View style={[styles.grabber, { backgroundColor: grabberColor }]} />
+  );
+  if (isLiquidGlassAvailable()) {
+    return (
+      <GlassView
+        glassEffectStyle="regular"
+        colorScheme={colorScheme}
+        style={[styles.grabberRow, { paddingTop }]}
+      >
+        {content}
+      </GlassView>
+    );
+  }
+  return (
+    <BlurView
+      tint={colorScheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
+      intensity={50}
+      style={[styles.grabberRow, { paddingTop }]}
+    >
+      {content}
+    </BlurView>
   );
 }
 
@@ -222,6 +256,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 5,
     borderRadius: 999,
+  },
+  cardTopStrip: {
+    height: 10,
   },
   surface: {
     flex: 1,
