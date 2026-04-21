@@ -5,11 +5,14 @@ import {
   reconcileOptimisticSessionMessage,
   removeOptimisticSessionMessage,
   SEND_SESSION_MESSAGE_MUTATION,
+  useAuthStore,
   wrapPrompt,
   type InteractionMode,
 } from "@trace/client-core";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
+import { uploadImage } from "@/lib/upload";
+import { useDraftsStore, type ImageAttachment } from "@/stores/drafts";
 
 export type ComposerMode = InteractionMode;
 
@@ -23,11 +26,6 @@ interface UseComposerSubmitOptions {
   onSuccess: () => void;
 }
 
-/**
- * Encapsulates the send-vs-queue fork, optimistic-event insert, and rollback
- * plumbing the composer needs. Kept as a hook so `SessionInputComposer.tsx`
- * stays focused on UI and under its 200-line budget.
- */
 export function useComposerSubmit({
   sessionId,
   isActive,
@@ -38,16 +36,19 @@ export function useComposerSubmit({
 
   const submit = useCallback(
     async (draft: string, mode: ComposerMode) => {
-      if (!draft || sending) return;
+      const images = useDraftsStore.getState().images[sessionId] ?? [];
+      if ((!draft && images.length === 0) || sending) return;
       void haptic.light();
       setSending(true);
-      const wrapped = wrapPrompt(mode, draft);
+      const wrapped = draft ? wrapPrompt(mode, draft) : "";
       const interactionMode = mode === "code" ? undefined : mode;
       // Clear the draft the same frame the message visibly leaves the input —
       // either as it lands in the queue, or as the optimistic bubble appears.
       // `onFailure(draft)` restores it on error.
       try {
         if (isActive) {
+          // Queue path: server mutation doesn't accept imageKeys. Match web
+          // and submit text only — attachments remain in the draft.
           onSuccess();
           const result = await getClient()
             .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
@@ -59,16 +60,64 @@ export function useComposerSubmit({
           if (result.error) throw result.error;
           return;
         }
+
+        const savedImages: ImageAttachment[] = [...images];
+        const savedIds = new Set(savedImages.map((img) => img.id));
+        const previewUris = savedImages.map((img) => img.previewUri);
+
+        let imageKeys: string[] = [];
+        if (savedImages.length > 0) {
+          useDraftsStore
+            .getState()
+            .setImages(sessionId, (prev) =>
+              prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: true } : img)),
+            );
+          const orgId = useAuthStore.getState().activeOrgId;
+          if (!orgId) throw new Error("No active organization for upload");
+          try {
+            imageKeys = await Promise.all(
+              savedImages.map((img) =>
+                uploadImage({
+                  base64: img.base64,
+                  mimeType: img.mimeType,
+                  organizationId: orgId,
+                }),
+              ),
+            );
+          } catch (err) {
+            useDraftsStore
+              .getState()
+              .setImages(sessionId, (prev) =>
+                prev.map((img) =>
+                  savedIds.has(img.id) ? { ...img, uploading: false } : img,
+                ),
+              );
+            throw err;
+          }
+        }
+
         const { eventId, clientMutationId } = optimisticallyInsertSessionMessage(
           sessionId,
           wrapped,
+          imageKeys.length > 0
+            ? { imageKeys, imagePreviewUrls: previewUris }
+            : undefined,
         );
+        useDraftsStore
+          .getState()
+          .setImages(sessionId, (prev) => prev.filter((img) => !savedIds.has(img.id)));
         onSuccess();
         try {
           const result = await getClient()
             .mutation<{ sendSessionMessage: { id: string } }>(
               SEND_SESSION_MESSAGE_MUTATION,
-              { sessionId, text: wrapped, interactionMode, clientMutationId },
+              {
+                sessionId,
+                text: wrapped,
+                imageKeys: imageKeys.length > 0 ? imageKeys : undefined,
+                interactionMode,
+                clientMutationId,
+              },
             )
             .toPromise();
           if (result.error) throw result.error;
@@ -77,6 +126,11 @@ export function useComposerSubmit({
           reconcileOptimisticSessionMessage(sessionId, eventId, realId);
         } catch (err) {
           removeOptimisticSessionMessage(sessionId, eventId);
+          // Restore images so the user can retry without repicking.
+          useDraftsStore.getState().setImages(sessionId, (prev) => [
+            ...savedImages.map((img) => ({ ...img, uploading: false })),
+            ...prev,
+          ]);
           throw err;
         }
       } catch {

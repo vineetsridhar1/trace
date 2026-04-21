@@ -2,8 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text as NativeText, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView, type SFSymbol } from "expo-symbols";
+import * as Clipboard from "expo-clipboard";
 import Animated, {
+  FadeIn,
   FadeInDown,
+  FadeOut,
   FadeOutUp,
   useAnimatedStyle,
   useSharedValue,
@@ -12,6 +15,7 @@ import Animated, {
 import {
   AVAILABLE_RUNTIMES_QUERY,
   DISMISS_SESSION_MUTATION,
+  generateUUID,
   UPDATE_SESSION_CONFIG_MUTATION,
   useEntityField,
 } from "@trace/client-core";
@@ -25,16 +29,19 @@ import { getDefaultModel, getModelLabel, getModelsForTool } from "@trace/shared"
 import { Glass, Text } from "@/components/design-system";
 import { MODE_CYCLE, useComposerModePalette } from "@/hooks/useComposerModePalette";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
+import { useClipboardImage } from "@/hooks/useClipboardImage";
 import { haptic } from "@/lib/haptics";
 import { recordPerf } from "@/lib/perf";
 import { applyOptimisticPatch } from "@/lib/optimisticEntity";
 import { getClient } from "@/lib/urql";
+import { useDraftsStore, type ImageAttachment } from "@/stores/drafts";
 import { alpha, useTheme } from "@/theme";
 import { ComposerConnectionNotice } from "./ComposerConnectionNotice";
 import {
   ComposerMorphPill,
   type ComposerMorphPillItem,
 } from "./ComposerMorphPill";
+import { ImageAttachmentBar } from "./ImageAttachmentBar";
 
 interface SessionInputComposerProps { sessionId: string }
 
@@ -53,6 +60,8 @@ const MAX_INPUT_HEIGHT = 260;
 const ACTION_SIZE = 46;
 const ACTION_GAP = 8;
 const ACTION_CLUSTER_WIDTH = ACTION_SIZE * 2 + ACTION_GAP;
+const MAX_IMAGES = 5;
+const EMPTY_IMAGES: ImageAttachment[] = [];
 
 /**
  * Session composer: a single-line-start liquid glass input next to a
@@ -94,6 +103,10 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const [errorDraft, setErrorDraft] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
+  const [pastingImage, setPastingImage] = useState(false);
+
+  const images = useDraftsStore((s) => s.images[sessionId] ?? EMPTY_IMAGES);
+  const setImages = useDraftsStore((s) => s.setImages);
 
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
@@ -113,8 +126,12 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   // server has no row to address — a send would fail silently and the draft
   // would flicker. Match web's gate: let the user type, block the send.
   const canInteract = !isTerminal && !sending && !stopping && !isDisconnected && !isOptimistic;
-  const canSubmit = canInteract && trimmed.length > 0;
+  const canSubmit = canInteract && (trimmed.length > 0 || images.length > 0);
   const canStop = isActive && !stopping;
+
+  const { hasImage: clipboardHasImage, refresh: refreshClipboard } = useClipboardImage();
+  const showPasteButton =
+    canInteract && clipboardHasImage && images.length < MAX_IMAGES && !pastingImage;
 
   const {
     glassAnimatedProps,
@@ -178,6 +195,45 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const handleSend = useCallback(() => {
     if (canSubmit) void runSubmit(trimmed, mode);
   }, [canSubmit, mode, runSubmit, trimmed]);
+  const handlePasteImage = useCallback(async () => {
+    if (pastingImage || images.length >= MAX_IMAGES) return;
+    setPastingImage(true);
+    void haptic.selection();
+    try {
+      const result = await Clipboard.getImageAsync({ format: "png" });
+      if (!result?.data) return;
+      const mimeType = "image/png";
+      const attachment: ImageAttachment = {
+        id: generateUUID(),
+        mimeType,
+        base64: result.data,
+        previewUri: `data:${mimeType};base64,${result.data}`,
+        width: result.size?.width ?? null,
+        height: result.size?.height ?? null,
+        s3Key: null,
+        uploading: false,
+      };
+      setImages(sessionId, (prev) => {
+        if (prev.length >= MAX_IMAGES) return prev;
+        return [...prev, attachment];
+      });
+      void haptic.light();
+    } catch (err) {
+      void haptic.error();
+      console.warn("[composer] clipboard paste failed", err);
+    } finally {
+      setPastingImage(false);
+    }
+  }, [images.length, pastingImage, sessionId, setImages]);
+  const handleRemoveImage = useCallback(
+    (id: string) => {
+      setImages(sessionId, (prev) => prev.filter((img) => img.id !== id));
+    },
+    [sessionId, setImages],
+  );
+  const handleInputFocus = useCallback(() => {
+    refreshClipboard();
+  }, [refreshClipboard]);
   const handleModePress = useCallback(() => {
     void haptic.selection();
     setMode((current) => {
@@ -432,6 +488,41 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
       {isDisconnected ? (
         <ComposerConnectionNotice sessionId={sessionId} canRetry={canRetryConnection} />
       ) : null}
+      {showPasteButton ? (
+        <Animated.View
+          entering={FadeIn.duration(180)}
+          exiting={FadeOut.duration(140)}
+          style={styles.pasteRow}
+        >
+          <Pressable
+            onPress={() => void handlePasteImage()}
+            accessibilityRole="button"
+            accessibilityLabel="Paste image from clipboard"
+            hitSlop={6}
+            style={({ pressed }) => [
+              styles.pasteButton,
+              {
+                backgroundColor: alpha(theme.colors.accent, 0.14),
+                borderColor: alpha(theme.colors.accent, 0.36),
+                opacity: pressed ? 0.7 : 1,
+              },
+            ]}
+          >
+            <SymbolView
+              name="photo.on.rectangle"
+              size={14}
+              tintColor={theme.colors.accent}
+              weight="medium"
+              resizeMode="scaleAspectFit"
+              style={styles.pasteIcon}
+            />
+            <NativeText style={[styles.pasteLabel, { color: theme.colors.accent }]}>
+              Paste image in clipboard
+            </NativeText>
+          </Pressable>
+        </Animated.View>
+      ) : null}
+      <ImageAttachmentBar images={images} onRemove={handleRemoveImage} />
       <View style={styles.composerStack}>
         <View style={styles.inputActionRow}>
           <Glass
@@ -449,6 +540,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
               <TextInput
                 value={text}
                 onChangeText={handleChangeText}
+                onFocus={handleInputFocus}
                 onContentSizeChange={(e) => {
                   const h = e.nativeEvent.contentSize.height;
                   const next = Math.min(MAX_INPUT_HEIGHT, Math.max(MIN_INPUT_HEIGHT, h));
@@ -658,4 +750,16 @@ const styles = StyleSheet.create({
   modeIcon: { width: 14, height: 14 },
   modeText: { fontSize: 13, fontWeight: "700" },
   retryRow: { paddingBottom: 4 },
+  pasteRow: { flexDirection: "row", paddingBottom: 6 },
+  pasteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  pasteIcon: { width: 14, height: 14 },
+  pasteLabel: { fontSize: 13, fontWeight: "600" },
 });
