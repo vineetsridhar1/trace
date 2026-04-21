@@ -1,5 +1,11 @@
-import { useEffect, useMemo } from "react";
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  View,
+  type LayoutChangeEvent,
+} from "react-native";
 import {
   eventScopeKey,
   useEntityField,
@@ -73,6 +79,10 @@ export function SessionSurface({
     () => findMostRecentPendingInput(eventIds, events),
     [eventIds, events],
   );
+  const [composerHeight, setComposerHeight] = useState(0);
+  const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
+    setComposerHeight(e.nativeEvent.layout.height);
+  }, []);
 
   useEffect(() => {
     if (!groupId) return;
@@ -112,15 +122,22 @@ export function SessionSurface({
         />
       )}
       {hideHeader ? null : <ActiveTodoStrip sessionId={sessionId} />}
-      <SessionStream key={sessionId} sessionId={sessionId} topInset={topInset} />
-      {pendingInput ? (
-        <PendingInputBar sessionId={sessionId} />
-      ) : (
-        <>
-          <QueuedMessagesStrip sessionId={sessionId} />
-          <SessionInputComposer sessionId={sessionId} />
-        </>
-      )}
+      <SessionStream
+        key={sessionId}
+        sessionId={sessionId}
+        topInset={topInset}
+        bottomInset={composerHeight}
+      />
+      <View style={styles.overlay} onLayout={handleComposerLayout} pointerEvents="box-none">
+        {pendingInput ? (
+          <PendingInputBar sessionId={sessionId} />
+        ) : (
+          <>
+            <QueuedMessagesStrip sessionId={sessionId} />
+            <SessionInputComposer sessionId={sessionId} />
+          </>
+        )}
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -160,5 +177,11 @@ const styles = StyleSheet.create({
   },
   headerLayer: {
     zIndex: 10,
+  },
+  overlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
 });

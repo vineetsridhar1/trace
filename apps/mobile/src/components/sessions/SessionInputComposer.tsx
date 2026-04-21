@@ -44,12 +44,11 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const [errorDraft, setErrorDraft] = useState<string | null>(null);
 
   const isActive = agentStatus === "active";
-  const isTerminal =
-    agentStatus === "failed" ||
-    agentStatus === "stopped" ||
-    agentStatus === "done" ||
-    sessionStatus === "merged" ||
-    worktreeDeleted === true;
+  // Terminal = no more input accepted ever. `done`, `failed`, `stopped` are
+  // resumable — web's `canSendMessage` allows sends for them — so they must
+  // NOT disable the composer. Only a deleted worktree or a merged session
+  // are truly closed.
+  const isTerminal = worktreeDeleted === true || sessionStatus === "merged";
 
   const onFailure = useCallback((draft: string) => { setText(draft); setErrorDraft(draft); }, []);
   const onSuccess = useCallback(() => { setText(""); setErrorDraft(null); }, []);
@@ -71,7 +70,13 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
     if (errorDraft && !isTerminal) void runSubmit(errorDraft, mode);
   }, [errorDraft, isTerminal, mode, runSubmit]);
 
-  const placeholder = isTerminal ? "Session complete" : isActive ? "Queue a message…" : "Message…";
+  const placeholder = worktreeDeleted
+    ? "Worktree deleted"
+    : sessionStatus === "merged"
+      ? "Session merged"
+      : isActive
+        ? "Queue a message…"
+        : "Message…";
   const bridgeIcon: SFSymbol = hosting === "cloud" ? "cloud" : "laptopcomputer";
 
   return (

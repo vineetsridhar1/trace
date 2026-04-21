@@ -32,6 +32,11 @@ interface SessionStreamProps {
    * while still allowing content to scroll behind it.
    */
   topInset?: number;
+  /**
+   * Bottom padding so content can scroll behind the composer / queued-
+   * messages overlay at the bottom of the surface.
+   */
+  bottomInset?: number;
 }
 
 const NEAR_BOTTOM_THRESHOLD = 120;
@@ -44,7 +49,7 @@ const TIMESTAMP_REVEAL_RESISTANCE = 0.5;
 /** In-memory scroll offset per sessionId — preserved across re-mounts within a session. */
 const scrollOffsetMemory = new Map<string, number>();
 
-export function SessionStream({ sessionId, topInset }: SessionStreamProps) {
+export function SessionStream({ sessionId, topInset, bottomInset }: SessionStreamProps) {
   const theme = useTheme();
   const { loading, loadingOlder, hasOlder, error, fetchEvents, fetchOlderEvents } =
     useSessionEvents(sessionId);
@@ -149,6 +154,7 @@ export function SessionStream({ sessionId, topInset }: SessionStreamProps) {
             disconnectReason={connection?.lastError ?? null}
             initialScrollIndex={initialScrollIndex}
             topInset={topInset}
+            bottomInset={bottomInset}
             onScroll={handleScroll}
             fetchOlderEvents={fetchOlderEvents}
           />
