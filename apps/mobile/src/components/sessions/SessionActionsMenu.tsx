@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -6,20 +6,26 @@ import {
   type NativeSyntheticEvent,
   type ViewStyle,
 } from "react-native";
-import {
-  GlassContainer,
-  GlassView,
-  isLiquidGlassAvailable,
-} from "expo-glass-effect";
+import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import ContextMenu, {
   type ContextMenuAction,
   type ContextMenuOnPressNativeEvent,
 } from "react-native-context-menu-view";
+import Animated, {
+  Easing,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import { BlurView } from "expo-blur";
 import { Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
+
+const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
 
 export interface SessionMenuAction {
   title: string;
@@ -36,14 +42,14 @@ interface SessionActionsMenuProps {
 const TRIGGER_SIZE = 48;
 const MENU_WIDTH = 240;
 const ITEM_HEIGHT = 48;
-const MENU_TOP_OFFSET = 8;
+const MENU_RADIUS = 20;
+const DURATION = 300;
 
 /**
  * Liquid Glass overflow affordance: a circular pill that morphs into a
- * menu card on tap. iOS 26+ runs the trigger and the menu inside the same
- * GlassContainer so the glass visibly "pools" between them during the
- * enter/exit animation. Older OS versions fall back to the stock native
- * ContextMenu rendered inside a BlurView pill.
+ * menu card on tap. The single GlassView interpolates its frame and
+ * corner radius while the icon/menu cross-fade in and out. Older OS
+ * versions fall back to the stock native ContextMenu inside a BlurView.
  */
 export function SessionActionsMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) {
   if (!isLiquidGlassAvailable()) {
@@ -55,10 +61,15 @@ export function SessionActionsMenu({ actions, accessibilityLabel }: SessionActio
 function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
+  // Keeps menu content mounted through the close animation so it can fade out.
+  const [mounted, setMounted] = useState(false);
+  const progress = useSharedValue(0);
+
+  const menuHeight = actions.length * ITEM_HEIGHT;
 
   const handleToggle = useCallback(() => {
     void haptic.light();
-    setOpen((o) => !o);
+    setOpen((prev) => !prev);
   }, []);
 
   const handleItem = useCallback((action: SessionMenuAction) => {
@@ -67,11 +78,38 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
     action.onPress();
   }, []);
 
-  const menuHeight = actions.length * ITEM_HEIGHT;
-  // GlassContainer must be large enough to contain both glass surfaces in its
-  // native frame — that's the condition under which Liquid Glass morphs the
-  // new GlassView in/out of the existing one when it mounts/unmounts.
-  const containerHeight = TRIGGER_SIZE + MENU_TOP_OFFSET + menuHeight;
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      progress.value = withTiming(1, {
+        duration: DURATION,
+        easing: Easing.out(Easing.cubic),
+      });
+    } else {
+      progress.value = withTiming(
+        0,
+        { duration: DURATION, easing: Easing.in(Easing.cubic) },
+        (finished) => {
+          if (finished) runOnJS(setMounted)(false);
+        },
+      );
+    }
+  }, [open, progress]);
+
+  // Shape morph: pill -> rounded rect. Anchored top-right, so it grows down and left.
+  const glassStyle = useAnimatedStyle(() => ({
+    width: interpolate(progress.value, [0, 1], [TRIGGER_SIZE, MENU_WIDTH]),
+    height: interpolate(progress.value, [0, 1], [TRIGGER_SIZE, menuHeight]),
+    borderRadius: interpolate(progress.value, [0, 1], [TRIGGER_SIZE / 2, MENU_RADIUS]),
+  }));
+
+  // Cross-fade: icon out in the first 40% of the morph, menu in during the last 45%.
+  const iconStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 0.4], [1, 0], "clamp"),
+  }));
+  const menuStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0.55, 1], [0, 1], "clamp"),
+  }));
 
   return (
     <>
@@ -84,43 +122,47 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
       ) : null}
 
       <View style={styles.anchor}>
-        <GlassContainer
-          spacing={28}
-          style={[
-            styles.container,
-            { width: MENU_WIDTH, height: containerHeight },
-          ]}
+        <AnimatedGlassView
+          isInteractive
+          glassEffectStyle="regular"
+          colorScheme={theme.scheme === "dark" ? "dark" : "light"}
+          style={[styles.morphingGlass, glassStyle]}
         >
-          <GlassView
-            isInteractive
-            animate
-            animationDuration={280}
-            glassEffectStyle="regular"
-            colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-            style={open ? [styles.menuPill, { height: menuHeight }] : styles.triggerPill}
-          >
-            {open ? (
+          {mounted ? (
+            <Animated.View
+              pointerEvents={open ? "auto" : "none"}
+              style={[
+                styles.menuLayer,
+                { width: MENU_WIDTH, height: menuHeight },
+                menuStyle,
+              ]}
+            >
               <MenuList actions={actions} onPick={handleItem} />
-            ) : (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={accessibilityLabel}
-                onPress={handleToggle}
-                style={styles.triggerInner}
-                hitSlop={8}
-              >
-                <SymbolView
-                  name="ellipsis"
-                  size={18}
-                  tintColor={theme.colors.foreground}
-                  weight="semibold"
-                  resizeMode="scaleAspectFit"
-                  style={styles.icon}
-                />
-              </Pressable>
-            )}
-          </GlassView>
-        </GlassContainer>
+            </Animated.View>
+          ) : null}
+
+          <Animated.View
+            pointerEvents={open ? "none" : "auto"}
+            style={[styles.triggerLayer, iconStyle]}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={accessibilityLabel}
+              onPress={handleToggle}
+              style={styles.triggerInner}
+              hitSlop={8}
+            >
+              <SymbolView
+                name="ellipsis"
+                size={18}
+                tintColor={theme.colors.foreground}
+                weight="semibold"
+                resizeMode="scaleAspectFit"
+                style={styles.icon}
+              />
+            </Pressable>
+          </Animated.View>
+        </AnimatedGlassView>
       </View>
     </>
   );
@@ -218,34 +260,32 @@ const styles = StyleSheet.create({
     width: TRIGGER_SIZE,
     height: TRIGGER_SIZE,
   },
-  container: {
+  morphingGlass: {
     position: "absolute",
     top: 0,
     right: 0,
-    overflow: "visible",
+    overflow: "hidden",
   },
-  triggerPill: {
+  triggerLayer: {
     position: "absolute",
     top: 0,
     right: 0,
     width: TRIGGER_SIZE,
     height: TRIGGER_SIZE,
-    borderRadius: TRIGGER_SIZE / 2,
-    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
   },
   triggerInner: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    width: "100%",
   },
   icon: { width: 18, height: 18 },
-  menuPill: {
+  menuLayer: {
     position: "absolute",
-    top: TRIGGER_SIZE + MENU_TOP_OFFSET,
+    top: 0,
     right: 0,
-    width: MENU_WIDTH,
-    borderRadius: 20,
-    overflow: "hidden",
   },
   menuList: {
     flex: 1,
