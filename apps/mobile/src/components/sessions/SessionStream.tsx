@@ -91,12 +91,21 @@ export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStream
   }, [clearNewActivity]);
 
   const renderItem = useCallback(
-    ({ item, index }: { item: SessionNode; index: number }) => (
-      <View style={[styles.row, { paddingHorizontal: theme.spacing.lg }]}>
-        {renderNode({ node: item, context: renderContext, isLast: index === nodes.length - 1 })}
-      </View>
-    ),
-    [nodes.length, renderContext, theme.spacing.lg],
+    ({ item, index }: { item: SessionNode; index: number }) => {
+      // Fragment keeps the return type a single ReactElement while allowing
+      // the child to collapse to null — StreamRow owns padding, so a null
+      // dispatcher result reserves zero space.
+      return (
+        <>
+          {renderNode({
+            node: item,
+            context: renderContext,
+            isLast: index === nodes.length - 1,
+          })}
+        </>
+      );
+    },
+    [nodes.length, renderContext],
   );
 
   const keyExtractor = useCallback((item: SessionNode) => nodeKey(item), []);
@@ -170,7 +179,6 @@ export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStream
 
 const styles = StyleSheet.create({
   wrapper: { flex: 1 },
-  row: { paddingVertical: 6 },
   olderLoading: { alignItems: "center", paddingVertical: 10 },
   footer: { paddingTop: 8, paddingBottom: 4 },
 });

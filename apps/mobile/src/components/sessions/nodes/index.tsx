@@ -7,6 +7,7 @@ import { CommandExecutionRow } from "./CommandExecutionRow";
 import { PlanReviewCard } from "./PlanReviewCard";
 import { PRCard, type PRCardKind } from "./PRCard";
 import { ReadGlobGroup } from "./ReadGlobGroup";
+import { StreamRow } from "./StreamRow";
 import { SystemBadge } from "./SystemBadge";
 import { UserMessageBubble } from "./UserMessageBubble";
 import { renderSessionOutput } from "./event-output";
@@ -19,35 +20,46 @@ interface RenderNodeProps {
 }
 
 /**
- * Dispatches a `SessionNode` to its React renderer. Specialized node kinds
- * (command-execution, readglob-group, plan-review, ask-user-question) map
- * directly to components; `kind === "event"` delegates to `EventNode` so it
- * can subscribe to the underlying event record.
+ * Dispatches a `SessionNode` to its renderer. Every return flows through
+ * `StreamRow`, which owns row padding — so when `EventNode` (or the session
+ * output helpers) return null, no empty gap is left behind.
  */
 export function renderNode(props: RenderNodeProps): ReactNode {
   const { node, context, isLast } = props;
   switch (node.kind) {
     case "command-execution":
       return (
-        <CommandExecutionRow
-          command={node.command}
-          output={node.output}
-          timestamp={node.timestamp}
-          exitCode={node.exitCode}
-        />
+        <StreamRow>
+          <CommandExecutionRow
+            command={node.command}
+            output={node.output}
+            timestamp={node.timestamp}
+            exitCode={node.exitCode}
+          />
+        </StreamRow>
       );
     case "readglob-group":
-      return <ReadGlobGroup items={node.items} />;
+      return (
+        <StreamRow>
+          <ReadGlobGroup items={node.items} />
+        </StreamRow>
+      );
     case "plan-review":
       return (
-        <PlanReviewCard
-          planContent={node.planContent}
-          planFilePath={node.planFilePath}
-          timestamp={node.timestamp}
-        />
+        <StreamRow>
+          <PlanReviewCard
+            planContent={node.planContent}
+            planFilePath={node.planFilePath}
+            timestamp={node.timestamp}
+          />
+        </StreamRow>
       );
     case "ask-user-question":
-      return <AskUserQuestionCard questions={node.questions} timestamp={node.timestamp} />;
+      return (
+        <StreamRow>
+          <AskUserQuestionCard questions={node.questions} timestamp={node.timestamp} />
+        </StreamRow>
+      );
     case "event":
       return <EventNode id={node.id} context={context} isLast={isLast} />;
   }
@@ -60,9 +72,9 @@ interface EventNodeProps {
 }
 
 /**
- * Reads the event for a `kind: "event"` node from its scoped bucket and
- * dispatches on `eventType`. `memo`d so unrelated store updates don't
- * re-render the whole stream.
+ * Resolves the event content for a `kind: "event"` node and forwards it to
+ * `StreamRow`. If the event type / payload combination has no renderer, the
+ * computed `content` is null and `StreamRow` emits nothing.
  */
 const EventNode = memo(function EventNode({ id, context, isLast }: EventNodeProps) {
   const scopeKey = eventScopeKey("session", context.sessionId);
@@ -75,6 +87,30 @@ const EventNode = memo(function EventNode({ id, context, isLast }: EventNodeProp
 
   if (!eventType || !timestamp) return null;
 
+  const content = dispatchEvent({
+    id,
+    eventType,
+    payload,
+    timestamp,
+    actor,
+    context,
+    isLast,
+  });
+  return <StreamRow>{content}</StreamRow>;
+});
+
+interface DispatchEventArgs {
+  id: string;
+  eventType: Event["eventType"];
+  payload: JsonObject | undefined;
+  timestamp: string;
+  actor: { type: string; id: string; name?: string | null } | undefined;
+  context: NodeRenderContext;
+  isLast: boolean;
+}
+
+function dispatchEvent(args: DispatchEventArgs): ReactNode {
+  const { id, eventType, payload, timestamp, actor, context, isLast } = args;
   const checkpoints = context.gitCheckpointsByPromptEventId.get(id);
 
   switch (eventType) {
@@ -119,7 +155,7 @@ const EventNode = memo(function EventNode({ id, context, isLast }: EventNodeProp
     default:
       return null;
   }
-});
+}
 
 function prUrlFrom(payload: JsonObject | undefined): string | null {
   if (!payload) return null;
