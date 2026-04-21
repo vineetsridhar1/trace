@@ -76,7 +76,11 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
 
   return (
     <View style={{ paddingHorizontal: theme.spacing.md, paddingBottom: theme.spacing.sm + insets.bottom, paddingTop: theme.spacing.xs }}>
-      <Glass preset="pinnedBar" style={{ ...styles.card, borderColor: alpha(theme.colors.foreground, 0.08) }}>
+      <Glass
+        preset="pinnedBar"
+        tint="rgba(0,0,0,0)"
+        style={{ ...styles.card, borderColor: alpha(theme.colors.foreground, 0.08) }}
+      >
         {errorDraft ? (
           <Pressable onPress={handleRetry} accessibilityRole="button" accessibilityLabel="Retry send" style={styles.retryRow}>
             <Text variant="caption1" style={{ color: theme.colors.destructive }}>Failed to send. Tap to retry.</Text>
