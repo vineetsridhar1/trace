@@ -9,7 +9,7 @@ The bottom-pinned composer: plain-text input, interaction-mode toggle (code / pl
 - **`SessionInputComposer.tsx`** (<200 lines):
   - Liquid Glass background (input preset) that interpolates tint + border toward the current interaction mode's accent colour.
   - Suppressed by `SessionSurface` whenever the event stream has an unresolved pending-input event (plan or question). When the session is waiting on the user, `PendingInputBar` (ticket 22) owns the bottom slot and the composer is hidden — same replace-not-stack model as web's `AskUserQuestionBar` / `PlanResponseBar`. The gate is derived from events via `findMostRecentPendingInput`, not `sessionStatus === 'needs_input'`, so the swap happens as soon as the event arrives rather than waiting for a status flip.
-  - `TextInput` (multiline) that animates its own height via Reanimated between `MIN_INPUT_HEIGHT` (28) and `MAX_INPUT_HEIGHT` (140) based on `onContentSizeChange`.
+  - `TextInput` (multiline) that animates its own height via Reanimated between `MIN_INPUT_HEIGHT` (28) and `MAX_INPUT_HEIGHT` (240) based on `onContentSizeChange`.
   - Interaction-mode pill on the left: cycles `code → plan → ask → code` on tap. Visual variants per mode (shared tint palette used by the glass card, card border, chip, and send button). Haptic `selection` on cycle.
   - Send button on the right:
     - Arrow-up SF Symbol on all states; `accessibilityLabel` switches between "Send message" and "Queue message" based on `agentStatus === 'active'`.

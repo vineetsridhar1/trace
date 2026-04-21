@@ -21,7 +21,7 @@ interface SessionInputComposerProps { sessionId: string }
 const MODE_CYCLE: ComposerMode[] = ["code", "plan", "ask"];
 const MODE_LABEL: Record<ComposerMode, string> = { code: "Code", plan: "Plan", ask: "Ask" };
 const MIN_INPUT_HEIGHT = 28;
-const MAX_INPUT_HEIGHT = 140;
+const MAX_INPUT_HEIGHT = 240;
 const MODE_PROGRESS_INPUT = [0, 1, 2];
 
 /**
