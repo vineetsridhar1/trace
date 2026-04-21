@@ -157,17 +157,23 @@ async function doFetchSessionDetail(sessionId: string): Promise<void> {
 }
 
 /**
- * In-flight requests keyed by sessionId. Callers that fire while a fetch is
- * already pending receive the same promise, so prefetch-on-press and
- * overlay-mount hooks coalesce into a single network round-trip.
+ * See fetchSessionGroupDetail for the rationale. The entity store is kept
+ * fresh by the org-wide event subscription, so a repeat fetch within the
+ * TTL window is redundant and protects against the `onPressIn`-on-scroll
+ * pattern where a browsing finger lightly touches many rows.
  */
 const inflightSessionFetches = new Map<string, Promise<void>>();
+const lastSessionFetchAt = new Map<string, number>();
+const FETCH_TTL_MS = 30_000;
 
 export function fetchSessionDetail(sessionId: string): Promise<void> {
   const existing = inflightSessionFetches.get(sessionId);
   if (existing) return existing;
+  const lastAt = lastSessionFetchAt.get(sessionId);
+  if (lastAt && Date.now() - lastAt < FETCH_TTL_MS) return Promise.resolve();
   const promise = doFetchSessionDetail(sessionId).finally(() => {
     inflightSessionFetches.delete(sessionId);
+    lastSessionFetchAt.set(sessionId, Date.now());
   });
   inflightSessionFetches.set(sessionId, promise);
   return promise;

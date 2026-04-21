@@ -153,18 +153,31 @@ async function doFetchSessionGroupDetail(groupId: string): Promise<void> {
 }
 
 /**
- * In-flight requests keyed by groupId. Callers that fire while a fetch is
- * already pending receive the same promise, so prefetch-on-press and
- * overlay-mount hooks coalesce into a single network round-trip regardless
- * of timing.
+ * In-flight requests keyed by groupId, plus completion timestamps for
+ * throttling. Callers that fire while a fetch is already pending receive
+ * the same promise (coalescing prefetch-on-press and overlay-mount into
+ * one round-trip). Callers that fire within `FETCH_TTL_MS` of a prior
+ * successful fetch get a resolved promise — the entity store is already
+ * kept fresh by the org-wide event subscription, so repeat fetches during
+ * a single browsing session are redundant.
+ *
+ * This guards against the `onPressIn`-fires-on-scroll-touch pattern: a
+ * user scrolling through a channel list lightly touches many rows as
+ * their finger moves; without throttling each would fire two GraphQL
+ * queries for a session the user never opens.
  */
 const inflightGroupFetches = new Map<string, Promise<void>>();
+const lastGroupFetchAt = new Map<string, number>();
+const FETCH_TTL_MS = 30_000;
 
 export function fetchSessionGroupDetail(groupId: string): Promise<void> {
   const existing = inflightGroupFetches.get(groupId);
   if (existing) return existing;
+  const lastAt = lastGroupFetchAt.get(groupId);
+  if (lastAt && Date.now() - lastAt < FETCH_TTL_MS) return Promise.resolve();
   const promise = doFetchSessionGroupDetail(groupId).finally(() => {
     inflightGroupFetches.delete(groupId);
+    lastGroupFetchAt.set(groupId, Date.now());
   });
   inflightGroupFetches.set(groupId, promise);
   return promise;
@@ -175,13 +188,20 @@ export function useEnsureSessionGroupDetail(groupId: string | undefined): boolea
 
   useEffect(() => {
     if (!groupId) return;
-    // Skip the spinner when the group is already hydrated (e.g. a prefetch on
-    // row touch-down landed before the overlay mounted, or the user is
-    // reopening the same group). Without this, `SessionSurface`'s spinner
-    // branch fires for one frame and remounts the whole tree mid-animation.
-    const alreadyHydrated = Boolean(
-      useEntityStore.getState().sessionGroups[groupId],
-    );
+    // Skip the spinner when the detail query has already populated this
+    // group (e.g. a prefetch on row touch-down landed before the overlay
+    // mounted, or the user is reopening the same group). Without this,
+    // `SessionSurface`'s spinner branch fires for one frame and remounts
+    // the whole tree mid-animation.
+    //
+    // Checking `gitCheckpoints !== undefined` is the precise signal —
+    // list-level queries populate `sessionGroups[id]` with `name`, `status`,
+    // etc. but don't select `gitCheckpoints`. Only the detail query sets
+    // that field (as at minimum an empty array). A truthy store entry
+    // alone isn't enough — a partial list-level record would pass and
+    // leave downstream reads (tab strip, checkpoint markers) empty.
+    const group = useEntityStore.getState().sessionGroups[groupId];
+    const alreadyHydrated = group?.gitCheckpoints !== undefined;
     let cancelled = false;
     if (!alreadyHydrated) setLoading(true);
     fetchSessionGroupDetail(groupId).finally(() => {
