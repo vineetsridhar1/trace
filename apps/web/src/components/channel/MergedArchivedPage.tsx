@@ -8,8 +8,8 @@ import type {
 } from "ag-grid-community";
 import type { SessionGroup } from "@trace/gql";
 import { client } from "../../lib/urql";
-import { useEntityStore, type EntityState } from "../../stores/entity";
-import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
+import { useEntityStore, type EntityState } from "@trace/client-core";
+import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";

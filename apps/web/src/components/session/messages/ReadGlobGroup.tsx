@@ -1,13 +1,9 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
+import type { ReadGlobItem } from "@trace/client-core";
 import { formatTime } from "./utils";
 
-export interface ReadGlobItem {
-  id: string;
-  toolName: string;
-  filePath: string;
-  timestamp: string;
-}
+export type { ReadGlobItem };
 
 interface ReadGlobGroupProps {
   items: ReadGlobItem[];

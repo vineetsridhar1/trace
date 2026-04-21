@@ -16,10 +16,11 @@ Build the surface primitives that establish depth and hierarchy: elevated cards,
   - Props: `elevation?: 'low' | 'medium' | 'high'`, `padding?: keyof theme.spacing`, `onPress?` (makes it tappable with haptic + scale)
   - Optional `glass?: boolean` — uses `Glass` primitive instead of solid background
 - **`Sheet.tsx`**:
-  - Wraps expo-router's sheet presentation via `react-native-screens` `formSheet` / `pageSheet`.
-  - Props: `detents?: ('small' | 'medium' | 'large')[]` (maps to iOS `.compact` / `.medium` / `.large`), `showGrabber?`, `dismissOnBackdropTap?`.
-  - Renders content with safe-area aware padding.
-  - Wrapping note: because expo-router uses file-based routing for modal presentations, the actual sheet route is defined in the route tree (`(authed)/sheets/foo.tsx`); `Sheet` is a *layout* primitive used inside those routes to provide consistent padding, grabber, and theming.
+  - Layout primitive used inside a form-sheet route body to configure the sheet and style content.
+  - Props: `detents?: ('small' | 'medium' | 'large')[]` (mapped to fractional heights: small=0.35, medium=0.5, large=1.0 via `sheetAllowedDetents`), `showGrabber?`, `swipeToDismiss?`, `padding?: keyof ThemeSpacing`.
+  - Dynamically sets `sheetAllowedDetents`, `sheetGrabberVisible`, `sheetCornerRadius`, and `gestureEnabled` via an inline `<Stack.Screen>`.
+  - Wraps content with the theme surface color, horizontal/top padding from the theme scale, and a safe-area-aware bottom inset.
+  - **Presentation note**: `presentation: 'formSheet'` must be declared by the *parent layout* (e.g. `app/(authed)/sheets/_layout.tsx`) when the sheet route is registered — expo-router applies options via `setOptions` in a post-mount `useEffect`, which is too late for `presentation` to take effect if declared from inside the screen body. iOS backdrop-tap dismissal on dimmed detents is always on and is not toggleable; `swipeToDismiss` only controls the native swipe-down gesture.
 
 ## Dependencies
 
@@ -29,11 +30,11 @@ Build the surface primitives that establish depth and hierarchy: elevated cards,
 
 ## Completion requirements
 
-- [ ] `Glass` renders correctly on iOS 26+ with real Liquid Glass
-- [ ] `Glass` falls back cleanly to `BlurView` on iOS 17–25 (no visual breakage)
-- [ ] `Card` renders with correct elevation shadows
-- [ ] `Sheet` layout primitive composes with expo-router modal routes
-- [ ] All files <200 lines
+- [x] `Glass` renders correctly on iOS 26+ with real Liquid Glass
+- [x] `Glass` falls back cleanly to `BlurView` on iOS 17–25 (no visual breakage)
+- [x] `Card` renders with correct elevation shadows
+- [x] `Sheet` layout primitive composes with expo-router modal routes
+- [x] All files <200 lines
 
 ## How to test
 

@@ -36,15 +36,15 @@ Move the event-handling pipeline (the pure store-update logic inside `useOrgEven
 
 ## Completion requirements
 
-- [ ] `packages/client-core/src/events/handlers.ts` contains the pure event-to-store logic
-- [ ] Web hooks (`useOrgEvents`, `useSessionEvents`) delegate to client-core handlers
-- [ ] V1 event parity is preserved, including non-rendered event families that still need store updates
-- [ ] Notification registry is in client-core; web-specific handlers remain in `apps/web`
-- [ ] Mutations + optimistic-message helpers are in client-core
-- [ ] `createGqlClient` factory is in client-core and used by `apps/web`
-- [ ] Unit tests cover the extracted event handlers and `session_output` subtype routing
-- [ ] `pnpm typecheck`, `pnpm lint` pass
-- [ ] Web app end-to-end behavior unchanged
+- [x] `packages/client-core/src/events/handlers.ts` contains the pure event-to-store logic
+- [x] Web hooks (`useOrgEvents`, `useSessionEvents`) delegate to client-core handlers
+- [x] V1 event parity is preserved, including non-rendered event families that still need store updates
+- [x] Notification registry is in client-core; web-specific handlers remain in `apps/web`
+- [x] Mutations + optimistic-message helpers are in client-core
+- [x] `createGqlClient` factory is in client-core and used by `apps/web`
+- [x] Unit tests cover the extracted event handlers and `session_output` subtype routing
+- [x] `pnpm typecheck`, `pnpm lint` pass
+- [x] Web app end-to-end behavior unchanged
 
 ## How to test
 

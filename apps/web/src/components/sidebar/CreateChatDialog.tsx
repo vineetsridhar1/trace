@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { Plus } from "lucide-react";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
-import { ORG_MEMBERS_QUERY } from "../../lib/mutations";
+import { ORG_MEMBERS_QUERY } from "@trace/client-core";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,

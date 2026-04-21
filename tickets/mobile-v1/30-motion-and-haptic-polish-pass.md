@@ -24,7 +24,7 @@ A deliberate review pass of every transition, animation, haptic, and real-device
   - Button press: `0.98` scale, spring back (`damping: 25, stiffness: 400`)
   - Pending-input bar collapse: fade + height
   - Tab bar: no haptic on scroll; `selection` on tap
-  - Keyboard rise: matches keyboard velocity (via `react-native-keyboard-controller`)
+  - Keyboard rise: matches keyboard velocity via native `Keyboard.addListener` + `LayoutAnimation.keyboard` (see `SessionSurface` for the pattern)
 - **Performance instrumentation and profiling:**
   - Add lightweight instrumentation via `expo-performance` or an equivalent supported tool so we can measure the plan's budgets on-device instead of guessing.
   - Measure cold start, warm start, event-ingest latency, session-stream scroll smoothness, input keystroke latency, and memory usage with a 1000-event session.
@@ -55,3 +55,92 @@ A deliberate review pass of every transition, animation, haptic, and real-device
 3. Open a 1000-event session and verify scroll performance on a real device.
 4. Video-record before/after comparison; diff the feel.
 5. Hand device to a non-involved person familiar with iOS; ask "does this feel like a real iOS app?"
+
+## Code-only landing notes
+
+This change lands the parts of the polish pass that can be verified on a
+codebase, leaving the on-device-only items for the dogfood loop:
+
+- `theme/motion.ts` is now the single source of truth for spring configs.
+  Added `springs.morph.{open,close}` and `durations.accordion`. Adopted by
+  `SessionActionsMenu`, `SessionGroupTitleMenu`, `NewActivityPill`,
+  `SessionInputComposer`, `ActiveTodoStrip`, `CommandExecutionRow`, and
+  `ReadGlobGroup`.
+- Added subtle row-press scale (`0.99`) to `HomeSessionRow` and
+  `SessionGroupRow` — wide list rows previously only changed background on
+  press, which read as web-y. The press now reads as a real touch.
+- Filled in the sign-in haptic gaps from §11.6: `light` on press,
+  `success` on completed auth, `error` on every failure branch.
+- Added `lib/perf.ts` — a lightweight, zero-dependency replacement for
+  `expo-performance` that captures cold-start, warm-start, and event-ingest
+  samples in a ring buffer (and logs to console under `__DEV__`). Wired into
+  `app/_layout.tsx` (cold/warm) and the org/session event subscriptions
+  (event-ingest).
+- Existing surfaces verified against §11.6 haptics map and the named motion
+  targets: tab switches use the native UITabBar selection haptic; the
+  composer mode chip uses `selection`; the tab-strip underline uses
+  `springs.smooth`; `Button` press uses `springs.snap` (damping 25 /
+  stiffness 400) per spec; pull-to-refresh fires `medium` on each list
+  screen.
+- `SessionStreamList` continues to set `maxItemsInRecyclePool={0}` —
+  intentional workaround for the Fabric recycling crash fixed in
+  `8c55e3f2`. It costs scroll memory; tracked under "Open follow-ups".
+
+## On-device follow-ups (not in this ticket)
+
+Anything that genuinely needs an iPhone in hand or measurement on real
+hardware is explicitly deferred — the `lib/perf.ts` markers exist so these
+can be checked without re-instrumentation:
+
+- [ ] Capture cold start, warm start, event ingest, input latency, and
+      memory against §16 budgets on an iPhone 13/15 Pro. Record before/after
+      numbers. The infrastructure is in place — read samples via
+      `recentPerfSamples()` from a dev overlay or `console.log`.
+- [ ] Verify 120fps scrolling on a 1000-event session. If a sustained drop
+      shows up, revisit the FlashList recycle-pool tradeoff (see crash fix
+      in `8c55e3f2`) — it may be possible to re-enable recycling for a
+      subset of node types.
+- [ ] Tune `springs.morph.{open,close}`, `springs.snap`, and the row-press
+      scale on a real device. The values currently match the prior local
+      constants; the scale (`0.99`) is a code-only guess that should be
+      validated against feel.
+- [ ] Internal team dogfood review (3+ users → "feels native").
+
+## Code-only follow-ups surfaced by /review-against-plan
+
+All four gaps the review found are now closed. Each item below describes
+the original gap and where the fix lives.
+
+- [x] **Haptic-map drift vs §11.6**: three call sites had the wrong
+      strength. Fixed in `useHomeRowMenu.handleStop` (medium → heavy),
+      `SessionGroupHeader.archiveGroup` (medium → heavy), and
+      `PendingInputPlan.dispatch` (now branches `success` for approve,
+      `light` for revise). Also downgraded `SessionGroupHeader.handleCopyLink`
+      from `success` to `light` since copy is not a notification-class event.
+- [x] **`recordPerf("input-latency", …)` is now wired**. The
+      `SessionInputComposer` `onChangeText` callback stamps the keystroke
+      start, then samples in `requestAnimationFrame` so the recorded
+      duration covers state-set + commit + paint setup — the right shape
+      for the §16 <16ms budget.
+- [x] **Status chip on change: brief flash**. `Chip` now scales to 1.08
+      then springs back to 1 whenever its `variant` changes. Skipped on the
+      first render so chips don't pop unsolicited when a list mounts.
+- [x] **Message arrival entrance animation**. `SessionStreamList` now
+      wraps the *newest* row in a `FadeInDown` entering animation, gated on
+      both `isNearBottomRef.current` (the user is following the bottom) and
+      `lastSeenKeyRef !== currentKey` (this is a brand-new last row, not
+      a re-render of the same one). A one-frame `acceptEntering` flag also
+      suppresses the cascade on initial mount. Compatible with the
+      `maxItemsInRecyclePool={0}` Fabric workaround — every row is mounted
+      exactly once, so per-row enters fire only on real arrivals.
+
+## Dependency note
+
+The plan README places ticket 30 in M6 with "needs M5 complete". As of the
+PR commit, tickets 26–29 (push registration client, server push dispatch,
+deep links, badge counts) have not landed on `main`. Ticket 30 has been
+worked on with the assumption that those will land before 30 ships, since
+none of the polish work depends on push or badging. This is fine but worth
+re-checking before this ticket merges — specifically whether the deep-link
+entry point (28) brings any new haptics or motion that need to be tuned in
+this pass.

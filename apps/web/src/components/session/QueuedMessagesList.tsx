@@ -1,7 +1,7 @@
 import { X, Trash2 } from "lucide-react";
-import { useEntityField, useQueuedMessageIdsForSession } from "../../stores/entity";
+import { useEntityField, useQueuedMessageIdsForSession } from "@trace/client-core";
 import { client } from "../../lib/urql";
-import { REMOVE_QUEUED_MESSAGE_MUTATION, CLEAR_QUEUED_MESSAGES_MUTATION } from "../../lib/mutations";
+import { REMOVE_QUEUED_MESSAGE_MUTATION, CLEAR_QUEUED_MESSAGES_MUTATION } from "@trace/client-core";
 import { toast } from "sonner";
 
 function QueuedMessageItem({ id }: { id: string }) {

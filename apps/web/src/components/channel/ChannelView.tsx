@@ -1,4 +1,4 @@
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { CodingChannelView } from "./CodingChannelView";
 import { TextChannelView } from "./TextChannelView";
 

@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import { Send, Square, Cloud, Monitor } from "lucide-react";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
-import { SEND_SESSION_MESSAGE_MUTATION, QUEUE_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
+import { SEND_SESSION_MESSAGE_MUTATION, QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
 import { type InteractionMode, MODE_CYCLE, MODE_CONFIG, wrapPrompt } from "./interactionModes";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
@@ -16,15 +16,15 @@ import {
   optimisticallyInsertSessionMessage,
   reconcileOptimisticSessionMessage,
   removeOptimisticSessionMessage,
-} from "../../lib/optimistic-message";
+} from "@trace/client-core";
 import { ChatEditor, type ChatEditorHandle } from "../chat/ChatEditor";
 import { useSlashCommands } from "./useSlashCommands";
 import { createQuickSession } from "../../lib/create-quick-session";
 import { useUIStore } from "../../stores/ui";
 import { ImageAttachmentBar, type ImageAttachment } from "./ImageAttachmentBar";
 import { uploadImage } from "../../lib/upload";
-import { generateUUID } from "../../lib/uuid";
-import { useAuthStore } from "../../stores/auth";
+import { generateUUID } from "@trace/client-core";
+import { useAuthStore } from "@trace/client-core";
 import { useDraftsStore } from "../../stores/drafts";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";

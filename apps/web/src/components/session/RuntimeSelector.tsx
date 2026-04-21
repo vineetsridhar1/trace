@@ -9,7 +9,7 @@ import {
   SelectValue,
 } from "../ui/select";
 import { client } from "../../lib/urql";
-import { AVAILABLE_RUNTIMES_QUERY } from "../../lib/mutations";
+import { AVAILABLE_RUNTIMES_QUERY } from "@trace/client-core";
 
 /** Sentinel value for the on-demand cloud option */
 export const CLOUD_RUNTIME_ID = "__cloud__";

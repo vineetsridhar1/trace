@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from "react";
 import { Check, X } from "lucide-react";
-import { useAuthStore, type AuthState } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "@trace/client-core";
 import { useOrgMembers } from "../../hooks/useOrgMembers";
 import { Button } from "../ui/button";
 import { ChatEditor, type ChatEditorHandle } from "./ChatEditor";

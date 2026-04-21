@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Circle, FileCode, GitCompareArrows, MessageSquarePlus, Plus, TerminalSquare, X } from "lucide-react";
-import type { SessionEntity } from "../../stores/entity";
+import type { SessionEntity } from "@trace/client-core";
 import type { TerminalEntry } from "../../stores/terminal";
 import { cn } from "../../lib/utils";
 import { useUIStore } from "../../stores/ui";

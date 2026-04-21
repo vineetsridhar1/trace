@@ -12,6 +12,72 @@ const WEB_URL = process.env.TRACE_WEB_URL || `http://localhost:${3000 + Number(p
 const SERVER_PUBLIC_URL = process.env.TRACE_SERVER_PUBLIC_URL || WEB_URL;
 const GITHUB_CALLBACK_URL = `${SERVER_PUBLIC_URL.replace(/\/$/, "")}/auth/github/callback`;
 
+// Mobile uses ASWebAuthenticationSession which only terminates when the server
+// redirects to a registered custom URL scheme. Web origins can't satisfy that
+// requirement, so we recognise a sentinel origin value and swap the final
+// redirect to the mobile scheme while the rest of the OAuth flow stays identical.
+const MOBILE_ORIGIN = "trace-mobile";
+const MOBILE_REDIRECT_URL = "trace://auth/callback";
+const OAUTH_STATE_TTL_SECONDS = 5 * 60;
+
+type OAuthStatePayload = { origin: string; tokenType: "oauth_state" };
+
+// Origins permitted on /auth/github and /auth/github/callback. The popup
+// embeds this as the postMessage target — accepting arbitrary values would
+// let an attacker-chosen origin receive the token.
+export function getAllowedOAuthOrigins(): Set<string> {
+  const origins = new Set<string>([WEB_URL, MOBILE_ORIGIN]);
+  const extra = process.env.CORS_ALLOWED_ORIGINS;
+  if (extra) {
+    for (const value of extra.split(",")) {
+      const trimmed = value.trim();
+      if (trimmed) origins.add(trimmed);
+    }
+  }
+  return origins;
+}
+
+function isAllowedOrigin(origin: string): boolean {
+  return getAllowedOAuthOrigins().has(origin);
+}
+
+export function createOAuthStateToken(origin: string): string {
+  return jwt.sign(
+    { origin, tokenType: "oauth_state" } satisfies OAuthStatePayload,
+    JWT_SECRET,
+    { expiresIn: OAUTH_STATE_TTL_SECONDS },
+  );
+}
+
+export function verifyOAuthStateToken(state: string): { origin: string } | null {
+  try {
+    const payload = jwt.verify(state, JWT_SECRET) as OAuthStatePayload;
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      payload.tokenType !== "oauth_state" ||
+      typeof payload.origin !== "string"
+    ) {
+      return null;
+    }
+    return { origin: payload.origin };
+  } catch {
+    return null;
+  }
+}
+
+// Safely embed a string inside a <script> block. JSON.stringify handles
+// quote/backslash/unicode escaping; the `<` / `>` / `&` escapes stop a
+// pathological payload from closing the script tag.
+function escapeJsString(value: string): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
 // Redirect to GitHub OAuth
 router.get("/auth/github", (req: Request, res: Response) => {
   const origin = req.query.origin as string | undefined;
@@ -20,8 +86,8 @@ router.get("/auth/github", (req: Request, res: Response) => {
     redirect_uri: GITHUB_CALLBACK_URL,
     scope: "read:user user:email",
   });
-  if (origin) {
-    params.set("state", origin);
+  if (origin && isAllowedOrigin(origin)) {
+    params.set("state", createOAuthStateToken(origin));
   }
   res.redirect(`https://github.com/login/oauth/authorize?${params}`);
 });
@@ -128,8 +194,17 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
       path: "/",
     });
 
-    // Use origin from OAuth state param if available, otherwise fall back to WEB_URL
-    const redirectOrigin = (req.query.state as string) || WEB_URL;
+    const origin = resolveStateOrigin(req.query.state);
+
+    if (origin === MOBILE_ORIGIN) {
+      const target = new URL(MOBILE_REDIRECT_URL);
+      target.searchParams.set("token", token);
+      return res.redirect(302, target.toString());
+    }
+
+    const redirectOrigin = origin ?? WEB_URL;
+    const tokenLiteral = escapeJsString(token);
+    const originLiteral = escapeJsString(redirectOrigin);
 
     // Signal the opener window and close the popup.
     // Always store the token in localStorage first — window.opener can be
@@ -139,23 +214,28 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
     // BroadcastChannel give the main window two independent fallback
     // signals that work even when the opener reference is severed.
     res.send(`<!DOCTYPE html><html><body><script>
-      try { localStorage.setItem("trace_token", "${token}"); } catch(e) {}
+      try { localStorage.setItem("trace_token", ${tokenLiteral}); } catch(e) {}
       try {
         var bc = new BroadcastChannel("trace_auth");
-        bc.postMessage({ type: "auth:success", token: "${token}" });
+        bc.postMessage({ type: "auth:success", token: ${tokenLiteral} });
         bc.close();
       } catch(e) {}
       if (window.opener) {
-        window.opener.postMessage({ type: "auth:success", token: "${token}" }, "${redirectOrigin}");
+        window.opener.postMessage({ type: "auth:success", token: ${tokenLiteral} }, ${originLiteral});
       }
       window.close();
     </script></body></html>`);
   } catch (err) {
     console.error("GitHub OAuth error:", err);
-    const errorOrigin = (req.query.state as string) || WEB_URL;
+    const origin = resolveStateOrigin(req.query.state);
+    if (origin === MOBILE_ORIGIN) {
+      return res.redirect(302, `${MOBILE_REDIRECT_URL}?error=auth_failed`);
+    }
+    const errorOrigin = origin ?? WEB_URL;
+    const errorOriginLiteral = escapeJsString(errorOrigin);
     res.send(`<!DOCTYPE html><html><body><script>
       if (window.opener) {
-        window.opener.postMessage({ type: "auth:error" }, "${errorOrigin}");
+        window.opener.postMessage({ type: "auth:error" }, ${errorOriginLiteral});
         window.close();
       } else {
         document.body.textContent = "Authentication failed";
@@ -163,6 +243,12 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
     </script></body></html>`);
   }
 });
+
+function resolveStateOrigin(rawState: unknown): string | null {
+  if (typeof rawState !== "string" || rawState.length === 0) return null;
+  const origin = verifyOAuthStateToken(rawState)?.origin ?? null;
+  return origin && isAllowedOrigin(origin) ? origin : null;
+}
 
 // Get current user with org memberships
 router.get("/auth/me", async (req: Request, res: Response) => {

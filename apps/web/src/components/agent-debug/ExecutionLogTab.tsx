@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
-import { useAuthStore, type AuthState } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { Button } from "../ui/button";

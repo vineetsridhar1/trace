@@ -2,7 +2,7 @@ import { Check } from "lucide-react";
 import { SidebarTrigger } from "../ui/sidebar";
 import { useOnboardingStatus } from "../../hooks/useOnboardingStatus";
 import { OnboardingChecklist } from "./OnboardingChecklist";
-import { useAuthStore, type AuthState } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "@trace/client-core";
 
 export function HomeView() {
   const userName = useAuthStore((s: AuthState) => s.user?.name);

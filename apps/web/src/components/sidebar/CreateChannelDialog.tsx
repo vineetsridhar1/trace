@@ -5,7 +5,7 @@ import { gql } from "@urql/core";
 import { BranchCombobox } from "../channel/BranchCombobox";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import { AVAILABLE_RUNTIMES_QUERY } from "../../lib/mutations";
+import { AVAILABLE_RUNTIMES_QUERY } from "@trace/client-core";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -23,8 +23,8 @@ import {
 import { useIsMobile } from "../../hooks/use-mobile";
 import { client } from "../../lib/urql";
 import { features } from "../../lib/features";
-import { useAuthStore } from "../../stores/auth";
-import { useEntityField, useEntityIds } from "../../stores/entity";
+import { useAuthStore } from "@trace/client-core";
+import { useEntityField, useEntityIds } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 
 const CREATE_CHANNEL_MUTATION = gql`

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { FolderPlus } from "lucide-react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,

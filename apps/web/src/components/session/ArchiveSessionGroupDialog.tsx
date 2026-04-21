@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { client } from "../../lib/urql";
-import { ARCHIVE_SESSION_GROUP_MUTATION } from "../../lib/mutations";
+import { ARCHIVE_SESSION_GROUP_MUTATION } from "@trace/client-core";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,

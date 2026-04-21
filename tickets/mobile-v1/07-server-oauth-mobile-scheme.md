@@ -22,11 +22,11 @@ None — can land in parallel with M0/M1 client work.
 
 ## Completion requirements
 
-- [ ] `/auth/github?origin=trace-mobile` starts the flow
-- [ ] `/auth/github/callback` redirects to `trace://auth/callback?token=...` for mobile origin
-- [ ] Existing web OAuth continues to work unchanged (no regression)
-- [ ] Token issued identically (same signing, same lifetime)
-- [ ] Integration test covers the new origin branch
+- [x] `/auth/github?origin=trace-mobile` starts the flow
+- [x] `/auth/github/callback` redirects to `trace://auth/callback?token=...` for mobile origin
+- [x] Existing web OAuth continues to work unchanged (no regression)
+- [x] Token issued identically (same signing, same lifetime)
+- [x] Integration test covers the new origin branch
 
 ## How to test
 

@@ -3,7 +3,7 @@ import { Send } from "lucide-react";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { toast } from "sonner";
-import { useAuthStore, type AuthState } from "../../stores/auth";
+import { useAuthStore, type AuthState } from "@trace/client-core";
 import { useOrgMembers } from "../../hooks/useOrgMembers";
 import { Button } from "../ui/button";
 import { ChatEditor, type ChatEditorHandle } from "../chat/ChatEditor";

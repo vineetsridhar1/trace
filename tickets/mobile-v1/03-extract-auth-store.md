@@ -33,10 +33,10 @@ Move the auth store (`apps/web/src/stores/auth.ts`) into `@trace/client-core` an
 
 ## Completion requirements
 
-- [ ] `packages/client-core/src/stores/auth.ts` has no direct references to `localStorage`, `window`, or `document`
-- [ ] `apps/web/src/lib/platform-web.ts` wires the web platform once at boot
-- [ ] Existing web sign-in flow (GitHub OAuth popup → token → `signInWithToken` → `fetchMe`) works unchanged
-- [ ] `pnpm lint` passes
+- [x] `packages/client-core/src/stores/auth.ts` has no direct references to `localStorage`, `window`, or `document`
+- [x] `apps/web/src/lib/platform-web.ts` wires the web platform once at boot
+- [x] Existing web sign-in flow (GitHub OAuth popup → token → `signInWithToken` → `fetchMe`) works unchanged
+- [x] `pnpm lint` passes
 - [ ] Manual smoke: sign out, sign in, switch org — all work
 
 ## How to test

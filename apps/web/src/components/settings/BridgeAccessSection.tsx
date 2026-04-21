@@ -9,7 +9,7 @@ import {
   MY_BRIDGE_RUNTIMES_QUERY,
   REVOKE_BRIDGE_ACCESS_GRANT_MUTATION,
   UPDATE_BRIDGE_ACCESS_GRANT_MUTATION,
-} from "../../lib/mutations";
+} from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import {
   BRIDGE_ACCESS_APPROVAL_OPTIONS,

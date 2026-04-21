@@ -2,8 +2,8 @@ import { createElement, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import type { BridgeAccessCapability } from "@trace/gql";
 import { client } from "../lib/urql";
-import { MY_BRIDGE_RUNTIMES_QUERY } from "../lib/mutations";
-import { useAuthStore } from "../stores/auth";
+import { MY_BRIDGE_RUNTIMES_QUERY } from "@trace/client-core";
+import { useAuthStore } from "@trace/client-core";
 import { getBridgeAccessRequestToastId } from "../lib/bridge-access";
 import {
   BridgeAccessRequestToast,

@@ -11,9 +11,9 @@ Build the primitives screens use to display data: rows, chips, status indicators
   - Tappable rows: haptic `light`, brief highlight on press
   - 17pt title, 13pt subtitle, correct iOS spacing, separator hairline
 - **`Chip.tsx`**:
-  - Status chip with variants: `'active' | 'needsInput' | 'done' | 'failed' | 'merged' | 'inReview'`
-  - Each variant has a color from theme.
-  - `'active'` variant pulses subtly (Reanimated opacity loop, UI thread).
+  - Status chip with variants: `'inProgress' | 'needsInput' | 'done' | 'failed' | 'merged' | 'inReview'` (names mirror the `sessionStatus` data contract in camelCase).
+  - Each variant has a color from theme; muted backgrounds come from the shared `alpha()` helper in `theme/colors.ts`.
+  - `'inProgress'` variant pulses subtly (Reanimated opacity loop, UI thread); `cancelAnimation` is called on variant change to stop layering.
   - Optional leading icon.
 - **`StatusDot.tsx`**:
   - Small colored dot for agent status (`active` / `done` / `failed` / `stopped`).
@@ -39,11 +39,19 @@ Build the primitives screens use to display data: rows, chips, status indicators
 
 ## Completion requirements
 
-- [ ] All 7 primitives exported from `components/design-system/index.ts`
-- [ ] Each file <200 lines
-- [ ] All colors/spacing from theme
-- [ ] Active-status pulse animation runs on the UI thread (verify with Reanimated devtools)
-- [ ] Avatar falls back to initials gracefully
+- [x] All 7 primitives exported from `components/design-system/index.ts`
+- [x] Each file <200 lines
+- [x] All colors/spacing from theme
+- [x] Pulse animations (Chip `inProgress`, StatusDot `active`) run on the UI thread (verify with Reanimated devtools)
+- [x] Avatar falls back to initials gracefully
+
+## Implementation notes (landed)
+
+- **Chip variant → session-status mapping**: `Chip` variant names are the camelCase form of `sessionStatus` (`in_progress → inProgress`, `needs_input → needsInput`, `in_review → inReview`). Consumers do the snake-to-camel translation at the data boundary (see ticket 17).
+- **Skeleton shimmer**: implemented as a translating highlight band (not a true gradient) to avoid adding `expo-linear-gradient`. Visual intent matches the plan; re-evaluate in the M6 polish pass if motion feels off on real devices.
+- **Pulse cancellation**: `Chip` and `StatusDot` both call `cancelAnimation(opacity)` and tween back to 1 when the pulsing state ends — no visible beat when a row transitions out of `inProgress`/`active`.
+- **Alpha helper**: `alpha(color, a)` lives in `theme/colors.ts` and is exported via `@/theme`. Handles 3- and 6-digit hex and passes through `rgba`/`hsl` unchanged; used by Chip for muted backgrounds derived from status colors.
+- **SegmentedControl iOS-26 pill clip (added during ticket 16)**: iOS 26's native `UISegmentedControl` draws a capsule selection indicator inside a less-rounded rectangular track, which reads as mismatched shapes. The primitive now wraps the native control in a clip `View` with `borderRadius: height/2` + `overflow: "hidden"` so the outer track matches the indicator. The primitive also fixes `height` at 32pt to make the pill radius deterministic.
 
 ## How to test
 

@@ -37,11 +37,11 @@ None — can land in parallel with M0/M1 client work. Required before M5 push ti
 
 ## Completion requirements
 
-- [ ] Prisma migration creates `push_tokens` table cleanly
-- [ ] `registerPushToken` and `unregisterPushToken` mutations exist in schema
-- [ ] Service methods upsert and delete correctly, idempotent
-- [ ] Regenerated types available in `@trace/gql`
-- [ ] Unit tests cover register (upsert semantics), unregister (no-op if absent)
+- [x] Prisma migration creates `push_tokens` table cleanly
+- [x] `registerPushToken` and `unregisterPushToken` mutations exist in schema
+- [x] Service methods upsert and delete correctly, idempotent
+- [x] Regenerated types available in `@trace/gql`
+- [x] Unit tests cover register (upsert semantics), unregister (no-op if absent)
 
 ## How to test
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { client } from "../../lib/urql";
-import { DELETE_SESSION_MUTATION } from "../../lib/mutations";
+import { DELETE_SESSION_MUTATION } from "@trace/client-core";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,

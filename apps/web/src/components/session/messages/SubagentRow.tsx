@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { GitCheckpoint } from "@trace/gql";
 import { Cpu, Check, ChevronRight, Loader2 } from "lucide-react";
-import { useScopedEventIdsByParentId } from "../../../stores/entity";
+import { useScopedEventIdsByParentId } from "@trace/client-core";
 import { SessionMessage } from "../SessionMessage";
 import type { AgentToolResult } from "../groupReadGlob";
 import { formatTime, serializeUnknown } from "./utils";

@@ -1,16 +1,16 @@
 import { useCallback, useMemo, useState } from "react";
 import { Circle, Plus } from "lucide-react";
 import { client } from "../../lib/urql";
-import { START_SESSION_MUTATION } from "../../lib/mutations";
+import { START_SESSION_MUTATION } from "@trace/client-core";
 import {
   useEntitiesByIds,
   useEntityField,
   useSessionIdsByGroup,
   type SessionEntity,
-} from "../../stores/entity";
+} from "@trace/client-core";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
-import { getSessionChannelId, getSessionGroupChannelId } from "../../lib/session-group";
+import { getSessionChannelId, getSessionGroupChannelId } from "@trace/client-core";
 import { agentStatusColor, getDisplayAgentStatus } from "./sessionStatus";
 
 interface SessionHistoryProps {

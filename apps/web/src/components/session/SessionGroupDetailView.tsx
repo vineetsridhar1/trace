@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
-import { SESSION_TERMINALS_QUERY, START_SESSION_MUTATION } from "../../lib/mutations";
+import { SESSION_TERMINALS_QUERY, START_SESSION_MUTATION } from "@trace/client-core";
 import type { Terminal } from "@trace/gql";
 import { useDetailPanelStore } from "../../stores/detail-panel";
-import { useEntityField, useEntityStore } from "../../stores/entity";
-import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
+import { useEntityField, useEntityStore } from "@trace/client-core";
+import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
 import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
 import { useUIStore } from "../../stores/ui";
-import { getSessionChannelId, getSessionGroupChannelId } from "../../lib/session-group";
+import { getSessionChannelId, getSessionGroupChannelId } from "@trace/client-core";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { GroupHeader } from "./GroupHeader";
 import { GroupTabStrip } from "./GroupTabStrip";

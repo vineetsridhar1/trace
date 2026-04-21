@@ -1,7 +1,7 @@
 import type { KeyboardEvent } from "react";
 import { ChevronLeft, ChevronRight, Send, X } from "lucide-react";
+import { useQuestionState } from "@trace/client-core";
 import type { Question, QuestionOption } from "@trace/shared";
-import { useQuestionState } from "../../hooks/useQuestionState";
 import { QuestionOptionPill } from "./messages/QuestionOptionPill";
 
 interface AskUserQuestionBarProps {

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { Search, Code, MessageSquare, LogIn, LogOut } from "lucide-react";
 import type { ChannelType } from "@trace/gql";
-import { useAuthStore } from "../../stores/auth";
+import { useAuthStore } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { features } from "../../lib/features";
 import { gql } from "@urql/core";

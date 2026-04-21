@@ -1,9 +1,9 @@
 import { useCallback } from "react";
-import { useEntityField, useEntityStore } from "../stores/entity";
+import { useEntityField, useEntityStore } from "@trace/client-core";
 import { useUIStore, type UIState } from "../stores/ui";
 import { useTerminalStore } from "../stores/terminal";
 import { client } from "../lib/urql";
-import { CREATE_TERMINAL_MUTATION } from "../lib/mutations";
+import { CREATE_TERMINAL_MUTATION } from "@trace/client-core";
 
 interface RunScript {
   name: string;

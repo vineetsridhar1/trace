@@ -1,7 +1,7 @@
 import { memo } from "react";
 import type { GitCheckpoint } from "@trace/gql";
 import { asJsonObject, type JsonObject } from "@trace/shared";
-import { useScopedEventField } from "../../stores/entity";
+import { useScopedEventField } from "@trace/client-core";
 import { useEventScopeKey } from "./EventScopeContext";
 import { UserBubble } from "./messages/UserBubble";
 import { AssistantText } from "./messages/AssistantText";

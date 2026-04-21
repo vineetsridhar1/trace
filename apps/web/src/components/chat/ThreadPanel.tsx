@@ -8,7 +8,7 @@ import {
   useEntityField,
   useEntityStore,
   useMessageIdsForScope,
-} from "../../stores/entity";
+} from "@trace/client-core";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { ThreadMessage } from "./ThreadMessage";
 import { ChatComposer } from "./ChatComposer";
