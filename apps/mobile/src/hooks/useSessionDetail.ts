@@ -94,7 +94,7 @@ type FetchedSession = Session & {
   sessionGroup?: SessionGroupEntity;
 };
 
-async function fetchSessionDetail(sessionId: string): Promise<void> {
+export async function fetchSessionDetail(sessionId: string): Promise<void> {
   const result = await getClient()
     .query(SESSION_DETAIL_QUERY, { id: sessionId })
     .toPromise();

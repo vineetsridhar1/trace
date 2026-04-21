@@ -7,7 +7,7 @@ import { Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { haptic } from "@/lib/haptics";
 import { usePressScale } from "@/lib/motion";
-import { tryOpenSessionPlayer } from "@/lib/sessionPlayer";
+import { prefetchSessionPlayer, tryOpenSessionPlayer } from "@/lib/sessionPlayer";
 import { timeAgo } from "@/lib/time";
 import { useTheme } from "@/theme";
 import { useHomeRowMenu } from "./useHomeRowMenu";
@@ -47,7 +47,18 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
   // Subtle row scale on press — wide rows feel weird at 0.98, so target the
   // edges-only feedback iOS list rows actually have. Combined with the bg
   // highlight, the press reads as a real touch instead of a web hover.
-  const { animatedStyle: pressScaleStyle, onPressIn, onPressOut } = usePressScale(0.99);
+  const {
+    animatedStyle: pressScaleStyle,
+    onPressIn: onPressInScale,
+    onPressOut,
+  } = usePressScale(0.99);
+
+  // Prefetch group + session detail on touch-down so the overlay has data
+  // in Zustand before the spring lands. See SessionGroupRow for rationale.
+  const handlePressIn = useCallback(() => {
+    onPressInScale();
+    prefetchSessionPlayer(sessionId);
+  }, [onPressInScale, sessionId]);
 
   if (!name) return null;
 
@@ -63,7 +74,7 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
           onPress={handlePress}
           onLongPress={noop}
           delayLongPress={250}
-          onPressIn={onPressIn}
+          onPressIn={handlePressIn}
           onPressOut={onPressOut}
           style={({ pressed }) => [
             styles.row,

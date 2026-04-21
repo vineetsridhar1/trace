@@ -15,7 +15,7 @@ import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndic
 import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
 import { usePressScale } from "@/lib/motion";
-import { tryOpenSessionPlayer } from "@/lib/sessionPlayer";
+import { prefetchSessionPlayer, tryOpenSessionPlayer } from "@/lib/sessionPlayer";
 import { useTheme } from "@/theme";
 import { useLatestSessionIdForGroup } from "@/hooks/useChannelSessionGroups";
 import { CHIP_LABELS, mapStatusToChipVariant } from "@/lib/sessionGroupStatus";
@@ -98,7 +98,21 @@ export const SessionGroupRow = memo(function SessionGroupRow({
   // Subtle row scale on press — pairs with the bg highlight so the press
   // reads as a real touch instead of a web-style hover. 0.99 keeps it from
   // feeling exaggerated on these wide multi-line rows.
-  const { animatedStyle: pressScaleStyle, onPressIn, onPressOut } = usePressScale(0.99);
+  const {
+    animatedStyle: pressScaleStyle,
+    onPressIn: onPressInScale,
+    onPressOut,
+  } = usePressScale(0.99);
+
+  // Prefetch group + session detail on touch-down so data is hydrated in
+  // Zustand before the overlay's spring finishes. Without this, the first
+  // open shows a spinner → full-tree remount mid-animation, which is the
+  // source of the first-open lag. Subsequent opens already hit the cache,
+  // which is why they feel fluid.
+  const handlePressIn = useCallback(() => {
+    onPressInScale();
+    if (latestSessionId) prefetchSessionPlayer(latestSessionId);
+  }, [onPressInScale, latestSessionId]);
 
   if (!name) return null;
 
@@ -112,7 +126,7 @@ export const SessionGroupRow = memo(function SessionGroupRow({
           accessibilityRole="button"
           accessibilityLabel={name}
           onPress={handlePress}
-          onPressIn={onPressIn}
+          onPressIn={handlePressIn}
           onPressOut={onPressOut}
           style={({ pressed }) => [
             styles.row,
