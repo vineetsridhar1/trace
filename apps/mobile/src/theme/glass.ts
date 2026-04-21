@@ -29,7 +29,7 @@ export type GlassUseCase =
 export type ThemeGlass = Record<GlassUseCase, GlassPreset>;
 
 export const glass: ThemeGlass = {
-  navBar: { tint: "rgba(10,10,10,0.38)", intensity: 40, shape: "rect" },
+  navBar: { tint: "rgba(0,0,0,0)", intensity: 70, shape: "rect" },
   input: { tint: "rgba(23,23,23,0.64)", intensity: 60, shape: "capsule" },
   pinnedBar: { tint: "rgba(23,23,23,0.70)", intensity: 70, shape: "roundedMd" },
   card: { tint: "rgba(38,38,38,0.60)", intensity: 50, shape: "roundedLg" },

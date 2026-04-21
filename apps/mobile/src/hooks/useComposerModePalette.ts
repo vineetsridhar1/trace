@@ -31,7 +31,7 @@ export function useComposerModePalette(mode: InteractionMode) {
     const plan = "#8b5cf6";
     const ask = "#ea580c";
     return {
-      glassTint: ["rgba(10,10,10,0.38)", alpha(plan, 0.14), alpha(ask, 0.14)],
+      glassTint: ["rgba(0,0,0,0)", alpha(plan, 0.14), alpha(ask, 0.14)],
       cardBorder: [alpha(fg, 0.08), alpha(plan, 0.25), alpha(ask, 0.25)],
       chipBorder: [alpha(fg, 0.12), alpha(plan, 0.5), alpha(ask, 0.5)],
       chipBg: [alpha(fg, 0.05), alpha(plan, 0.16), alpha(ask, 0.16)],
