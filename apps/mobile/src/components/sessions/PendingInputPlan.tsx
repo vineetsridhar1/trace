@@ -13,7 +13,6 @@ import {
 
 interface PendingInputPlanProps {
   sessionId: string;
-  planContent: string;
   planFilePath: string;
 }
 
@@ -25,10 +24,12 @@ const APPROVE_PRESET = "Approve";
  * an Approve preset toggle + an inline revise input share one Send button
  * that fires either the approval text or `Please revise the plan: …`
  * (with `interactionMode: "plan"`) depending on which input has content.
+ *
+ * V1 does not expose web's "Approve (new session)" clear-context path, so
+ * we don't need the raw plan content — only the file path for the header.
  */
 export function PendingInputPlan({
   sessionId,
-  planContent: _planContent,
   planFilePath,
 }: PendingInputPlanProps) {
   const theme = useTheme();

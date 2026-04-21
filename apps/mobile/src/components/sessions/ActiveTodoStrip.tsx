@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -28,10 +28,7 @@ interface ActiveTodoStripProps {
  */
 export function ActiveTodoStrip({ sessionId }: ActiveTodoStripProps) {
   const theme = useTheme();
-  const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as
-    | string
-    | null
-    | undefined;
+  const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
   const scopeKey = eventScopeKey("session", sessionId);
   const eventIds = useScopedEventIds(scopeKey, byTimestamp);
   const events = useScopedEvents(scopeKey);
@@ -42,8 +39,15 @@ export function ActiveTodoStrip({ sessionId }: ActiveTodoStripProps) {
 
   const focus = useMemo(() => pickFocusTodo(todos), [todos]);
 
+  // Cross-fade only when the focused label changes after mount; the initial
+  // render should appear at full opacity so the strip doesn't flash in.
   const fade = useSharedValue(1);
+  const isFirstRun = useRef(true);
   useEffect(() => {
+    if (isFirstRun.current) {
+      isFirstRun.current = false;
+      return;
+    }
     fade.value = 0;
     fade.value = withTiming(1, { duration: 220 });
   }, [fade, focus?.label]);

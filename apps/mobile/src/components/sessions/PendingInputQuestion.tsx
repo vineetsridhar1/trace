@@ -20,6 +20,12 @@ import { QuestionOptionPill } from "./QuestionOptionPill";
 interface PendingInputQuestionProps {
   sessionId: string;
   questions: Question[];
+  /**
+   * True when an earlier assistant event in the session is a plan block.
+   * When set, the response is sent with `interactionMode: "plan"` so the
+   * agent stays in plan mode — matches web's `AskUserQuestionBar` usage.
+   */
+  hasActivePlan: boolean;
 }
 
 /**
@@ -33,6 +39,7 @@ interface PendingInputQuestionProps {
 export function PendingInputQuestion({
   sessionId,
   questions,
+  hasActivePlan,
 }: PendingInputQuestionProps) {
   const theme = useTheme();
   const {
@@ -64,12 +71,13 @@ export function PendingInputQuestion({
         .mutation(SEND_SESSION_MESSAGE_MUTATION, {
           sessionId,
           text: response,
+          interactionMode: hasActivePlan ? "plan" : undefined,
         })
         .toPromise();
     } finally {
       setSending(false);
     }
-  }, [buildResponse, hasAllAnswers, sending, sessionId]);
+  }, [buildResponse, hasActivePlan, hasAllAnswers, sending, sessionId]);
 
   const handleSubmit = () => {
     if (hasAllAnswers) void handleSend();
