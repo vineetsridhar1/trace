@@ -1,33 +1,36 @@
-// DIAGNOSTIC: this file has been temporarily reshaped to be a near-exact
-// clone of (home)/index.tsx (simple ScrollView + filler rows) so we can
-// tell whether the tab-bar minimize failure on pushed channel detail
-// screens is caused by the detail's actual content (segmented control,
-// RefreshControl, LayoutAnimationConfig wrapper, etc.) or by the push
-// scenario itself (stack push + iOS 26 tabBarMinimizeBehavior).
-// Revert via: git checkout HEAD~1 -- "apps/mobile/app/(authed)/channels/[id].tsx"
+// DIAGNOSTIC (step 2): same filler content as the step-1 home-clone, but
+// wrapped in RNALayoutAnimationConfig and carrying a `key` prop on the
+// ScrollView, matching the real channels/[id].tsx outer shape.
+// Revert via: git checkout HEAD~2 -- "apps/mobile/app/(authed)/channels/[id].tsx"
+import { useState } from "react";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { LayoutAnimationConfig as RNALayoutAnimationConfig } from "react-native-reanimated";
 import { useEntityField } from "@trace/client-core";
 
 export default function ChannelDetail() {
   const { id: channelId } = useLocalSearchParams<{ id: string }>();
   const channelName = useEntityField("channels", channelId, "name");
+  const [scope] = useState<"all" | "mine">("all");
 
   return (
     <>
       <Stack.Screen options={{ title: channelName ?? "Channel" }} />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.container}
-        contentInsetAdjustmentBehavior="automatic"
-      >
-        <Text style={styles.heading}>Detail (diagnostic)</Text>
-        {Array.from({ length: 30 }).map((_, i) => (
-          <View key={i} style={styles.filler}>
-            <Text style={styles.fillerText}>Scroll filler row {i + 1}</Text>
-          </View>
-        ))}
-      </ScrollView>
+      <RNALayoutAnimationConfig skipEntering={true}>
+        <ScrollView
+          key={scope}
+          style={styles.scroll}
+          contentContainerStyle={styles.container}
+          contentInsetAdjustmentBehavior="automatic"
+        >
+          <Text style={styles.heading}>Detail step-2 diagnostic</Text>
+          {Array.from({ length: 30 }).map((_, i) => (
+            <View key={i} style={styles.filler}>
+              <Text style={styles.fillerText}>Scroll filler row {i + 1}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      </RNALayoutAnimationConfig>
     </>
   );
 }
