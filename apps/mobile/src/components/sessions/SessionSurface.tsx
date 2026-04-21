@@ -20,11 +20,19 @@ interface SessionSurfaceProps {
   /** Called when the user taps a sibling session in the tab strip. */
   onSelectSession: (sessionId: string) => void;
   /**
-   * When true, the SessionGroupHeader is not rendered. The Session Player
-   * pulls the header into its drag handle so the whole top region responds
-   * to pull-down-to-dismiss.
+   * When true, the SessionGroupHeader and SessionTabStrip are not rendered.
+   * The Session Player pulls those into its drag handle so the whole top
+   * region responds to pull-down-to-dismiss and the message stream flows
+   * behind the glass header.
    */
   hideHeader?: boolean;
+  /**
+   * Top padding to apply to the message stream's content so the first
+   * message starts below an external overlay (e.g. the Session Player's
+   * drag-handle + header region) while still allowing content to scroll
+   * behind it.
+   */
+  topInset?: number;
 }
 
 /**
@@ -36,6 +44,7 @@ export function SessionSurface({
   sessionId,
   onSelectSession,
   hideHeader = false,
+  topInset,
 }: SessionSurfaceProps) {
   const theme = useTheme();
   const groupId = useEntityField("sessions", sessionId, "sessionGroupId") as
@@ -86,14 +95,17 @@ export function SessionSurface({
           <SessionGroupHeader groupId={groupId} sessionId={sessionId} solid={solidHeader} />
         </View>
       )}
-      <SessionTabStrip
-        activeSessionId={sessionId}
-        sessionIds={sessionIds}
-        onSelect={onSelectSession}
-      />
+      {hideHeader ? null : (
+        <SessionTabStrip
+          activeSessionId={sessionId}
+          sessionIds={sessionIds}
+          onSelect={onSelectSession}
+        />
+      )}
       <SessionStream
         key={sessionId}
         sessionId={sessionId}
+        topInset={topInset}
         onScrollOffsetChange={handleScrollOffsetChange}
       />
     </View>

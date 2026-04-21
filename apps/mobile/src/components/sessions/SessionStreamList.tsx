@@ -29,6 +29,8 @@ interface SessionStreamListProps {
   disconnected: boolean;
   disconnectReason?: string | null;
   initialScrollIndex?: number;
+  /** Extra top padding so content can scroll behind an overlay header. */
+  topInset?: number;
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   fetchOlderEvents: () => Promise<void>;
 }
@@ -45,6 +47,7 @@ export function SessionStreamList({
   disconnected,
   disconnectReason,
   initialScrollIndex,
+  topInset = 0,
   onScroll,
   fetchOlderEvents,
 }: SessionStreamListProps) {
@@ -97,7 +100,11 @@ export function SessionStreamList({
         autoscrollToBottomThreshold: 0.2,
         animateAutoScrollToBottom: false,
       }}
-      contentContainerStyle={{ paddingVertical: theme.spacing.md }}
+      contentContainerStyle={{
+        paddingTop: theme.spacing.md + topInset,
+        paddingBottom: theme.spacing.md,
+      }}
+      scrollIndicatorInsets={{ top: topInset }}
       ListHeaderComponent={
         loadingOlder ? (
           <View style={styles.olderLoading}>

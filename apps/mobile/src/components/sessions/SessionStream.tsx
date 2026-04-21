@@ -28,6 +28,12 @@ interface SessionStreamProps {
   sessionId: string;
   /** Called with the list's scroll offset so parents can drive header solidification. */
   onScrollOffsetChange?: (offsetY: number) => void;
+  /**
+   * Top padding applied to the FlashList's content so the first message
+   * starts below an external overlay (e.g. the Session Player's header)
+   * while still allowing content to scroll behind it.
+   */
+  topInset?: number;
 }
 
 const NEAR_BOTTOM_THRESHOLD = 120;
@@ -38,7 +44,11 @@ const TIMESTAMP_REVEAL_RESISTANCE = 0.5;
 /** In-memory scroll offset per sessionId — preserved across re-mounts within a session. */
 const scrollOffsetMemory = new Map<string, number>();
 
-export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStreamProps) {
+export function SessionStream({
+  sessionId,
+  onScrollOffsetChange,
+  topInset,
+}: SessionStreamProps) {
   const theme = useTheme();
   const { loading, loadingOlder, hasOlder, error, fetchEvents, fetchOlderEvents } =
     useSessionEvents(sessionId);
@@ -143,6 +153,7 @@ export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStream
             disconnected={disconnected}
             disconnectReason={connection?.lastError ?? null}
             initialScrollIndex={initialScrollIndex}
+            topInset={topInset}
             onScroll={handleScroll}
             fetchOlderEvents={fetchOlderEvents}
           />

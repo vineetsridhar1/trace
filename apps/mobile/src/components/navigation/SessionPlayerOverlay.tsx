@@ -1,9 +1,10 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Pressable,
   StyleSheet,
   View,
   useWindowDimensions,
+  type LayoutChangeEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
@@ -18,6 +19,8 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useEntityField } from "@trace/client-core";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
 import { SessionSurface, SessionSurfaceEmpty } from "@/components/sessions/SessionSurface";
+import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
+import { useSessionGroupSessionIds } from "@/hooks/useSessionGroupDetail";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { haptic } from "@/lib/haptics";
 import { useMobileUIStore } from "@/stores/ui";
@@ -43,6 +46,8 @@ export function SessionPlayerOverlay() {
     | string
     | null
     | undefined;
+  const sessionIds = useSessionGroupSessionIds(headerGroupId ?? "");
+  const [topInsetHeight, setTopInsetHeight] = useState(0);
 
   const progress = useSharedValue(0);
   const dragY = useSharedValue(0);
@@ -102,6 +107,11 @@ export function SessionPlayerOverlay() {
     [setOverlaySessionId],
   );
 
+  const handleTopInsetLayout = useCallback((e: LayoutChangeEvent) => {
+    const height = e.nativeEvent.layout.height;
+    setTopInsetHeight((current) => (current === height ? current : height));
+  }, []);
+
   if (!open && !sessionId) return null;
 
   return (
@@ -127,7 +137,24 @@ export function SessionPlayerOverlay() {
           { backgroundColor: theme.colors.background },
         ]}
       >
-        <View style={[styles.topInset, { paddingTop: insets.top }]}>
+        <View style={styles.surface}>
+          {sessionId ? (
+            <SessionSurface
+              sessionId={sessionId}
+              onSelectSession={handleSelectSession}
+              hideHeader
+              topInset={topInsetHeight}
+            />
+          ) : (
+            <SessionSurfaceEmpty />
+          )}
+        </View>
+
+        <View
+          style={[styles.topInset, { paddingTop: insets.top }]}
+          onLayout={handleTopInsetLayout}
+          pointerEvents="box-none"
+        >
           <GestureDetector gesture={pan}>
             <View style={styles.dragHandle}>
               <View style={styles.grabberRow}>
@@ -141,20 +168,15 @@ export function SessionPlayerOverlay() {
               {sessionId ? (
                 <SessionGroupHeader groupId={headerGroupId ?? ""} sessionId={sessionId} />
               ) : null}
+              {sessionId ? (
+                <SessionTabStrip
+                  activeSessionId={sessionId}
+                  sessionIds={sessionIds}
+                  onSelect={handleSelectSession}
+                />
+              ) : null}
             </View>
           </GestureDetector>
-        </View>
-
-        <View style={styles.surface}>
-          {sessionId ? (
-            <SessionSurface
-              sessionId={sessionId}
-              onSelectSession={handleSelectSession}
-              hideHeader
-            />
-          ) : (
-            <SessionSurfaceEmpty />
-          )}
         </View>
       </Animated.View>
     </View>
@@ -174,6 +196,10 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   topInset: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
     zIndex: 10,
   },
   dragHandle: {
