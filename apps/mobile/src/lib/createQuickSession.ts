@@ -1,10 +1,11 @@
+import { Alert } from "react-native";
 import {
   generateUUID,
+  insertOptimisticSessionPair,
+  reconcileOptimisticSessionPair,
+  rollbackOptimisticSessionPair,
   START_SESSION_MUTATION,
   useEntityStore,
-  type EntityState,
-  type SessionEntity,
-  type SessionGroupEntity,
 } from "@trace/client-core";
 import { getDefaultModel } from "@trace/shared";
 import type { CodingTool, HostingMode } from "@trace/gql";
@@ -14,17 +15,10 @@ import { closeSessionPlayer, tryOpenSessionPlayer } from "@/lib/sessionPlayer";
 import { useMobileUIStore } from "@/stores/ui";
 
 const DEFAULT_TOOL: CodingTool = "claude_code";
+// Mobile has no preferences store yet, so the create path always routes to
+// cloud. TODO(mobile-v1): once ticket 36 lands a preferences store, honor a
+// connected local bridge the same way web's `resolveDefaultRuntime` does.
 const DEFAULT_HOSTING: HostingMode = "cloud";
-
-interface OptimisticEntities {
-  tempSessionId: string;
-  tempGroupId: string;
-  tool: CodingTool;
-  model: string | undefined;
-  hosting: HostingMode;
-  channelId: string;
-  repoId: string | undefined;
-}
 
 /**
  * Mobile twin of web's `createQuickSession`: inserts optimistic session
@@ -44,7 +38,7 @@ export async function createQuickSession(channelId: string): Promise<void> {
   const model = getDefaultModel(tool);
   const hosting = DEFAULT_HOSTING;
 
-  const optimistic: OptimisticEntities = {
+  insertOptimisticSessionPair({
     tempSessionId,
     tempGroupId,
     tool,
@@ -52,9 +46,7 @@ export async function createQuickSession(channelId: string): Promise<void> {
     hosting,
     channelId,
     repoId: channelRepoId,
-  };
-
-  insertOptimistic(optimistic);
+  });
   void haptic.light();
   tryOpenSessionPlayer(tempSessionId);
 
@@ -81,148 +73,33 @@ export async function createQuickSession(channelId: string): Promise<void> {
 
     // Swap entities first, then retarget the overlay so the SessionSurface
     // never dereferences a deleted temp id. React batches these updates.
-    reconcile(optimistic, {
+    reconcileOptimisticSessionPair({
+      tempSessionId,
+      tempGroupId,
       realSessionId: session.id,
       realGroupId: session.sessionGroupId,
+      tool,
+      model,
+      hosting,
+      channelId,
+      repoId: channelRepoId,
     });
     const ui = useMobileUIStore.getState();
     if (ui.overlaySessionId === tempSessionId) {
       ui.setOverlaySessionId(session.id);
     }
   } catch (err) {
-    rollback(optimistic);
-    closeSessionPlayer();
-    console.error("[createQuickSession] failed", err);
+    rollbackOptimisticSessionPair({ tempSessionId, tempGroupId });
+    // Only collapse the Player if it's still pointed at the temp session —
+    // the user may have swiped it away and tapped into an unrelated session
+    // while the mutation was in flight.
+    const ui = useMobileUIStore.getState();
+    if (ui.overlaySessionId === tempSessionId) {
+      closeSessionPlayer();
+      ui.setOverlaySessionId(null);
+    }
+    const message = err instanceof Error ? err.message : "Please try again.";
+    void haptic.error();
+    Alert.alert("Couldn't start session", message);
   }
-}
-
-function insertOptimistic(o: OptimisticEntities): void {
-  const now = new Date().toISOString();
-  const store = useEntityStore.getState();
-  const repo = o.repoId ? { id: o.repoId } : null;
-
-  store.upsert(
-    "sessionGroups",
-    o.tempGroupId,
-    {
-      id: o.tempGroupId,
-      name: "New session",
-      status: "in_progress",
-      channel: { id: o.channelId },
-      repo,
-      branch: null,
-      worktreeDeleted: false,
-      createdAt: now,
-      updatedAt: now,
-      _sortTimestamp: now,
-      _optimistic: true,
-    } as Partial<SessionGroupEntity> as SessionGroupEntity,
-  );
-
-  store.upsert(
-    "sessions",
-    o.tempSessionId,
-    {
-      id: o.tempSessionId,
-      name: "New session",
-      sessionGroupId: o.tempGroupId,
-      agentStatus: "not_started",
-      sessionStatus: "in_progress",
-      tool: o.tool,
-      model: o.model ?? null,
-      hosting: o.hosting,
-      channel: { id: o.channelId },
-      repo,
-      branch: null,
-      createdAt: now,
-      updatedAt: now,
-      _optimistic: true,
-    } as Partial<SessionEntity> as SessionEntity,
-  );
-}
-
-function buildRealGroup(o: OptimisticEntities, realGroupId: string): SessionGroupEntity {
-  const now = new Date().toISOString();
-  const repo = o.repoId ? { id: o.repoId } : null;
-  return {
-    id: realGroupId,
-    name: "New session",
-    status: "in_progress",
-    channel: { id: o.channelId },
-    repo,
-    branch: null,
-    worktreeDeleted: false,
-    createdAt: now,
-    updatedAt: now,
-    _sortTimestamp: now,
-  } as Partial<SessionGroupEntity> as SessionGroupEntity;
-}
-
-function buildRealSession(
-  o: OptimisticEntities,
-  realSessionId: string,
-  realGroupId: string,
-): SessionEntity {
-  const now = new Date().toISOString();
-  const repo = o.repoId ? { id: o.repoId } : null;
-  return {
-    id: realSessionId,
-    name: "New session",
-    sessionGroupId: realGroupId,
-    agentStatus: "not_started",
-    sessionStatus: "in_progress",
-    tool: o.tool,
-    model: o.model ?? null,
-    hosting: o.hosting,
-    channel: { id: o.channelId },
-    repo,
-    branch: null,
-    createdAt: now,
-    updatedAt: now,
-  } as Partial<SessionEntity> as SessionEntity;
-}
-
-function reconcile(
-  o: OptimisticEntities,
-  real: { realSessionId: string; realGroupId: string },
-): void {
-  useEntityStore.setState((state: EntityState) => {
-    const sessions = { ...state.sessions };
-    delete sessions[o.tempSessionId];
-    sessions[real.realSessionId] = buildRealSession(o, real.realSessionId, real.realGroupId);
-
-    const sessionGroups = { ...state.sessionGroups };
-    delete sessionGroups[o.tempGroupId];
-    sessionGroups[real.realGroupId] = buildRealGroup(o, real.realGroupId);
-
-    const idx = { ...state._sessionIdsByGroup };
-    if (idx[o.tempGroupId]) {
-      idx[o.tempGroupId] = idx[o.tempGroupId].filter((id: string) => id !== o.tempSessionId);
-      if (idx[o.tempGroupId].length === 0) delete idx[o.tempGroupId];
-    }
-    idx[real.realGroupId] = [
-      ...(idx[real.realGroupId] ?? []).filter((id: string) => id !== real.realSessionId),
-      real.realSessionId,
-    ];
-
-    return { sessions, sessionGroups, _sessionIdsByGroup: idx };
-  });
-}
-
-function rollback(o: OptimisticEntities): void {
-  useEntityStore.setState((state: EntityState) => {
-    const sessions = { ...state.sessions };
-    delete sessions[o.tempSessionId];
-
-    const sessionGroups = { ...state.sessionGroups };
-    delete sessionGroups[o.tempGroupId];
-
-    const idx = { ...state._sessionIdsByGroup };
-    if (idx[o.tempGroupId]) {
-      idx[o.tempGroupId] = idx[o.tempGroupId].filter((id: string) => id !== o.tempSessionId);
-      if (idx[o.tempGroupId].length === 0) delete idx[o.tempGroupId];
-    }
-
-    return { sessions, sessionGroups, _sessionIdsByGroup: idx };
-  });
 }
