@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Alert, Linking, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import * as Clipboard from "expo-clipboard";
+import { useRouter } from "expo-router";
 import {
   ARCHIVE_SESSION_GROUP_MUTATION,
   useEntityField,
@@ -22,6 +23,7 @@ export function SessionGroupHeader({
   sessionId,
 }: SessionGroupHeaderProps) {
   const theme = useTheme();
+  const router = useRouter();
   const prUrl = useEntityField("sessionGroups", groupId, "prUrl") as
     | string
     | null
@@ -31,6 +33,10 @@ export function SessionGroupHeader({
     | null
     | undefined;
   const archivedAt = useEntityField("sessionGroups", groupId, "archivedAt") as
+    | string
+    | null
+    | undefined;
+  const agentStatus = useEntityField("sessions", sessionId ?? "", "agentStatus") as
     | string
     | null
     | undefined;
@@ -76,13 +82,34 @@ export function SessionGroupHeader({
   }, [archiveGroup]);
 
   const handleCopyLink = useCallback(async () => {
-    await Clipboard.setStringAsync(`trace://sessions/${groupId}`);
+    const link = sessionId
+      ? `trace://sessions/${groupId}/${sessionId}`
+      : `trace://sessions/${groupId}`;
+    await Clipboard.setStringAsync(link);
     void haptic.success();
-  }, [groupId]);
+  }, [groupId, sessionId]);
+
+  const handleStopSession = useCallback(() => {
+    if (!sessionId) return;
+    void haptic.medium();
+    router.push({
+      pathname: "/sheets/confirm-stop-session",
+      params: { sessionId },
+    });
+  }, [router, sessionId]);
 
   const menuItems = useMemo(() => {
     const items: SessionMenuAction[] = [];
+    if (sessionId && agentStatus === "active") {
+      items.push({
+        title: "Stop session",
+        systemIcon: "stop.circle",
+        destructive: true,
+        onPress: handleStopSession,
+      });
+    }
     if (prUrl) items.push({ title: "Open PR", systemIcon: "arrow.up.forward.square", onPress: handleOpenPr });
+    items.push({ title: "Copy link", systemIcon: "link", onPress: handleCopyLink });
     if (!archivedAt && status !== "archived") {
       items.push({
         title: "Archive workspace",
@@ -91,9 +118,18 @@ export function SessionGroupHeader({
         onPress: handleArchive,
       });
     }
-    items.push({ title: "Copy link", systemIcon: "link", onPress: handleCopyLink });
     return items;
-  }, [archivedAt, handleArchive, handleCopyLink, handleOpenPr, prUrl, status]);
+  }, [
+    agentStatus,
+    archivedAt,
+    handleArchive,
+    handleCopyLink,
+    handleOpenPr,
+    handleStopSession,
+    prUrl,
+    sessionId,
+    status,
+  ]);
 
   return (
     <View

@@ -34,12 +34,18 @@ The remaining session-screen actions: the header overflow menu (stop, copy link,
 
 ## Completion requirements
 
-- [ ] Overflow menu shows correct items per state
-- [ ] Stop confirmation sheet dispatches dismissSession on confirm
-- [ ] Composer disables when connection lost; re-enables when restored
-- [ ] Retry action triggers reconnection mutation
-- [ ] Error card surfaces lastError and allows retry
-- [ ] All files <200 lines
+- [x] Overflow menu shows correct items per state (Stop session appears only when `agentStatus === 'active'`; Open PR only when `prUrl` is set; Copy link always; Archive workspace on non-archived groups)
+- [x] Stop confirmation sheet dispatches `dismissSession` on confirm (new `app/sheets/confirm-stop-session.tsx`, small detent, heavy haptic)
+- [x] Composer disables when connection lost; re-enables when restored (`canInteract` now gates on `connection.state === 'disconnected'`)
+- [x] Retry action triggers reconnection mutation (`ComposerConnectionNotice` + `SessionErrorCard` both fire `retrySessionConnection`; disabled + error tint when `canRetry === false`)
+- [x] Error card surfaces `connection.lastError` and allows retry (new `SessionErrorCard`, tap-to-dismiss locally, suppressed when already disconnected to avoid duplicating the in-stream banner and composer notice)
+- [x] All files <200 lines (new/modified: `ComposerConnectionNotice` 112, `SessionErrorCard` 151, `confirm-stop-session` 68, `SessionInputComposer` 191, `SessionGroupHeader` 164, `useSessionEvents` 185, `useHydrate` 196; `SessionSurface` remains at 233 per ticket 23, grew by 5 lines here)
+
+## Implementation notes
+
+- **`isUnauthorized` helper extracted** from `useHydrate` into `apps/mobile/src/lib/auth.ts` along with a `handleUnauthorized()` helper that resets the entity store and calls `useAuthStore.logout()`. Both `useHydrate` and `useSessionEvents` now share the same 401-handling path. `useSessionEvents` calls it from the initial `fetchEvents`, `fetchOlderEvents`, and both subscriptions; the auth reset unmounts the session screen, which naturally unsubscribes via the existing useEffect cleanup.
+- **`ConnectionLostBanner` is left untouched**. The existing in-stream banner (ticket 21) already dispatches `retrySessionConnection`. Ticket 24 adds two new surfaces — `ComposerConnectionNotice` above the input and `SessionErrorCard` in the overlay — to complete the interaction loop described in the ticket.
+- **Error card placement** follows the ticket: pinned below `PendingInputBar` when one is active, pinned above the queued-messages strip / composer otherwise. The card self-hides when `connection.state === 'disconnected'` so the disconnected case stays single-surface (the composer notice carries the Retry affordance).
 
 ## How to test
 

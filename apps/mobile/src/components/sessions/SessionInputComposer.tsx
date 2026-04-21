@@ -14,6 +14,7 @@ import { haptic } from "@/lib/haptics";
 import { MODE_CYCLE, useComposerModePalette } from "@/hooks/useComposerModePalette";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
 import { alpha, useTheme } from "@/theme";
+import { ComposerConnectionNotice } from "./ComposerConnectionNotice";
 
 interface SessionInputComposerProps { sessionId: string }
 
@@ -36,6 +37,9 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted");
   const model = useEntityField("sessions", sessionId, "model");
   const hosting = useEntityField("sessions", sessionId, "hosting");
+  const connection = useEntityField("sessions", sessionId, "connection");
+  const isDisconnected = connection?.state === "disconnected";
+  const canRetryConnection = connection?.canRetry === true;
 
   const [text, setText] = useState("");
   const [mode, setMode] = useState<ComposerMode>("code");
@@ -54,7 +58,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const { submit: runSubmit, sending } = useComposerSubmit({ sessionId, isActive, onFailure, onSuccess });
 
   const trimmed = text.trim();
-  const canInteract = !isTerminal && !sending;
+  const canInteract = !isTerminal && !sending && !isDisconnected;
   const canSubmit = canInteract && trimmed.length > 0;
 
   const {
@@ -93,6 +97,9 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
 
   return (
     <View style={{ paddingHorizontal: theme.spacing.md, paddingBottom: theme.spacing.sm + insets.bottom, paddingTop: theme.spacing.xs }}>
+      {isDisconnected ? (
+        <ComposerConnectionNotice sessionId={sessionId} canRetry={canRetryConnection} />
+      ) : null}
       <Glass
         preset="pinnedBar"
         tint="rgba(0,0,0,0)"

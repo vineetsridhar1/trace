@@ -20,6 +20,7 @@ import { Spinner, Text } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { PendingInputBar } from "@/components/sessions/PendingInputBar";
 import { QueuedMessagesStrip } from "@/components/sessions/QueuedMessagesStrip";
+import { SessionErrorCard } from "@/components/sessions/SessionErrorCard";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
 import { SessionInputComposer } from "@/components/sessions/SessionInputComposer";
 import { SessionStream } from "@/components/sessions/SessionStream";
@@ -168,9 +169,13 @@ export function SessionSurface({
         pointerEvents="box-none"
       >
         {pendingInput ? (
-          <PendingInputBar sessionId={sessionId} />
+          <>
+            <PendingInputBar sessionId={sessionId} />
+            <SessionErrorCard sessionId={sessionId} />
+          </>
         ) : (
           <>
+            <SessionErrorCard sessionId={sessionId} />
             <QueuedMessagesStrip sessionId={sessionId} />
             <SessionInputComposer sessionId={sessionId} />
           </>
