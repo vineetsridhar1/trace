@@ -100,9 +100,9 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
 const styles = StyleSheet.create({
   wrapper: { width: "100%", paddingVertical: 2 },
   card: {
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.05)",
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.05)",
     overflow: "hidden",
   },
   header: { flexDirection: "row", alignItems: "center" },
