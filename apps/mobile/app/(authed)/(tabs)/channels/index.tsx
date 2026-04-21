@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Stack } from "expo-router";
+import { Text, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import { EmptyState } from "@/components/design-system";
@@ -53,6 +54,27 @@ export default function ChannelsIndex() {
     }
   }, [activeOrgId, logout]);
 
+  // The iOS native large title doesn't render with our search bar +
+  // native-tabs minimize combo on iOS 26, so render the heading inline as a
+  // FlashList header. The small "Channels" still appears in the nav bar on
+  // scroll because headerLargeTitle is left enabled.
+  const listHeader = useMemo(
+    () => (
+      <View
+        style={{
+          paddingHorizontal: theme.spacing.lg,
+          paddingTop: theme.spacing.xs,
+          paddingBottom: theme.spacing.sm,
+        }}
+      >
+        <Text style={[theme.typography.largeTitle, { color: theme.colors.foreground }]}>
+          Channels
+        </Text>
+      </View>
+    ),
+    [theme],
+  );
+
   return (
     <>
       <Stack.Screen
@@ -71,6 +93,7 @@ export default function ChannelsIndex() {
         contentInsetAdjustmentBehavior="automatic"
         onRefresh={handleRefresh}
         refreshing={refreshing}
+        ListHeaderComponent={listHeader}
         ListEmptyComponent={<ChannelsEmpty search={search} />}
         style={{ flex: 1, backgroundColor: theme.colors.background }}
       />
