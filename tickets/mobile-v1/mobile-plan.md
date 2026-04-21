@@ -94,7 +94,7 @@ The app is built on the same event-driven, service-layer-owned, event-sourced ar
 - **expo-glass-effect** (or custom Expo module wrapping `UIGlassEffect`) — Liquid Glass on iOS 26+
 - **@shopify/flash-list** — virtualized lists (all session/message lists)
 - **@gorhom/bottom-sheet** OR `react-native-screens` native bottomSheet presentation (prefer native)
-- **react-native-keyboard-controller** — keyboard avoidance that actually works
+- **React Native core `Keyboard` + `LayoutAnimation`** — keyboard avoidance (ticket 23 landed on this after evaluating `react-native-keyboard-controller`; the native listeners match the iOS keyboard curve cleanly without the extra native module)
 - **react-native-safe-area-context** — safe area insets
 - **react-native-context-menu-view** — native long-press menus
 
@@ -563,7 +563,7 @@ Full-screen modals for:
 - Auto-scroll to bottom when new events arrive *and* user is already near the bottom. If user has scrolled up, do not yank them — instead show a "New activity" pill floating above the input that taps to jump down.
 - Haptic `light` on send/queue; `medium` on stop confirmation.
 - Assistant message "typing" effect when the most recent event is streaming: subtle cursor block at end of text.
-- Keyboard-avoiding via `react-native-keyboard-controller` — the input rises smoothly, stream adjusts, no jank.
+- Keyboard-avoiding via native `Keyboard` listeners + `LayoutAnimation.keyboard` (ticket 23) — the input rises smoothly, stream adjusts, no jank.
 - Liquid Glass on the input container and any pinned bars (pending-input, queued strip) on iOS 26+.
 - Long-press on a message bubble → native context menu: "Copy".
 

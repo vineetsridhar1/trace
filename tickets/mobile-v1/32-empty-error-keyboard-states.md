@@ -24,7 +24,7 @@ Ensure every screen handles empty data, load failures, network errors, and keybo
 - **Keyboard-up behavior** — per screen:
   - Session stream composer: ✅ (ticket 23)
   - Sign-in: no input in V1, N/A
-  - Any future input fields must be inside `<KeyboardAvoidingView>` (or react-native-keyboard-controller replacement)
+  - Any future input fields must reuse the `Keyboard.addListener` + `LayoutAnimation.keyboard` pattern wired into `SessionSurface` in ticket 23 (or a `<KeyboardAvoidingView>` for simple single-input screens)
   - Tapping outside a focused input dismisses keyboard
 - **Network status hook** (`useNetworkStatus.ts`, <50 lines):
   - Wraps `@react-native-community/netinfo`

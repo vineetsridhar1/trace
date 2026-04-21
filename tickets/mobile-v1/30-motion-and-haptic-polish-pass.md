@@ -24,7 +24,7 @@ A deliberate review pass of every transition, animation, haptic, and real-device
   - Button press: `0.98` scale, spring back (`damping: 25, stiffness: 400`)
   - Pending-input bar collapse: fade + height
   - Tab bar: no haptic on scroll; `selection` on tap
-  - Keyboard rise: matches keyboard velocity (via `react-native-keyboard-controller`)
+  - Keyboard rise: matches keyboard velocity via native `Keyboard.addListener` + `LayoutAnimation.keyboard` (see `SessionSurface` for the pattern)
 - **Performance instrumentation and profiling:**
   - Add lightweight instrumentation via `expo-performance` or an equivalent supported tool so we can measure the plan's budgets on-device instead of guessing.
   - Measure cold start, warm start, event-ingest latency, session-stream scroll smoothness, input keystroke latency, and memory usage with a 1000-event session.

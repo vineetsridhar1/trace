@@ -1,14 +1,32 @@
-import { useEffect } from "react";
-import { StyleSheet, View } from "react-native";
-import { useEntityField } from "@trace/client-core";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Keyboard,
+  LayoutAnimation,
+  Platform,
+  StyleSheet,
+  UIManager,
+  View,
+  type LayoutChangeEvent,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  eventScopeKey,
+  useEntityField,
+  useScopedEventIds,
+  useScopedEvents,
+} from "@trace/client-core";
+import type { Event } from "@trace/gql";
 import { Spinner, Text } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { PendingInputBar } from "@/components/sessions/PendingInputBar";
+import { QueuedMessagesStrip } from "@/components/sessions/QueuedMessagesStrip";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
+import { SessionInputComposer } from "@/components/sessions/SessionInputComposer";
 import { SessionStream } from "@/components/sessions/SessionStream";
 import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
 import { useEnsureSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { useSessionDetail } from "@/hooks/useSessionDetail";
+import { findMostRecentPendingInput } from "@/lib/pending-input";
 import { useTheme } from "@/theme";
 import { useMobileUIStore } from "@/stores/ui";
 
@@ -57,6 +75,49 @@ export function SessionSurface({
     | string
     | null
     | undefined;
+  const scopeKey = eventScopeKey("session", sessionId);
+  const eventIds = useScopedEventIds(scopeKey, byTimestamp);
+  const events = useScopedEvents(scopeKey);
+  const pendingInput = useMemo(
+    () => findMostRecentPendingInput(eventIds, events),
+    [eventIds, events],
+  );
+  const insets = useSafeAreaInsets();
+  const [composerHeight, setComposerHeight] = useState(0);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
+    setComposerHeight(e.nativeEvent.layout.height);
+  }, []);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const animate = (duration: number | undefined) => {
+      if (Platform.OS === "ios" && duration) {
+        LayoutAnimation.configureNext({
+          duration,
+          update: { type: LayoutAnimation.Types.keyboard },
+        });
+      } else if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+        UIManager.setLayoutAnimationEnabledExperimental(true);
+      }
+    };
+    const show = Keyboard.addListener(showEvent, (e) => {
+      animate(e.duration);
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hide = Keyboard.addListener(hideEvent, (e) => {
+      animate(e.duration);
+      setKeyboardHeight(0);
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  // iOS's keyboard height already includes the home-indicator safe-area, so
+  // offset by insets.bottom to avoid double-padding the composer.
+  const overlayBottom = keyboardHeight > 0 ? Math.max(0, keyboardHeight - insets.bottom) : 0;
 
   useEffect(() => {
     if (!groupId) return;
@@ -93,10 +154,34 @@ export function SessionSurface({
         />
       )}
       {hideHeader ? null : <ActiveTodoStrip sessionId={sessionId} />}
-      <SessionStream key={sessionId} sessionId={sessionId} topInset={topInset} />
-      <PendingInputBar sessionId={sessionId} />
+      <View style={[styles.streamWrapper, { marginBottom: overlayBottom }]}>
+        <SessionStream
+          key={sessionId}
+          sessionId={sessionId}
+          topInset={topInset}
+          bottomInset={composerHeight}
+        />
+      </View>
+      <View
+        style={[styles.overlay, { bottom: overlayBottom }]}
+        onLayout={handleComposerLayout}
+        pointerEvents="box-none"
+      >
+        {pendingInput ? (
+          <PendingInputBar sessionId={sessionId} />
+        ) : (
+          <>
+            <QueuedMessagesStrip sessionId={sessionId} />
+            <SessionInputComposer sessionId={sessionId} />
+          </>
+        )}
+      </View>
     </View>
   );
+}
+
+function byTimestamp(a: Event, b: Event): number {
+  return a.timestamp.localeCompare(b.timestamp);
 }
 
 interface SessionSurfaceEmptyProps {
@@ -130,5 +215,14 @@ const styles = StyleSheet.create({
   },
   headerLayer: {
     zIndex: 10,
+  },
+  streamWrapper: {
+    flex: 1,
+  },
+  overlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
 });

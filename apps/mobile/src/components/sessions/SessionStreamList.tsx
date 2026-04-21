@@ -31,6 +31,8 @@ interface SessionStreamListProps {
   initialScrollIndex?: number;
   /** Extra top padding so content can scroll behind an overlay header. */
   topInset?: number;
+  /** Extra bottom padding so content can scroll behind the composer overlay. */
+  bottomInset?: number;
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   fetchOlderEvents: () => Promise<void>;
 }
@@ -48,6 +50,7 @@ export function SessionStreamList({
   disconnectReason,
   initialScrollIndex,
   topInset = 0,
+  bottomInset = 0,
   onScroll,
   fetchOlderEvents,
 }: SessionStreamListProps) {
@@ -93,6 +96,8 @@ export function SessionStreamList({
       inverted={false}
       onScroll={onScroll}
       scrollEventThrottle={16}
+      keyboardDismissMode="interactive"
+      keyboardShouldPersistTaps="handled"
       onStartReached={hasOlder && !loadingOlder ? fetchOlderEvents : undefined}
       onStartReachedThreshold={0.2}
       initialScrollIndex={initialScrollIndex}
@@ -102,9 +107,9 @@ export function SessionStreamList({
       }}
       contentContainerStyle={{
         paddingTop: theme.spacing.md + topInset,
-        paddingBottom: theme.spacing.md,
+        paddingBottom: theme.spacing.md + bottomInset,
       }}
-      scrollIndicatorInsets={{ top: topInset }}
+      scrollIndicatorInsets={{ top: topInset, bottom: bottomInset }}
       ListHeaderComponent={
         loadingOlder ? (
           <View style={styles.olderLoading}>

@@ -1,7 +1,12 @@
 import type { ReactNode } from "react";
-import type { ViewStyle } from "react-native";
+import type { StyleProp, ViewStyle } from "react-native";
 import { BlurView, type BlurTint } from "expo-blur";
-import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
+import {
+  GlassView,
+  isLiquidGlassAvailable,
+  type GlassViewProps,
+} from "expo-glass-effect";
+import Animated, { type AnimatedProps } from "react-native-reanimated";
 import {
   useTheme,
   type GlassShape,
@@ -9,11 +14,20 @@ import {
   type Theme,
 } from "@/theme";
 
+const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
+
 export interface GlassProps {
   preset?: GlassUseCase;
   children?: ReactNode;
   tint?: string;
-  style?: ViewStyle;
+  /**
+   * Reanimated-driven props applied to the underlying `GlassView` — most
+   * often `{ tintColor }` from `useAnimatedProps` for mode-based tint
+   * interpolation. Ignored on the `BlurView` fallback path (pre-iOS 26 /
+   * Android).
+   */
+  animatedProps?: AnimatedProps<GlassViewProps>;
+  style?: StyleProp<ViewStyle>;
 }
 
 const FALLBACK_TINT: BlurTint = "systemThinMaterialDark";
@@ -37,6 +51,7 @@ export function Glass({
   preset = "card",
   children,
   tint,
+  animatedProps,
   style,
 }: GlassProps) {
   const theme = useTheme();
@@ -51,14 +66,15 @@ export function Glass({
   if (isLiquidGlassAvailable()) {
     const resolvedTint = tint ?? config.tint;
     return (
-      <GlassView
+      <AnimatedGlassView
         glassEffectStyle="regular"
         {...(resolvedTint ? { tintColor: resolvedTint } : {})}
         colorScheme={theme.scheme === "dark" ? "dark" : "light"}
         style={[baseStyle, style]}
+        animatedProps={animatedProps}
       >
         {children}
-      </GlassView>
+      </AnimatedGlassView>
     );
   }
 

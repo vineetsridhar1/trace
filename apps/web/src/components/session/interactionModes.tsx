@@ -1,9 +1,12 @@
 import { Pencil, Map, HelpCircle, type LucideIcon } from "lucide-react";
-import { PLAN_PREFIX, stripPromptWrapping } from "@trace/client-core";
+import {
+  stripPromptWrapping,
+  wrapPrompt,
+  type InteractionMode,
+} from "@trace/client-core";
 
-export { stripPromptWrapping };
-
-export type InteractionMode = "code" | "plan" | "ask";
+export { stripPromptWrapping, wrapPrompt };
+export type { InteractionMode };
 
 export const MODE_CYCLE: InteractionMode[] = ["code", "plan", "ask"];
 
@@ -51,14 +54,3 @@ export const MODE_CONFIG: Record<InteractionMode, ModeConfig> = {
   },
 };
 
-export function wrapPrompt(mode: InteractionMode, prompt: string): string {
-  switch (mode) {
-    case "plan":
-      return `${PLAN_PREFIX}\n\n${prompt}`;
-    case "ask":
-      return `<trace-internal>\nDo NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n</trace-internal>\n\n${prompt}`;
-    case "code":
-    default:
-      return prompt;
-  }
-}
