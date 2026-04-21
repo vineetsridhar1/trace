@@ -26,8 +26,13 @@ export default function ChannelsLayout() {
           title: "Channels",
           headerLargeTitle: true,
           headerLargeTitleShadowVisible: false,
-          // DIAGNOSTIC: headerSearchBarOptions removed to test whether the
-          // UISearchController is what breaks tab-bar .bottom scroll binding.
+          // DIAGNOSTIC: search bar back, but with hideWhenScrolling=false to
+          // test whether the scroll-observation the search controller sets up
+          // for pull-to-reveal is what's breaking tab-bar .bottom binding.
+          headerSearchBarOptions: {
+            placeholder: "Search channels",
+            hideWhenScrolling: false,
+          },
           headerRight: () => (
             <TopBarPill
               avatar={
