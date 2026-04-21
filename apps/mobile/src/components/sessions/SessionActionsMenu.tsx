@@ -93,35 +93,32 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
         >
           <GlassView
             isInteractive
+            animate
+            animationDuration={280}
             glassEffectStyle="regular"
             colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-            style={[styles.triggerPill, { opacity: open ? 0 : 1 }]}
+            style={open ? [styles.menuPill, { height: menuHeight }] : styles.triggerPill}
           >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={accessibilityLabel}
-              onPress={handleToggle}
-              style={styles.triggerInner}
-              hitSlop={8}
-            >
-              <SymbolView
-                name="ellipsis"
-                size={18}
-                tintColor={theme.colors.foreground}
-                weight="semibold"
-                resizeMode="scaleAspectFit"
-                style={styles.icon}
-              />
-            </Pressable>
-          </GlassView>
-
-          <GlassView
-            isInteractive
-            glassEffectStyle="regular"
-            colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-            style={[styles.menuPill, { height: menuHeight, opacity: open ? 1 : 0 }]}
-          >
-            <MenuList actions={actions} onPick={handleItem} />
+            {open ? (
+              <MenuList actions={actions} onPick={handleItem} />
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={accessibilityLabel}
+                onPress={handleToggle}
+                style={styles.triggerInner}
+                hitSlop={8}
+              >
+                <SymbolView
+                  name="ellipsis"
+                  size={18}
+                  tintColor={theme.colors.foreground}
+                  weight="semibold"
+                  resizeMode="scaleAspectFit"
+                  style={styles.icon}
+                />
+              </Pressable>
+            )}
           </GlassView>
         </GlassContainer>
       </View>
