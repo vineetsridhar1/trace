@@ -31,7 +31,7 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
 
   // Prefetch group + session detail on touch-down so the overlay has data
   // in Zustand before the spring lands. See SessionGroupRow for rationale.
-  const onPressIn = useCallback(() => {
+  const handlePressIn = useCallback(() => {
     prefetchSessionPlayer(sessionId);
   }, [sessionId]);
 
@@ -46,7 +46,7 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
       accessibilityLabel={`Open session player — ${name}`}
       style={[styles.row, { width }]}
       onPress={onPress}
-      onPressIn={onPressIn}
+      onPressIn={handlePressIn}
     >
       <View style={styles.leading}>
         <SessionStatusIndicator status={sessionStatus} agentStatus={agentStatus} size={10} />
