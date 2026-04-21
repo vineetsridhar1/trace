@@ -10,15 +10,15 @@ export function SessionCompactSummaryCell({ row }: { row?: SessionGroupRow }) {
 
   const repo = getSessionRepo(row);
   const lastActivityAt = getSessionLastActivityAt(row);
-  const slug = row.slug;
+  const branch = row.branch ?? row.slug;
   const terminals = useSessionGroupTerminals(row.id);
   const hasActiveTerminal = terminals.some((t) => t.status === "active");
 
-  const subtext = repo && slug
-    ? `${repo.name} / ${slug}`
+  const subtext = repo && branch
+    ? `${repo.name} / ${branch}`
     : repo
       ? repo.name
-      : slug ?? null;
+      : branch ?? null;
 
   return (
     <div className="flex h-full w-full min-w-0 flex-1 flex-col justify-center py-2">

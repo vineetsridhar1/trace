@@ -3,15 +3,15 @@ import { getSessionRepo } from "./session-cell-data";
 
 export function SessionRepoCell({ row }: { row?: SessionGroupRow }) {
   const repo = getSessionRepo(row);
-  const slug = row?.slug;
+  const branch = row?.branch ?? row?.slug;
 
-  if (!repo && !slug) return null;
+  if (!repo && !branch) return null;
 
-  const text = repo && slug
-    ? `${repo.name} / ${slug}`
+  const text = repo && branch
+    ? `${repo.name} / ${branch}`
     : repo
       ? repo.name
-      : slug;
+      : branch;
 
   return <span className="truncate text-xs text-muted-foreground">{text}</span>;
 }
