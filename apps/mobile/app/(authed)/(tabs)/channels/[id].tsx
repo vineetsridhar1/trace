@@ -31,6 +31,7 @@ import {
 } from "@/hooks/useChannelSessionGroups";
 import { fetchChannelSessionGroups } from "@/hooks/useChannelSessionGroupsQuery";
 import { refreshOrgData } from "@/hooks/useHydrate";
+import { createQuickSession } from "@/lib/createQuickSession";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
 
@@ -116,6 +117,10 @@ export default function ChannelDetail() {
     router.push(`/channels/${channelId}/merged-archived`);
   }, [router, channelId]);
 
+  const handleCreateSession = useCallback(() => {
+    void createQuickSession(channelId);
+  }, [channelId]);
+
   const handleToggleSection = useCallback((status: SessionGroupSectionStatus) => {
     void haptic.light();
     LayoutAnimation.configureNext(SECTION_TOGGLE_ANIMATION);
@@ -179,7 +184,14 @@ export default function ChannelDetail() {
           headerLargeTitle: true,
           headerLargeTitleShadowVisible: false,
           headerRight: () => (
-            <View style={{ marginLeft: 2 }}>
+            <View style={{ flexDirection: "row", marginLeft: 2, gap: 4 }}>
+              <IconButton
+                symbol="plus"
+                size="sm"
+                color="foreground"
+                onPress={handleCreateSession}
+                accessibilityLabel="New session"
+              />
               <IconButton
                 symbol="archivebox"
                 size="sm"

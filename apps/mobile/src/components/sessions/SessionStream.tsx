@@ -130,10 +130,13 @@ export function SessionStream({ sessionId, topInset, bottomInset }: SessionStrea
   }, [nodes.length, sessionId]);
 
   if (loading && nodes.length === 0) return <SessionStreamSkeleton />;
-  if (!loading && nodes.length === 0 && error) {
+  // A not_started session has no events yet by design — the initial events
+  // query commonly 404s for optimistic/pending session ids. Fall through to
+  // the friendly empty state instead of surfacing a retry banner.
+  if (!loading && nodes.length === 0 && error && agentStatus !== "not_started") {
     return <SessionStreamError error={error} onRetry={() => void fetchEvents()} />;
   }
-  if (!loading && nodes.length === 0) return <SessionStreamEmpty />;
+  if (!loading && nodes.length === 0) return <SessionStreamEmpty agentStatus={agentStatus} />;
 
   const disconnected = connection?.state === "disconnected";
 
