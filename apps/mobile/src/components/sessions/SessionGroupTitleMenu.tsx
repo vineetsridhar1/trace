@@ -156,7 +156,7 @@ function MorphingTitle({ groupId, sessionId, fullWidth }: SessionGroupTitleMenuP
       >
         <AnimatedGlassView
           isInteractive
-          glassEffectStyle="regular"
+          glassEffectStyle="clear"
           colorScheme={theme.scheme === "dark" ? "dark" : "light"}
           style={[styles.morphingGlass, glassStyle]}
         >
