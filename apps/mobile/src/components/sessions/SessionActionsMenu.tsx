@@ -44,8 +44,8 @@ const ITEM_HEIGHT = 48;
 const MENU_RADIUS = 20;
 // Open: bouncy spring with a touch of overshoot. Close: snappier so the menu
 // doesn't linger on dismiss.
-const OPEN_SPRING = { damping: 14, stiffness: 180, mass: 0.9 } as const;
-const CLOSE_SPRING = { damping: 22, stiffness: 260, mass: 0.8 } as const;
+const OPEN_SPRING = { damping: 14, stiffness: 120, mass: 1.1 } as const;
+const CLOSE_SPRING = { damping: 22, stiffness: 190, mass: 1.0 } as const;
 
 /**
  * Liquid Glass overflow affordance: a circular pill that morphs into a
