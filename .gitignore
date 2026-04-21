@@ -18,4 +18,8 @@ tmp/
 **/src/**/*.js.map
 **/src/**/*.d.ts
 **/src/**/*.d.ts.map
+apps/mobile/app/**/*.js
+apps/mobile/app/**/*.js.map
+apps/mobile/app/**/*.d.ts
+apps/mobile/app/**/*.d.ts.map
 package-lock.json
