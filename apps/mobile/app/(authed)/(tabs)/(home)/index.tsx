@@ -1,110 +1,97 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
-import {
-  useAuthStore,
-  useEntityIds,
-  type AuthState,
-} from "@trace/client-core";
+import { useCallback, useMemo, useState } from "react";
+import { StyleSheet, View } from "react-native";
+import { FlashList } from "@shopify/flash-list";
+import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
+import { EmptyState } from "@/components/design-system";
+import { useTheme } from "@/theme";
+import { HomeSectionHeader } from "@/components/home/HomeSectionHeader";
+import { HomeSessionRow } from "@/components/home/HomeSessionRow";
+import { useHomeSections, type HomeSectionKind } from "@/hooks/useHomeSections";
+import { refreshOrgData } from "@/hooks/useHydrate";
+import { haptic } from "@/lib/haptics";
+
+type HomeListItem =
+  | { kind: "header"; section: HomeSectionKind; count: number }
+  | { kind: "row"; sessionId: string };
 
 export default function AuthedHome() {
-  const router = useRouter();
-  const user = useAuthStore((s: AuthState) => s.user);
+  const theme = useTheme();
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
-  const memberships = useAuthStore((s: AuthState) => s.orgMemberships);
-  const channelIds = useEntityIds("channels");
-  const sessionIds = useEntityIds("sessions");
+  const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
+  const logout = useAuthStore((s: AuthState) => s.logout);
+  const sections = useHomeSections(userId);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const activeOrg = memberships.find((m) => m.organizationId === activeOrgId);
+  const items = useMemo<HomeListItem[]>(() => {
+    const out: HomeListItem[] = [];
+    for (const section of sections) {
+      out.push({ kind: "header", section: section.kind, count: section.ids.length });
+      for (const id of section.ids) {
+        out.push({ kind: "row", sessionId: id });
+      }
+    }
+    return out;
+  }, [sections]);
+
+  const handleRefresh = useCallback(async () => {
+    if (!activeOrgId) return;
+    void haptic.medium();
+    setRefreshing(true);
+    try {
+      const ok = await refreshOrgData(activeOrgId);
+      if (!ok) {
+        useEntityStore.getState().reset();
+        await logout();
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }, [activeOrgId, logout]);
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.container}
+    <FlashList
+      data={items}
+      renderItem={renderItem}
+      keyExtractor={keyExtractor}
+      getItemType={getItemType}
       contentInsetAdjustmentBehavior="automatic"
-    >
-      <Text style={styles.heading}>Trace Mobile</Text>
-      {user && <Text style={styles.subtle}>Signed in as {user.name}</Text>}
-      <Text style={styles.subtle}>{activeOrg?.organization.name ?? "No org"}</Text>
+      onRefresh={handleRefresh}
+      refreshing={refreshing}
+      ListEmptyComponent={<HomeEmpty />}
+      style={{ flex: 1, backgroundColor: theme.colors.background }}
+    />
+  );
+}
 
-      <View style={styles.stats}>
-        <Text style={styles.stat}>Channels: {channelIds.length}</Text>
-        <Text style={styles.stat}>Sessions: {sessionIds.length}</Text>
-      </View>
+function renderItem({ item }: { item: HomeListItem }) {
+  if (item.kind === "header") {
+    return <HomeSectionHeader kind={item.section} count={item.count} />;
+  }
+  return <HomeSessionRow sessionId={item.sessionId} />;
+}
 
-      {__DEV__ && (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push("/(dev)/design-system")}
-          style={({ pressed }) => [styles.devButton, pressed && styles.pressed]}
-        >
-          <Text style={styles.devButtonText}>Design System</Text>
-        </Pressable>
-      )}
+function keyExtractor(item: HomeListItem): string {
+  return item.kind === "header" ? `h:${item.section}` : `r:${item.sessionId}`;
+}
 
-      {Array.from({ length: 30 }).map((_, i) => (
-        <View key={i} style={styles.filler}>
-          <Text style={styles.fillerText}>Scroll filler row {i + 1}</Text>
-        </View>
-      ))}
-    </ScrollView>
+function getItemType(item: HomeListItem): string {
+  return item.kind;
+}
+
+function HomeEmpty() {
+  return (
+    <View style={styles.empty}>
+      <EmptyState
+        icon="checkmark.seal"
+        title="All clear"
+        subtitle="Sessions that need you will show up here."
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-    backgroundColor: "#000",
-  },
-  container: {
-    alignItems: "center",
-    gap: 16,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 160,
-  },
-  filler: {
-    alignSelf: "stretch",
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#222",
-  },
-  fillerText: {
-    color: "#888",
-    fontSize: 14,
-  },
-  heading: {
-    color: "#fff",
-    fontSize: 22,
-    fontWeight: "600",
-  },
-  subtle: {
-    color: "#888",
-    fontSize: 14,
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  stats: {
-    alignItems: "center",
-    gap: 4,
-    marginTop: 12,
-  },
-  stat: {
-    color: "#666",
-    fontSize: 13,
-  },
-  devButton: {
-    marginTop: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#333",
-  },
-  devButtonText: {
-    color: "#888",
-    fontSize: 12,
-    fontFamily: "Menlo",
+  empty: {
+    paddingTop: 80,
   },
 });
