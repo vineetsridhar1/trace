@@ -5,6 +5,7 @@ import { alpha, useTheme, type Theme } from "@/theme";
 
 interface MarkdownProps {
   children: string;
+  compactSpacing?: boolean;
 }
 
 // Assistant content is LLM-generated, so we only open links whose scheme we
@@ -17,9 +18,9 @@ const ALLOWED_LINK_SCHEMES = /^(https?|mailto):/i;
  * wrapper — headers, lists, inline code, code blocks, blockquotes, links.
  * No KaTeX / images in V1.
  */
-export function Markdown({ children }: MarkdownProps) {
+export function Markdown({ children, compactSpacing = false }: MarkdownProps) {
   const theme = useTheme();
-  const styles = useMemo(() => buildStyles(theme), [theme]);
+  const styles = useMemo(() => buildStyles(theme, compactSpacing), [compactSpacing, theme]);
 
   return (
     <MarkdownLib
@@ -37,8 +38,9 @@ export function Markdown({ children }: MarkdownProps) {
 
 const mono = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" });
 
-function buildStyles(theme: Theme) {
+function buildStyles(theme: Theme, compactSpacing: boolean) {
   const codeBg = alpha(theme.colors.surfaceElevated, 0.6);
+  const paragraphMarginBottom = compactSpacing ? theme.spacing.xs : theme.spacing.sm;
   return StyleSheet.create({
     body: {
       color: theme.colors.foreground,
@@ -47,7 +49,7 @@ function buildStyles(theme: Theme) {
     },
     paragraph: {
       marginTop: 0,
-      marginBottom: theme.spacing.sm,
+      marginBottom: paragraphMarginBottom,
     },
     strong: { fontWeight: "700" as const },
     em: { fontStyle: "italic" as const },
@@ -75,8 +77,8 @@ function buildStyles(theme: Theme) {
       marginTop: theme.spacing.sm,
       marginBottom: theme.spacing.xs,
     },
-    bullet_list: { marginBottom: theme.spacing.sm },
-    ordered_list: { marginBottom: theme.spacing.sm },
+    bullet_list: { marginBottom: paragraphMarginBottom },
+    ordered_list: { marginBottom: paragraphMarginBottom },
     list_item: { marginBottom: 2, color: theme.colors.foreground },
     code_inline: {
       color: theme.colors.foreground,
