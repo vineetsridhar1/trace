@@ -9,6 +9,7 @@ import {
   useEnsureSessionGroupDetail,
   useSessionGroupSessionIds,
 } from "@/hooks/useSessionGroupDetail";
+import { useSessionDetail } from "@/hooks/useSessionDetail";
 import { useTheme } from "@/theme";
 import { useMobileUIStore } from "@/stores/ui";
 
@@ -42,6 +43,10 @@ export function SessionSurface({
     | null
     | undefined;
   const loading = useEnsureSessionGroupDetail(groupId ?? undefined);
+  // Loads queuedMessages + per-session gitCheckpoints that the group query
+  // doesn't surface — needed by CheckpointMarker (ticket 21) and the queued-
+  // messages strip (ticket 23).
+  useSessionDetail(sessionId);
   const sessionIds = useSessionGroupSessionIds(groupId ?? "");
   const groupName = useEntityField("sessionGroups", groupId ?? "", "name") as
     | string
