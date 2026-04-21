@@ -1,10 +1,12 @@
 import { memo, useCallback } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+import Animated from "react-native-reanimated";
 import ContextMenu from "react-native-context-menu-view";
 import { useEntityField } from "@trace/client-core";
 import { Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { haptic } from "@/lib/haptics";
+import { usePressScale } from "@/lib/motion";
 import { tryOpenSessionPlayer } from "@/lib/sessionPlayer";
 import { timeAgo } from "@/lib/time";
 import { useTheme } from "@/theme";
@@ -42,6 +44,10 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
     prUrl,
     isActive: agentStatus === "active",
   });
+  // Subtle row scale on press — wide rows feel weird at 0.98, so target the
+  // edges-only feedback iOS list rows actually have. Combined with the bg
+  // highlight, the press reads as a real touch instead of a web hover.
+  const { animatedStyle: pressScaleStyle, onPressIn, onPressOut } = usePressScale(0.99);
 
   if (!name) return null;
 
@@ -50,71 +56,75 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
 
   return (
     <ContextMenu actions={actions} onPress={onMenuPress} preview={null}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={name}
-        onPress={handlePress}
-        onLongPress={noop}
-        delayLongPress={250}
-        style={({ pressed }) => [
-          styles.row,
-          {
-            paddingHorizontal: theme.spacing.lg,
-            paddingVertical: theme.spacing.md,
-            borderBottomWidth: StyleSheet.hairlineWidth,
-            borderBottomColor: theme.colors.borderMuted,
-            backgroundColor: pressed ? theme.colors.surfaceElevated : "transparent",
-          },
-        ]}
-      >
-        <View style={styles.main}>
-          <View style={styles.titleRow}>
-            <SessionStatusIndicator status={sessionStatus} agentStatus={agentStatus} />
-            <Text
-              variant="body"
-              color="foreground"
-              numberOfLines={1}
-              style={[styles.title, styles.titleText]}
-            >
-              {name}
-            </Text>
+      <Animated.View style={pressScaleStyle}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={name}
+          onPress={handlePress}
+          onLongPress={noop}
+          delayLongPress={250}
+          onPressIn={onPressIn}
+          onPressOut={onPressOut}
+          style={({ pressed }) => [
+            styles.row,
+            {
+              paddingHorizontal: theme.spacing.lg,
+              paddingVertical: theme.spacing.md,
+              borderBottomWidth: StyleSheet.hairlineWidth,
+              borderBottomColor: theme.colors.borderMuted,
+              backgroundColor: pressed ? theme.colors.surfaceElevated : "transparent",
+            },
+          ]}
+        >
+          <View style={styles.main}>
+            <View style={styles.titleRow}>
+              <SessionStatusIndicator status={sessionStatus} agentStatus={agentStatus} />
+              <Text
+                variant="body"
+                color="foreground"
+                numberOfLines={1}
+                style={[styles.title, styles.titleText]}
+              >
+                {name}
+              </Text>
+            </View>
+            {branch ? (
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.branch,
+                  theme.typography.mono,
+                  { color: theme.colors.dimForeground, fontSize: 12 },
+                ]}
+              >
+                {branch}
+              </Text>
+            ) : null}
+            {lastEventPreview ? (
+              <Text
+                variant="footnote"
+                color="mutedForeground"
+                numberOfLines={1}
+                style={styles.preview}
+              >
+                {lastEventPreview}
+              </Text>
+            ) : null}
           </View>
-          {branch ? (
-            <Text
-              numberOfLines={1}
-              style={[
-                styles.branch,
-                theme.typography.mono,
-                { color: theme.colors.dimForeground, fontSize: 12 },
-              ]}
-            >
-              {branch}
-            </Text>
-          ) : null}
-          {lastEventPreview ? (
-            <Text
-              variant="footnote"
-              color="mutedForeground"
-              numberOfLines={1}
-              style={styles.preview}
-            >
-              {lastEventPreview}
-            </Text>
-          ) : null}
-        </View>
-        <View style={styles.accessory}>
-          {timestamp ? (
-            <Text variant="caption2" color="dimForeground" style={styles.timestamp}>
-              {timeAgo(timestamp)}
-            </Text>
-          ) : null}
-          {channelName ? (
-            <Text variant="caption2" color="dimForeground" numberOfLines={1}>
-              #{channelName}
-            </Text>
-          ) : null}
-        </View>
-      </Pressable>
+          <View style={styles.accessory}>
+            {timestamp ? (
+              <Text variant="caption2" color="dimForeground" style={styles.timestamp}>
+                {timeAgo(timestamp)}
+              </Text>
+            ) : null}
+            {channelName ? (
+              <Text variant="caption2" color="dimForeground" numberOfLines={1}>
+                #{channelName}
+              </Text>
+            ) : null}
+          </View>
+        </Pressable>
+      </Animated.View>
     </ContextMenu>
   );
 });

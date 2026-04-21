@@ -8,7 +8,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { SymbolView } from "expo-symbols";
 import { Text } from "@/components/design-system";
-import { alpha, useTheme } from "@/theme";
+import { alpha, motion, useTheme } from "@/theme";
 import { formatCommandLabel, getCommandPrefix, serializeUnknown } from "./utils";
 
 interface CommandExecutionRowProps {
@@ -17,7 +17,7 @@ interface CommandExecutionRowProps {
   exitCode?: number;
 }
 
-const ACCORDION_DURATION = 220;
+const ACCORDION_DURATION = motion.durations.accordion;
 const ACCORDION_EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
 /**

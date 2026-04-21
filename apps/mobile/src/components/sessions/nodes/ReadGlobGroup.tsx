@@ -9,13 +9,13 @@ import Animated, {
 import { SymbolView } from "expo-symbols";
 import type { ReadGlobItem } from "@trace/client-core";
 import { Text } from "@/components/design-system";
-import { alpha, useTheme } from "@/theme";
+import { alpha, motion, useTheme } from "@/theme";
 
 interface ReadGlobGroupProps {
   items: ReadGlobItem[];
 }
 
-const ACCORDION_DURATION = 220;
+const ACCORDION_DURATION = motion.durations.accordion;
 const ACCORDION_EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
 /**

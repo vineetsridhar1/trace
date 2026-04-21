@@ -11,6 +11,7 @@ import * as ExpoLinking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { API_URL, isApiUrlConfigured } from "@/lib/env";
+import { haptic } from "@/lib/haptics";
 
 const REDIRECT_URL = "trace://auth/callback";
 const TERMS_URL = "https://trace.app/terms";
@@ -33,12 +34,14 @@ export default function SignInScreen() {
 
   async function handleSignIn() {
     if (loading) return;
+    void haptic.light();
     setError(null);
     if (!isApiUrlConfigured()) {
       setError(
         "EXPO_PUBLIC_API_URL is not configured. Restart Metro with " +
           "EXPO_PUBLIC_API_URL=http://<host>:4000.",
       );
+      void haptic.error();
       return;
     }
     setLoading(true);
@@ -50,17 +53,21 @@ export default function SignInScreen() {
       if (result.type !== "success") {
         if (result.type === "cancel" || result.type === "dismiss") return;
         setError("Sign-in did not complete. Please try again.");
+        void haptic.error();
         return;
       }
       const token = tokenFromCallback(result.url);
       if (!token) {
         setError("Sign-in returned no token. Please try again.");
+        void haptic.error();
         return;
       }
       await signInWithToken(token);
+      void haptic.success();
     } catch (err) {
       console.error("[sign-in] failed", err);
       setError("Something went wrong. Please try again.");
+      void haptic.error();
     } finally {
       setLoading(false);
     }

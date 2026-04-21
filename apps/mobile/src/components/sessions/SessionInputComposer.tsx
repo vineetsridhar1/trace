@@ -71,8 +71,8 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
 
   const inputHeight = useSharedValue(MIN_INPUT_HEIGHT);
   useEffect(() => {
-    inputHeight.value = withTiming(height, { duration: 140 });
-  }, [height, inputHeight]);
+    inputHeight.value = withTiming(height, { duration: theme.motion.durations.fast });
+  }, [height, inputHeight, theme.motion.durations.fast]);
   const inputAnimatedStyle = useAnimatedStyle(() => ({ height: inputHeight.value }));
 
   const cycleMode = useCallback(() => {
