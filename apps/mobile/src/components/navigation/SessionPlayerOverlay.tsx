@@ -15,6 +15,8 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { useEntityField } from "@trace/client-core";
+import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
 import { SessionSurface, SessionSurfaceEmpty } from "@/components/sessions/SessionSurface";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { haptic } from "@/lib/haptics";
@@ -37,6 +39,10 @@ export function SessionPlayerOverlay() {
   const open = useMobileUIStore((s) => s.sessionPlayerOpen);
   const sessionId = useMobileUIStore((s) => s.overlaySessionId);
   const setOverlaySessionId = useMobileUIStore((s) => s.setOverlaySessionId);
+  const headerGroupId = useEntityField("sessions", sessionId ?? "", "sessionGroupId") as
+    | string
+    | null
+    | undefined;
 
   const progress = useSharedValue(0);
   const dragY = useSharedValue(0);
@@ -121,24 +127,30 @@ export function SessionPlayerOverlay() {
           { backgroundColor: theme.colors.background },
         ]}
       >
-        <GestureDetector gesture={pan}>
-          <View style={[styles.dragRegion, { paddingTop: insets.top }]}>
-            <View style={styles.grabberRow}>
-              <View
-                style={[
-                  styles.grabber,
-                  { backgroundColor: alpha(theme.colors.foreground, 0.28) },
-                ]}
-              />
+        <View style={[styles.topInset, { paddingTop: insets.top }]}>
+          <GestureDetector gesture={pan}>
+            <View style={styles.dragHandle}>
+              <View style={styles.grabberRow}>
+                <View
+                  style={[
+                    styles.grabber,
+                    { backgroundColor: alpha(theme.colors.foreground, 0.28) },
+                  ]}
+                />
+              </View>
+              {sessionId ? (
+                <SessionGroupHeader groupId={headerGroupId ?? ""} sessionId={sessionId} />
+              ) : null}
             </View>
-          </View>
-        </GestureDetector>
+          </GestureDetector>
+        </View>
 
         <View style={styles.surface}>
           {sessionId ? (
             <SessionSurface
               sessionId={sessionId}
               onSelectSession={handleSelectSession}
+              hideHeader
             />
           ) : (
             <SessionSurfaceEmpty />
@@ -161,11 +173,13 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     overflow: "hidden",
   },
-  dragRegion: {},
+  topInset: {},
+  dragHandle: {},
   grabberRow: {
     alignItems: "center",
     justifyContent: "center",
     paddingTop: 8,
+    paddingBottom: 6,
   },
   grabber: {
     width: 36,

@@ -18,6 +18,12 @@ interface SessionSurfaceProps {
   sessionId: string;
   /** Called when the user taps a sibling session in the tab strip. */
   onSelectSession: (sessionId: string) => void;
+  /**
+   * When true, the SessionGroupHeader is not rendered. The Session Player
+   * pulls the header into its drag handle so the whole top region responds
+   * to pull-down-to-dismiss.
+   */
+  hideHeader?: boolean;
 }
 
 /**
@@ -25,7 +31,11 @@ interface SessionSurfaceProps {
  * stream. Rendered both inside the Session Player (§10.8) and by the
  * deep-link stack route, so both paths land on the same composition.
  */
-export function SessionSurface({ sessionId, onSelectSession }: SessionSurfaceProps) {
+export function SessionSurface({
+  sessionId,
+  onSelectSession,
+  hideHeader = false,
+}: SessionSurfaceProps) {
   const theme = useTheme();
   const groupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
@@ -66,7 +76,9 @@ export function SessionSurface({ sessionId, onSelectSession }: SessionSurfacePro
 
   return (
     <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
-      <SessionGroupHeader groupId={groupId} sessionId={sessionId} solid={solidHeader} />
+      {hideHeader ? null : (
+        <SessionGroupHeader groupId={groupId} sessionId={sessionId} solid={solidHeader} />
+      )}
       <SessionTabStrip
         activeSessionId={sessionId}
         sessionIds={sessionIds}
