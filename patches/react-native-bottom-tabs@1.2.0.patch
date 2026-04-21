@@ -1,29 +1,25 @@
 diff --git a/ios/RepresentableView.swift b/ios/RepresentableView.swift
-index 09adaca401c716dd6c47590ffc7fe5646de2e50b..cff29f901e2101f46f5eca076f9919742295060d 100644
+index 09adaca401c716dd6c47590ffc7fe5646de2e50b..9d878fe3576967b5163974ccaa3ad71803807a22 100644
 --- a/ios/RepresentableView.swift
 +++ b/ios/RepresentableView.swift
-@@ -30,3 +30,109 @@ struct RepresentableView: PlatformViewRepresentable {
+@@ -30,3 +30,54 @@ struct RepresentableView: PlatformViewRepresentable {
  
  #endif
  }
 +
 +#if !os(macOS)
 +extension UIView {
-+  /// Top-down DFS for the first `UIScrollView` descendant. Used to bridge
-+  /// React Native's scroll-view hierarchy into UIKit's tab-bar minimize
-+  /// detection, which relies on `UIViewController.contentScrollView(for:)`.
-+  ///
-+  /// Subviews are iterated from topmost (last) to bottommost (first) so a
-+  /// screen freshly pushed on top of a nested navigation stack wins over a
-+  /// lingering background screen that may still be attached.
++  /// BFS search for the first UIScrollView descendant. Used to bridge React
++  /// Native's scroll-view hierarchy into UIKit's tab-bar minimize detection,
++  /// which relies on `UIViewController.contentScrollView(for:)`.
 +  func findDescendantScrollView() -> UIScrollView? {
-+    if let scroll = self as? UIScrollView {
-+      return scroll
-+    }
-+    for subview in subviews.reversed() {
-+      if let found = subview.findDescendantScrollView() {
-+        return found
++    var queue: [UIView] = subviews.reversed()
++    while !queue.isEmpty {
++      let view = queue.removeLast()
++      if let scrollView = view as? UIScrollView {
++        return scrollView
 +      }
++      queue.insert(contentsOf: view.subviews, at: 0)
 +    }
 +    return nil
 +  }
@@ -37,27 +33,15 @@ index 09adaca401c716dd6c47590ffc7fe5646de2e50b..cff29f901e2101f46f5eca076f991974
 +    guard !installed else { return }
 +    installed = true
 +
-+    if let original = class_getInstanceMethod(
++    let original = class_getInstanceMethod(
 +      UIViewController.self,
 +      #selector(UIViewController.contentScrollView(for:))
-+    ),
-+      let swizzled = class_getInstanceMethod(
-+        UIViewController.self,
-+        #selector(UIViewController.rntabs_contentScrollView(for:))
-+      )
-+    {
-+      method_exchangeImplementations(original, swizzled)
-+    }
-+
-+    if let original = class_getInstanceMethod(
++    )
++    let swizzled = class_getInstanceMethod(
 +      UIViewController.self,
-+      #selector(UIViewController.viewDidAppear(_:))
-+    ),
-+      let swizzled = class_getInstanceMethod(
-+        UIViewController.self,
-+        #selector(UIViewController.rntabs_viewDidAppear(_:))
-+      )
-+    {
++      #selector(UIViewController.rntabs_contentScrollView(for:))
++    )
++    if let original, let swizzled {
 +      method_exchangeImplementations(original, swizzled)
 +    }
 +  }
@@ -70,45 +54,6 @@ index 09adaca401c716dd6c47590ffc7fe5646de2e50b..cff29f901e2101f46f5eca076f991974
 +      return original
 +    }
 +    return view.findDescendantScrollView()
-+  }
-+
-+  /// After a view controller becomes visible inside a tab bar, re-publish
-+  /// the current topmost scroll view up the responder chain. UIKit caches
-+  /// the scroll view it observes for `tabBarMinimizeBehavior` and does not
-+  /// re-query when a nested navigation stack pushes or pops, so without
-+  /// this nudge the minimize behavior stays bound to whichever scroll view
-+  /// happened to be mounted on the initial tab render.
-+  @objc func rntabs_viewDidAppear(_ animated: Bool) {
-+    rntabs_viewDidAppear(animated)
-+
-+    guard let tabBarController = self.tabBarController else { return }
-+
-+    // Prefer a scroll view inside the VC that just appeared — that is the
-+    // topmost in the nested stack. Fall back to whatever the selected tab
-+    // exposes (e.g. when a container VC appears before its children).
-+    guard let scrollView =
-+      self.view.findDescendantScrollView()
-+      ?? tabBarController.selectedViewController?.view.findDescendantScrollView()
-+    else {
-+      // Never clear an existing binding; UIKit would stop observing and the
-+      // tab bar would stop minimizing until a tab re-selection re-queries.
-+      return
-+    }
-+
-+    // Publish on every link in the chain that UIKit might ask so the
-+    // minimize observer rebinds regardless of which VC it queries first.
-+    if let selected = tabBarController.selectedViewController {
-+      selected.setContentScrollView(scrollView, for: .bottom)
-+    }
-+    tabBarController.setContentScrollView(scrollView, for: .bottom)
-+
-+    var ancestor: UIViewController? = self.parent
-+    while let current = ancestor, current !== tabBarController {
-+      if current is UINavigationController {
-+        current.setContentScrollView(scrollView, for: .bottom)
-+      }
-+      ancestor = current.parent
-+    }
 +  }
 +}
 +#endif
