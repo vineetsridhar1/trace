@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Keyboard,
-  LayoutAnimation,
-  Platform,
   StyleSheet,
-  UIManager,
   View,
   type LayoutChangeEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, { useAnimatedStyle } from "react-native-reanimated";
+import {
+  KeyboardGestureArea,
+  useReanimatedKeyboardAnimation,
+} from "react-native-keyboard-controller";
 import {
   eventScopeKey,
   useEntityField,
@@ -21,7 +22,10 @@ import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { PendingInputBar } from "@/components/sessions/PendingInputBar";
 import { QueuedMessagesStrip } from "@/components/sessions/QueuedMessagesStrip";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
-import { SessionInputComposer } from "@/components/sessions/SessionInputComposer";
+import {
+  COMPOSER_INPUT_NATIVE_ID,
+  SessionInputComposer,
+} from "@/components/sessions/SessionInputComposer";
 import { SessionStream } from "@/components/sessions/SessionStream";
 import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
 import { useEnsureSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
@@ -54,6 +58,13 @@ interface SessionSurfaceProps {
  * The complete session surface: group header + sibling tab strip + event
  * stream. Rendered both inside the Session Player (§10.8) and by the
  * deep-link stack route, so both paths land on the same composition.
+ *
+ * Keyboard handling uses `react-native-keyboard-controller`'s native bridge:
+ * `useReanimatedKeyboardAnimation` gives a UI-thread-driven shared value
+ * that tracks the keyboard's real position frame-for-frame (including
+ * during an interactive drag), and `KeyboardGestureArea` wraps the whole
+ * surface so a swipe-down anywhere over it follows the keyboard natively
+ * on iOS and on Android. No JS-side `Keyboard.addListener` plumbing needed.
  */
 export function SessionSurface({
   sessionId,
@@ -84,40 +95,26 @@ export function SessionSurface({
   );
   const insets = useSafeAreaInsets();
   const [composerHeight, setComposerHeight] = useState(0);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
     setComposerHeight(e.nativeEvent.layout.height);
   }, []);
 
-  useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const animate = (duration: number | undefined) => {
-      if (Platform.OS === "ios" && duration) {
-        LayoutAnimation.configureNext({
-          duration,
-          update: { type: LayoutAnimation.Types.keyboard },
-        });
-      } else if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-        UIManager.setLayoutAnimationEnabledExperimental(true);
-      }
-    };
-    const show = Keyboard.addListener(showEvent, (e) => {
-      animate(e.duration);
-      setKeyboardHeight(e.endCoordinates.height);
-    });
-    const hide = Keyboard.addListener(hideEvent, (e) => {
-      animate(e.duration);
-      setKeyboardHeight(0);
-    });
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
+  // `height` is a `SharedValue<number>` tracking the keyboard's vertical
+  // offset (negative when open, zero when closed). Driven on the UI thread
+  // by the native keyboard-controller module so it stays frame-perfect
+  // during interactive drags.
+  const { height: keyboardHeight } = useReanimatedKeyboardAnimation();
+
   // iOS's keyboard height already includes the home-indicator safe-area, so
-  // offset by insets.bottom to avoid double-padding the composer.
-  const overlayBottom = keyboardHeight > 0 ? Math.max(0, keyboardHeight - insets.bottom) : 0;
+  // clamp by insets.bottom to avoid double-padding the composer.
+  const overlayStyle = useAnimatedStyle(() => {
+    const offset = Math.min(0, keyboardHeight.value + insets.bottom);
+    return { transform: [{ translateY: offset }] };
+  });
+  const streamStyle = useAnimatedStyle(() => {
+    const offset = Math.max(0, -keyboardHeight.value - insets.bottom);
+    return { marginBottom: offset };
+  });
 
   useEffect(() => {
     if (!groupId) return;
@@ -140,7 +137,11 @@ export function SessionSurface({
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
+    <KeyboardGestureArea
+      interpolator="ios"
+      textInputNativeID={COMPOSER_INPUT_NATIVE_ID}
+      style={[styles.root, { backgroundColor: theme.colors.background }]}
+    >
       {hideHeader ? null : (
         <View style={styles.headerLayer}>
           <SessionGroupHeader groupId={groupId} sessionId={sessionId} />
@@ -154,16 +155,16 @@ export function SessionSurface({
         />
       )}
       {hideHeader ? null : <ActiveTodoStrip sessionId={sessionId} />}
-      <View style={[styles.streamWrapper, { marginBottom: overlayBottom }]}>
+      <Animated.View style={[styles.streamWrapper, streamStyle]}>
         <SessionStream
           key={sessionId}
           sessionId={sessionId}
           topInset={topInset}
           bottomInset={composerHeight}
         />
-      </View>
-      <View
-        style={[styles.overlay, { bottom: overlayBottom }]}
+      </Animated.View>
+      <Animated.View
+        style={[styles.overlay, overlayStyle]}
         onLayout={handleComposerLayout}
         pointerEvents="box-none"
       >
@@ -175,8 +176,8 @@ export function SessionSurface({
             <SessionInputComposer sessionId={sessionId} />
           </>
         )}
-      </View>
-    </View>
+      </Animated.View>
+    </KeyboardGestureArea>
   );
 }
 

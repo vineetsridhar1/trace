@@ -17,6 +17,14 @@ import { alpha, useTheme } from "@/theme";
 
 interface SessionInputComposerProps { sessionId: string }
 
+/**
+ * Shared `nativeID` for the composer's TextInput. Matched by the
+ * enclosing `KeyboardGestureArea`'s `textInputNativeID` so iOS knows
+ * which input should participate in the interactive keyboard-dismiss
+ * gesture.
+ */
+export const COMPOSER_INPUT_NATIVE_ID = "session-composer-input";
+
 const MODE_LABEL: Record<ComposerMode, string> = { code: "Code", plan: "Plan", ask: "Ask" };
 const MIN_INPUT_HEIGHT = 28;
 const MAX_INPUT_HEIGHT = 240;
@@ -106,6 +114,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
         ) : null}
         <Animated.View style={[styles.inputWrapper, inputAnimatedStyle]}>
           <TextInput
+            nativeID={COMPOSER_INPUT_NATIVE_ID}
             value={text}
             onChangeText={setText}
             onContentSizeChange={(e) => {

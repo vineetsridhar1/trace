@@ -43,7 +43,9 @@
       "@prisma/engines",
       "prisma"
     ],
-    "patchedDependencies": {}
+    "patchedDependencies": {
+      "react-native-keyboard-controller@1.21.6": "patches/react-native-keyboard-controller@1.21.6.patch"
+    }
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
