@@ -66,22 +66,23 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
     modeProgress.value = withTiming(modeIndex, { duration: theme.motion.durations.base });
   }, [modeIndex, modeProgress, theme.motion.durations.base]);
 
-  // Per-mode color palette precomputed once per theme. interpolateColor runs
-  // on the UI thread, so we hand it plain rgba arrays rather than re-deriving
-  // inside worklets.
+  // Per-mode color palette precomputed once per theme. `code` stays on the
+  // neutral foreground tokens so its tint reads as default chrome; plan/ask
+  // lean on their accent hues but at a softer alpha on the glass itself.
   const palette = useMemo(() => {
-    const codeColor = theme.colors.accent;
-    const planColor = "#8b5cf6";
-    const askColor = "#ea580c";
-    const solids = [codeColor, planColor, askColor];
+    const fg = theme.colors.foreground;
+    const accent = theme.colors.accent;
+    const plan = "#8b5cf6";
+    const ask = "#ea580c";
     return {
-      solids,
-      glassTint: solids.map((c) => alpha(c, 0.22)),
-      cardBorder: solids.map((c) => alpha(c, 0.28)),
-      chipBorder: solids.map((c) => alpha(c, 0.5)),
-      chipBg: solids.map((c) => alpha(c, 0.16)),
+      glassTint: ["rgba(0,0,0,0)", alpha(plan, 0.14), alpha(ask, 0.14)],
+      cardBorder: [alpha(fg, 0.08), alpha(plan, 0.25), alpha(ask, 0.25)],
+      chipBorder: [alpha(fg, 0.12), alpha(plan, 0.5), alpha(ask, 0.5)],
+      chipBg: [alpha(fg, 0.05), alpha(plan, 0.16), alpha(ask, 0.16)],
+      chipText: [fg, plan, ask],
+      sendBg: [accent, plan, ask],
     };
-  }, [theme.colors.accent]);
+  }, [theme.colors.accent, theme.colors.foreground]);
 
   const glassAnimatedProps = useAnimatedProps(() => ({
     tintColor: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.glassTint),
@@ -94,10 +95,10 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
     backgroundColor: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.chipBg),
   }));
   const chipTextAnimatedStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.solids),
+    color: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.chipText),
   }));
   const sendButtonAnimatedStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.solids),
+    backgroundColor: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.sendBg),
   }));
 
   const cycleMode = useCallback(() => {
