@@ -346,8 +346,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             <GlassGroup style={styles.actionGlassContainer} spacing={ACTION_SIZE}>
               <Glass
                 preset="input"
-                tint="rgba(0,0,0,0)"
-                animatedProps={glassAnimatedProps}
+                tint={alpha(theme.colors.success, 0.18)}
                 interactive
                 style={[
                   styles.sendGlass,
