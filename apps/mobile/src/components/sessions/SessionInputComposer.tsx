@@ -18,6 +18,8 @@ import { alpha, useTheme } from "@/theme";
 
 interface SessionInputComposerProps { sessionId: string }
 
+const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
+
 const MODE_CYCLE: ComposerMode[] = ["code", "plan", "ask"];
 const MODE_LABEL: Record<ComposerMode, string> = { code: "Code", plan: "Plan", ask: "Ask" };
 const MIN_INPUT_HEIGHT = 28;
@@ -65,6 +67,12 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   useEffect(() => {
     modeProgress.value = withTiming(modeIndex, { duration: theme.motion.durations.base });
   }, [modeIndex, modeProgress, theme.motion.durations.base]);
+
+  const inputHeight = useSharedValue(MIN_INPUT_HEIGHT);
+  useEffect(() => {
+    inputHeight.value = withTiming(height, { duration: 140 });
+  }, [height, inputHeight]);
+  const inputAnimatedStyle = useAnimatedStyle(() => ({ height: inputHeight.value }));
 
   // Per-mode color palette precomputed once per theme. `code` stays on the
   // neutral foreground tokens so its tint reads as default chrome; plan/ask
@@ -134,18 +142,19 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             <Text variant="caption1" style={{ color: theme.colors.destructive }}>Failed to send. Tap to retry.</Text>
           </Pressable>
         ) : null}
-        <TextInput
+        <AnimatedTextInput
           value={text}
           onChangeText={setText}
           onContentSizeChange={(e) => {
             const h = e.nativeEvent.contentSize.height;
-            setHeight(Math.min(MAX_INPUT_HEIGHT, Math.max(MIN_INPUT_HEIGHT, h)));
+            const next = Math.min(MAX_INPUT_HEIGHT, Math.max(MIN_INPUT_HEIGHT, h));
+            if (next !== height) setHeight(next);
           }}
           editable={canInteract}
           multiline
           placeholder={placeholder}
           placeholderTextColor={theme.colors.dimForeground}
-          style={[styles.input, { height, color: theme.colors.foreground }]}
+          style={[styles.input, { color: theme.colors.foreground }, inputAnimatedStyle]}
         />
         <View style={styles.controlsRow}>
           <View style={styles.optionsGroup}>
