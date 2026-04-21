@@ -12,12 +12,11 @@ import ContextMenu, {
   type ContextMenuOnPressNativeEvent,
 } from "react-native-context-menu-view";
 import Animated, {
-  Easing,
   interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withTiming,
+  withSpring,
 } from "react-native-reanimated";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import { BlurView } from "expo-blur";
@@ -43,7 +42,10 @@ const TRIGGER_SIZE = 48;
 const MENU_WIDTH = 240;
 const ITEM_HEIGHT = 48;
 const MENU_RADIUS = 20;
-const DURATION = 300;
+// Open: bouncy spring with a touch of overshoot. Close: snappier so the menu
+// doesn't linger on dismiss.
+const OPEN_SPRING = { damping: 14, stiffness: 180, mass: 0.9 } as const;
+const CLOSE_SPRING = { damping: 22, stiffness: 260, mass: 0.8 } as const;
 
 /**
  * Liquid Glass overflow affordance: a circular pill that morphs into a
@@ -81,18 +83,11 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
   useEffect(() => {
     if (open) {
       setMounted(true);
-      progress.value = withTiming(1, {
-        duration: DURATION,
-        easing: Easing.out(Easing.cubic),
-      });
+      progress.value = withSpring(1, OPEN_SPRING);
     } else {
-      progress.value = withTiming(
-        0,
-        { duration: DURATION, easing: Easing.in(Easing.cubic) },
-        (finished) => {
-          if (finished) runOnJS(setMounted)(false);
-        },
-      );
+      progress.value = withSpring(0, CLOSE_SPRING, (finished) => {
+        if (finished) runOnJS(setMounted)(false);
+      });
     }
   }, [open, progress]);
 
