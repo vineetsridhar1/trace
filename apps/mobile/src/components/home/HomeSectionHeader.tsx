@@ -17,7 +17,7 @@ function sectionColor(theme: Theme, kind: HomeSectionKind): string {
     case "working_now":
       return theme.colors.statusActive;
     case "recently_done":
-      return theme.colors.statusDone;
+      return theme.colors.statusActive;
   }
 }
 
