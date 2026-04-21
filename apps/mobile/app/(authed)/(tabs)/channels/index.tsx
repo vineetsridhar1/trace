@@ -55,7 +55,14 @@ export default function ChannelsIndex() {
 
   return (
     <>
-      <Stack.Screen options={{ headerSearchBarOptions: searchBarOptions }} />
+      <Stack.Screen
+        options={{
+          title: "Channels",
+          headerLargeTitle: true,
+          headerLargeTitleShadowVisible: false,
+          headerSearchBarOptions: searchBarOptions,
+        }}
+      />
       <FlashList
         data={keys}
         renderItem={renderItem}
