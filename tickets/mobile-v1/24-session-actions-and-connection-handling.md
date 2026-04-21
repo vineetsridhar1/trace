@@ -24,6 +24,7 @@ The remaining session-screen actions: the header overflow menu (stop, copy link,
 - **Error surfacing**:
   - If the session has a recent `lastError`, display a small non-blocking error card pinned below the pending-input bar (or at the top if no pending-input): "Something went wrong: {lastError}". Tap to dismiss (local only).
   - Retry button if `canRetry === true`.
+- **Unauthorized (401) handling on focused subscriptions** (carried over from ticket 20): `useSessionEvents` currently logs errors but does not handle `isUnauthorized` like `useHydrate.ts` does. Port the same pattern so a token expiring mid-session tears down the focused subscription, resets the entity store, and punts to the sign-in screen.
 
 ## Dependencies
 

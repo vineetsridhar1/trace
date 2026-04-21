@@ -61,5 +61,14 @@ Resolve these before wiring the stream — the shell landed in ticket 19 but lef
 
 - `buildSessionNodes`, `SessionNode`, `ReadGlobItem`, and `HIDDEN_SESSION_PAYLOAD_TYPES` were extracted from `apps/web/src/components/session/groupReadGlob.ts` + `apps/web/src/lib/session-event-filters.ts` into `packages/client-core/src/session/` so mobile and web share one node model (per plan §7.1). The old web files are now thin re-exports — downstream web imports continue to work unchanged.
 - `useSessionEvents` (mobile) mirrors web's hook: initial page via `events(scope, limit, before)`, `sessionEvents` subscription for live full payloads, `sessionStatusChanged` subscription that patches the session entity in the store.
-- `estimatedItemSize` is no longer a `FlashList` prop in v2 (automatic measurement). The ticket's requirement remains honored via `maintainVisibleContentPosition.autoscrollToBottomThreshold`.
-- Scroll offset memoized per `sessionId` in a module-level `Map` so re-mounts within a session restore position; a different session starts at the bottom (per "initial scroll to end" flow).
+- `estimatedItemSize` is no longer a `FlashList` prop in v2 (automatic measurement). The auto-scroll-at-bottom behavior is expressed through `maintainVisibleContentPosition.autoscrollToBottomThreshold`.
+- Scroll offset is written into a module-level `Map` keyed by `sessionId` on every scroll. Restoration on re-mount is **not yet wired** (see Follow-ups).
+
+## Follow-ups discovered during implementation
+
+Surfaced during implementation; none of these block ticket 20 shipping but they affect downstream tickets:
+
+1. **Session-level hydration gap.** The ticket called for a `session(id)` query to hydrate `queuedMessages` + per-session `gitCheckpoints`. Mobile currently only calls `sessionGroup(id)` (via `useEnsureSessionGroupDetail`), which returns checkpoints at the **group** level and no queued messages. Per-session `gitCheckpoints` is needed by ticket 21 (`CheckpointMarker`) and `queuedMessages` by ticket 23 (`QueuedMessagesStrip`). Resolve in ticket 21 or ticket 23 by adding a `SESSION_DETAIL_QUERY` — ideally extracted into `@trace/client-core` so web and mobile share it.
+2. **Scroll-offset restore is not actually implemented.** `scrollOffsetMemory.set(sessionId, offsetY)` is called on every scroll, but `initialScrollIndex` returns `undefined` when a memorized offset exists (FlashList v2 exposes no `initialScrollOffset` prop). Proper restore would be an imperative `listRef.current?.scrollToOffset({ offset: memorized, animated: false })` inside a one-shot effect after first layout.
+3. **Auto-scroll duplication.** Both `maintainVisibleContentPosition.autoscrollToBottomThreshold: 0.2` and the explicit `listRef.current?.scrollToEnd()` fire on new nodes while near bottom. They currently both run. Pick one: either lean on MVCP (drop the JS-thread `scrollToEnd`) or disable MVCP's auto-scroll and keep the 120pt-pixel threshold that matches the ticket spec exactly.
+4. **Missing 401 handling in focused subscriptions.** `useSessionEvents` logs errors but does not handle `isUnauthorized` like `useHydrate.ts` does. If the token expires mid-session, the subscription silently fails. Mirror the existing org-events pattern in ticket 24.
