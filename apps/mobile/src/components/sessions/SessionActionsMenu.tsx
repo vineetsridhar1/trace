@@ -44,8 +44,8 @@ const ITEM_HEIGHT = 48;
 const MENU_RADIUS = 20;
 // Open: bouncy spring with a touch of overshoot. Close: snappier so the menu
 // doesn't linger on dismiss.
-const OPEN_SPRING = { damping: 14, stiffness: 120, mass: 1.1 } as const;
-const CLOSE_SPRING = { damping: 22, stiffness: 190, mass: 1.0 } as const;
+const OPEN_SPRING = { damping: 14, stiffness: 120, mass: 1.2 } as const;
+const CLOSE_SPRING = { damping: 22, stiffness: 190, mass: 1.2 } as const;
 
 /**
  * Liquid Glass overflow affordance: a circular pill that morphs into a
@@ -102,11 +102,7 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
     borderRadius: interpolate(progress.value, [0, 1], [TRIGGER_SIZE / 2, MENU_RADIUS]),
     transform: [
       {
-        translateY: interpolate(
-          progress.value,
-          [0, 0.5, 0.82, 1],
-          [0, 26, -10, 0],
-        ),
+        translateY: interpolate(progress.value, [0, 0.5, 1], [0, 26, 0]),
       },
     ],
   }));
