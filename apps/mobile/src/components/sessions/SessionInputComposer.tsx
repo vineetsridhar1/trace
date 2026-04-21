@@ -1,13 +1,20 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView, type SFSymbol } from "expo-symbols";
+import Animated, {
+  interpolateColor,
+  useAnimatedProps,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useEntityField } from "@trace/client-core";
 import { getModelLabel } from "@trace/shared";
 import { Glass, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
-import { alpha, useTheme, type Theme } from "@/theme";
+import { alpha, useTheme } from "@/theme";
 
 interface SessionInputComposerProps { sessionId: string }
 
@@ -15,12 +22,7 @@ const MODE_CYCLE: ComposerMode[] = ["code", "plan", "ask"];
 const MODE_LABEL: Record<ComposerMode, string> = { code: "Code", plan: "Plan", ask: "Ask" };
 const MIN_INPUT_HEIGHT = 28;
 const MAX_INPUT_HEIGHT = 140;
-
-function modeTint(theme: Theme, mode: ComposerMode): string {
-  if (mode === "plan") return "#8b5cf6";
-  if (mode === "ask") return "#ea580c";
-  return theme.colors.accent;
-}
+const MODE_PROGRESS_INPUT = [0, 1, 2];
 
 /**
  * Slack-style composer: one floating glass card with the multiline input on
@@ -57,7 +59,46 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const trimmed = text.trim();
   const canInteract = !isTerminal && !sending;
   const canSubmit = canInteract && trimmed.length > 0;
-  const tint = modeTint(theme, mode);
+
+  const modeIndex = MODE_CYCLE.indexOf(mode);
+  const modeProgress = useSharedValue(modeIndex);
+  useEffect(() => {
+    modeProgress.value = withTiming(modeIndex, { duration: theme.motion.durations.base });
+  }, [modeIndex, modeProgress, theme.motion.durations.base]);
+
+  // Per-mode color palette precomputed once per theme. interpolateColor runs
+  // on the UI thread, so we hand it plain rgba arrays rather than re-deriving
+  // inside worklets.
+  const palette = useMemo(() => {
+    const codeColor = theme.colors.accent;
+    const planColor = "#8b5cf6";
+    const askColor = "#ea580c";
+    const solids = [codeColor, planColor, askColor];
+    return {
+      solids,
+      glassTint: solids.map((c) => alpha(c, 0.22)),
+      cardBorder: solids.map((c) => alpha(c, 0.28)),
+      chipBorder: solids.map((c) => alpha(c, 0.5)),
+      chipBg: solids.map((c) => alpha(c, 0.16)),
+    };
+  }, [theme.colors.accent]);
+
+  const glassAnimatedProps = useAnimatedProps(() => ({
+    tintColor: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.glassTint),
+  }));
+  const cardBorderAnimatedStyle = useAnimatedStyle(() => ({
+    borderColor: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.cardBorder),
+  }));
+  const chipAnimatedStyle = useAnimatedStyle(() => ({
+    borderColor: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.chipBorder),
+    backgroundColor: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.chipBg),
+  }));
+  const chipTextAnimatedStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.solids),
+  }));
+  const sendButtonAnimatedStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.solids),
+  }));
 
   const cycleMode = useCallback(() => {
     void haptic.selection();
@@ -84,7 +125,8 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
       <Glass
         preset="pinnedBar"
         tint="rgba(0,0,0,0)"
-        style={{ ...styles.card, borderColor: alpha(theme.colors.foreground, 0.08) }}
+        animatedProps={glassAnimatedProps}
+        style={[styles.card, cardBorderAnimatedStyle]}
       >
         {errorDraft ? (
           <Pressable onPress={handleRetry} accessibilityRole="button" accessibilityLabel="Retry send" style={styles.retryRow}>
@@ -111,13 +153,15 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
               disabled={!canInteract}
               accessibilityRole="button"
               accessibilityLabel={`Interaction mode: ${MODE_LABEL[mode]}. Tap to cycle.`}
-              style={({ pressed }) => [styles.chip, {
-                borderColor: alpha(tint, 0.5),
-                backgroundColor: pressed ? alpha(tint, 0.28) : alpha(tint, 0.16),
-                opacity: canInteract ? 1 : 0.5,
-              }]}
+              style={{ opacity: canInteract ? 1 : 0.5 }}
             >
-              <Text variant="caption1" style={{ color: tint, fontWeight: "600" }}>{MODE_LABEL[mode]}</Text>
+              {({ pressed }) => (
+                <Animated.View style={[styles.chip, chipAnimatedStyle, { opacity: pressed ? 0.85 : 1 }]}>
+                  <Animated.Text style={[styles.chipText, chipTextAnimatedStyle]}>
+                    {MODE_LABEL[mode]}
+                  </Animated.Text>
+                </Animated.View>
+              )}
             </Pressable>
             {model ? (
               <View style={[styles.chip, { borderColor: alpha(theme.colors.foreground, 0.12) }]}>
@@ -135,12 +179,14 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             disabled={!canSubmit}
             accessibilityRole="button"
             accessibilityLabel={isActive ? "Queue message" : "Send message"}
-            style={({ pressed }) => [styles.sendButton, {
-              backgroundColor: canSubmit ? tint : alpha(tint, 0.3),
-              opacity: pressed && canSubmit ? 0.85 : 1,
-            }]}
           >
-            <SymbolView name="arrow.up" size={16} tintColor={theme.colors.accentForeground} resizeMode="scaleAspectFit" style={styles.sendIcon} />
+            {({ pressed }) => (
+              <Animated.View style={[styles.sendButton, sendButtonAnimatedStyle, {
+                opacity: canSubmit ? (pressed ? 0.85 : 1) : 0.3,
+              }]}>
+                <SymbolView name="arrow.up" size={16} tintColor={theme.colors.accentForeground} resizeMode="scaleAspectFit" style={styles.sendIcon} />
+              </Animated.View>
+            )}
           </Pressable>
         </View>
       </Glass>
@@ -154,6 +200,7 @@ const styles = StyleSheet.create({
   controlsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 },
   optionsGroup: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 },
   chip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth },
+  chipText: { fontSize: 12, lineHeight: 16, fontWeight: "600" },
   iconChip: { width: 26, height: 26, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, alignItems: "center", justifyContent: "center" },
   iconChipGlyph: { width: 12, height: 12 },
   sendButton: { width: 30, height: 30, borderRadius: 999, alignItems: "center", justifyContent: "center" },
