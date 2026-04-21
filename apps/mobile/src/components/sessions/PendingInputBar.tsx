@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import {
   eventScopeKey,
-  useEntityField,
   useScopedEventIds,
   useScopedEvents,
 } from "@trace/client-core";
@@ -15,17 +14,15 @@ interface PendingInputBarProps {
 }
 
 /**
- * Bottom-pinned bar that takes over the composer area when the session is
- * waiting on the user (`session.sessionStatus === "needs_input"`). Renders
- * the plan-review surface or the question surface depending on the most
- * recent pending block. The bar dismounts itself once the session leaves
- * the needs-input state.
+ * Bottom-pinned bar that takes over the composer area when the agent's
+ * most recent output is an unanswered question or plan block. Renders the
+ * plan-review surface or the question surface accordingly. Driven purely
+ * off the event stream — no `sessionStatus` gate — so the bar appears as
+ * soon as the events scope is hydrated, even if the server-side status
+ * flip arrives a tick later. Disappears once the user (or any teammate)
+ * sends a follow-up `message_sent` event.
  */
 export function PendingInputBar({ sessionId }: PendingInputBarProps) {
-  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
-    | string
-    | null
-    | undefined;
   const scopeKey = eventScopeKey("session", sessionId);
   const eventIds = useScopedEventIds(scopeKey, byTimestamp);
   const events = useScopedEvents(scopeKey);
@@ -34,7 +31,7 @@ export function PendingInputBar({ sessionId }: PendingInputBarProps) {
     [eventIds, events],
   );
 
-  if (sessionStatus !== "needs_input" || !pending) return null;
+  if (!pending) return null;
 
   if (pending.kind === "plan") {
     return (

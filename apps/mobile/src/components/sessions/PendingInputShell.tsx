@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import { Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
@@ -22,6 +23,7 @@ export function PendingInputShell({
   children,
 }: PendingInputShellProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   return (
     <View
       style={[
@@ -30,7 +32,8 @@ export function PendingInputShell({
           backgroundColor: theme.colors.surface,
           borderTopColor: alpha(theme.colors.accent, 0.3),
           paddingHorizontal: theme.spacing.md,
-          paddingVertical: theme.spacing.md,
+          paddingTop: theme.spacing.md,
+          paddingBottom: theme.spacing.md + insets.bottom,
         },
       ]}
     >

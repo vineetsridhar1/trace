@@ -17,10 +17,15 @@ export type PendingInputData =
     };
 
 /**
- * Walk events backwards to find the most recent assistant event containing
- * either a question or plan block. Mirrors the detection in
- * `packages/client-core/src/session/nodes.ts` so the pending-input bar
- * always surfaces the same block the stream node represents.
+ * Walk events backwards to find the most recent assistant event that
+ * carries a question or plan block. If a `message_sent` event appears
+ * before we hit a pending block, the user has already answered — return
+ * null so the bar dismisses without waiting on a server-side
+ * `sessionStatus` flip (which can lag the question event by a tick on
+ * cold-open).
+ *
+ * Mirrors the detection in `packages/client-core/src/session/nodes.ts` so
+ * the bar always surfaces the same block the in-stream node represents.
  */
 export function findMostRecentPendingInput(
   eventIds: string[],
@@ -30,7 +35,9 @@ export function findMostRecentPendingInput(
     const id = eventIds[i];
     if (!id) continue;
     const ev = events[id];
-    if (!ev || ev.eventType !== "session_output") continue;
+    if (!ev) continue;
+    if (ev.eventType === "message_sent") return null;
+    if (ev.eventType !== "session_output") continue;
     const payload = asJsonObject(ev.payload);
     if (!payload || payload.type !== "assistant") continue;
     const message = asJsonObject(payload.message);
