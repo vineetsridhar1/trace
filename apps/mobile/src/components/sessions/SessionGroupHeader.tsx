@@ -1,13 +1,25 @@
 import { useCallback, useMemo } from "react";
-import { Alert, Linking, StyleSheet, View } from "react-native";
+import {
+  Alert,
+  Linking,
+  Pressable,
+  StyleSheet,
+  View,
+  type NativeSyntheticEvent,
+} from "react-native";
 import * as Clipboard from "expo-clipboard";
+import { SymbolView } from "expo-symbols";
+import ContextMenu, {
+  type ContextMenuAction,
+  type ContextMenuOnPressNativeEvent,
+} from "react-native-context-menu-view";
 import {
   ARCHIVE_SESSION_GROUP_MUTATION,
   useEntityField,
 } from "@trace/client-core";
 import type { SessionGroupStatus } from "@trace/gql";
 import type { ChipVariant, IconMenuItem } from "@/components/design-system";
-import { Chip, IconButton, Spinner, Text } from "@/components/design-system";
+import { Chip, Glass, Spinner, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
@@ -35,7 +47,7 @@ function prChip(
 export function SessionGroupHeader({
   groupId,
   sessionId,
-  solid = false,
+  solid: _solid = false,
 }: SessionGroupHeaderProps) {
   const theme = useTheme();
   const name = useEntityField("sessionGroups", groupId, "name") as string | null | undefined;
@@ -115,6 +127,23 @@ export function SessionGroupHeader({
     return items;
   }, [archivedAt, handleArchive, handleCopyLink, handleOpenPr, prUrl, status]);
 
+  const actions = useMemo<ContextMenuAction[]>(
+    () =>
+      menuItems.map((m) => ({
+        title: m.title,
+        systemIcon: m.systemIcon,
+        destructive: m.destructive,
+      })),
+    [menuItems],
+  );
+
+  const handleMenuPress = useCallback(
+    (e: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>) => {
+      menuItems[e.nativeEvent.index]?.onPress();
+    },
+    [menuItems],
+  );
+
   const chip = prChip(prUrl, status);
 
   return (
@@ -122,53 +151,96 @@ export function SessionGroupHeader({
       style={[
         styles.container,
         {
-          backgroundColor: solid ? theme.colors.surface : theme.colors.background,
-          borderBottomColor: theme.colors.borderMuted,
           paddingHorizontal: theme.spacing.lg,
-          paddingVertical: theme.spacing.sm,
+          paddingTop: theme.spacing.sm,
+          paddingBottom: theme.spacing.sm,
         },
       ]}
     >
-      <View style={styles.headerRow}>
-        <SessionStatusIndicator
-          status={status as SessionGroupStatus | null | undefined}
-          agentStatus={agentStatus}
-          size={10}
-        />
-        <View style={styles.textBlock}>
-          {name ? (
-            <Text variant="headline" numberOfLines={1}>
-              {name}
-            </Text>
-          ) : (
-            <Spinner size="small" color="mutedForeground" />
-          )}
-          {branch ? (
-            <Text variant="caption1" numberOfLines={1} color="mutedForeground" style={styles.branch}>
-              {branch}
-            </Text>
-          ) : null}
-        </View>
-        {chip ? <Chip label={chip.label} variant={chip.variant} /> : null}
-        <IconButton
-          symbol="ellipsis.circle"
-          size="md"
-          color="mutedForeground"
-          onPress={() => {}}
-          accessibilityLabel="Session group actions"
-          menuItems={menuItems}
+      <View style={styles.row}>
+        <ContextMenu
+          actions={actions}
+          onPress={handleMenuPress}
           dropdownMenuMode
-        />
+          style={styles.flex}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={name ? `${name} — actions` : "Session actions"}
+            onPress={() => void haptic.light()}
+          >
+            <Glass preset="card" style={styles.titlePill}>
+              <View style={[styles.titleRow, { paddingHorizontal: theme.spacing.md }]}>
+                <SessionStatusIndicator
+                  status={status as SessionGroupStatus | null | undefined}
+                  agentStatus={agentStatus}
+                  size={10}
+                />
+                <View style={styles.textBlock}>
+                  {name ? (
+                    <Text variant="headline" numberOfLines={1}>
+                      {name}
+                    </Text>
+                  ) : (
+                    <Spinner size="small" color="mutedForeground" />
+                  )}
+                  {branch ? (
+                    <Text
+                      variant="caption1"
+                      numberOfLines={1}
+                      color="mutedForeground"
+                      style={styles.branch}
+                    >
+                      {branch}
+                    </Text>
+                  ) : null}
+                </View>
+                {chip ? <Chip label={chip.label} variant={chip.variant} /> : null}
+              </View>
+            </Glass>
+          </Pressable>
+        </ContextMenu>
+
+        <ContextMenu actions={actions} onPress={handleMenuPress} dropdownMenuMode>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Session actions"
+            onPress={() => void haptic.light()}
+          >
+            <Glass preset="input" style={styles.overflowPill}>
+              <View style={styles.overflowInner}>
+                <SymbolView
+                  name="ellipsis"
+                  size={18}
+                  tintColor={theme.colors.foreground}
+                  weight="semibold"
+                  resizeMode="scaleAspectFit"
+                  style={styles.overflowIcon}
+                />
+              </View>
+            </Glass>
+          </Pressable>
+        </ContextMenu>
       </View>
     </View>
   );
 }
 
+const PILL_HEIGHT = 48;
+
 const styles = StyleSheet.create({
-  container: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
+  container: {},
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
-  headerRow: {
+  flex: { flex: 1, minWidth: 0 },
+  titlePill: {
+    height: PILL_HEIGHT,
+    justifyContent: "center",
+  },
+  titleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
@@ -180,5 +252,18 @@ const styles = StyleSheet.create({
   branch: {
     marginTop: 1,
     fontFamily: "Menlo",
+  },
+  overflowPill: {
+    width: PILL_HEIGHT,
+    height: PILL_HEIGHT,
+  },
+  overflowInner: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  overflowIcon: {
+    width: 18,
+    height: 18,
   },
 });
