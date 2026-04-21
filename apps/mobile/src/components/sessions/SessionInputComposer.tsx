@@ -350,7 +350,18 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
 
           <Animated.View style={[styles.actionCluster, actionClusterAnimatedStyle]}>
             <GlassGroup style={styles.actionGlassContainer} spacing={ACTION_SIZE}>
-              <Animated.View style={[styles.sendSlot, sendPulseAnimatedStyle]}>
+              <Glass
+                preset="input"
+                tint="rgba(0,0,0,0)"
+                animatedProps={glassAnimatedProps}
+                interactive
+                style={[
+                  styles.sendGlass,
+                  cardBorderAnimatedStyle,
+                  { opacity: canSubmit ? 1 : 0.35 },
+                  sendPulseAnimatedStyle,
+                ]}
+              >
                 <Pressable
                   onPress={handleSend}
                   disabled={!canSubmit}
@@ -358,27 +369,23 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
                   accessibilityLabel={isActive ? "Queue message" : "Send message"}
                   style={styles.actionPressable}
                 >
-                  {({ pressed }) => (
-                    <Glass
-                      preset="input"
-                      tint="rgba(0,0,0,0)"
-                      animatedProps={glassAnimatedProps}
-                      interactive
-                      style={[
-                        styles.actionGlass,
-                        cardBorderAnimatedStyle,
-                        { opacity: canSubmit ? (pressed ? 0.82 : 1) : 0.35 },
-                      ]}
-                    >
-                      <SymbolView name="paperplane.fill" size={16} tintColor={theme.colors.accentForeground} resizeMode="scaleAspectFit" style={styles.sendIcon} />
-                    </Glass>
-                  )}
+                  <SymbolView name="paperplane.fill" size={16} tintColor={theme.colors.accentForeground} resizeMode="scaleAspectFit" style={styles.sendIcon} />
                 </Pressable>
-              </Animated.View>
+              </Glass>
 
-              <Animated.View
-                pointerEvents={isActive ? "auto" : "none"}
-                style={[styles.stopSlot, stopSlotAnimatedStyle]}
+              <Glass
+                preset="input"
+                tint={alpha(theme.colors.destructive, 0.16)}
+                interactive
+                style={[
+                  styles.stopGlass,
+                  {
+                    borderColor: alpha(theme.colors.destructive, 0.42),
+                    opacity: canStop ? 1 : 0.45,
+                    pointerEvents: isActive ? "auto" : "none",
+                  },
+                  stopSlotAnimatedStyle,
+                ]}
               >
                 <Pressable
                   onPress={handleStop}
@@ -387,24 +394,9 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
                   accessibilityLabel="Stop session"
                   style={styles.actionPressable}
                 >
-                  {({ pressed }) => (
-                    <Glass
-                      preset="input"
-                      tint={alpha(theme.colors.destructive, 0.16)}
-                      interactive
-                      style={[
-                        styles.actionGlass,
-                        {
-                          borderColor: alpha(theme.colors.destructive, 0.42),
-                          opacity: canStop ? (pressed ? 0.78 : 1) : 0.45,
-                        },
-                      ]}
-                    >
-                      <SymbolView name="stop.fill" size={14} tintColor={theme.colors.destructive} resizeMode="scaleAspectFit" style={styles.stopIcon} />
-                    </Glass>
-                  )}
+                  <SymbolView name="stop.fill" size={14} tintColor={theme.colors.destructive} resizeMode="scaleAspectFit" style={styles.stopIcon} />
                 </Pressable>
-              </Animated.View>
+              </Glass>
             </GlassGroup>
           </Animated.View>
         </View>
@@ -503,29 +495,24 @@ const styles = StyleSheet.create({
   actionPressable: {
     width: ACTION_SIZE,
     height: ACTION_SIZE,
-  },
-  actionGlass: {
-    width: ACTION_SIZE,
-    height: ACTION_SIZE,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
     justifyContent: "center",
-    overflow: "hidden",
   },
   sendIcon: { width: 16, height: 16 },
-  sendSlot: {
+  sendGlass: {
     position: "absolute",
     left: 0,
     top: 0,
     width: ACTION_SIZE,
     height: ACTION_SIZE,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  stopSlot: {
+  stopGlass: {
     position: "absolute",
     top: 0,
     width: ACTION_SIZE,
     height: ACTION_SIZE,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   stopIcon: { width: 14, height: 14 },
   pillsRow: { flexDirection: "row", alignItems: "center", gap: 8 },
