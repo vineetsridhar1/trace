@@ -490,8 +490,8 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
       ) : null}
       {showPasteButton ? (
         <Animated.View
-          entering={FadeIn.duration(180)}
-          exiting={FadeOut.duration(140)}
+          entering={FadeIn.duration(260)}
+          exiting={FadeOut.duration(160)}
           style={styles.pasteRow}
         >
           <Pressable
@@ -502,21 +502,21 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             style={({ pressed }) => [
               styles.pasteButton,
               {
-                backgroundColor: alpha(theme.colors.accent, 0.14),
-                borderColor: alpha(theme.colors.accent, 0.36),
-                opacity: pressed ? 0.7 : 1,
+                backgroundColor: theme.colors.accent,
+                borderColor: theme.colors.accent,
+                opacity: pressed ? 0.82 : 1,
               },
             ]}
           >
             <SymbolView
               name="photo.on.rectangle"
               size={14}
-              tintColor={theme.colors.accent}
+              tintColor={theme.colors.accentForeground}
               weight="medium"
               resizeMode="scaleAspectFit"
               style={styles.pasteIcon}
             />
-            <NativeText style={[styles.pasteLabel, { color: theme.colors.accent }]}>
+            <NativeText style={[styles.pasteLabel, { color: theme.colors.accentForeground }]}>
               Paste image in clipboard
             </NativeText>
           </Pressable>
