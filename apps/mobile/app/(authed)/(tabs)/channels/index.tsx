@@ -4,6 +4,7 @@
 // tab bar's .bottom-edge scroll view binding.
 // Revert both files with: git checkout HEAD~2 -- "apps/mobile/app/(authed)/channels/index.tsx" "apps/mobile/app/(authed)/channels/_layout.tsx"
 import { useCallback, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import { EmptyState, Screen } from "@/components/design-system";
@@ -51,10 +52,36 @@ export default function ChannelsIndex() {
         onRefresh={handleRefresh}
         refreshing={refreshing}
         ListEmptyComponent={<ChannelsEmpty />}
+        ListFooterComponent={<DiagnosticFiller />}
       />
     </Screen>
   );
 }
+
+function DiagnosticFiller() {
+  return (
+    <View>
+      {Array.from({ length: 30 }).map((_, i) => (
+        <View key={i} style={fillerStyles.row}>
+          <Text style={fillerStyles.text}>Scroll filler row {i + 1}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const fillerStyles = StyleSheet.create({
+  row: {
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#222",
+  },
+  text: {
+    color: "#888",
+    fontSize: 14,
+  },
+});
 
 function renderItem({ item }: { item: ChannelListItemKey }) {
   const { kind, id } = parseItemKey(item);
