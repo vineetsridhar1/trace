@@ -26,11 +26,11 @@ export default function ChannelsLayout() {
           title: "Channels",
           headerLargeTitle: true,
           headerLargeTitleShadowVisible: false,
-          // DIAGNOSTIC: search bar back, but with hideWhenScrolling=false to
-          // test whether the scroll-observation the search controller sets up
-          // for pull-to-reveal is what's breaking tab-bar .bottom binding.
           headerSearchBarOptions: {
             placeholder: "Search channels",
+            // See channels/index.tsx — pull-to-reveal fights iOS 26 tab bar
+            // minimize for the same scroll view. Keep the bar always visible
+            // so the tab bar + bottom accessory collapse on scroll.
             hideWhenScrolling: false,
           },
           headerRight: () => (
