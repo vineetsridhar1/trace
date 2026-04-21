@@ -91,22 +91,15 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
             { width: MENU_WIDTH, height: containerHeight },
           ]}
         >
-          {open ? (
-            <GlassView
-              isInteractive
-              glassEffectStyle="regular"
-              colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-              style={[styles.menuPill, { height: menuHeight }]}
-            >
+          <GlassView
+            isInteractive
+            glassEffectStyle="regular"
+            colorScheme={theme.scheme === "dark" ? "dark" : "light"}
+            style={open ? [styles.menuPill, { height: menuHeight }] : styles.triggerPill}
+          >
+            {open ? (
               <MenuList actions={actions} onPick={handleItem} />
-            </GlassView>
-          ) : (
-            <GlassView
-              isInteractive
-              glassEffectStyle="regular"
-              colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-              style={styles.triggerPill}
-            >
+            ) : (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={accessibilityLabel}
@@ -123,8 +116,8 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
                   style={styles.icon}
                 />
               </Pressable>
-            </GlassView>
-          )}
+            )}
+          </GlassView>
         </GlassContainer>
       </View>
     </>
