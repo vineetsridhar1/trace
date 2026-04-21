@@ -153,7 +153,7 @@ function MorphingTitle({ groupId, sessionId, fullWidth }: SessionGroupTitleMenuP
                 panelStyle,
               ]}
             >
-              <PanelContent />
+              <PanelContent groupId={groupId} sessionId={sessionId} />
             </Animated.View>
           ) : null}
 
@@ -243,18 +243,16 @@ function TitleRow({
   );
 }
 
-function PanelContent() {
-  const theme = useTheme();
+function PanelContent({
+  groupId,
+  sessionId,
+}: {
+  groupId: string;
+  sessionId?: string;
+}) {
   return (
-    <View
-      style={[
-        styles.panelInner,
-        { paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.lg },
-      ]}
-    >
-      <Text variant="caption1" color="mutedForeground">
-        More options coming soon
-      </Text>
+    <View style={styles.panelTitleSlot}>
+      <TitleRow groupId={groupId} sessionId={sessionId} />
     </View>
   );
 }
@@ -326,8 +324,9 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
   },
-  panelInner: {
-    flex: 1,
+  panelTitleSlot: {
+    height: PILL_HEIGHT,
+    justifyContent: "center",
   },
   fallbackPill: {
     flex: 1,
