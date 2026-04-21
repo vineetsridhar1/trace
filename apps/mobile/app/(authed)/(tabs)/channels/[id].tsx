@@ -31,6 +31,7 @@ import {
 } from "@/hooks/useChannelSessionGroups";
 import { fetchChannelSessionGroups } from "@/hooks/useChannelSessionGroupsQuery";
 import { refreshOrgData } from "@/hooks/useHydrate";
+import { createQuickSession } from "@/lib/createQuickSession";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
 
@@ -117,9 +118,8 @@ export default function ChannelDetail() {
   }, [router, channelId]);
 
   const handleCreateSession = useCallback(() => {
-    void haptic.light();
-    router.push(`/sheets/create-session?channelId=${channelId}`);
-  }, [router, channelId]);
+    void createQuickSession(channelId);
+  }, [channelId]);
 
   const handleToggleSection = useCallback((status: SessionGroupSectionStatus) => {
     void haptic.light();
