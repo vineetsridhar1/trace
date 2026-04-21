@@ -20,6 +20,7 @@ import {
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
+import { LinkedCheckoutPanelSection } from "./LinkedCheckoutPanelSection";
 
 const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
 
@@ -254,8 +255,11 @@ function PanelContent({
 }) {
   const theme = useTheme();
   return (
-    <View style={[styles.panelTitleSlot, { paddingVertical: theme.spacing.sm }]}>
-      <TitleRow groupId={groupId} sessionId={sessionId} nameLines={2} />
+    <View style={styles.panelBody}>
+      <View style={[styles.panelTitleSlot, { paddingVertical: theme.spacing.sm }]}>
+        <TitleRow groupId={groupId} sessionId={sessionId} nameLines={2} />
+      </View>
+      <LinkedCheckoutPanelSection groupId={groupId} />
     </View>
   );
 }
@@ -329,6 +333,9 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 0,
     left: 0,
+  },
+  panelBody: {
+    flex: 1,
   },
   panelTitleSlot: {
     minHeight: PILL_HEIGHT,
