@@ -22,7 +22,7 @@ The bottom-pinned composer: plain-text input, interaction-mode toggle (code / pl
   - V1 offline behavior: no durable offline outbox. Failed drafts remain visible only while the screen stays mounted; cross-launch persistence is deferred.
   - Model + hosting chips render as read-only display only. Making them tappable is deferred to [36 — Composer Model & Runtime Pickers](36-composer-model-and-runtime-pickers.md).
   - Keyboard handling: `SessionSurface` listens to the native `Keyboard` module and drives a `LayoutAnimation` that raises the composer overlay and trims the stream's visible frame so the newest message stays visible. `react-native-keyboard-controller` was evaluated and dropped — direct `Keyboard.addListener` matches the iOS keyboard curve without the extra native dependency.
-  - Send/queue logic lives in the shared `useComposerSubmit` hook (`apps/mobile/src/hooks/useComposerSubmit.ts`) to keep the component focused on layout and stay under the 200-line budget. The hook owns the optimistic insert, prompt wrapping (plan / ask prefixes), error rollback, and haptic — `SessionInputComposer` just calls `submit(draft, mode)` and reacts to the resolved state.
+  - Send/queue logic lives in the shared `useComposerSubmit` hook (`apps/mobile/src/hooks/useComposerSubmit.ts`); the mode-tint palette + the five `useAnimatedStyle` bindings live in `useComposerModePalette` (`apps/mobile/src/hooks/useComposerModePalette.ts`). Splitting both out keeps `SessionInputComposer` focused on layout and under the 200-line budget. The submit hook owns the optimistic insert, prompt wrapping (via `wrapPrompt` / `ASK_PREFIX` / `PLAN_PREFIX` shared from `@trace/client-core`), error rollback, and haptic — `SessionInputComposer` just calls `submit(draft, mode)` and reacts to the resolved state.
 - **`QueuedMessagesStrip.tsx`** (<150 lines):
   - Horizontal scroll strip above the composer, only visible when session has queued messages.
   - Each message: chip with truncated text, `×` button on the right (haptic `light`, calls `removeQueuedMessage`).
@@ -60,6 +60,3 @@ The bottom-pinned composer: plain-text input, interaction-mode toggle (code / pl
 7. Cycle interaction mode → tint, chip, border, and send-button colours interpolate smoothly and haptic fires each tap.
 8. Keyboard interactions on device: composer rises with the keyboard, the stream frame shrinks so the last message stays visible, dragging the list down dismisses the keyboard without a jump.
 
-## Follow-ups
-
-- `wrapPrompt` + the ASK-mode prefix string are currently duplicated between `apps/web/src/components/session/interactionModes.tsx` and `apps/mobile/src/hooks/useComposerSubmit.ts`. Hoist both into `@trace/client-core` (next to `PLAN_PREFIX`) the next time either composer is touched — natural pickup inside ticket 24 or a follow-on tidy.

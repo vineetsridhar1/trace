@@ -71,6 +71,17 @@ const TRACE_INTERNAL_RE = /<trace-internal>[\s\S]*?<\/trace-internal>\s*/g;
 const CONVERSATION_HISTORY_RE = /<conversation-history>[\s\S]*?<\/conversation-history>\s*/g;
 export const PLAN_PREFIX =
   "Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.";
+export const ASK_PREFIX =
+  "<trace-internal>\nDo NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n</trace-internal>\n\n";
+
+export type InteractionMode = "code" | "plan" | "ask";
+
+/** Wrap a user prompt with the mode-specific prefix the agent expects. */
+export function wrapPrompt(mode: InteractionMode, prompt: string): string {
+  if (mode === "plan") return `${PLAN_PREFIX}\n\n${prompt}`;
+  if (mode === "ask") return `${ASK_PREFIX}${prompt}`;
+  return prompt;
+}
 
 /** Strip server-wrapped prompt prefixes so the stored prompt renders as the user typed it. */
 export function stripPromptWrapping(text: string): string {

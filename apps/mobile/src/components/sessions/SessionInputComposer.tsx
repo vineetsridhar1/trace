@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import Animated, {
-  interpolateColor,
-  useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -13,16 +11,15 @@ import { useEntityField } from "@trace/client-core";
 import { getModelLabel } from "@trace/shared";
 import { Glass, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
+import { MODE_CYCLE, useComposerModePalette } from "@/hooks/useComposerModePalette";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
 import { alpha, useTheme } from "@/theme";
 
 interface SessionInputComposerProps { sessionId: string }
 
-const MODE_CYCLE: ComposerMode[] = ["code", "plan", "ask"];
 const MODE_LABEL: Record<ComposerMode, string> = { code: "Code", plan: "Plan", ask: "Ask" };
 const MIN_INPUT_HEIGHT = 28;
 const MAX_INPUT_HEIGHT = 240;
-const MODE_PROGRESS_INPUT = [0, 1, 2];
 
 /**
  * Slack-style composer: one floating glass card with the multiline input on
@@ -60,52 +57,19 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const canInteract = !isTerminal && !sending;
   const canSubmit = canInteract && trimmed.length > 0;
 
-  const modeIndex = MODE_CYCLE.indexOf(mode);
-  const modeProgress = useSharedValue(modeIndex);
-  useEffect(() => {
-    modeProgress.value = withTiming(modeIndex, { duration: theme.motion.durations.base });
-  }, [modeIndex, modeProgress, theme.motion.durations.base]);
+  const {
+    glassAnimatedProps,
+    cardBorderAnimatedStyle,
+    chipAnimatedStyle,
+    chipTextAnimatedStyle,
+    sendButtonAnimatedStyle,
+  } = useComposerModePalette(mode);
 
   const inputHeight = useSharedValue(MIN_INPUT_HEIGHT);
   useEffect(() => {
     inputHeight.value = withTiming(height, { duration: 140 });
   }, [height, inputHeight]);
   const inputAnimatedStyle = useAnimatedStyle(() => ({ height: inputHeight.value }));
-
-  // Per-mode color palette precomputed once per theme. `code` stays on the
-  // neutral foreground tokens so its tint reads as default chrome; plan/ask
-  // lean on their accent hues but at a softer alpha on the glass itself.
-  const palette = useMemo(() => {
-    const fg = theme.colors.foreground;
-    const accent = theme.colors.accent;
-    const plan = "#8b5cf6";
-    const ask = "#ea580c";
-    return {
-      glassTint: ["rgba(0,0,0,0)", alpha(plan, 0.14), alpha(ask, 0.14)],
-      cardBorder: [alpha(fg, 0.08), alpha(plan, 0.25), alpha(ask, 0.25)],
-      chipBorder: [alpha(fg, 0.12), alpha(plan, 0.5), alpha(ask, 0.5)],
-      chipBg: [alpha(fg, 0.05), alpha(plan, 0.16), alpha(ask, 0.16)],
-      chipText: [fg, plan, ask],
-      sendBg: [accent, plan, ask],
-    };
-  }, [theme.colors.accent, theme.colors.foreground]);
-
-  const glassAnimatedProps = useAnimatedProps(() => ({
-    tintColor: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.glassTint),
-  }));
-  const cardBorderAnimatedStyle = useAnimatedStyle(() => ({
-    borderColor: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.cardBorder),
-  }));
-  const chipAnimatedStyle = useAnimatedStyle(() => ({
-    borderColor: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.chipBorder),
-    backgroundColor: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.chipBg),
-  }));
-  const chipTextAnimatedStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.chipText),
-  }));
-  const sendButtonAnimatedStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.sendBg),
-  }));
 
   const cycleMode = useCallback(() => {
     void haptic.selection();

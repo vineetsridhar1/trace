@@ -85,6 +85,7 @@ export type {
   SessionNode,
 } from "./session/nodes.js";
 export {
+  ASK_PREFIX,
   PLAN_PREFIX,
   formatCommandLabel,
   formatTime,
@@ -92,5 +93,7 @@ export {
   serializeUnknown,
   stripPromptWrapping,
   truncate,
+  wrapPrompt,
 } from "./session/messages.js";
+export type { InteractionMode } from "./session/messages.js";
 export { useQuestionState } from "./session/question-state.js";

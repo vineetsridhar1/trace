@@ -1,25 +1,17 @@
 import { useCallback, useState } from "react";
 import {
   optimisticallyInsertSessionMessage,
-  PLAN_PREFIX,
   QUEUE_SESSION_MESSAGE_MUTATION,
   reconcileOptimisticSessionMessage,
   removeOptimisticSessionMessage,
   SEND_SESSION_MESSAGE_MUTATION,
+  wrapPrompt,
+  type InteractionMode,
 } from "@trace/client-core";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 
-export type ComposerMode = "code" | "plan" | "ask";
-
-const ASK_PREFIX =
-  "<trace-internal>\nDo NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n</trace-internal>\n\n";
-
-function wrapPrompt(mode: ComposerMode, text: string): string {
-  if (mode === "plan") return `${PLAN_PREFIX}\n\n${text}`;
-  if (mode === "ask") return `${ASK_PREFIX}${text}`;
-  return text;
-}
+export type ComposerMode = InteractionMode;
 
 interface UseComposerSubmitOptions {
   sessionId: string;
