@@ -120,8 +120,6 @@
   }
   html {
     @apply font-sans;
-    tab-size: 2;
-    -moz-tab-size: 2;
   }
   html, body, #root {
     height: 100%;
