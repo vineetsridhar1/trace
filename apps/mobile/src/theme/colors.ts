@@ -78,7 +78,7 @@ const dark: ThemeColors = {
 
   statusActive: "#3b82f6",
   statusNeedsInput: "#f59e0b",
-  statusInReview: "#06b6d4",
+  statusInReview: "#a78bfa",
   statusDone: "#22c55e",
   statusFailed: "#ef4444",
   statusMerged: "#a855f7",
