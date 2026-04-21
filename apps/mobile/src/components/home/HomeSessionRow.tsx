@@ -2,9 +2,8 @@ import { memo, useCallback } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import ContextMenu from "react-native-context-menu-view";
 import { useEntityField } from "@trace/client-core";
-import { Chip, Text } from "@/components/design-system";
+import { Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
-import { CHIP_LABELS, mapStatusToChipVariant } from "@/lib/sessionGroupStatus";
 import { haptic } from "@/lib/haptics";
 import { tryOpenSessionPlayer } from "@/lib/sessionPlayer";
 import { timeAgo } from "@/lib/time";
@@ -19,7 +18,6 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
   const theme = useTheme();
   const name = useEntityField("sessions", sessionId, "name");
   const branch = useEntityField("sessions", sessionId, "branch");
-  const channel = useEntityField("sessions", sessionId, "channel");
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId");
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus");
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
@@ -42,9 +40,7 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
 
   if (!name) return null;
 
-  const chipVariant = mapStatusToChipVariant(sessionStatus);
   const timestamp = lastMessageAt ?? updatedAt ?? null;
-  const channelName = (channel as { name?: string } | null | undefined)?.name ?? null;
 
   return (
     <ContextMenu actions={actions} onPress={onMenuPress} preview={null}>
@@ -87,16 +83,6 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
               {branch}
             </Text>
           ) : null}
-          {channelName ? (
-            <Text
-              variant="caption1"
-              color="dimForeground"
-              numberOfLines={1}
-              style={styles.channel}
-            >
-              #{channelName}
-            </Text>
-          ) : null}
           {lastEventPreview ? (
             <Text
               variant="footnote"
@@ -109,7 +95,6 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
           ) : null}
         </View>
         <View style={styles.accessory}>
-          {chipVariant ? <Chip label={CHIP_LABELS[chipVariant]} variant={chipVariant} /> : null}
           {timestamp ? (
             <Text variant="caption2" color="dimForeground" style={styles.timestamp}>
               {timeAgo(timestamp)}
@@ -137,7 +122,6 @@ const styles = StyleSheet.create({
   title: { fontWeight: "600" },
   titleText: { flex: 1, minWidth: 0 },
   branch: { marginTop: 2 },
-  channel: { marginTop: 2 },
   preview: { marginTop: 4 },
   accessory: {
     marginLeft: 12,

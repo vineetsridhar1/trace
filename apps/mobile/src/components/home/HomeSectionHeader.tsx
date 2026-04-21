@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { StyleSheet, View } from "react-native";
-import { Glass, Text } from "@/components/design-system";
-import { useTheme } from "@/theme";
+import { Text } from "@/components/design-system";
+import { useTheme, type Theme } from "@/theme";
 import type { HomeSectionKind } from "@/hooks/useHomeSections";
 
 const SECTION_LABELS: Record<HomeSectionKind, string> = {
@@ -9,6 +9,17 @@ const SECTION_LABELS: Record<HomeSectionKind, string> = {
   working_now: "Working now",
   recently_done: "Recently done",
 };
+
+function sectionColor(theme: Theme, kind: HomeSectionKind): string {
+  switch (kind) {
+    case "needs_input":
+      return theme.colors.statusNeedsInput;
+    case "working_now":
+      return theme.colors.statusActive;
+    case "recently_done":
+      return theme.colors.statusDone;
+  }
+}
 
 export interface HomeSectionHeaderProps {
   kind: HomeSectionKind;
@@ -20,31 +31,30 @@ export const HomeSectionHeader = memo(function HomeSectionHeader({
   count,
 }: HomeSectionHeaderProps) {
   const theme = useTheme();
+  const color = sectionColor(theme, kind);
   const label = SECTION_LABELS[kind];
 
   return (
-    <Glass
-      preset="pinnedBar"
+    <View
+      accessibilityRole="header"
+      accessibilityLabel={`${label}, ${count} ${count === 1 ? "session" : "sessions"}`}
       style={[
         styles.container,
         {
           paddingHorizontal: theme.spacing.lg,
           paddingVertical: theme.spacing.sm,
+          backgroundColor: theme.colors.background,
         },
       ]}
     >
-      <Text
-        variant="footnote"
-        color="foreground"
-        style={styles.label}
-      >
+      <View style={[styles.dot, { backgroundColor: color }]} />
+      <Text variant="footnote" style={[styles.label, { color, fontWeight: "600" }]}>
         {label}
       </Text>
-      <View style={styles.spacer} />
       <Text variant="caption1" color="dimForeground">
         {count}
       </Text>
-    </Glass>
+    </View>
   );
 });
 
@@ -55,6 +65,10 @@ const styles = StyleSheet.create({
     gap: 8,
     minHeight: 32,
   },
-  label: { fontWeight: "600" },
-  spacer: { flex: 1 },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  label: {},
 });
