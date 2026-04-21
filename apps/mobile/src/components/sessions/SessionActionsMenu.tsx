@@ -91,38 +91,40 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
             { width: MENU_WIDTH, height: containerHeight },
           ]}
         >
-          <GlassView
-            glassEffectStyle="regular"
-            colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-            style={styles.triggerPill}
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={accessibilityLabel}
-              onPress={handleToggle}
-              style={styles.triggerInner}
-              hitSlop={8}
-            >
-              <SymbolView
-                name="ellipsis"
-                size={18}
-                tintColor={theme.colors.foreground}
-                weight="semibold"
-                resizeMode="scaleAspectFit"
-                style={styles.icon}
-              />
-            </Pressable>
-          </GlassView>
-
           {open ? (
             <GlassView
+              isInteractive
               glassEffectStyle="regular"
               colorScheme={theme.scheme === "dark" ? "dark" : "light"}
               style={[styles.menuPill, { height: menuHeight }]}
             >
               <MenuList actions={actions} onPick={handleItem} />
             </GlassView>
-          ) : null}
+          ) : (
+            <GlassView
+              isInteractive
+              glassEffectStyle="regular"
+              colorScheme={theme.scheme === "dark" ? "dark" : "light"}
+              style={styles.triggerPill}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={accessibilityLabel}
+                onPress={handleToggle}
+                style={styles.triggerInner}
+                hitSlop={8}
+              >
+                <SymbolView
+                  name="ellipsis"
+                  size={18}
+                  tintColor={theme.colors.foreground}
+                  weight="semibold"
+                  resizeMode="scaleAspectFit"
+                  style={styles.icon}
+                />
+              </Pressable>
+            </GlassView>
+          )}
         </GlassContainer>
       </View>
     </>
