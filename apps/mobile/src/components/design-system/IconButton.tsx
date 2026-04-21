@@ -26,6 +26,11 @@ export interface IconButtonProps {
   disabled?: boolean;
   haptic?: HapticStrength;
   menuItems?: IconMenuItem[];
+  /**
+   * When true and `menuItems` is set, the menu opens on tap (dropdown style)
+   * instead of the default long-press. Use this for overflow affordances.
+   */
+  dropdownMenuMode?: boolean;
 }
 
 const GLYPH_SIZE: Record<IconButtonSize, number> = { sm: 18, md: 22, lg: 28 };
@@ -46,6 +51,7 @@ export function IconButton({
   disabled = false,
   haptic = "light",
   menuItems,
+  dropdownMenuMode = false,
 }: IconButtonProps) {
   const theme = useTheme();
   const hitSize = HIT_SIZE[size];
@@ -102,7 +108,11 @@ export function IconButton({
   }
 
   return (
-    <ContextMenu actions={actions} onPress={handleMenuPress}>
+    <ContextMenu
+      actions={actions}
+      onPress={handleMenuPress}
+      dropdownMenuMode={dropdownMenuMode}
+    >
       {button}
     </ContextMenu>
   );

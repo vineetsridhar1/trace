@@ -342,9 +342,9 @@ Per-tab iOS `largeTitle` headers live inside pathless route groups (`(home)`, `(
 
 ### 9.2.1 Bottom accessory slot
 
-The iOS 26 `.tabViewBottomAccessory` slot (exposed by `react-native-bottom-tabs` as `renderBottomAccessoryView`) carries an "active sessions" mini-strip: a horizontal pager over the user's currently-in-progress sessions that taps to expand into the full Session Player (§10.8). The accessory returns `null` when no sessions are active, collapsing UITabBar back to normal height. `minimizeBehavior="onScrollDown"` collapses the tab bar + accessory together as the active screen scrolls.
+The iOS 26 `.tabViewBottomAccessory` slot (exposed by `react-native-bottom-tabs` as `renderBottomAccessoryView`) carries an "active sessions" mini-strip: a horizontal pager over the user's currently-in-progress sessions that taps to open the Session Player (§10.8) pointing at that session. The accessory returns `null` when no sessions are active, collapsing UITabBar back to normal height. `minimizeBehavior="onScrollDown"` collapses the tab bar + accessory together as the active screen scrolls.
 
-The accessory and the expanded player read from a single shared `activeAccessoryIndex` in `useMobileUIStore` so swiping in one updates the other.
+The accessory tracks its own pager position in `activeAccessoryIndex`. Tapping a card sets `overlaySessionId` to that session and opens the Player. The Player does not drive the accessory's pager position directly — the accessory is the "scrub between parallel active sessions" surface, and the Player is the "view one session in depth" surface.
 
 ### 9.3 Modal/sheet usage
 
@@ -361,7 +361,7 @@ Full-screen modals for:
 - Scheme: `trace://`
 - Universal links: `https://trace.app/m/...` (configured via Apple App Site Association)
 - Supported paths:
-  - `trace://sessions/:groupId/:sessionId` — opens session stream
+  - `trace://sessions/:groupId/:sessionId` — opens the Session Player (§10.8) pointing at that session
   - `trace://channels/:id` — opens coding channel
   - `trace://auth/callback?token=...` — OAuth callback (internal only)
 - Push notifications carry a `data.deepLink` field; tapping routes through the deep-link handler.
@@ -480,9 +480,9 @@ Full-screen modals for:
 
 ---
 
-### 10.5 Session Group Detail — `app/(authed)/sessions/[groupId].tsx`
+### 10.5 Session Group Detail
 
-**Purpose:** Entry screen for a session group. In V1, this screen is **thin** — it immediately routes to the most-recent session within the group. If the group has multiple sessions, a tab strip appears at the top to switch.
+**Purpose:** Entry point for a session group. In V1 there is no dedicated group-detail screen — tapping a session group row opens the Session Player (§10.8) pointing at the group's most-recent session, with the group header + sibling tab strip rendered inside the Player. The stack route `app/(authed)/sessions/[groupId].tsx` remains only as a deep-link redirect: on mount it opens the Player and pops itself.
 
 **Data:**
 - Query `sessionGroup(id)` — full group + sibling sessions + checkpoints.
@@ -506,9 +506,9 @@ Full-screen modals for:
 
 ---
 
-### 10.6 Session Stream Screen — `app/(authed)/sessions/[groupId]/[sessionId].tsx`
+### 10.6 Session Stream Screen
 
-**This is the single most important screen in V1.** It is where the user spends most of their time.
+**This is the single most important surface in V1.** It is where the user spends most of their time. It is **rendered inside the Session Player (§10.8)**, not as a dedicated full-screen route. The stack route `app/(authed)/sessions/[groupId]/[sessionId].tsx` is retained only as a deep-link target and renders the same composition (`SessionSurface`) inline.
 
 **Purpose:** View the message/event stream for a specific session and interact with it.
 
@@ -593,22 +593,42 @@ Full-screen modals for:
 
 ---
 
-### 10.8 Session Player — `app/(authed)/sheets/session-player.tsx`
+### 10.8 Session Player — primary session surface
 
-**Purpose:** Expand the Active Sessions bottom-accessory (§9.2.1) into a full-screen, gesture-driven player that previews currently-in-progress sessions without leaving whatever tab the user was on.
+**Purpose:** The Session Player is the primary surface for viewing and interacting with a session. It is a full-screen bottom-sheet-style modal that slides up over whichever tab the user is on, and it renders the complete session experience — not a preview. Any entry point that previously would have pushed the session stream as its own stack screen opens the Player instead.
 
-**UI structure:**
-1. **Player card** — session name, agent status, small stop action (if `active`). No composer — full send/queue flow stays on the session stream screen (§10.6).
-2. **In-progress list** (revealed at the `"playerAndList"` detent) — one row per active session; tap snaps the player to that session.
+> **Change from earlier drafts:** The Session Player was originally scoped as a "preview-only" overlay on top of currently-active sessions. V1 now unifies the Player and the Session Stream: tapping a session group row opens the Player, tapping a card in the bottom accessory opens the Player, and all downstream session surfaces (pending-input bar, active-todo strip, queued-messages strip, input composer) mount inside it. The stack route `/sessions/:groupId/:sessionId` is retained only for deep-link compatibility and renders the same composition.
 
-**Gesture model (Reanimated, UI thread):**
-- Detents: `"player"` → `"playerAndList"` → `"dismissed"`.
-- Pull-down from player advances the detent; second pull-down dismisses.
-- Horizontal swipe inside the player updates `activeAccessoryIndex` (shared with the accessory).
+**Entry points:**
+- Tap any session-group row in Channels (§10.4) — opens the Player pointing at the group's latest session.
+- Tap a card in the bottom accessory pager (§9.2.1) — opens the Player pointing at that active session.
+- Deep link `trace://sessions/:groupId/:sessionId` (§9.4) — opens the Player pointing at that session.
+- Push notification tap (§14) — opens the Player.
 
-**Single-subscription invariant:** only the session pointed to by `activeAccessoryIndex` has an active `sessionEvents` subscription; switching sessions tears down the previous subscription before starting the new one.
+**UI structure (top-to-bottom, rendered inside the Player):**
+1. **Grabber + dismiss affordance** — pull-down-to-dismiss gesture on the top region, plus a small chevron-down close button.
+2. **Session group header** (§10.5) — group name, branch, PR chip, overflow menu. Solidifies on scroll of the inner FlashList.
+3. **Session tab strip** — sibling sessions in the group; tap switches the Player's shown session without closing.
+4. **Session stream** (§10.6) — the FlashList of events.
+5. **Pending-input bar / active-todo strip / queued-messages strip / input composer** — all of §10.6's surfaces mount here as their tickets (22/23/24) land.
 
-**V1 scope guardrails:** no composer, no recently-done sessions in the list, no branching/ticketing surfaces.
+**State model:**
+- `useMobileUIStore.overlaySessionId: string | null` — the session currently shown by the Player. `null` = Player closed.
+- `useMobileUIStore.activeAccessoryIndex: number` — purely the bottom-accessory pager's visible index; kept in sync with `overlaySessionId` when the Player is open *and* the shown session is in the active-sessions list.
+- Setting `overlaySessionId` to non-null mounts the Player; clearing it (or setting `sessionPlayerOpen = false`) dismisses.
+
+**Gesture model (V1):**
+- Single detent: Player is either fully open or fully dismissed.
+- Pull-down past threshold (120pt or velocity > 800) dismisses.
+- Horizontal swipe across sessions is a V2 evolution (the tab strip handles sibling switching within a group; the bottom accessory handles scrubbing across parallel active sessions while the Player is closed).
+- The `"playerAndList"` "Up Next" detent from earlier drafts is **dropped** — the bottom accessory already provides the across-sessions scrub surface.
+
+**Single-subscription invariant:** only the session pointed to by `overlaySessionId` has an active `sessionEvents` + `sessionStatusChanged` subscription; switching sessions tears down the previous subscription before starting the new one. Same behavior as the earlier Player spec — it just now applies to every session entry point, not just active ones.
+
+**Scope guardrails (updated):**
+- Works for sessions of any status the user can access, not just `active`. Done / merged / failed / needs-input sessions all open the Player.
+- Composer is **in scope** (lands in ticket 23) because the Player is the session surface, not a preview.
+- New-session creation is still out of scope for V1.
 
 ---
 

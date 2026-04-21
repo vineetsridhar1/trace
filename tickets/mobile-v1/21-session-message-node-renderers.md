@@ -2,7 +2,7 @@
 
 ## Summary
 
-Replace placeholder node text in the session stream with real renderers for each node type. Match web's node model (user message, assistant message, tool calls, read-glob groups, command executions, checkpoint markers, PR cards, connection-lost banners). Markdown rendering for assistant content. No file-tree / diff expansion in V1.
+Replace placeholder node text in the session stream with real renderers for each node type. The node model itself (`SessionNode`, `ReadGlobItem`, `buildSessionNodes`, `HIDDEN_SESSION_PAYLOAD_TYPES`) ships from `@trace/client-core` (extracted from web in ticket 20) — mobile renders against the same model as web, so every `SessionNode.kind` must have a matching renderer. Markdown rendering for assistant content. No file-tree / diff expansion in V1.
 
 ## What needs to happen
 
@@ -16,7 +16,8 @@ Replace placeholder node text in the session stream with real renderers for each
   - `CheckpointMarker.tsx` — inline chip "✓ Committed: {subject} ({fileCount} files)"; tap: no-op in V1 (file-tree deferred)
   - `PRCard.tsx` — compact card for `session_pr_opened/merged/closed`; tap → opens URL in browser
   - `ConnectionLostBanner.tsx` — dim banner in stream; inline "Retry" button calls `retrySessionConnection` mutation
-- `nodes/index.tsx` — `renderNode(node: SessionNode)` switch that dispatches to the right component.
+- `nodes/index.tsx` — `renderNode(node: SessionNode)` switch that dispatches to the right component. Import `SessionNode` from `@trace/client-core`, not from any web or mobile-local module.
+- **Per-session hydration** (carried over from ticket 20): add a `SESSION_DETAIL_QUERY` that loads `queuedMessages` + per-session `gitCheckpoints` and upserts into the entity store on session-screen mount. `CheckpointMarker` reads from `useEntityField("sessions", sessionId, "gitCheckpoints")`. Ideally extract the query into `@trace/client-core` so web's `SessionDetailView` can also consume it.
 - **Markdown:** use `react-native-markdown-display` with a custom rulesRenderer matching the theme (headers, lists, inline code, code blocks in monospace dark container). No KaTeX/math in V1. No image rendering in V1.
 - **Streaming assistant cursor:** if the node is the most recent `assistant` event and the session is still `active`, render a blinking cursor at the end of the text (opacity 0→1→0 over 800ms via Reanimated, UI thread).
 - **Long-press on user/assistant bubble:** native context menu: "Copy".

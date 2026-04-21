@@ -1,6 +1,5 @@
 import { memo, useCallback, useMemo } from "react";
 import { Pressable, StyleSheet, View, type NativeSyntheticEvent } from "react-native";
-import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import ContextMenu, {
   type ContextMenuAction,
@@ -29,7 +28,6 @@ export const SessionGroupRow = memo(function SessionGroupRow({
   groupId,
   hideStatusChip = false,
 }: SessionGroupRowProps) {
-  const router = useRouter();
   const theme = useTheme();
   const name = useEntityField("sessionGroups", groupId, "name");
   const status = useEntityField("sessionGroups", groupId, "status");
@@ -47,9 +45,10 @@ export const SessionGroupRow = memo(function SessionGroupRow({
   );
 
   const handlePress = useCallback(() => {
-    if (tryOpenSessionPlayer(latestSessionId)) return;
-    router.push(`/sessions/${groupId}`);
-  }, [groupId, latestSessionId, router]);
+    if (!latestSessionId) return;
+    void haptic.light();
+    tryOpenSessionPlayer(latestSessionId);
+  }, [latestSessionId]);
 
   const handleArchive = useCallback(async () => {
     void haptic.medium();

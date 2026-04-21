@@ -27,6 +27,7 @@ The bottom-pinned composer: plain-text input, interaction-mode toggle (code / pl
   - Count label: "Queued (N)".
   - Reads from entity store via `useEntityStore(s => s._queuedMessageIdsBySession[sessionId] ?? [])`.
   - Live updates from `queued_message_*` events via existing handlers.
+- **Per-session hydration.** `queuedMessages` must be populated in the store when the composer mounts. At boot, `mySessions` covers the user's own sessions, but sessions reached via deep link or another user's shared link may not be hydrated. If ticket 21 hasn't already added `SESSION_DETAIL_QUERY` hydration on the session screen, this ticket must.
 - Focus behavior: tapping the stream dismisses keyboard. Pull-to-refresh at top also dismisses keyboard.
 
 ## Dependencies

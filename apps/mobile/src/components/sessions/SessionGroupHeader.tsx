@@ -1,18 +1,34 @@
 import { useCallback, useMemo } from "react";
-import { Alert, Linking, StyleSheet, View } from "react-native";
+import {
+  Alert,
+  Linking,
+  Pressable,
+  StyleSheet,
+  View,
+  type NativeSyntheticEvent,
+} from "react-native";
 import * as Clipboard from "expo-clipboard";
+import ContextMenu, {
+  type ContextMenuAction,
+  type ContextMenuOnPressNativeEvent,
+} from "react-native-context-menu-view";
 import {
   ARCHIVE_SESSION_GROUP_MUTATION,
   useEntityField,
 } from "@trace/client-core";
-import type { ChipVariant, IconMenuItem } from "@/components/design-system";
-import { Chip, Glass, IconButton, Spinner, Text } from "@/components/design-system";
+import type { SessionGroupStatus } from "@trace/gql";
+import type { ChipVariant } from "@/components/design-system";
+import { Chip, Glass, Spinner, Text } from "@/components/design-system";
+import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
+import { SessionActionsMenu, type SessionMenuAction } from "./SessionActionsMenu";
 
 interface SessionGroupHeaderProps {
   groupId: string;
+  /** The session currently shown; drives the status dot's agentStatus overlay. */
+  sessionId?: string;
   solid?: boolean;
 }
 
@@ -30,7 +46,8 @@ function prChip(
 
 export function SessionGroupHeader({
   groupId,
-  solid = false,
+  sessionId,
+  solid: _solid = false,
 }: SessionGroupHeaderProps) {
   const theme = useTheme();
   const name = useEntityField("sessionGroups", groupId, "name") as string | null | undefined;
@@ -47,6 +64,10 @@ export function SessionGroupHeader({
     | null
     | undefined;
   const archivedAt = useEntityField("sessionGroups", groupId, "archivedAt") as
+    | string
+    | null
+    | undefined;
+  const agentStatus = useEntityField("sessions", sessionId ?? "", "agentStatus") as
     | string
     | null
     | undefined;
@@ -92,7 +113,7 @@ export function SessionGroupHeader({
   }, [groupId]);
 
   const menuItems = useMemo(() => {
-    const items: IconMenuItem[] = [];
+    const items: SessionMenuAction[] = [];
     if (prUrl) items.push({ title: "Open PR", systemIcon: "arrow.up.forward.square", onPress: handleOpenPr });
     if (!archivedAt && status !== "archived") {
       items.push({
@@ -106,87 +127,111 @@ export function SessionGroupHeader({
     return items;
   }, [archivedAt, handleArchive, handleCopyLink, handleOpenPr, prUrl, status]);
 
-  const content = (
+  const actions = useMemo<ContextMenuAction[]>(
+    () =>
+      menuItems.map((m) => ({
+        title: m.title,
+        systemIcon: m.systemIcon,
+        destructive: m.destructive,
+      })),
+    [menuItems],
+  );
+
+  const handleMenuPress = useCallback(
+    (e: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>) => {
+      menuItems[e.nativeEvent.index]?.onPress();
+    },
+    [menuItems],
+  );
+
+  const chip = prChip(prUrl, status);
+
+  return (
     <View
       style={[
-        styles.content,
+        styles.container,
         {
           paddingHorizontal: theme.spacing.lg,
-          paddingVertical: theme.spacing.md,
-          borderBottomColor: theme.colors.borderMuted,
+          paddingTop: theme.spacing.sm,
+          paddingBottom: theme.spacing.sm,
         },
       ]}
     >
-      <View style={styles.headerRow}>
-        <View style={styles.textBlock}>
-          {name ? (
-            <>
-              <Text variant="title1" numberOfLines={2}>
-                {name}
-              </Text>
-              {branch ? (
-                <Text variant="mono" numberOfLines={1} color="mutedForeground">
-                  {branch}
-                </Text>
-              ) : null}
-            </>
-          ) : (
-            <Spinner size="small" color="mutedForeground" />
-          )}
-        </View>
-        <IconButton
-          symbol="ellipsis.circle"
-          size="lg"
-          color="mutedForeground"
-          onPress={() => {}}
-          accessibilityLabel="Session group actions"
-          menuItems={menuItems}
-        />
+      <View style={styles.row}>
+        <ContextMenu
+          actions={actions}
+          onPress={handleMenuPress}
+          dropdownMenuMode
+          style={styles.flex}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={name ? `${name} — actions` : "Session actions"}
+            onPress={() => void haptic.light()}
+          >
+            <Glass preset="card" style={styles.titlePill}>
+              <View style={[styles.titleRow, { paddingHorizontal: theme.spacing.md }]}>
+                <SessionStatusIndicator
+                  status={status as SessionGroupStatus | null | undefined}
+                  agentStatus={agentStatus}
+                  size={10}
+                />
+                <View style={styles.textBlock}>
+                  {name ? (
+                    <Text variant="headline" numberOfLines={1}>
+                      {name}
+                    </Text>
+                  ) : (
+                    <Spinner size="small" color="mutedForeground" />
+                  )}
+                  {branch ? (
+                    <Text
+                      variant="caption1"
+                      numberOfLines={1}
+                      color="mutedForeground"
+                      style={styles.branch}
+                    >
+                      {branch}
+                    </Text>
+                  ) : null}
+                </View>
+                {chip ? <Chip label={chip.label} variant={chip.variant} /> : null}
+              </View>
+            </Glass>
+          </Pressable>
+        </ContextMenu>
+
+        <SessionActionsMenu actions={menuItems} accessibilityLabel="Session actions" />
       </View>
-      {(() => {
-        const chip = prChip(prUrl, status);
-        return chip ? <Chip label={chip.label} variant={chip.variant} /> : null;
-      })()}
     </View>
-  );
-
-  if (solid) {
-    return (
-      <View
-        style={{
-          backgroundColor: theme.colors.surface,
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: theme.colors.borderMuted,
-        }}
-      >
-        {content}
-      </View>
-    );
-  }
-
-  return (
-    <Glass preset="pinnedBar" style={styles.glass}>
-      {content}
-    </Glass>
   );
 }
 
+const PILL_HEIGHT = 48;
+
 const styles = StyleSheet.create({
-  glass: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  content: {
-    gap: 10,
-  },
-  headerRow: {
+  container: {},
+  row: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
+    alignItems: "center",
+    gap: 8,
+  },
+  flex: { flex: 1, minWidth: 0 },
+  titlePill: {
+    height: PILL_HEIGHT,
+    justifyContent: "center",
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   textBlock: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+  },
+  branch: {
+    marginTop: 1,
+    fontFamily: "Menlo",
   },
 });

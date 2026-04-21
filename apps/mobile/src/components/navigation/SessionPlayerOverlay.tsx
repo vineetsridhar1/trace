@@ -1,14 +1,11 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useShallow } from "zustand/react/shallow";
-import { useEntityStore } from "@trace/client-core";
 import Animated, {
   interpolate,
   runOnJS,
@@ -18,26 +15,34 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { IconButton, Text } from "@/components/design-system";
-import { selectActiveSessionIds } from "@/lib/activeSessions";
+import { useEntityField } from "@trace/client-core";
+import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
+import { SessionSurface, SessionSurfaceEmpty } from "@/components/sessions/SessionSurface";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { haptic } from "@/lib/haptics";
 import { useMobileUIStore } from "@/stores/ui";
 import { alpha, useTheme } from "@/theme";
-import { SessionPlayerRow } from "./SessionPlayerRow";
-import { SessionPlayerSelectedCard } from "./SessionPlayerSelectedCard";
 
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 800;
 
+/**
+ * The Session Player (§10.8) — the primary session surface in V1. Renders
+ * the full `SessionSurface` (header + tab strip + stream) in a bottom-sheet
+ * modal that slides over whichever tab the user is on. Opened from session
+ * group rows, bottom-accessory cards, deep links, and push-notification taps.
+ */
 export function SessionPlayerOverlay() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
   const open = useMobileUIStore((s) => s.sessionPlayerOpen);
-  const index = useMobileUIStore((s) => s.activeAccessoryIndex);
-  const setIndex = useMobileUIStore((s) => s.setActiveAccessoryIndex);
-  const ids = useEntityStore(useShallow(selectActiveSessionIds));
+  const sessionId = useMobileUIStore((s) => s.overlaySessionId);
+  const setOverlaySessionId = useMobileUIStore((s) => s.setOverlaySessionId);
+  const headerGroupId = useEntityField("sessions", sessionId ?? "", "sessionGroupId") as
+    | string
+    | null
+    | undefined;
 
   const progress = useSharedValue(0);
   const dragY = useSharedValue(0);
@@ -48,9 +53,7 @@ export function SessionPlayerOverlay() {
       progress.value = withSpring(1, theme.motion.springs.gentle);
     } else {
       dragY.value = withTiming(0, { duration: theme.motion.durations.base });
-      progress.value = withTiming(0, {
-        duration: theme.motion.durations.base,
-      });
+      progress.value = withTiming(0, { duration: theme.motion.durations.base });
     }
   }, [
     open,
@@ -59,19 +62,6 @@ export function SessionPlayerOverlay() {
     theme.motion.durations.base,
     theme.motion.springs.gentle,
   ]);
-
-  useEffect(() => {
-    if (ids.length === 0 && open) closeSessionPlayer();
-  }, [ids.length, open]);
-
-  useEffect(() => {
-    if (ids.length === 0) return;
-    const max = ids.length - 1;
-    if (index > max) setIndex(max);
-  }, [ids.length, index, setIndex]);
-
-  const sessionId = ids[index] ?? ids[0] ?? null;
-  const queueIds = ids.filter((_, i) => i !== index);
 
   const pan = Gesture.Pan()
     .enabled(open)
@@ -100,27 +90,24 @@ export function SessionPlayerOverlay() {
     const p = progress.value;
     return {
       transform: [
-        {
-          translateY:
-            interpolate(p, [0, 1], [screenHeight, 0]) + dragY.value,
-        },
+        { translateY: interpolate(p, [0, 1], [screenHeight, 0]) + dragY.value },
       ],
     };
   });
 
-  if (ids.length === 0 && !open) return null;
+  const handleSelectSession = useCallback(
+    (nextId: string) => {
+      setOverlaySessionId(nextId);
+    },
+    [setOverlaySessionId],
+  );
+
+  if (!open && !sessionId) return null;
 
   return (
-    <View
-      pointerEvents={open ? "auto" : "none"}
-      style={styles.overlay}
-    >
+    <View pointerEvents={open ? "auto" : "none"} style={styles.overlay}>
       <Animated.View
-        style={[
-          styles.backdrop,
-          { backgroundColor: "#000" },
-          backdropStyle,
-        ]}
+        style={[styles.backdrop, { backgroundColor: "#000" }, backdropStyle]}
       >
         <Pressable
           style={StyleSheet.absoluteFill}
@@ -140,73 +127,35 @@ export function SessionPlayerOverlay() {
           { backgroundColor: theme.colors.background },
         ]}
       >
-        <GestureDetector gesture={pan}>
-          <View style={[styles.dragRegion, { paddingTop: insets.top }]}>
-            <View style={styles.grabberRow}>
-              <View
-                style={[
-                  styles.grabber,
-                  {
-                    backgroundColor: alpha(theme.colors.foreground, 0.28),
-                  },
-                ]}
-              />
-            </View>
-            <View style={styles.closeRow}>
-              <IconButton
-                symbol="chevron.down"
-                size="sm"
-                color="mutedForeground"
-                accessibilityLabel="Close session player"
-                onPress={() => closeSessionPlayer()}
-              />
-              <View style={styles.closeRowSpacer} />
-            </View>
-            {sessionId ? (
-              <SessionPlayerSelectedCard sessionId={sessionId} />
-            ) : null}
-          </View>
-        </GestureDetector>
-
-        {queueIds.length > 0 ? (
-          <View style={styles.queue}>
-            <Text
-              variant="caption1"
-              color="mutedForeground"
-              style={styles.queueLabel}
-            >
-              UP NEXT
-            </Text>
-            <ScrollView
-              contentContainerStyle={{
-                paddingBottom: Math.max(insets.bottom, 24),
-              }}
-              showsVerticalScrollIndicator={false}
-            >
-              <View
-                style={[
-                  styles.queueCard,
-                  { backgroundColor: alpha(theme.colors.foreground, 0.04) },
-                ]}
-              >
-                {queueIds.map((id, i) => {
-                  const rowIndex = ids.indexOf(id);
-                  return (
-                    <SessionPlayerRow
-                      key={id}
-                      sessionId={id}
-                      showSeparator={i < queueIds.length - 1}
-                      onPress={() => {
-                        void haptic.selection();
-                        setIndex(rowIndex);
-                      }}
-                    />
-                  );
-                })}
+        <View style={[styles.topInset, { paddingTop: insets.top }]}>
+          <GestureDetector gesture={pan}>
+            <View style={styles.dragHandle}>
+              <View style={styles.grabberRow}>
+                <View
+                  style={[
+                    styles.grabber,
+                    { backgroundColor: alpha(theme.colors.foreground, 0.28) },
+                  ]}
+                />
               </View>
-            </ScrollView>
-          </View>
-        ) : null}
+              {sessionId ? (
+                <SessionGroupHeader groupId={headerGroupId ?? ""} sessionId={sessionId} />
+              ) : null}
+            </View>
+          </GestureDetector>
+        </View>
+
+        <View style={styles.surface}>
+          {sessionId ? (
+            <SessionSurface
+              sessionId={sessionId}
+              onSelectSession={handleSelectSession}
+              hideHeader
+            />
+          ) : (
+            <SessionSurfaceEmpty />
+          )}
+        </View>
       </Animated.View>
     </View>
   );
@@ -224,39 +173,20 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     overflow: "hidden",
   },
-  dragRegion: {},
+  topInset: {},
+  dragHandle: {},
   grabberRow: {
     alignItems: "center",
     justifyContent: "center",
     paddingTop: 8,
+    paddingBottom: 6,
   },
   grabber: {
     width: 36,
     height: 5,
     borderRadius: 999,
   },
-  closeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    paddingHorizontal: 8,
-    marginTop: 4,
-  },
-  closeRowSpacer: {
+  surface: {
     flex: 1,
-  },
-  queue: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  queueLabel: {
-    marginLeft: 6,
-    marginBottom: 8,
-    letterSpacing: 1.2,
-    fontWeight: "600",
-  },
-  queueCard: {
-    borderRadius: 16,
-    overflow: "hidden",
   },
 });
