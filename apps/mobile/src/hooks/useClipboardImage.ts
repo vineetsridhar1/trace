@@ -14,6 +14,8 @@ import * as Clipboard from "expo-clipboard";
 export function useClipboardImage(): {
   hasImage: boolean;
   refresh: () => void;
+  /** Hide the indicator without re-checking — call after the user acts on it. */
+  dismiss: () => void;
 } {
   const [hasImage, setHasImage] = useState(false);
   const mountedRef = useRef(true);
@@ -29,6 +31,10 @@ export function useClipboardImage(): {
     })();
   }, []);
 
+  const dismiss = useCallback(() => {
+    setHasImage(false);
+  }, []);
+
   useEffect(() => {
     mountedRef.current = true;
     refresh();
@@ -37,5 +43,5 @@ export function useClipboardImage(): {
     };
   }, [refresh]);
 
-  return { hasImage, refresh };
+  return { hasImage, refresh, dismiss };
 }

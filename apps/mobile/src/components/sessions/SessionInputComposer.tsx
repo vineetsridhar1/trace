@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text as NativeText, TextInput, View } from "reac
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import * as Clipboard from "expo-clipboard";
+import * as ImagePicker from "expo-image-picker";
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -129,9 +130,15 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const canSubmit = canInteract && (trimmed.length > 0 || images.length > 0);
   const canStop = isActive && !stopping;
 
-  const { hasImage: clipboardHasImage, refresh: refreshClipboard } = useClipboardImage();
+  const {
+    hasImage: clipboardHasImage,
+    refresh: refreshClipboard,
+    dismiss: dismissClipboard,
+  } = useClipboardImage();
+  const [pickingImage, setPickingImage] = useState(false);
   const showPasteButton =
     canInteract && clipboardHasImage && images.length < MAX_IMAGES && !pastingImage;
+  const canAttach = canInteract && !pickingImage && images.length < MAX_IMAGES;
 
   const {
     glassAnimatedProps,
@@ -217,6 +224,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
         if (prev.length >= MAX_IMAGES) return prev;
         return [...prev, attachment];
       });
+      dismissClipboard();
       void haptic.light();
     } catch (err) {
       void haptic.error();
@@ -224,7 +232,50 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
     } finally {
       setPastingImage(false);
     }
-  }, [images.length, pastingImage, sessionId, setImages]);
+  }, [dismissClipboard, images.length, pastingImage, sessionId, setImages]);
+  const handlePickFromLibrary = useCallback(async () => {
+    if (pickingImage || images.length >= MAX_IMAGES) return;
+    setPickingImage(true);
+    void haptic.selection();
+    try {
+      const remaining = MAX_IMAGES - images.length;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        base64: true,
+        quality: 0.9,
+        allowsMultipleSelection: true,
+        selectionLimit: remaining,
+      });
+      if (result.canceled) return;
+      const attachments: ImageAttachment[] = [];
+      for (const asset of result.assets) {
+        if (!asset.base64) continue;
+        const mimeType = asset.mimeType ?? "image/jpeg";
+        attachments.push({
+          id: generateUUID(),
+          mimeType,
+          base64: asset.base64,
+          previewUri: asset.uri || `data:${mimeType};base64,${asset.base64}`,
+          width: asset.width || null,
+          height: asset.height || null,
+          s3Key: null,
+          uploading: false,
+        });
+      }
+      if (attachments.length === 0) return;
+      setImages(sessionId, (prev) => {
+        const room = MAX_IMAGES - prev.length;
+        if (room <= 0) return prev;
+        return [...prev, ...attachments.slice(0, room)];
+      });
+      void haptic.light();
+    } catch (err) {
+      void haptic.error();
+      console.warn("[composer] image library pick failed", err);
+    } finally {
+      setPickingImage(false);
+    }
+  }, [images.length, pickingImage, sessionId, setImages]);
   const handleRemoveImage = useCallback(
     (id: string) => {
       setImages(sessionId, (prev) => prev.filter((img) => img.id !== id));
@@ -555,6 +606,33 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             </Animated.View>
           </Glass>
 
+          <Glass
+            preset="input"
+            tint="rgba(0,0,0,0)"
+            interactive
+            style={[
+              styles.attachGlass,
+              { borderColor: theme.colors.border, opacity: canAttach ? 1 : 0.45 },
+            ]}
+          >
+            <Pressable
+              onPress={() => void handlePickFromLibrary()}
+              disabled={!canAttach}
+              accessibilityRole="button"
+              accessibilityLabel="Attach image from library"
+              style={styles.actionPressable}
+            >
+              <SymbolView
+                name="photo.on.rectangle"
+                size={18}
+                tintColor={theme.colors.foreground}
+                weight="medium"
+                resizeMode="scaleAspectFit"
+                style={styles.attachIcon}
+              />
+            </Pressable>
+          </Glass>
+
           <Animated.View style={[styles.actionCluster, actionClusterAnimatedStyle]}>
             <View style={styles.actionGlassContainer}>
               <Glass
@@ -762,4 +840,12 @@ const styles = StyleSheet.create({
   },
   pasteIcon: { width: 14, height: 14 },
   pasteLabel: { fontSize: 13, fontWeight: "600" },
+  attachGlass: {
+    width: ACTION_SIZE,
+    height: ACTION_SIZE,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  attachIcon: { width: 18, height: 18 },
 });
