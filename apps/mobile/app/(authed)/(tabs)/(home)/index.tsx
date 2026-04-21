@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { StyleSheet, Text as RNText, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import { EmptyState } from "@/components/design-system";
@@ -12,8 +12,7 @@ import { haptic } from "@/lib/haptics";
 
 type HomeListItem =
   | { kind: "header"; section: HomeSectionKind; count: number }
-  | { kind: "row"; sessionId: string }
-  | { kind: "filler"; index: number };
+  | { kind: "row"; sessionId: string };
 
 export default function AuthedHome() {
   const theme = useTheme();
@@ -30,10 +29,6 @@ export default function AuthedHome() {
       for (const id of section.ids) {
         out.push({ kind: "row", sessionId: id });
       }
-    }
-    // DEBUG: temporary filler rows to test tab bar minimize-on-scroll.
-    for (let i = 0; i < 50; i++) {
-      out.push({ kind: "filler", index: i });
     }
     return out;
   }, [sections]);
@@ -72,24 +67,11 @@ function renderItem({ item }: { item: HomeListItem }) {
   if (item.kind === "header") {
     return <HomeSectionHeader kind={item.section} count={item.count} />;
   }
-  if (item.kind === "filler") {
-    return <FillerRow index={item.index} />;
-  }
   return <HomeSessionRow sessionId={item.sessionId} />;
 }
 
-function FillerRow({ index }: { index: number }) {
-  return (
-    <View style={styles.filler}>
-      <RNText style={styles.fillerText}>Filler row {index + 1}</RNText>
-    </View>
-  );
-}
-
 function keyExtractor(item: HomeListItem): string {
-  if (item.kind === "header") return `h:${item.section}`;
-  if (item.kind === "filler") return `f:${item.index}`;
-  return `r:${item.sessionId}`;
+  return item.kind === "header" ? `h:${item.section}` : `r:${item.sessionId}`;
 }
 
 function getItemType(item: HomeListItem): string {
@@ -111,15 +93,5 @@ function HomeEmpty() {
 const styles = StyleSheet.create({
   empty: {
     paddingTop: 80,
-  },
-  filler: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#222",
-  },
-  fillerText: {
-    color: "#888",
-    fontSize: 14,
   },
 });
