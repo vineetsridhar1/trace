@@ -11,7 +11,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { DISMISS_SESSION_MUTATION, useEntityField } from "@trace/client-core";
 import { getModelLabel } from "@trace/shared";
-import { Glass, GlassContainer, Text } from "@/components/design-system";
+import { Glass, Text } from "@/components/design-system";
 import { MODE_CYCLE, useComposerModePalette } from "@/hooks/useComposerModePalette";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
 import { haptic } from "@/lib/haptics";
@@ -221,7 +221,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
       {isDisconnected ? (
         <ComposerConnectionNotice sessionId={sessionId} canRetry={canRetryConnection} />
       ) : null}
-      <GlassContainer spacing={12} style={styles.composerStack}>
+      <View style={styles.composerStack}>
         <View style={styles.inputActionRow}>
           <Glass
             preset="pinnedBar"
@@ -371,7 +371,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             minWidth={88}
           />
         </View>
-      </GlassContainer>
+      </View>
     </View>
   );
 }

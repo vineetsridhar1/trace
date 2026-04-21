@@ -14,7 +14,7 @@ export {
   type IconButtonSize,
   type IconMenuItem,
 } from "./IconButton";
-export { Glass, GlassContainer, type GlassProps } from "./Glass";
+export { Glass, type GlassProps } from "./Glass";
 export {
   Card,
   type CardProps,
