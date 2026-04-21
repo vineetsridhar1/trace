@@ -66,7 +66,7 @@ export function SessionSurface({ sessionId, onSelectSession }: SessionSurfacePro
 
   return (
     <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
-      <SessionGroupHeader groupId={groupId} solid={solidHeader} />
+      <SessionGroupHeader groupId={groupId} sessionId={sessionId} solid={solidHeader} />
       <SessionTabStrip
         activeSessionId={sessionId}
         sessionIds={sessionIds}

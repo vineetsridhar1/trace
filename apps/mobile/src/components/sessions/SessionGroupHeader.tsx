@@ -5,14 +5,18 @@ import {
   ARCHIVE_SESSION_GROUP_MUTATION,
   useEntityField,
 } from "@trace/client-core";
+import type { SessionGroupStatus } from "@trace/gql";
 import type { ChipVariant, IconMenuItem } from "@/components/design-system";
 import { Chip, IconButton, Spinner, Text } from "@/components/design-system";
+import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
 
 interface SessionGroupHeaderProps {
   groupId: string;
+  /** The session currently shown; drives the status dot's agentStatus overlay. */
+  sessionId?: string;
   solid?: boolean;
 }
 
@@ -30,6 +34,7 @@ function prChip(
 
 export function SessionGroupHeader({
   groupId,
+  sessionId,
   solid = false,
 }: SessionGroupHeaderProps) {
   const theme = useTheme();
@@ -47,6 +52,10 @@ export function SessionGroupHeader({
     | null
     | undefined;
   const archivedAt = useEntityField("sessionGroups", groupId, "archivedAt") as
+    | string
+    | null
+    | undefined;
+  const agentStatus = useEntityField("sessions", sessionId ?? "", "agentStatus") as
     | string
     | null
     | undefined;
@@ -121,6 +130,11 @@ export function SessionGroupHeader({
       ]}
     >
       <View style={styles.headerRow}>
+        <SessionStatusIndicator
+          status={status as SessionGroupStatus | null | undefined}
+          agentStatus={agentStatus}
+          size={10}
+        />
         <View style={styles.textBlock}>
           {name ? (
             <Text variant="headline" numberOfLines={1}>
