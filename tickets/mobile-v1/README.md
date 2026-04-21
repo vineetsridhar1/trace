@@ -87,6 +87,14 @@ The single most important feature surface. Built in composable pieces, all files
 | 34 | [CI + EAS Preview Builds](34-ci-and-eas-preview-builds.md) | CI runs typecheck/lint/test, file-size guardrail, EAS preview on PRs, smoke test |
 | 35 | [TestFlight Beta Launch](35-testflight-beta-launch.md) | App Store Connect, TestFlight groups, QA checklist, ship V1 |
 
+## Post-V1 Follow-ups
+
+Explicitly scoped out of V1 per `mobile-plan.md` §21 (cloud-only, model pinned at creation). Scheduled after V1 ships.
+
+| # | Ticket | What it does |
+|---|--------|-------------|
+| 36 | [Composer Model & Runtime Pickers](36-composer-model-and-runtime-pickers.md) | Make the model and hosting chips tappable; reuse `UPDATE_SESSION_CONFIG_MUTATION` + `AVAILABLE_RUNTIMES_QUERY` with the same gating web uses |
+
 ## Dependency graph
 
 ```
