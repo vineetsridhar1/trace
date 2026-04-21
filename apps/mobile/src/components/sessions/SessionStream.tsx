@@ -6,8 +6,10 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
-import { useEntityField, type SessionEntity } from "@trace/client-core";
+import { useEntityField } from "@trace/client-core";
 import type { SessionNode } from "@trace/client-core";
+import type { Event } from "@trace/gql";
+import { asJsonObject } from "@trace/shared";
 import { Text } from "@/components/design-system";
 import { useNewActivityTracker, nodeKey } from "@/hooks/useNewActivityTracker";
 import { useSessionEvents } from "@/hooks/useSessionEvents";
@@ -37,14 +39,15 @@ export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStream
   const theme = useTheme();
   const { loading, loadingOlder, hasOlder, error, fetchEvents, fetchOlderEvents } =
     useSessionEvents(sessionId);
-  const { nodes, completedAgentTools, toolResultByUseId, gitCheckpointsByPromptEventId } =
-    useSessionNodes(sessionId);
-  const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as
-    | SessionEntity["agentStatus"]
-    | undefined;
-  const connection = useEntityField("sessions", sessionId, "connection") as
-    | SessionEntity["connection"]
-    | undefined;
+  const {
+    nodes,
+    completedAgentTools,
+    toolResultByUseId,
+    gitCheckpointsByPromptEventId,
+    events: scopedEvents,
+  } = useSessionNodes(sessionId);
+  const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
+  const connection = useEntityField("sessions", sessionId, "connection");
 
   const listRef = useRef<FlashListRef<SessionNode>>(null);
   const isNearBottomRef = useRef(true);
@@ -90,30 +93,53 @@ export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStream
     listRef.current?.scrollToEnd({ animated: true });
   }, [clearNewActivity]);
 
+  const extraData = useMemo(
+    () => ({ lastIndex: nodes.length - 1, context: renderContext }),
+    [nodes.length, renderContext],
+  );
+
+  const horizontalPadding = theme.spacing.lg;
   const renderItem = useCallback(
-    ({ item, index }: { item: SessionNode; index: number }) => (
+    ({
+      item,
+      index,
+      extraData: ed,
+    }: {
+      item: SessionNode;
+      index: number;
+      extraData?: { lastIndex: number; context: NodeRenderContext };
+    }) => {
+      if (!ed) return null;
       // Stable View root — FlashList v2 recycles by cell shape, so every row
       // must resolve to the same element tree. `useSessionNodes` already
       // filters out event nodes the dispatcher can't render.
-      <View style={[styles.row, { paddingHorizontal: theme.spacing.lg }]}>
-        {renderNode({
-          node: item,
-          context: renderContext,
-          isLast: index === nodes.length - 1,
-        })}
-      </View>
-    ),
-    [nodes.length, renderContext, theme.spacing.lg],
+      return (
+        <View style={[styles.row, { paddingHorizontal: horizontalPadding }]}>
+          {renderNode({
+            node: item,
+            context: ed.context,
+            isLast: index === ed.lastIndex,
+          })}
+        </View>
+      );
+    },
+    [horizontalPadding],
   );
 
   const keyExtractor = useCallback((item: SessionNode) => nodeKey(item), []);
 
-  // Segment recycling pools by node kind. Without this, FlashList v2 will
-  // recycle a cell that was rendering, say, a user bubble into a command-
-  // execution row, and Fabric's reconciler crashes with
-  // "Attempt to mount already mounted component view" on the first text
-  // swap. One type per node.kind keeps the trees consistent per pool.
-  const getItemType = useCallback((item: SessionNode) => item.kind, []);
+  // Segment FlashList's recycling pools as finely as possible. Cells in a
+  // pool are recycled into one another, and Fabric crashes ("Attempt to
+  // recycle a mounted view") when the new tree shape doesn't line up with
+  // the cell's mounted native views. SessionNode.kind alone isn't enough —
+  // the `event` kind dispatches to wildly different sub-renderers based on
+  // eventType / payload.type. For assistant + user session_outputs (which
+  // mix AssistantMessage / ToolCallRow / SubagentRow per event), give each
+  // event its own pool so no cross-recycling happens.
+  const getItemType = useCallback(
+    (item: SessionNode) => itemTypeFor(item, scopedEvents),
+    [scopedEvents],
+  );
 
   const initialScrollIndex = useMemo(() => {
     if (nodes.length === 0) return undefined;
@@ -134,6 +160,7 @@ export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStream
       <FlashList
         ref={listRef}
         data={nodes}
+        extraData={extraData}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         getItemType={getItemType}
@@ -183,6 +210,24 @@ export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStream
       />
     </View>
   );
+}
+
+function itemTypeFor(item: SessionNode, events: Record<string, Event>): string {
+  if (item.kind !== "event") return item.kind;
+  const event = events[item.id];
+  if (!event) return "event:unknown";
+  if (event.eventType === "session_output") {
+    const payload = asJsonObject(event.payload);
+    const payloadType = typeof payload?.type === "string" ? payload.type : "unknown";
+    // Assistant/user session_outputs render a per-event mix of text +
+    // tool_use + subagent rows. The shape is too variable to recycle
+    // safely, so pin each event to its own pool.
+    if (payloadType === "assistant" || payloadType === "user") {
+      return `event:so:${payloadType}:${item.id}`;
+    }
+    return `event:so:${payloadType}`;
+  }
+  return `event:${event.eventType}`;
 }
 
 const styles = StyleSheet.create({

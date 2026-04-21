@@ -2,7 +2,6 @@ import { useCallback } from "react";
 import { StyleSheet, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import ContextMenu, {
-  type ContextMenuAction,
   type ContextMenuOnPressNativeEvent,
 } from "react-native-context-menu-view";
 import type { GitCheckpoint } from "@trace/gql";
@@ -12,7 +11,7 @@ import { alpha, useTheme } from "@/theme";
 import { haptic } from "@/lib/haptics";
 import { CheckpointMarker } from "./CheckpointMarker";
 import { Markdown } from "./Markdown";
-import { formatTime, stripPromptWrapping } from "./utils";
+import { COPY_CONTEXT_MENU, formatTime, stripPromptWrapping } from "./utils";
 
 interface UserMessageBubbleProps {
   text: string;
@@ -21,8 +20,6 @@ interface UserMessageBubbleProps {
   actorName?: string | null;
   checkpoints?: GitCheckpoint[];
 }
-
-const COPY_ACTION: ContextMenuAction[] = [{ title: "Copy" }];
 
 /**
  * Right-aligned user prompt bubble. Long-press opens a native context menu
@@ -55,7 +52,7 @@ export function UserMessageBubble({
   return (
     <View style={styles.wrapper}>
       <View style={styles.column}>
-        <ContextMenu actions={COPY_ACTION} onPress={handleContextMenuPress}>
+        <ContextMenu actions={COPY_CONTEXT_MENU} onPress={handleContextMenuPress}>
           <View
             style={[
               styles.bubble,

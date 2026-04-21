@@ -17,6 +17,8 @@ export interface UseSessionNodesResult {
   toolResultByUseId: Map<string, unknown>;
   /** Checkpoints bucketed by the user-prompt event that produced them. */
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
+  /** Scoped events table. Exposed so `getItemType` can segment FlashList recycling pools by eventType. */
+  events: Record<string, Event>;
 }
 
 /**
@@ -62,7 +64,7 @@ export function useSessionNodes(sessionId: string): UseSessionNodesResult {
     return map;
   }, [gitCheckpoints]);
 
-  return { nodes, completedAgentTools, toolResultByUseId, gitCheckpointsByPromptEventId };
+  return { nodes, completedAgentTools, toolResultByUseId, gitCheckpointsByPromptEventId, events };
 }
 
 /** Mirror of the mobile dispatcher's renderable event-type / payload-type set. */

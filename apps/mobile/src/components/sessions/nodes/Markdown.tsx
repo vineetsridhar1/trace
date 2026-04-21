@@ -7,6 +7,11 @@ interface MarkdownProps {
   children: string;
 }
 
+// Assistant content is LLM-generated, so we only open links whose scheme we
+// explicitly trust. Unknown/custom schemes (tel:, sms:, trace:, etc.) are
+// dropped rather than handed to `Linking.openURL`.
+const ALLOWED_LINK_SCHEMES = /^(https?|mailto):/i;
+
 /**
  * Theme-aware markdown renderer. Mirrors the subset used by web's `Markdown`
  * wrapper — headers, lists, inline code, code blocks, blockquotes, links.
@@ -20,6 +25,7 @@ export function Markdown({ children }: MarkdownProps) {
     <MarkdownLib
       style={styles}
       onLinkPress={(url) => {
+        if (!ALLOWED_LINK_SCHEMES.test(url)) return false;
         void Linking.openURL(url);
         return true;
       }}

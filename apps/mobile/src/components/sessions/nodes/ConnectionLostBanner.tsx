@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { RETRY_SESSION_CONNECTION_MUTATION } from "@trace/client-core";
@@ -21,6 +21,13 @@ interface ConnectionLostBannerProps {
 export function ConnectionLostBanner({ sessionId, reason }: ConnectionLostBannerProps) {
   const theme = useTheme();
   const [pending, setPending] = useState(false);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   async function handleRetry() {
     if (pending) return;
@@ -29,7 +36,7 @@ export function ConnectionLostBanner({ sessionId, reason }: ConnectionLostBanner
     await getClient()
       .mutation(RETRY_SESSION_CONNECTION_MUTATION, { sessionId })
       .toPromise();
-    setPending(false);
+    if (mountedRef.current) setPending(false);
   }
 
   return (

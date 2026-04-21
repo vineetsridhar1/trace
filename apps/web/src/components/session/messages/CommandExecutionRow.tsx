@@ -1,29 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
-import { formatCommandLabel, formatTime, serializeUnknown } from "./utils";
-
-const EXPLORATION_COMMANDS = new Set([
-  "cat",
-  "find",
-  "git",
-  "grep",
-  "head",
-  "ls",
-  "pwd",
-  "rg",
-  "sed",
-  "tail",
-]);
-
-function getCommandPrefix(command: string): string {
-  const normalizedCommand = formatCommandLabel(command);
-  const [binary = ""] = normalizedCommand.trim().split(/\s+/, 1);
-  if (binary === "git") {
-    if (/\bgit\s+(status|show|log|diff|branch)\b/.test(normalizedCommand)) return "Explored";
-    return "Ran";
-  }
-  return EXPLORATION_COMMANDS.has(binary) ? "Explored" : "Ran";
-}
+import {
+  formatCommandLabel,
+  formatTime,
+  getCommandPrefix,
+  serializeUnknown,
+} from "./utils";
 
 interface CommandExecutionRowProps {
   command: string;

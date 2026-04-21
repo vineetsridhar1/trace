@@ -2,7 +2,6 @@ import { useCallback } from "react";
 import { StyleSheet, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import ContextMenu, {
-  type ContextMenuAction,
   type ContextMenuOnPressNativeEvent,
 } from "react-native-context-menu-view";
 import { Text } from "@/components/design-system";
@@ -10,7 +9,7 @@ import { useTheme } from "@/theme";
 import { haptic } from "@/lib/haptics";
 import { Markdown } from "./Markdown";
 import { StreamingCursor } from "./StreamingCursor";
-import { formatTime } from "./utils";
+import { COPY_CONTEXT_MENU, formatTime } from "./utils";
 
 interface AssistantMessageProps {
   text: string;
@@ -18,8 +17,6 @@ interface AssistantMessageProps {
   /** Show blinking cursor — set when this is the most recent assistant text and the session is still active. */
   streaming?: boolean;
 }
-
-const COPY_ACTION: ContextMenuAction[] = [{ title: "Copy" }];
 
 export function AssistantMessage({ text, timestamp, streaming = false }: AssistantMessageProps) {
   const theme = useTheme();
@@ -36,7 +33,7 @@ export function AssistantMessage({ text, timestamp, streaming = false }: Assista
 
   return (
     <View style={[styles.wrapper, { paddingVertical: theme.spacing.xs }]}>
-      <ContextMenu actions={COPY_ACTION} onPress={handleContextMenuPress}>
+      <ContextMenu actions={COPY_CONTEXT_MENU} onPress={handleContextMenuPress}>
         <View>
           <Markdown>{text}</Markdown>
           <View style={styles.footer}>

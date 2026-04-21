@@ -1,5 +1,4 @@
 import { memo, type ReactNode } from "react";
-import type { Event } from "@trace/gql";
 import { eventScopeKey, useScopedEventField, type SessionNode } from "@trace/client-core";
 import { asJsonObject, type JsonObject } from "@trace/shared";
 import { AskUserQuestionCard } from "./AskUserQuestionCard";
@@ -70,12 +69,10 @@ interface EventNodeProps {
  */
 const EventNode = memo(function EventNode({ id, context, isLast }: EventNodeProps) {
   const scopeKey = eventScopeKey("session", context.sessionId);
-  const eventType = useScopedEventField(scopeKey, id, "eventType") as Event["eventType"] | undefined;
+  const eventType = useScopedEventField(scopeKey, id, "eventType");
   const payload = asJsonObject(useScopedEventField(scopeKey, id, "payload"));
-  const timestamp = useScopedEventField(scopeKey, id, "timestamp") as string | undefined;
-  const actor = useScopedEventField(scopeKey, id, "actor") as
-    | { type: string; id: string; name?: string | null }
-    | undefined;
+  const timestamp = useScopedEventField(scopeKey, id, "timestamp");
+  const actor = useScopedEventField(scopeKey, id, "actor");
 
   if (!eventType || !timestamp) return null;
 
