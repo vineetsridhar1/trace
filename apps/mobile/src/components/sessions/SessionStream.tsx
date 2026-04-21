@@ -108,6 +108,13 @@ export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStream
 
   const keyExtractor = useCallback((item: SessionNode) => nodeKey(item), []);
 
+  // Segment recycling pools by node kind. Without this, FlashList v2 will
+  // recycle a cell that was rendering, say, a user bubble into a command-
+  // execution row, and Fabric's reconciler crashes with
+  // "Attempt to mount already mounted component view" on the first text
+  // swap. One type per node.kind keeps the trees consistent per pool.
+  const getItemType = useCallback((item: SessionNode) => item.kind, []);
+
   const initialScrollIndex = useMemo(() => {
     if (nodes.length === 0) return undefined;
     if (scrollOffsetMemory.has(sessionId)) return undefined;
@@ -129,6 +136,7 @@ export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStream
         data={nodes}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
+        getItemType={getItemType}
         inverted={false}
         onScroll={handleScroll}
         scrollEventThrottle={16}
@@ -137,7 +145,9 @@ export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStream
         initialScrollIndex={initialScrollIndex}
         maintainVisibleContentPosition={{
           autoscrollToBottomThreshold: 0.2,
-          animateAutoScrollToBottom: true,
+          // Animating auto-scroll during rapid streaming interacts badly
+          // with Fabric recycling — let the list jump instantly instead.
+          animateAutoScrollToBottom: false,
         }}
         contentContainerStyle={{ paddingVertical: theme.spacing.md }}
         ListHeaderComponent={
