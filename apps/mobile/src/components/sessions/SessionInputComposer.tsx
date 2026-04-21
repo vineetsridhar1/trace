@@ -1,8 +1,9 @@
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { SymbolView } from "expo-symbols";
+import { SymbolView, type SFSymbol } from "expo-symbols";
 import { useEntityField } from "@trace/client-core";
+import { getModelLabel } from "@trace/shared";
 import { Glass, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
@@ -12,8 +13,8 @@ interface SessionInputComposerProps { sessionId: string }
 
 const MODE_CYCLE: ComposerMode[] = ["code", "plan", "ask"];
 const MODE_LABEL: Record<ComposerMode, string> = { code: "Code", plan: "Plan", ask: "Ask" };
-const MIN_HEIGHT = 38;
-const MAX_HEIGHT = 128;
+const MIN_INPUT_HEIGHT = 28;
+const MAX_INPUT_HEIGHT = 140;
 
 function modeTint(theme: Theme, mode: ComposerMode): string {
   if (mode === "plan") return "#8b5cf6";
@@ -22,11 +23,11 @@ function modeTint(theme: Theme, mode: ComposerMode): string {
 }
 
 /**
- * Bottom-pinned composer for sending or queuing session messages. Mounted by
- * `SessionSurface` only when no pending-input bar is active (ticket 22 owns
- * the bottom slot while the session is waiting on the user). Send switches
- * to Queue whenever the agent is running. On failure, the draft is restored
- * and an inline retry row is surfaced so the user doesn't lose their text.
+ * Slack-style composer: one floating glass card with the multiline input on
+ * top and a row of meta controls (mode, model, hosting) plus the send arrow
+ * along the bottom. Mounted by `SessionSurface` only when no pending-input
+ * bar is active. Send switches to Queue whenever the agent is running.
+ * On failure the draft is restored with an inline retry affordance.
  */
 export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const theme = useTheme();
@@ -34,10 +35,12 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus");
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted");
+  const model = useEntityField("sessions", sessionId, "model");
+  const hosting = useEntityField("sessions", sessionId, "hosting");
 
   const [text, setText] = useState("");
   const [mode, setMode] = useState<ComposerMode>("code");
-  const [height, setHeight] = useState(MIN_HEIGHT);
+  const [height, setHeight] = useState(MIN_INPUT_HEIGHT);
   const [errorDraft, setErrorDraft] = useState<string | null>(null);
 
   const isActive = agentStatus === "active";
@@ -48,14 +51,8 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
     sessionStatus === "merged" ||
     worktreeDeleted === true;
 
-  const onFailure = useCallback((draft: string) => {
-    setText(draft);
-    setErrorDraft(draft);
-  }, []);
-  const onSuccess = useCallback(() => {
-    setText("");
-    setErrorDraft(null);
-  }, []);
+  const onFailure = useCallback((draft: string) => { setText(draft); setErrorDraft(draft); }, []);
+  const onSuccess = useCallback(() => { setText(""); setErrorDraft(null); }, []);
   const { submit: runSubmit, sending } = useComposerSubmit({ sessionId, isActive, onFailure, onSuccess });
 
   const trimmed = text.trim();
@@ -67,88 +64,90 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
     void haptic.selection();
     setMode((m) => MODE_CYCLE[(MODE_CYCLE.indexOf(m) + 1) % MODE_CYCLE.length]!);
   }, []);
-
   const handleSend = useCallback(() => {
     if (canSubmit) void runSubmit(trimmed, mode);
   }, [canSubmit, mode, runSubmit, trimmed]);
-
   const handleRetry = useCallback(() => {
     if (errorDraft && !isTerminal) void runSubmit(errorDraft, mode);
   }, [errorDraft, isTerminal, mode, runSubmit]);
 
-  const sendLabel = isActive ? "Queue" : "Send";
-  const placeholder = isTerminal
-    ? "Session complete"
-    : isActive ? "Queue a message…" : "Send a message…";
+  const placeholder = isTerminal ? "Session complete" : isActive ? "Queue a message…" : "Message…";
+  const bridgeIcon: SFSymbol = hosting === "cloud" ? "cloud" : "laptopcomputer";
 
   return (
-    <Glass preset="pinnedBar" style={{
-      borderRadius: 0,
-      paddingHorizontal: theme.spacing.md,
-      paddingTop: theme.spacing.sm,
-      paddingBottom: theme.spacing.sm + insets.bottom,
-    }}>
-      {errorDraft ? (
-        <Pressable onPress={handleRetry} accessibilityRole="button" accessibilityLabel="Retry send" style={styles.retryRow}>
-          <Text variant="caption1" style={{ color: theme.colors.destructive }}>
-            Failed to send. Tap to retry.
-          </Text>
-        </Pressable>
-      ) : null}
-      <View style={styles.row}>
-        <Pressable
-          onPress={cycleMode}
-          disabled={!canInteract}
-          accessibilityRole="button"
-          accessibilityLabel={`Interaction mode: ${MODE_LABEL[mode]}. Tap to cycle.`}
-          style={({ pressed }) => [styles.modePill, {
-            borderColor: alpha(tint, 0.5),
-            backgroundColor: pressed ? alpha(tint, 0.28) : alpha(tint, 0.16),
-            opacity: canInteract ? 1 : 0.5,
-          }]}
-        >
-          <Text variant="caption1" style={{ color: tint, fontWeight: "600" }}>{MODE_LABEL[mode]}</Text>
-        </Pressable>
+    <View style={{ paddingHorizontal: theme.spacing.md, paddingBottom: theme.spacing.sm + insets.bottom, paddingTop: theme.spacing.xs }}>
+      <Glass preset="pinnedBar" style={{ ...styles.card, borderColor: alpha(theme.colors.foreground, 0.08) }}>
+        {errorDraft ? (
+          <Pressable onPress={handleRetry} accessibilityRole="button" accessibilityLabel="Retry send" style={styles.retryRow}>
+            <Text variant="caption1" style={{ color: theme.colors.destructive }}>Failed to send. Tap to retry.</Text>
+          </Pressable>
+        ) : null}
         <TextInput
           value={text}
           onChangeText={setText}
           onContentSizeChange={(e) => {
             const h = e.nativeEvent.contentSize.height;
-            setHeight(Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, h)));
+            setHeight(Math.min(MAX_INPUT_HEIGHT, Math.max(MIN_INPUT_HEIGHT, h)));
           }}
           editable={canInteract}
           multiline
           placeholder={placeholder}
           placeholderTextColor={theme.colors.dimForeground}
-          style={[styles.input, {
-            height,
-            backgroundColor: theme.colors.surfaceDeep,
-            borderColor: theme.colors.border,
-            color: theme.colors.foreground,
-          }]}
+          style={[styles.input, { height, color: theme.colors.foreground }]}
         />
-        <Pressable
-          onPress={handleSend}
-          disabled={!canSubmit}
-          accessibilityRole="button"
-          accessibilityLabel={sendLabel}
-          style={({ pressed }) => [styles.sendButton, {
-            backgroundColor: canSubmit ? tint : alpha(tint, 0.35),
-            opacity: pressed && canSubmit ? 0.85 : 1,
-          }]}
-        >
-          <SymbolView name="paperplane.fill" size={14} tintColor={theme.colors.accentForeground} resizeMode="scaleAspectFit" style={styles.sendIcon} />
-        </Pressable>
-      </View>
-    </Glass>
+        <View style={styles.controlsRow}>
+          <View style={styles.optionsGroup}>
+            <Pressable
+              onPress={cycleMode}
+              disabled={!canInteract}
+              accessibilityRole="button"
+              accessibilityLabel={`Interaction mode: ${MODE_LABEL[mode]}. Tap to cycle.`}
+              style={({ pressed }) => [styles.chip, {
+                borderColor: alpha(tint, 0.5),
+                backgroundColor: pressed ? alpha(tint, 0.28) : alpha(tint, 0.16),
+                opacity: canInteract ? 1 : 0.5,
+              }]}
+            >
+              <Text variant="caption1" style={{ color: tint, fontWeight: "600" }}>{MODE_LABEL[mode]}</Text>
+            </Pressable>
+            {model ? (
+              <View style={[styles.chip, { borderColor: alpha(theme.colors.foreground, 0.12) }]}>
+                <Text variant="caption1" color="mutedForeground" numberOfLines={1}>{getModelLabel(model)}</Text>
+              </View>
+            ) : null}
+            {hosting ? (
+              <View style={[styles.iconChip, { borderColor: alpha(theme.colors.foreground, 0.12) }]}>
+                <SymbolView name={bridgeIcon} size={12} tintColor={theme.colors.mutedForeground} resizeMode="scaleAspectFit" style={styles.iconChipGlyph} />
+              </View>
+            ) : null}
+          </View>
+          <Pressable
+            onPress={handleSend}
+            disabled={!canSubmit}
+            accessibilityRole="button"
+            accessibilityLabel={isActive ? "Queue message" : "Send message"}
+            style={({ pressed }) => [styles.sendButton, {
+              backgroundColor: canSubmit ? tint : alpha(tint, 0.3),
+              opacity: pressed && canSubmit ? 0.85 : 1,
+            }]}
+          >
+            <SymbolView name="arrow.up" size={16} tintColor={theme.colors.accentForeground} resizeMode="scaleAspectFit" style={styles.sendIcon} />
+          </Pressable>
+        </View>
+      </Glass>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
-  modePill: { height: MIN_HEIGHT, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  input: { flex: 1, minHeight: MIN_HEIGHT, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, fontSize: 15, lineHeight: 20 },
-  sendButton: { width: MIN_HEIGHT, height: MIN_HEIGHT, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  sendIcon: { width: 14, height: 14 },
-  retryRow: { paddingBottom: 6 },
+  card: { borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, gap: 6 },
+  input: { fontSize: 16, lineHeight: 21, minHeight: MIN_INPUT_HEIGHT, paddingHorizontal: 2, paddingVertical: 2, textAlignVertical: "top" },
+  controlsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 },
+  optionsGroup: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 },
+  chip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth },
+  iconChip: { width: 26, height: 26, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, alignItems: "center", justifyContent: "center" },
+  iconChipGlyph: { width: 12, height: 12 },
+  sendButton: { width: 30, height: 30, borderRadius: 999, alignItems: "center", justifyContent: "center" },
+  sendIcon: { width: 16, height: 16 },
+  retryRow: { paddingBottom: 4 },
 });
