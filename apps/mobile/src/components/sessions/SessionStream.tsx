@@ -7,7 +7,7 @@ import {
 } from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import type { SessionNode } from "@trace/client-core";
-import { Skeleton, Text } from "@/components/design-system";
+import { Button, Skeleton, Text } from "@/components/design-system";
 import { useSessionEvents } from "@/hooks/useSessionEvents";
 import { useSessionNodes } from "@/hooks/useSessionNodes";
 import { useTheme } from "@/theme";
@@ -31,21 +31,29 @@ function nodeKey(node: SessionNode): string {
 
 export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStreamProps) {
   const theme = useTheme();
-  const { loading, loadingOlder, hasOlder, fetchOlderEvents } = useSessionEvents(sessionId);
+  const { loading, loadingOlder, hasOlder, error, fetchEvents, fetchOlderEvents } =
+    useSessionEvents(sessionId);
   const { nodes } = useSessionNodes(sessionId);
 
   const listRef = useRef<FlashListRef<SessionNode>>(null);
   const isNearBottomRef = useRef(true);
-  const prevNodeCountRef = useRef(0);
-  const contentHeightRef = useRef(0);
-  const viewportHeightRef = useRef(0);
+  const prevTailKeyRef = useRef<string | null>(null);
   const [newActivityCount, setNewActivityCount] = useState(0);
 
+  // Detect tail advances, not length changes — pagination prepends older events
+  // and must not register as new activity.
   useEffect(() => {
-    const prev = prevNodeCountRef.current;
-    prevNodeCountRef.current = nodes.length;
-    if (nodes.length <= prev) return;
-    const delta = nodes.length - prev;
+    if (nodes.length === 0) {
+      prevTailKeyRef.current = null;
+      return;
+    }
+    const tailKey = nodeKey(nodes[nodes.length - 1]);
+    const prevTail = prevTailKeyRef.current;
+    prevTailKeyRef.current = tailKey;
+    if (!prevTail || prevTail === tailKey) return;
+    const prevIdx = nodes.findIndex((n) => nodeKey(n) === prevTail);
+    const delta = prevIdx === -1 ? 1 : nodes.length - 1 - prevIdx;
+    if (delta <= 0) return;
     if (isNearBottomRef.current) {
       requestAnimationFrame(() => {
         listRef.current?.scrollToEnd({ animated: true });
@@ -53,22 +61,20 @@ export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStream
       return;
     }
     setNewActivityCount((c) => c + delta);
-  }, [nodes.length]);
+  }, [nodes]);
 
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-      contentHeightRef.current = contentSize.height;
-      viewportHeightRef.current = layoutMeasurement.height;
       const distanceFromBottom =
         contentSize.height - contentOffset.y - layoutMeasurement.height;
       const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
       isNearBottomRef.current = nearBottom;
-      if (nearBottom && newActivityCount > 0) setNewActivityCount(0);
+      if (nearBottom) setNewActivityCount((c) => (c === 0 ? c : 0));
       scrollOffsetMemory.set(sessionId, contentOffset.y);
       onScrollOffsetChange?.(contentOffset.y);
     },
-    [newActivityCount, onScrollOffsetChange, sessionId],
+    [onScrollOffsetChange, sessionId],
   );
 
   const handlePillPress = useCallback(() => {
@@ -106,6 +112,20 @@ export function SessionStream({ sessionId, onScrollOffsetChange }: SessionStream
             <Skeleton width="55%" height={12} />
           </View>
         ))}
+      </View>
+    );
+  }
+
+  if (!loading && nodes.length === 0 && error) {
+    return (
+      <View style={[styles.errorState, { paddingHorizontal: theme.spacing.lg }]}>
+        <Text variant="body" color="mutedForeground" align="center">
+          Couldn't load session events.
+        </Text>
+        <Text variant="footnote" color="mutedForeground" align="center">
+          {error}
+        </Text>
+        <Button title="Retry" variant="secondary" size="sm" onPress={() => void fetchEvents()} />
       </View>
     );
   }
@@ -176,6 +196,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  errorState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
   },
   olderLoading: {
     alignItems: "center",

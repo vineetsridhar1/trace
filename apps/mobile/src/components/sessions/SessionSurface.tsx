@@ -84,7 +84,11 @@ export function SessionSurface({
         sessionIds={sessionIds}
         onSelect={onSelectSession}
       />
-      <SessionStream sessionId={sessionId} onScrollOffsetChange={handleScrollOffsetChange} />
+      <SessionStream
+        key={sessionId}
+        sessionId={sessionId}
+        onScrollOffsetChange={handleScrollOffsetChange}
+      />
     </View>
   );
 }
