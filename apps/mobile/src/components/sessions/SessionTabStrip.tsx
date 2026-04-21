@@ -9,12 +9,13 @@ import Animated, {
 } from "react-native-reanimated";
 import { Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
+import { useSessionGroupSessionIds } from "@/hooks/useSessionGroupDetail";
 import { haptic } from "@/lib/haptics";
 import { alpha, useTheme } from "@/theme";
 
 interface SessionTabStripProps {
+  groupId: string;
   activeSessionId: string;
-  sessionIds: string[];
   onSelect: (sessionId: string) => void;
 }
 
@@ -24,11 +25,12 @@ interface TabLayout {
 }
 
 export const SessionTabStrip = memo(function SessionTabStrip({
+  groupId,
   activeSessionId,
-  sessionIds,
   onSelect,
 }: SessionTabStripProps) {
   const theme = useTheme();
+  const sessionIds = useSessionGroupSessionIds(groupId);
   const scrollRef = useRef<ScrollView>(null);
   const [layouts, setLayouts] = useState<Record<string, TabLayout>>({});
   const indicatorX = useSharedValue(0);

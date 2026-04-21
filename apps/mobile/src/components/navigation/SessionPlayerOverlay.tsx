@@ -1,9 +1,10 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Pressable,
   StyleSheet,
   View,
   useWindowDimensions,
+  type LayoutChangeEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
@@ -18,13 +19,19 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useEntityField } from "@trace/client-core";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
 import { SessionSurface, SessionSurfaceEmpty } from "@/components/sessions/SessionSurface";
+import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { haptic } from "@/lib/haptics";
 import { useMobileUIStore } from "@/stores/ui";
-import { alpha, useTheme } from "@/theme";
+import { useTheme } from "@/theme";
 
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 800;
+// Conservative header+strip seed so the first message doesn't render under the
+// absolute-positioned drag-handle before `onLayout` reports the real height.
+// Over-padding by a few points is invisible; under-padding causes a flash.
+const ESTIMATED_HEADER_HEIGHT = 56;
+const ESTIMATED_TAB_STRIP_HEIGHT = 44;
 
 /**
  * The Session Player (§10.8) — the primary session surface in V1. Renders
@@ -43,6 +50,10 @@ export function SessionPlayerOverlay() {
     | string
     | null
     | undefined;
+  const [measuredTopInset, setMeasuredTopInset] = useState<number | null>(null);
+  const topInsetHeight =
+    measuredTopInset
+    ?? insets.top + ESTIMATED_HEADER_HEIGHT + ESTIMATED_TAB_STRIP_HEIGHT;
 
   const progress = useSharedValue(0);
   const dragY = useSharedValue(0);
@@ -102,6 +113,11 @@ export function SessionPlayerOverlay() {
     [setOverlaySessionId],
   );
 
+  const handleTopInsetLayout = useCallback((e: LayoutChangeEvent) => {
+    const height = e.nativeEvent.layout.height;
+    setMeasuredTopInset((current) => (current === height ? current : height));
+  }, []);
+
   if (!open && !sessionId) return null;
 
   return (
@@ -127,34 +143,41 @@ export function SessionPlayerOverlay() {
           { backgroundColor: theme.colors.background },
         ]}
       >
-        <View style={[styles.topInset, { paddingTop: insets.top }]}>
-          <GestureDetector gesture={pan}>
-            <View style={styles.dragHandle}>
-              <View style={styles.grabberRow}>
-                <View
-                  style={[
-                    styles.grabber,
-                    { backgroundColor: alpha(theme.colors.foreground, 0.28) },
-                  ]}
-                />
-              </View>
-              {sessionId ? (
-                <SessionGroupHeader groupId={headerGroupId ?? ""} sessionId={sessionId} />
-              ) : null}
-            </View>
-          </GestureDetector>
-        </View>
-
         <View style={styles.surface}>
           {sessionId ? (
             <SessionSurface
               sessionId={sessionId}
               onSelectSession={handleSelectSession}
               hideHeader
+              topInset={topInsetHeight}
             />
           ) : (
             <SessionSurfaceEmpty />
           )}
+        </View>
+
+        <View
+          style={styles.topInset}
+          onLayout={handleTopInsetLayout}
+          pointerEvents="box-none"
+        >
+          <GestureDetector gesture={pan}>
+            <View style={styles.dragHandle}>
+              <View
+                style={{ height: insets.top, backgroundColor: theme.colors.background }}
+              />
+              {sessionId ? (
+                <SessionGroupHeader groupId={headerGroupId ?? ""} sessionId={sessionId} />
+              ) : null}
+              {sessionId ? (
+                <SessionTabStrip
+                  groupId={headerGroupId ?? ""}
+                  activeSessionId={sessionId}
+                  onSelect={handleSelectSession}
+                />
+              ) : null}
+            </View>
+          </GestureDetector>
         </View>
       </Animated.View>
     </View>
@@ -174,21 +197,14 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   topInset: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
     zIndex: 10,
   },
   dragHandle: {
     overflow: "visible",
-  },
-  grabberRow: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: 8,
-    paddingBottom: 6,
-  },
-  grabber: {
-    width: 36,
-    height: 5,
-    borderRadius: 999,
   },
   surface: {
     flex: 1,
