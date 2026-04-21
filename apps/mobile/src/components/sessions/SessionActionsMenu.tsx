@@ -27,6 +27,8 @@ import { Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
 
+const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
+
 export interface SessionMenuAction {
   title: string;
   systemIcon?: SFSymbol;
@@ -124,46 +126,39 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
             { width: MENU_WIDTH, height: containerHeight },
           ]}
         >
-          <Animated.View
-            style={[styles.triggerWrap, triggerAnimatedStyle]}
-            pointerEvents={open ? "none" : "auto"}
+          <AnimatedGlassView
+            glassEffectStyle="regular"
+            colorScheme={theme.scheme === "dark" ? "dark" : "light"}
+            style={[styles.triggerPill, triggerAnimatedStyle]}
           >
-            <GlassView
-              glassEffectStyle="regular"
-              colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-              style={styles.triggerPill}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={accessibilityLabel}
+              onPress={handleToggle}
+              style={styles.triggerInner}
+              hitSlop={8}
+              pointerEvents={open ? "none" : "auto"}
             >
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={accessibilityLabel}
-                onPress={handleToggle}
-                style={styles.triggerInner}
-                hitSlop={8}
-              >
-                <SymbolView
-                  name="ellipsis"
-                  size={18}
-                  tintColor={theme.colors.foreground}
-                  weight="semibold"
-                  resizeMode="scaleAspectFit"
-                  style={styles.icon}
-                />
-              </Pressable>
-            </GlassView>
-          </Animated.View>
+              <SymbolView
+                name="ellipsis"
+                size={18}
+                tintColor={theme.colors.foreground}
+                weight="semibold"
+                resizeMode="scaleAspectFit"
+                style={styles.icon}
+              />
+            </Pressable>
+          </AnimatedGlassView>
 
-          <Animated.View
-            pointerEvents={open ? "auto" : "none"}
-            style={[styles.menuWrap, { width: MENU_WIDTH, height: menuHeight }, menuAnimatedStyle]}
+          <AnimatedGlassView
+            glassEffectStyle="regular"
+            colorScheme={theme.scheme === "dark" ? "dark" : "light"}
+            style={[styles.menuPill, { height: menuHeight }, menuAnimatedStyle]}
           >
-            <GlassView
-              glassEffectStyle="regular"
-              colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-              style={[styles.menuPill, { height: menuHeight }]}
-            >
+            <View pointerEvents={open ? "auto" : "none"} style={styles.menuInner}>
               <MenuList actions={actions} onPick={handleItem} />
-            </GlassView>
-          </Animated.View>
+            </View>
+          </AnimatedGlassView>
         </GlassContainer>
       </View>
     </>
@@ -268,14 +263,10 @@ const styles = StyleSheet.create({
     right: 0,
     overflow: "visible",
   },
-  triggerWrap: {
+  triggerPill: {
     position: "absolute",
     top: 0,
     right: 0,
-    width: TRIGGER_SIZE,
-    height: TRIGGER_SIZE,
-  },
-  triggerPill: {
     width: TRIGGER_SIZE,
     height: TRIGGER_SIZE,
     borderRadius: TRIGGER_SIZE / 2,
@@ -287,16 +278,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   icon: { width: 18, height: 18 },
-  menuWrap: {
+  menuPill: {
     position: "absolute",
     top: TRIGGER_SIZE + MENU_TOP_OFFSET,
     right: 0,
-    transformOrigin: "top right",
-  },
-  menuPill: {
-    width: "100%",
+    width: MENU_WIDTH,
     borderRadius: 20,
     overflow: "hidden",
+    transformOrigin: "top right",
+  },
+  menuInner: {
+    width: "100%",
+    height: "100%",
   },
   menuList: {
     flex: 1,
