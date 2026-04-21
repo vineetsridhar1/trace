@@ -39,14 +39,14 @@ The bottom-pinned composer: plain-text input, interaction-mode toggle (code / pl
 
 ## Completion requirements
 
-- [ ] Composer sends when agent idle; queues when active
-- [ ] Optimistic update inserts event or queued-message immediately
-- [ ] Server event reconciles optimistic entry; mutation failures roll it back and restore the draft
-- [ ] Interaction mode toggle cycles correctly with haptic
-- [ ] Completed/stopped sessions disable the composer and show the completion hint
-- [ ] Queued strip displays and updates live
-- [ ] Keyboard behavior: composer rises, stream adjusts, no jank
-- [ ] All files <200 lines
+- [x] Composer sends when agent idle; queues when active
+- [x] Optimistic update inserts event or queued-message immediately
+- [x] Server event reconciles optimistic entry; mutation failures roll it back and restore the draft
+- [x] Interaction mode toggle cycles correctly with haptic
+- [x] Completed/stopped sessions disable the composer and show the completion hint
+- [x] Queued strip displays and updates live
+- [x] Keyboard behavior: composer rises, stream adjusts, no jank
+- [x] All files <200 lines
 
 ## How to test
 

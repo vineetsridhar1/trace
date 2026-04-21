@@ -1,14 +1,24 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { StyleSheet, View } from "react-native";
-import { useEntityField } from "@trace/client-core";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import {
+  eventScopeKey,
+  useEntityField,
+  useScopedEventIds,
+  useScopedEvents,
+} from "@trace/client-core";
+import type { Event } from "@trace/gql";
 import { Spinner, Text } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { PendingInputBar } from "@/components/sessions/PendingInputBar";
+import { QueuedMessagesStrip } from "@/components/sessions/QueuedMessagesStrip";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
+import { SessionInputComposer } from "@/components/sessions/SessionInputComposer";
 import { SessionStream } from "@/components/sessions/SessionStream";
 import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
 import { useEnsureSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { useSessionDetail } from "@/hooks/useSessionDetail";
+import { findMostRecentPendingInput } from "@/lib/pending-input";
 import { useTheme } from "@/theme";
 import { useMobileUIStore } from "@/stores/ui";
 
@@ -57,6 +67,13 @@ export function SessionSurface({
     | string
     | null
     | undefined;
+  const scopeKey = eventScopeKey("session", sessionId);
+  const eventIds = useScopedEventIds(scopeKey, byTimestamp);
+  const events = useScopedEvents(scopeKey);
+  const pendingInput = useMemo(
+    () => findMostRecentPendingInput(eventIds, events),
+    [eventIds, events],
+  );
 
   useEffect(() => {
     if (!groupId) return;
@@ -79,7 +96,10 @@ export function SessionSurface({
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
+    <KeyboardAvoidingView
+      behavior="padding"
+      style={[styles.root, { backgroundColor: theme.colors.background }]}
+    >
       {hideHeader ? null : (
         <View style={styles.headerLayer}>
           <SessionGroupHeader groupId={groupId} sessionId={sessionId} />
@@ -94,9 +114,20 @@ export function SessionSurface({
       )}
       {hideHeader ? null : <ActiveTodoStrip sessionId={sessionId} />}
       <SessionStream key={sessionId} sessionId={sessionId} topInset={topInset} />
-      <PendingInputBar sessionId={sessionId} />
-    </View>
+      {pendingInput ? (
+        <PendingInputBar sessionId={sessionId} />
+      ) : (
+        <>
+          <QueuedMessagesStrip sessionId={sessionId} />
+          <SessionInputComposer sessionId={sessionId} />
+        </>
+      )}
+    </KeyboardAvoidingView>
   );
+}
+
+function byTimestamp(a: Event, b: Event): number {
+  return a.timestamp.localeCompare(b.timestamp);
 }
 
 interface SessionSurfaceEmptyProps {

@@ -93,6 +93,8 @@ export function SessionStreamList({
       inverted={false}
       onScroll={onScroll}
       scrollEventThrottle={16}
+      keyboardDismissMode="interactive"
+      keyboardShouldPersistTaps="handled"
       onStartReached={hasOlder && !loadingOlder ? fetchOlderEvents : undefined}
       onStartReachedThreshold={0.2}
       initialScrollIndex={initialScrollIndex}
