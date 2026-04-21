@@ -16,7 +16,7 @@ import {
 } from "@trace/client-core";
 import type { CodingTool } from "@trace/gql";
 import { getDefaultModel, getModelLabel, getModelsForTool } from "@trace/shared";
-import { Glass, GlassGroup, Text } from "@/components/design-system";
+import { Glass, Text } from "@/components/design-system";
 import { MODE_CYCLE, useComposerModePalette } from "@/hooks/useComposerModePalette";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
 import { haptic } from "@/lib/haptics";
@@ -342,7 +342,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
           </Glass>
 
           <Animated.View style={[styles.actionCluster, actionClusterAnimatedStyle]}>
-            <GlassGroup style={styles.actionGlassContainer} spacing={0}>
+            <View style={styles.actionGlassContainer}>
               <Glass
                 preset="input"
                 tint={alpha(theme.colors.success, 0.18)}
@@ -384,7 +384,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
                   <SymbolView name="stop.fill" size={14} tintColor={theme.colors.destructive} resizeMode="scaleAspectFit" style={styles.stopIcon} />
                 </Pressable>
               </Glass>
-            </GlassGroup>
+            </View>
           </Animated.View>
         </View>
 
