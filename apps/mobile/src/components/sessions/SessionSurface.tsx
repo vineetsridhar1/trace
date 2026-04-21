@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useEntityField } from "@trace/client-core";
 import { Spinner, Text } from "@/components/design-system";
+import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
+import { PendingInputBar } from "@/components/sessions/PendingInputBar";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
 import { SessionStream } from "@/components/sessions/SessionStream";
 import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
@@ -91,6 +93,8 @@ export function SessionSurface({
         sessionIds={sessionIds}
         onSelect={onSelectSession}
       />
+      <PendingInputBar sessionId={sessionId} />
+      <ActiveTodoStrip sessionId={sessionId} />
       <SessionStream
         key={sessionId}
         sessionId={sessionId}
