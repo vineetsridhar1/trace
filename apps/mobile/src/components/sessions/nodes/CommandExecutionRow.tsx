@@ -31,6 +31,7 @@ export function CommandExecutionRow({
 }: CommandExecutionRowProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
+  const [bodyMounted, setBodyMounted] = useState(false);
   const bodyHeight = useSharedValue(0);
   const progress = useSharedValue(0);
   const prefix = getCommandPrefix(command);
@@ -63,7 +64,10 @@ export function CommandExecutionRow({
         accessibilityRole="button"
         accessibilityLabel={`${prefix} ${display}`}
         disabled={!hasBody}
-        onPress={() => setOpen((v) => !v)}
+        onPress={() => {
+          setBodyMounted(true);
+          setOpen((v) => !v);
+        }}
         style={[
           styles.header,
           {
@@ -81,7 +85,6 @@ export function CommandExecutionRow({
             size={10}
             tintColor={theme.colors.mutedForeground}
             resizeMode="scaleAspectFit"
-            style={styles.chevron}
           />
         </Animated.View>
         <Text variant="caption1" color="mutedForeground">
@@ -95,7 +98,7 @@ export function CommandExecutionRow({
           {display}
         </Text>
       </Pressable>
-      {hasBody ? (
+      {hasBody && bodyMounted ? (
         <Animated.View style={[styles.bodyClip, bodyStyle]}>
           <View
             onLayout={(e) => {

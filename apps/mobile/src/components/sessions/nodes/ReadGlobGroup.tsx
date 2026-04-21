@@ -26,6 +26,7 @@ const ACCORDION_EASING = Easing.bezier(0.16, 1, 0.3, 1);
 export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
+  const [bodyMounted, setBodyMounted] = useState(false);
   const bodyHeight = useSharedValue(0);
   const progress = useSharedValue(0);
 
@@ -52,7 +53,10 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${items.length} file scan${items.length === 1 ? "" : "s"}`}
-        onPress={() => setOpen((v) => !v)}
+        onPress={() => {
+          setBodyMounted(true);
+          setOpen((v) => !v);
+        }}
         style={[
           styles.header,
           {
@@ -70,55 +74,56 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
             size={10}
             tintColor={theme.colors.mutedForeground}
             resizeMode="scaleAspectFit"
-            style={styles.chevron}
           />
         </Animated.View>
         <Text variant="caption1" color="mutedForeground" style={{ fontFamily: "Menlo" }}>
           {items.length} file scan{items.length === 1 ? "" : "s"} (Read/Glob)
         </Text>
       </Pressable>
-      <Animated.View style={[styles.bodyClip, bodyStyle]}>
-        <View
-          onLayout={(e) => {
-            const h = e.nativeEvent.layout.height;
-            if (h > 0 && Math.abs(h - bodyHeight.value) > 0.5) {
-              bodyHeight.value = h;
-            }
-          }}
-          style={[
-            styles.body,
-            styles.bodyMeasure,
-            {
-              backgroundColor: alpha(theme.colors.surfaceElevated, 0.4),
-              borderColor: theme.colors.borderMuted,
-              borderRadius: theme.radius.md,
-              padding: theme.spacing.sm,
-            },
-          ]}
-        >
-          {items.map((item) => (
-            <View key={item.id} style={styles.row}>
-              <Text
-                variant="caption1"
-                style={{ color: theme.colors.foreground, fontWeight: "600" }}
-              >
-                {item.toolName}
-              </Text>
-              <Text variant="caption1" color="dimForeground">
-                ·
-              </Text>
-              <Text
-                variant="caption1"
-                color="mutedForeground"
-                numberOfLines={1}
-                style={[styles.path, { fontFamily: "Menlo" }]}
-              >
-                {item.filePath || "—"}
-              </Text>
-            </View>
-          ))}
-        </View>
-      </Animated.View>
+      {bodyMounted ? (
+        <Animated.View style={[styles.bodyClip, bodyStyle]}>
+          <View
+            onLayout={(e) => {
+              const h = e.nativeEvent.layout.height;
+              if (h > 0 && Math.abs(h - bodyHeight.value) > 0.5) {
+                bodyHeight.value = h;
+              }
+            }}
+            style={[
+              styles.body,
+              styles.bodyMeasure,
+              {
+                backgroundColor: alpha(theme.colors.surfaceElevated, 0.4),
+                borderColor: theme.colors.borderMuted,
+                borderRadius: theme.radius.md,
+                padding: theme.spacing.sm,
+              },
+            ]}
+          >
+            {items.map((item) => (
+              <View key={item.id} style={styles.row}>
+                <Text
+                  variant="caption1"
+                  style={{ color: theme.colors.foreground, fontWeight: "600" }}
+                >
+                  {item.toolName}
+                </Text>
+                <Text variant="caption1" color="dimForeground">
+                  ·
+                </Text>
+                <Text
+                  variant="caption1"
+                  color="mutedForeground"
+                  numberOfLines={1}
+                  style={[styles.path, { fontFamily: "Menlo" }]}
+                >
+                  {item.filePath || "—"}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </Animated.View>
+      ) : null}
     </View>
   );
 }
