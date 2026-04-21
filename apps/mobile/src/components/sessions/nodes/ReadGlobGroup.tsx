@@ -32,7 +32,7 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
         style={[
           styles.header,
           {
-            backgroundColor: alpha(theme.colors.surfaceElevated, 0.5),
+            backgroundColor: theme.colors.surfaceElevated,
             paddingVertical: theme.spacing.xs,
             paddingHorizontal: theme.spacing.sm,
             gap: theme.spacing.xs,
