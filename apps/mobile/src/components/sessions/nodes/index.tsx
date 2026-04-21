@@ -7,7 +7,6 @@ import { CommandExecutionRow } from "./CommandExecutionRow";
 import { PlanReviewCard } from "./PlanReviewCard";
 import { PRCard, type PRCardKind } from "./PRCard";
 import { ReadGlobGroup } from "./ReadGlobGroup";
-import { StreamRow } from "./StreamRow";
 import { SystemBadge } from "./SystemBadge";
 import { UserMessageBubble } from "./UserMessageBubble";
 import { renderSessionOutput } from "./event-output";
@@ -20,46 +19,38 @@ interface RenderNodeProps {
 }
 
 /**
- * Dispatches a `SessionNode` to its renderer. Every return flows through
- * `StreamRow`, which owns row padding — so when `EventNode` (or the session
- * output helpers) return null, no empty gap is left behind.
+ * Dispatches a `SessionNode` to its renderer. Row padding is owned by
+ * `SessionStream.renderItem` so every list cell has a stable element tree —
+ * FlashList v2 recycles cells by shape and will crash ("Attempt to recycle
+ * a mounted view") if the root varies between null and a View.
+ *
+ * Event-kind nodes the dispatcher can't render are filtered upstream by
+ * `useSessionNodes`, so this switch only needs to handle the known cases.
  */
 export function renderNode(props: RenderNodeProps): ReactNode {
   const { node, context, isLast } = props;
   switch (node.kind) {
     case "command-execution":
       return (
-        <StreamRow>
-          <CommandExecutionRow
-            command={node.command}
-            output={node.output}
-            timestamp={node.timestamp}
-            exitCode={node.exitCode}
-          />
-        </StreamRow>
+        <CommandExecutionRow
+          command={node.command}
+          output={node.output}
+          timestamp={node.timestamp}
+          exitCode={node.exitCode}
+        />
       );
     case "readglob-group":
-      return (
-        <StreamRow>
-          <ReadGlobGroup items={node.items} />
-        </StreamRow>
-      );
+      return <ReadGlobGroup items={node.items} />;
     case "plan-review":
       return (
-        <StreamRow>
-          <PlanReviewCard
-            planContent={node.planContent}
-            planFilePath={node.planFilePath}
-            timestamp={node.timestamp}
-          />
-        </StreamRow>
+        <PlanReviewCard
+          planContent={node.planContent}
+          planFilePath={node.planFilePath}
+          timestamp={node.timestamp}
+        />
       );
     case "ask-user-question":
-      return (
-        <StreamRow>
-          <AskUserQuestionCard questions={node.questions} timestamp={node.timestamp} />
-        </StreamRow>
-      );
+      return <AskUserQuestionCard questions={node.questions} timestamp={node.timestamp} />;
     case "event":
       return <EventNode id={node.id} context={context} isLast={isLast} />;
   }
@@ -72,9 +63,10 @@ interface EventNodeProps {
 }
 
 /**
- * Resolves the event content for a `kind: "event"` node and forwards it to
- * `StreamRow`. If the event type / payload combination has no renderer, the
- * computed `content` is null and `StreamRow` emits nothing.
+ * Reads the event record for a `kind: "event"` node and dispatches on
+ * `eventType`. `useSessionNodes` already screens out combinations this
+ * switch doesn't handle, but the `default` returns null defensively in
+ * case an event mutates after the filter pass.
  */
 const EventNode = memo(function EventNode({ id, context, isLast }: EventNodeProps) {
   const scopeKey = eventScopeKey("session", context.sessionId);
@@ -87,30 +79,6 @@ const EventNode = memo(function EventNode({ id, context, isLast }: EventNodeProp
 
   if (!eventType || !timestamp) return null;
 
-  const content = dispatchEvent({
-    id,
-    eventType,
-    payload,
-    timestamp,
-    actor,
-    context,
-    isLast,
-  });
-  return <StreamRow>{content}</StreamRow>;
-});
-
-interface DispatchEventArgs {
-  id: string;
-  eventType: Event["eventType"];
-  payload: JsonObject | undefined;
-  timestamp: string;
-  actor: { type: string; id: string; name?: string | null } | undefined;
-  context: NodeRenderContext;
-  isLast: boolean;
-}
-
-function dispatchEvent(args: DispatchEventArgs): ReactNode {
-  const { id, eventType, payload, timestamp, actor, context, isLast } = args;
   const checkpoints = context.gitCheckpointsByPromptEventId.get(id);
 
   switch (eventType) {
@@ -142,9 +110,6 @@ function dispatchEvent(args: DispatchEventArgs): ReactNode {
     case "session_output":
       return payload ? renderSessionOutput(payload, timestamp, context, isLast) : null;
 
-    case "session_terminated":
-      return <SystemBadge text={terminationText(payload)} />;
-
     case "session_pr_opened":
       return <PRCard kind="opened" prUrl={prUrlFrom(payload)} timestamp={timestamp} />;
     case "session_pr_merged":
@@ -155,7 +120,7 @@ function dispatchEvent(args: DispatchEventArgs): ReactNode {
     default:
       return null;
   }
-}
+});
 
 function prUrlFrom(payload: JsonObject | undefined): string | null {
   if (!payload) return null;
@@ -163,20 +128,6 @@ function prUrlFrom(payload: JsonObject | undefined): string | null {
   const group = asJsonObject(payload.sessionGroup);
   if (group && typeof group.prUrl === "string") return group.prUrl;
   return null;
-}
-
-function terminationText(payload: JsonObject | undefined): string {
-  if (!payload) return "Session terminated";
-  if (payload.reason === "manual_stop") return "Session stopped";
-  if (payload.reason === "workspace_failed") {
-    const err = typeof payload.error === "string" ? payload.error : "";
-    return err || "Workspace preparation failed";
-  }
-  if (payload.sessionStatus === "merged") return "Session merged";
-  if (payload.agentStatus === "failed") return "Session failed";
-  if (payload.agentStatus === "stopped") return "Session stopped";
-  if (payload.agentStatus === "done") return "Session completed";
-  return "Session terminated";
 }
 
 export type { NodeRenderContext, PRCardKind };
