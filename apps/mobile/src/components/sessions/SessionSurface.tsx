@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { StyleSheet, View } from "react-native";
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
 import {
   eventScopeKey,
   useEntityField,
@@ -97,7 +96,7 @@ export function SessionSurface({
 
   return (
     <KeyboardAvoidingView
-      behavior="padding"
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={[styles.root, { backgroundColor: theme.colors.background }]}
     >
       {hideHeader ? null : (
