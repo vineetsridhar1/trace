@@ -95,7 +95,7 @@ export function SessionStreamList({
       initialScrollIndex={initialScrollIndex}
       maintainVisibleContentPosition={{
         autoscrollToBottomThreshold: 0.2,
-        animateAutoScrollToBottom: false,
+        animateAutoScrollToBottom: true,
       }}
       contentContainerStyle={{ paddingVertical: theme.spacing.md }}
       ListHeaderComponent={

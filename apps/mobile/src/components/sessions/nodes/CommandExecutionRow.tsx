@@ -31,7 +31,7 @@ export function CommandExecutionRow({
 }: CommandExecutionRowProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
-  const [bodyHeight, setBodyHeight] = useState(0);
+  const bodyHeight = useSharedValue(0);
   const progress = useSharedValue(0);
   const prefix = getCommandPrefix(command);
   const display = formatCommandLabel(command);
@@ -49,7 +49,7 @@ export function CommandExecutionRow({
   }, [open, progress]);
 
   const bodyStyle = useAnimatedStyle(() => ({
-    height: progress.value * bodyHeight,
+    height: progress.value * bodyHeight.value,
     opacity: progress.value,
   }));
 
@@ -100,7 +100,9 @@ export function CommandExecutionRow({
           <View
             onLayout={(e) => {
               const h = e.nativeEvent.layout.height;
-              if (h > 0 && h !== bodyHeight) setBodyHeight(h);
+              if (h > 0 && Math.abs(h - bodyHeight.value) > 0.5) {
+                bodyHeight.value = h;
+              }
             }}
             style={[
               styles.body,

@@ -26,7 +26,7 @@ const ACCORDION_EASING = Easing.bezier(0.16, 1, 0.3, 1);
 export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
-  const [bodyHeight, setBodyHeight] = useState(0);
+  const bodyHeight = useSharedValue(0);
   const progress = useSharedValue(0);
 
   useEffect(() => {
@@ -37,7 +37,7 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
   }, [open, progress]);
 
   const bodyStyle = useAnimatedStyle(() => ({
-    height: progress.value * bodyHeight,
+    height: progress.value * bodyHeight.value,
     opacity: progress.value,
   }));
 
@@ -81,7 +81,9 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
         <View
           onLayout={(e) => {
             const h = e.nativeEvent.layout.height;
-            if (h > 0 && h !== bodyHeight) setBodyHeight(h);
+            if (h > 0 && Math.abs(h - bodyHeight.value) > 0.5) {
+              bodyHeight.value = h;
+            }
           }}
           style={[
             styles.body,
