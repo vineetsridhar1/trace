@@ -8,7 +8,6 @@ import {
   useEntityStore,
   useScopedEventIds,
   type AuthState,
-  type SessionEntity,
 } from "@trace/client-core";
 import type { Event, Session } from "@trace/gql";
 import { getClient } from "@/lib/urql";
@@ -26,6 +25,7 @@ interface UseSessionEventsResult {
   loadingOlder: boolean;
   hasOlder: boolean;
   error: string | null;
+  fetchEvents: () => Promise<void>;
   fetchOlderEvents: () => Promise<void>;
 }
 
@@ -49,8 +49,12 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
   const scopeKey = eventScopeKey("session", sessionId);
 
   const fetchEvents = useCallback(async () => {
-    if (!activeOrgId) return;
+    if (!activeOrgId) {
+      setLoading(false);
+      return;
+    }
 
+    setLoading(true);
     setError(null);
     const result = await getClient()
       .query(SESSION_EVENTS_QUERY, {
@@ -91,6 +95,9 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
     if (!activeOrgId) return;
 
     const client = getClient();
+    // TODO(ticket-24): detect isUnauthorized and tear down + sign out,
+    // matching the pattern in useHydrate.ts. Currently mid-session token
+    // expiry silently drops live updates.
     const eventSub = client
       .subscription(SESSION_EVENTS_SUBSCRIPTION, {
         sessionId,
@@ -117,12 +124,7 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
         }
         const next = result.data?.sessionStatusChanged;
         if (!next?.id) return;
-        const state = useEntityStore.getState();
-        const existing = state.sessions[next.id];
-        state.upsert("sessions", next.id, {
-          ...(existing ?? {}),
-          ...next,
-        } as SessionEntity);
+        useEntityStore.getState().patch("sessions", next.id, next);
       });
 
     return () => {
@@ -178,5 +180,5 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
 
   const eventIds = useScopedEventIds(scopeKey, (a, b) => a.timestamp.localeCompare(b.timestamp));
 
-  return { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents };
+  return { eventIds, loading, loadingOlder, hasOlder, error, fetchEvents, fetchOlderEvents };
 }

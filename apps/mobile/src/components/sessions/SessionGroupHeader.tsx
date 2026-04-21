@@ -8,7 +8,6 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { SymbolView } from "expo-symbols";
 import ContextMenu, {
   type ContextMenuAction,
   type ContextMenuOnPressNativeEvent,
@@ -18,12 +17,13 @@ import {
   useEntityField,
 } from "@trace/client-core";
 import type { SessionGroupStatus } from "@trace/gql";
-import type { ChipVariant, IconMenuItem } from "@/components/design-system";
+import type { ChipVariant } from "@/components/design-system";
 import { Chip, Glass, Spinner, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
+import { SessionActionsMenu, type SessionMenuAction } from "./SessionActionsMenu";
 
 interface SessionGroupHeaderProps {
   groupId: string;
@@ -113,7 +113,7 @@ export function SessionGroupHeader({
   }, [groupId]);
 
   const menuItems = useMemo(() => {
-    const items: IconMenuItem[] = [];
+    const items: SessionMenuAction[] = [];
     if (prUrl) items.push({ title: "Open PR", systemIcon: "arrow.up.forward.square", onPress: handleOpenPr });
     if (!archivedAt && status !== "archived") {
       items.push({
@@ -201,26 +201,7 @@ export function SessionGroupHeader({
           </Pressable>
         </ContextMenu>
 
-        <ContextMenu actions={actions} onPress={handleMenuPress} dropdownMenuMode>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Session actions"
-            onPress={() => void haptic.light()}
-          >
-            <Glass preset="input" style={styles.overflowPill}>
-              <View style={styles.overflowInner}>
-                <SymbolView
-                  name="ellipsis"
-                  size={18}
-                  tintColor={theme.colors.foreground}
-                  weight="semibold"
-                  resizeMode="scaleAspectFit"
-                  style={styles.overflowIcon}
-                />
-              </View>
-            </Glass>
-          </Pressable>
-        </ContextMenu>
+        <SessionActionsMenu actions={menuItems} accessibilityLabel="Session actions" />
       </View>
     </View>
   );
@@ -252,18 +233,5 @@ const styles = StyleSheet.create({
   branch: {
     marginTop: 1,
     fontFamily: "Menlo",
-  },
-  overflowPill: {
-    width: PILL_HEIGHT,
-    height: PILL_HEIGHT,
-  },
-  overflowInner: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  overflowIcon: {
-    width: 18,
-    height: 18,
   },
 });
