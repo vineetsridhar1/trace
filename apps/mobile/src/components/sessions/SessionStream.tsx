@@ -31,9 +31,9 @@ interface SessionStreamProps {
 }
 
 const NEAR_BOTTOM_THRESHOLD = 120;
-const TIMESTAMP_REVEAL_ACTIVATION = 32;
-const TIMESTAMP_REVEAL_FAIL_Y = 19;
-const TIMESTAMP_REVEAL_RESISTANCE = 0.39;
+const TIMESTAMP_REVEAL_ACTIVATION = 24;
+const TIMESTAMP_REVEAL_FAIL_Y = 20;
+const TIMESTAMP_REVEAL_RESISTANCE = 0.5;
 
 /** In-memory scroll offset per sessionId — preserved across re-mounts within a session. */
 const scrollOffsetMemory = new Map<string, number>();
