@@ -15,7 +15,6 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { IconButton } from "@/components/design-system";
 import { SessionSurface, SessionSurfaceEmpty } from "@/components/sessions/SessionSurface";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { haptic } from "@/lib/haptics";
@@ -132,16 +131,6 @@ export function SessionPlayerOverlay() {
                 ]}
               />
             </View>
-            <View style={styles.closeRow}>
-              <IconButton
-                symbol="chevron.down"
-                size="sm"
-                color="mutedForeground"
-                accessibilityLabel="Close session player"
-                onPress={() => closeSessionPlayer()}
-              />
-              <View style={styles.closeRowSpacer} />
-            </View>
           </View>
         </GestureDetector>
 
@@ -182,16 +171,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 5,
     borderRadius: 999,
-  },
-  closeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    paddingHorizontal: 8,
-    marginTop: 4,
-  },
-  closeRowSpacer: {
-    flex: 1,
   },
   surface: {
     flex: 1,
