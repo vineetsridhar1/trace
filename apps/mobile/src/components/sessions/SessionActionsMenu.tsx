@@ -105,7 +105,7 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
         translateY: interpolate(
           progress.value,
           [0, 0.5, 0.82, 1],
-          [0, 10, -4, 0],
+          [0, 26, -10, 0],
         ),
       },
     ],
