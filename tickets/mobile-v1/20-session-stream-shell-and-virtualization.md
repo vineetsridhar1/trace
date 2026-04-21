@@ -59,6 +59,7 @@ Resolve these before wiring the stream — the shell landed in ticket 19 but lef
 
 ## Implementation notes
 
+- **The session surface lives inside the Session Player (§10.8), not a dedicated full-screen route.** Ticket 20 delivered the stream in a shared `SessionSurface.tsx` composition that is mounted both by the Player and by the deep-link stack route. Tapping a session-group row in Channels opens the Player — there is no standalone session screen in V1. See ticket 15b for the Player's scope change.
 - `buildSessionNodes`, `SessionNode`, `ReadGlobItem`, and `HIDDEN_SESSION_PAYLOAD_TYPES` were extracted from `apps/web/src/components/session/groupReadGlob.ts` + `apps/web/src/lib/session-event-filters.ts` into `packages/client-core/src/session/` so mobile and web share one node model (per plan §7.1). The old web files are now thin re-exports — downstream web imports continue to work unchanged.
 - `useSessionEvents` (mobile) mirrors web's hook: initial page via `events(scope, limit, before)`, `sessionEvents` subscription for live full payloads, `sessionStatusChanged` subscription that patches the session entity in the store.
 - `estimatedItemSize` is no longer a `FlashList` prop in v2 (automatic measurement). The auto-scroll-at-bottom behavior is expressed through `maintainVisibleContentPosition.autoscrollToBottomThreshold`.

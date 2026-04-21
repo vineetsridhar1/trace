@@ -1,6 +1,5 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent } from "react-native";
-import { useRouter } from "expo-router";
 import type { SessionGroupStatus } from "@trace/gql";
 import { useEntityField } from "@trace/client-core";
 import Animated, {
@@ -14,9 +13,9 @@ import { haptic } from "@/lib/haptics";
 import { alpha, useTheme } from "@/theme";
 
 interface SessionTabStripProps {
-  groupId: string;
   activeSessionId: string;
   sessionIds: string[];
+  onSelect: (sessionId: string) => void;
 }
 
 interface TabLayout {
@@ -25,12 +24,11 @@ interface TabLayout {
 }
 
 export const SessionTabStrip = memo(function SessionTabStrip({
-  groupId,
   activeSessionId,
   sessionIds,
+  onSelect,
 }: SessionTabStripProps) {
   const theme = useTheme();
-  const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
   const [layouts, setLayouts] = useState<Record<string, TabLayout>>({});
   const indicatorX = useSharedValue(0);
@@ -83,7 +81,7 @@ export const SessionTabStrip = memo(function SessionTabStrip({
               onPress={() => {
                 if (sessionId === activeSessionId) return;
                 void haptic.selection();
-                router.replace(`/sessions/${groupId}/${sessionId}`);
+                onSelect(sessionId);
               }}
             />
           ))}

@@ -14,12 +14,19 @@ export interface MobileUIState {
   setActiveSessionGroupId: (id: string | null) => void;
 
   /**
-   * Shared pager index for the active-sessions accessory (§9.2.1) and the
-   * expanded Session Player (§10.8). Swiping in either surface updates this
-   * so the other stays in sync.
+   * Pager position for the active-sessions bottom accessory (§9.2.1). Purely
+   * the accessory's visible index — the Session Player (§10.8) does not read
+   * or drive this value; Player targeting goes through `overlaySessionId`.
    */
   activeAccessoryIndex: number;
   setActiveAccessoryIndex: (i: number) => void;
+  /**
+   * Session currently rendered by the Session Player (§10.8). Null = Player
+   * closed. Set by any entry point (row tap, accessory tap, deep link) to
+   * both target the Player's content and open it.
+   */
+  overlaySessionId: string | null;
+  setOverlaySessionId: (id: string | null) => void;
   sessionPlayerOpen: boolean;
   setSessionPlayerOpen: (open: boolean) => void;
 
@@ -43,6 +50,7 @@ const initial = {
   activeSessionId: null as string | null,
   activeSessionGroupId: null as string | null,
   activeAccessoryIndex: 0,
+  overlaySessionId: null as string | null,
   sessionPlayerOpen: false,
   channelDoneBadges: {} as Record<string, boolean>,
   sessionDoneBadges: {} as Record<string, boolean>,
@@ -57,6 +65,7 @@ export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUISta
   setActiveSessionGroupId: (id) => set({ activeSessionGroupId: id }),
 
   setActiveAccessoryIndex: (i) => set({ activeAccessoryIndex: i }),
+  setOverlaySessionId: (id) => set({ overlaySessionId: id }),
   setSessionPlayerOpen: (open) => set({ sessionPlayerOpen: open }),
 
   markChannelDone: (id) =>
