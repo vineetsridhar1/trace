@@ -173,8 +173,12 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     overflow: "hidden",
   },
-  topInset: {},
-  dragHandle: {},
+  topInset: {
+    zIndex: 10,
+  },
+  dragHandle: {
+    overflow: "visible",
+  },
   grabberRow: {
     alignItems: "center",
     justifyContent: "center",
