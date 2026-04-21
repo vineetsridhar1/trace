@@ -92,13 +92,23 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
   }, [open, progress]);
 
   // Shape morph: pill -> rounded rect, anchored at the trigger's top-right
-  // corner. Width grows leftward and height grows downward from that pinned
-  // corner, so the surface "unfolds" out of the trigger instead of drifting
-  // to a new center and expanding from there.
+  // corner. A translateY arc dips the surface down through the middle and
+  // then springs back up past the resting line before settling, so the
+  // motion reads as "unfold from the trigger with a bounce" instead of
+  // drifting to a new center.
   const glassStyle = useAnimatedStyle(() => ({
     width: interpolate(progress.value, [0, 1], [TRIGGER_SIZE, MENU_WIDTH]),
     height: interpolate(progress.value, [0, 1], [TRIGGER_SIZE, menuHeight]),
     borderRadius: interpolate(progress.value, [0, 1], [TRIGGER_SIZE / 2, MENU_RADIUS]),
+    transform: [
+      {
+        translateY: interpolate(
+          progress.value,
+          [0, 0.5, 0.82, 1],
+          [0, 10, -4, 0],
+        ),
+      },
+    ],
   }));
 
   // Cross-fade: icon out in the first 40% of the morph, menu in during the last 45%.
