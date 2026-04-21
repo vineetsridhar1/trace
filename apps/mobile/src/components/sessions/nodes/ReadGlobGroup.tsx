@@ -25,6 +25,7 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
 
   return (
     <View style={styles.wrapper}>
+      <View style={[styles.card, { borderRadius: theme.radius.sm }]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${items.length} file scan${items.length === 1 ? "" : "s"}`}
@@ -32,11 +33,9 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
         style={[
           styles.header,
           {
-            backgroundColor: "rgba(255,255,255,0.1)",
-            paddingVertical: theme.spacing.xs,
-            paddingHorizontal: theme.spacing.sm,
+            paddingVertical: theme.spacing.sm,
+            paddingHorizontal: theme.spacing.md,
             gap: theme.spacing.xs,
-            borderRadius: theme.radius.sm,
           },
         ]}
       >
@@ -55,6 +54,7 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
           {items.length > 1 ? ` – ${formatTime(last.timestamp)}` : ""}
         </Text>
       </Pressable>
+      </View>
       {open ? (
         <View
           style={[
@@ -99,6 +99,12 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
 
 const styles = StyleSheet.create({
   wrapper: { width: "100%", paddingVertical: 2 },
+  card: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+  },
   header: { flexDirection: "row", alignItems: "center" },
   chevron: { width: 10, height: 10 },
   time: { marginLeft: "auto" },

@@ -40,6 +40,14 @@ export function CommandExecutionRow({
 
   return (
     <View style={styles.wrapper}>
+      <View
+        style={[
+          styles.card,
+          {
+            borderRadius: theme.radius.sm,
+          },
+        ]}
+      >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${prefix} ${display}`}
@@ -48,11 +56,9 @@ export function CommandExecutionRow({
         style={[
           styles.header,
           {
-            backgroundColor: "rgba(255,255,255,0.1)",
-            paddingVertical: theme.spacing.xs,
-            paddingHorizontal: theme.spacing.sm,
+            paddingVertical: theme.spacing.sm,
+            paddingHorizontal: theme.spacing.md,
             gap: theme.spacing.xs,
-            borderRadius: theme.radius.sm,
           },
         ]}
       >
@@ -93,6 +99,7 @@ export function CommandExecutionRow({
           {formatTime(timestamp)}
         </Text>
       </Pressable>
+      </View>
       {open && hasBody ? (
         <View
           style={[
@@ -125,6 +132,12 @@ export function CommandExecutionRow({
 
 const styles = StyleSheet.create({
   wrapper: { width: "100%", paddingVertical: 2 },
+  card: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+  },
   header: { flexDirection: "row", alignItems: "center" },
   chevron: { width: 10, height: 10 },
   command: { flex: 1 },

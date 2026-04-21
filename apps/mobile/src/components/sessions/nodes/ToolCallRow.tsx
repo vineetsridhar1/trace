@@ -45,6 +45,7 @@ export function ToolCallRow({ name, input, output, timestamp }: ToolCallRowProps
 
   return (
     <View style={styles.wrapper}>
+      <View style={[styles.card, { borderRadius: theme.radius.sm }]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${name} tool call`}
@@ -53,11 +54,9 @@ export function ToolCallRow({ name, input, output, timestamp }: ToolCallRowProps
         style={[
           styles.header,
           {
-            backgroundColor: "rgba(255,255,255,0.1)",
-            paddingVertical: theme.spacing.xs,
-            paddingHorizontal: theme.spacing.sm,
+            paddingVertical: theme.spacing.sm,
+            paddingHorizontal: theme.spacing.md,
             gap: theme.spacing.xs,
-            borderRadius: theme.radius.sm,
           },
         ]}
       >
@@ -85,6 +84,7 @@ export function ToolCallRow({ name, input, output, timestamp }: ToolCallRowProps
           {formatTime(timestamp)}
         </Text>
       </Pressable>
+      </View>
       {open && hasBody ? (
         <View
           style={[
@@ -120,6 +120,12 @@ export function ToolCallRow({ name, input, output, timestamp }: ToolCallRowProps
 
 const styles = StyleSheet.create({
   wrapper: { width: "100%", paddingVertical: 2 },
+  card: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
