@@ -959,7 +959,11 @@ The app badge reflects the count of sessions in `needs_input` across the active 
 - **Input keystroke latency:** <16ms from touch to glyph rendered.
 - **Memory:** <200MB RSS with a session of 1000 events loaded.
 
-Instrumented via `expo-performance` or equivalent; checked in M6.
+Instrumented via `apps/mobile/src/lib/perf.ts` (a dependency-free
+`expo-performance` equivalent landed in ticket 30): cold-start, warm-start,
+event-ingest, and input-latency markers; samples are kept in a 200-entry
+ring buffer and logged in `__DEV__`. Read via `recentPerfSamples()` from a
+dev overlay or console. Checked on real devices in M6.
 
 ---
 

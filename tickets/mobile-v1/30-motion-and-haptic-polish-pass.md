@@ -105,3 +105,43 @@ can be checked without re-instrumentation:
       constants; the scale (`0.99`) is a code-only guess that should be
       validated against feel.
 - [ ] Internal team dogfood review (3+ users → "feels native").
+
+## Code-only follow-ups surfaced by /review-against-plan
+
+These are gaps the review found that *can* be closed from a codebase but
+weren't part of this PR. Pick them up in a small follow-up commit on the
+same ticket before declaring it shipped:
+
+- [ ] **Haptic-map drift vs §11.6**: three call sites use the wrong
+      strength.
+  - `useHomeRowMenu.handleStop` fires `medium`; spec says `heavy` for
+      "Stop session (confirm)".
+  - `SessionGroupHeader.archiveGroup` fires `medium`; archive is a
+      destructive confirmation → `heavy`.
+  - `PendingInputPlan.dispatch` fires `light` for both approve and revise;
+      the approve branch should fire `success` per "Approve plan → success".
+- [ ] **`recordPerf("input-latency", …)` is declared but never called.**
+      Add a marker around `SessionInputComposer`'s `onChangeText` so the
+      §16 input-latency budget actually has samples in the ring buffer.
+- [ ] **Status chip on change: brief flash / scale** (an explicit "specific
+      target" in this ticket). `Chip` only pulses `inProgress`; switching
+      from any other variant to a new one has no transition cue. Add a
+      one-shot scale/opacity flash keyed on `variant` change.
+- [ ] **Message arrival entrance animation** (also an explicit "specific
+      target"). Currently no per-row entrance — auto-scroll handles "follow
+      the bottom" but new messages do not fade/slide in. A `FadeIn` on the
+      newest row only (gated by `isLast` + a "near bottom" flag) would
+      satisfy this without per-row recycling cost. The risk: it interacts
+      with the `maxItemsInRecyclePool={0}` workaround for the Fabric crash;
+      validate before landing.
+
+## Dependency note
+
+The plan README places ticket 30 in M6 with "needs M5 complete". As of the
+PR commit, tickets 26–29 (push registration client, server push dispatch,
+deep links, badge counts) have not landed on `main`. Ticket 30 has been
+worked on with the assumption that those will land before 30 ships, since
+none of the polish work depends on push or badging. This is fine but worth
+re-checking before this ticket merges — specifically whether the deep-link
+entry point (28) brings any new haptics or motion that need to be tuned in
+this pass.
