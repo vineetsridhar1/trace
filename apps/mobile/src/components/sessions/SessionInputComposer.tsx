@@ -365,6 +365,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             disabled={!canInteract}
             items={modelItems}
             minWidth={0}
+            tintAnimatedProps={glassAnimatedProps}
           />
           <ComposerMorphPill
             label={bridgeLabel}
@@ -374,6 +375,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             systemIcon={bridgeIcon}
             align="right"
             minWidth={88}
+            tintAnimatedProps={glassAnimatedProps}
           />
         </View>
       </View>
