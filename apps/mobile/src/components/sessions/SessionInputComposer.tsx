@@ -242,8 +242,8 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
 
   const currentTool: CodingTool = tool === "codex" ? "codex" : "claude_code";
   const modelOptions = useMemo(() => getModelsForTool(currentTool), [currentTool]);
-  const modelItems = useMemo<ComposerMorphPillItem[]>(() => {
-    const toolRows: ComposerMorphPillItem[] = [
+  const toolHeaderItems = useMemo<ComposerMorphPillItem[]>(
+    () => [
       {
         key: "tool:claude_code",
         label: "Claude Code",
@@ -258,16 +258,20 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
         disabled: !canInteract,
         onPress: () => void handleToolChange("codex"),
       },
-    ];
-    const modelRows: ComposerMorphPillItem[] = modelOptions.map((option) => ({
-      key: `model:${option.value}`,
-      label: option.label,
-      selected: model === option.value,
-      disabled: !canInteract,
-      onPress: () => void handleModelChange(option.value),
-    }));
-    return [...toolRows, ...modelRows];
-  }, [canInteract, currentTool, handleModelChange, handleToolChange, model, modelOptions]);
+    ],
+    [canInteract, currentTool, handleToolChange],
+  );
+  const modelItems = useMemo<ComposerMorphPillItem[]>(
+    () =>
+      modelOptions.map((option) => ({
+        key: `model:${option.value}`,
+        label: option.label,
+        selected: model === option.value,
+        disabled: !canInteract,
+        onPress: () => void handleModelChange(option.value),
+      })),
+    [canInteract, handleModelChange, model, modelOptions],
+  );
   const bridgeItems = useMemo<ComposerMorphPillItem[]>(
     () => [
       {
@@ -428,6 +432,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             label={modelLabel}
             accessibilityLabel="Model"
             disabled={!canInteract}
+            headerItems={toolHeaderItems}
             items={modelItems}
             minWidth={0}
             tintAnimatedProps={glassAnimatedProps}
