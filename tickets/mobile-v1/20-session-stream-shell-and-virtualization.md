@@ -35,18 +35,18 @@ The scaffold of the main session screen: the session header, the virtualized `Fl
 
 Resolve these before wiring the stream — the shell landed in ticket 19 but left two unresolved choices that affect how the stream plugs in:
 
-- Overflow menu must open on tap. Either add `dropdownMenuMode` support to `IconButton` (preferred — downstream tickets will reuse the pattern) or render `ContextMenu` directly from `SessionGroupHeader`.
-- Pick the header strategy and apply it. Either move to native large-title on `sessions/_layout.tsx` (matching `(tabs)/channels/_layout.tsx`) and relocate `SessionTabStrip` to a pinned accessory, or render the custom Glass header above `FlashList` (outside the scroll view) and drive the solid-on-scroll state from `FlashList`'s scroll offset. In either direction, remove the group-name duplication between the native `Stack.Screen` title and the custom header.
+- [x] **Overflow menu must open on tap.** Added `dropdownMenuMode?: boolean` to `IconButton`; `SessionGroupHeader` passes `dropdownMenuMode` on the `ellipsis.circle` button so the context menu opens on tap.
+- [x] **Header strategy (Option B applied).** Pulled `SessionGroupHeader` + `SessionTabStrip` out of the scroll view in `[sessionId].tsx`; `SessionStream` owns the `FlashList` below them. Solid-on-scroll state is driven from `FlashList`'s scroll offset (>8pt → solid) via an `onScrollOffsetChange` callback from `SessionStream`. The native `Stack.Screen` title now shows the session name (not the group name) to remove the duplicate, keeping the back chevron + small title and letting the custom Glass header own the group context.
 
 ## Completion requirements
 
-- [ ] Session stream renders a placeholder per event
-- [ ] Subscribes to `sessionEvents` on focus; unsubscribes on blur
-- [ ] Initial loading state renders skeleton placeholders; no-event sessions show the empty-state copy from the plan
-- [ ] Scrolling back to top triggers pagination
-- [ ] New events auto-scroll when at bottom; show "New activity" pill otherwise
-- [ ] 120fps scrolling on ProMotion device with 500+ events
-- [ ] All files <200 lines
+- [x] Session stream renders a placeholder per event (`<Text>[{node.kind}]</Text>` in `SessionStream.tsx`; replaced by real renderers in ticket 21)
+- [x] Subscribes to `sessionEvents` + `sessionStatusChanged` on mount; unsubscribes on unmount (screen blur in expo-router unmounts the stack child)
+- [x] Initial loading state renders skeleton placeholders; no-event sessions show "Waiting for agent to start…"
+- [x] Scrolling back to top triggers pagination via `FlashList`'s `onStartReached` + `before: oldestTimestamp` query
+- [x] New events auto-scroll when within 120pt of bottom; show "New activity" pill otherwise
+- [ ] 120fps scrolling on ProMotion device with 500+ events — requires a real device run; FlashList v2 recycling + placeholder-only renderers should clear this comfortably. Verify in M6 polish pass.
+- [x] All files <200 lines (largest: `SessionGroupHeader.tsx` at 193; `SessionTabStrip.tsx` at 186; `SessionStream.tsx` at 184; `useSessionEvents.ts` at 182)
 
 ## How to test
 
@@ -56,3 +56,10 @@ Resolve these before wiring the stream — the shell landed in ticket 19 but lef
 4. New event arrives while near bottom → auto-scrolls.
 5. Scroll up, then new event arrives → "New activity" pill appears; tap → scrolls down.
 6. Instruments / perf overlay shows no sustained frame drops during fast flicks.
+
+## Implementation notes
+
+- `buildSessionNodes`, `SessionNode`, `ReadGlobItem`, and `HIDDEN_SESSION_PAYLOAD_TYPES` were extracted from `apps/web/src/components/session/groupReadGlob.ts` + `apps/web/src/lib/session-event-filters.ts` into `packages/client-core/src/session/` so mobile and web share one node model (per plan §7.1). The old web files are now thin re-exports — downstream web imports continue to work unchanged.
+- `useSessionEvents` (mobile) mirrors web's hook: initial page via `events(scope, limit, before)`, `sessionEvents` subscription for live full payloads, `sessionStatusChanged` subscription that patches the session entity in the store.
+- `estimatedItemSize` is no longer a `FlashList` prop in v2 (automatic measurement). The ticket's requirement remains honored via `maintainVisibleContentPosition.autoscrollToBottomThreshold`.
+- Scroll offset memoized per `sessionId` in a module-level `Map` so re-mounts within a session restore position; a different session starts at the bottom (per "initial scroll to end" flow).

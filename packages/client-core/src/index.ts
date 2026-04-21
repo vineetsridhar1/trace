@@ -72,3 +72,15 @@ export { notifyForEvent, registerHandler } from "./notifications/registry.js";
 
 export type { CreateGqlClientOptions, GqlClient } from "./gql/createClient.js";
 export { createGqlClient } from "./gql/createClient.js";
+
+export {
+  HIDDEN_SESSION_PAYLOAD_TYPES,
+  HIDDEN_SESSION_PAYLOAD_TYPE_SET,
+} from "./session/event-filters.js";
+export { buildSessionNodes } from "./session/nodes.js";
+export type {
+  AgentToolResult,
+  BuildSessionNodesResult,
+  ReadGlobItem,
+  SessionNode,
+} from "./session/nodes.js";

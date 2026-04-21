@@ -1,15 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import {
-  ScrollView,
-  StyleSheet,
-  View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-} from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useEntityField } from "@trace/client-core";
-import { Spinner, Text } from "@/components/design-system";
+import { Spinner } from "@/components/design-system";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
+import { SessionStream } from "@/components/sessions/SessionStream";
 import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
 import {
   useEnsureSessionGroupDetail,
@@ -17,6 +12,8 @@ import {
 } from "@/hooks/useSessionGroupDetail";
 import { useTheme } from "@/theme";
 import { useMobileUIStore } from "@/stores/ui";
+
+const SOLID_HEADER_THRESHOLD = 8;
 
 export default function SessionStreamScreen() {
   const { groupId, sessionId } = useLocalSearchParams<{
@@ -27,10 +24,7 @@ export default function SessionStreamScreen() {
   const theme = useTheme();
   const loading = useEnsureSessionGroupDetail(groupId);
   const sessionIds = useSessionGroupSessionIds(groupId);
-  const groupName = useEntityField("sessionGroups", groupId, "name") as
-    | string
-    | null
-    | undefined;
+  const groupName = useEntityField("sessionGroups", groupId, "name") as string | null | undefined;
   const sessionName = useEntityField("sessions", sessionId, "name") as
     | string
     | null
@@ -54,6 +48,11 @@ export default function SessionStreamScreen() {
     router.replace(`/sessions/${groupId}/${sessionIds[0]}`);
   }, [groupId, router, sessionId, sessionIds]);
 
+  const handleScrollOffsetChange = useCallback((offsetY: number) => {
+    const next = offsetY > SOLID_HEADER_THRESHOLD;
+    setSolidHeader((current) => (current === next ? current : next));
+  }, []);
+
   if (loading && !groupName) {
     return (
       <View style={[styles.loading, { backgroundColor: theme.colors.background }]}>
@@ -64,41 +63,16 @@ export default function SessionStreamScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: groupName ?? sessionName ?? "Session" }} />
-      <ScrollView
-        style={{ flex: 1, backgroundColor: theme.colors.background }}
-        contentInsetAdjustmentBehavior="automatic"
-        scrollEventThrottle={16}
-        onScroll={(event: NativeSyntheticEvent<NativeScrollEvent>) => {
-          const next = event.nativeEvent.contentOffset.y > 8;
-          setSolidHeader((current) => (current === next ? current : next));
-        }}
-      >
+      <Stack.Screen options={{ title: sessionName ?? "Session" }} />
+      <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
         <SessionGroupHeader groupId={groupId} solid={solidHeader} />
         <SessionTabStrip
           groupId={groupId}
           activeSessionId={sessionId}
           sessionIds={sessionIds}
         />
-        <View
-          style={[
-            styles.placeholder,
-            {
-              minHeight: 560,
-              paddingHorizontal: theme.spacing.lg,
-              paddingVertical: theme.spacing.xl,
-            },
-          ]}
-        >
-          <Text variant="headline">Session stream placeholder</Text>
-          <Text variant="body" color="mutedForeground" style={{ marginTop: theme.spacing.sm }}>
-            Ticket 19 now provides the session-group shell, redirect, header, and sibling tab strip.
-          </Text>
-          <Text variant="body" color="mutedForeground" style={{ marginTop: theme.spacing.sm }}>
-            Ticket 20 will replace this body with the virtualized session event stream for {sessionName ?? sessionId}.
-          </Text>
-        </View>
-      </ScrollView>
+        <SessionStream sessionId={sessionId} onScrollOffsetChange={handleScrollOffsetChange} />
+      </View>
     </>
   );
 }
@@ -109,7 +83,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  placeholder: {
-    justifyContent: "flex-start",
+  root: {
+    flex: 1,
   },
 });

@@ -141,6 +141,7 @@ export function SessionGroupHeader({
           onPress={() => {}}
           accessibilityLabel="Session group actions"
           menuItems={menuItems}
+          dropdownMenuMode
         />
       </View>
       {(() => {
