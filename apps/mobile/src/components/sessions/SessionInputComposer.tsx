@@ -364,8 +364,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             accessibilityLabel="Model"
             disabled={!canInteract}
             items={modelItems}
-            minWidth={120}
-            style={styles.modelPill}
+            minWidth={0}
           />
           <ComposerMorphPill
             label={bridgeLabel}
@@ -459,6 +458,5 @@ const styles = StyleSheet.create({
   modeContent: { ...StyleSheet.absoluteFillObject, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: MODE_CONTENT_GAP },
   modeIcon: { width: 14, height: 14 },
   modeText: { fontSize: 13, fontWeight: "700" },
-  modelPill: { flex: 1, minWidth: 0 },
   retryRow: { paddingBottom: 4 },
 });

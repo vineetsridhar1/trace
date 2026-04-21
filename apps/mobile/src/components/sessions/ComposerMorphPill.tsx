@@ -176,6 +176,9 @@ function MorphingPill({
         onLayout={handleLayout}
         style={[styles.anchor, { minWidth }, open ? styles.anchorOpen : null, style]}
       >
+        <View pointerEvents="none" style={styles.measureLayer}>
+          <PillLabel icon={systemIcon} label={label} />
+        </View>
         <AnimatedGlassView
           isInteractive
           glassEffectStyle="regular"
@@ -372,6 +375,13 @@ const styles = StyleSheet.create({
   },
   anchorOpen: {
     zIndex: 60,
+  },
+  measureLayer: {
+    height: PILL_HEIGHT,
+    alignSelf: "flex-start",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    opacity: 0,
   },
   glass: {
     position: "absolute",
