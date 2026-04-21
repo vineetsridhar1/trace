@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import {
   formatCommandLabel,
@@ -22,8 +21,16 @@ export function CommandExecutionRow({
   exitCode,
 }: CommandExecutionRowProps) {
   const [open, setOpen] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [bodyHeight, setBodyHeight] = useState(0);
   const prefix = getCommandPrefix(command);
   const displayCommand = formatCommandLabel(command);
+
+  useEffect(() => {
+    if (bodyRef.current) {
+      setBodyHeight(bodyRef.current.scrollHeight);
+    }
+  }, [open, output, exitCode]);
 
   const renderedOutput = (() => {
     if (typeof output === "string" && output.trim()) return output;
@@ -41,35 +48,27 @@ export function CommandExecutionRow({
         className="tool-cmd-button"
         onClick={() => setOpen(!open)}
       >
-        <motion.span
+        <span
           className="tool-cmd-chevron"
-          animate={{ rotate: open ? 90 : 0 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
+          style={{ transform: open ? "rotate(90deg)" : undefined }}
         >
           <ChevronRight size={10} />
-        </motion.span>
+        </span>
         <span className="tool-cmd-prefix">{prefix}</span>
         <code className="tool-cmd-code">{displayCommand}</code>
         <span className="tool-cmd-time">{formatTime(timestamp)}</span>
       </button>
-      <AnimatePresence initial={false}>
-        {renderedOutput && open && (
-          <motion.div
-            key="body"
-            className="tool-cmd-body"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ height: { duration: 0.22, ease: [0.16, 1, 0.3, 1] }, opacity: { duration: 0.18 } }}
-            style={{ overflow: "hidden" }}
-          >
-            <div>
-              <div className="tool-cmd-section-label">Output</div>
-              <pre className="tool-cmd-output">{renderedOutput}</pre>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {renderedOutput && (
+        <div
+          className="tool-cmd-body"
+          style={{ maxHeight: open ? `${bodyHeight}px` : "0px" }}
+        >
+          <div ref={bodyRef}>
+            <div className="tool-cmd-section-label">Output</div>
+            <pre className="tool-cmd-output">{renderedOutput}</pre>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
