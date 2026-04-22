@@ -28,7 +28,7 @@ export function SessionMoveButton({
           open ? "bg-surface-elevated text-foreground" : undefined,
           className,
         )}
-        title={unavailable && disabledReason ? disabledReason : "Move session"}
+        title={!sessionId ? undefined : disabledReason && unavailable ? disabledReason : "Move session"}
       >
         <ArrowRightLeft size={14} />
       </PopoverTrigger>

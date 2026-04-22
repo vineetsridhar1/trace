@@ -108,26 +108,54 @@ function areSectionsEqual(a: HomeSection[], b: HomeSection[]): boolean {
 
 const SECTION_ORDER: HomeSectionKind[] = ["needs_input", "working_now", "recently_done"];
 
+export interface HomeRepoOption {
+  id: string;
+  name: string;
+}
+
+interface HomeSectionsResult {
+  sections: HomeSection[];
+  /** Repo options derived from visible groups (only populated when collectRepos=true) */
+  repos: HomeRepoOption[];
+}
+
 /**
  * Core computation shared by `useHomeSections` and `useHomeRepos`.
  * Returns the three ordered buckets of session group IDs for the home tab,
  * applying ownership, visibility, repo, cutoff, and cap rules consistently.
+ *
+ * When `collectRepos` is true, also collects distinct repos from the unfiltered
+ * (no repoId) visible groups in a single pass, avoiding a second full traversal.
  */
 function buildHomeSections(
   state: EntityState,
   userId: string,
   repoId: string | null,
-): HomeSection[] {
+  collectRepos = false,
+): HomeSectionsResult {
   // Per-group accumulators: track the best bucket and sort key for each group.
   const groupNeedsInput = new Map<string, { rank: number; ts: number }>();
   const groupWorking = new Map<string, { ts: number }>();
   const groupDone = new Map<string, { ts: number }>();
+  // When collectRepos=true, track the first repo seen per group (keyed by groupId).
+  // After sectioning we look up repos only for groups that made it into a section.
+  const groupRepo = collectRepos ? new Map<string, { id: string; name: string }>() : null;
 
   const cutoff = Date.now() - RECENTLY_DONE_WINDOW_MS;
 
   for (const session of Object.values(state.sessions) as SessionEntity[]) {
     if (!ownedBy(session, userId)) continue;
     if (hiddenFromHome(state, session)) continue;
+
+    // Track repo per group (unfiltered by repoId) for later chip collection.
+    if (groupRepo) {
+      const gid = session.sessionGroupId;
+      if (gid && !groupRepo.has(gid)) {
+        const repo = session.repo as { id?: string; name?: string } | null | undefined;
+        if (repo?.id) groupRepo.set(gid, { id: repo.id, name: repo.name ?? repo.id });
+      }
+    }
+
     if (repoId && sessionRepoId(session) !== repoId) continue;
 
     // Sessions always have a group ID; guard is for type narrowing.
@@ -188,7 +216,23 @@ function buildHomeSections(
     const ids = buckets[kind];
     if (ids.length > 0) sections.push({ kind, ids });
   }
-  return sections;
+
+  let repos: HomeRepoOption[] = [];
+  if (groupRepo) {
+    // Collect repos only from groups that made it into a section (i.e. are visible).
+    const repoById = new Map<string, string>();
+    for (const section of sections) {
+      for (const gid of section.ids) {
+        const r = groupRepo.get(gid);
+        if (r && !repoById.has(r.id)) repoById.set(r.id, r.name);
+      }
+    }
+    repos = Array.from(repoById, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  }
+
+  return { sections, repos };
 }
 
 /**
@@ -215,15 +259,10 @@ export function useHomeSections(
     useEntityStore,
     (state: EntityState): HomeSection[] => {
       if (!userId) return [];
-      return buildHomeSections(state, userId, repoId);
+      return buildHomeSections(state, userId, repoId).sections;
     },
     areSectionsEqual,
   );
-}
-
-export interface HomeRepoOption {
-  id: string;
-  name: string;
 }
 
 function areRepoOptionsEqual(a: HomeRepoOption[], b: HomeRepoOption[]): boolean {
@@ -239,35 +278,15 @@ function areRepoOptionsEqual(a: HomeRepoOption[], b: HomeRepoOption[]): boolean 
  * (i.e. groups that appear in at least one section), sorted by name.
  * Drives the home repo filter chip row — only repos with at least one visible
  * group are shown, so filtering to any chip will always produce a non-empty
- * list. Uses `buildHomeSections` (no repo filter) to get the canonical set of
- * visible groups, then looks up each group's repo from the session store.
+ * list. Uses `buildHomeSections` with `collectRepos=true` so both the section
+ * classification and repo collection happen in a single session-store pass.
  */
 export function useHomeRepos(userId: string | null): HomeRepoOption[] {
   return useStoreWithEqualityFn(
     useEntityStore,
     (state: EntityState): HomeRepoOption[] => {
       if (!userId) return [];
-
-      // Get the full unfiltered section list to know which groups are visible.
-      const sections = buildHomeSections(state, userId, null);
-      const visibleGroupIds = new Set<string>();
-      for (const section of sections) {
-        for (const id of section.ids) visibleGroupIds.add(id);
-      }
-
-      // Collect one repo name per repo ID, from visible groups only.
-      const seen = new Map<string, string>();
-      for (const session of Object.values(state.sessions) as SessionEntity[]) {
-        const groupId = session.sessionGroupId;
-        if (!groupId || !visibleGroupIds.has(groupId)) continue;
-        const repo = session.repo as { id?: string; name?: string } | null | undefined;
-        if (!repo?.id || seen.has(repo.id)) continue;
-        seen.set(repo.id, repo.name ?? repo.id);
-      }
-
-      return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) =>
-        a.name.localeCompare(b.name),
-      );
+      return buildHomeSections(state, userId, null, true).repos;
     },
     areRepoOptionsEqual,
   );

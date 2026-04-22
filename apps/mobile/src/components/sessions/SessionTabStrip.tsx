@@ -1,12 +1,7 @@
-import { memo, useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import type { SessionGroupStatus } from "@trace/gql";
 import { useEntityField } from "@trace/client-core";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
 import { Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { useSessionGroupSessionIds } from "@/hooks/useSessionGroupDetail";
@@ -19,11 +14,6 @@ interface SessionTabStripProps {
   onSelect: (sessionId: string) => void;
 }
 
-interface TabLayout {
-  width: number;
-  x: number;
-}
-
 export const SessionTabStrip = memo(function SessionTabStrip({
   groupId,
   activeSessionId,
@@ -32,25 +22,21 @@ export const SessionTabStrip = memo(function SessionTabStrip({
   const theme = useTheme();
   const sessionIds = useSessionGroupSessionIds(groupId);
   const scrollRef = useRef<ScrollView>(null);
-  const [layouts, setLayouts] = useState<Record<string, TabLayout>>({});
-  const indicatorX = useSharedValue(0);
-  const indicatorWidth = useSharedValue(0);
+  const [layouts, setLayouts] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    const layout = layouts[activeSessionId];
-    if (!layout) return;
-    indicatorX.value = withSpring(layout.x, theme.motion.springs.smooth);
-    indicatorWidth.value = withSpring(layout.width, theme.motion.springs.smooth);
+    const x = layouts[activeSessionId];
+    if (x === undefined) return;
     scrollRef.current?.scrollTo({
-      x: Math.max(layout.x - theme.spacing.lg, 0),
+      x: Math.max(x - theme.spacing.lg, 0),
       animated: true,
     });
-  }, [activeSessionId, indicatorWidth, indicatorX, layouts, theme.motion.springs.smooth, theme.spacing.lg]);
+  }, [activeSessionId, layouts, theme.spacing.lg]);
 
-  const indicatorStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: indicatorX.value }],
-    width: indicatorWidth.value,
-  }));
+  // Stable callback so SessionTabPill memoization is not broken.
+  const handleLayout = useCallback((sessionId: string, x: number) => {
+    setLayouts((current) => (current[sessionId] === x ? current : { ...current, [sessionId]: x }));
+  }, []);
 
   if (sessionIds.length <= 1) return null;
 
@@ -72,32 +58,10 @@ export const SessionTabStrip = memo(function SessionTabStrip({
               key={sessionId}
               sessionId={sessionId}
               active={sessionId === activeSessionId}
-              onLayout={(e) => {
-                const { x, width } = e.nativeEvent.layout;
-                setLayouts((current) =>
-                  current[sessionId]?.x === x && current[sessionId]?.width === width
-                    ? current
-                    : { ...current, [sessionId]: { x, width } },
-                );
-              }}
-              onPress={() => {
-                if (sessionId === activeSessionId) return;
-                void haptic.selection();
-                onSelect(sessionId);
-              }}
+              onLayout={handleLayout}
+              onSelect={onSelect}
             />
           ))}
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.indicator,
-              {
-                backgroundColor: theme.colors.accent,
-                left: 0,
-              },
-              indicatorStyle,
-            ]}
-          />
         </View>
       </ScrollView>
     </View>
@@ -107,15 +71,15 @@ export const SessionTabStrip = memo(function SessionTabStrip({
 interface SessionTabPillProps {
   sessionId: string;
   active: boolean;
-  onLayout: (e: LayoutChangeEvent) => void;
-  onPress: () => void;
+  onLayout: (sessionId: string, x: number) => void;
+  onSelect: (sessionId: string) => void;
 }
 
 const SessionTabPill = memo(function SessionTabPill({
   sessionId,
   active,
   onLayout,
-  onPress,
+  onSelect,
 }: SessionTabPillProps) {
   const theme = useTheme();
   const name = useEntityField("sessions", sessionId, "name") as string | null | undefined;
@@ -133,8 +97,12 @@ const SessionTabPill = memo(function SessionTabPill({
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
       accessibilityLabel={name ?? "Session"}
-      onLayout={onLayout}
-      onPress={onPress}
+      onLayout={(e) => onLayout(sessionId, e.nativeEvent.layout.x)}
+      onPress={() => {
+        if (active) return;
+        void haptic.selection();
+        onSelect(sessionId);
+      }}
       style={({ pressed }) => [
         styles.pill,
         {
@@ -164,23 +132,15 @@ const SessionTabPill = memo(function SessionTabPill({
 
 const styles = StyleSheet.create({
   row: {
-    position: "relative",
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingBottom: 6,
   },
   pill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     borderWidth: 1,
-    borderRadius: 999,
-  },
-  indicator: {
-    position: "absolute",
-    bottom: 0,
-    height: 3,
     borderRadius: 999,
   },
 });
