@@ -384,19 +384,29 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
     ];
     for (const r of runtimes) {
       if (r.hostingMode !== "local" || !r.connected) continue;
-      const lacksRepo =
-        Boolean(channelRepoId) && !r.registeredRepoIds.includes(channelRepoId!);
+      const lacksRepo = channelRepoId
+        ? !r.registeredRepoIds.includes(channelRepoId)
+        : false;
       items.push({
         key: `bridge:${r.id}`,
-        label: lacksRepo ? `${r.label} · repo not linked` : r.label,
+        label: r.label,
         systemIcon: "laptopcomputer",
+        trailingIcon: lacksRepo ? "exclamationmark.triangle.fill" : undefined,
+        trailingIconTint: lacksRepo ? theme.colors.warning : undefined,
         selected: runtimeInstanceId === r.id,
         disabled: lacksRepo,
         onPress: () => void handleBridgeChange(r.id),
       });
     }
     return items;
-  }, [channelRepoId, handleBridgeChange, hosting, runtimeInstanceId, runtimes]);
+  }, [
+    channelRepoId,
+    handleBridgeChange,
+    hosting,
+    runtimeInstanceId,
+    runtimes,
+    theme.colors.warning,
+  ]);
 
   return (
     <View style={{ paddingHorizontal: theme.spacing.md, paddingBottom: theme.spacing.sm + insets.bottom, paddingTop: theme.spacing.xs }}>
