@@ -153,8 +153,7 @@ async function doFetchSessionDetail(sessionId: string): Promise<void> {
 /**
  * See fetchSessionGroupDetail for the rationale. The entity store is kept
  * fresh by the org-wide event subscription, so a repeat fetch within the
- * TTL window is redundant and protects against the `onPressIn`-on-scroll
- * pattern where a browsing finger lightly touches many rows.
+ * TTL window is redundant and protects against repeated open attempts.
  */
 const inflightSessionFetches = new Map<string, Promise<void>>();
 const lastSessionFetchAt = new Map<string, number>();

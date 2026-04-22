@@ -100,10 +100,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
 
 function sessionTime(session: SessionEntity | undefined): number {
   const raw =
-    session?._sortTimestamp
-    ?? session?.lastMessageAt
-    ?? session?.updatedAt
-    ?? session?.createdAt;
+    session?._sortTimestamp ?? session?.lastMessageAt ?? session?.updatedAt ?? session?.createdAt;
   const value = raw ? new Date(raw).getTime() : 0;
   return Number.isFinite(value) ? value : 0;
 }
@@ -119,9 +116,7 @@ function areIdsEqual(a: string[], b: string[]): boolean {
 }
 
 async function doFetchSessionGroupDetail(groupId: string): Promise<void> {
-  const result = await getClient()
-    .query(SESSION_GROUP_DETAIL_QUERY, { id: groupId })
-    .toPromise();
+  const result = await getClient().query(SESSION_GROUP_DETAIL_QUERY, { id: groupId }).toPromise();
   const group = result.data?.sessionGroup as (SessionGroup & { id: string }) | null | undefined;
   if (result.error || !group) return;
 
@@ -135,18 +130,12 @@ async function doFetchSessionGroupDetail(groupId: string): Promise<void> {
     .slice()
     .sort((a, b) => sessionTime(b) - sessionTime(a) || a.id.localeCompare(b.id));
 
-  existing.upsert(
-    "sessionGroups",
-    group.id,
-    {
-      ...(existing.sessionGroups[group.id] ?? {}),
-      ...group,
-      _sortTimestamp:
-        sortedSessions[0]?.lastMessageAt
-        ?? sortedSessions[0]?.updatedAt
-        ?? group.updatedAt,
-    } as SessionGroupEntity,
-  );
+  existing.upsert("sessionGroups", group.id, {
+    ...(existing.sessionGroups[group.id] ?? {}),
+    ...group,
+    _sortTimestamp:
+      sortedSessions[0]?.lastMessageAt ?? sortedSessions[0]?.updatedAt ?? group.updatedAt,
+  } as SessionGroupEntity);
   if (mergedSessions.length > 0) {
     existing.upsertMany("sessions", mergedSessions);
   }
@@ -161,10 +150,8 @@ async function doFetchSessionGroupDetail(groupId: string): Promise<void> {
  * kept fresh by the org-wide event subscription, so repeat fetches during
  * a single browsing session are redundant.
  *
- * This guards against the `onPressIn`-fires-on-scroll-touch pattern: a
- * user scrolling through a channel list lightly touches many rows as
- * their finger moves; without throttling each would fire two GraphQL
- * queries for a session the user never opens.
+ * This guards against repeated open attempts and overlapping overlay-mount
+ * fetches without requiring callers to reason about request coalescing.
  */
 const inflightGroupFetches = new Map<string, Promise<void>>();
 const lastGroupFetchAt = new Map<string, number>();
@@ -189,8 +176,8 @@ export function useEnsureSessionGroupDetail(groupId: string | undefined): boolea
   useEffect(() => {
     if (!groupId) return;
     // Skip the spinner when the detail query has already populated this
-    // group (e.g. a prefetch on row touch-down landed before the overlay
-    // mounted, or the user is reopening the same group). Without this,
+    // group (e.g. a confirmed open already prefetched the row, or the user
+    // is reopening the same group). Without this,
     // `SessionSurface`'s spinner branch fires for one frame and remounts
     // the whole tree mid-animation.
     //
@@ -221,12 +208,10 @@ export function useSessionGroupSessionIds(groupId: string): string[] {
     (state: EntityState): string[] => {
       const ids = state._sessionIdsByGroup[groupId];
       if (!ids || ids.length === 0) return EMPTY_IDS;
-      return ids
-        .slice()
-        .sort((a, b) => {
-          const diff = sessionTime(state.sessions[b]) - sessionTime(state.sessions[a]);
-          return diff !== 0 ? diff : a.localeCompare(b);
-        });
+      return ids.slice().sort((a, b) => {
+        const diff = sessionTime(state.sessions[b]) - sessionTime(state.sessions[a]);
+        return diff !== 0 ? diff : a.localeCompare(b);
+      });
     },
     areIdsEqual,
   );

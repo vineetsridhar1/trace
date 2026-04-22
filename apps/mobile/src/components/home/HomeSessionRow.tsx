@@ -35,6 +35,7 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
 
   const handlePress = useCallback(() => {
     void haptic.light();
+    prefetchSessionPlayer(sessionId);
     tryOpenSessionPlayer(sessionId);
   }, [sessionId]);
 
@@ -53,12 +54,9 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
     onPressOut,
   } = usePressScale(0.99);
 
-  // Prefetch group + session detail on touch-down so the overlay has data
-  // in Zustand before the spring lands. See SessionGroupRow for rationale.
   const handlePressIn = useCallback(() => {
     onPressInScale();
-    prefetchSessionPlayer(sessionId);
-  }, [onPressInScale, sessionId]);
+  }, [onPressInScale]);
 
   if (!name) return null;
 
