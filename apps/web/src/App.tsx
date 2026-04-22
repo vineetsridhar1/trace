@@ -3,6 +3,7 @@ import { useAuthStore, useEntityField, type AuthState } from "@trace/client-core
 import { useUIStore, type UIState } from "./stores/ui";
 import { useDetailPanelStore, type DetailPanelState } from "./stores/detail-panel";
 import { AppSidebar } from "./components/AppSidebar";
+import { BridgeSyncHydrator } from "./components/BridgeSyncHydrator";
 import { ChannelView } from "./components/channel/ChannelView";
 import { ChatView } from "./components/chat/ChatView";
 import { SettingsPage } from "./components/settings/SettingsPage";
@@ -142,6 +143,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
 
   return (
     <TooltipProvider>
+      <BridgeSyncHydrator />
       <div
         className="flex h-dvh max-h-dvh min-h-dvh flex-col pt-[env(safe-area-inset-top)] bg-surface-deep"
         style={{ backgroundColor: "var(--trace-shell-bg, var(--th-surface-deep))" }}
