@@ -11,12 +11,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useEntityField } from "@trace/client-core";
 import type { SessionGroupStatus } from "@trace/gql";
-import {
-  Chip,
-  Spinner,
-  Text,
-  type ChipVariant,
-} from "@/components/design-system";
+import { Spinner, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
@@ -35,18 +30,6 @@ interface SessionGroupTitleMenuProps {
   sessionId?: string;
   /** Width the morph should expand to when open — usually the full header row. */
   fullWidth: number;
-}
-
-function prChip(
-  prUrl: string | null | undefined,
-  status: string | null | undefined,
-): { label: string; variant: ChipVariant } | null {
-  if (!prUrl) return null;
-  if (status === "merged") return { label: "PR merged", variant: "done" };
-  if (status === "failed" || status === "stopped" || status === "archived") {
-    return { label: "PR closed", variant: "failed" };
-  }
-  return { label: "PR open", variant: "inReview" };
 }
 
 /**
@@ -246,10 +229,6 @@ function TitleRow({
     | string
     | null
     | undefined;
-  const prUrl = useEntityField("sessionGroups", groupId, "prUrl") as
-    | string
-    | null
-    | undefined;
   const status = useEntityField("sessionGroups", groupId, "status") as
     | string
     | null
@@ -259,8 +238,6 @@ function TitleRow({
     sessionId ?? "",
     "agentStatus",
   ) as string | null | undefined;
-
-  const chip = prChip(prUrl, status);
 
   return (
     <View style={[styles.titleRow, { paddingHorizontal: theme.spacing.md }]}>
@@ -288,7 +265,6 @@ function TitleRow({
           </Text>
         ) : null}
       </View>
-      {chip ? <Chip label={chip.label} variant={chip.variant} /> : null}
     </View>
   );
 }
