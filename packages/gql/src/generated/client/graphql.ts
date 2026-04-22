@@ -1463,6 +1463,8 @@ export type QueryLinkedCheckoutStatusArgs = {
 
 export type QueryMySessionsArgs = {
   agentStatus?: InputMaybe<AgentStatus>;
+  includeArchived?: InputMaybe<Scalars['Boolean']['input']>;
+  includeMerged?: InputMaybe<Scalars['Boolean']['input']>;
   organizationId: Scalars['ID']['input'];
 };
 
