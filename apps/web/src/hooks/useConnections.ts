@@ -58,6 +58,7 @@ export interface ConnectionBridge {
     accessGrants: Array<{ id: string; capabilities?: BridgeAccessCapability[] | null }>;
   };
   repos: ConnectionRepoEntry[];
+  canTerminal: boolean;
 }
 
 interface ConnectionsQueryResult {

@@ -64,7 +64,7 @@ export function ConnectionsBridgeCard({
                 {open && (
                   <ConnectionsRepoRow
                     bridgeRuntimeId={bridge.id}
-                    bridgeInstanceId={bridge.instanceId}
+                    canTerminal={connection.canTerminal}
                     entry={entry}
                     onRefresh={onRefresh}
                   />

@@ -795,6 +795,8 @@ type ConnectionsRepoEntry {
 type ConnectionsBridge {
   bridge: BridgeRuntime!
   repos: [ConnectionsRepoEntry!]!
+  """Whether the calling user has terminal capability on this bridge."""
+  canTerminal: Boolean!
 }
 
 type BranchDiffFile {

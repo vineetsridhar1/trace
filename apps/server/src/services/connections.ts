@@ -36,6 +36,7 @@ export interface ConnectionsRepoEntry {
 export interface ConnectionsBridge {
   bridge: BridgeWithAccess;
   repos: ConnectionsRepoEntry[];
+  canTerminal: boolean;
 }
 
 function activeGrantWhere(userId: string, now: Date): Prisma.BridgeAccessGrantWhereInput {
@@ -135,12 +136,24 @@ class ConnectionsService {
         }
       }
 
+      // canTerminal: owner always has terminal; grantees need an all_sessions grant
+      // with the terminal capability (channel terminals aren't session-group scoped).
+      const canTerminal =
+        bridge.ownerUserId === input.userId ||
+        bridge.accessGrants.some(
+          (g) =>
+            g.granteeUserId === input.userId &&
+            g.scopeType === "all_sessions" &&
+            (g.capabilities as string[] | null ?? []).includes("terminal"),
+        );
+
       return {
         bridge:
           bridge.ownerUserId === input.userId
             ? bridge
             : { ...bridge, accessRequests: [], accessGrants: [] },
         repos,
+        canTerminal,
       };
     });
   }

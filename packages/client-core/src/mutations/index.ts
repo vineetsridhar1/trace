@@ -329,6 +329,7 @@ export const MY_BRIDGE_RUNTIMES_FOR_HOME_QUERY = gql`
 export const MY_CONNECTIONS_QUERY = gql`
   query MyConnections {
     myConnections {
+      canTerminal
       bridge {
         id
         instanceId

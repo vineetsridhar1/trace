@@ -6,11 +6,12 @@ import { ConnectionsSyncActions } from "./ConnectionsSyncActions";
 
 export function ConnectionsRepoRow({
   bridgeRuntimeId,
+  canTerminal,
   entry,
   onRefresh,
 }: {
   bridgeRuntimeId: string;
-  bridgeInstanceId: string;
+  canTerminal: boolean;
   entry: ConnectionRepoEntry;
   onRefresh: () => Promise<void>;
 }) {
@@ -56,7 +57,7 @@ export function ConnectionsRepoRow({
         <ConnectionsSyncActions checkout={checkout} onChanged={onRefresh} />
       ) : null}
 
-      <ConnectionsRepoTerminals bridgeRuntimeId={bridgeRuntimeId} entry={entry} />
+      {canTerminal && <ConnectionsRepoTerminals bridgeRuntimeId={bridgeRuntimeId} entry={entry} />}
     </div>
   );
 }

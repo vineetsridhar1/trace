@@ -388,6 +388,8 @@ export type CodingTool =
 export type ConnectionsBridge = {
   __typename?: 'ConnectionsBridge';
   bridge: BridgeRuntime;
+  /** Whether the calling user has terminal capability on this bridge. */
+  canTerminal: Scalars['Boolean']['output'];
   repos: Array<ConnectionsRepoEntry>;
 };
 
@@ -2627,6 +2629,7 @@ export type ChatMemberResolvers<ContextType = Context, ParentType extends Resolv
 
 export type ConnectionsBridgeResolvers<ContextType = Context, ParentType extends ResolversParentTypes['ConnectionsBridge'] = ResolversParentTypes['ConnectionsBridge']> = ResolversObject<{
   bridge?: Resolver<ResolversTypes['BridgeRuntime'], ParentType, ContextType>;
+  canTerminal?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   repos?: Resolver<Array<ResolversTypes['ConnectionsRepoEntry']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;

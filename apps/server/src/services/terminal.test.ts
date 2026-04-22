@@ -633,4 +633,212 @@ describe("TerminalService", () => {
       ).rejects.toThrow("Access denied");
     });
   });
+
+  describe("createForChannel", () => {
+    const baseChannelSetup = () => {
+      prismaMock.channel.findFirst.mockResolvedValueOnce({
+        id: "channel-1",
+        repoId: "repo-1",
+      });
+      prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
+        instanceId: "runtime-1",
+      });
+      sessionRouterMock.getRuntime.mockReturnValue({
+        id: "runtime-1",
+        organizationId: "org-1",
+        hostingMode: "local",
+        registeredRepoIds: ["repo-1"],
+      });
+      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+      sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValue({
+        repoPath: "/home/user/projects/my-repo",
+      });
+    };
+
+    it("creates a channel terminal at the repo path", async () => {
+      baseChannelSetup();
+
+      const result = await terminalService.createForChannel({
+        channelId: "channel-1",
+        bridgeRuntimeId: "bridge-1",
+        cols: 80,
+        rows: 24,
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+
+      expect(result).toEqual({ id: "term-channel-1", sessionId: "channel-1" });
+      expect(terminalRelayMock.createChannelTerminal).toHaveBeenCalledWith(
+        "channel-1",
+        "org-1",
+        "repo-1",
+        "runtime-1",
+        80,
+        24,
+        "/home/user/projects/my-repo",
+      );
+    });
+
+    it("throws when channel is not found or user is not a member", async () => {
+      prismaMock.channel.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        terminalService.createForChannel({
+          channelId: "missing",
+          bridgeRuntimeId: "bridge-1",
+          cols: 80,
+          rows: 24,
+          organizationId: "org-1",
+          userId: "user-1",
+        }),
+      ).rejects.toThrow("Channel not found");
+    });
+
+    it("throws when repo is not linked on the bridge", async () => {
+      prismaMock.channel.findFirst.mockResolvedValueOnce({
+        id: "channel-1",
+        repoId: "repo-1",
+      });
+      prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
+        instanceId: "runtime-1",
+      });
+      sessionRouterMock.getRuntime.mockReturnValue({
+        id: "runtime-1",
+        organizationId: "org-1",
+        hostingMode: "local",
+        registeredRepoIds: [], // repo-1 not registered
+      });
+      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+
+      await expect(
+        terminalService.createForChannel({
+          channelId: "channel-1",
+          bridgeRuntimeId: "bridge-1",
+          cols: 80,
+          rows: 24,
+          organizationId: "org-1",
+          userId: "user-1",
+        }),
+      ).rejects.toThrow("Repo is not linked on this bridge");
+    });
+
+    it("throws when access is denied (no terminal capability)", async () => {
+      prismaMock.channel.findFirst.mockResolvedValueOnce({
+        id: "channel-1",
+        repoId: "repo-1",
+      });
+      prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
+        instanceId: "runtime-1",
+      });
+      sessionRouterMock.getRuntime.mockReturnValue({
+        id: "runtime-1",
+        organizationId: "org-1",
+        hostingMode: "local",
+        registeredRepoIds: ["repo-1"],
+      });
+      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+      runtimeAccessServiceMock.assertAccess.mockRejectedValueOnce(
+        new Error("Access denied: you do not have permission to use this local bridge"),
+      );
+
+      await expect(
+        terminalService.createForChannel({
+          channelId: "channel-1",
+          bridgeRuntimeId: "bridge-1",
+          cols: 80,
+          rows: 24,
+          organizationId: "org-1",
+          userId: "user-2",
+        }),
+      ).rejects.toThrow("Access denied");
+    });
+
+    it("throws when bridge has no repoPath for the linked checkout", async () => {
+      prismaMock.channel.findFirst.mockResolvedValueOnce({
+        id: "channel-1",
+        repoId: "repo-1",
+      });
+      prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
+        instanceId: "runtime-1",
+      });
+      sessionRouterMock.getRuntime.mockReturnValue({
+        id: "runtime-1",
+        organizationId: "org-1",
+        hostingMode: "local",
+        registeredRepoIds: ["repo-1"],
+      });
+      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+      sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValue({ repoPath: null });
+
+      await expect(
+        terminalService.createForChannel({
+          channelId: "channel-1",
+          bridgeRuntimeId: "bridge-1",
+          cols: 80,
+          rows: 24,
+          organizationId: "org-1",
+          userId: "user-1",
+        }),
+      ).rejects.toThrow("Repo is not linked on this bridge");
+    });
+  });
+
+  describe("listForChannel", () => {
+    it("returns terminals for a valid channel+bridge pair", async () => {
+      prismaMock.channel.findFirst.mockResolvedValueOnce({
+        id: "channel-1",
+        repoId: "repo-1",
+      });
+      prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
+        instanceId: "runtime-1",
+      });
+      sessionRouterMock.getRuntime.mockReturnValue({
+        id: "runtime-1",
+        organizationId: "org-1",
+        hostingMode: "local",
+        registeredRepoIds: ["repo-1"],
+      });
+      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+      terminalRelayMock.getTerminalsForChannel.mockReturnValueOnce(["term-a", "term-b"]);
+
+      const result = await terminalService.listForChannel({
+        channelId: "channel-1",
+        bridgeRuntimeId: "bridge-1",
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+
+      expect(result).toEqual([
+        { id: "term-a", sessionId: "channel-1" },
+        { id: "term-b", sessionId: "channel-1" },
+      ]);
+    });
+
+    it("returns empty array when no terminals exist for the channel", async () => {
+      prismaMock.channel.findFirst.mockResolvedValueOnce({
+        id: "channel-1",
+        repoId: "repo-1",
+      });
+      prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce({
+        instanceId: "runtime-1",
+      });
+      sessionRouterMock.getRuntime.mockReturnValue({
+        id: "runtime-1",
+        organizationId: "org-1",
+        hostingMode: "local",
+        registeredRepoIds: ["repo-1"],
+      });
+      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+      terminalRelayMock.getTerminalsForChannel.mockReturnValueOnce([]);
+
+      const result = await terminalService.listForChannel({
+        channelId: "channel-1",
+        bridgeRuntimeId: "bridge-1",
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+
+      expect(result).toEqual([]);
+    });
+  });
 });

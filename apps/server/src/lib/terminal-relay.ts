@@ -654,14 +654,27 @@ class TerminalRelay {
    * Destroy terminals attached by a specific user whose session falls within
    * the given scope. Called when a bridge access grant is revoked — closes
    * the grantee's frontend WS immediately and tears down the PTY on the
-   * bridge side. `sessionIds` limits the scope (for a session_group grant the
-   * caller passes the set of sessions in that group; for all_sessions it
-   * passes undefined to match all sessions).
+   * bridge side.
+   *
+   * `sessionIds` scopes session terminals (for a session_group grant pass the
+   * sessions in that group; for all_sessions pass undefined to match all).
+   * `organizationId` scopes channel terminals — channel terminals use a
+   * synthetic sessionId (`channel:<id>`) that is never in `sessionIds`, so
+   * they must be matched separately.
    */
-  destroyTerminalsForUser(userId: string, sessionIds?: Set<string>): void {
+  destroyTerminalsForUser(
+    userId: string,
+    sessionIds?: Set<string>,
+    organizationId?: string,
+  ): void {
     for (const [terminalId, entry] of this.terminals) {
       if (entry.attachedUserId !== userId) continue;
-      if (sessionIds && !sessionIds.has(entry.sessionId)) continue;
+      if (entry.kind === "channel") {
+        // Channel terminals are scoped by organization, not by session.
+        if (organizationId && entry.organizationId !== organizationId) continue;
+      } else {
+        if (sessionIds && !sessionIds.has(entry.sessionId)) continue;
+      }
       if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
         entry.frontendWs.send(JSON.stringify({ type: "error", message: "Bridge access revoked" }));
         entry.frontendWs.close(1008, "Bridge access revoked");

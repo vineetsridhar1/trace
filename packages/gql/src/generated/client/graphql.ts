@@ -387,6 +387,8 @@ export type CodingTool =
 export type ConnectionsBridge = {
   __typename?: 'ConnectionsBridge';
   bridge: BridgeRuntime;
+  /** Whether the calling user has terminal capability on this bridge. */
+  canTerminal: Scalars['Boolean']['output'];
   repos: Array<ConnectionsRepoEntry>;
 };
 
