@@ -30,15 +30,21 @@ export function useComposerModePalette(mode: InteractionMode) {
     const accent = theme.colors.accent;
     const plan = "#8b5cf6";
     const ask = "#ea580c";
+    const baseGlassTint = theme.glass.input.tint ?? theme.colors.glassTint;
     return {
-      glassTint: ["rgba(0,0,0,0)", alpha(plan, 0.14), alpha(ask, 0.14)],
+      glassTint: [baseGlassTint, "rgba(50,39,74,0.66)", "rgba(70,42,27,0.66)"],
       cardBorder: [alpha(fg, 0.08), alpha(plan, 0.25), alpha(ask, 0.25)],
       chipBorder: [alpha(fg, 0.12), alpha(plan, 0.5), alpha(ask, 0.5)],
       chipBg: [alpha(fg, 0.05), alpha(plan, 0.16), alpha(ask, 0.16)],
       chipText: [fg, plan, ask],
       sendBg: [accent, plan, ask],
     };
-  }, [theme.colors.accent, theme.colors.foreground]);
+  }, [
+    theme.colors.accent,
+    theme.colors.foreground,
+    theme.colors.glassTint,
+    theme.glass.input.tint,
+  ]);
 
   const glassAnimatedProps = useAnimatedProps(() => ({
     tintColor: interpolateColor(modeProgress.value, MODE_PROGRESS_INPUT, palette.glassTint),
