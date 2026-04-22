@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -130,6 +130,33 @@ function parsePrismaDevStatus(line) {
   return "unknown";
 }
 
+async function findBrokenMigrationDirectories() {
+  const migrationsRoot = path.join(cwd, "apps", "server", "prisma", "migrations");
+  const entries = await readdir(migrationsRoot, { withFileTypes: true });
+  const broken = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+
+    const migrationFile = path.join(migrationsRoot, entry.name, "migration.sql");
+    try {
+      await access(migrationFile);
+    } catch {
+      broken.push(entry.name);
+    }
+  }
+
+  return broken;
+}
+
+function shouldFallbackToSchemaSync(error) {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes("P3015") ||
+    error.message.includes("Could not find the migration file at migration.sql")
+  );
+}
+
 function assertNodeVersion() {
   const [major] = process.versions.node.split(".");
   if (Number(major) >= 22) return;
@@ -174,12 +201,12 @@ function spawnLongRunning(label, args, env) {
   return child;
 }
 
-async function runCommand(label, args, env = process.env) {
+async function runCommand(label, args, env = process.env, stdinText = null) {
   return new Promise((resolve, reject) => {
     const child = spawn(pnpmCommand, args, {
       cwd,
       env,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"],
     });
 
     let stdout = "";
@@ -191,6 +218,8 @@ async function runCommand(label, args, env = process.env) {
     child.stderr.on("data", (chunk) => {
       stderr += chunk.toString();
     });
+
+    child.stdin?.end(stdinText ?? "");
 
     child.on("error", reject);
     child.on("close", (code) => {
@@ -286,15 +315,58 @@ async function ensurePrismaDev() {
   throw new Error("Prisma dev did not report a direct PostgreSQL connection string");
 }
 
-async function migrateAndSeed(databaseUrl) {
-  const env = { ...sharedEnv, DATABASE_URL: databaseUrl };
-
-  log("applying Prisma migrations");
+async function pushSchema(databaseUrl, env) {
+  log("ensuring pgvector extension");
   await runCommand(
-    "prisma migrate deploy",
-    ["--filter", "@trace/server", "exec", "prisma", "migrate", "deploy"],
+    "prisma db execute",
+    ["--filter", "@trace/server", "exec", "prisma", "db", "execute", "--stdin", "--url", databaseUrl],
+    env,
+    "CREATE EXTENSION IF NOT EXISTS vector;",
+  );
+
+  log("syncing Prisma schema for local mode");
+  await runCommand(
+    "prisma db push",
+    [
+      "--filter",
+      "@trace/server",
+      "exec",
+      "prisma",
+      "db",
+      "push",
+      "--skip-generate",
+      "--accept-data-loss",
+    ],
     env,
   );
+}
+
+async function migrateAndSeed(databaseUrl) {
+  const env = { ...sharedEnv, DATABASE_URL: databaseUrl };
+  const brokenMigrations = await findBrokenMigrationDirectories();
+
+  if (brokenMigrations.length > 0) {
+    log(
+      `skipping Prisma migrations in local mode because these directories are missing migration.sql: ${brokenMigrations.join(", ")}`,
+    );
+    await pushSchema(databaseUrl, env);
+  } else {
+    log("applying Prisma migrations");
+    try {
+      await runCommand(
+        "prisma migrate deploy",
+        ["--filter", "@trace/server", "exec", "prisma", "migrate", "deploy"],
+        env,
+      );
+    } catch (error) {
+      if (!shouldFallbackToSchemaSync(error)) {
+        throw error;
+      }
+
+      log("Prisma migration history is incomplete locally; falling back to schema sync");
+      await pushSchema(databaseUrl, env);
+    }
+  }
 
   log("seeding baseline data");
   await runCommand("db:seed", ["--filter", "@trace/server", "db:seed"], env);
