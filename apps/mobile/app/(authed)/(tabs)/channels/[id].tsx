@@ -1,20 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import {
-  useAuthStore,
-  useEntityField,
-  useEntityStore,
-  type AuthState,
-} from "@trace/client-core";
+import { useAuthStore, useEntityField, useEntityStore, type AuthState } from "@trace/client-core";
 import {
   LayoutAnimation,
   Platform,
-  RefreshControl,
-  ScrollView,
   UIManager,
   View,
   type LayoutAnimationConfig,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import Animated, {
   FadeIn,
   FadeOut,
@@ -41,16 +35,10 @@ type ListItem =
 
 // Mirror the web behavior where terminal/less-actionable sections start
 // collapsed so the user lands on what still needs attention.
-const DEFAULT_COLLAPSED: ReadonlySet<SessionGroupSectionStatus> = new Set([
-  "failed",
-  "stopped",
-]);
+const DEFAULT_COLLAPSED: ReadonlySet<SessionGroupSectionStatus> = new Set(["failed", "stopped"]);
 
 // LayoutAnimation is opt-in on Android; iOS already has it enabled.
-if (
-  Platform.OS === "android"
-  && UIManager.setLayoutAnimationEnabledExperimental
-) {
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
@@ -151,11 +139,10 @@ export default function ChannelDetail() {
   }, [sections, collapsed]);
 
   const renderListItem = useCallback(
-    (item: ListItem) => {
+    ({ item }: { item: ListItem }) => {
       if (item.kind === "header") {
         return (
           <SessionGroupSectionHeader
-            key={`h:${item.status}`}
             status={item.status}
             count={item.count}
             collapsed={item.collapsed}
@@ -164,11 +151,7 @@ export default function ChannelDetail() {
         );
       }
       return (
-        <Animated.View
-          key={`r:${item.groupId}`}
-          entering={FadeIn.duration(160)}
-          exiting={FadeOut.duration(120)}
-        >
+        <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)}>
           <SessionGroupRow groupId={item.groupId} hideStatusChip />
         </Animated.View>
       );
@@ -204,25 +187,32 @@ export default function ChannelDetail() {
         }}
       />
       <RNALayoutAnimationConfig skipEntering={skipInitialEntering}>
-        <ScrollView
+        <FlashList
           // Re-mount on segment change so scroll position resets to zero
           // instead of carrying over from the previous (often longer) list.
           key={scope}
-          // Keep the ScrollView as the root native view on the screen. The
-          // home tab collapses correctly with this shape, while wrapping the
-          // list in our SafeAreaView-based Screen shell does not.
+          data={items}
+          renderItem={renderListItem}
+          keyExtractor={keyExtractor}
+          getItemType={getItemType}
           style={{ flex: 1, backgroundColor: theme.colors.background }}
           contentInsetAdjustmentBehavior="automatic"
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-          }
-        >
-          <SessionGroupsHeader segment={scope} onSegmentChange={setScope} />
-          {items.length === 0 ? <ActiveEmpty scope={scope} /> : items.map(renderListItem)}
-        </ScrollView>
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
+          ListHeaderComponent={<SessionGroupsHeader segment={scope} onSegmentChange={setScope} />}
+          ListEmptyComponent={<ActiveEmpty scope={scope} />}
+        />
       </RNALayoutAnimationConfig>
     </>
   );
+}
+
+function keyExtractor(item: ListItem): string {
+  return item.kind === "header" ? `h:${item.status}` : `r:${item.groupId}`;
+}
+
+function getItemType(item: ListItem): string {
+  return item.kind;
 }
 
 function ActiveEmpty({ scope }: { scope: ActiveSegment }) {

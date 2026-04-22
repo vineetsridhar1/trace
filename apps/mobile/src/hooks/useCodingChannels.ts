@@ -1,9 +1,6 @@
 import { useShallow } from "zustand/react/shallow";
-import {
-  useEntityStore,
-  type EntityState,
-  type SessionEntity,
-} from "@trace/client-core";
+import { useStoreWithEqualityFn } from "zustand/traditional";
+import { useEntityStore, type EntityState, type SessionEntity } from "@trace/client-core";
 import type { Channel, ChannelGroup } from "@trace/gql";
 
 /**
@@ -17,35 +14,40 @@ export interface UseCodingChannelKeysArgs {
   search: string;
 }
 
-export function useCodingChannelKeys({
-  search,
-}: UseCodingChannelKeysArgs): ChannelListItemKey[] {
+export function useCodingChannelKeys({ search }: UseCodingChannelKeysArgs): ChannelListItemKey[] {
   return useEntityStore(useShallow((state: EntityState) => buildKeys(state, search)));
 }
 
-/**
- * Derive how many *actively working* sessions are attached to a single
- * channel. "Active" means the user can still influence the session:
- * `in_progress` (agent working) or `needs_input` (waiting on the user).
- * Completed (`merged`), archived, or stuck (`failed`, `in_review`)
- * sessions do not count.
- */
-export function useChannelActiveSessionCount(channelId: string): number {
-  return useEntityStore((state: EntityState) => {
-    let count = 0;
-    for (const session of Object.values(state.sessions) as SessionEntity[]) {
-      if (session.channel?.id !== channelId) continue;
-      if (session.sessionStatus === "in_progress" || session.sessionStatus === "needs_input") {
-        count += 1;
+export function useChannelActiveSessionCounts(): Record<string, number> {
+  return useStoreWithEqualityFn(
+    useEntityStore,
+    (state: EntityState): Record<string, number> => {
+      const counts: Record<string, number> = {};
+      for (const session of Object.values(state.sessions) as SessionEntity[]) {
+        if (session.sessionStatus !== "in_progress" && session.sessionStatus !== "needs_input") {
+          continue;
+        }
+        const channelId = session.channel?.id;
+        if (!channelId) continue;
+        counts[channelId] = (counts[channelId] ?? 0) + 1;
       }
-    }
-    return count;
-  });
+      return counts;
+    },
+    areCountsEqual,
+  );
 }
 
-export function parseItemKey(
-  key: ChannelListItemKey,
-): { kind: "channel" | "group"; id: string } {
+function areCountsEqual(a: Record<string, number>, b: Record<string, number>): boolean {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
+}
+
+export function parseItemKey(key: ChannelListItemKey): { kind: "channel" | "group"; id: string } {
   const colon = key.indexOf(":");
   if (colon === -1) return { kind: "channel", id: key };
   const kind = key.slice(0, colon) as "channel" | "group";

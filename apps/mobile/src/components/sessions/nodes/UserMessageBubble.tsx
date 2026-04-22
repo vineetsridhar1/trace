@@ -1,9 +1,7 @@
-import { useCallback } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import ContextMenu, {
-  type ContextMenuOnPressNativeEvent,
-} from "react-native-context-menu-view";
+import ContextMenu, { type ContextMenuOnPressNativeEvent } from "react-native-context-menu-view";
 import type { GitCheckpoint } from "@trace/gql";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Text } from "@/components/design-system";
@@ -25,7 +23,7 @@ interface UserMessageBubbleProps {
  * with a Copy action. Git-checkpoint chips render as a footer below the
  * bubble when the prompt produced one or more commits.
  */
-export function UserMessageBubble({
+export const UserMessageBubble = memo(function UserMessageBubble({
   text,
   actorId,
   actorName,
@@ -35,7 +33,7 @@ export function UserMessageBubble({
   const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
   const isMe = !actorId || actorId === currentUserId;
   const displayName = isMe ? "You" : (actorName ?? "Someone");
-  const displayText = stripPromptWrapping(text);
+  const displayText = useMemo(() => stripPromptWrapping(text), [text]);
 
   const handleContextMenuPress = useCallback(
     (event: { nativeEvent: ContextMenuOnPressNativeEvent }) => {
@@ -83,7 +81,7 @@ export function UserMessageBubble({
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrapper: {

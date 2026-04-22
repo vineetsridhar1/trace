@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   HIDDEN_SESSION_PAYLOAD_TYPES,
-  eventScopeKey,
   handleSessionEvent,
   upsertFetchedSessionEventsWithOptimisticResolution,
   useAuthStore,
   useEntityStore,
-  useScopedEventIds,
   type AuthState,
 } from "@trace/client-core";
 import type { Event, Session } from "@trace/gql";
@@ -22,7 +20,6 @@ import {
 const PAGE_SIZE = 100;
 
 interface UseSessionEventsResult {
-  eventIds: string[];
   loading: boolean;
   loadingOlder: boolean;
   hasOlder: boolean;
@@ -48,7 +45,6 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
   const oldestTimestampRef = useRef<string | null>(null);
   const loadingOlderRef = useRef(false);
   const hasOlderRef = useRef(true);
-  const scopeKey = eventScopeKey("session", sessionId);
 
   const fetchEvents = useCallback(async () => {
     if (!activeOrgId) {
@@ -107,8 +103,14 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
     const eventSub = client
       .subscription(SESSION_EVENTS_SUBSCRIPTION, { sessionId, organizationId: activeOrgId })
       .subscribe((result: { error?: unknown; data?: { sessionEvents?: Event } }) => {
-        if (isUnauthorized(result.error)) { void handleUnauthorized(); return; }
-        if (result.error) { console.error("[sessionEvents] subscription error:", result.error); return; }
+        if (isUnauthorized(result.error)) {
+          void handleUnauthorized();
+          return;
+        }
+        if (result.error) {
+          console.error("[sessionEvents] subscription error:", result.error);
+          return;
+        }
         if (!result.data?.sessionEvents) return;
         const event = result.data.sessionEvents as Event & { id: string };
         timedEventIngest(event.eventType, () => {
@@ -119,8 +121,14 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
     const statusSub = client
       .subscription(SESSION_STATUS_SUBSCRIPTION, { sessionId, organizationId: activeOrgId })
       .subscribe((result: { error?: unknown; data?: { sessionStatusChanged?: Session } }) => {
-        if (isUnauthorized(result.error)) { void handleUnauthorized(); return; }
-        if (result.error) { console.error("[sessionStatusChanged] subscription error:", result.error); return; }
+        if (isUnauthorized(result.error)) {
+          void handleUnauthorized();
+          return;
+        }
+        if (result.error) {
+          console.error("[sessionStatusChanged] subscription error:", result.error);
+          return;
+        }
         const next = result.data?.sessionStatusChanged;
         if (!next?.id) return;
         useEntityStore.getState().patch("sessions", next.id, next);
@@ -134,10 +142,10 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
 
   const fetchOlderEvents = useCallback(async () => {
     if (
-      !activeOrgId
-      || !oldestTimestampRef.current
-      || loadingOlderRef.current
-      || !hasOlderRef.current
+      !activeOrgId ||
+      !oldestTimestampRef.current ||
+      loadingOlderRef.current ||
+      !hasOlderRef.current
     ) {
       return;
     }
@@ -183,7 +191,5 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
     setLoadingOlder(false);
   }, [activeOrgId, sessionId]);
 
-  const eventIds = useScopedEventIds(scopeKey, (a, b) => a.timestamp.localeCompare(b.timestamp));
-
-  return { eventIds, loading, loadingOlder, hasOlder, error, fetchEvents, fetchOlderEvents };
+  return { loading, loadingOlder, hasOlder, error, fetchEvents, fetchOlderEvents };
 }

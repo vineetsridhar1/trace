@@ -7,6 +7,7 @@ import { ChannelListRow } from "@/components/channels/ChannelListRow";
 import { ChannelGroupHeader } from "@/components/channels/ChannelGroupHeader";
 import {
   parseItemKey,
+  useChannelActiveSessionCounts,
   useCodingChannelKeys,
   type ChannelListItemKey,
 } from "@/hooks/useCodingChannels";
@@ -23,6 +24,7 @@ export default function ChannelsIndex() {
   const [refreshing, setRefreshing] = useState(false);
 
   const keys = useCodingChannelKeys({ search });
+  const activeCounts = useChannelActiveSessionCounts();
 
   // hideWhenScrolling is disabled because the pull-to-reveal observation
   // (UISearchController + hidesSearchBarWhenScrolling=YES) conflicts with
@@ -53,14 +55,24 @@ export default function ChannelsIndex() {
     }
   }, [activeOrgId, logout]);
 
+  const renderListItem = useCallback(
+    ({ item }: { item: ChannelListItemKey }) => {
+      const { kind, id } = parseItemKey(item);
+      if (kind === "group") return <ChannelGroupHeader groupId={id} />;
+      return <ChannelListRow channelId={id} activeCount={activeCounts[id] ?? 0} />;
+    },
+    [activeCounts],
+  );
+
   return (
     <>
       <Stack.Screen options={{ headerSearchBarOptions: searchBarOptions }} />
       <FlashList
         data={keys}
-        renderItem={renderItem}
+        renderItem={renderListItem}
         keyExtractor={keyExtractor}
         getItemType={getItemType}
+        extraData={activeCounts}
         contentInsetAdjustmentBehavior="automatic"
         onRefresh={handleRefresh}
         refreshing={refreshing}
@@ -69,12 +81,6 @@ export default function ChannelsIndex() {
       />
     </>
   );
-}
-
-function renderItem({ item }: { item: ChannelListItemKey }) {
-  const { kind, id } = parseItemKey(item);
-  if (kind === "group") return <ChannelGroupHeader groupId={id} />;
-  return <ChannelListRow channelId={id} />;
 }
 
 function keyExtractor(item: ChannelListItemKey): string {
