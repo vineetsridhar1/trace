@@ -279,6 +279,9 @@ const styles = StyleSheet.create({
   anchor: {
     width: TRIGGER_SIZE,
     height: TRIGGER_SIZE,
+    // Must sit above backdropHit (zIndex 50) so taps reach menu items
+    // instead of being swallowed by the dismiss backdrop.
+    zIndex: 51,
   },
   morphingGlass: {
     position: "absolute",
