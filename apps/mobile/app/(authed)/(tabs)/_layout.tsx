@@ -29,6 +29,10 @@ function selectNeedsInputCount(state: EntityState): number {
 
 const renderAccessory = () => <ActiveSessionsAccessory />;
 
+export const unstable_settings = {
+  initialRouteName: "(home)",
+};
+
 const homeIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
   sfSymbol: "house",
 });
