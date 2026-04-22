@@ -281,6 +281,12 @@ export type BridgeRuntime = {
   instanceId: Scalars['ID']['output'];
   label: Scalars['String']['output'];
   lastSeenAt: Scalars['DateTime']['output'];
+  /**
+   * Currently-attached linked checkouts on this bridge, one per repo at most.
+   * Empty when nothing is synced or the bridge is offline. Sourced from the
+   * in-memory router cache, which is warmed on bridge connect.
+   */
+  linkedCheckouts: Array<LinkedCheckoutStatus>;
   metadata?: Maybe<Scalars['JSON']['output']>;
   ownerUser: User;
 };
@@ -601,6 +607,7 @@ export type LinkedCheckoutActionResult = {
 
 export type LinkedCheckoutStatus = {
   __typename?: 'LinkedCheckoutStatus';
+  attachedSessionGroup?: Maybe<SessionGroup>;
   attachedSessionGroupId?: Maybe<Scalars['ID']['output']>;
   autoSyncEnabled: Scalars['Boolean']['output'];
   currentBranch?: Maybe<Scalars['String']['output']>;
@@ -608,6 +615,7 @@ export type LinkedCheckoutStatus = {
   isAttached: Scalars['Boolean']['output'];
   lastSyncError?: Maybe<Scalars['String']['output']>;
   lastSyncedCommitSha?: Maybe<Scalars['String']['output']>;
+  repo?: Maybe<Repo>;
   repoId: Scalars['ID']['output'];
   repoPath?: Maybe<Scalars['String']['output']>;
   restoreBranch?: Maybe<Scalars['String']['output']>;
@@ -2507,6 +2515,7 @@ export type BridgeRuntimeResolvers<ContextType = Context, ParentType extends Res
   instanceId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   label?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   lastSeenAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  linkedCheckouts?: Resolver<Array<ResolversTypes['LinkedCheckoutStatus']>, ParentType, ContextType>;
   metadata?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
   ownerUser?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
@@ -2650,6 +2659,7 @@ export type LinkedCheckoutActionResultResolvers<ContextType = Context, ParentTyp
 }>;
 
 export type LinkedCheckoutStatusResolvers<ContextType = Context, ParentType extends ResolversParentTypes['LinkedCheckoutStatus'] = ResolversParentTypes['LinkedCheckoutStatus']> = ResolversObject<{
+  attachedSessionGroup?: Resolver<Maybe<ResolversTypes['SessionGroup']>, ParentType, ContextType>;
   attachedSessionGroupId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
   autoSyncEnabled?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   currentBranch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
@@ -2657,6 +2667,7 @@ export type LinkedCheckoutStatusResolvers<ContextType = Context, ParentType exte
   isAttached?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   lastSyncError?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   lastSyncedCommitSha?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  repo?: Resolver<Maybe<ResolversTypes['Repo']>, ParentType, ContextType>;
   repoId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   repoPath?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   restoreBranch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;

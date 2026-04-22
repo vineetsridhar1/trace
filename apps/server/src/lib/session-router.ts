@@ -69,6 +69,12 @@ export interface RuntimeInstance {
   registeredRepoIds: string[];
   lastHeartbeat: number;
   boundSessions: Set<string>;
+  /**
+   * Cache of linked-checkout status per repo, populated as the bridge responds
+   * to status/action requests. Lets queries like `BridgeRuntime.linkedCheckouts`
+   * answer without a per-call WebSocket round-trip.
+   */
+  linkedCheckouts: Map<string, BridgeLinkedCheckoutStatus>;
 }
 
 // --- SessionAdapter interface ---
@@ -336,12 +342,17 @@ export class SessionRouter {
   /** Pending linked-checkout status requests: requestId → resolve/reject */
   private pendingLinkedCheckoutStatusRequests = new Map<
     string,
-    { resolve: (status: BridgeLinkedCheckoutStatus) => void; reject: (err: Error) => void }
+    {
+      runtimeId: string;
+      resolve: (status: BridgeLinkedCheckoutStatus) => void;
+      reject: (err: Error) => void;
+    }
   >();
   /** Pending linked-checkout action requests: requestId → resolve/reject */
   private pendingLinkedCheckoutActionRequests = new Map<
     string,
     {
+      runtimeId: string;
       resolve: (result: BridgeLinkedCheckoutActionResultPayload) => void;
       reject: (err: Error) => void;
     }
@@ -371,6 +382,8 @@ export class SessionRouter {
   }) {
     const existing = this.runtimes.get(runtime.id);
     const boundSessions = existing?.boundSessions ?? new Set<string>();
+    const linkedCheckouts =
+      existing?.linkedCheckouts ?? new Map<string, BridgeLinkedCheckoutStatus>();
     if (existing && existing.ws !== runtime.ws) {
       runtimeDebug("replacing runtime websocket", {
         runtimeId: runtime.id,
@@ -387,6 +400,7 @@ export class SessionRouter {
       registeredRepoIds: runtime.registeredRepoIds ?? existing?.registeredRepoIds ?? [],
       lastHeartbeat: Date.now(),
       boundSessions,
+      linkedCheckouts,
     });
     runtimeDebug("registered runtime", {
       runtimeId: runtime.id,
@@ -1030,6 +1044,7 @@ export class SessionRouter {
       }, timeoutMs);
 
       this.pendingLinkedCheckoutStatusRequests.set(requestId, {
+        runtimeId,
         resolve: (status) => {
           clearTimeout(timer);
           resolve(status);
@@ -1046,7 +1061,22 @@ export class SessionRouter {
     const pending = this.pendingLinkedCheckoutStatusRequests.get(requestId);
     if (!pending) return;
     this.pendingLinkedCheckoutStatusRequests.delete(requestId);
+    this.cacheLinkedCheckoutStatus(pending.runtimeId, status);
     pending.resolve(status);
+  }
+
+  /**
+   * Populate the cache for one repo. Called whenever the bridge volunteers a
+   * fresh status (status_result or action_result), so foreground sync actions
+   * keep the home-screen view warm without extra round-trips.
+   */
+  private cacheLinkedCheckoutStatus(
+    runtimeId: string,
+    status: BridgeLinkedCheckoutStatus,
+  ): void {
+    const runtime = this.runtimes.get(runtimeId);
+    if (!runtime) return;
+    runtime.linkedCheckouts.set(status.repoId, status);
   }
 
   private requestLinkedCheckoutAction(
@@ -1070,6 +1100,7 @@ export class SessionRouter {
       }, timeoutMs);
 
       this.pendingLinkedCheckoutActionRequests.set(requestId, {
+        runtimeId,
         resolve: (actionResult) => {
           clearTimeout(timer);
           resolve(actionResult);
@@ -1163,6 +1194,7 @@ export class SessionRouter {
     const pending = this.pendingLinkedCheckoutActionRequests.get(requestId);
     if (!pending) return;
     this.pendingLinkedCheckoutActionRequests.delete(requestId);
+    if (result.status) this.cacheLinkedCheckoutStatus(pending.runtimeId, result.status);
     pending.resolve(result);
   }
 

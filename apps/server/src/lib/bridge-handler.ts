@@ -176,6 +176,17 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             console.error("[bridge] error restoring sessions for runtime:", err);
           });
 
+          // Warm the linked-checkout cache for each registered repo so
+          // `BridgeRuntime.linkedCheckouts` can answer without a per-call
+          // round-trip on every home-screen poll. Per-repo failures are
+          // ignored — the bridge may not have a checkout configured.
+          // Fire-and-forget: a home-screen poll arriving in the brief window
+          // before responses land will see an empty list; the next poll
+          // (10s later) picks up the warmed cache.
+          for (const repoId of registeredRepoIds) {
+            sessionRouter.getLinkedCheckoutStatus(runtimeId, repoId).catch(() => {});
+          }
+
           // Restore terminal relay entries from bridge-reported active terminals
           if (Array.isArray(msg.activeTerminals) && msg.activeTerminals.length > 0) {
             const activeTerminals = (msg.activeTerminals as unknown[]).filter(
@@ -208,7 +219,11 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       }
 
       if (msg.type === "repo_linked" && msg.repoId) {
-        sessionRouter.addRegisteredRepo(runtimeId, msg.repoId as string, ws);
+        const repoId = msg.repoId as string;
+        sessionRouter.addRegisteredRepo(runtimeId, repoId, ws);
+        // Warm the linked-checkout cache for the freshly-linked repo (no-op
+        // if no checkout is configured for it).
+        sessionRouter.getLinkedCheckoutStatus(runtimeId, repoId).catch(() => {});
         return;
       }
 
