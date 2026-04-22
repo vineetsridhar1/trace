@@ -29,7 +29,9 @@ interface TerminalEntry {
   scrollback: string[];
   /** Running byte total of scrollback chunks */
   scrollbackBytes: number;
-  /** Timer to kill orphaned terminals that no frontend attaches to */
+  /** True after a frontend has attached at least once. */
+  hasEverAttached: boolean;
+  /** Timer to kill terminals that were created but never attached. */
   orphanTimer: ReturnType<typeof setTimeout> | null;
   /** Optional server-side callbacks for terminal lifecycle events */
   onReady?: () => void;
@@ -41,7 +43,7 @@ interface TerminalEntry {
  * No persistence — terminal data is ephemeral and never hits the event store.
  */
 class TerminalRelay {
-  /** If no frontend attaches within this window, kill the orphaned terminal. */
+  /** If no frontend ever attaches within this window, kill the orphaned terminal. */
   private static ORPHAN_TIMEOUT_MS = 30 * 60 * 1000;
   /** Max scrollback buffer size in bytes — older output is trimmed from the front. */
   private static MAX_SCROLLBACK_BYTES = 50 * 1024;
@@ -85,6 +87,7 @@ class TerminalRelay {
       buffer: [],
       scrollback: [],
       scrollbackBytes: 0,
+      hasEverAttached: false,
       orphanTimer: null,
     });
     const ids = this.sessionTerminals.get(sessionId) ?? new Set();
@@ -150,6 +153,7 @@ class TerminalRelay {
       buffer: [],
       scrollback: [],
       scrollbackBytes: 0,
+      hasEverAttached: false,
       orphanTimer: null,
     });
 
@@ -245,13 +249,29 @@ class TerminalRelay {
 
   /**
    * Rebuild relay entries from bridge-reported active terminals (on reconnect).
-   * Skips entries that already exist. Starts orphan cleanup timer for each restored entry.
+   * Skips entries that already exist. Restored terminals already existed on
+   * the bridge, so keep them alive until explicit destroy or process exit.
    */
   async restoreTerminals(
     runtimeInstanceId: string,
     terminals: Array<{ terminalId: string; sessionId: string }>,
   ): Promise<void> {
-    const sessionIds = [...new Set(terminals.map(({ sessionId }) => sessionId))];
+    const channelPrefix = "channel:";
+    const sessionIds = [
+      ...new Set(
+        terminals
+          .map(({ sessionId }) => sessionId)
+          .filter((sessionId) => !sessionId.startsWith(channelPrefix)),
+      ),
+    ];
+    const channelIds = [
+      ...new Set(
+        terminals
+          .map(({ sessionId }) => sessionId)
+          .filter((sessionId) => sessionId.startsWith(channelPrefix))
+          .map((sessionId) => sessionId.slice(channelPrefix.length)),
+      ),
+    ];
     const sessions =
       sessionIds.length === 0
         ? []
@@ -259,15 +279,58 @@ class TerminalRelay {
             where: { id: { in: sessionIds } },
             select: { id: true, sessionGroupId: true },
           });
+    const channels =
+      channelIds.length === 0
+        ? []
+        : await prisma.channel.findMany({
+            where: { id: { in: channelIds } },
+            select: { id: true, organizationId: true, repoId: true },
+          });
     const sessionGroupIds = new Map<string, string | null>(
       sessions.map((session: { id: string; sessionGroupId: string | null }) => [
         session.id,
         session.sessionGroupId ?? null,
       ]),
     );
+    const channelsById = new Map(channels.map((channel) => [channel.id, channel]));
 
     for (const { terminalId, sessionId } of terminals) {
       if (this.terminals.has(terminalId)) continue;
+      if (sessionId.startsWith(channelPrefix)) {
+        const channelId = sessionId.slice(channelPrefix.length);
+        const channel = channelsById.get(channelId);
+        if (!channel?.repoId) continue;
+
+        this.terminals.set(terminalId, {
+          sessionId,
+          sessionGroupId: null,
+          kind: "channel",
+          channelId,
+          organizationId: channel.organizationId,
+          repoId: channel.repoId,
+          runtimeInstanceId,
+          frontendWs: null,
+          attachedUserId: null,
+          ready: true,
+          terminated: false,
+          buffer: [],
+          scrollback: [],
+          scrollbackBytes: 0,
+          hasEverAttached: true,
+          orphanTimer: null,
+        });
+
+        const sessionTerminals = this.sessionTerminals.get(sessionId) ?? new Set();
+        sessionTerminals.add(terminalId);
+        this.sessionTerminals.set(sessionId, sessionTerminals);
+
+        const channelKey = this.channelTerminalKey(channelId, runtimeInstanceId);
+        const channelTerminals = this.channelTerminals.get(channelKey) ?? new Set();
+        channelTerminals.add(terminalId);
+        this.channelTerminals.set(channelKey, channelTerminals);
+        continue;
+      }
+
       const sessionGroupId = sessionGroupIds.get(sessionId) ?? null;
 
       this.terminals.set(terminalId, {
@@ -282,6 +345,7 @@ class TerminalRelay {
         buffer: [],
         scrollback: [],
         scrollbackBytes: 0,
+        hasEverAttached: true,
         orphanTimer: null,
       });
 
@@ -293,8 +357,6 @@ class TerminalRelay {
         groupIds.add(terminalId);
         this.sessionGroupTerminals.set(sessionGroupId, groupIds);
       }
-
-      this.scheduleOrphanCleanup(terminalId);
     }
   }
 
@@ -339,6 +401,7 @@ class TerminalRelay {
     if (!entry) return false;
     entry.frontendWs = ws;
     entry.attachedUserId = userId;
+    entry.hasEverAttached = true;
     const hadBufferedReady = entry.buffer.some((msg) => msg.includes('"type":"ready"'));
 
     // Cancel orphan cleanup — a frontend has attached
@@ -613,6 +676,10 @@ class TerminalRelay {
 
     // Don't schedule if a frontend is already attached
     if (entry.frontendWs) return;
+    // Once a terminal has been attached, it should live until explicit close,
+    // process exit, or the shell exits. A transient browser/WebSocket detach
+    // must not become a terminal kill timer.
+    if (entry.hasEverAttached) return;
 
     this.cancelOrphanCleanup(terminalId);
     entry.orphanTimer = setTimeout(() => {

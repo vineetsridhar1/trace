@@ -28,13 +28,12 @@ export type TerminalSocketEvent =
 const RECONNECT_BASE_MS = 1_000;
 /** Max delay between reconnect attempts (ms). */
 const RECONNECT_MAX_MS = 30_000;
-/** Max reconnect attempts before giving up. */
-const MAX_RECONNECT_ATTEMPTS = 10;
 
 /**
  * WebSocket client for a single terminal session.
  * Connects to the server's /terminal endpoint and relays I/O.
- * Automatically reconnects on unexpected disconnects.
+ * Automatically reconnects on unexpected disconnects until explicitly closed
+ * or the server reports a fatal auth/terminal error.
  */
 export class TerminalSocket {
   private ws: WebSocket | null = null;
@@ -43,6 +42,8 @@ export class TerminalSocket {
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private awaitingReconnectReady = false;
+  private pendingWrites: string[] = [];
+  private pendingResize: { cols: number; rows: number } | null = null;
 
   constructor(private terminalId: string) {}
 
@@ -78,7 +79,9 @@ export class TerminalSocket {
           const isReconnect = this.awaitingReconnectReady;
           this.awaitingReconnectReady = false;
           this.reconnectAttempts = 0;
+          this.flushPendingResize();
           this.emit(msg);
+          this.flushPendingWrites();
           if (isReconnect) {
             this.emit({ type: "reconnected" });
           }
@@ -109,11 +112,6 @@ export class TerminalSocket {
 
   private scheduleReconnect(): void {
     if (this.closed) return;
-    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      this.closed = true;
-      this.emit({ type: "disconnected" });
-      return;
-    }
 
     this.emit({ type: "reconnecting" });
 
@@ -131,14 +129,14 @@ export class TerminalSocket {
   }
 
   write(data: string): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: "input", data }));
+    if (!this.sendMessage({ type: "input", data }) && !this.closed) {
+      this.pendingWrites.push(data);
     }
   }
 
   resize(cols: number, rows: number): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: "resize", cols, rows }));
+    if (!this.sendMessage({ type: "resize", cols, rows }) && !this.closed) {
+      this.pendingResize = { cols, rows };
     }
   }
 
@@ -152,6 +150,8 @@ export class TerminalSocket {
   close(): void {
     this.closed = true;
     this.awaitingReconnectReady = false;
+    this.pendingWrites = [];
+    this.pendingResize = null;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -164,6 +164,28 @@ export class TerminalSocket {
   private emit(event: TerminalSocketEvent): void {
     for (const listener of this.listeners) {
       listener(event);
+    }
+  }
+
+  private sendMessage(message: Record<string, unknown>): boolean {
+    if (this.ws?.readyState !== WebSocket.OPEN) return false;
+    this.ws.send(JSON.stringify(message));
+    return true;
+  }
+
+  private flushPendingResize(): void {
+    const resize = this.pendingResize;
+    if (!resize) return;
+    if (this.sendMessage({ type: "resize", cols: resize.cols, rows: resize.rows })) {
+      this.pendingResize = null;
+    }
+  }
+
+  private flushPendingWrites(): void {
+    while (this.pendingWrites.length > 0) {
+      const data = this.pendingWrites[0]!;
+      if (!this.sendMessage({ type: "input", data })) return;
+      this.pendingWrites.shift();
     }
   }
 }
