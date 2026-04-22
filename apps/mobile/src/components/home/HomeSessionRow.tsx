@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import Animated from "react-native-reanimated";
 import ContextMenu from "react-native-context-menu-view";
 import { useEntityField } from "@trace/client-core";
-import { Text } from "@/components/design-system";
+import { Avatar, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { haptic } from "@/lib/haptics";
 import { usePressScale } from "@/lib/motion";
@@ -32,6 +32,10 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
   const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt");
   const updatedAt = useEntityField("sessions", sessionId, "updatedAt");
   const prUrl = useEntityField("sessions", sessionId, "prUrl");
+  const createdBy = useEntityField("sessions", sessionId, "createdBy") as
+    | { name?: string | null; avatarUrl?: string | null }
+    | null
+    | undefined;
 
   const handlePress = useCallback(() => {
     void haptic.light();
@@ -85,6 +89,14 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
             },
           ]}
         >
+          {createdBy?.name ? (
+            <Avatar
+              name={createdBy.name}
+              uri={createdBy.avatarUrl ?? null}
+              size="sm"
+              style={styles.avatar}
+            />
+          ) : null}
           <View style={styles.main}>
             <View style={styles.titleRow}>
               <SessionStatusIndicator status={sessionStatus} agentStatus={agentStatus} />
@@ -144,6 +156,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     minHeight: 60,
   },
+  avatar: { marginRight: 10, marginTop: 2 },
   main: { flex: 1, minWidth: 0 },
   titleRow: {
     flexDirection: "row",
