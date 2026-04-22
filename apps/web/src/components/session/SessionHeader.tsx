@@ -22,10 +22,12 @@ import {
   sessionStatusLabel,
   isDisconnected,
 } from "./sessionStatus";
+import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { AgentStatusIcon } from "./AgentStatusIcon";
 import { SessionHistory } from "./SessionHistory";
 import { ScrambleText } from "../ui/ScrambleText";
 import { SessionMoveButton } from "./SessionMoveButton";
+import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 
 /** How long to show "Reconnecting…" before switching to "Connection Lost" */
 const CONNECTION_LOST_BANNER_DELAY_MS = 60_000;
@@ -70,7 +72,13 @@ export function SessionHeader({
   const prUrl = groupPrUrl ?? null;
 
   const disconnected = isDisconnected(connection);
-  const canMoveSession = sessionStatus !== "merged";
+  const moveRuntimeInstanceId = getLinkedCheckoutRuntimeInstanceId(connection);
+  const { access: moveBridgeAccess } = useBridgeRuntimeAccess(
+    moveRuntimeInstanceId,
+    sessionGroupId ?? null,
+  );
+  const canMoveSession =
+    sessionStatus !== "merged" && isBridgeInteractionAllowed(moveBridgeAccess);
 
   // Show "Reconnecting" for a grace period before showing "Connection Lost"
   const [pastGracePeriod, setPastGracePeriod] = useState(false);

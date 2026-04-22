@@ -323,11 +323,22 @@ export function SessionGroupDetailView({
     getLinkedCheckoutRuntimeInstanceId(groupConnection) ??
     getLinkedCheckoutRuntimeInstanceId(selectedSession?.connection) ??
     null;
+  const selectedSessionRuntimeInstanceId =
+    getLinkedCheckoutRuntimeInstanceId(selectedSession?.connection) ??
+    getLinkedCheckoutRuntimeInstanceId(groupConnection) ??
+    null;
   const { access: bridgeAccess, refresh: refreshBridgeAccess } = useBridgeRuntimeAccess(
     groupRuntimeInstanceId,
     sessionGroupId,
   );
+  const { access: selectedSessionBridgeAccess } = useBridgeRuntimeAccess(
+    selectedSessionRuntimeInstanceId,
+    sessionGroupId,
+  );
   const bridgeInteractionAllowed = isBridgeInteractionAllowed(bridgeAccess);
+  const selectedSessionBridgeInteractionAllowed = isBridgeInteractionAllowed(
+    selectedSessionBridgeAccess,
+  );
   const linkedCheckoutAllowed =
     bridgeInteractionAllowed &&
     !!groupRuntimeInstanceId &&
@@ -458,7 +469,7 @@ export function SessionGroupDetailView({
             canInteract={bridgeInteractionAllowed}
             selectedSessionStatus={selectedSessionStatus}
             selectedSessionId={selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)}
-            canMoveSession={canMoveSelectedSession && bridgeInteractionAllowed}
+            canMoveSession={canMoveSelectedSession && selectedSessionBridgeInteractionAllowed}
             groupPrUrl={groupPrUrl}
             panelMode={panelMode}
             isFullscreen={isFullscreen}
