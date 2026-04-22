@@ -16,6 +16,7 @@ import { useRunScripts } from "../../hooks/useRunScripts";
 import { useLinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
 import { LinkedCheckoutSubtitle } from "./LinkedCheckoutSubtitle";
 import { LinkedCheckoutActions } from "./LinkedCheckoutActions";
+import { SessionMoveButton } from "./SessionMoveButton";
 
 interface GroupHeaderProps {
   groupName: string | undefined;
@@ -27,6 +28,7 @@ interface GroupHeaderProps {
   canInteract: boolean;
   selectedSessionStatus: string;
   selectedSessionId: string | null;
+  canMoveSession: boolean;
   groupPrUrl: string | null | undefined;
   panelMode?: boolean;
   isFullscreen: boolean;
@@ -46,6 +48,7 @@ export function GroupHeader({
   canInteract,
   selectedSessionStatus,
   selectedSessionId,
+  canMoveSession,
   groupPrUrl,
   panelMode,
   isFullscreen,
@@ -131,6 +134,8 @@ export function GroupHeader({
           <Play size={14} />
         </button>
       )}
+
+      <SessionMoveButton sessionId={selectedSessionId} disabled={!canMoveSession} />
 
       <button
         onClick={onToggleSidebar}

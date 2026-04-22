@@ -19,6 +19,7 @@ export const HIDDEN_SESSION_PAYLOAD_TYPES = [
   "session_rehomed",
   "recovery_requested",
   "recovery_failed",
+  "tool_session_recovered",
   "upgrade_workspace",
   "workspace_ready",
   "session_resumed",

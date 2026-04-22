@@ -28,6 +28,7 @@ import {
   cleanupTempImages,
   GIT_SHOW_ARGS,
   GIT_DIFF_TREE_ARGS,
+  isMissingToolSessionError,
   parseGitShowOutput,
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
@@ -597,6 +598,7 @@ export class BridgeClient implements IBridgeClient {
     const priorPendingToolUseId = this.pendingInputToolUseIds.get(sessionId) ?? null;
     let hasForwardedOutput = false;
     let endedOnPending = false;
+    let recoveringMissingToolSession = false;
 
     // Download attached images to temp files
     let imagePaths: string[] | undefined;
@@ -635,11 +637,38 @@ export class BridgeClient implements IBridgeClient {
 
     // Capture adapter/run identity so callbacks from older runs are dropped.
     const activeAdapter = adapter;
+    const recoverMissingToolSession = (message: string) => {
+      if (!toolSessionId || hasForwardedOutput || recoveringMissingToolSession) return false;
+      if (!isMissingToolSessionError(message)) return false;
+
+      recoveringMissingToolSession = true;
+      this.finishRun(sessionId, runId);
+      activeAdapter.abort();
+      this.adapters.delete(sessionId);
+      this.reportedToolSessionIds.delete(sessionId);
+      this.pendingInputToolUseIds.delete(sessionId);
+      cleanupImages();
+      this.send({
+        type: "tool_session_missing",
+        sessionId,
+        toolSessionId,
+        message,
+        interactionMode,
+        checkpointContext,
+        imageUrls,
+      });
+      return true;
+    };
+
     adapter.run({
       prompt: finalPrompt,
       cwd: workdir,
       onOutput: (output) => {
         if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
+
+        if (output.type === "error" && recoverMissingToolSession(output.message)) {
+          return;
+        }
 
         const maybeReportToolSessionId = () => {
           if (adapter.getSessionId) {
@@ -707,6 +736,7 @@ export class BridgeClient implements IBridgeClient {
       },
       onComplete: () => {
         if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
+        if (recoveringMissingToolSession) return;
         if (!endedOnPending && priorPendingToolUseId) {
           this.pendingInputToolUseIds.delete(sessionId);
         }

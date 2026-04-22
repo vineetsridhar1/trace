@@ -136,6 +136,17 @@ export type ToolOutput = AssistantEvent | UserEvent | ResultEvent | ErrorEvent;
 
 export type OutputCallback = (data: ToolOutput) => void;
 
+const MISSING_TOOL_SESSION_PATTERNS = [
+  /\bno\s+(conversation|session|thread|chat)\s+found\b/i,
+  /\b(conversation|session|thread|chat)\b[\s\S]{0,80}\b(not found|does not exist|could not be found)\b/i,
+  /\b(not found|does not exist|could not be found)\b[\s\S]{0,80}\b(conversation|session|thread|chat)\b/i,
+  /\bresume\b[\s\S]{0,80}\b(not found|does not exist|could not be found)\b/i,
+];
+
+export function isMissingToolSessionError(message: string): boolean {
+  return MISSING_TOOL_SESSION_PATTERNS.some((pattern) => pattern.test(message));
+}
+
 export interface RunOptions {
   prompt: string;
   cwd: string;

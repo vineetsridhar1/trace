@@ -1596,6 +1596,89 @@ describe("SessionService", () => {
     });
   });
 
+  describe("recoverMissingToolSession", () => {
+    it("clears a stale tool session id and retries with conversation history", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "active",
+          workdir: "/tmp/worktree",
+          toolSessionId: "stale-tool-session",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-a",
+            runtimeLabel: "Laptop A",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([
+        {
+          eventType: "session_started",
+          payload: { prompt: "Initial task" },
+        },
+        {
+          eventType: "message_sent",
+          payload: { text: "Follow-up instruction" },
+        },
+      ]);
+      prismaMock.event.findFirst.mockResolvedValueOnce({ id: "event-message-1" });
+      sessionRouterMock.send.mockReturnValueOnce("delivered");
+
+      await service.recoverMissingToolSession("session-1", {
+        toolSessionId: "stale-tool-session",
+        message: "No conversation found with session ID stale-tool-session",
+        interactionMode: "code",
+      });
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: { toolSessionId: null },
+      });
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          type: "send",
+          sessionId: "session-1",
+          prompt: expect.stringContaining("[User]: Follow-up instruction"),
+          checkpointContext: expect.objectContaining({
+            promptEventId: "event-message-1",
+          }),
+        }),
+        { expectedHomeRuntimeId: "runtime-a" },
+      );
+      const sendCommand = sessionRouterMock.send.mock.calls[0]?.[1] as
+        | Record<string, unknown>
+        | undefined;
+      expect(sendCommand).not.toHaveProperty("toolSessionId");
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({ type: "tool_session_recovered" }),
+        }),
+      );
+    });
+
+    it("ignores recovery from an old bridge process after a new tool id is stored", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "active",
+          toolSessionId: "new-tool-session",
+        }),
+      );
+
+      await service.recoverMissingToolSession("session-1", {
+        toolSessionId: "stale-tool-session",
+      });
+
+      expect(sessionRouterMock.send).not.toHaveBeenCalled();
+      expect(prismaMock.session.update).not.toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: { toolSessionId: null },
+      });
+    });
+  });
+
   describe("retryConnection", () => {
     it("fails without picking a different bridge when the home runtime is offline", async () => {
       // Laptop A is the home bridge; Laptop B is also connected. Auto-retry
