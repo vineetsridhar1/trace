@@ -11,10 +11,12 @@ export type HomeSectionKind = "needs_input" | "working_now" | "recently_done";
 
 export interface HomeSection {
   kind: HomeSectionKind;
+  /** Session group IDs */
   ids: string[];
 }
 
 const RECENTLY_DONE_WINDOW_MS = 24 * 60 * 60 * 1000;
+const RECENTLY_DONE_MAX = 15;
 
 function timestampMs(value: string | null | undefined): number {
   if (!value) return 0;
@@ -107,12 +109,15 @@ function areSectionsEqual(a: HomeSection[], b: HomeSection[]): boolean {
 const SECTION_ORDER: HomeSectionKind[] = ["needs_input", "working_now", "recently_done"];
 
 /**
- * Three buckets of sessions belonging to `userId` for the Home tab:
- *  1. Needs you — `sessionStatus === "needs_input"`, sorted by pending-event
- *     urgency (question_pending first, then plan_pending), then recency.
- *  2. Working now — `agentStatus === "active"`, sorted by `_sortTimestamp` desc.
- *  3. Recently done — `agentStatus === "done"` or `sessionStatus === "in_review"`
- *     with `updatedAt` inside the trailing 24h, sorted by recency desc.
+ * Three buckets of session groups belonging to `userId` for the Home tab:
+ *  1. Needs you — any session in the group has `sessionStatus === "needs_input"`,
+ *     sorted by pending-event urgency (question_pending first, then plan_pending),
+ *     then recency.
+ *  2. Working now — any session in the group has `agentStatus === "active"`,
+ *     sorted by `_sortTimestamp` desc.
+ *  3. Recently done — most recent session has `agentStatus === "done"` or
+ *     `sessionStatus === "in_review"` within the trailing 24h, sorted by recency
+ *     desc and capped at 15 groups.
  *
  * Merged sessions and sessions in merged/archived groups are hidden from Home.
  * When `repoId` is non-null, sessions whose `repo.id` doesn't match are also
@@ -128,9 +133,10 @@ export function useHomeSections(
     (state: EntityState): HomeSection[] => {
       if (!userId) return [];
 
-      const needsInput: Array<{ id: string; rank: number; ts: number }> = [];
-      const working: Array<{ id: string; ts: number }> = [];
-      const done: Array<{ id: string; ts: number }> = [];
+      // Per-group accumulators: track the best bucket and sort key for each group.
+      const groupNeedsInput = new Map<string, { rank: number; ts: number }>();
+      const groupWorking = new Map<string, { ts: number }>();
+      const groupDone = new Map<string, { ts: number }>();
 
       const cutoff = Date.now() - RECENTLY_DONE_WINDOW_MS;
 
@@ -139,16 +145,25 @@ export function useHomeSections(
         if (hiddenFromHome(state, session)) continue;
         if (repoId && sessionRepoId(session) !== repoId) continue;
 
+        const groupId = session.sessionGroupId;
+        if (!groupId) continue;
+
         const sortTs = sortTimestamp(session);
 
         if (session.sessionStatus === "needs_input") {
           const meta = pendingMeta(state, session.id, sortTs);
-          needsInput.push({ id: session.id, rank: meta.rank, ts: meta.ts });
+          const existing = groupNeedsInput.get(groupId);
+          if (!existing || meta.rank < existing.rank || (meta.rank === existing.rank && meta.ts > existing.ts)) {
+            groupNeedsInput.set(groupId, { rank: meta.rank, ts: meta.ts });
+          }
           continue;
         }
 
         if (session.agentStatus === "active") {
-          working.push({ id: session.id, ts: sortTs });
+          const existing = groupWorking.get(groupId);
+          if (!existing || sortTs > existing.ts) {
+            groupWorking.set(groupId, { ts: sortTs });
+          }
           continue;
         }
 
@@ -156,10 +171,21 @@ export function useHomeSections(
         if (isDone) {
           const updatedTs = timestampMs(session.updatedAt);
           if (updatedTs >= cutoff) {
-            done.push({ id: session.id, ts: updatedTs });
+            const existing = groupDone.get(groupId);
+            if (!existing || updatedTs > existing.ts) {
+              groupDone.set(groupId, { ts: updatedTs });
+            }
           }
         }
       }
+
+      // A group in needs_input or working_now should not also appear in recently_done.
+      for (const id of groupNeedsInput.keys()) groupDone.delete(id);
+      for (const id of groupWorking.keys()) groupDone.delete(id);
+
+      const needsInput = Array.from(groupNeedsInput, ([id, v]) => ({ id, ...v }));
+      const working = Array.from(groupWorking, ([id, v]) => ({ id, ...v }));
+      const done = Array.from(groupDone, ([id, v]) => ({ id, ...v }));
 
       needsInput.sort((a, b) => a.rank - b.rank || b.ts - a.ts || a.id.localeCompare(b.id));
       working.sort((a, b) => b.ts - a.ts || a.id.localeCompare(b.id));
@@ -168,7 +194,7 @@ export function useHomeSections(
       const buckets: Record<HomeSectionKind, string[]> = {
         needs_input: needsInput.map((x) => x.id),
         working_now: working.map((x) => x.id),
-        recently_done: done.map((x) => x.id),
+        recently_done: done.slice(0, RECENTLY_DONE_MAX).map((x) => x.id),
       };
 
       const sections: HomeSection[] = [];
@@ -196,11 +222,11 @@ function areRepoOptionsEqual(a: HomeRepoOption[], b: HomeRepoOption[]): boolean 
 }
 
 /**
- * Distinct repos referenced by the current user's home sessions, sorted by
- * name. Drives the home repo filter chip row — repos with no sessions in
- * any home bucket aren't shown because filtering to them would empty the
+ * Distinct repos referenced by the current user's home session groups, sorted
+ * by name. Drives the home repo filter chip row — repos with no session groups
+ * in any home bucket aren't shown because filtering to them would empty the
  * list. Mirrors `useHomeSections`'s ownership/visibility rules so the
- * available repos and the filtered sessions stay in sync.
+ * available repos and the filtered groups stay in sync.
  */
 export function useHomeRepos(userId: string | null): HomeRepoOption[] {
   return useStoreWithEqualityFn(
@@ -208,9 +234,13 @@ export function useHomeRepos(userId: string | null): HomeRepoOption[] {
     (state: EntityState): HomeRepoOption[] => {
       if (!userId) return [];
       const seen = new Map<string, string>();
+      const seenGroups = new Set<string>();
       for (const session of Object.values(state.sessions) as SessionEntity[]) {
         if (!ownedBy(session, userId)) continue;
         if (hiddenFromHome(state, session)) continue;
+        const groupId = session.sessionGroupId;
+        if (!groupId || seenGroups.has(groupId)) continue;
+        seenGroups.add(groupId);
         const repo = session.repo as { id?: string; name?: string } | null | undefined;
         if (!repo?.id) continue;
         if (seen.has(repo.id)) continue;
