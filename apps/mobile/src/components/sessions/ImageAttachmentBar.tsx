@@ -25,7 +25,13 @@ export function ImageAttachmentBar({ images, onRemove }: Props) {
         <View key={img.id} style={styles.thumbWrap}>
           <Image
             source={{ uri: img.previewUri }}
-            style={[styles.thumb, { borderColor: theme.colors.border }]}
+            style={[
+              styles.thumb,
+              {
+                borderColor: theme.colors.border,
+                backgroundColor: theme.colors.surfaceElevated,
+              },
+            ]}
           />
           {img.uploading ? (
             <View style={[styles.overlay, { backgroundColor: alpha("#000000", 0.4) }]}>

@@ -137,7 +137,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   } = useClipboardImage();
   const [pickingImage, setPickingImage] = useState(false);
   const showPasteButton =
-    canInteract && clipboardHasImage && images.length < MAX_IMAGES && !pastingImage;
+    canInteract && clipboardHasImage && images.length === 0 && !pastingImage;
   const canAttach = canInteract && !pickingImage && images.length < MAX_IMAGES;
 
   const {
@@ -209,12 +209,17 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
     try {
       const result = await Clipboard.getImageAsync({ format: "png" });
       if (!result?.data) return;
-      const mimeType = "image/png";
+      // expo-clipboard returns `data` as a full `data:image/<fmt>;base64,...`
+      // URI, not raw base64. Split off the prefix so we have the same shape
+      // as the gallery picker path (raw base64 + explicit mimeType).
+      const prefixMatch = result.data.match(/^data:([^;,]+);base64,(.+)$/);
+      const mimeType = prefixMatch?.[1] ?? "image/png";
+      const rawBase64 = prefixMatch?.[2] ?? result.data;
       const attachment: ImageAttachment = {
         id: generateUUID(),
         mimeType,
-        base64: result.data,
-        previewUri: `data:${mimeType};base64,${result.data}`,
+        base64: rawBase64,
+        previewUri: result.data,
         width: result.size?.width ?? null,
         height: result.size?.height ?? null,
         s3Key: null,
@@ -545,32 +550,35 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
           exiting={FadeOut.duration(160)}
           style={styles.pasteRow}
         >
-          <Pressable
-            onPress={() => void handlePasteImage()}
-            accessibilityRole="button"
-            accessibilityLabel="Paste image from clipboard"
-            hitSlop={6}
-            style={({ pressed }) => [
-              styles.pasteButton,
-              {
-                backgroundColor: theme.colors.accent,
-                borderColor: theme.colors.accent,
-                opacity: pressed ? 0.82 : 1,
-              },
-            ]}
+          <Glass
+            preset="input"
+            tint={alpha(theme.colors.accent, 0.34)}
+            interactive
+            style={styles.pasteGlass}
           >
-            <SymbolView
-              name="photo.on.rectangle"
-              size={14}
-              tintColor={theme.colors.accentForeground}
-              weight="medium"
-              resizeMode="scaleAspectFit"
-              style={styles.pasteIcon}
-            />
-            <NativeText style={[styles.pasteLabel, { color: theme.colors.accentForeground }]}>
-              Paste image in clipboard
-            </NativeText>
-          </Pressable>
+            <Pressable
+              onPress={() => void handlePasteImage()}
+              accessibilityRole="button"
+              accessibilityLabel="Paste image from clipboard"
+              hitSlop={6}
+              style={({ pressed }) => [
+                styles.pasteInner,
+                { opacity: pressed ? 0.78 : 1 },
+              ]}
+            >
+              <SymbolView
+                name="photo.on.rectangle"
+                size={14}
+                tintColor={theme.colors.accentForeground}
+                weight="medium"
+                resizeMode="scaleAspectFit"
+                style={styles.pasteIcon}
+              />
+              <NativeText style={[styles.pasteLabel, { color: theme.colors.accentForeground }]}>
+                Paste image in clipboard
+              </NativeText>
+            </Pressable>
+          </Glass>
         </Animated.View>
       ) : null}
       <ImageAttachmentBar images={images} onRemove={handleRemoveImage} />
@@ -829,14 +837,17 @@ const styles = StyleSheet.create({
   modeText: { fontSize: 13, fontWeight: "700" },
   retryRow: { paddingBottom: 4 },
   pasteRow: { flexDirection: "row", paddingBottom: 6 },
-  pasteButton: {
+  pasteGlass: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  pasteInner: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
   },
   pasteIcon: { width: 14, height: 14 },
   pasteLabel: { fontSize: 13, fontWeight: "600" },
