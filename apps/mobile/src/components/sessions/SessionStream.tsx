@@ -168,6 +168,7 @@ export function SessionStream({ sessionId, topInset, bottomInset }: SessionStrea
         count={newActivityCount}
         visible={newActivityCount > 0}
         onPress={handlePillPress}
+        bottomOffset={bottomInset}
       />
     </View>
   );

@@ -15,13 +15,15 @@ interface NewActivityPillProps {
   count: number;
   visible: boolean;
   onPress: () => void;
+  /** Distance from the bottom of the parent to the top of the composer. */
+  bottomOffset?: number;
 }
 
 /**
  * Floating pill that appears above the session input composer when new events
  * arrive while the user has scrolled up. Tap to jump to the bottom.
  */
-export function NewActivityPill({ count, visible, onPress }: NewActivityPillProps) {
+export function NewActivityPill({ count, visible, onPress, bottomOffset = 0 }: NewActivityPillProps) {
   const theme = useTheme();
   const progress = useSharedValue(0);
 
@@ -44,7 +46,10 @@ export function NewActivityPill({ count, visible, onPress }: NewActivityPillProp
   const label = `${count} new`;
 
   return (
-    <Animated.View pointerEvents={visible ? "auto" : "none"} style={[styles.wrapper, animatedStyle]}>
+    <Animated.View
+      pointerEvents={visible ? "auto" : "none"}
+      style={[styles.wrapper, { bottom: bottomOffset + 8 }, animatedStyle]}
+    >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Jump to new activity: ${label}`}
@@ -74,7 +79,6 @@ const styles = StyleSheet.create({
   wrapper: {
     position: "absolute",
     right: 16,
-    bottom: 0,
     alignItems: "flex-end",
   },
   pill: {
