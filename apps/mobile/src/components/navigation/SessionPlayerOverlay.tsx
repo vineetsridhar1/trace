@@ -215,6 +215,9 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 10,
   },
+  // Layering contract: zIndex must stay below `topInset` (10) so header
+  // taps still reach menu items and above `surface` (0) so body taps
+  // hit the scrim and dismiss the active menu.
   menuScrim: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 5,

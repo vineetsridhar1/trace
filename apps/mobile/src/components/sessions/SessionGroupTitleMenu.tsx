@@ -33,9 +33,13 @@ interface SessionGroupTitleMenuProps {
 }
 
 /**
- * Liquid Glass session-title affordance: the title pill morphs into a
- * full-width panel on tap, mirroring the SessionActionsMenu morph. Panel
- * contents are a placeholder for now — real options will land here later.
+ * Liquid Glass session-title affordance: the inline pill reserves layout
+ * space in the header row and captures the open tap. On open, we
+ * measureInWindow the pill and render the morphing glass inside a
+ * transparent Modal at the same screen coordinates — this escapes the
+ * header's ancestor hit-test frame so controls in the expanded panel
+ * (e.g. sync/restore buttons that sit below the header baseline) remain
+ * tappable. The Modal's full-screen backdrop dismisses on tap.
  * Older OS versions fall back to a static blurred title pill.
  */
 export function SessionGroupTitleMenu({
@@ -317,6 +321,10 @@ const styles = StyleSheet.create({
     minWidth: 0,
     height: PILL_HEIGHT,
   },
+  // Keep `inlinePill.borderRadius` matched to the morph's start value
+  // (PILL_RADIUS) so the handoff from the inline glass to the Modal glass
+  // is visually seamless. The portal glass animates its own borderRadius
+  // from PILL_RADIUS → PANEL_RADIUS in `glassStyle`.
   inlinePill: {
     width: "100%",
     height: PILL_HEIGHT,

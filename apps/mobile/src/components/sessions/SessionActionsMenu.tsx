@@ -91,6 +91,11 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
   // Register a close callback so the Session Player's body-area scrim can
   // dismiss this menu. In-header taps are still handled by the local
   // backdropHit Pressable below.
+  //
+  // The cleanup's identity guard is load-bearing: if another menu opens
+  // between this one closing and this effect's cleanup running, that
+  // menu's callback is already in the store — an unconditional clear
+  // would stomp it. Keep the `=== close` check.
   useEffect(() => {
     if (!open) return;
     const close = () => setOpen(false);
