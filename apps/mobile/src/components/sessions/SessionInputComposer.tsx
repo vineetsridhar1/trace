@@ -10,11 +10,17 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import {
+  AVAILABLE_RUNTIMES_QUERY,
   DISMISS_SESSION_MUTATION,
   UPDATE_SESSION_CONFIG_MUTATION,
   useEntityField,
 } from "@trace/client-core";
-import type { CodingTool } from "@trace/gql";
+import type {
+  CodingTool,
+  HostingMode,
+  SessionConnection,
+  SessionRuntimeInstance,
+} from "@trace/gql";
 import { getDefaultModel, getModelLabel, getModelsForTool } from "@trace/shared";
 import { Glass, Text } from "@/components/design-system";
 import { MODE_CYCLE, useComposerModePalette } from "@/hooks/useComposerModePalette";
@@ -31,6 +37,10 @@ import {
 } from "./ComposerMorphPill";
 
 interface SessionInputComposerProps { sessionId: string }
+
+// Sentinel used by the bridge picker for the "Cloud" option. Mirrors the
+// web `CLOUD_RUNTIME_ID` so the shared mental model is identical.
+const CLOUD_RUNTIME_ID = "__cloud__";
 
 const MODE_LABEL: Record<ComposerMode, string> = { code: "Code", plan: "Plan", ask: "Ask" };
 const MODE_ICON: Record<ComposerMode, SFSymbol> = { code: "pencil", plan: "map", ask: "questionmark.circle" };
@@ -61,9 +71,18 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const model = useEntityField("sessions", sessionId, "model") as string | null | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | null | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
-    | { state?: string | null; canRetry?: boolean | null; runtimeLabel?: string | null }
+    | SessionConnection
     | null
     | undefined;
+  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
+    | string
+    | null
+    | undefined;
+  const repo = useEntityField("sessions", sessionId, "repo") as
+    | { id: string }
+    | null
+    | undefined;
+  const channelRepoId = repo?.id;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic");
   const isDisconnected = connection?.state === "disconnected";
   const canRetryConnection = connection?.canRetry === true;
@@ -74,8 +93,11 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const [height, setHeight] = useState(MIN_INPUT_HEIGHT);
   const [errorDraft, setErrorDraft] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
+  const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
 
   const isActive = agentStatus === "active";
+  const isNotStarted = agentStatus === "not_started";
+  const currentTool: CodingTool = tool === "codex" ? "codex" : "claude_code";
   // Terminal = no more input accepted ever. `done`, `failed`, `stopped` are
   // resumable — web's `canSendMessage` allows sends for them — so they must
   // NOT disable the composer. Only a deleted worktree or a merged session
@@ -215,6 +237,79 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
     },
     [model, sessionId],
   );
+  // Runtime switching mirrors web: the pill is only a live picker while the
+  // session is `not_started`. Once the agent starts (or the session is still
+  // optimistic), the pill locks to the current bridge.
+  const canChangeBridge = isNotStarted && !isOptimistic;
+  const runtimeInstanceId = connection?.runtimeInstanceId ?? null;
+  const currentRuntimeValue =
+    hosting === "cloud" ? CLOUD_RUNTIME_ID : (runtimeInstanceId ?? CLOUD_RUNTIME_ID);
+
+  useEffect(() => {
+    if (!canChangeBridge) return;
+    let cancelled = false;
+    getClient()
+      .query(AVAILABLE_RUNTIMES_QUERY, {
+        tool: currentTool,
+        sessionGroupId: sessionGroupId ?? null,
+      })
+      .toPromise()
+      .then((result) => {
+        if (cancelled) return;
+        const data = result.data?.availableRuntimes as SessionRuntimeInstance[] | undefined;
+        if (data) setRuntimes(data);
+      })
+      .catch((err) => {
+        console.warn("[availableRuntimes] failed", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canChangeBridge, currentTool, sessionGroupId]);
+
+  const handleBridgeChange = useCallback(
+    async (value: string) => {
+      if (!canChangeBridge || value === currentRuntimeValue) return;
+      const newIsCloud = value === CLOUD_RUNTIME_ID;
+      const rt = runtimes.find((r) => r.id === value);
+      const nextHosting: HostingMode = newIsCloud
+        ? "cloud"
+        : (rt?.hostingMode ?? "local");
+      const nextConnection: SessionConnection = {
+        __typename: connection?.__typename ?? "SessionConnection",
+        autoRetryable: connection?.autoRetryable ?? null,
+        canMove: connection?.canMove ?? true,
+        canRetry: connection?.canRetry ?? true,
+        lastDeliveryFailureAt: connection?.lastDeliveryFailureAt ?? null,
+        lastError: connection?.lastError ?? null,
+        lastSeen: connection?.lastSeen ?? null,
+        retryCount: connection?.retryCount ?? 0,
+        runtimeInstanceId: newIsCloud ? null : value,
+        runtimeLabel: newIsCloud ? null : (rt?.label ?? null),
+        state: connection?.state ?? "disconnected",
+      };
+      const rollback = applyOptimisticPatch("sessions", sessionId, {
+        hosting: nextHosting,
+        connection: nextConnection,
+      });
+      try {
+        const result = await getClient()
+          .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
+            sessionId,
+            hosting: newIsCloud ? "cloud" : undefined,
+            runtimeInstanceId: newIsCloud ? undefined : value,
+          })
+          .toPromise();
+        if (result.error) throw result.error;
+      } catch (err) {
+        rollback();
+        void haptic.error();
+        console.warn("[updateSessionConfig] bridge change failed", err);
+      }
+    },
+    [canChangeBridge, connection, currentRuntimeValue, runtimes, sessionId],
+  );
+
   const handleStop = useCallback(async () => {
     if (!canStop) return;
     setStopping(true);
@@ -246,7 +341,6 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const bridgeLabel = hosting === "cloud" ? "Cloud" : (connection?.runtimeLabel ?? "Local");
   const modeIconTint = mode === "plan" ? "#8b5cf6" : mode === "ask" ? "#ea580c" : theme.colors.foreground;
 
-  const currentTool: CodingTool = tool === "codex" ? "codex" : "claude_code";
   const modelOptions = useMemo(() => getModelsForTool(currentTool), [currentTool]);
   const toolHeaderItems = useMemo<ComposerMorphPillItem[]>(
     () => [
@@ -278,17 +372,31 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
       })),
     [canInteract, handleModelChange, model, modelOptions],
   );
-  const bridgeItems = useMemo<ComposerMorphPillItem[]>(
-    () => [
+  const bridgeItems = useMemo<ComposerMorphPillItem[]>(() => {
+    const items: ComposerMorphPillItem[] = [
       {
-        key: "bridge",
-        label: bridgeLabel,
-        selected: Boolean(hosting),
-        systemIcon: bridgeIcon,
+        key: `bridge:${CLOUD_RUNTIME_ID}`,
+        label: "Cloud",
+        systemIcon: "cloud",
+        selected: hosting === "cloud",
+        onPress: () => void handleBridgeChange(CLOUD_RUNTIME_ID),
       },
-    ],
-    [bridgeIcon, bridgeLabel, hosting],
-  );
+    ];
+    for (const r of runtimes) {
+      if (r.hostingMode !== "local" || !r.connected) continue;
+      const lacksRepo =
+        Boolean(channelRepoId) && !r.registeredRepoIds.includes(channelRepoId!);
+      items.push({
+        key: `bridge:${r.id}`,
+        label: lacksRepo ? `${r.label} · repo not linked` : r.label,
+        systemIcon: "laptopcomputer",
+        selected: runtimeInstanceId === r.id,
+        disabled: lacksRepo,
+        onPress: () => void handleBridgeChange(r.id),
+      });
+    }
+    return items;
+  }, [channelRepoId, handleBridgeChange, hosting, runtimeInstanceId, runtimes]);
 
   return (
     <View style={{ paddingHorizontal: theme.spacing.md, paddingBottom: theme.spacing.sm + insets.bottom, paddingTop: theme.spacing.xs }}>
@@ -446,7 +554,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
           <ComposerMorphPill
             label={bridgeLabel}
             accessibilityLabel="Bridge"
-            disabled={!hosting}
+            disabled={!canChangeBridge}
             items={bridgeItems}
             systemIcon={bridgeIcon}
             align="right"
