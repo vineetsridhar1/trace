@@ -1,5 +1,8 @@
 import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import path from "node:path";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 
@@ -58,6 +61,63 @@ function log(message) {
 
 function stripAnsi(text) {
   return text.replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, "");
+}
+
+function getPrismaDevStateRoot() {
+  const home = homedir();
+  if (process.platform === "darwin") {
+    return path.join(home, "Library", "Application Support", "prisma-dev-nodejs");
+  }
+  if (process.platform === "win32") {
+    return path.join(
+      process.env.LOCALAPPDATA ?? path.join(home, "AppData", "Local"),
+      "prisma-dev-nodejs",
+      "Data",
+    );
+  }
+  return path.join(
+    process.env.XDG_DATA_HOME ?? path.join(home, ".local", "share"),
+    "prisma-dev-nodejs",
+  );
+}
+
+function buildPrismaDevDatabaseUrl(port) {
+  const params = new URLSearchParams({
+    sslmode: "disable",
+    connection_limit: "10",
+    connect_timeout: "0",
+    max_idle_connection_lifetime: "0",
+    pool_timeout: "0",
+    socket_timeout: "0",
+  });
+  return `postgres://postgres:postgres@localhost:${port}/template1?${params.toString()}`;
+}
+
+async function readPrismaDevState() {
+  const statePath = path.join(getPrismaDevStateRoot(), prismaServerName, "server.json");
+  try {
+    const raw = await readFile(statePath, "utf8");
+    return JSON.parse(raw);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+function getPrismaDevStateUrl(state) {
+  const exportedUrl = state?.exports?.database?.prismaORMConnectionString;
+  if (typeof exportedUrl === "string" && exportedUrl.length > 0) {
+    return exportedUrl;
+  }
+
+  const databasePort = state?.databasePort;
+  if (Number.isInteger(databasePort) && databasePort > 0) {
+    return buildPrismaDevDatabaseUrl(databasePort);
+  }
+
+  return null;
 }
 
 function assertNodeVersion() {
@@ -155,7 +215,10 @@ async function getPrismaDevEntry() {
 
   if (!line) return null;
 
-  const urls = line.match(/\b(?:prisma\+postgres|postgres(?:ql)?|https?):\/\/\S+/g) ?? [];
+  const cliUrls = line.match(/\b(?:prisma\+postgres|postgres(?:ql)?|https?):\/\/\S+/g) ?? [];
+  const state = await readPrismaDevState();
+  const stateUrl = getPrismaDevStateUrl(state);
+  const urls = stateUrl ? [stateUrl, ...cliUrls] : cliUrls;
   const status = line.includes("running")
     ? "running"
     : (line.includes("not_running") || line.includes("not running"))
