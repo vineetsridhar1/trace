@@ -9,11 +9,6 @@ import {
   type LayoutAnimationConfig,
 } from "react-native";
 import { FlashList } from "@shopify/flash-list";
-import Animated, {
-  FadeIn,
-  FadeOut,
-  LayoutAnimationConfig as RNALayoutAnimationConfig,
-} from "react-native-reanimated";
 import { EmptyState, IconButton } from "@/components/design-system";
 import { SessionGroupRow } from "@/components/channels/SessionGroupRow";
 import { SessionGroupsHeader } from "@/components/channels/SessionGroupsHeader";
@@ -58,14 +53,6 @@ export default function ChannelDetail() {
   const [collapsed, setCollapsed] = useState<Set<SessionGroupSectionStatus>>(
     () => new Set(DEFAULT_COLLAPSED),
   );
-  // Suppress row FadeIn on the first frame so opening the channel doesn't
-  // cascade-fade every visible row. Subsequent expand/collapse toggles play
-  // entering/exiting normally.
-  const [skipInitialEntering, setSkipInitialEntering] = useState(true);
-  useEffect(() => {
-    const handle = requestAnimationFrame(() => setSkipInitialEntering(false));
-    return () => cancelAnimationFrame(handle);
-  }, []);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
   const logout = useAuthStore((s: AuthState) => s.logout);
@@ -150,11 +137,7 @@ export default function ChannelDetail() {
           />
         );
       }
-      return (
-        <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)}>
-          <SessionGroupRow groupId={item.groupId} hideStatusChip />
-        </Animated.View>
-      );
+      return <SessionGroupRow groupId={item.groupId} hideStatusChip />;
     },
     [handleToggleSection],
   );
@@ -186,23 +169,21 @@ export default function ChannelDetail() {
           ),
         }}
       />
-      <RNALayoutAnimationConfig skipEntering={skipInitialEntering}>
-        <FlashList
-          // Re-mount on segment change so scroll position resets to zero
-          // instead of carrying over from the previous (often longer) list.
-          key={scope}
-          data={items}
-          renderItem={renderListItem}
-          keyExtractor={keyExtractor}
-          getItemType={getItemType}
-          style={{ flex: 1, backgroundColor: theme.colors.background }}
-          contentInsetAdjustmentBehavior="automatic"
-          onRefresh={handleRefresh}
-          refreshing={refreshing}
-          ListHeaderComponent={<SessionGroupsHeader segment={scope} onSegmentChange={setScope} />}
-          ListEmptyComponent={<ActiveEmpty scope={scope} />}
-        />
-      </RNALayoutAnimationConfig>
+      <FlashList
+        // Re-mount on segment change so scroll position resets to zero
+        // instead of carrying over from the previous (often longer) list.
+        key={scope}
+        data={items}
+        renderItem={renderListItem}
+        keyExtractor={keyExtractor}
+        getItemType={getItemType}
+        style={{ flex: 1, backgroundColor: theme.colors.background }}
+        contentInsetAdjustmentBehavior="automatic"
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+        ListHeaderComponent={<SessionGroupsHeader segment={scope} onSegmentChange={setScope} />}
+        ListEmptyComponent={<ActiveEmpty scope={scope} />}
+      />
     </>
   );
 }
