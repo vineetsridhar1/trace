@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/design-system";
 import { useTheme } from "@/theme";
 import { HomeRepoFilter } from "@/components/home/HomeRepoFilter";
 import { HomeSectionHeader } from "@/components/home/HomeSectionHeader";
-import { HomeSessionRow } from "@/components/home/HomeSessionRow";
+import { SessionGroupRow } from "@/components/channels/SessionGroupRow";
 import { useHomeSections, type HomeSectionKind } from "@/hooks/useHomeSections";
 import { refreshOrgData } from "@/hooks/useHydrate";
 import { haptic } from "@/lib/haptics";
@@ -14,7 +14,7 @@ import { useMobileUIStore, type MobileUIState } from "@/stores/ui";
 
 type HomeListItem =
   | { kind: "header"; section: HomeSectionKind; count: number }
-  | { kind: "row"; sessionId: string };
+  | { kind: "row"; groupId: string };
 
 export default function AuthedHome() {
   const theme = useTheme();
@@ -30,7 +30,7 @@ export default function AuthedHome() {
     for (const section of sections) {
       out.push({ kind: "header", section: section.kind, count: section.ids.length });
       for (const id of section.ids) {
-        out.push({ kind: "row", sessionId: id });
+        out.push({ kind: "row", groupId: id });
       }
     }
     return out;
@@ -76,11 +76,11 @@ function renderItem({ item }: { item: HomeListItem }) {
   if (item.kind === "header") {
     return <HomeSectionHeader kind={item.section} count={item.count} />;
   }
-  return <HomeSessionRow sessionId={item.sessionId} />;
+  return <SessionGroupRow groupId={item.groupId} hideStatusChip hideAvatar />;
 }
 
 function keyExtractor(item: HomeListItem): string {
-  return item.kind === "header" ? `h:${item.section}` : `r:${item.sessionId}`;
+  return item.kind === "header" ? `h:${item.section}` : `r:${item.groupId}`;
 }
 
 function getItemType(item: HomeListItem): string {

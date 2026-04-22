@@ -7,10 +7,13 @@ import { SessionRuntimePicker } from "./SessionRuntimePicker";
 export function SessionMoveButton({
   sessionId,
   disabled,
+  disabledReason,
   className,
 }: {
   sessionId: string | null;
   disabled?: boolean;
+  /** Tooltip shown when the button is disabled, in place of the default title. */
+  disabledReason?: string;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -25,7 +28,7 @@ export function SessionMoveButton({
           open ? "bg-surface-elevated text-foreground" : undefined,
           className,
         )}
-        title="Move session"
+        title={!sessionId ? undefined : disabledReason && unavailable ? disabledReason : "Move session"}
       >
         <ArrowRightLeft size={14} />
       </PopoverTrigger>
