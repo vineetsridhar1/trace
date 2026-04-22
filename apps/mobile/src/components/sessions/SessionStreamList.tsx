@@ -8,14 +8,35 @@ import {
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import type { SessionNode } from "@trace/client-core";
 import type { Event } from "@trace/gql";
-import Animated, { FadeInDown, type SharedValue } from "react-native-reanimated";
+import Animated, { Keyframe, type SharedValue } from "react-native-reanimated";
 import { Text } from "@/components/design-system";
 import { nodeKey } from "@/hooks/useNewActivityTracker";
-import { motion, useTheme } from "@/theme";
+import { useTheme } from "@/theme";
 import { ConnectionLostBanner } from "./nodes/ConnectionLostBanner";
 import { renderNode, type NodeRenderContext } from "./nodes";
 import { TimestampRevealRow } from "./TimestampRevealRow";
 import { itemTypeFor, timestampLabelForNode } from "./sessionStreamItems";
+
+// Subtle rise-into-place for a freshly-arrived last bubble. Default `FadeInDown`
+// translates from ~300px below which reads as a flash — this is a small,
+// deliberate slide so the message visibly rises out of the composer area.
+const messageEnter = new Keyframe({
+  0: { opacity: 0, transform: [{ translateY: 18 }] },
+  100: { opacity: 1, transform: [{ translateY: 0 }] },
+}).duration(260);
+
+// FlashList identity for an item. For user-sent events we key on
+// `clientMutationId` (which both the optimistic and the real event carry in
+// their payload) so the optimistic→real id swap stays the same logical item —
+// no remount, no replayed entrance animation.
+function stableNodeKey(item: SessionNode, scopedEvents: Record<string, Event>): string {
+  if (item.kind !== "event") return nodeKey(item);
+  const payload = scopedEvents[item.id]?.payload as
+    | { clientMutationId?: unknown }
+    | undefined;
+  const cm = payload?.clientMutationId;
+  return typeof cm === "string" ? `cm:${cm}` : nodeKey(item);
+}
 
 interface SessionStreamListProps {
   sessionId: string;
@@ -83,7 +104,7 @@ export function SessionStreamList({
   const renderItem = useCallback(
     ({ item, index }: { item: SessionNode; index: number }) => {
       const isLast = index === nodes.length - 1;
-      const key = nodeKey(item);
+      const key = stableNodeKey(item, scopedEvents);
       const isFreshLast =
         isLast
         && acceptEntering
@@ -104,11 +125,7 @@ export function SessionStreamList({
         </TimestampRevealRow>
       );
       if (!isFreshLast) return body;
-      return (
-        <Animated.View entering={FadeInDown.duration(motion.durations.accordion)}>
-          {body}
-        </Animated.View>
-      );
+      return <Animated.View entering={messageEnter}>{body}</Animated.View>;
     },
     [
       acceptEntering,
@@ -121,7 +138,10 @@ export function SessionStreamList({
     ],
   );
 
-  const keyExtractor = useCallback((item: SessionNode) => nodeKey(item), []);
+  const keyExtractor = useCallback(
+    (item: SessionNode) => stableNodeKey(item, scopedEvents),
+    [scopedEvents],
+  );
   const getItemType = useCallback(
     (item: SessionNode) => itemTypeFor(item, scopedEvents),
     [scopedEvents],
