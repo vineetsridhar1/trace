@@ -382,6 +382,23 @@ export type CodingTool =
   | 'codex'
   | 'custom';
 
+export type ConnectionsBridge = {
+  __typename?: 'ConnectionsBridge';
+  bridge: BridgeRuntime;
+  /** Whether the calling user has terminal capability on this bridge. */
+  canTerminal: Scalars['Boolean']['output'];
+  repos: Array<ConnectionsRepoEntry>;
+};
+
+export type ConnectionsRepoEntry = {
+  __typename?: 'ConnectionsRepoEntry';
+  /** Channel used to authorize terminal creation + source of runScripts. */
+  channel: Channel;
+  linkedCheckout?: Maybe<LinkedCheckoutStatus>;
+  repo: Repo;
+  runScripts?: Maybe<Scalars['JSON']['output']>;
+};
+
 export type CostBudget = {
   __typename?: 'CostBudget';
   dailyLimitCents: Scalars['Int']['output'];
@@ -662,6 +679,7 @@ export type Mutation = {
   createAiConversation: AiConversation;
   createChannel: Channel;
   createChannelGroup: ChannelGroup;
+  createChannelTerminal: Terminal;
   createChat: Chat;
   createProject: Project;
   createRepo: Repo;
@@ -797,6 +815,14 @@ export type MutationCreateChannelArgs = {
 
 export type MutationCreateChannelGroupArgs = {
   input: CreateChannelGroupInput;
+};
+
+
+export type MutationCreateChannelTerminalArgs = {
+  bridgeRuntimeId: Scalars['ID']['input'];
+  channelId: Scalars['ID']['input'];
+  cols: Scalars['Int']['input'];
+  rows: Scalars['Int']['input'];
 };
 
 
@@ -1301,6 +1327,7 @@ export type Query = {
   channel?: Maybe<Channel>;
   channelGroups: Array<ChannelGroup>;
   channelMessages: Array<Message>;
+  channelTerminals: Array<Terminal>;
   channels: Array<Channel>;
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
@@ -1310,6 +1337,7 @@ export type Query = {
   linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
   myBridgeRuntimes: Array<BridgeRuntime>;
+  myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
   organization?: Maybe<Organization>;
@@ -1421,6 +1449,12 @@ export type QueryChannelMessagesArgs = {
   before?: InputMaybe<Scalars['DateTime']['input']>;
   channelId: Scalars['ID']['input'];
   limit?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryChannelTerminalsArgs = {
+  bridgeRuntimeId: Scalars['ID']['input'];
+  channelId: Scalars['ID']['input'];
 };
 
 

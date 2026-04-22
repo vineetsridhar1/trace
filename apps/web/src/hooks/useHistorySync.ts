@@ -31,6 +31,16 @@ function parseNavFromPath(path: string): {
       channelSubPage: null,
     };
   }
+  if (path.startsWith("/connections")) {
+    return {
+      channelId: null,
+      sessionGroupId: null,
+      sessionId: null,
+      chatId: null,
+      page: "connections",
+      channelSubPage: null,
+    };
+  }
   if (path.startsWith("/tickets")) {
     return {
       channelId: null,
@@ -125,7 +135,18 @@ function parseNavFromPath(path: string): {
 }
 
 export function useHistorySync() {
-  const restoreNav = useUIStore((s: { _restoreNav: (channelId: string | null, sessionGroupId: string | null, sessionId: string | null, page?: ActivePage, chatId?: string | null, channelSubPage?: ChannelSubPage) => void }) => s._restoreNav);
+  const restoreNav = useUIStore(
+    (s: {
+      _restoreNav: (
+        channelId: string | null,
+        sessionGroupId: string | null,
+        sessionId: string | null,
+        page?: ActivePage,
+        chatId?: string | null,
+        channelSubPage?: ChannelSubPage,
+      ) => void;
+    }) => s._restoreNav,
+  );
 
   useEffect(() => {
     const parsedNav = parseNavFromPath(window.location.pathname);
@@ -134,20 +155,20 @@ export function useHistorySync() {
       parsedNav.sessionId,
     );
     const { channelId, sessionGroupId, sessionId, chatId, page } = initialRedirect ?? parsedNav;
+    const isTopLevelPage =
+      page === "settings" || page === "inbox" || page === "connections" || page === "tickets";
     const initialChat =
-      page === "settings" || page === "inbox" || page === "tickets" || channelId
-        ? null
-        : (chatId ?? localStorage.getItem("trace:activeChatId"));
+      isTopLevelPage || channelId ? null : (chatId ?? localStorage.getItem("trace:activeChatId"));
     const initialChannel =
-      page === "settings" || page === "inbox" || page === "tickets" || initialChat
+      isTopLevelPage || initialChat
         ? null
         : (channelId ?? localStorage.getItem("trace:activeChannelId"));
     const initialSessionGroupId =
-      page === "settings" || page === "inbox" || page === "tickets" || initialChat
+      isTopLevelPage || initialChat
         ? null
         : (sessionGroupId ?? localStorage.getItem("trace:activeSessionGroupId"));
     const initialSessionId =
-      page === "settings" || page === "inbox" || page === "tickets" || initialChat
+      isTopLevelPage || initialChat
         ? null
         : (sessionId ?? localStorage.getItem("trace:activeSessionId"));
 

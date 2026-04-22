@@ -1,5 +1,6 @@
-import { TerminalSquare } from "lucide-react";
+import { Laptop, TerminalSquare } from "lucide-react";
 import { timeAgo } from "../../lib/utils";
+import { useAttachedCheckoutForGroup } from "../../stores/bridges";
 import { useSessionGroupTerminals } from "../../stores/terminal";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { getSessionLastActivityAt, getSessionRepo } from "./session-cell-data";
@@ -13,6 +14,7 @@ export function SessionCompactSummaryCell({ row }: { row?: SessionGroupRow }) {
   const slug = row.slug;
   const terminals = useSessionGroupTerminals(row.id);
   const hasActiveTerminal = terminals.some((t) => t.status === "active");
+  const attached = useAttachedCheckoutForGroup(row.id);
 
   const subtext = repo && slug
     ? `${repo.name} / ${slug}`
@@ -25,6 +27,15 @@ export function SessionCompactSummaryCell({ row }: { row?: SessionGroupRow }) {
       <div className="flex w-full min-w-0 items-center gap-2">
         <SessionStatusIndicator row={row} />
         <span className="truncate text-sm font-medium text-foreground">{row.name}</span>
+        {attached && (
+          <span
+            title={`Synced to ${attached.bridgeLabel}`}
+            className="inline-flex shrink-0"
+            aria-label={`Synced to ${attached.bridgeLabel}`}
+          >
+            <Laptop className="h-3.5 w-3.5 text-emerald-500" />
+          </span>
+        )}
         {hasActiveTerminal && (
           <TerminalSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         )}

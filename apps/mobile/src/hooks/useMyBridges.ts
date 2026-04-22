@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import { MY_BRIDGE_RUNTIMES_FOR_HOME_QUERY } from "@trace/client-core";
 import type { HostingMode } from "@trace/gql";
 import { getClient } from "@/lib/urql";
+import { useBridgesStore } from "@/stores/bridges";
 
 export interface SyncedSessionGroupSummary {
   id: string;
@@ -66,13 +67,19 @@ export function useMyBridges(activeOrgId: string | null): {
   loading: boolean;
   refresh: () => Promise<void>;
 } {
-  const [bridges, setBridges] = useState<MyBridgeSummary[]>([]);
-  const [loading, setLoading] = useState(false);
+  const bridges = useBridgesStore((s) => s.bridges);
+  const loading = useBridgesStore((s) => s.loading);
+  const setBridges = useBridgesStore((s) => s.setBridges);
+  const setLoading = useBridgesStore((s) => s.setLoading);
   const cancelledRef = useRef(false);
 
   const fetchOnce = useCallback(
     async (showLoading: boolean): Promise<void> => {
-      if (!activeOrgId) return;
+      if (!activeOrgId) {
+        setBridges([]);
+        setLoading(false);
+        return;
+      }
       if (showLoading) setLoading(true);
       try {
         const result = await getClient()
@@ -92,7 +99,7 @@ export function useMyBridges(activeOrgId: string | null): {
         if (!cancelledRef.current && showLoading) setLoading(false);
       }
     },
-    [activeOrgId],
+    [activeOrgId, setBridges, setLoading],
   );
 
   useEffect(() => {
@@ -126,6 +133,33 @@ export function useMyBridges(activeOrgId: string | null): {
   const refresh = useCallback(() => fetchOnce(false), [fetchOnce]);
 
   return { bridges, loading, refresh };
+}
+
+export async function refreshMyBridges(activeOrgId: string | null): Promise<void> {
+  const { setBridges, setLoading } = useBridgesStore.getState();
+  if (!activeOrgId) {
+    setBridges([]);
+    setLoading(false);
+    return;
+  }
+
+  setLoading(true);
+  try {
+    const result = await getClient()
+      .query<BridgesQueryResult>(
+        MY_BRIDGE_RUNTIMES_FOR_HOME_QUERY,
+        {},
+        { requestPolicy: "network-only" },
+      )
+      .toPromise();
+    if (result.error) {
+      console.warn("[refreshMyBridges] query failed", result.error);
+      return;
+    }
+    setBridges(toBridgeSummaries(result.data?.myBridgeRuntimes ?? []));
+  } finally {
+    setLoading(false);
+  }
 }
 
 function toBridgeSummaries(
