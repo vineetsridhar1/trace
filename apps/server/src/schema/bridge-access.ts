@@ -4,6 +4,7 @@ import { AuthenticationError } from "../lib/errors.js";
 import { requireOrgContext } from "../lib/require-org.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
+import { readBridgeTunnelSlotsFromMetadata } from "../lib/bridge-tunnels.js";
 
 export const bridgeAccessQueries = {
   myBridgeRuntimes: (_: unknown, _args: unknown, ctx: Context) => {
@@ -100,6 +101,38 @@ export const bridgeAccessMutations = {
       capabilities: args.capabilities,
     });
   },
+  startBridgeTunnel: (_: unknown, args: { runtimeInstanceId: string; slotId: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return runtimeAccessService.startBridgeTunnel({
+      userId: ctx.userId,
+      organizationId: requireOrgContext(ctx),
+      runtimeInstanceId: args.runtimeInstanceId,
+      slotId: args.slotId,
+    });
+  },
+  stopBridgeTunnel: (_: unknown, args: { runtimeInstanceId: string; slotId: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return runtimeAccessService.stopBridgeTunnel({
+      userId: ctx.userId,
+      organizationId: requireOrgContext(ctx),
+      runtimeInstanceId: args.runtimeInstanceId,
+      slotId: args.slotId,
+    });
+  },
+  retargetBridgeTunnel: (
+    _: unknown,
+    args: { runtimeInstanceId: string; slotId: string; targetPort: number },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return runtimeAccessService.retargetBridgeTunnel({
+      userId: ctx.userId,
+      organizationId: requireOrgContext(ctx),
+      runtimeInstanceId: args.runtimeInstanceId,
+      slotId: args.slotId,
+      targetPort: args.targetPort,
+    });
+  },
 };
 
 export const bridgeAccessTypeResolvers = {
@@ -114,6 +147,13 @@ export const bridgeAccessTypeResolvers = {
       return [...live.linkedCheckouts.values()].filter(
         (status) => status.isAttached && activeRepos.has(status.repoId),
       );
+    },
+    tunnelSlots: (runtime: { instanceId: string; metadata?: unknown }) => {
+      const live = sessionRouter.getRuntime(runtime.instanceId);
+      if (live && live.ws.readyState === live.ws.OPEN) {
+        return [...live.tunnelSlots.values()];
+      }
+      return readBridgeTunnelSlotsFromMetadata(runtime.metadata);
     },
   },
   LinkedCheckoutStatus: {

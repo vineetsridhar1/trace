@@ -1,9 +1,11 @@
 import { Prisma, type BridgeAccessCapability, type BridgeAccessScopeType } from "@prisma/client";
+import type { BridgeTunnelActionResultPayload, BridgeTunnelSlot } from "@trace/shared";
 import { isCloudMachineRuntimeId } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { AuthorizationError } from "../lib/errors.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
+import { serializeBridgeTunnelSlotsForPrisma } from "../lib/bridge-tunnels.js";
 import { eventService } from "./event.js";
 
 const BRIDGE_ACCESS_DENIED_ERROR =
@@ -153,6 +155,11 @@ function isConnectedRuntime(instanceId: string): boolean {
   return sessionRouter.isRuntimeAvailable(instanceId);
 }
 
+function asMetadataObject(value: Prisma.JsonValue | null): Prisma.JsonObject {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Prisma.JsonObject;
+}
+
 function runtimeHostingMode(
   runtimeInstanceId: string,
   persisted: { id: string } | null,
@@ -274,6 +281,100 @@ class RuntimeAccessService {
       where: { id },
       include: { ownerUser: true },
     });
+  }
+
+  async updateTunnelSlotsSnapshot(input: {
+    instanceId: string;
+    organizationId: string;
+    ownerUserId: string;
+    tunnelSlots: BridgeTunnelSlot[];
+  }): Promise<void> {
+    const bridgeRuntime = await prisma.bridgeRuntime.findFirst({
+      where: {
+        instanceId: input.instanceId,
+        organizationId: input.organizationId,
+        ownerUserId: input.ownerUserId,
+      },
+      select: {
+        id: true,
+        metadata: true,
+      },
+    });
+    if (!bridgeRuntime) return;
+
+    await prisma.bridgeRuntime.update({
+      where: { id: bridgeRuntime.id },
+      data: {
+        lastSeenAt: new Date(),
+        metadata: {
+          ...asMetadataObject(bridgeRuntime.metadata),
+          tunnelSlots: serializeBridgeTunnelSlotsForPrisma(input.tunnelSlots),
+        } satisfies Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  private async assertOwnerControlledLocalRuntime(input: {
+    userId: string;
+    organizationId: string;
+    runtimeInstanceId: string;
+  }): Promise<void> {
+    const bridgeRuntime = await prisma.bridgeRuntime.findFirst({
+      where: {
+        instanceId: input.runtimeInstanceId,
+        organizationId: input.organizationId,
+        ownerUserId: input.userId,
+      },
+      select: {
+        instanceId: true,
+        hostingMode: true,
+      },
+    });
+
+    if (!bridgeRuntime) {
+      throw new AuthorizationError(BRIDGE_ACCESS_DENIED_ERROR);
+    }
+    if (bridgeRuntime.hostingMode !== "local") {
+      throw new Error("Tunnel control is only available for local bridge runtimes");
+    }
+    if (!sessionRouter.isRuntimeAvailable(input.runtimeInstanceId)) {
+      throw new Error("Bridge runtime is not connected");
+    }
+  }
+
+  async startBridgeTunnel(input: {
+    userId: string;
+    organizationId: string;
+    runtimeInstanceId: string;
+    slotId: string;
+  }): Promise<BridgeTunnelActionResultPayload> {
+    await this.assertOwnerControlledLocalRuntime(input);
+    return sessionRouter.startBridgeTunnel(input.runtimeInstanceId, input.slotId);
+  }
+
+  async stopBridgeTunnel(input: {
+    userId: string;
+    organizationId: string;
+    runtimeInstanceId: string;
+    slotId: string;
+  }): Promise<BridgeTunnelActionResultPayload> {
+    await this.assertOwnerControlledLocalRuntime(input);
+    return sessionRouter.stopBridgeTunnel(input.runtimeInstanceId, input.slotId);
+  }
+
+  async retargetBridgeTunnel(input: {
+    userId: string;
+    organizationId: string;
+    runtimeInstanceId: string;
+    slotId: string;
+    targetPort: number;
+  }): Promise<BridgeTunnelActionResultPayload> {
+    await this.assertOwnerControlledLocalRuntime(input);
+    return sessionRouter.retargetBridgeTunnel(
+      input.runtimeInstanceId,
+      input.slotId,
+      input.targetPort,
+    );
   }
 
   /**

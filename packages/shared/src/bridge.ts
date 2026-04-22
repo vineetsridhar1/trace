@@ -172,6 +172,41 @@ export interface BridgeSetLinkedCheckoutAutoSyncCommand {
   enabled: boolean;
 }
 
+export type BridgeTunnelProvider = "custom" | "ngrok";
+export type BridgeTunnelMode = "manual" | "trace_managed";
+export type BridgeTunnelState = "configured" | "running" | "stopped" | "error";
+
+export interface BridgeTunnelSlot {
+  id: string;
+  label: string;
+  provider: BridgeTunnelProvider;
+  mode: BridgeTunnelMode;
+  publicUrl: string;
+  targetPort: number | null;
+  state: BridgeTunnelState;
+  lastError: string | null;
+  updatedAt: string;
+}
+
+export interface BridgeTunnelStartCommand {
+  type: "bridge_tunnel_start";
+  requestId: string;
+  slotId: string;
+}
+
+export interface BridgeTunnelStopCommand {
+  type: "bridge_tunnel_stop";
+  requestId: string;
+  slotId: string;
+}
+
+export interface BridgeTunnelRetargetCommand {
+  type: "bridge_tunnel_retarget";
+  requestId: string;
+  slotId: string;
+  targetPort: number;
+}
+
 // --- Terminal commands (Server → Bridge) ---
 
 export interface BridgeTerminalCreateCommand {
@@ -221,6 +256,9 @@ export type BridgeCommand =
   | BridgeSyncLinkedCheckoutCommand
   | BridgeRestoreLinkedCheckoutCommand
   | BridgeSetLinkedCheckoutAutoSyncCommand
+  | BridgeTunnelStartCommand
+  | BridgeTunnelStopCommand
+  | BridgeTunnelRetargetCommand
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
   | BridgeTerminalResizeCommand
@@ -236,6 +274,8 @@ export interface BridgeRuntimeHello {
   supportedTools: string[];
   /** Repo IDs this bridge has locally registered (device bridges only). Empty for cloud. */
   registeredRepoIds: string[];
+  /** Public tunnel slots configured on this bridge. */
+  tunnelSlots?: BridgeTunnelSlot[];
   /** Active terminal ptys still running on this bridge (reported on reconnect). */
   activeTerminals?: Array<{ terminalId: string; sessionId: string }>;
 }
@@ -304,6 +344,11 @@ export interface BridgeRepoLinked {
   repoId: string;
 }
 
+export interface BridgeTunnelSlotsUpdated {
+  type: "bridge_tunnel_slots_updated";
+  tunnelSlots: BridgeTunnelSlot[];
+}
+
 export interface BridgeLinkedCheckoutStatus {
   repoId: string;
   repoPath: string | null;
@@ -336,6 +381,19 @@ export interface BridgeLinkedCheckoutActionResult {
   requestId: string;
   action: "link_repo" | "sync" | "restore" | "set_auto_sync";
   result: BridgeLinkedCheckoutActionResultPayload;
+}
+
+export interface BridgeTunnelActionResultPayload {
+  ok: boolean;
+  slot: BridgeTunnelSlot | null;
+  error: string | null;
+}
+
+export interface BridgeTunnelActionResult {
+  type: "bridge_tunnel_action_result";
+  requestId: string;
+  action: "start" | "stop" | "retarget";
+  result: BridgeTunnelActionResultPayload;
 }
 
 export interface BridgeBranchesResult {
@@ -430,8 +488,10 @@ export type BridgeMessage =
   | BridgeToolSessionMissing
   | BridgeGitCheckpoint
   | BridgeRepoLinked
+  | BridgeTunnelSlotsUpdated
   | BridgeLinkedCheckoutStatusResult
   | BridgeLinkedCheckoutActionResult
+  | BridgeTunnelActionResult
   | BridgeBranchesResult
   | BridgeFilesResult
   | BridgeFileContentResult

@@ -25,6 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import { BridgeTunnelSettingsCard } from "./BridgeTunnelSettingsCard";
 
 type BridgeUser = {
   id: string;
@@ -169,6 +170,8 @@ export function BridgeAccessSection() {
           Review requests for your local bridges, approve shared access, and revoke grants.
         </p>
       </div>
+
+      <BridgeTunnelSettingsCard />
 
       {loading ? (
         <div className="rounded-lg border border-border bg-surface-deep p-4 text-sm text-muted-foreground">

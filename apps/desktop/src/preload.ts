@@ -1,4 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { BridgeTunnelSlot } from "@trace/shared";
+import type { BridgeTunnelSlotConfig } from "./config.js";
 
 contextBridge.exposeInMainWorld("trace", {
   platform: process.platform,
@@ -17,11 +19,24 @@ contextBridge.exposeInMainWorld("trace", {
   getRepoGitHookStatus: (repoId: string) => ipcRenderer.invoke("get-repo-git-hook-status", repoId),
   repairRepoGitHooks: (repoId: string) => ipcRenderer.invoke("repair-repo-git-hooks", repoId),
   getBridgeStatus: () => ipcRenderer.invoke("get-bridge-status"),
+  getBridgeTunnelSlots: () => ipcRenderer.invoke("get-bridge-tunnel-slots"),
+  saveBridgeTunnelSlots: (slots: BridgeTunnelSlotConfig[]) =>
+    ipcRenderer.invoke("save-bridge-tunnel-slots", slots),
+  startBridgeTunnel: (slotId: string) => ipcRenderer.invoke("start-bridge-tunnel", slotId),
+  stopBridgeTunnel: (slotId: string) => ipcRenderer.invoke("stop-bridge-tunnel", slotId),
+  retargetBridgeTunnel: (slotId: string, targetPort: number) =>
+    ipcRenderer.invoke("retarget-bridge-tunnel", slotId, targetPort),
   setBridgeAuthContext: (token: string | null, organizationId: string | null) =>
     ipcRenderer.invoke("set-bridge-auth-context", token, organizationId),
   onBridgeStatus: (callback: (status: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, status: string) => callback(status);
     ipcRenderer.on("bridge-status", listener);
     return () => ipcRenderer.removeListener("bridge-status", listener);
+  },
+  onBridgeTunnelSlots: (callback: (slots: BridgeTunnelSlot[]) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, slots: BridgeTunnelSlot[]) =>
+      callback(slots);
+    ipcRenderer.on("bridge-tunnel-slots", listener);
+    return () => ipcRenderer.removeListener("bridge-tunnel-slots", listener);
   },
 });

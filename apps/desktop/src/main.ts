@@ -3,7 +3,13 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { BridgeClient, type BridgeConnectionStatus } from "./bridge.js";
-import { getRepoConfig, getRepoPath, saveRepoPath, setRepoGitHooksEnabled } from "./config.js";
+import {
+  getRepoConfig,
+  getRepoPath,
+  saveRepoPath,
+  setRepoGitHooksEnabled,
+  type BridgeTunnelSlotConfig,
+} from "./config.js";
 import { disableRepoHooks, getRepoHookStatus, installOrRepairRepoHooks } from "./repo-hooks.js";
 import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
 
@@ -17,6 +23,11 @@ const bridge = new BridgeClient(serverUrl);
 function publishBridgeStatus(status: BridgeConnectionStatus) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send("bridge-status", status);
+}
+
+function publishBridgeTunnelSlots() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send("bridge-tunnel-slots", bridge.getTunnelSlots());
 }
 
 function createWindow() {
@@ -140,6 +151,19 @@ ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: string) => {
 });
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());
+ipcMain.handle("get-bridge-tunnel-slots", () => bridge.getTunnelSlots());
+ipcMain.handle("save-bridge-tunnel-slots", (_event, slots: BridgeTunnelSlotConfig[]) => {
+  return bridge.saveTunnelSlots(slots);
+});
+ipcMain.handle("start-bridge-tunnel", (_event, slotId: string) => {
+  return bridge.startTunnelSlot(slotId);
+});
+ipcMain.handle("stop-bridge-tunnel", (_event, slotId: string) => {
+  return bridge.stopTunnelSlot(slotId);
+});
+ipcMain.handle("retarget-bridge-tunnel", (_event, slotId: string, targetPort: number) => {
+  return bridge.retargetTunnelSlot(slotId, targetPort);
+});
 ipcMain.handle(
   "set-bridge-auth-context",
   (_event, token: string | null, organizationId: string | null) => {
@@ -155,6 +179,9 @@ app.whenReady().then(() => {
   });
   bridge.onStatusChange((status) => {
     publishBridgeStatus(status);
+  });
+  bridge.onTunnelSlotsChange(() => {
+    publishBridgeTunnelSlots();
   });
   bridge.connect();
   createWindow();

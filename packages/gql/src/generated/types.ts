@@ -286,6 +286,7 @@ export type BridgeRuntime = {
   linkedCheckouts: Array<LinkedCheckoutStatus>;
   metadata?: Maybe<Scalars['JSON']['output']>;
   ownerUser: User;
+  tunnelSlots: Array<BridgeTunnelSlot>;
 };
 
 export type BridgeRuntimeAccess = {
@@ -304,6 +305,40 @@ export type BridgeRuntimeAccess = {
   scopeType?: Maybe<BridgeAccessScopeType>;
   sessionGroupId?: Maybe<Scalars['ID']['output']>;
 };
+
+export type BridgeTunnelActionResult = {
+  __typename?: 'BridgeTunnelActionResult';
+  error?: Maybe<Scalars['String']['output']>;
+  ok: Scalars['Boolean']['output'];
+  slot?: Maybe<BridgeTunnelSlot>;
+};
+
+export type BridgeTunnelMode =
+  | 'manual'
+  | 'trace_managed';
+
+export type BridgeTunnelProvider =
+  | 'custom'
+  | 'ngrok';
+
+export type BridgeTunnelSlot = {
+  __typename?: 'BridgeTunnelSlot';
+  id: Scalars['ID']['output'];
+  label: Scalars['String']['output'];
+  lastError?: Maybe<Scalars['String']['output']>;
+  mode: BridgeTunnelMode;
+  provider: BridgeTunnelProvider;
+  publicUrl: Scalars['String']['output'];
+  state: BridgeTunnelState;
+  targetPort?: Maybe<Scalars['Int']['output']>;
+  updatedAt: Scalars['DateTime']['output'];
+};
+
+export type BridgeTunnelState =
+  | 'configured'
+  | 'error'
+  | 'running'
+  | 'stopped';
 
 export type Channel = {
   __typename?: 'Channel';
@@ -397,6 +432,7 @@ export type ConnectionsRepoEntry = {
   linkedCheckout?: Maybe<LinkedCheckoutStatus>;
   repo: Repo;
   runScripts?: Maybe<Scalars['JSON']['output']>;
+  webPreview?: Maybe<WebPreview>;
 };
 
 export type CostBudget = {
@@ -442,6 +478,7 @@ export type CreateRepoInput = {
   name: Scalars['String']['input'];
   organizationId: Scalars['ID']['input'];
   remoteUrl: Scalars['String']['input'];
+  webPreviewPort?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type CreateTicketInput = {
@@ -719,6 +756,7 @@ export type Mutation = {
   reorderChannels: Array<Channel>;
   requestBridgeAccess: BridgeAccessRequest;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
+  retargetBridgeTunnel: BridgeTunnelActionResult;
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
   revokeBridgeAccessGrant: BridgeAccessGrant;
@@ -730,7 +768,9 @@ export type Mutation = {
   sendTurn: Turn;
   setApiToken: ApiTokenStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
+  startBridgeTunnel: BridgeTunnelActionResult;
   startSession: Session;
+  stopBridgeTunnel: BridgeTunnelActionResult;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
   terminateSession: Session;
@@ -1043,6 +1083,13 @@ export type MutationRestoreLinkedCheckoutArgs = {
 };
 
 
+export type MutationRetargetBridgeTunnelArgs = {
+  runtimeInstanceId: Scalars['ID']['input'];
+  slotId: Scalars['ID']['input'];
+  targetPort: Scalars['Int']['input'];
+};
+
+
 export type MutationRetrySessionConnectionArgs = {
   sessionId: Scalars['ID']['input'];
 };
@@ -1116,8 +1163,20 @@ export type MutationSetLinkedCheckoutAutoSyncArgs = {
 };
 
 
+export type MutationStartBridgeTunnelArgs = {
+  runtimeInstanceId: Scalars['ID']['input'];
+  slotId: Scalars['ID']['input'];
+};
+
+
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
+};
+
+
+export type MutationStopBridgeTunnelArgs = {
+  runtimeInstanceId: Scalars['ID']['input'];
+  slotId: Scalars['ID']['input'];
 };
 
 
@@ -1356,6 +1415,7 @@ export type Query = {
   sessionGroupFileAtRef: Scalars['String']['output'];
   sessionGroupFileContent: Scalars['String']['output'];
   sessionGroupFiles: Array<Scalars['String']['output']>;
+  sessionGroupWebPreview: WebPreview;
   sessionGroups: Array<SessionGroup>;
   sessionSlashCommands: Array<SlashCommand>;
   sessionTerminals: Array<Terminal>;
@@ -1599,6 +1659,11 @@ export type QuerySessionGroupFilesArgs = {
 };
 
 
+export type QuerySessionGroupWebPreviewArgs = {
+  sessionGroupId: Scalars['ID']['input'];
+};
+
+
 export type QuerySessionGroupsArgs = {
   archived?: InputMaybe<Scalars['Boolean']['input']>;
   channelId: Scalars['ID']['input'];
@@ -1672,6 +1737,7 @@ export type Repo = {
   projects: Array<Project>;
   remoteUrl: Scalars['String']['output'];
   sessions: Array<Session>;
+  webPreviewPort?: Maybe<Scalars['Int']['output']>;
   webhookActive: Scalars['Boolean']['output'];
 };
 
@@ -2030,6 +2096,7 @@ export type UpdateChannelInput = {
 export type UpdateRepoInput = {
   defaultBranch?: InputMaybe<Scalars['String']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
+  webPreviewPort?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type UpdateTicketInput = {
@@ -2053,3 +2120,26 @@ export type UserRole =
   | 'admin'
   | 'member'
   | 'observer';
+
+export type WebPreview = {
+  __typename?: 'WebPreview';
+  available: Scalars['Boolean']['output'];
+  canManageTunnel: Scalars['Boolean']['output'];
+  isOwner: Scalars['Boolean']['output'];
+  port?: Maybe<Scalars['Int']['output']>;
+  reason?: Maybe<WebPreviewReason>;
+  repo?: Maybe<Repo>;
+  runtimeInstanceId?: Maybe<Scalars['ID']['output']>;
+  sessionGroup?: Maybe<SessionGroup>;
+  slot?: Maybe<BridgeTunnelSlot>;
+  url?: Maybe<Scalars['String']['output']>;
+};
+
+export type WebPreviewReason =
+  | 'missing_repo'
+  | 'missing_repo_port'
+  | 'no_matching_tunnel'
+  | 'not_local_runtime'
+  | 'not_synced_to_main_worktree'
+  | 'runtime_disconnected'
+  | 'tunnel_inactive';

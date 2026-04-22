@@ -5,13 +5,16 @@ import { useRouter } from "expo-router";
 import { Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
-import type { ConnectionRepoEntry } from "@/hooks/useConnections";
+import type { ConnectionBridge, ConnectionRepoEntry } from "@/hooks/useConnections";
 import { ConnectionsRepoSyncActions } from "./ConnectionsRepoSyncActions";
+import { ConnectionsRepoPreviewActions } from "./ConnectionsRepoPreviewActions";
 
 export function ConnectionsRepoAccordion({
+  bridge,
   entry,
   onChanged,
 }: {
+  bridge: ConnectionBridge["bridge"];
   entry: ConnectionRepoEntry;
   onChanged: () => Promise<void>;
 }) {
@@ -83,6 +86,12 @@ export function ConnectionsRepoAccordion({
           {checkout?.isAttached && checkout.attachedSessionGroupId ? (
             <ConnectionsRepoSyncActions checkout={checkout} onChanged={onChanged} />
           ) : null}
+          {entry.webPreview?.url ? (
+            <Text variant="footnote" color="mutedForeground" numberOfLines={1}>
+              {entry.webPreview.url}
+            </Text>
+          ) : null}
+          <ConnectionsRepoPreviewActions bridge={bridge} entry={entry} onChanged={onChanged} />
         </View>
       ) : null}
     </View>

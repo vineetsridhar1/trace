@@ -33,7 +33,12 @@ import {
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
-import { getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
+import {
+  getOrCreateInstanceId,
+  getRepoConfig,
+  readConfig,
+  type BridgeTunnelSlotConfig,
+} from "./config.js";
 import {
   getLinkedCheckoutStatus,
   linkLinkedCheckoutRepo,
@@ -51,6 +56,8 @@ import {
   removeQueuedCheckpointFile,
   writeCheckpointContext,
 } from "./hook-runtime.js";
+import { BridgeTunnelManager } from "./bridge-tunnels.js";
+import type { BridgeTunnelSlot } from "@trace/shared";
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 const HOOK_QUEUE_FLUSH_INTERVAL_MS = 2_000;
@@ -160,6 +167,7 @@ export class BridgeClient implements IBridgeClient {
   private activeRuns = new Map<string, number>();
   private terminalManager: TerminalManager;
   private autoSyncManager: LinkedCheckoutAutoSyncManager;
+  private tunnelManager: BridgeTunnelManager;
 
   private gitExec: GitExecFn = (args, cwd) =>
     new Promise((resolve, reject) => {
@@ -184,6 +192,10 @@ export class BridgeClient implements IBridgeClient {
       LINKED_CHECKOUT_AUTO_SYNC_INTERVAL_MS,
     );
     setAutoSyncManager(this.autoSyncManager);
+    this.tunnelManager = new BridgeTunnelManager();
+    this.tunnelManager.subscribe((slots) => {
+      this.publishTunnelSlotsUpdated(slots);
+    });
   }
 
   connect() {
@@ -324,6 +336,30 @@ export class BridgeClient implements IBridgeClient {
     this.pendingInputToolUseIds.clear();
   }
 
+  getTunnelSlots(): BridgeTunnelSlot[] {
+    return this.tunnelManager.getSlotsSnapshot();
+  }
+
+  saveTunnelSlots(slots: BridgeTunnelSlotConfig[]): Promise<BridgeTunnelSlot[]> {
+    return this.tunnelManager.saveSlots(slots);
+  }
+
+  startTunnelSlot(slotId: string) {
+    return this.tunnelManager.startSlot(slotId);
+  }
+
+  stopTunnelSlot(slotId: string) {
+    return this.tunnelManager.stopSlot(slotId);
+  }
+
+  retargetTunnelSlot(slotId: string, targetPort: number) {
+    return this.tunnelManager.retargetSlot(slotId, targetPort);
+  }
+
+  onTunnelSlotsChange(listener: (slots: BridgeTunnelSlot[]) => void): () => void {
+    return this.tunnelManager.subscribe(listener);
+  }
+
   /**
    * Force an immediate reconnect — used after system wake to avoid waiting
    * for the stale WebSocket to time out on its own.
@@ -455,7 +491,16 @@ export class BridgeClient implements IBridgeClient {
       hostingMode: "local",
       supportedTools: ["claude_code", "codex", "custom"],
       registeredRepoIds: Object.keys(config.repos),
+      tunnelSlots: this.tunnelManager.getSlotsSnapshot(),
       activeTerminals: this.terminalManager.getActiveTerminals(),
+    });
+  }
+
+  publishTunnelSlotsUpdated(slots = this.tunnelManager.getSlotsSnapshot()) {
+    if (this.ws?.readyState !== WebSocket.OPEN) return;
+    this.send({
+      type: "bridge_tunnel_slots_updated",
+      tunnelSlots: slots,
     });
   }
 
@@ -1079,7 +1124,40 @@ export class BridgeClient implements IBridgeClient {
                 result,
               });
             });
+        });
+        break;
+      }
+      case "bridge_tunnel_start": {
+        void this.tunnelManager.startSlot(cmd.slotId).then((result) => {
+          this.send({
+            type: "bridge_tunnel_action_result",
+            requestId: cmd.requestId,
+            action: "start",
+            result,
           });
+        });
+        break;
+      }
+      case "bridge_tunnel_stop": {
+        void this.tunnelManager.stopSlot(cmd.slotId).then((result) => {
+          this.send({
+            type: "bridge_tunnel_action_result",
+            requestId: cmd.requestId,
+            action: "stop",
+            result,
+          });
+        });
+        break;
+      }
+      case "bridge_tunnel_retarget": {
+        void this.tunnelManager.retargetSlot(cmd.slotId, cmd.targetPort).then((result) => {
+          this.send({
+            type: "bridge_tunnel_action_result",
+            requestId: cmd.requestId,
+            action: "retarget",
+            result,
+          });
+        });
         break;
       }
       case "list_files": {

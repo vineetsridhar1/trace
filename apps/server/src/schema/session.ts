@@ -4,6 +4,7 @@ import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
+import { webPreviewService } from "../services/web-preview.js";
 import { BUILTIN_SLASH_COMMANDS, type BridgeSkillInfo } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { AuthenticationError } from "../lib/errors.js";
@@ -136,6 +137,14 @@ export const sessionQueries = {
       orgId,
       ctx.userId,
     );
+  },
+  sessionGroupWebPreview: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return webPreviewService.getSessionGroupPreview({
+      sessionGroupId: args.sessionGroupId,
+      organizationId: requireOrgContext(ctx),
+      userId: ctx.userId,
+    });
   },
   sessionSlashCommands: async (_: unknown, args: { sessionId: string }, ctx: Context) => {
     if (!ctx.userId) throw new AuthenticationError();

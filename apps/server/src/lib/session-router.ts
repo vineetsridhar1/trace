@@ -16,6 +16,8 @@ import type {
   BridgeSkillInfo,
   BridgeLinkedCheckoutStatus,
   BridgeLinkedCheckoutActionResultPayload,
+  BridgeTunnelSlot,
+  BridgeTunnelActionResultPayload,
 } from "@trace/shared";
 import { prisma } from "./db.js";
 import { apiTokenService } from "../services/api-token.js";
@@ -75,6 +77,8 @@ export interface RuntimeInstance {
    * answer without a per-call WebSocket round-trip.
    */
   linkedCheckouts: Map<string, BridgeLinkedCheckoutStatus>;
+  /** Last-known tunnel slots for this runtime, updated from hello + slot changes. */
+  tunnelSlots: Map<string, BridgeTunnelSlot>;
 }
 
 // --- SessionAdapter interface ---
@@ -357,6 +361,15 @@ export class SessionRouter {
       reject: (err: Error) => void;
     }
   >();
+  /** Pending bridge tunnel action requests: requestId → resolve/reject */
+  private pendingBridgeTunnelActionRequests = new Map<
+    string,
+    {
+      runtimeId: string;
+      resolve: (result: BridgeTunnelActionResultPayload) => void;
+      reject: (err: Error) => void;
+    }
+  >();
 
   /** Cloud adapter instance, initialized once CloudMachineService is available */
   private cloudAdapter: SessionAdapter | null = null;
@@ -379,11 +392,16 @@ export class SessionRouter {
     bridgeRuntimeId?: string;
     supportedTools: string[];
     registeredRepoIds?: string[];
+    tunnelSlots?: BridgeTunnelSlot[];
   }) {
     const existing = this.runtimes.get(runtime.id);
     const boundSessions = existing?.boundSessions ?? new Set<string>();
     const linkedCheckouts =
       existing?.linkedCheckouts ?? new Map<string, BridgeLinkedCheckoutStatus>();
+    const tunnelSlots =
+      runtime.tunnelSlots != null
+        ? new Map(runtime.tunnelSlots.map((slot) => [slot.id, slot]))
+        : (existing?.tunnelSlots ?? new Map<string, BridgeTunnelSlot>());
     if (existing && existing.ws !== runtime.ws) {
       runtimeDebug("replacing runtime websocket", {
         runtimeId: runtime.id,
@@ -401,6 +419,7 @@ export class SessionRouter {
       lastHeartbeat: Date.now(),
       boundSessions,
       linkedCheckouts,
+      tunnelSlots,
     });
     runtimeDebug("registered runtime", {
       runtimeId: runtime.id,
@@ -410,6 +429,7 @@ export class SessionRouter {
       ownerUserId: runtime.ownerUserId ?? null,
       supportedTools: runtime.supportedTools,
       registeredRepoIds: runtime.registeredRepoIds ?? [],
+      tunnelSlotIds: [...tunnelSlots.keys()],
       totalRuntimes: this.runtimes.size,
       runtimeIds: [...this.runtimes.keys()],
     });
@@ -451,6 +471,38 @@ export class SessionRouter {
       return;
     }
     runtimeDebug("repo already registered on runtime", { runtimeId, repoId });
+  }
+
+  updateTunnelSlots(runtimeId: string, tunnelSlots: BridgeTunnelSlot[], ws?: WebSocket): void {
+    const runtime = this.runtimes.get(runtimeId);
+    if (!runtime) {
+      runtimeDebug("bridge tunnel slots ignored for missing runtime", { runtimeId });
+      return;
+    }
+    if (ws && runtime.ws !== ws) {
+      runtimeDebug("bridge tunnel slots ignored for stale websocket", { runtimeId });
+      return;
+    }
+    runtime.tunnelSlots = new Map(tunnelSlots.map((slot) => [slot.id, slot]));
+  }
+
+  upsertTunnelSlot(runtimeId: string, slot: BridgeTunnelSlot, ws?: WebSocket): void {
+    const runtime = this.runtimes.get(runtimeId);
+    if (!runtime) {
+      runtimeDebug("bridge tunnel slot ignored for missing runtime", {
+        runtimeId,
+        slotId: slot.id,
+      });
+      return;
+    }
+    if (ws && runtime.ws !== ws) {
+      runtimeDebug("bridge tunnel slot ignored for stale websocket", {
+        runtimeId,
+        slotId: slot.id,
+      });
+      return;
+    }
+    runtime.tunnelSlots.set(slot.id, slot);
   }
 
   /**
@@ -687,6 +739,7 @@ export class SessionRouter {
       readyState: runtime.ws.readyState,
       lastHeartbeatAgeMs: now - runtime.lastHeartbeat,
       boundSessions: [...runtime.boundSessions],
+      tunnelSlotIds: [...runtime.tunnelSlots.keys()],
     }));
   }
 
@@ -1192,6 +1245,98 @@ export class SessionRouter {
     if (!pending) return;
     this.pendingLinkedCheckoutActionRequests.delete(requestId);
     if (result.status) this.cacheLinkedCheckoutStatus(pending.runtimeId, result.status);
+    pending.resolve(result);
+  }
+
+  private requestBridgeTunnelAction(
+    runtimeId: string,
+    command: Record<string, unknown>,
+    timeoutMs = 30_000,
+  ): Promise<BridgeTunnelActionResultPayload> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, {
+      ...command,
+      requestId,
+    });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<BridgeTunnelActionResultPayload>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingBridgeTunnelActionRequests.delete(requestId);
+        reject(new Error("Bridge tunnel action request timed out"));
+      }, timeoutMs);
+
+      this.pendingBridgeTunnelActionRequests.set(requestId, {
+        runtimeId,
+        resolve: (actionResult) => {
+          clearTimeout(timer);
+          resolve(actionResult);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  startBridgeTunnel(
+    runtimeId: string,
+    slotId: string,
+    timeoutMs = 30_000,
+  ): Promise<BridgeTunnelActionResultPayload> {
+    return this.requestBridgeTunnelAction(
+      runtimeId,
+      {
+        type: "bridge_tunnel_start",
+        slotId,
+      },
+      timeoutMs,
+    );
+  }
+
+  stopBridgeTunnel(
+    runtimeId: string,
+    slotId: string,
+    timeoutMs = 30_000,
+  ): Promise<BridgeTunnelActionResultPayload> {
+    return this.requestBridgeTunnelAction(
+      runtimeId,
+      {
+        type: "bridge_tunnel_stop",
+        slotId,
+      },
+      timeoutMs,
+    );
+  }
+
+  retargetBridgeTunnel(
+    runtimeId: string,
+    slotId: string,
+    targetPort: number,
+    timeoutMs = 30_000,
+  ): Promise<BridgeTunnelActionResultPayload> {
+    return this.requestBridgeTunnelAction(
+      runtimeId,
+      {
+        type: "bridge_tunnel_retarget",
+        slotId,
+        targetPort,
+      },
+      timeoutMs,
+    );
+  }
+
+  resolveBridgeTunnelActionRequest(
+    requestId: string,
+    result: BridgeTunnelActionResultPayload,
+  ): void {
+    const pending = this.pendingBridgeTunnelActionRequests.get(requestId);
+    if (!pending) return;
+    this.pendingBridgeTunnelActionRequests.delete(requestId);
+    if (result.slot) this.upsertTunnelSlot(pending.runtimeId, result.slot);
     pending.resolve(result);
   }
 

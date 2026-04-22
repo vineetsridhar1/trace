@@ -289,6 +289,7 @@ export type BridgeRuntime = {
   linkedCheckouts: Array<LinkedCheckoutStatus>;
   metadata?: Maybe<Scalars['JSON']['output']>;
   ownerUser: User;
+  tunnelSlots: Array<BridgeTunnelSlot>;
 };
 
 export type BridgeRuntimeAccess = {
@@ -307,6 +308,40 @@ export type BridgeRuntimeAccess = {
   scopeType?: Maybe<BridgeAccessScopeType>;
   sessionGroupId?: Maybe<Scalars['ID']['output']>;
 };
+
+export type BridgeTunnelActionResult = {
+  __typename?: 'BridgeTunnelActionResult';
+  error?: Maybe<Scalars['String']['output']>;
+  ok: Scalars['Boolean']['output'];
+  slot?: Maybe<BridgeTunnelSlot>;
+};
+
+export type BridgeTunnelMode =
+  | 'manual'
+  | 'trace_managed';
+
+export type BridgeTunnelProvider =
+  | 'custom'
+  | 'ngrok';
+
+export type BridgeTunnelSlot = {
+  __typename?: 'BridgeTunnelSlot';
+  id: Scalars['ID']['output'];
+  label: Scalars['String']['output'];
+  lastError?: Maybe<Scalars['String']['output']>;
+  mode: BridgeTunnelMode;
+  provider: BridgeTunnelProvider;
+  publicUrl: Scalars['String']['output'];
+  state: BridgeTunnelState;
+  targetPort?: Maybe<Scalars['Int']['output']>;
+  updatedAt: Scalars['DateTime']['output'];
+};
+
+export type BridgeTunnelState =
+  | 'configured'
+  | 'error'
+  | 'running'
+  | 'stopped';
 
 export type Channel = {
   __typename?: 'Channel';
@@ -400,6 +435,7 @@ export type ConnectionsRepoEntry = {
   linkedCheckout?: Maybe<LinkedCheckoutStatus>;
   repo: Repo;
   runScripts?: Maybe<Scalars['JSON']['output']>;
+  webPreview?: Maybe<WebPreview>;
 };
 
 export type CostBudget = {
@@ -445,6 +481,7 @@ export type CreateRepoInput = {
   name: Scalars['String']['input'];
   organizationId: Scalars['ID']['input'];
   remoteUrl: Scalars['String']['input'];
+  webPreviewPort?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type CreateTicketInput = {
@@ -722,6 +759,7 @@ export type Mutation = {
   reorderChannels: Array<Channel>;
   requestBridgeAccess: BridgeAccessRequest;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
+  retargetBridgeTunnel: BridgeTunnelActionResult;
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
   revokeBridgeAccessGrant: BridgeAccessGrant;
@@ -733,7 +771,9 @@ export type Mutation = {
   sendTurn: Turn;
   setApiToken: ApiTokenStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
+  startBridgeTunnel: BridgeTunnelActionResult;
   startSession: Session;
+  stopBridgeTunnel: BridgeTunnelActionResult;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
   terminateSession: Session;
@@ -1046,6 +1086,13 @@ export type MutationRestoreLinkedCheckoutArgs = {
 };
 
 
+export type MutationRetargetBridgeTunnelArgs = {
+  runtimeInstanceId: Scalars['ID']['input'];
+  slotId: Scalars['ID']['input'];
+  targetPort: Scalars['Int']['input'];
+};
+
+
 export type MutationRetrySessionConnectionArgs = {
   sessionId: Scalars['ID']['input'];
 };
@@ -1119,8 +1166,20 @@ export type MutationSetLinkedCheckoutAutoSyncArgs = {
 };
 
 
+export type MutationStartBridgeTunnelArgs = {
+  runtimeInstanceId: Scalars['ID']['input'];
+  slotId: Scalars['ID']['input'];
+};
+
+
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
+};
+
+
+export type MutationStopBridgeTunnelArgs = {
+  runtimeInstanceId: Scalars['ID']['input'];
+  slotId: Scalars['ID']['input'];
 };
 
 
@@ -1359,6 +1418,7 @@ export type Query = {
   sessionGroupFileAtRef: Scalars['String']['output'];
   sessionGroupFileContent: Scalars['String']['output'];
   sessionGroupFiles: Array<Scalars['String']['output']>;
+  sessionGroupWebPreview: WebPreview;
   sessionGroups: Array<SessionGroup>;
   sessionSlashCommands: Array<SlashCommand>;
   sessionTerminals: Array<Terminal>;
@@ -1602,6 +1662,11 @@ export type QuerySessionGroupFilesArgs = {
 };
 
 
+export type QuerySessionGroupWebPreviewArgs = {
+  sessionGroupId: Scalars['ID']['input'];
+};
+
+
 export type QuerySessionGroupsArgs = {
   archived?: InputMaybe<Scalars['Boolean']['input']>;
   channelId: Scalars['ID']['input'];
@@ -1675,6 +1740,7 @@ export type Repo = {
   projects: Array<Project>;
   remoteUrl: Scalars['String']['output'];
   sessions: Array<Session>;
+  webPreviewPort?: Maybe<Scalars['Int']['output']>;
   webhookActive: Scalars['Boolean']['output'];
 };
 
@@ -2033,6 +2099,7 @@ export type UpdateChannelInput = {
 export type UpdateRepoInput = {
   defaultBranch?: InputMaybe<Scalars['String']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
+  webPreviewPort?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type UpdateTicketInput = {
@@ -2056,6 +2123,29 @@ export type UserRole =
   | 'admin'
   | 'member'
   | 'observer';
+
+export type WebPreview = {
+  __typename?: 'WebPreview';
+  available: Scalars['Boolean']['output'];
+  canManageTunnel: Scalars['Boolean']['output'];
+  isOwner: Scalars['Boolean']['output'];
+  port?: Maybe<Scalars['Int']['output']>;
+  reason?: Maybe<WebPreviewReason>;
+  repo?: Maybe<Repo>;
+  runtimeInstanceId?: Maybe<Scalars['ID']['output']>;
+  sessionGroup?: Maybe<SessionGroup>;
+  slot?: Maybe<BridgeTunnelSlot>;
+  url?: Maybe<Scalars['String']['output']>;
+};
+
+export type WebPreviewReason =
+  | 'missing_repo'
+  | 'missing_repo_port'
+  | 'no_matching_tunnel'
+  | 'not_local_runtime'
+  | 'not_synced_to_main_worktree'
+  | 'runtime_disconnected'
+  | 'tunnel_inactive';
 
 export type WithIndex<TObject> = TObject & Record<string, any>;
 export type ResolversObject<TObject> = WithIndex<TObject>;
@@ -2159,6 +2249,11 @@ export type ResolversTypes = ResolversObject<{
   BridgeAccessScopeType: BridgeAccessScopeType;
   BridgeRuntime: ResolverTypeWrapper<BridgeRuntime>;
   BridgeRuntimeAccess: ResolverTypeWrapper<BridgeRuntimeAccess>;
+  BridgeTunnelActionResult: ResolverTypeWrapper<BridgeTunnelActionResult>;
+  BridgeTunnelMode: BridgeTunnelMode;
+  BridgeTunnelProvider: BridgeTunnelProvider;
+  BridgeTunnelSlot: ResolverTypeWrapper<BridgeTunnelSlot>;
+  BridgeTunnelState: BridgeTunnelState;
   Channel: ResolverTypeWrapper<Channel>;
   ChannelGroup: ResolverTypeWrapper<ChannelGroup>;
   ChannelMember: ResolverTypeWrapper<ChannelMember>;
@@ -2250,6 +2345,8 @@ export type ResolversTypes = ResolversObject<{
   UpdateTicketInput: UpdateTicketInput;
   User: ResolverTypeWrapper<User>;
   UserRole: UserRole;
+  WebPreview: ResolverTypeWrapper<WebPreview>;
+  WebPreviewReason: WebPreviewReason;
 }>;
 
 /** Mapping between all available schema types and the resolvers parents */
@@ -2275,6 +2372,8 @@ export type ResolversParentTypes = ResolversObject<{
   BridgeAccessRequest: BridgeAccessRequest;
   BridgeRuntime: BridgeRuntime;
   BridgeRuntimeAccess: BridgeRuntimeAccess;
+  BridgeTunnelActionResult: BridgeTunnelActionResult;
+  BridgeTunnelSlot: BridgeTunnelSlot;
   Channel: Channel;
   ChannelGroup: ChannelGroup;
   ChannelMember: ChannelMember;
@@ -2341,6 +2440,7 @@ export type ResolversParentTypes = ResolversObject<{
   UpdateRepoInput: UpdateRepoInput;
   UpdateTicketInput: UpdateTicketInput;
   User: User;
+  WebPreview: WebPreview;
 }>;
 
 export type ActorResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Actor'] = ResolversParentTypes['Actor']> = ResolversObject<{
@@ -2556,6 +2656,7 @@ export type BridgeRuntimeResolvers<ContextType = Context, ParentType extends Res
   linkedCheckouts?: Resolver<Array<ResolversTypes['LinkedCheckoutStatus']>, ParentType, ContextType>;
   metadata?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
   ownerUser?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
+  tunnelSlots?: Resolver<Array<ResolversTypes['BridgeTunnelSlot']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -2573,6 +2674,26 @@ export type BridgeRuntimeAccessResolvers<ContextType = Context, ParentType exten
   runtimeInstanceId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   scopeType?: Resolver<Maybe<ResolversTypes['BridgeAccessScopeType']>, ParentType, ContextType>;
   sessionGroupId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type BridgeTunnelActionResultResolvers<ContextType = Context, ParentType extends ResolversParentTypes['BridgeTunnelActionResult'] = ResolversParentTypes['BridgeTunnelActionResult']> = ResolversObject<{
+  error?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  ok?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  slot?: Resolver<Maybe<ResolversTypes['BridgeTunnelSlot']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type BridgeTunnelSlotResolvers<ContextType = Context, ParentType extends ResolversParentTypes['BridgeTunnelSlot'] = ResolversParentTypes['BridgeTunnelSlot']> = ResolversObject<{
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  label?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  lastError?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  mode?: Resolver<ResolversTypes['BridgeTunnelMode'], ParentType, ContextType>;
+  provider?: Resolver<ResolversTypes['BridgeTunnelProvider'], ParentType, ContextType>;
+  publicUrl?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  state?: Resolver<ResolversTypes['BridgeTunnelState'], ParentType, ContextType>;
+  targetPort?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -2639,6 +2760,7 @@ export type ConnectionsRepoEntryResolvers<ContextType = Context, ParentType exte
   linkedCheckout?: Resolver<Maybe<ResolversTypes['LinkedCheckoutStatus']>, ParentType, ContextType>;
   repo?: Resolver<ResolversTypes['Repo'], ParentType, ContextType>;
   runScripts?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
+  webPreview?: Resolver<Maybe<ResolversTypes['WebPreview']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -2800,6 +2922,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   reorderChannels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<MutationReorderChannelsArgs, 'input'>>;
   requestBridgeAccess?: Resolver<ResolversTypes['BridgeAccessRequest'], ParentType, ContextType, RequireFields<MutationRequestBridgeAccessArgs, 'runtimeInstanceId' | 'scopeType'>>;
   restoreLinkedCheckout?: Resolver<ResolversTypes['LinkedCheckoutActionResult'], ParentType, ContextType, RequireFields<MutationRestoreLinkedCheckoutArgs, 'repoId' | 'sessionGroupId'>>;
+  retargetBridgeTunnel?: Resolver<ResolversTypes['BridgeTunnelActionResult'], ParentType, ContextType, RequireFields<MutationRetargetBridgeTunnelArgs, 'runtimeInstanceId' | 'slotId' | 'targetPort'>>;
   retrySessionConnection?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRetrySessionConnectionArgs, 'sessionId'>>;
   retrySessionGroupSetup?: Resolver<ResolversTypes['SessionGroup'], ParentType, ContextType, RequireFields<MutationRetrySessionGroupSetupArgs, 'id'>>;
   revokeBridgeAccessGrant?: Resolver<ResolversTypes['BridgeAccessGrant'], ParentType, ContextType, RequireFields<MutationRevokeBridgeAccessGrantArgs, 'grantId'>>;
@@ -2811,7 +2934,9 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   sendTurn?: Resolver<ResolversTypes['Turn'], ParentType, ContextType, RequireFields<MutationSendTurnArgs, 'branchId' | 'content'>>;
   setApiToken?: Resolver<ResolversTypes['ApiTokenStatus'], ParentType, ContextType, RequireFields<MutationSetApiTokenArgs, 'input'>>;
   setLinkedCheckoutAutoSync?: Resolver<ResolversTypes['LinkedCheckoutActionResult'], ParentType, ContextType, RequireFields<MutationSetLinkedCheckoutAutoSyncArgs, 'enabled' | 'repoId' | 'sessionGroupId'>>;
+  startBridgeTunnel?: Resolver<ResolversTypes['BridgeTunnelActionResult'], ParentType, ContextType, RequireFields<MutationStartBridgeTunnelArgs, 'runtimeInstanceId' | 'slotId'>>;
   startSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationStartSessionArgs, 'input'>>;
+  stopBridgeTunnel?: Resolver<ResolversTypes['BridgeTunnelActionResult'], ParentType, ContextType, RequireFields<MutationStopBridgeTunnelArgs, 'runtimeInstanceId' | 'slotId'>>;
   subscribe?: Resolver<ResolversTypes['Participant'], ParentType, ContextType, RequireFields<MutationSubscribeArgs, 'scopeId' | 'scopeType'>>;
   syncLinkedCheckout?: Resolver<ResolversTypes['LinkedCheckoutActionResult'], ParentType, ContextType, RequireFields<MutationSyncLinkedCheckoutArgs, 'branch' | 'repoId' | 'sessionGroupId'>>;
   terminateSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationTerminateSessionArgs, 'id'>>;
@@ -2933,6 +3058,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   sessionGroupFileAtRef?: Resolver<ResolversTypes['String'], ParentType, ContextType, RequireFields<QuerySessionGroupFileAtRefArgs, 'filePath' | 'ref' | 'sessionGroupId'>>;
   sessionGroupFileContent?: Resolver<ResolversTypes['String'], ParentType, ContextType, RequireFields<QuerySessionGroupFileContentArgs, 'filePath' | 'sessionGroupId'>>;
   sessionGroupFiles?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType, RequireFields<QuerySessionGroupFilesArgs, 'sessionGroupId'>>;
+  sessionGroupWebPreview?: Resolver<ResolversTypes['WebPreview'], ParentType, ContextType, RequireFields<QuerySessionGroupWebPreviewArgs, 'sessionGroupId'>>;
   sessionGroups?: Resolver<Array<ResolversTypes['SessionGroup']>, ParentType, ContextType, RequireFields<QuerySessionGroupsArgs, 'channelId'>>;
   sessionSlashCommands?: Resolver<Array<ResolversTypes['SlashCommand']>, ParentType, ContextType, RequireFields<QuerySessionSlashCommandsArgs, 'sessionId'>>;
   sessionTerminals?: Resolver<Array<ResolversTypes['Terminal']>, ParentType, ContextType, RequireFields<QuerySessionTerminalsArgs, 'sessionId'>>;
@@ -2960,6 +3086,7 @@ export type RepoResolvers<ContextType = Context, ParentType extends ResolversPar
   projects?: Resolver<Array<ResolversTypes['Project']>, ParentType, ContextType>;
   remoteUrl?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType>;
+  webPreviewPort?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
   webhookActive?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
@@ -3145,6 +3272,20 @@ export type UserResolvers<ContextType = Context, ParentType extends ResolversPar
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type WebPreviewResolvers<ContextType = Context, ParentType extends ResolversParentTypes['WebPreview'] = ResolversParentTypes['WebPreview']> = ResolversObject<{
+  available?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  canManageTunnel?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  isOwner?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  port?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
+  reason?: Resolver<Maybe<ResolversTypes['WebPreviewReason']>, ParentType, ContextType>;
+  repo?: Resolver<Maybe<ResolversTypes['Repo']>, ParentType, ContextType>;
+  runtimeInstanceId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
+  sessionGroup?: Resolver<Maybe<ResolversTypes['SessionGroup']>, ParentType, ContextType>;
+  slot?: Resolver<Maybe<ResolversTypes['BridgeTunnelSlot']>, ParentType, ContextType>;
+  url?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type Resolvers<ContextType = Context> = ResolversObject<{
   Actor?: ActorResolvers<ContextType>;
   AgentBudgetStatus?: AgentBudgetStatusResolvers<ContextType>;
@@ -3165,6 +3306,8 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   BridgeAccessRequest?: BridgeAccessRequestResolvers<ContextType>;
   BridgeRuntime?: BridgeRuntimeResolvers<ContextType>;
   BridgeRuntimeAccess?: BridgeRuntimeAccessResolvers<ContextType>;
+  BridgeTunnelActionResult?: BridgeTunnelActionResultResolvers<ContextType>;
+  BridgeTunnelSlot?: BridgeTunnelSlotResolvers<ContextType>;
   Channel?: ChannelResolvers<ContextType>;
   ChannelGroup?: ChannelGroupResolvers<ContextType>;
   ChannelMember?: ChannelMemberResolvers<ContextType>;
@@ -3206,5 +3349,6 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   TicketLink?: TicketLinkResolvers<ContextType>;
   Turn?: TurnResolvers<ContextType>;
   User?: UserResolvers<ContextType>;
+  WebPreview?: WebPreviewResolvers<ContextType>;
 }>;
 

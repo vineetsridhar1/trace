@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import type {
   BridgeLinkedCheckoutStatus,
   BridgeLinkedCheckoutActionResultPayload,
+  BridgeTunnelActionResultPayload,
   GitCheckpointContext,
 } from "@trace/shared";
 import { sessionRouter } from "./session-router.js";
@@ -10,6 +11,10 @@ import { sessionService } from "../services/session.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { terminalRelay } from "./terminal-relay.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
+import {
+  readBridgeTunnelSlotsFromMetadata,
+  serializeBridgeTunnelSlotsForPrisma,
+} from "./bridge-tunnels.js";
 
 /** Grace period before marking sessions disconnected — allows fast reconnects */
 const DISCONNECT_GRACE_MS = 10_000;
@@ -67,6 +72,18 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
     queues.set(sessionId, next);
   }
 
+  async function persistTunnelSlotsSnapshot(currentRuntimeId: string): Promise<void> {
+    if (bridgeAuth?.kind !== "local") return;
+    const runtime = sessionRouter.getRuntime(currentRuntimeId);
+    if (!runtime) return;
+    await runtimeAccessService.updateTunnelSlotsSnapshot({
+      instanceId: currentRuntimeId,
+      organizationId: bridgeAuth.organizationId,
+      ownerUserId: bridgeAuth.userId,
+      tunnelSlots: [...runtime.tunnelSlots.values()],
+    });
+  }
+
   ws.on("message", (raw: Buffer | string) => {
     try {
       const msg = JSON.parse(raw.toString());
@@ -82,6 +99,9 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             "custom",
           ];
           const registeredRepoIds = (msg.registeredRepoIds as string[]) ?? [];
+          const tunnelSlots = readBridgeTunnelSlotsFromMetadata({
+            tunnelSlots: msg.tunnelSlots,
+          });
 
           runtimeDebug("received runtime_hello", {
             oldId,
@@ -90,6 +110,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             hostingMode,
             supportedTools,
             registeredRepoIds,
+            tunnelSlots,
             authKind: bridgeAuth?.kind ?? "unknown",
           });
 
@@ -112,6 +133,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               metadata: {
                 supportedTools,
                 registeredRepoIds,
+                tunnelSlots: serializeBridgeTunnelSlotsForPrisma(tunnelSlots),
               },
             });
 
@@ -131,6 +153,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               bridgeRuntimeId: bridgeRuntime.id,
               supportedTools,
               registeredRepoIds,
+              tunnelSlots,
             });
 
             if (existingRuntime && existingRuntime.ws !== ws) {
@@ -155,6 +178,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               hostingMode,
               supportedTools,
               registeredRepoIds,
+              tunnelSlots,
             });
 
             if (existingRuntime && existingRuntime.ws !== ws) {
@@ -241,6 +265,28 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           msg.requestId,
           msg.result as BridgeLinkedCheckoutActionResultPayload,
         );
+        return;
+      }
+
+      if (msg.type === "bridge_tunnel_slots_updated") {
+        const tunnelSlots = readBridgeTunnelSlotsFromMetadata({
+          tunnelSlots: msg.tunnelSlots,
+        });
+        sessionRouter.updateTunnelSlots(runtimeId, tunnelSlots, ws);
+        void persistTunnelSlotsSnapshot(runtimeId).catch((error) => {
+          console.error("[bridge] failed to persist tunnel slot snapshot:", error);
+        });
+        return;
+      }
+
+      if (msg.type === "bridge_tunnel_action_result" && typeof msg.requestId === "string") {
+        sessionRouter.resolveBridgeTunnelActionRequest(
+          msg.requestId,
+          msg.result as BridgeTunnelActionResultPayload,
+        );
+        void persistTunnelSlotsSnapshot(runtimeId).catch((error) => {
+          console.error("[bridge] failed to persist tunnel slot snapshot:", error);
+        });
         return;
       }
 

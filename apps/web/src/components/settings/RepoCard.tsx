@@ -10,6 +10,7 @@ import {
 import { Button } from "../ui/button";
 import { BranchCombobox } from "../channel/BranchCombobox";
 import { RepoDesktopSection } from "./RepoDesktopSection";
+import { RepoWebPreviewPortField } from "./RepoWebPreviewPortField";
 
 const isElectron = typeof window.trace?.getRepoConfig === "function";
 
@@ -149,6 +150,8 @@ export function RepoCard({ id, desktopRefreshKey }: { key?: React.Key; id: strin
           {webhookError && (
             <p className="mt-2 text-xs text-destructive">{webhookError}</p>
           )}
+
+          <RepoWebPreviewPortField repoId={id} />
 
           {isElectron && (
             <RepoDesktopSection repoId={id} desktopRefreshKey={desktopRefreshKey} />
