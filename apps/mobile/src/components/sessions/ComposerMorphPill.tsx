@@ -34,6 +34,13 @@ export interface ComposerMorphPillItem {
   key: string;
   label: string;
   systemIcon?: SFSymbol;
+  /**
+   * Optional trailing icon, rendered in the slot used by the selection
+   * checkmark when the row isn't selected. Useful for warnings on disabled
+   * rows (e.g. "repo not linked").
+   */
+  trailingIcon?: SFSymbol;
+  trailingIconTint?: string;
   selected?: boolean;
   disabled?: boolean;
   onPress?: () => void;
@@ -350,6 +357,14 @@ function MenuContent({
               name="checkmark"
               size={14}
               tintColor={theme.colors.foreground}
+              resizeMode="scaleAspectFit"
+              style={styles.checkIcon}
+            />
+          ) : item.trailingIcon ? (
+            <SymbolView
+              name={item.trailingIcon}
+              size={14}
+              tintColor={item.trailingIconTint ?? theme.colors.mutedForeground}
               resizeMode="scaleAspectFit"
               style={styles.checkIcon}
             />
