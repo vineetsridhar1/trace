@@ -14,13 +14,11 @@ export function useLongPress({
   onLongPress,
   rowSelector = "[row-id]",
   groupPrefix = "row-group-",
-  disabled = false,
 }: {
   ref: RefObject<HTMLElement | null>;
   onLongPress: (rowId: string) => void;
   rowSelector?: string;
   groupPrefix?: string;
-  disabled?: boolean;
 }) {
   const firedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -28,7 +26,7 @@ export function useLongPress({
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || disabled) return;
+    if (!el) return;
 
     const clear = () => {
       if (timerRef.current) {
@@ -51,8 +49,6 @@ export function useLongPress({
 
       timerRef.current = setTimeout(() => {
         firedRef.current = true;
-        window.getSelection()?.removeAllRanges();
-        navigator.vibrate?.(10);
         onLongPress(rowId);
       }, LONG_PRESS_MS);
     };
@@ -68,17 +64,10 @@ export function useLongPress({
       }
     };
 
-    const onContextMenu = (e: Event) => {
-      if (firedRef.current) {
-        e.preventDefault();
-      }
-    };
-
     el.addEventListener("touchstart", onTouchStart, { passive: true });
     el.addEventListener("touchmove", onTouchMove, { passive: true });
     el.addEventListener("touchend", clear);
     el.addEventListener("touchcancel", clear);
-    el.addEventListener("contextmenu", onContextMenu);
 
     return () => {
       clear();
@@ -86,9 +75,8 @@ export function useLongPress({
       el.removeEventListener("touchmove", onTouchMove);
       el.removeEventListener("touchend", clear);
       el.removeEventListener("touchcancel", clear);
-      el.removeEventListener("contextmenu", onContextMenu);
     };
-  }, [ref, onLongPress, rowSelector, groupPrefix, disabled]);
+  }, [ref, onLongPress, rowSelector, groupPrefix]);
 
   return firedRef;
 }

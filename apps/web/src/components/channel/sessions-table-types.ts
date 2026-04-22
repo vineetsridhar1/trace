@@ -5,7 +5,6 @@ export type SessionGroupRow = SessionGroupEntity & {
   displaySessionStatus: string;
   displayAgentStatus: string;
   latestSession?: SessionEntity;
-  latestMessageSession?: SessionEntity;
   createdBySession?: SessionEntity;
   _groupLastMessageAt?: string;
   _sortTimestamp?: string;

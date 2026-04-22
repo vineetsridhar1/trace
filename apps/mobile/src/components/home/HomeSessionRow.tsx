@@ -4,7 +4,9 @@ import Animated from "react-native-reanimated";
 import ContextMenu from "react-native-context-menu-view";
 import { useEntityField } from "@trace/client-core";
 import { Text } from "@/components/design-system";
+import { SessionContextPreview } from "@/components/channels/SessionContextPreview";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
+import { useSessionPreviewMessage } from "@/hooks/useSessionPreviewMessage";
 import { haptic } from "@/lib/haptics";
 import { usePressScale } from "@/lib/motion";
 import { prefetchSessionPlayer, tryOpenSessionPlayer } from "@/lib/sessionPlayer";
@@ -32,6 +34,17 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
   const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt");
   const updatedAt = useEntityField("sessions", sessionId, "updatedAt");
   const prUrl = useEntityField("sessions", sessionId, "prUrl");
+  const timestamp = lastMessageAt ?? updatedAt ?? null;
+  const channelName = (channel as { name?: string } | null | undefined)?.name ?? null;
+  const {
+    loading: previewLoading,
+    message: previewMessage,
+    warmPreview,
+  } = useSessionPreviewMessage({
+    sessionId,
+    cachedPreview: lastEventPreview,
+    fallbackTimestamp: timestamp,
+  });
 
   const handlePress = useCallback(() => {
     void haptic.light();
@@ -58,15 +71,27 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
   const handlePressIn = useCallback(() => {
     onPressInScale();
     prefetchSessionPlayer(sessionId);
-  }, [onPressInScale, sessionId]);
+    void warmPreview();
+  }, [onPressInScale, sessionId, warmPreview]);
 
   if (!name) return null;
 
-  const timestamp = lastMessageAt ?? updatedAt ?? null;
-  const channelName = (channel as { name?: string } | null | undefined)?.name ?? null;
-
   return (
-    <ContextMenu actions={actions} onPress={onMenuPress} preview={null}>
+    <ContextMenu
+      actions={actions}
+      onPress={onMenuPress}
+      onPreviewPress={handlePress}
+      preview={
+        <SessionContextPreview
+          loading={previewLoading}
+          message={previewMessage}
+          subtitle={branch ?? (channelName ? `#${channelName}` : null)}
+          title={name}
+        />
+      }
+      previewBackgroundColor="transparent"
+      borderRadius={theme.radius.lg}
+    >
       <Animated.View style={pressScaleStyle}>
         <Pressable
           accessibilityRole="button"
@@ -111,14 +136,14 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
                 {branch}
               </Text>
             ) : null}
-            {lastEventPreview ? (
+            {previewMessage?.text ? (
               <Text
                 variant="footnote"
                 color="mutedForeground"
                 numberOfLines={1}
                 style={styles.preview}
               >
-                {lastEventPreview}
+                {previewMessage.text}
               </Text>
             ) : null}
           </View>

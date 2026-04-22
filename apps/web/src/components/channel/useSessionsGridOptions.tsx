@@ -18,23 +18,18 @@ export function useSessionsGridOptions({
   getContextMenuItems,
   isCompact,
   onGridReady,
-  shouldSuppressRowClick,
 }: {
   channelId: string;
   filterStorageKey: string;
   getContextMenuItems: (params: GetContextMenuItemsParams<SessionGroupRow>) => (DefaultMenuItem | MenuItemDef<SessionGroupRow>)[];
   isCompact: boolean;
   onGridReady?: (event: GridReadyEvent<SessionGroupRow>) => void;
-  shouldSuppressRowClick?: () => boolean;
 }) {
   return {
     onRowClicked: (event: {
       node: { group?: boolean; expanded?: boolean; setExpanded: (v: boolean) => void };
       data?: SessionGroupRow;
     }) => {
-      if (shouldSuppressRowClick?.()) {
-        return;
-      }
       if (event.node.group) {
         event.node.setExpanded(!event.node.expanded);
         return;

@@ -11,6 +11,7 @@ import {
   useEntityField,
 } from "@trace/client-core";
 import { Chip, Text } from "@/components/design-system";
+import { SessionContextPreview } from "@/components/channels/SessionContextPreview";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
@@ -18,8 +19,13 @@ import { usePressScale } from "@/lib/motion";
 import { prefetchSessionPlayer, tryOpenSessionPlayer } from "@/lib/sessionPlayer";
 import { useTheme } from "@/theme";
 import { useLatestSessionIdForGroup } from "@/hooks/useChannelSessionGroups";
+import { useSessionPreviewMessage } from "@/hooks/useSessionPreviewMessage";
 import { CHIP_LABELS, mapStatusToChipVariant } from "@/lib/sessionGroupStatus";
 import { timeAgo } from "@/lib/time";
+
+// Passing onLongPress to Pressable suppresses onPress when the user holds
+// long enough for the native context menu to take over.
+const noop = () => {};
 
 export interface SessionGroupRowProps {
   groupId: string;
@@ -45,6 +51,15 @@ export const SessionGroupRow = memo(function SessionGroupRow({
     latestSessionId ?? "",
     "_lastEventPreview",
   );
+  const {
+    loading: previewLoading,
+    message: previewMessage,
+    warmPreview,
+  } = useSessionPreviewMessage({
+    sessionId: latestSessionId,
+    cachedPreview: lastEventPreview,
+    fallbackTimestamp: lastMessageAt ?? updatedAt ?? null,
+  });
 
   const handlePress = useCallback(() => {
     if (!latestSessionId) return;
@@ -112,7 +127,8 @@ export const SessionGroupRow = memo(function SessionGroupRow({
   const handlePressIn = useCallback(() => {
     onPressInScale();
     if (latestSessionId) prefetchSessionPlayer(latestSessionId);
-  }, [onPressInScale, latestSessionId]);
+    void warmPreview();
+  }, [onPressInScale, latestSessionId, warmPreview]);
 
   if (!name) return null;
 
@@ -120,12 +136,28 @@ export const SessionGroupRow = memo(function SessionGroupRow({
   const timestamp = lastMessageAt ?? updatedAt ?? null;
 
   return (
-    <ContextMenu actions={actions} onPress={handleMenuPress} preview={null}>
+    <ContextMenu
+      actions={actions}
+      onPress={handleMenuPress}
+      onPreviewPress={handlePress}
+      preview={
+        <SessionContextPreview
+          loading={previewLoading}
+          message={previewMessage}
+          subtitle={branch}
+          title={name}
+        />
+      }
+      previewBackgroundColor="transparent"
+      borderRadius={theme.radius.lg}
+    >
       <Animated.View style={pressScaleStyle}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={name}
           onPress={handlePress}
+          onLongPress={noop}
+          delayLongPress={250}
           onPressIn={handlePressIn}
           onPressOut={onPressOut}
           style={({ pressed }) => [
@@ -159,14 +191,14 @@ export const SessionGroupRow = memo(function SessionGroupRow({
                 {branch}
               </Text>
             ) : null}
-            {lastEventPreview ? (
+            {previewMessage?.text ? (
               <Text
                 variant="footnote"
                 color="mutedForeground"
                 numberOfLines={1}
                 style={styles.preview}
               >
-                {lastEventPreview}
+                {previewMessage.text}
               </Text>
             ) : null}
           </View>

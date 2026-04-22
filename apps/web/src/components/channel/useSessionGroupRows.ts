@@ -59,9 +59,6 @@ function buildRowSignature(row: SessionGroupRow): string {
     latestSession?.updatedAt ?? "",
     latestSession?._sortTimestamp ?? "",
     latestSession?.lastMessageAt ?? "",
-    row.latestMessageSession?.id ?? "",
-    row.latestMessageSession?.lastMessageAt ?? "",
-    row.latestMessageSession?._lastEventPreview ?? "",
     latestSession?.agentStatus ?? "",
     latestSession?.sessionStatus ?? "",
     latestRepo?.id ?? "",
@@ -140,7 +137,6 @@ export function useSessionGroupRows(
         const row = {
           ...group,
           latestSession,
-          latestMessageSession,
           createdBySession,
           displaySessionStatus,
           displayAgentStatus,
