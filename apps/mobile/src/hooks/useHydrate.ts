@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import { gql } from "@urql/core";
 import {
@@ -12,6 +12,7 @@ import type { Channel, ChannelGroup, Event, Session } from "@trace/gql";
 import { isUnauthorized } from "@/lib/auth";
 import { timedEventIngest } from "@/lib/perf";
 import { getClient } from "@/lib/urql";
+import { useConnectionStore, type ConnectionState } from "@/stores/connection";
 
 const ORGANIZATION_QUERY = gql`
   query MobileOrganization($id: ID!) {
@@ -192,7 +193,25 @@ export function useHydrate(activeOrgId: string | null): void {
     };
   }, [activeOrgId, logout]);
 
-  // Re-fetch /auth/me on app foreground if it's been more than 24h.
+  // Catch up list-level state (sessions, channels, unread counts) after a WS
+  // reconnect: the server's in-memory pubsub has no replay, so events emitted
+  // while the socket was down are lost to the live subscription.
+  const reconnectCounter = useConnectionStore(
+    (s: ConnectionState) => s.reconnectCounter,
+  );
+  const baselineReconnectCounter = useRef(reconnectCounter);
+  useEffect(() => {
+    if (!activeOrgId) return;
+    if (reconnectCounter <= baselineReconnectCounter.current) return;
+    baselineReconnectCounter.current = reconnectCounter;
+    refreshOrgData(activeOrgId).catch((err: unknown) => {
+      console.warn("[hydrate] reconnect refresh failed", err);
+    });
+  }, [reconnectCounter, activeOrgId]);
+
+  // Re-fetch /auth/me on app foreground if it's been more than 24h since any
+  // successful request. Unrelated to WS state — this is a periodic auth-staleness
+  // check, independent of the reconnect-driven data refresh above.
   useEffect(() => {
     function onChange(state: AppStateStatus) {
       if (state !== "active") return;
