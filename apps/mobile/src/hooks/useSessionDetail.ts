@@ -1,10 +1,6 @@
 import { useEffect } from "react";
 import { gql } from "@urql/core";
-import {
-  useEntityStore,
-  type SessionEntity,
-  type SessionGroupEntity,
-} from "@trace/client-core";
+import { useEntityStore, type SessionEntity, type SessionGroupEntity } from "@trace/client-core";
 import type { QueuedMessage, Session } from "@trace/gql";
 import { getClient } from "@/lib/urql";
 import { fetchSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
@@ -82,6 +78,7 @@ const SESSION_DETAIL_QUERY = gql`
       }
       channel {
         id
+        name
       }
       createdAt
       updatedAt
@@ -96,9 +93,7 @@ type FetchedSession = Session & {
 };
 
 async function doFetchSessionDetail(sessionId: string): Promise<void> {
-  const result = await getClient()
-    .query(SESSION_DETAIL_QUERY, { id: sessionId })
-    .toPromise();
+  const result = await getClient().query(SESSION_DETAIL_QUERY, { id: sessionId }).toPromise();
   const fetched = result.data?.session as FetchedSession | null | undefined;
   if (result.error || !fetched) return;
 
@@ -149,8 +144,7 @@ async function doFetchSessionDetail(sessionId: string): Promise<void> {
   // detail fetch so the Session Player has its header data without waiting
   // for overlay mount. `fetchSessionGroupDetail` is itself deduped, so this
   // is a no-op if the group has already been fetched.
-  const groupIdAfterUpsert =
-    fetched.sessionGroupId ?? fetched.sessionGroup?.id ?? null;
+  const groupIdAfterUpsert = fetched.sessionGroupId ?? fetched.sessionGroup?.id ?? null;
   if (groupIdAfterUpsert) {
     void fetchSessionGroupDetail(groupIdAfterUpsert);
   }
