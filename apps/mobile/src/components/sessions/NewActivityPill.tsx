@@ -55,7 +55,7 @@ export function NewActivityPill({ count, visible, onPress, bottomOffset = 0 }: N
         onPress={handlePress}
         hitSlop={8}
       >
-        <Glass preset="card" style={styles.pill}>
+        <Glass preset="input" style={styles.pill}>
           <View style={[styles.content, { paddingHorizontal: theme.spacing.md }]}>
             <SymbolView
               name="arrow.down"
