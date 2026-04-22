@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -15,13 +15,15 @@ interface NewActivityPillProps {
   count: number;
   visible: boolean;
   onPress: () => void;
+  /** Distance from the bottom of the parent to the top of the composer. */
+  bottomOffset?: number;
 }
 
 /**
  * Floating pill that appears above the session input composer when new events
  * arrive while the user has scrolled up. Tap to jump to the bottom.
  */
-export function NewActivityPill({ count, visible, onPress }: NewActivityPillProps) {
+export function NewActivityPill({ count, visible, onPress, bottomOffset = 0 }: NewActivityPillProps) {
   const theme = useTheme();
   const progress = useSharedValue(0);
 
@@ -33,7 +35,6 @@ export function NewActivityPill({ count, visible, onPress }: NewActivityPillProp
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
-    transform: [{ translateY: (1 - progress.value) * 16 }, { scale: 0.96 + progress.value * 0.04 }],
   }));
 
   function handlePress() {
@@ -44,26 +45,27 @@ export function NewActivityPill({ count, visible, onPress }: NewActivityPillProp
   const label = `${count} new`;
 
   return (
-    <Animated.View pointerEvents={visible ? "auto" : "none"} style={[styles.wrapper, animatedStyle]}>
+    <Animated.View
+      pointerEvents={visible ? "auto" : "none"}
+      style={[styles.wrapper, { bottom: bottomOffset + 8 }, animatedStyle]}
+    >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Jump to new activity: ${label}`}
         onPress={handlePress}
         hitSlop={8}
       >
-        <Glass preset="card" style={styles.pill}>
-          <View style={[styles.content, { paddingHorizontal: theme.spacing.md }]}>
-            <SymbolView
-              name="arrow.down"
-              size={14}
-              tintColor={theme.colors.foreground}
-              resizeMode="scaleAspectFit"
-              style={styles.icon}
-            />
-            <Text variant="footnote" color="foreground">
-              {label}
-            </Text>
-          </View>
+        <Glass preset="input" style={[styles.pill, { paddingHorizontal: theme.spacing.md }]}>
+          <SymbolView
+            name="arrow.down"
+            size={14}
+            tintColor={theme.colors.foreground}
+            resizeMode="scaleAspectFit"
+            style={styles.icon}
+          />
+          <Text variant="footnote" color="foreground">
+            {label}
+          </Text>
         </Glass>
       </Pressable>
     </Animated.View>
@@ -73,18 +75,16 @@ export function NewActivityPill({ count, visible, onPress }: NewActivityPillProp
 const styles = StyleSheet.create({
   wrapper: {
     position: "absolute",
-    right: 16,
-    bottom: 0,
-    alignItems: "flex-end",
+    left: 16,
+    alignItems: "flex-start",
   },
   pill: {
-    overflow: "hidden",
-  },
-  content: {
+    height: 32,
+    borderRadius: 999,
     flexDirection: "row",
     alignItems: "center",
-    height: 32,
     gap: 6,
+    overflow: "hidden",
   },
   icon: {
     width: 14,
