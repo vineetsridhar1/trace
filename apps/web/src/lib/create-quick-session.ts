@@ -22,6 +22,7 @@ import {
   registerOptimisticSessionRedirect,
 } from "../stores/ui";
 import { getDefaultModel } from "../components/session/modelOptions";
+import { isLocalMode } from "./runtime-mode";
 
 /**
  * Resolve the best runtime for a new session based on user preference.
@@ -36,7 +37,7 @@ async function resolveDefaultRuntime(
   hosting: "cloud" | "local";
 }> {
   const pref = usePreferencesStore.getState().defaultHosting;
-  if (pref === "cloud") {
+  if (!isLocalMode && pref === "cloud") {
     return { runtimeInstanceId: undefined, hosting: "cloud" };
   }
 
@@ -53,7 +54,7 @@ async function resolveDefaultRuntime(
   } catch {
     // Fall through to cloud
   }
-  return { runtimeInstanceId: undefined, hosting: "cloud" };
+  return { runtimeInstanceId: undefined, hosting: isLocalMode ? "local" : "cloud" };
 }
 
 /**
@@ -83,7 +84,7 @@ export async function createQuickSession(channelId: string): Promise<void> {
   // Generate temp IDs and navigate immediately
   const tempSessionId = generateUUID();
   const tempGroupId = generateUUID();
-  const assumedHosting = prefHosting === "cloud" ? "cloud" : "local";
+  const assumedHosting = isLocalMode ? "local" : (prefHosting === "cloud" ? "cloud" : "local");
 
   optimisticallyInsertSessionGroup({
     id: tempGroupId,
@@ -114,14 +115,17 @@ export async function createQuickSession(channelId: string): Promise<void> {
   // Fire mutation in background, reconcile when done
   try {
     const { runtimeInstanceId, hosting } = await resolveDefaultRuntime(prefTool, channelRepoId);
-    const isCloud = !runtimeInstanceId || hosting === "cloud";
+    const isCloud = !isLocalMode && (!runtimeInstanceId || hosting === "cloud");
+    if (isLocalMode && !runtimeInstanceId) {
+      throw new Error("No connected local runtime available");
+    }
 
     const result = await client
       .mutation(START_SESSION_MUTATION, {
         input: {
           tool: prefTool,
           model: prefModel ?? undefined,
-          hosting: isCloud ? "cloud" : undefined,
+          hosting: isCloud ? "cloud" : (isLocalMode ? "local" : undefined),
           runtimeInstanceId: isCloud ? undefined : runtimeInstanceId,
           channelId,
           repoId: channelRepoId ?? undefined,

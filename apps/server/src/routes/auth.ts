@@ -2,6 +2,11 @@ import { Router, type Router as RouterType, type Request, type Response } from "
 import jwt from "jsonwebtoken";
 import { prisma } from "../lib/db.js";
 import { createBridgeAuthToken, getRequestToken, verifyToken } from "../lib/auth.js";
+import { isLocalMode } from "../lib/mode.js";
+import {
+  ensureLocalUserWorkspace,
+  normalizeLocalLoginName,
+} from "../services/local-bootstrap.js";
 
 const router: RouterType = Router();
 
@@ -78,8 +83,42 @@ function escapeJsString(value: string): string {
     .replace(/\u2029/g, "\\u2029");
 }
 
+function setSessionCookie(res: Response, token: string): void {
+  res.cookie("trace_token", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    path: "/",
+  });
+}
+
+router.post("/auth/local/login", async (req: Request, res: Response) => {
+  if (!isLocalMode()) {
+    return res.status(404).json({ error: "Local login is only available in local mode" });
+  }
+
+  const rawName = typeof req.body?.name === "string" ? req.body.name : "";
+  const name = normalizeLocalLoginName(rawName);
+  if (name.length < 2) {
+    return res.status(400).json({ error: "Name must be at least 2 characters" });
+  }
+
+  const { user, organizationId } = await ensureLocalUserWorkspace(name);
+  const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "30d" });
+  setSessionCookie(res, token);
+  res.json({
+    token,
+    organizationId,
+    user,
+  });
+});
+
 // Redirect to GitHub OAuth
 router.get("/auth/github", (req: Request, res: Response) => {
+  if (isLocalMode()) {
+    return res.status(404).json({ error: "GitHub auth is disabled in local mode" });
+  }
   const origin = req.query.origin as string | undefined;
   const params = new URLSearchParams({
     client_id: GITHUB_CLIENT_ID,
@@ -94,6 +133,9 @@ router.get("/auth/github", (req: Request, res: Response) => {
 
 // GitHub OAuth callback
 router.get("/auth/github/callback", async (req: Request, res: Response) => {
+  if (isLocalMode()) {
+    return res.status(404).json({ error: "GitHub auth is disabled in local mode" });
+  }
   const { code } = req.query;
   if (!code || typeof code !== "string") {
     return res.status(400).json({ error: "Missing code parameter" });
@@ -186,13 +228,7 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
       { expiresIn: "7d" },
     );
 
-    res.cookie("trace_token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: "/",
-    });
+    setSessionCookie(res, token);
 
     const origin = resolveStateOrigin(req.query.state);
 

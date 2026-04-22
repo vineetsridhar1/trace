@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { useEntityStore } from "@trace/client-core";
 import { useOnboardingStore } from "../stores/onboarding";
+import { isLocalMode } from "../lib/runtime-mode";
 
 export interface OnboardingStatus {
   loading: boolean;
@@ -30,6 +31,7 @@ export function useOnboardingStatus(): OnboardingStatus {
   const channelCount = useEntityStore((s) => Object.keys(s.channels).length);
 
   useEffect(() => {
+    if (isLocalMode) return;
     if (!tokensLoaded) void fetchApiTokens();
   }, [tokensLoaded, fetchApiTokens]);
 
@@ -41,14 +43,18 @@ export function useOnboardingStatus(): OnboardingStatus {
 
   const hasRepo = repoCount > 0;
   const hasChannel = channelCount > 0;
-  const completedCount = [anthropicSet, githubSet, hasRepo, hasChannel].filter(Boolean).length;
-  const totalCount = 4;
+  const effectiveAnthropicSet = isLocalMode ? true : anthropicSet;
+  const effectiveGithubSet = isLocalMode ? true : githubSet;
+  const completedCount = isLocalMode
+    ? [hasRepo, hasChannel].filter(Boolean).length
+    : [effectiveAnthropicSet, effectiveGithubSet, hasRepo, hasChannel].filter(Boolean).length;
+  const totalCount = isLocalMode ? 2 : 4;
   const allDone = completedCount === totalCount;
 
   return {
-    loading: tokensLoading && !tokensLoaded,
-    anthropicSet,
-    githubSet,
+    loading: isLocalMode ? false : tokensLoading && !tokensLoaded,
+    anthropicSet: effectiveAnthropicSet,
+    githubSet: effectiveGithubSet,
     hasRepo,
     hasChannel,
     allDone,

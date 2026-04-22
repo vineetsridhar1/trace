@@ -5,6 +5,7 @@ import { useUIStore, type UIState } from "../../stores/ui";
 import type { OnboardingStatus } from "../../hooks/useOnboardingStatus";
 import { BrowseChannelsDialog } from "../sidebar/BrowseChannelsDialog";
 import { CreateChannelDialog } from "../sidebar/CreateChannelDialog";
+import { isLocalMode } from "../../lib/runtime-mode";
 
 type IconComponent = typeof Key;
 
@@ -33,20 +34,24 @@ export function OnboardingChecklist({ status }: Props) {
       </div>
 
       <div className="space-y-2">
-        <SimpleRow
-          done={status.anthropicSet}
-          icon={Key}
-          title="Add your Anthropic API key"
-          description="Required to power Claude Code sessions."
-          onClick={() => openSettings("api-keys")}
-        />
-        <SimpleRow
-          done={status.githubSet}
-          icon={Github}
-          title="Add a GitHub token"
-          description="Used for repository access in cloud sessions."
-          onClick={() => openSettings("api-keys")}
-        />
+        {!isLocalMode && (
+          <SimpleRow
+            done={status.anthropicSet}
+            icon={Key}
+            title="Add your Anthropic API key"
+            description="Required to power Claude Code sessions."
+            onClick={() => openSettings("api-keys")}
+          />
+        )}
+        {!isLocalMode && (
+          <SimpleRow
+            done={status.githubSet}
+            icon={Github}
+            title="Add a GitHub token"
+            description="Used for repository access in cloud sessions."
+            onClick={() => openSettings("api-keys")}
+          />
+        )}
         <SimpleRow
           done={status.hasRepo}
           icon={GitBranch}

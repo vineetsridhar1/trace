@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, GitBranch, Bot, SlidersHorizontal, Bell, Key, Users, Code, MonitorCog } from "lucide-react";
 import { useUIStore } from "../../stores/ui";
 import { Button } from "../ui/button";
@@ -12,6 +12,7 @@ import { ApiTokensSection } from "./ApiTokensSection";
 import { MembersSection } from "./MembersSection";
 import { ChannelsSection } from "./ChannelsSection";
 import { BridgeAccessSection } from "./BridgeAccessSection";
+import { isLocalMode } from "../../lib/runtime-mode";
 
 type SettingsTab =
   | "repositories"
@@ -45,13 +46,32 @@ export function SettingsPage() {
   const settingsInitialTab = useUIStore((s) => s.settingsInitialTab);
   const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
   const [activeTab, setActiveTab] = useState<SettingsTab>("repositories");
+  const visibleTabs = useMemo(
+    () =>
+      TABS.filter((tab) => {
+        if (tab.id === "ai") return !isLocalMode;
+        if (tab.id === "api-keys") return !isLocalMode;
+        return true;
+      }),
+    [],
+  );
 
   useEffect(() => {
-    if (isSettingsTab(settingsInitialTab)) {
+    if (
+      isSettingsTab(settingsInitialTab) &&
+      visibleTabs.some((tab) => tab.id === settingsInitialTab)
+    ) {
       setActiveTab(settingsInitialTab);
-      setSettingsInitialTab(null);
     }
-  }, [settingsInitialTab, setSettingsInitialTab]);
+    setSettingsInitialTab(null);
+  }, [settingsInitialTab, setSettingsInitialTab, visibleTabs]);
+
+  useEffect(() => {
+    if (!visibleTabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab(visibleTabs[0]?.id ?? "repositories");
+    }
+  }, [activeTab, visibleTabs]);
+
   const contentWidthClass =
     activeTab === "members" ||
     activeTab === "repositories" ||
@@ -78,7 +98,7 @@ export function SettingsPage() {
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <nav className="shrink-0 border-b border-border bg-surface-deep/50 p-3 md:w-52 md:border-b-0 md:border-r">
           <ul className="flex gap-1 overflow-x-auto md:block md:space-y-0.5">
-            {TABS.map((tab) => (
+            {visibleTabs.map((tab) => (
               <li key={tab.id}>
                 <button
                   onClick={() => setActiveTab(tab.id)}

@@ -11,6 +11,7 @@ import { useEntityField } from "@trace/client-core";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { cn } from "../../lib/utils";
+import { isLocalMode } from "../../lib/runtime-mode";
 
 interface PlanResponseBarProps {
   sessionId: string;
@@ -32,6 +33,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
   const branch = useEntityField("sessions", sessionId, "branch") as string | undefined;
+  const defaultHosting = hosting ?? (isLocalMode ? "local" : "cloud");
 
   const handleClearContext = useCallback(async () => {
     if (sending || !sessionGroupId) return;
@@ -43,7 +45,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
           input: {
             tool: tool ?? "claude_code",
             model,
-            hosting: hosting ?? "cloud",
+            hosting: defaultHosting,
             channelId: channel?.id,
             repoId: repo?.id,
             branch,
@@ -61,7 +63,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
           sessionGroupId,
           tool: tool ?? "claude_code",
           model,
-          hosting: hosting ?? "cloud",
+          hosting: defaultHosting,
           channel,
           repo,
           branch,
@@ -74,7 +76,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
     } finally {
       setSending(false);
     }
-  }, [sending, sessionGroupId, planContent, tool, model, hosting, channel?.id, repo?.id, branch, sessionId, openSessionTab]);
+  }, [sending, sessionGroupId, planContent, tool, model, defaultHosting, channel?.id, repo?.id, branch, sessionId, openSessionTab]);
 
   const handleKeepContext = useCallback(async () => {
     if (sending) return;

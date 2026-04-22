@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./redis.js", async () => {
   const { createRedisMock } = await import("../../test/helpers.js");
@@ -8,18 +8,32 @@ vi.mock("./redis.js", async () => {
   };
 });
 
-import { redis, redisSub } from "./redis.js";
-import { pubsub, topics } from "./pubsub.js";
-
-const redisMock = redis as any;
-const redisSubMock = redisSub as any;
+let pubsub: typeof import("./pubsub.js").pubsub;
+let topics: typeof import("./pubsub.js").topics;
+let redisMock: any;
+let redisSubMock: any;
 
 describe("pubsub", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.unstubAllEnvs();
+
+    const redisModule = await import("./redis.js");
+    const pubsubModule = await import("./pubsub.js");
+
+    pubsub = pubsubModule.pubsub;
+    topics = pubsubModule.topics;
+    redisMock = redisModule.redis as any;
+    redisSubMock = redisModule.redisSub as any;
+
     vi.clearAllMocks();
     redisMock.publish.mockResolvedValue(undefined);
     redisSubMock.subscribe.mockResolvedValue(undefined);
     redisSubMock.unsubscribe.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("publishes serialized payloads to redis", () => {

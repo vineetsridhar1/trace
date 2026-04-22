@@ -20,6 +20,7 @@ vi.mock("../lib/db.js", async () => {
 });
 
 import { prisma } from "../lib/db.js";
+import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import {
   authRouter,
   createOAuthStateToken,
@@ -32,6 +33,7 @@ type PrismaMock = ReturnType<typeof import("../../test/helpers.js").createPrisma
   user: ReturnType<typeof import("../../test/helpers.js").createPrismaMock>["user"] & {
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
+    upsert: ReturnType<typeof vi.fn>;
   };
 };
 const prismaMock = prisma as unknown as PrismaMock;
@@ -55,6 +57,103 @@ describe("oauth state token", () => {
 
   it("rejects unsigned / garbage input", () => {
     expect(verifyOAuthStateToken("not-a-jwt")).toBeNull();
+  });
+});
+
+describe("local login", () => {
+  let server: Server;
+  let baseUrl: string;
+
+  beforeEach(async () => {
+    vi.stubEnv("TRACE_LOCAL_MODE", "1");
+
+    const app = express();
+    app.use(express.json());
+    app.use(authRouter);
+
+    server = createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const { port } = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${port}`;
+
+    prismaMock.organization.findFirst.mockResolvedValue({
+      id: "org-1",
+      name: "Trace",
+    });
+    prismaMock.user.upsert
+      .mockResolvedValueOnce({
+        id: TRACE_AI_USER_ID,
+        email: "ai@trace.dev",
+        name: "Trace AI",
+        avatarUrl: null,
+      })
+      .mockResolvedValueOnce({
+        id: "user-1",
+        email: "jane-developer@trace.local",
+        name: "Jane Developer",
+        avatarUrl: null,
+      });
+    prismaMock.orgMember.upsert.mockResolvedValue({});
+    prismaMock.channel.findFirst.mockResolvedValue(null);
+    prismaMock.channel.create.mockResolvedValue({ id: "channel-1" });
+  });
+
+  afterEach(async () => {
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
+    vi.unstubAllEnvs();
+  });
+
+  it("creates a local session token and bootstrap records", async () => {
+    const res = await fetch(`${baseUrl}/auth/local/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Jane Developer" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { token: string; organizationId: string };
+    expect(jwt.verify(body.token, JWT_SECRET)).toMatchObject({ userId: "user-1" });
+    expect(body.organizationId).toBe("org-1");
+    expect(prismaMock.user.upsert).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { email: "jane-developer@trace.local" },
+      }),
+    );
+    expect(prismaMock.orgMember.upsert).toHaveBeenCalledWith({
+      where: {
+        userId_organizationId: {
+          userId: "user-1",
+          organizationId: "org-1",
+        },
+      },
+      update: { role: "admin" },
+      create: {
+        userId: "user-1",
+        organizationId: "org-1",
+        role: "admin",
+      },
+    });
+    expect(prismaMock.channel.create).toHaveBeenCalledWith({
+      data: {
+        name: "General",
+        organizationId: "org-1",
+        type: "coding",
+      },
+    });
+  });
+
+  it("rejects short names", async () => {
+    const res = await fetch(`${baseUrl}/auth/local/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: " " }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(prismaMock.user.upsert).not.toHaveBeenCalled();
   });
 });
 

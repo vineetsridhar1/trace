@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../lib/db.js", async () => {
   const { createPrismaMock } = await import("../../test/helpers.js");
@@ -65,10 +65,14 @@ vi.mock("../lib/runtime-debug.js", () => ({
   runtimeDebug: vi.fn(),
 }));
 
-vi.mock("@trace/shared", async () => {
-  const actual = await vi.importActual<typeof import("@trace/shared")>("@trace/shared");
+vi.mock("../lib/storage/index.js", () => ({
+  storage: {
+    getGetUrl: vi.fn(async (key: string) => `https://example.test/${key}`),
+  },
+}));
+
+vi.mock("@trace/shared", () => {
   return {
-    ...actual,
     getDefaultModel: vi.fn().mockReturnValue("claude-sonnet-4-20250514"),
     isSupportedModel: vi.fn().mockReturnValue(true),
     hasQuestionBlock: vi.fn().mockReturnValue(false),
@@ -224,6 +228,10 @@ describe("SessionService", () => {
     });
     prismaMock.channel.findUnique.mockResolvedValue(null);
     prismaMock.gitCheckpoint.findUnique.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   describe("isFullyUnloadedSession", () => {
@@ -2401,6 +2409,15 @@ describe("SessionService", () => {
   });
 
   describe("moveToCloud", () => {
+    it("rejects cloud moves in local mode", async () => {
+      vi.stubEnv("TRACE_LOCAL_MODE", "1");
+
+      await expect(service.moveToCloud("session-1", "org-1", "user", "user-1")).rejects.toThrow(
+        "Cloud sessions are disabled in local mode",
+      );
+      expect(prismaMock.session.findFirstOrThrow).not.toHaveBeenCalled();
+    });
+
     it("creates the cloud session inside the same group", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({

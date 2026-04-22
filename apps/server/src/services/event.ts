@@ -3,6 +3,7 @@ import type { ScopeType, EventType, ActorType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { redis } from "../lib/redis.js";
+import { isLocalMode } from "../lib/mode.js";
 
 export interface CreateEventInput {
   organizationId: string;
@@ -175,6 +176,7 @@ export class EventService {
   }
 
   private appendToStream(organizationId: string, event: { id: string } & Record<string, unknown>) {
+    if (isLocalMode()) return;
     const streamKey = `stream:org:${organizationId}:events`;
     redis
       .xadd(streamKey, "*", "event", JSON.stringify(event))

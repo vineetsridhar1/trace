@@ -1,28 +1,23 @@
 import { redis, redisSub } from "./redis.js";
+import { isLocalMode } from "./mode.js";
 
-/**
- * Redis-backed pub-sub for event broadcasting.
- * Drop-in replacement for the previous EventEmitter-based implementation.
- * Supports multi-process communication (server + agent worker).
- */
-class PubSub {
-  private subscriptions = new Map<string, Set<(payload: unknown) => void>>();
+type SubscriptionHandler = (payload: unknown) => void;
 
-  /**
-   * Publish a payload to a topic. Serializes to JSON and sends via Redis.
-   */
-  publish<T>(topic: string, payload: T): void {
-    redis.publish(topic, JSON.stringify(payload)).catch((err: Error) => {
-      console.error(`[pubsub] publish error on topic ${topic}:`, err.message);
-    });
-  }
+interface TracePubSub {
+  init(): void;
+  publish<T>(topic: string, payload: T): void;
+  asyncIterator<T>(topic: string): AsyncIterableIterator<T>;
+}
 
-  /**
-   * Returns an AsyncIterableIterator for use in GraphQL subscription resolvers.
-   * Each call creates a dedicated listener on the Redis subscriber connection.
-   */
+abstract class BasePubSub implements TracePubSub {
+  protected subscriptions = new Map<string, Set<SubscriptionHandler>>();
+
+  publish<T>(_topic: string, _payload: T): void {}
+
+  init(): void {}
+
   asyncIterator<T>(topic: string): AsyncIterableIterator<T> {
-    const pullQueue: ((value: IteratorResult<T>) => void)[] = [];
+    const pullQueue: Array<(value: IteratorResult<T>) => void> = [];
     const pushQueue: T[] = [];
     let done = false;
 
@@ -36,26 +31,22 @@ class PubSub {
       }
     };
 
-    // Track this handler so the shared message listener can dispatch to it
-    let handlers = this.subscriptions.get(topic);
-    if (!handlers) {
-      handlers = new Set();
-      this.subscriptions.set(topic, handlers);
-      // First subscriber for this topic — tell Redis to subscribe
-      redisSub.subscribe(topic).catch((err: Error) => {
-        console.error(`[pubsub] subscribe error on topic ${topic}:`, err.message);
-      });
+    const existingHandlers = this.subscriptions.get(topic);
+    if (existingHandlers) {
+      existingHandlers.add(handler);
+    } else {
+      this.subscriptions.set(topic, new Set([handler]));
+      this.onFirstSubscriber(topic);
     }
-    handlers.add(handler);
 
     const cleanup = () => {
       done = true;
-      const h = this.subscriptions.get(topic);
-      if (h) {
-        h.delete(handler);
-        if (h.size === 0) {
+      const handlers = this.subscriptions.get(topic);
+      if (handlers) {
+        handlers.delete(handler);
+        if (handlers.size === 0) {
           this.subscriptions.delete(topic);
-          redisSub.unsubscribe(topic).catch(() => {});
+          this.onLastSubscriber(topic);
         }
       }
       for (const resolve of pullQueue) {
@@ -69,7 +60,7 @@ class PubSub {
       next(): Promise<IteratorResult<T>> {
         if (done) return Promise.resolve({ value: undefined as T, done: true });
         const value = pushQueue.shift();
-        if (value) return Promise.resolve({ value, done: false });
+        if (value !== undefined) return Promise.resolve({ value, done: false });
         return new Promise((resolve) => pullQueue.push(resolve));
       },
       return(): Promise<IteratorResult<T>> {
@@ -86,27 +77,60 @@ class PubSub {
     };
   }
 
-  /**
-   * Initialize the shared message listener on the subscriber connection.
-   * Call once at server startup after Redis is connected.
-   */
-  init(): void {
-    redisSub.on("message", (channel: string, message: string) => {
-      const handlers = this.subscriptions.get(channel);
-      if (!handlers || handlers.size === 0) return;
-      try {
-        const payload = JSON.parse(message);
-        for (const handler of handlers) {
-          handler(payload);
-        }
-      } catch (err) {
-        console.error(`[pubsub] failed to parse message on ${channel}:`, err);
-      }
-    });
+  protected dispatch(topic: string, payload: unknown): void {
+    const handlers = this.subscriptions.get(topic);
+    if (!handlers || handlers.size === 0) return;
+    for (const handler of handlers) {
+      handler(payload);
+    }
+  }
+
+  protected onFirstSubscriber(_topic: string): void {}
+
+  protected onLastSubscriber(_topic: string): void {}
+}
+
+class MemoryPubSub extends BasePubSub {
+  override publish<T>(topic: string, payload: T): void {
+    this.dispatch(topic, payload);
   }
 }
 
-export const pubsub = new PubSub();
+class RedisPubSub extends BasePubSub {
+  private initialized = false;
+
+  private readonly messageHandler = (channel: string, message: string) => {
+    try {
+      this.dispatch(channel, JSON.parse(message));
+    } catch (err) {
+      console.error(`[pubsub] failed to parse message on ${channel}:`, err);
+    }
+  };
+
+  override publish<T>(topic: string, payload: T): void {
+    redis.publish(topic, JSON.stringify(payload)).catch((err: Error) => {
+      console.error(`[pubsub] publish error on topic ${topic}:`, err.message);
+    });
+  }
+
+  override init(): void {
+    if (this.initialized) return;
+    this.initialized = true;
+    redisSub.on("message", this.messageHandler);
+  }
+
+  protected override onFirstSubscriber(topic: string): void {
+    redisSub.subscribe(topic).catch((err: Error) => {
+      console.error(`[pubsub] subscribe error on topic ${topic}:`, err.message);
+    });
+  }
+
+  protected override onLastSubscriber(topic: string): void {
+    redisSub.unsubscribe(topic).catch(() => {});
+  }
+}
+
+export const pubsub: TracePubSub = isLocalMode() ? new MemoryPubSub() : new RedisPubSub();
 
 // Standard topic builders
 export const topics = {

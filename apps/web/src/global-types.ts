@@ -3,6 +3,7 @@ declare global {
     readonly DEV?: boolean;
     readonly VITE_API_URL?: string;
     readonly VITE_WS_URL?: string;
+    readonly VITE_TRACE_LOCAL_MODE?: string;
     readonly VITE_AG_GRID_LICENSE_KEY?: string;
     readonly VITE_ENABLE_MESSAGING?: string;
     readonly VITE_ENABLE_TICKETS?: string;

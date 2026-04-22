@@ -12,6 +12,9 @@ import { getModelsForTool, getDefaultModel, getModelLabel } from "./modelOptions
 import { CLOUD_RUNTIME_ID } from "./RuntimeSelector";
 import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
 import { cn } from "../../lib/utils";
+import { isLocalMode } from "../../lib/runtime-mode";
+
+const UNBOUND_LOCAL_RUNTIME_ID = "__unbound_local__";
 
 const TOOL_LABELS: Record<string, string> = {
   claude_code: "Claude Code",
@@ -58,8 +61,10 @@ export function SessionInputOptions({
 
   const runtimeLabel = connection?.runtimeLabel ?? null;
   const runtimeInstanceId = connection?.runtimeInstanceId ?? null;
-  const isCloud = hosting === "cloud";
-  const currentRuntimeValue = isCloud ? CLOUD_RUNTIME_ID : (runtimeInstanceId ?? CLOUD_RUNTIME_ID);
+  const isCloud = !isLocalMode && hosting === "cloud";
+  const currentRuntimeValue = isLocalMode
+    ? (runtimeInstanceId ?? UNBOUND_LOCAL_RUNTIME_ID)
+    : (isCloud ? CLOUD_RUNTIME_ID : (runtimeInstanceId ?? CLOUD_RUNTIME_ID));
 
   // Fetch runtimes when not_started so user can switch
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
@@ -122,7 +127,9 @@ export function SessionInputOptions({
     async (value: string | null) => {
       if (isOptimistic || value === currentRuntimeValue) return;
       if (!value) return;
-      const newIsCloud = value === CLOUD_RUNTIME_ID;
+      if (isLocalMode && value === UNBOUND_LOCAL_RUNTIME_ID) return;
+
+      const newIsCloud = !isLocalMode && value === CLOUD_RUNTIME_ID;
       const rt = runtimes.find((r: SessionRuntimeInstance) => r.id === value);
       const nextConnection: SessionConnection = {
         __typename: connection?.__typename ?? "SessionConnection",
@@ -146,7 +153,7 @@ export function SessionInputOptions({
         const result = await client
           .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
             sessionId,
-            hosting: newIsCloud ? "cloud" : undefined,
+            hosting: newIsCloud ? "cloud" : (isLocalMode ? "local" : undefined),
             runtimeInstanceId: newIsCloud ? undefined : value,
           })
           .toPromise();
@@ -248,6 +255,10 @@ export function SessionInputOptions({
                   <>
                     <Cloud size={12} className="text-blue-400" /> Cloud
                   </>
+                ) : !runtimeInstanceId ? (
+                  <>
+                    <AlertTriangle size={12} className="text-amber-500" /> No local runtime
+                  </>
                 ) : (
                   <>
                     <Monitor size={12} className="text-green-400" /> {runtimeLabel ?? "Local"}
@@ -257,11 +268,20 @@ export function SessionInputOptions({
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={CLOUD_RUNTIME_ID}>
-              <span className="flex items-center gap-1.5">
-                <Cloud size={12} className="text-blue-400" /> Cloud
-              </span>
-            </SelectItem>
+            {!isLocalMode && (
+              <SelectItem value={CLOUD_RUNTIME_ID}>
+                <span className="flex items-center gap-1.5">
+                  <Cloud size={12} className="text-blue-400" /> Cloud
+                </span>
+              </SelectItem>
+            )}
+            {isLocalMode && !runtimeInstanceId && (
+              <SelectItem value={UNBOUND_LOCAL_RUNTIME_ID} disabled>
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <AlertTriangle size={12} className="text-amber-500" /> No local runtime
+                </span>
+              </SelectItem>
+            )}
             {runtimes
               .filter((r: SessionRuntimeInstance) => r.hostingMode === "local" && r.connected)
               .map((r: SessionRuntimeInstance) => {

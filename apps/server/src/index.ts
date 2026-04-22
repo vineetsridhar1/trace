@@ -29,6 +29,7 @@ import { handleTerminalConnection } from "./lib/terminal-handler.js";
 import { connectRedis, disconnectRedis } from "./lib/redis.js";
 import { pubsub } from "./lib/pubsub.js";
 import { runtimeAccessService } from "./services/runtime-access.js";
+import { isLocalMode } from "./lib/mode.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -38,6 +39,7 @@ async function main() {
   const httpServer = createServer(app);
   const schema = makeExecutableSchema({ typeDefs, resolvers });
   const PORT = Number(process.env.PORT) || 4000 + Number(process.env.TRACE_PORT || 0);
+  const localMode = isLocalMode();
   let startupReady = false;
 
   app.get("/health", (_req: express.Request, res: express.Response) => {
@@ -45,8 +47,10 @@ async function main() {
   });
 
   // Initialize cloud machine service and inject into session router
-  const cloudMachineService = new CloudMachineService(flyProvider, "fly");
-  sessionRouter.setCloudMachineService(cloudMachineService);
+  const cloudMachineService = localMode ? null : new CloudMachineService(flyProvider, "fly");
+  if (cloudMachineService) {
+    sessionRouter.setCloudMachineService(cloudMachineService);
+  }
 
   app.use(
     cors({
@@ -143,6 +147,11 @@ async function main() {
         const bridgeReq = req as IncomingMessage & BridgeConnectionRequest;
 
         if (cloudToken) {
+          if (!cloudMachineService) {
+            socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+            socket.destroy();
+            return;
+          }
           if (!(await cloudMachineService.isValidBridgeToken(cloudToken))) {
             socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
             socket.destroy();
@@ -216,20 +225,24 @@ async function main() {
   });
 
   // Connect Redis and initialize pub/sub message listener after binding the health check port.
-  try {
-    await connectRedis();
-    pubsub.init();
-  } catch {
-    const url = process.env.REDIS_URL ?? "redis://localhost:6379";
-    console.error(`\n[redis] Failed to connect to Redis at ${url}`);
-    console.error(
-      "[redis] Start Redis locally, for example: docker run -d --name trace-redis -p 6379:6379 redis:7-alpine\n",
-    );
-    process.exit(1);
+  if (!localMode) {
+    try {
+      await connectRedis();
+      pubsub.init();
+    } catch {
+      const url = process.env.REDIS_URL ?? "redis://localhost:6379";
+      console.error(`\n[redis] Failed to connect to Redis at ${url}`);
+      console.error(
+        "[redis] Start Redis locally, for example: docker run -d --name trace-redis -p 6379:6379 redis:7-alpine\n",
+      );
+      process.exit(1);
+    }
   }
 
   // Restore cloud machine state from DB
-  await cloudMachineService.restoreFromDb();
+  if (cloudMachineService) {
+    await cloudMachineService.restoreFromDb();
+  }
 
   startupReady = true;
 }

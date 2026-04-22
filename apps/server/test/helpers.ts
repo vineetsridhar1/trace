@@ -32,12 +32,21 @@ export function createPubsubMock() {
 
 export function createPrismaMock() {
   const prisma = {
+    organization: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      upsert: vi.fn(),
+      update: vi.fn(),
+    },
     $transaction: vi.fn(),
     user: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       findMany: vi.fn(),
+      upsert: vi.fn(),
     },
     orgMember: {
       count: vi.fn(),
@@ -210,6 +219,7 @@ export function createPrismaMock() {
     },
     channel: {
       create: vi.fn(),
+      count: vi.fn(),
       findFirst: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       findMany: vi.fn(),

@@ -25,6 +25,7 @@ import {
   type SessionGroupStatus as DerivedSessionGroupStatus,
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
+import { isLocalMode } from "../lib/mode.js";
 
 export type StartSessionServiceInput = StartSessionInput & {
   sessionGroupId?: string | null;
@@ -1318,8 +1319,16 @@ export class SessionService {
             .slice(0, MAX_SESSION_NAME_LENGTH)
         : `Session ${new Date().toLocaleString()}`;
 
-    // Resolve hosting mode: if a runtime is specified, derive from it; otherwise use explicit value or default to cloud
-    let hosting = input.hosting ?? sourceSession?.hosting ?? "cloud";
+    // Resolve hosting mode: if a runtime is specified, derive from it; otherwise
+    // default to local in TRACE_LOCAL_MODE and cloud everywhere else.
+    if (isLocalMode() && input.hosting === "cloud") {
+      throw new Error("Cloud sessions are disabled in local mode");
+    }
+
+    let hosting = input.hosting ?? sourceSession?.hosting ?? (isLocalMode() ? "local" : "cloud");
+    if (isLocalMode() && hosting === "cloud") {
+      hosting = "local";
+    }
     let runtimeLabel: string | undefined;
     let requestedRuntimeInstanceId =
       input.runtimeInstanceId ?? sharedRuntimeInstanceId ?? restoreGroupRuntimeInstanceId ?? null;
@@ -2016,6 +2025,9 @@ export class SessionService {
       prev.agentStatus === "not_started" &&
       (config.hosting != null || config.runtimeInstanceId != null);
     if (runtimeChanged) {
+      if (isLocalMode() && config.hosting === "cloud") {
+        throw new Error("Cloud sessions are disabled in local mode");
+      }
       let newHosting = config.hosting ?? prev.hosting;
       let runtimeInstanceId: string | undefined;
       let runtimeLabel: string | undefined;
@@ -4121,6 +4133,10 @@ export class SessionService {
     actorType: ActorType,
     actorId: string,
   ) {
+    if (isLocalMode()) {
+      throw new Error("Cloud sessions are disabled in local mode");
+    }
+
     const session = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
       include: { ...SESSION_INCLUDE, projects: true },

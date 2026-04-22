@@ -41,6 +41,7 @@ import { publishWorkerStatus, publishAggregationWindows } from "./services/agent
 import { Semaphore } from "./agent/concurrency.js";
 import { createAgentLogger, incrementMetric, getMetrics } from "./agent/logger.js";
 import { startRedisHealthMonitor, stopRedisHealthMonitor } from "./agent/redis-health.js";
+import { isLocalMode } from "./lib/mode.js";
 
 // ---------------------------------------------------------------------------
 // Cached cost tracker — bridges async CostTrackingService to sync router interface
@@ -653,6 +654,11 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
+  if (isLocalMode()) {
+    log("TRACE_LOCAL_MODE=1 — ambient agent worker disabled");
+    return;
+  }
+
   log("starting agent worker process");
 
   // Connect to Redis

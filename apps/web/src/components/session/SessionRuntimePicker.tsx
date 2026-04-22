@@ -10,6 +10,7 @@ import {
 import { navigateToSession } from "../../stores/ui";
 import { useEntityField } from "@trace/client-core";
 import { cn } from "../../lib/utils";
+import { isLocalMode } from "../../lib/runtime-mode";
 
 interface RuntimeInstance {
   id: string;
@@ -92,6 +93,7 @@ export function SessionRuntimePicker({
   );
 
   const handleMoveToCloud = useCallback(async () => {
+    if (isLocalMode) return;
     setMoving("cloud");
     try {
       const result = await client
@@ -119,7 +121,7 @@ export function SessionRuntimePicker({
   }, [channel?.id, onClose, sessionGroupId, sessionId]);
 
   const localRuntimes = runtimes.filter((rt: RuntimeInstance) => rt.id !== currentRuntimeInstanceId);
-  const canMoveToCloud = hosting !== "cloud";
+  const canMoveToCloud = !isLocalMode && hosting !== "cloud";
 
   return (
     <div className={cn("mt-2 rounded-lg border border-border bg-surface p-3", className)}>

@@ -9,6 +9,7 @@
  */
 
 import { redis } from "../lib/redis.js";
+import { isLocalMode } from "../lib/mode.js";
 
 const STATUS_KEY = "agent:worker:status";
 const STATUS_TTL_SECONDS = 60; // Expire after 60s if worker stops updating
@@ -41,6 +42,7 @@ export interface WorkerStatusData {
  * Write worker status to Redis (called from agent-worker process).
  */
 export async function publishWorkerStatus(status: WorkerStatusData): Promise<void> {
+  if (isLocalMode()) return;
   try {
     const hash: Record<string, string> = {
       running: status.running ? "1" : "0",
@@ -80,6 +82,7 @@ export async function publishAggregationWindows(
     lastEventAt: number;
   }>,
 ): Promise<void> {
+  if (isLocalMode()) return;
   const key = "agent:worker:aggregation_windows";
   try {
     await redis.set(key, JSON.stringify(windows), "EX", STATUS_TTL_SECONDS);
@@ -92,6 +95,15 @@ export async function publishAggregationWindows(
  * Read worker status from Redis (called from GraphQL server).
  */
 export async function getWorkerStatus(): Promise<WorkerStatusData> {
+  if (isLocalMode()) {
+    return {
+      running: false,
+      startedAt: 0,
+      openAggregationWindows: 0,
+      activeOrganizations: 0,
+      lastHeartbeat: 0,
+    };
+  }
   try {
     const data = await redis.hgetall(STATUS_KEY);
     if (!data || !data.running) {
@@ -133,6 +145,7 @@ export async function getAggregationWindows(organizationId?: string): Promise<
     lastEventAt: number;
   }>
 > {
+  if (isLocalMode()) return [];
   try {
     const raw = await redis.get("agent:worker:aggregation_windows");
     if (!raw) return [];

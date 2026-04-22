@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../lib/db.js", async () => {
   const { createPrismaMock } = await import("../../test/helpers.js");
@@ -36,6 +36,10 @@ describe("EventService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     redisMock.xadd.mockResolvedValue("1-0");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("creates events, publishes to pubsub, and appends to redis streams", async () => {
@@ -95,5 +99,29 @@ describe("EventService", () => {
       take: 2,
     });
     expect(results).toEqual([older, newer]);
+  });
+
+  it("skips Redis stream appends in local mode", async () => {
+    vi.stubEnv("TRACE_LOCAL_MODE", "1");
+    prismaMock.event.create.mockResolvedValueOnce({
+      id: "event-local-1",
+      organizationId: "org-1",
+      scopeType: "channel",
+      scopeId: "channel-1",
+      eventType: "channel_created",
+    });
+
+    const service = new EventService();
+    await service.create({
+      organizationId: "org-1",
+      scopeType: "channel",
+      scopeId: "channel-1",
+      eventType: "channel_created",
+      payload: { ok: true } as any,
+      actorType: "user",
+      actorId: "user-1",
+    });
+
+    expect(redisMock.xadd).not.toHaveBeenCalled();
   });
 });
