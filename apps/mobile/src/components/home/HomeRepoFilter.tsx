@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect } from "react";
 import { Pressable, ScrollView, StyleSheet } from "react-native";
 import { Text } from "@/components/design-system";
 import { useHomeRepos } from "@/hooks/useHomeSections";
@@ -15,6 +15,15 @@ export const HomeRepoFilter = memo(function HomeRepoFilter({ userId }: HomeRepoF
   const repos = useHomeRepos(userId);
   const selected = useMobileUIStore((s: MobileUIState) => s.homeRepoFilter);
   const setSelected = useMobileUIStore((s: MobileUIState) => s.setHomeRepoFilter);
+
+  // If the selected repo no longer has any sessions in the home view, drop
+  // the filter so the user isn't trapped staring at an empty list with the
+  // chip row possibly hidden (repos.length < 2). Sessions naturally age out
+  // of the 24h "Most recent" window, so this is a real path users hit.
+  useEffect(() => {
+    if (selected === null) return;
+    if (!repos.some((r) => r.id === selected)) setSelected(null);
+  }, [selected, repos, setSelected]);
 
   // Filter is meaningless with 0 or 1 repos — hide it entirely.
   if (repos.length < 2) return null;
