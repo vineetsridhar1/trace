@@ -120,6 +120,16 @@ function getPrismaDevStateUrl(state) {
   return null;
 }
 
+function parsePrismaDevStatus(line) {
+  if (line.includes("not_running") || line.includes("not running")) {
+    return "not_running";
+  }
+  if (line.includes("running")) {
+    return "running";
+  }
+  return "unknown";
+}
+
 function assertNodeVersion() {
   const [major] = process.versions.node.split(".");
   if (Number(major) >= 22) return;
@@ -219,11 +229,7 @@ async function getPrismaDevEntry() {
   const state = await readPrismaDevState();
   const stateUrl = getPrismaDevStateUrl(state);
   const urls = stateUrl ? [stateUrl, ...cliUrls] : cliUrls;
-  const status = line.includes("running")
-    ? "running"
-    : (line.includes("not_running") || line.includes("not running"))
-        ? "not_running"
-        : "unknown";
+  const status = parsePrismaDevStatus(line);
 
   return { status, urls };
 }
