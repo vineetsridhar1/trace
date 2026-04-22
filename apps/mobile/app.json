@@ -32,7 +32,13 @@
       "expo-dev-client",
       "expo-secure-store",
       "expo-notifications",
-      "react-native-bottom-tabs"
+      "react-native-bottom-tabs",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Trace to attach images from your photo library."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

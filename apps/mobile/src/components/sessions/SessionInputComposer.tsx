@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text as NativeText, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView, type SFSymbol } from "expo-symbols";
+import * as Clipboard from "expo-clipboard";
+import * as ImagePicker from "expo-image-picker";
 import Animated, {
   FadeInDown,
   FadeOutUp,
@@ -12,6 +14,7 @@ import Animated, {
 import {
   AVAILABLE_RUNTIMES_QUERY,
   DISMISS_SESSION_MUTATION,
+  generateUUID,
   UPDATE_SESSION_CONFIG_MUTATION,
   useEntityField,
 } from "@trace/client-core";
@@ -25,16 +28,21 @@ import { getDefaultModel, getModelLabel, getModelsForTool } from "@trace/shared"
 import { Glass, Text } from "@/components/design-system";
 import { MODE_CYCLE, useComposerModePalette } from "@/hooks/useComposerModePalette";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
+import { useClipboardImage } from "@/hooks/useClipboardImage";
 import { haptic } from "@/lib/haptics";
 import { recordPerf } from "@/lib/perf";
 import { applyOptimisticPatch } from "@/lib/optimisticEntity";
 import { getClient } from "@/lib/urql";
+import { useDraftsStore, type ImageAttachment } from "@/stores/drafts";
 import { alpha, useTheme } from "@/theme";
+import { ComposerAttachButton } from "./ComposerAttachButton";
 import { ComposerConnectionNotice } from "./ComposerConnectionNotice";
 import {
   ComposerMorphPill,
   type ComposerMorphPillItem,
 } from "./ComposerMorphPill";
+import { ComposerPasteButton } from "./ComposerPasteButton";
+import { ImageAttachmentBar } from "./ImageAttachmentBar";
 
 interface SessionInputComposerProps { sessionId: string }
 
@@ -53,6 +61,8 @@ const MAX_INPUT_HEIGHT = 260;
 const ACTION_SIZE = 46;
 const ACTION_GAP = 8;
 const ACTION_CLUSTER_WIDTH = ACTION_SIZE * 2 + ACTION_GAP;
+const MAX_IMAGES = 5;
+const EMPTY_IMAGES: ImageAttachment[] = [];
 
 /**
  * Session composer: a single-line-start liquid glass input next to a
@@ -92,8 +102,13 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const [modeWidths, setModeWidths] = useState<Partial<Record<ComposerMode, number>>>({});
   const [height, setHeight] = useState(MIN_INPUT_HEIGHT);
   const [errorDraft, setErrorDraft] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
+  const [pastingImage, setPastingImage] = useState(false);
+
+  const images = useDraftsStore((s) => s.images[sessionId] ?? EMPTY_IMAGES);
+  const setImages = useDraftsStore((s) => s.setImages);
 
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
@@ -104,8 +119,16 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   // are truly closed.
   const isTerminal = worktreeDeleted === true || sessionStatus === "merged";
 
-  const onFailure = useCallback((draft: string) => { setText(draft); setErrorDraft(draft); }, []);
-  const onSuccess = useCallback(() => { setText(""); setErrorDraft(null); }, []);
+  const onFailure = useCallback((draft: string, message: string) => {
+    setText(draft);
+    setErrorDraft(draft);
+    setErrorMessage(message);
+  }, []);
+  const onSuccess = useCallback(() => {
+    setText("");
+    setErrorDraft(null);
+    setErrorMessage(null);
+  }, []);
   const { submit: runSubmit, sending } = useComposerSubmit({ sessionId, isActive, onFailure, onSuccess });
 
   const trimmed = text.trim();
@@ -113,8 +136,23 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   // server has no row to address — a send would fail silently and the draft
   // would flicker. Match web's gate: let the user type, block the send.
   const canInteract = !isTerminal && !sending && !stopping && !isDisconnected && !isOptimistic;
-  const canSubmit = canInteract && trimmed.length > 0;
+  const canSubmit = canInteract && (trimmed.length > 0 || images.length > 0);
   const canStop = isActive && !stopping;
+
+  const {
+    hasImage: clipboardHasImage,
+    refresh: refreshClipboard,
+    dismiss: dismissClipboard,
+  } = useClipboardImage();
+  const [pickingImage, setPickingImage] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
+  const showPasteButton =
+    canInteract &&
+    inputFocused &&
+    clipboardHasImage &&
+    images.length === 0 &&
+    !pastingImage;
+  const canAttach = canInteract && !pickingImage && images.length < MAX_IMAGES;
 
   const {
     glassAnimatedProps,
@@ -178,6 +216,100 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const handleSend = useCallback(() => {
     if (canSubmit) void runSubmit(trimmed, mode);
   }, [canSubmit, mode, runSubmit, trimmed]);
+  const handlePasteImage = useCallback(async () => {
+    if (pastingImage || images.length >= MAX_IMAGES) return;
+    setPastingImage(true);
+    void haptic.selection();
+    try {
+      // JPEG at q=0.85 keeps a Mac screenshot comfortably under the 5MB
+      // upload cap — PNG at full quality routinely blew past it. Alpha is
+      // flattened, which is fine for the chat-screenshot use case.
+      const result = await Clipboard.getImageAsync({ format: "jpeg", jpegQuality: 0.85 });
+      if (!result?.data) return;
+      // expo-clipboard returns `data` as a full `data:image/jpeg;base64,...`
+      // URI. Split off the prefix so the rest of the pipeline (upload,
+      // optimistic preview) sees the same shape as the gallery picker.
+      const prefixMatch = result.data.match(/^data:([^;,]+);base64,(.+)$/);
+      if (!prefixMatch) {
+        throw new Error("expo-clipboard returned an unexpected data shape");
+      }
+      const [, mimeType, rawBase64] = prefixMatch;
+      const attachment: ImageAttachment = {
+        id: generateUUID(),
+        mimeType,
+        base64: rawBase64,
+        previewUri: result.data,
+        width: result.size?.width ?? null,
+        height: result.size?.height ?? null,
+        s3Key: null,
+        uploading: false,
+      };
+      setImages(sessionId, (prev) => {
+        if (prev.length >= MAX_IMAGES) return prev;
+        return [...prev, attachment];
+      });
+      dismissClipboard();
+      void haptic.light();
+    } catch (err) {
+      void haptic.error();
+      console.warn("[composer] clipboard paste failed", err);
+    } finally {
+      setPastingImage(false);
+    }
+  }, [dismissClipboard, images.length, pastingImage, sessionId, setImages]);
+  const handlePickFromLibrary = useCallback(async () => {
+    if (pickingImage || images.length >= MAX_IMAGES) return;
+    setPickingImage(true);
+    void haptic.selection();
+    try {
+      const remaining = MAX_IMAGES - images.length;
+      // Skip `base64: true` — a 5MB JPEG becomes ~7MB of base64 in JS heap
+      // per attachment. We keep the file URI in the draft and read bytes
+      // lazily at upload time via `fetch(uri).blob()`.
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.9,
+        allowsMultipleSelection: true,
+        selectionLimit: remaining,
+      });
+      if (result.canceled) return;
+      const attachments: ImageAttachment[] = result.assets.map((asset) => ({
+        id: generateUUID(),
+        mimeType: asset.mimeType ?? "image/jpeg",
+        fileUri: asset.uri,
+        previewUri: asset.uri,
+        width: asset.width || null,
+        height: asset.height || null,
+        s3Key: null,
+        uploading: false,
+      }));
+      if (attachments.length === 0) return;
+      setImages(sessionId, (prev) => {
+        const room = MAX_IMAGES - prev.length;
+        if (room <= 0) return prev;
+        return [...prev, ...attachments.slice(0, room)];
+      });
+      void haptic.light();
+    } catch (err) {
+      void haptic.error();
+      console.warn("[composer] image library pick failed", err);
+    } finally {
+      setPickingImage(false);
+    }
+  }, [images.length, pickingImage, sessionId, setImages]);
+  const handleRemoveImage = useCallback(
+    (id: string) => {
+      setImages(sessionId, (prev) => prev.filter((img) => img.id !== id));
+    },
+    [sessionId, setImages],
+  );
+  const handleInputFocus = useCallback(() => {
+    setInputFocused(true);
+    refreshClipboard();
+  }, [refreshClipboard]);
+  const handleInputBlur = useCallback(() => {
+    setInputFocused(false);
+  }, []);
   const handleModePress = useCallback(() => {
     void haptic.selection();
     setMode((current) => {
@@ -432,6 +564,11 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
       {isDisconnected ? (
         <ComposerConnectionNotice sessionId={sessionId} canRetry={canRetryConnection} />
       ) : null}
+      <ComposerPasteButton
+        visible={showPasteButton}
+        onPress={() => void handlePasteImage()}
+      />
+      <ImageAttachmentBar images={images} onRemove={handleRemoveImage} />
       <View style={styles.composerStack}>
         <View style={styles.inputActionRow}>
           <Glass
@@ -442,13 +579,17 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
           >
             {errorDraft ? (
               <Pressable onPress={handleRetry} accessibilityRole="button" accessibilityLabel="Retry send" style={styles.retryRow}>
-                <Text variant="caption1" style={{ color: theme.colors.destructive }}>Failed to send. Tap to retry.</Text>
+                <Text variant="caption1" style={{ color: theme.colors.destructive }}>
+                  {errorMessage ?? "Failed to send"}. Tap to retry.
+                </Text>
               </Pressable>
             ) : null}
             <Animated.View style={[styles.inputWrapper, inputAnimatedStyle]}>
               <TextInput
                 value={text}
                 onChangeText={handleChangeText}
+                onFocus={handleInputFocus}
+                onBlur={handleInputBlur}
                 onContentSizeChange={(e) => {
                   const h = e.nativeEvent.contentSize.height;
                   const next = Math.min(MAX_INPUT_HEIGHT, Math.max(MIN_INPUT_HEIGHT, h));
@@ -462,6 +603,11 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
               />
             </Animated.View>
           </Glass>
+
+          <ComposerAttachButton
+            enabled={canAttach}
+            onPress={() => void handlePickFromLibrary()}
+          />
 
           <Animated.View style={[styles.actionCluster, actionClusterAnimatedStyle]}>
             <View style={styles.actionGlassContainer}>
