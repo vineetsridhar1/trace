@@ -45,8 +45,13 @@ export function useRunScripts(sessionGroupId: string, selectedSessionId: string 
         .mutation(CREATE_TERMINAL_MUTATION, { sessionId: selectedSessionId, cols: 80, rows: 24 })
         .toPromise();
       if (result.data?.createTerminal) {
-        const { id } = result.data.createTerminal as { id: string };
-        addTerminal(id, selectedSessionId, sessionGroupId, "connecting", {
+        const created = result.data.createTerminal as { id: string; bridgeRuntimeId: string };
+        addTerminal({
+          id: created.id,
+          sessionId: selectedSessionId,
+          sessionGroupId,
+          bridgeRuntimeId: created.bridgeRuntimeId,
+          status: "connecting",
           customName: script.name,
           initialCommand: script.command,
         });

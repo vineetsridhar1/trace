@@ -289,7 +289,13 @@ export function SessionGroupDetailView({
         const serverTerminals = (result.data?.sessionTerminals as Terminal[] | undefined) ?? [];
         for (const terminal of serverTerminals) {
           if (!useTerminalStore.getState().terminals[terminal.id]) {
-            addTerminal(terminal.id, terminal.sessionId, sessionGroupId, "active");
+            addTerminal({
+              id: terminal.id,
+              sessionId: terminal.sessionId,
+              sessionGroupId,
+              bridgeRuntimeId: terminal.bridgeRuntimeId,
+              status: "active",
+            });
           }
         }
       });

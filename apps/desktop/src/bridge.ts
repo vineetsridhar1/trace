@@ -32,7 +32,7 @@ import {
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
-import { getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
+import { getOrCreateInstanceId, getRepoConfig, getRepoPath, readConfig } from "./config.js";
 import {
   getLinkedCheckoutStatus,
   linkLinkedCheckoutRepo,
@@ -1090,10 +1090,42 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "terminal_create": {
-        const { terminalId, sessionId, cols, rows, cwd } = cmd;
-        const workdir = cwd || this.sessionWorkdirs.get(sessionId) || os.homedir();
+        const { terminalId, sessionId, channelId, repoId, cols, rows, cwd } = cmd;
         try {
-          this.terminalManager.create(terminalId, sessionId, workdir, cols, rows);
+          if (channelId && repoId) {
+            const repoPath = getRepoPath(repoId);
+            if (!repoPath) {
+              this.send({
+                type: "terminal_error",
+                terminalId,
+                error: "Repo is not linked on this bridge",
+              });
+              break;
+            }
+            this.terminalManager.create(
+              terminalId,
+              { kind: "channel", channelId, repoId },
+              repoPath,
+              cols,
+              rows,
+            );
+          } else if (sessionId) {
+            const workdir = cwd || this.sessionWorkdirs.get(sessionId) || os.homedir();
+            this.terminalManager.create(
+              terminalId,
+              { kind: "session", sessionId },
+              workdir,
+              cols,
+              rows,
+            );
+          } else {
+            this.send({
+              type: "terminal_error",
+              terminalId,
+              error: "terminal_create missing scope (sessionId or channelId+repoId)",
+            });
+            break;
+          }
           this.send({ type: "terminal_ready", terminalId });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);

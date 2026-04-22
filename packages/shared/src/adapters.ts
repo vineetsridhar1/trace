@@ -3,4 +3,9 @@
 export { ClaudeCodeAdapter } from "./adapters/claude-code.js";
 export { CodexAdapter } from "./adapters/codex.js";
 export { TerminalManager } from "./adapters/terminal-manager.js";
-export type { TerminalCallbacks, TerminalManagerOptions } from "./adapters/terminal-manager.js";
+export type {
+  TerminalCallbacks,
+  TerminalManagerOptions,
+  TerminalScopeDescriptor,
+  ActiveTerminalDescriptor,
+} from "./adapters/terminal-manager.js";

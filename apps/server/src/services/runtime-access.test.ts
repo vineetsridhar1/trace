@@ -372,10 +372,11 @@ describe("runtimeAccessService", () => {
       ownerUserId: "user-1",
     });
 
-    expect(terminalRelayMock.destroyTerminalsForUser).toHaveBeenCalledWith(
-      "user-2",
-      new Set(["session-a", "session-b"]),
-    );
+    expect(terminalRelayMock.destroyTerminalsForUser).toHaveBeenCalledWith("user-2", {
+      sessionIds: new Set(["session-a", "session-b"]),
+      runtimeInstanceId: "runtime-1",
+      includeChannelTerminals: false,
+    });
   });
 
   it("allows owners to override approvals from the popup presets", async () => {
@@ -711,10 +712,11 @@ describe("runtimeAccessService", () => {
         where: expect.objectContaining({ id: "grant-1", revokedAt: null }),
       }),
     );
-    expect(terminalRelayMock.destroyTerminalsForUser).toHaveBeenCalledWith(
-      "user-2",
-      new Set(["session-a"]),
-    );
+    expect(terminalRelayMock.destroyTerminalsForUser).toHaveBeenCalledWith("user-2", {
+      sessionIds: new Set(["session-a"]),
+      runtimeInstanceId: "runtime-1",
+      includeChannelTerminals: false,
+    });
     expect(eventServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: "bridge_access_updated",

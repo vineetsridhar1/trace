@@ -45,9 +45,14 @@ export function TerminalPanel({
       return;
     }
     if (result.data?.createTerminal) {
-      const { id } = result.data.createTerminal as { id: string };
-      addTerminal(id, sessionId, sessionGroupId);
-      setActiveTerminalId(id);
+      const created = result.data.createTerminal as { id: string; bridgeRuntimeId: string };
+      addTerminal({
+        id: created.id,
+        sessionId,
+        sessionGroupId,
+        bridgeRuntimeId: created.bridgeRuntimeId,
+      });
+      setActiveTerminalId(created.id);
     }
   }, [addTerminal, sessionGroupId, sessionId]);
 
@@ -82,7 +87,13 @@ export function TerminalPanel({
       if (existing && existing.length > 0) {
         for (const terminal of existing) {
           if (!useTerminalStore.getState().terminals[terminal.id]) {
-            addTerminal(terminal.id, terminal.sessionId, sessionGroupId, "active");
+            addTerminal({
+              id: terminal.id,
+              sessionId: terminal.sessionId,
+              sessionGroupId,
+              bridgeRuntimeId: terminal.bridgeRuntimeId,
+              status: "active",
+            });
           }
         }
         setActiveTerminalId(existing[0]?.id ?? null);

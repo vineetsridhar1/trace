@@ -12,6 +12,15 @@ import {
 } from "./message-utils.js";
 import { normalizeMembers } from "./member-utils.js";
 import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
+import { sessionRouter } from "../lib/session-router.js";
+import { runtimeAccessService } from "./runtime-access.js";
+
+export interface ChannelBridgeOption {
+  runtimeInstanceId: string;
+  label: string;
+  ownerUserId: string | null;
+  isOwn: boolean;
+}
 
 export class ChannelService {
   async listChannels(
@@ -699,6 +708,54 @@ export class ChannelService {
     });
 
     return true;
+  }
+
+  async listAvailableBridges({
+    channelId,
+    userId,
+    organizationId,
+  }: {
+    channelId: string;
+    userId: string;
+    organizationId: string;
+  }): Promise<ChannelBridgeOption[]> {
+    const channel = await prisma.channel.findFirst({
+      where: {
+        id: channelId,
+        organizationId,
+        members: { some: { userId, leftAt: null } },
+      },
+      select: { id: true, type: true, repoId: true },
+    });
+    if (!channel) throw new AuthorizationError("Not authorized for this channel");
+    if (channel.type !== "coding" || !channel.repoId) return [];
+    const repoId = channel.repoId;
+
+    const candidates = sessionRouter
+      .listRuntimes({ hostingMode: "local" })
+      .filter(
+        (runtime) =>
+          runtime.organizationId === organizationId && runtime.registeredRepoIds.includes(repoId),
+      );
+
+    const results: ChannelBridgeOption[] = [];
+    for (const runtime of candidates) {
+      const access = await runtimeAccessService.getAccessState({
+        userId,
+        organizationId,
+        runtimeInstanceId: runtime.id,
+        sessionGroupId: null,
+        capability: "terminal",
+      });
+      if (!access.allowed) continue;
+      results.push({
+        runtimeInstanceId: runtime.id,
+        label: access.label ?? runtime.label,
+        ownerUserId: access.ownerUser?.id ?? runtime.ownerUserId ?? null,
+        isOwn: access.isOwner,
+      });
+    }
+    return results;
   }
 
   // --- Legacy event-based sendMessage (used by coding channels) ---

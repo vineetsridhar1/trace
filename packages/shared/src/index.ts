@@ -52,6 +52,7 @@ export type {
   BridgeTerminalInputCommand,
   BridgeTerminalResizeCommand,
   BridgeTerminalDestroyCommand,
+  BridgeActiveTerminal,
   BridgeListSkillsCommand,
   BridgeLinkedCheckoutStatusCommand,
   BridgeLinkLinkedCheckoutRepoCommand,

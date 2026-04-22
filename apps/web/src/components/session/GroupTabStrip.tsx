@@ -176,7 +176,7 @@ export function GroupTabStrip({
           })}
 
           {terminals.map((terminal, index) => {
-            const session = sessionById.get(terminal.sessionId);
+            const session = terminal.sessionId ? sessionById.get(terminal.sessionId) : undefined;
             const defaultLabel = session ? `Terminal ${index + 1} · ${session.name}` : `Terminal ${index + 1}`;
             const label = terminal.customName || defaultLabel;
             const isActive = activeTerminalId === terminal.id;

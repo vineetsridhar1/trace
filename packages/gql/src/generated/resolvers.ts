@@ -331,6 +331,14 @@ export type ChannelMessagesArgs = {
   limit?: InputMaybe<Scalars['Int']['input']>;
 };
 
+export type ChannelBridgeOption = {
+  __typename?: 'ChannelBridgeOption';
+  isOwn: Scalars['Boolean']['output'];
+  label: Scalars['String']['output'];
+  ownerUserId?: Maybe<Scalars['ID']['output']>;
+  runtimeInstanceId: Scalars['ID']['output'];
+};
+
 export type ChannelGroup = {
   __typename?: 'ChannelGroup';
   channels: Array<Channel>;
@@ -410,6 +418,13 @@ export type CreateChannelInput = {
   projectIds?: InputMaybe<Array<Scalars['ID']['input']>>;
   repoId?: InputMaybe<Scalars['ID']['input']>;
   type?: InputMaybe<ChannelType>;
+};
+
+export type CreateChannelTerminalInput = {
+  bridgeRuntimeId: Scalars['ID']['input'];
+  channelId: Scalars['ID']['input'];
+  cols: Scalars['Int']['input'];
+  rows: Scalars['Int']['input'];
 };
 
 export type CreateChatInput = {
@@ -665,6 +680,7 @@ export type Mutation = {
   createAiConversation: AiConversation;
   createChannel: Channel;
   createChannelGroup: ChannelGroup;
+  createChannelTerminal: Terminal;
   createChat: Chat;
   createProject: Project;
   createRepo: Repo;
@@ -800,6 +816,11 @@ export type MutationCreateChannelArgs = {
 
 export type MutationCreateChannelGroupArgs = {
   input: CreateChannelGroupInput;
+};
+
+
+export type MutationCreateChannelTerminalArgs = {
+  input: CreateChannelTerminalInput;
 };
 
 
@@ -1302,8 +1323,10 @@ export type Query = {
   branch?: Maybe<Branch>;
   bridgeRuntimeAccess: BridgeRuntimeAccess;
   channel?: Maybe<Channel>;
+  channelAvailableBridges: Array<ChannelBridgeOption>;
   channelGroups: Array<ChannelGroup>;
   channelMessages: Array<Message>;
+  channelTerminals: Array<Terminal>;
   channels: Array<Channel>;
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
@@ -1414,6 +1437,11 @@ export type QueryChannelArgs = {
 };
 
 
+export type QueryChannelAvailableBridgesArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
 export type QueryChannelGroupsArgs = {
   organizationId: Scalars['ID']['input'];
 };
@@ -1424,6 +1452,11 @@ export type QueryChannelMessagesArgs = {
   before?: InputMaybe<Scalars['DateTime']['input']>;
   channelId: Scalars['ID']['input'];
   limit?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryChannelTerminalsArgs = {
+  channelId: Scalars['ID']['input'];
 };
 
 
@@ -1898,8 +1931,10 @@ export type SubscriptionUserNotificationsArgs = {
 
 export type Terminal = {
   __typename?: 'Terminal';
+  bridgeRuntimeId: Scalars['ID']['output'];
+  channelId?: Maybe<Scalars['ID']['output']>;
   id: Scalars['ID']['output'];
-  sessionId: Scalars['ID']['output'];
+  sessionId?: Maybe<Scalars['ID']['output']>;
 };
 
 export type TerminalEndpoint = {
@@ -2126,6 +2161,7 @@ export type ResolversTypes = ResolversObject<{
   BridgeRuntime: ResolverTypeWrapper<BridgeRuntime>;
   BridgeRuntimeAccess: ResolverTypeWrapper<BridgeRuntimeAccess>;
   Channel: ResolverTypeWrapper<Channel>;
+  ChannelBridgeOption: ResolverTypeWrapper<ChannelBridgeOption>;
   ChannelGroup: ResolverTypeWrapper<ChannelGroup>;
   ChannelMember: ResolverTypeWrapper<ChannelMember>;
   ChannelType: ChannelType;
@@ -2137,6 +2173,7 @@ export type ResolversTypes = ResolversObject<{
   CreateAiConversationInput: CreateAiConversationInput;
   CreateChannelGroupInput: CreateChannelGroupInput;
   CreateChannelInput: CreateChannelInput;
+  CreateChannelTerminalInput: CreateChannelTerminalInput;
   CreateChatInput: CreateChatInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
@@ -2240,6 +2277,7 @@ export type ResolversParentTypes = ResolversObject<{
   BridgeRuntime: BridgeRuntime;
   BridgeRuntimeAccess: BridgeRuntimeAccess;
   Channel: Channel;
+  ChannelBridgeOption: ChannelBridgeOption;
   ChannelGroup: ChannelGroup;
   ChannelMember: ChannelMember;
   Chat: Chat;
@@ -2248,6 +2286,7 @@ export type ResolversParentTypes = ResolversObject<{
   CreateAiConversationInput: CreateAiConversationInput;
   CreateChannelGroupInput: CreateChannelGroupInput;
   CreateChannelInput: CreateChannelInput;
+  CreateChannelTerminalInput: CreateChannelTerminalInput;
   CreateChatInput: CreateChatInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
@@ -2555,6 +2594,14 @@ export type ChannelResolvers<ContextType = Context, ParentType extends Resolvers
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type ChannelBridgeOptionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['ChannelBridgeOption'] = ResolversParentTypes['ChannelBridgeOption']> = ResolversObject<{
+  isOwn?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  label?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  ownerUserId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
+  runtimeInstanceId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type ChannelGroupResolvers<ContextType = Context, ParentType extends ResolversParentTypes['ChannelGroup'] = ResolversParentTypes['ChannelGroup']> = ResolversObject<{
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
@@ -2707,6 +2754,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   createAiConversation?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType, RequireFields<MutationCreateAiConversationArgs, 'input' | 'organizationId'>>;
   createChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationCreateChannelArgs, 'input'>>;
   createChannelGroup?: Resolver<ResolversTypes['ChannelGroup'], ParentType, ContextType, RequireFields<MutationCreateChannelGroupArgs, 'input'>>;
+  createChannelTerminal?: Resolver<ResolversTypes['Terminal'], ParentType, ContextType, RequireFields<MutationCreateChannelTerminalArgs, 'input'>>;
   createChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationCreateChatArgs, 'input'>>;
   createProject?: Resolver<ResolversTypes['Project'], ParentType, ContextType, RequireFields<MutationCreateProjectArgs, 'input'>>;
   createRepo?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationCreateRepoArgs, 'input'>>;
@@ -2848,8 +2896,10 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   branch?: Resolver<Maybe<ResolversTypes['Branch']>, ParentType, ContextType, RequireFields<QueryBranchArgs, 'id'>>;
   bridgeRuntimeAccess?: Resolver<ResolversTypes['BridgeRuntimeAccess'], ParentType, ContextType, RequireFields<QueryBridgeRuntimeAccessArgs, 'runtimeInstanceId'>>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelArgs, 'id'>>;
+  channelAvailableBridges?: Resolver<Array<ResolversTypes['ChannelBridgeOption']>, ParentType, ContextType, RequireFields<QueryChannelAvailableBridgesArgs, 'channelId'>>;
   channelGroups?: Resolver<Array<ResolversTypes['ChannelGroup']>, ParentType, ContextType, RequireFields<QueryChannelGroupsArgs, 'organizationId'>>;
   channelMessages?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType, RequireFields<QueryChannelMessagesArgs, 'channelId'>>;
+  channelTerminals?: Resolver<Array<ResolversTypes['Terminal']>, ParentType, ContextType, RequireFields<QueryChannelTerminalsArgs, 'channelId'>>;
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelsArgs, 'organizationId'>>;
   chat?: Resolver<Maybe<ResolversTypes['Chat']>, ParentType, ContextType, RequireFields<QueryChatArgs, 'id'>>;
   chatMessages?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType, RequireFields<QueryChatMessagesArgs, 'chatId'>>;
@@ -3020,8 +3070,10 @@ export type SubscriptionResolvers<ContextType = Context, ParentType extends Reso
 }>;
 
 export type TerminalResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Terminal'] = ResolversParentTypes['Terminal']> = ResolversObject<{
+  bridgeRuntimeId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  channelId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
-  sessionId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  sessionId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3110,6 +3162,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   BridgeRuntime?: BridgeRuntimeResolvers<ContextType>;
   BridgeRuntimeAccess?: BridgeRuntimeAccessResolvers<ContextType>;
   Channel?: ChannelResolvers<ContextType>;
+  ChannelBridgeOption?: ChannelBridgeOptionResolvers<ContextType>;
   ChannelGroup?: ChannelGroupResolvers<ContextType>;
   ChannelMember?: ChannelMemberResolvers<ContextType>;
   Chat?: ChatResolvers<ContextType>;
