@@ -63,8 +63,6 @@ const CHIP_EXPAND_HOLD_MS = 1800;
 const MIN_INPUT_HEIGHT = 28;
 const MAX_INPUT_HEIGHT = 260;
 const ACTION_SIZE = 46;
-const ACTION_GAP = 8;
-const ACTION_CLUSTER_WIDTH = ACTION_SIZE * 2 + ACTION_GAP;
 const MAX_IMAGES = 5;
 const EMPTY_IMAGES: ImageAttachment[] = [];
 // Matches ACTION_SIZE so the leading model chip is the same visual size
@@ -218,39 +216,10 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   }));
 
   const inputHeight = useSharedValue(MIN_INPUT_HEIGHT);
-  const stopProgress = useSharedValue(isActive ? 1 : 0);
   useEffect(() => {
     inputHeight.value = withTiming(height, { duration: theme.motion.durations.fast });
   }, [height, inputHeight, theme.motion.durations.fast]);
-  useEffect(() => {
-    // Mitosis: stop emerges from inside send via translateX; layout frame
-    // is fixed at the final position so the GlassView is always laid out
-    // at its full size (UIGlassEffect needs a real frame to render).
-    stopProgress.value = withTiming(isActive ? 1 : 0, {
-      duration: isActive ? 340 : theme.motion.durations.base,
-    });
-  }, [isActive, stopProgress, theme.motion.durations.base]);
   const inputAnimatedStyle = useAnimatedStyle(() => ({ height: inputHeight.value }));
-  const actionClusterAnimatedStyle = useAnimatedStyle(() => ({
-    width: ACTION_SIZE + (ACTION_SIZE + ACTION_GAP) * stopProgress.value,
-  }));
-  const stopSlotAnimatedStyle = useAnimatedStyle(() => {
-    const p = stopProgress.value;
-    // Starts fully overlapping the send button (translateX = -54),
-    // slides to its own slot (translateX = 0). Scale gives the "pop".
-    const translateX = -(ACTION_SIZE + ACTION_GAP) * (1 - p);
-    const scale = 0.4 + 0.6 * p;
-    return {
-      opacity: Math.min(1, p * 1.6),
-      transform: [{ translateX }, { scale }],
-    };
-  });
-  const sendPulseAnimatedStyle = useAnimatedStyle(() => {
-    // Subtle bulge mid-split: sin() peaks at p=0.5 and returns to 1 at both ends.
-    const p = Math.max(0, Math.min(1, stopProgress.value));
-    const pulse = Math.sin(p * Math.PI);
-    return { transform: [{ scale: 1 + pulse * 0.08 }] };
-  });
 
   const clearModeCollapseTimer = useCallback(() => {
     if (modeCollapseTimer.current) {
@@ -313,27 +282,32 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   useEffect(() => clearModeCollapseTimer, [clearModeCollapseTimer]);
   useEffect(() => clearModelCollapseTimer, [clearModelCollapseTimer]);
   const expanded = focused;
-  // Leading chips take real width off the input. Once the user starts
-  // typing, hide them so the input gets more room; they come back when the
-  // field is cleared (still focused).
-  const hasText = text.length > 0;
-  // Leading chips stay up while the model menu is open, even if focus
-  // leaves the text input during backdrop interaction. While the agent
-  // is running the chips hide too — mode/model can't be changed mid-run.
-  const chipsVisible = (expanded && !hasText && !isActive) || modelMenuOpen;
+  // Anything that would make the send button appear: typed text or one
+  // or more attached images. Mode/model chips and the send button are
+  // mutually exclusive — showing both would crowd the row.
+  const hasSendable = trimmed.length > 0 || images.length > 0;
+  // Leading chips stay up while the model menu is open (which pulls focus
+  // away from the text input during backdrop interaction). Otherwise
+  // they show only in a focused, empty, idle composer.
+  const chipsVisible = (expanded && !hasSendable && !isActive) || modelMenuOpen;
+  // Send and stop are mutually exclusive: while the agent is running, a
+  // focused composer shows send (for queueing) and an unfocused one shows
+  // stop. While idle, send shows iff the composer has text or images.
+  const showSend = (isActive && focused) || (!isActive && hasSendable);
+  const showStop = isActive && !focused;
   useEffect(() => {
     chipsSlotProgress.value = withTiming(chipsVisible ? 1 : 0, {
       duration: theme.motion.durations.base,
     });
   }, [chipsVisible, chipsSlotProgress, theme.motion.durations.base]);
   useEffect(() => {
-    if (!hasText) return;
+    if (!hasSendable) return;
     clearModeCollapseTimer();
     setModeLabelVisible(false);
     if (modelMenuOpen) return;
     clearModelCollapseTimer();
     setModelLabelVisible(false);
-  }, [clearModeCollapseTimer, clearModelCollapseTimer, hasText, modelMenuOpen]);
+  }, [clearModeCollapseTimer, clearModelCollapseTimer, hasSendable, modelMenuOpen]);
   const handleChangeText = useCallback((next: string) => {
     // §16 budget: <16ms from keystroke to next painted frame.
     // Stamp the callback start, then sample at the next animation
@@ -872,61 +846,69 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             </Animated.View>
           </Glass>
 
-          <ComposerAttachButton
-            enabled={canAttach}
-            onPress={() => void handlePickFromLibrary()}
-          />
+          {isActive && !focused ? null : (
+            <ComposerAttachButton
+              enabled={canAttach}
+              onPress={() => void handlePickFromLibrary()}
+            />
+          )}
 
-          {expanded && (trimmed.length > 0 || images.length > 0 || isActive) ? (
+          {showSend ? (
             <Animated.View
-              key="send-cluster"
+              key="send-button"
               entering={FadeIn.duration(140)}
               exiting={FadeOut.duration(100)}
-              style={[styles.actionCluster, actionClusterAnimatedStyle]}
+              style={styles.singleActionSlot}
             >
-              <View style={styles.actionGlassContainer}>
-                <Glass
-                  preset="input"
-                  tint={alpha(theme.colors.success, 0.18)}
-                  interactive
-                  style={[
-                    styles.sendGlass,
-                    cardBorderAnimatedStyle,
-                    { opacity: canSubmit ? 1 : 0.35 },
-                    sendPulseAnimatedStyle,
-                  ]}
+              <Glass
+                preset="input"
+                tint={alpha(theme.colors.success, 0.18)}
+                interactive
+                style={[
+                  styles.singleActionGlass,
+                  cardBorderAnimatedStyle,
+                  { opacity: canSubmit ? 1 : 0.35 },
+                ]}
+              >
+                <Pressable
+                  onPress={handleSend}
+                  disabled={!canSubmit}
+                  accessibilityRole="button"
+                  accessibilityLabel={isActive ? "Queue message" : "Send message"}
+                  style={styles.actionPressable}
                 >
-                  <Pressable
-                    onPress={handleSend}
-                    disabled={!canSubmit}
-                    accessibilityRole="button"
-                    accessibilityLabel={isActive ? "Queue message" : "Send message"}
-                    style={styles.actionPressable}
-                  >
-                    <SymbolView name="paperplane.fill" size={16} tintColor={theme.colors.accentForeground} resizeMode="scaleAspectFit" style={styles.sendIcon} />
-                  </Pressable>
-                </Glass>
+                  <SymbolView name="paperplane.fill" size={16} tintColor={theme.colors.accentForeground} resizeMode="scaleAspectFit" style={styles.sendIcon} />
+                </Pressable>
+              </Glass>
+            </Animated.View>
+          ) : null}
 
-                <Glass
-                  preset="input"
-                  tint={alpha(theme.colors.destructive, 0.22)}
-                  interactive
-                  style={[
-                    styles.stopGlass,
-                    { borderColor: alpha(theme.colors.destructive, 0.42) },
-                  ]}
+          {showStop ? (
+            <Animated.View
+              key="stop-button"
+              entering={FadeIn.duration(140)}
+              exiting={FadeOut.duration(100)}
+              style={styles.singleActionSlot}
+            >
+              <Glass
+                preset="input"
+                tint={alpha(theme.colors.destructive, 0.22)}
+                interactive
+                style={[
+                  styles.singleActionGlass,
+                  { borderColor: alpha(theme.colors.destructive, 0.42) },
+                ]}
+              >
+                <Pressable
+                  onPress={handleStop}
+                  disabled={!canStop}
+                  accessibilityRole="button"
+                  accessibilityLabel="Stop session"
+                  style={styles.actionPressable}
                 >
-                  <Pressable
-                    onPress={handleStop}
-                    disabled={!canStop}
-                    accessibilityRole="button"
-                    accessibilityLabel="Stop session"
-                    style={styles.actionPressable}
-                  >
-                    <SymbolView name="stop.fill" size={14} tintColor={theme.colors.destructive} resizeMode="scaleAspectFit" style={styles.stopIcon} />
-                  </Pressable>
-                </Glass>
-              </View>
+                  <SymbolView name="stop.fill" size={14} tintColor={theme.colors.destructive} resizeMode="scaleAspectFit" style={styles.stopIcon} />
+                </Pressable>
+              </Glass>
             </Animated.View>
           ) : null}
         </View>
@@ -991,13 +973,16 @@ const styles = StyleSheet.create({
   modeChipIcon: { width: 16, height: 16 },
   inputWrapper: { overflow: "hidden" },
   input: { fontSize: 16, lineHeight: 21, paddingHorizontal: 2, paddingVertical: 2, textAlignVertical: "top" },
-  actionCluster: {
+  singleActionSlot: {
+    width: ACTION_SIZE,
     height: ACTION_SIZE,
-    overflow: "hidden",
   },
-  actionGlassContainer: {
-    width: ACTION_CLUSTER_WIDTH,
+  singleActionGlass: {
+    width: ACTION_SIZE,
     height: ACTION_SIZE,
+    borderRadius: ACTION_SIZE / 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
   },
   actionPressable: {
     width: ACTION_SIZE,
@@ -1006,22 +991,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sendIcon: { width: 16, height: 16 },
-  sendGlass: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    width: ACTION_SIZE,
-    height: ACTION_SIZE,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  stopGlass: {
-    position: "absolute",
-    left: ACTION_SIZE + ACTION_GAP,
-    top: 0,
-    width: ACTION_SIZE,
-    height: ACTION_SIZE,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
   stopIcon: { width: 14, height: 14 },
   bridgeRow: { flexDirection: "row", justifyContent: "center", alignItems: "center" },
   modelChipSlot: {
