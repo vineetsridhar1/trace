@@ -620,3 +620,9 @@ export const UPDATE_CHANNEL_MUTATION = gql`
     }
   }
 `;
+
+export const DELETE_CHANNEL_MUTATION = gql`
+  mutation DeleteChannel($id: ID!) {
+    deleteChannel(id: $id)
+  }
+`;
