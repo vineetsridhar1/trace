@@ -85,7 +85,7 @@ export const ChannelItem = memo(function ChannelItem({
         </ContextMenuTrigger>
         <ContextMenuContent>
           <ContextMenuItem
-            className="text-destructive focus:text-destructive"
+            variant="destructive"
             onSelect={() => setDeleteOpen(true)}
           >
             <Trash2 size={14} className="mr-2" />
