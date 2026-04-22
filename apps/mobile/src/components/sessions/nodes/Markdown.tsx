@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { Linking, Platform, StyleSheet } from "react-native";
+import { memo, useMemo } from "react";
+import { Linking, Platform, StyleSheet, Text as NativeText } from "react-native";
 import MarkdownLib from "react-native-markdown-display";
 import { alpha, useTheme, type Theme } from "@/theme";
 
@@ -12,28 +12,36 @@ interface MarkdownProps {
 // explicitly trust. Unknown/custom schemes (tel:, sms:, trace:, etc.) are
 // dropped rather than handed to `Linking.openURL`.
 const ALLOWED_LINK_SCHEMES = /^(https?|mailto):/i;
+const MARKDOWN_HINTS =
+  /(^|\n)\s{0,3}(#{1,6}\s|[-*+]\s|\d+[.)]\s|>\s|```|~~~)|[*_`\[\]]|!\[|https?:\/\/|mailto:/i;
 
 /**
  * Theme-aware markdown renderer. Mirrors the subset used by web's `Markdown`
  * wrapper — headers, lists, inline code, code blocks, blockquotes, links.
  * No KaTeX / images in V1.
  */
-export function Markdown({ children, compactSpacing = false }: MarkdownProps) {
+export const Markdown = memo(function Markdown({
+  children,
+  compactSpacing = false,
+}: MarkdownProps) {
   const theme = useTheme();
   const styles = useMemo(() => buildStyles(theme, compactSpacing), [compactSpacing, theme]);
 
+  if (!MARKDOWN_HINTS.test(children)) {
+    return <NativeText style={styles.plainText}>{children}</NativeText>;
+  }
+
   return (
-    <MarkdownLib
-      style={styles}
-      onLinkPress={(url) => {
-        if (!ALLOWED_LINK_SCHEMES.test(url)) return false;
-        void Linking.openURL(url);
-        return true;
-      }}
-    >
+    <MarkdownLib style={styles} onLinkPress={openTrustedMarkdownLink}>
       {children}
     </MarkdownLib>
   );
+});
+
+function openTrustedMarkdownLink(url: string): boolean {
+  if (!ALLOWED_LINK_SCHEMES.test(url)) return false;
+  void Linking.openURL(url);
+  return true;
 }
 
 const mono = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" });
@@ -46,6 +54,12 @@ function buildStyles(theme: Theme, compactSpacing: boolean) {
       color: theme.colors.foreground,
       fontSize: 15,
       lineHeight: 22,
+    },
+    plainText: {
+      color: theme.colors.foreground,
+      fontSize: 15,
+      lineHeight: 22,
+      marginBottom: paragraphMarginBottom,
     },
     paragraph: {
       marginTop: 0,

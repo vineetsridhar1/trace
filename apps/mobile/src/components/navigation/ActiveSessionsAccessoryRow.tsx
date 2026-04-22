@@ -13,7 +13,11 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
   sessionId,
   width,
   theme,
-}: { sessionId: string; width: number; theme: Theme }) {
+}: {
+  sessionId: string;
+  width: number;
+  theme: Theme;
+}) {
   const name = useEntityField("sessions", sessionId, "name");
   const sessionBranch = useEntityField("sessions", sessionId, "branch");
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId");
@@ -26,13 +30,8 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
 
   const onPress = useCallback(() => {
     haptic.light();
-    tryOpenSessionPlayer(sessionId);
-  }, [sessionId]);
-
-  // Prefetch group + session detail on touch-down so the overlay has data
-  // in Zustand before the spring lands. See SessionGroupRow for rationale.
-  const handlePressIn = useCallback(() => {
     prefetchSessionPlayer(sessionId);
+    tryOpenSessionPlayer(sessionId);
   }, [sessionId]);
 
   if (!name) return null;
@@ -46,7 +45,6 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
       accessibilityLabel={`Open session player — ${name}`}
       style={[styles.row, { width }]}
       onPress={onPress}
-      onPressIn={handlePressIn}
     >
       <View style={styles.leading}>
         <SessionStatusIndicator status={sessionStatus} agentStatus={agentStatus} size={10} />

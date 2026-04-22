@@ -6,10 +6,7 @@ import ContextMenu, {
   type ContextMenuAction,
   type ContextMenuOnPressNativeEvent,
 } from "react-native-context-menu-view";
-import {
-  ARCHIVE_SESSION_GROUP_MUTATION,
-  useEntityField,
-} from "@trace/client-core";
+import { ARCHIVE_SESSION_GROUP_MUTATION, useEntityField } from "@trace/client-core";
 import { Chip, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { getClient } from "@/lib/urql";
@@ -40,15 +37,12 @@ export const SessionGroupRow = memo(function SessionGroupRow({
   const lastMessageAt = useEntityField("sessions", latestSessionId ?? "", "lastMessageAt");
   const updatedAt = useEntityField("sessions", latestSessionId ?? "", "updatedAt");
   const agentStatus = useEntityField("sessions", latestSessionId ?? "", "agentStatus");
-  const lastEventPreview = useEntityField(
-    "sessions",
-    latestSessionId ?? "",
-    "_lastEventPreview",
-  );
+  const lastEventPreview = useEntityField("sessions", latestSessionId ?? "", "_lastEventPreview");
 
   const handlePress = useCallback(() => {
     if (!latestSessionId) return;
     void haptic.light();
+    prefetchSessionPlayer(latestSessionId);
     tryOpenSessionPlayer(latestSessionId);
   }, [latestSessionId]);
 
@@ -104,15 +98,9 @@ export const SessionGroupRow = memo(function SessionGroupRow({
     onPressOut,
   } = usePressScale(0.99);
 
-  // Prefetch group + session detail on touch-down so data is hydrated in
-  // Zustand before the overlay's spring finishes. Without this, the first
-  // open shows a spinner → full-tree remount mid-animation, which is the
-  // source of the first-open lag. Subsequent opens already hit the cache,
-  // which is why they feel fluid.
   const handlePressIn = useCallback(() => {
     onPressInScale();
-    if (latestSessionId) prefetchSessionPlayer(latestSessionId);
-  }, [onPressInScale, latestSessionId]);
+  }, [onPressInScale]);
 
   if (!name) return null;
 
@@ -154,7 +142,11 @@ export const SessionGroupRow = memo(function SessionGroupRow({
             {branch ? (
               <Text
                 numberOfLines={1}
-                style={[styles.branch, theme.typography.mono, { color: theme.colors.dimForeground, fontSize: 12 }]}
+                style={[
+                  styles.branch,
+                  theme.typography.mono,
+                  { color: theme.colors.dimForeground, fontSize: 12 },
+                ]}
               >
                 {branch}
               </Text>

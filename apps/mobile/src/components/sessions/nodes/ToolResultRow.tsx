@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { Text } from "@/components/design-system";
@@ -18,20 +18,31 @@ const PREVIEW_LEN = 80;
  * `ToolCallRow` (where each tool_use's matching tool_result is rendered) and
  * as a standalone fallback when a tool_result has no matching tool_use.
  */
-export function ToolResultRow({ output, isError = false }: ToolResultRowProps) {
+export const ToolResultRow = memo(function ToolResultRow({
+  output,
+  isError = false,
+}: ToolResultRowProps) {
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
-  const full = serializeUnknown(output);
-  const firstLine = full.split("\n")[0] ?? "";
-  const preview = truncate(firstLine, PREVIEW_LEN);
-  const multiline = full.length > preview.length || full.includes("\n");
+  const { full, preview, multiline } = useMemo(() => {
+    const serialized = typeof output === "string" ? output : serializeUnknown(output);
+    const newline = serialized.indexOf("\n");
+    const firstLine = newline === -1 ? serialized : serialized.slice(0, newline);
+    const short = truncate(firstLine, PREVIEW_LEN);
+    return {
+      full: serialized,
+      preview: short,
+      multiline: newline !== -1 || serialized.length > short.length,
+    };
+  }, [output]);
   const tint = isError ? theme.colors.destructive : theme.colors.success;
   const iconName = isError ? "xmark.circle.fill" : "checkmark.circle.fill";
+  const toggleExpanded = useCallback(() => setExpanded((v) => !v), []);
 
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={multiline ? () => setExpanded((v) => !v) : undefined}
+      onPress={multiline ? toggleExpanded : undefined}
       style={[
         styles.row,
         {
@@ -62,7 +73,7 @@ export function ToolResultRow({ output, isError = false }: ToolResultRowProps) {
       </View>
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   row: {

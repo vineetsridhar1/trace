@@ -1,10 +1,7 @@
-import { useCallback } from "react";
+import { memo, useCallback } from "react";
 import { StyleSheet, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import ContextMenu, {
-  type ContextMenuOnPressNativeEvent,
-} from "react-native-context-menu-view";
-import { Text } from "@/components/design-system";
+import ContextMenu, { type ContextMenuOnPressNativeEvent } from "react-native-context-menu-view";
 import { useTheme } from "@/theme";
 import { haptic } from "@/lib/haptics";
 import { Markdown } from "./Markdown";
@@ -17,7 +14,10 @@ interface AssistantMessageProps {
   streaming?: boolean;
 }
 
-export function AssistantMessage({ text, streaming = false }: AssistantMessageProps) {
+export const AssistantMessage = memo(function AssistantMessage({
+  text,
+  streaming = false,
+}: AssistantMessageProps) {
   const theme = useTheme();
 
   const handleContextMenuPress = useCallback(
@@ -44,7 +44,7 @@ export function AssistantMessage({ text, streaming = false }: AssistantMessagePr
       </ContextMenu>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrapper: { width: "100%" },

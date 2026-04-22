@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
-import {
-  StyleSheet,
-  View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-} from "react-native";
+import { StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import type { SessionNode } from "@trace/client-core";
 import type { Event } from "@trace/gql";
@@ -106,10 +101,7 @@ export function SessionStreamList({
       const isLast = index === nodes.length - 1;
       const key = stableNodeKey(item, scopedEvents);
       const isFreshLast =
-        isLast
-        && acceptEntering
-        && isNearBottomRef.current
-        && lastSeenKeyRef.current !== key;
+        isLast && acceptEntering && isNearBottomRef.current && lastSeenKeyRef.current !== key;
       if (isLast) lastSeenKeyRef.current = key;
       const body = (
         <TimestampRevealRow
@@ -155,7 +147,7 @@ export function SessionStreamList({
       renderItem={renderItem}
       keyExtractor={keyExtractor}
       getItemType={getItemType}
-      maxItemsInRecyclePool={0}
+      maxItemsInRecyclePool={24}
       inverted={false}
       onScroll={onScroll}
       scrollEventThrottle={16}

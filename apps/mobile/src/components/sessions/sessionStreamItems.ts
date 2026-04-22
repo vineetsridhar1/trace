@@ -24,7 +24,21 @@ export function timestampLabelForNode(
 }
 
 export function itemTypeFor(item: SessionNode, events: Record<string, Event>): string {
-  if (item.kind !== "event") return item.kind;
+  if (item.kind !== "event") {
+    switch (item.kind) {
+      // These rows keep local expansion/animation state, so they must not
+      // recycle across different transcript items.
+      case "command-execution":
+        return `command-execution:${item.id}`;
+      case "readglob-group": {
+        const firstId = item.items[0]?.id ?? "empty";
+        const lastId = item.items[item.items.length - 1]?.id ?? firstId;
+        return `readglob-group:${firstId}:${lastId}`;
+      }
+      default:
+        return item.kind;
+    }
+  }
   const event = events[item.id];
   if (!event) return "event:unknown";
   if (event.eventType === "session_output") {

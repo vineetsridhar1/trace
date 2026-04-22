@@ -2,16 +2,18 @@ import { memo, useCallback } from "react";
 import { useRouter } from "expo-router";
 import { useEntityField } from "@trace/client-core";
 import { ListRow } from "@/components/design-system";
-import { useChannelActiveSessionCount } from "@/hooks/useCodingChannels";
 
 export interface ChannelListRowProps {
   channelId: string;
+  activeCount: number;
 }
 
-export const ChannelListRow = memo(function ChannelListRow({ channelId }: ChannelListRowProps) {
+export const ChannelListRow = memo(function ChannelListRow({
+  channelId,
+  activeCount,
+}: ChannelListRowProps) {
   const router = useRouter();
   const name = useEntityField("channels", channelId, "name");
-  const activeCount = useChannelActiveSessionCount(channelId);
 
   const handlePress = useCallback(() => {
     router.push(`/channels/${channelId}`);

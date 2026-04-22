@@ -12,9 +12,7 @@ import { useMobileUIStore } from "@/stores/ui";
  * bottom accessory pager), the accessory's `activeAccessoryIndex` is synced
  * so the pager stays aligned when the Player closes.
  */
-export function tryOpenSessionPlayer(
-  sessionId: string | null | undefined,
-): boolean {
+export function tryOpenSessionPlayer(sessionId: string | null | undefined): boolean {
   if (!sessionId) return false;
 
   const ui = useMobileUIStore.getState();
@@ -34,11 +32,11 @@ export function closeSessionPlayer(): void {
 
 /**
  * Warms the Zustand entity store with the data the Session Player needs
- * before it mounts. Intended to be called on `onPressIn` of session rows so
- * the ~150–300 ms between touch-down and the spring landing overlaps with
- * the network round-trip. When the overlay mounts, its fetch hooks reuse
- * the in-flight promise (dedup lives in the fetch helpers) and the spinner
- * branch short-circuits if the group has already hydrated.
+ * before it mounts. Intended to be called only from confirmed open actions,
+ * not list `onPressIn`, because touch-down also fires during scroll gestures.
+ * When the overlay mounts, its fetch hooks reuse the in-flight promise
+ * (dedup lives in the fetch helpers) and the spinner branch short-circuits
+ * if the group has already hydrated.
  *
  * Fire-and-forget. A prefetch failure only logs a warning — the overlay's
  * own fetch will run and surface the canonical error state.
