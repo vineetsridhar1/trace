@@ -17,14 +17,13 @@ import Animated, {
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useEntityField } from "@trace/client-core";
-import { Glass } from "@/components/design-system/Glass";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
 import { SessionSurface, SessionSurfaceEmpty } from "@/components/sessions/SessionSurface";
 import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { haptic } from "@/lib/haptics";
 import { useMobileUIStore } from "@/stores/ui";
-import { useTheme } from "@/theme";
+import { alpha, useTheme } from "@/theme";
 
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 800;
@@ -172,7 +171,12 @@ export function SessionPlayerOverlay() {
           pointerEvents="box-none"
         >
           <GestureDetector gesture={pan}>
-            <Glass preset="navBar" style={styles.dragHandle}>
+            <View
+              style={[
+                styles.dragHandle,
+                { backgroundColor: alpha(theme.colors.background, 0.78) },
+              ]}
+            >
               <View style={{ height: insets.top }} />
               {sessionId ? (
                 <SessionGroupHeader groupId={headerGroupId ?? ""} sessionId={sessionId} />
@@ -184,7 +188,7 @@ export function SessionPlayerOverlay() {
                   onSelect={handleSelectSession}
                 />
               ) : null}
-            </Glass>
+            </View>
           </GestureDetector>
         </View>
       </Animated.View>
