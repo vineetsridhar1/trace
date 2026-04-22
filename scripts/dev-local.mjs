@@ -84,13 +84,25 @@ function getPrismaDevStateRoot() {
 function buildPrismaDevDatabaseUrl(port) {
   const params = new URLSearchParams({
     sslmode: "disable",
-    connection_limit: "10",
+    connection_limit: "1",
     connect_timeout: "0",
     max_idle_connection_lifetime: "0",
     pool_timeout: "0",
     socket_timeout: "0",
   });
   return `postgres://postgres:postgres@localhost:${port}/template1?${params.toString()}`;
+}
+
+function normalizeLocalDatabaseUrl(url) {
+  const parsed = new URL(url);
+  parsed.searchParams.set("sslmode", "disable");
+  // Prisma's local Postgres server accepts one connection at a time.
+  parsed.searchParams.set("connection_limit", "1");
+  parsed.searchParams.set("connect_timeout", "0");
+  parsed.searchParams.set("max_idle_connection_lifetime", "0");
+  parsed.searchParams.set("pool_timeout", "0");
+  parsed.searchParams.set("socket_timeout", "0");
+  return parsed.toString();
 }
 
 async function readPrismaDevState() {
@@ -109,7 +121,7 @@ async function readPrismaDevState() {
 function getPrismaDevStateUrl(state) {
   const exportedUrl = state?.exports?.database?.prismaORMConnectionString;
   if (typeof exportedUrl === "string" && exportedUrl.length > 0) {
-    return exportedUrl;
+    return normalizeLocalDatabaseUrl(exportedUrl);
   }
 
   const databasePort = state?.databasePort;
