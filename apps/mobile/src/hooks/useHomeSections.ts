@@ -33,6 +33,19 @@ function ownedBy(session: SessionEntity, userId: string): boolean {
   return typeof createdBy?.id === "string" && createdBy.id === userId;
 }
 
+function hiddenFromHome(state: EntityState, session: SessionEntity): boolean {
+  if (session.sessionStatus === "merged") return true;
+
+  const storedGroup = session.sessionGroupId
+    ? state.sessionGroups[session.sessionGroupId]
+    : undefined;
+  const sessionGroup = session.sessionGroup;
+  const groupStatus = storedGroup?.status ?? sessionGroup?.status;
+  const archivedAt = storedGroup?.archivedAt ?? sessionGroup?.archivedAt;
+
+  return Boolean(archivedAt) || groupStatus === "archived" || groupStatus === "merged";
+}
+
 interface PendingMeta {
   /** 0 = question_pending (most urgent), 1 = plan_pending, 2 = neither found */
   rank: number;
@@ -96,6 +109,7 @@ const SECTION_ORDER: HomeSectionKind[] = ["needs_input", "working_now", "recentl
  *  3. Recently done — `agentStatus === "done"` or `sessionStatus === "in_review"`
  *     with `updatedAt` inside the trailing 24h, sorted by recency desc.
  *
+ * Merged sessions and sessions in merged/archived groups are hidden from Home.
  * Empty buckets are omitted. Uses a custom equality fn so the hook only
  * triggers a render when the membership/order actually changes.
  */
@@ -113,6 +127,7 @@ export function useHomeSections(userId: string | null): HomeSection[] {
 
       for (const session of Object.values(state.sessions) as SessionEntity[]) {
         if (!ownedBy(session, userId)) continue;
+        if (hiddenFromHome(state, session)) continue;
 
         const sortTs = sortTimestamp(session);
 
