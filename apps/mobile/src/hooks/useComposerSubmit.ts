@@ -43,8 +43,13 @@ export function useComposerSubmit({
       setSending(true);
       const wrapped = wrapPrompt(mode, draft);
       const interactionMode = mode === "code" ? undefined : mode;
+      // Clear the input the same frame the message visibly leaves it — for
+      // the inactive path, that's right after the optimistic event is inserted
+      // into the stream; for the queue path, the user expects the draft to
+      // empty as soon as they tap. Either way we restore the draft on failure.
       try {
         if (isActive) {
+          onSuccess();
           const result = await getClient()
             .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
               sessionId,
@@ -53,13 +58,13 @@ export function useComposerSubmit({
             })
             .toPromise();
           if (result.error) throw result.error;
-          onSuccess();
           return;
         }
         const { eventId, clientMutationId } = optimisticallyInsertSessionMessage(
           sessionId,
           wrapped,
         );
+        onSuccess();
         try {
           const result = await getClient()
             .mutation<{ sendSessionMessage: { id: string } }>(
@@ -71,7 +76,6 @@ export function useComposerSubmit({
           const realId = result.data?.sendSessionMessage?.id;
           if (!realId) throw new Error("Send failed: missing event id");
           reconcileOptimisticSessionMessage(sessionId, eventId, realId);
-          onSuccess();
         } catch (err) {
           removeOptimisticSessionMessage(sessionId, eventId);
           throw err;

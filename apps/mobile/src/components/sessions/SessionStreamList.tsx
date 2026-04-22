@@ -8,14 +8,22 @@ import {
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import type { SessionNode } from "@trace/client-core";
 import type { Event } from "@trace/gql";
-import Animated, { FadeInDown, type SharedValue } from "react-native-reanimated";
+import Animated, { Keyframe, type SharedValue } from "react-native-reanimated";
 import { Text } from "@/components/design-system";
 import { nodeKey } from "@/hooks/useNewActivityTracker";
-import { motion, useTheme } from "@/theme";
+import { useTheme } from "@/theme";
 import { ConnectionLostBanner } from "./nodes/ConnectionLostBanner";
 import { renderNode, type NodeRenderContext } from "./nodes";
 import { TimestampRevealRow } from "./TimestampRevealRow";
 import { itemTypeFor, timestampLabelForNode } from "./sessionStreamItems";
+
+// Subtle rise-into-place for a freshly-arrived last bubble. Default `FadeInDown`
+// translates from ~300px below which reads as a flash — this is a small,
+// deliberate slide so the message visibly rises out of the composer area.
+const messageEnter = new Keyframe({
+  0: { opacity: 0, transform: [{ translateY: 18 }] },
+  100: { opacity: 1, transform: [{ translateY: 0 }] },
+}).duration(260);
 
 interface SessionStreamListProps {
   sessionId: string;
@@ -79,17 +87,31 @@ export function SessionStreamList({
   // last row is *actually new*, not just re-rendered (e.g., when its event
   // payload changed but its identity didn't).
   const lastSeenKeyRef = useRef<string | null>(null);
+  // The optimistic→real swap changes the event id (and thus the row key), so
+  // a key-only check would replay the entrance. Track clientMutationId to
+  // recognize the swap and suppress the second animation.
+  const seenMutationIdsRef = useRef<Set<string>>(new Set());
 
   const renderItem = useCallback(
     ({ item, index }: { item: SessionNode; index: number }) => {
       const isLast = index === nodes.length - 1;
       const key = nodeKey(item);
+      const event = item.kind === "event" ? scopedEvents[item.id] : undefined;
+      const mutationId =
+        event && typeof (event.payload as { clientMutationId?: unknown })?.clientMutationId === "string"
+          ? ((event.payload as { clientMutationId: string }).clientMutationId)
+          : undefined;
+      const alreadySeenViaMutation = mutationId
+        ? seenMutationIdsRef.current.has(mutationId)
+        : false;
       const isFreshLast =
         isLast
         && acceptEntering
         && isNearBottomRef.current
-        && lastSeenKeyRef.current !== key;
+        && lastSeenKeyRef.current !== key
+        && !alreadySeenViaMutation;
       if (isLast) lastSeenKeyRef.current = key;
+      if (isFreshLast && mutationId) seenMutationIdsRef.current.add(mutationId);
       const body = (
         <TimestampRevealRow
           paddingHorizontal={horizontalPadding}
@@ -104,11 +126,7 @@ export function SessionStreamList({
         </TimestampRevealRow>
       );
       if (!isFreshLast) return body;
-      return (
-        <Animated.View entering={FadeInDown.duration(motion.durations.accordion)}>
-          {body}
-        </Animated.View>
-      );
+      return <Animated.View entering={messageEnter}>{body}</Animated.View>;
     },
     [
       acceptEntering,
