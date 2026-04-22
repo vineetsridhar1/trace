@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { asJsonObject } from "@trace/shared";
@@ -21,13 +21,13 @@ const PREVIEW_LEN = 60;
  * command invocations render via `CommandExecutionRow` — this component
  * handles every other tool name.
  */
-export function ToolCallRow({ name, input, output }: ToolCallRowProps) {
+export const ToolCallRow = memo(function ToolCallRow({ name, input, output }: ToolCallRowProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
 
-  const lowered = name.toLowerCase();
-  const isCommand = lowered === "bash" || lowered === "command";
-  const preview = (() => {
+  const preview = useMemo(() => {
+    const lowered = name.toLowerCase();
+    const isCommand = lowered === "bash" || lowered === "command";
     if (isCommand && typeof input?.command === "string") {
       return formatCommandLabel(input.command);
     }
@@ -35,12 +35,13 @@ export function ToolCallRow({ name, input, output }: ToolCallRowProps) {
     if (typeof input?.pattern === "string") return input.pattern;
     if (typeof input?.description === "string") return input.description;
     return null;
-  })();
+  }, [input, name]);
 
   const hasBody = input != null || output != null;
   const outputIsError =
     (typeof output === "string" && /error|failed/i.test(output)) ||
     asJsonObject(output)?.isError === true;
+  const toggleOpen = useCallback(() => setOpen((v) => !v), []);
 
   return (
     <View style={styles.wrapper}>
@@ -48,7 +49,7 @@ export function ToolCallRow({ name, input, output }: ToolCallRowProps) {
         accessibilityRole="button"
         accessibilityLabel={`${name} tool call`}
         disabled={!hasBody}
-        onPress={() => setOpen((v) => !v)}
+        onPress={toggleOpen}
         style={[
           styles.header,
           {
@@ -99,10 +100,7 @@ export function ToolCallRow({ name, input, output }: ToolCallRowProps) {
               <Text variant="caption2" color="dimForeground">
                 Input
               </Text>
-              <Text
-                style={[styles.code, { color: theme.colors.mutedForeground }]}
-                selectable
-              >
+              <Text style={[styles.code, { color: theme.colors.mutedForeground }]} selectable>
                 {serializeUnknown(input)}
               </Text>
             </>
@@ -112,7 +110,7 @@ export function ToolCallRow({ name, input, output }: ToolCallRowProps) {
       ) : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrapper: { width: "100%", paddingVertical: 2 },

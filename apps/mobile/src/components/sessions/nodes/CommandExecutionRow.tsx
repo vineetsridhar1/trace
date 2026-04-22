@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import Animated, {
   Easing,
@@ -24,7 +24,7 @@ const ACCORDION_EASING = Easing.bezier(0.16, 1, 0.3, 1);
  * Merged shell-command row — renders the command in monospace and expands
  * to show the full stdout/stderr payload.
  */
-export function CommandExecutionRow({
+export const CommandExecutionRow = memo(function CommandExecutionRow({
   command,
   output,
   exitCode,
@@ -41,6 +41,10 @@ export function CommandExecutionRow({
     (output && typeof output === "object" && Object.keys(output).length > 0);
   const hasError = exitCode != null && exitCode !== 0;
   const hasBody = Boolean(hasOutput || hasError);
+  const handlePress = useCallback(() => {
+    setBodyMounted(true);
+    setOpen((v) => !v);
+  }, []);
 
   useEffect(() => {
     progress.value = withTiming(open ? 1 : 0, {
@@ -64,10 +68,7 @@ export function CommandExecutionRow({
         accessibilityRole="button"
         accessibilityLabel={`${prefix} ${display}`}
         disabled={!hasBody}
-        onPress={() => {
-          setBodyMounted(true);
-          setOpen((v) => !v);
-        }}
+        onPress={handlePress}
         style={[
           styles.header,
           {
@@ -122,20 +123,15 @@ export function CommandExecutionRow({
             <Text variant="caption2" color="dimForeground">
               Output
             </Text>
-            <Text
-              style={[styles.code, { color: theme.colors.mutedForeground }]}
-              selectable
-            >
-              {hasOutput
-                ? serializeUnknown(output)
-                : `Command exited with code ${exitCode}.`}
+            <Text style={[styles.code, { color: theme.colors.mutedForeground }]} selectable>
+              {hasOutput ? serializeUnknown(output) : `Command exited with code ${exitCode}.`}
             </Text>
           </View>
         </Animated.View>
       ) : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrapper: { width: "100%", paddingVertical: 2 },

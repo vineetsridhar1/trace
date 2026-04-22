@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { RefreshControl, ScrollView } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { EmptyState } from "@/components/design-system";
 import { SessionGroupRow } from "@/components/channels/SessionGroupRow";
 import { MergedArchivedHeader } from "@/components/channels/MergedArchivedHeader";
@@ -38,27 +38,32 @@ export default function MergedArchived() {
   return (
     <>
       <Stack.Screen options={{ title: "Merged & Archived" }} />
-      <ScrollView
+      <FlashList
         // Re-mount on segment change so scroll resets to zero instead of
         // carrying over from the previous (often differently-sized) list.
         key={segment}
-        // Keep the ScrollView as the root native view on the screen, matching
-        // the home tab's working minimize-on-scroll path.
+        data={ids}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
         style={{ flex: 1, backgroundColor: theme.colors.background }}
         contentInsetAdjustmentBehavior="automatic"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+        ListHeaderComponent={
+          <MergedArchivedHeader segment={segment} onSegmentChange={setSegment} />
         }
-      >
-        <MergedArchivedHeader segment={segment} onSegmentChange={setSegment} />
-        {ids.length === 0 ? (
-          <MergedArchivedEmpty segment={segment} />
-        ) : (
-          ids.map((id) => <SessionGroupRow key={id} groupId={id} />)
-        )}
-      </ScrollView>
+        ListEmptyComponent={<MergedArchivedEmpty segment={segment} />}
+      />
     </>
   );
+}
+
+function renderItem({ item }: { item: string }) {
+  return <SessionGroupRow groupId={item} />;
+}
+
+function keyExtractor(id: string): string {
+  return id;
 }
 
 function MergedArchivedEmpty({ segment }: { segment: MergedArchivedSegment }) {

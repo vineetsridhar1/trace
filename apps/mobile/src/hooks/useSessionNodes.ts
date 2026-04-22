@@ -21,6 +21,10 @@ export interface UseSessionNodesResult {
   events: Record<string, Event>;
 }
 
+function sortEventsByTimestamp(a: Event, b: Event): number {
+  return a.timestamp.localeCompare(b.timestamp);
+}
+
 /**
  * Derive the renderable SessionNode[] for a session from its scoped events,
  * identical to web's node model. Also exposes the two tool-output maps the
@@ -36,7 +40,7 @@ export interface UseSessionNodesResult {
  */
 export function useSessionNodes(sessionId: string): UseSessionNodesResult {
   const scopeKey = eventScopeKey("session", sessionId);
-  const eventIds = useScopedEventIds(scopeKey, (a, b) => a.timestamp.localeCompare(b.timestamp));
+  const eventIds = useScopedEventIds(scopeKey, sortEventsByTimestamp);
   const events = useScopedEvents(scopeKey);
   const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
     | GitCheckpoint[]
