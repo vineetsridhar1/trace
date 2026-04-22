@@ -57,10 +57,52 @@ export type ConnectionLinkedCheckout = Pick<
   attachedSessionGroup?: ConnectionAttachedSessionGroup | null;
 };
 
+export interface ConnectionTunnelSlot {
+  id: string;
+  label: string;
+  provider: "custom" | "ngrok";
+  mode: "manual" | "trace_managed";
+  publicUrl: string;
+  targetPort?: number | null;
+  state: "configured" | "running" | "stopped" | "error";
+  lastError?: string | null;
+  updatedAt: string;
+}
+
+export interface ConnectionWebPreview {
+  available: boolean;
+  reason?:
+    | "missing_repo"
+    | "missing_repo_port"
+    | "not_local_runtime"
+    | "runtime_disconnected"
+    | "not_synced_to_main_worktree"
+    | "no_matching_tunnel"
+    | "tunnel_inactive"
+    | null;
+  url?: string | null;
+  port?: number | null;
+  runtimeInstanceId?: string | null;
+  isOwner: boolean;
+  canManageTunnel: boolean;
+  repo?: { id: string; name: string; defaultBranch?: string | null; webPreviewPort?: number | null } | null;
+  slot?: ConnectionTunnelSlot | null;
+  sessionGroup?:
+    | {
+        id: string;
+        name: string;
+        slug?: string | null;
+        branch?: string | null;
+        channel?: { id: string; name: string } | null;
+      }
+    | null;
+}
+
 export interface ConnectionRepoEntry {
-  repo: Pick<Repo, "id" | "name" | "defaultBranch">;
+  repo: Pick<Repo, "id" | "name" | "defaultBranch" | "webPreviewPort">;
   channel: Pick<Channel, "id" | "name" | "baseBranch">;
   linkedCheckout?: ConnectionLinkedCheckout | null;
+  webPreview?: ConnectionWebPreview | null;
 }
 
 export interface ConnectionBridge {
@@ -71,6 +113,7 @@ export interface ConnectionBridge {
     hostingMode: HostingMode;
     lastSeenAt: string;
     connected: boolean;
+    tunnelSlots: ConnectionTunnelSlot[];
     ownerUser: ConnectionUser;
     accessRequests: ConnectionAccessRequest[];
     accessGrants: ConnectionAccessGrant[];

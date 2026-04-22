@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { sessionRouter, type RuntimeInstance } from "../lib/session-router.js";
 import type { BridgeLinkedCheckoutStatus } from "@trace/shared";
+import { webPreviewService, type WebPreviewRecord } from "./web-preview.js";
 
 type BridgeWithAccess = Prisma.BridgeRuntimeGetPayload<{
   include: {
@@ -31,6 +32,7 @@ export interface ConnectionsRepoEntry {
   channel: VisibleChannel;
   runScripts: Prisma.JsonValue | null;
   linkedCheckout: BridgeLinkedCheckoutStatus | null;
+  webPreview: WebPreviewRecord;
 }
 
 export interface ConnectionsBridge {
@@ -107,6 +109,32 @@ class ConnectionsService {
       channelByRepoId.set(channel.repoId, channel);
     }
 
+    const attachedSessionGroupIds = new Set<string>();
+    for (const runtime of liveById.values()) {
+      for (const checkout of runtime.linkedCheckouts.values()) {
+        if (!checkout.isAttached || !checkout.attachedSessionGroupId) continue;
+        attachedSessionGroupIds.add(checkout.attachedSessionGroupId);
+      }
+    }
+
+    const attachedSessionGroups = attachedSessionGroupIds.size
+      ? await prisma.sessionGroup.findMany({
+          where: {
+            organizationId: input.organizationId,
+            id: { in: [...attachedSessionGroupIds] },
+          },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            branch: true,
+          },
+        })
+      : [];
+    const attachedSessionGroupById = new Map(
+      (attachedSessionGroups ?? []).map((group) => [group.id, group]),
+    );
+
     return bridges.map((bridge) => {
       const runtime = liveById.get(bridge.instanceId);
       const repos: ConnectionsRepoEntry[] = [];
@@ -121,6 +149,19 @@ class ConnectionsService {
             channel,
             runScripts: channel.runScripts,
             linkedCheckout: checkout?.isAttached ? checkout : null,
+            webPreview: webPreviewService.buildConnectionsRepoPreview({
+              userId: input.userId,
+              ownerUserId: bridge.ownerUserId,
+              repo: channel.repo,
+              sessionGroup:
+                checkout?.attachedSessionGroupId
+                  ? (attachedSessionGroupById.get(checkout.attachedSessionGroupId) ?? null)
+                  : null,
+              runtimeInstanceId: runtime.id,
+              connected: !runtime.ws || runtime.ws.readyState === runtime.ws.OPEN,
+              tunnelSlots: runtime.tunnelSlots ? [...runtime.tunnelSlots.values()] : [],
+              attachedSessionGroupId: checkout?.attachedSessionGroupId ?? null,
+            }),
           });
         }
       }

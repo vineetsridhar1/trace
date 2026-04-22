@@ -44,7 +44,7 @@ type Documents = {
     "\n  mutation RemoveOrgMember($organizationId: ID!, $userId: ID!) {\n    removeOrgMember(organizationId: $organizationId, userId: $userId)\n  }\n": typeof types.RemoveOrgMemberDocument,
     "\n  mutation UpdateOrgMemberRole($organizationId: ID!, $userId: ID!, $role: UserRole!) {\n    updateOrgMemberRole(organizationId: $organizationId, userId: $userId, role: $role) {\n      user {\n        id\n      }\n      role\n    }\n  }\n": typeof types.UpdateOrgMemberRoleDocument,
     "\n  query SearchUsers($query: String!) {\n    searchUsers(query: $query) {\n      id\n      name\n      email\n      avatarUrl\n    }\n  }\n": typeof types.SearchUsersDocument,
-    "\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": typeof types.SettingsReposDocument,
+    "\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webPreviewPort\n      webhookActive\n    }\n  }\n": typeof types.SettingsReposDocument,
     "\n  mutation CreateDM($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateDmDocument,
     "\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      members {\n        user {\n          id\n        }\n        joinedAt\n      }\n    }\n  }\n": typeof types.AllChannelsDocument,
     "\n  mutation JoinChannel($channelId: ID!) {\n    joinChannel(channelId: $channelId) {\n      id\n    }\n  }\n": typeof types.JoinChannelDocument,
@@ -67,11 +67,11 @@ type Documents = {
     "\n  subscription SessionEventsLive($sessionId: ID!, $organizationId: ID!) {\n    sessionEvents(sessionId: $sessionId, organizationId: $organizationId) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n": typeof types.SessionEventsLiveDocument,
     "\n  query Channels($organizationId: ID!, $memberOnly: Boolean) {\n    channels(organizationId: $organizationId, memberOnly: $memberOnly) {\n      id\n      name\n      type\n      position\n      groupId\n      baseBranch\n      setupScript\n      runScripts\n      repo { id name }\n    }\n  }\n": typeof types.ChannelsDocument,
     "\n  query ChannelGroups($organizationId: ID!) {\n    channelGroups(organizationId: $organizationId) {\n      id\n      name\n      position\n      isCollapsed\n    }\n  }\n": typeof types.ChannelGroupsDocument,
-    "\n  query Repos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": typeof types.ReposDocument,
+    "\n  query Repos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webPreviewPort\n      webhookActive\n    }\n  }\n": typeof types.ReposDocument,
     "\n  query Chats {\n    chats {\n      id\n      type\n      name\n      members {\n        user {\n          id\n          name\n          avatarUrl\n        }\n        joinedAt\n      }\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.ChatsDocument,
     "\n  query InboxItems($organizationId: ID!) {\n    inboxItems(organizationId: $organizationId) {\n      id\n      itemType\n      status\n      title\n      summary\n      payload\n      userId\n      sourceType\n      sourceId\n      createdAt\n      resolvedAt\n    }\n  }\n": typeof types.InboxItemsDocument,
     "\n  query OnboardingApiTokens {\n    myApiTokens {\n      provider\n      isSet\n    }\n  }\n": typeof types.OnboardingApiTokensDocument,
-    "\n  query OnboardingRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": typeof types.OnboardingReposDocument,
+    "\n  query OnboardingRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webPreviewPort\n      webhookActive\n    }\n  }\n": typeof types.OnboardingReposDocument,
 };
 const documents: Documents = {
     "\n  query AgentIdentityDebug($organizationId: ID!) {\n    agentIdentity(organizationId: $organizationId) {\n      id\n      name\n      status\n      autonomyMode\n      soulFile\n      costBudget {\n        dailyLimitCents\n      }\n    }\n  }\n": types.AgentIdentityDebugDocument,
@@ -104,7 +104,7 @@ const documents: Documents = {
     "\n  mutation RemoveOrgMember($organizationId: ID!, $userId: ID!) {\n    removeOrgMember(organizationId: $organizationId, userId: $userId)\n  }\n": types.RemoveOrgMemberDocument,
     "\n  mutation UpdateOrgMemberRole($organizationId: ID!, $userId: ID!, $role: UserRole!) {\n    updateOrgMemberRole(organizationId: $organizationId, userId: $userId, role: $role) {\n      user {\n        id\n      }\n      role\n    }\n  }\n": types.UpdateOrgMemberRoleDocument,
     "\n  query SearchUsers($query: String!) {\n    searchUsers(query: $query) {\n      id\n      name\n      email\n      avatarUrl\n    }\n  }\n": types.SearchUsersDocument,
-    "\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": types.SettingsReposDocument,
+    "\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webPreviewPort\n      webhookActive\n    }\n  }\n": types.SettingsReposDocument,
     "\n  mutation CreateDM($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n": types.CreateDmDocument,
     "\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      members {\n        user {\n          id\n        }\n        joinedAt\n      }\n    }\n  }\n": types.AllChannelsDocument,
     "\n  mutation JoinChannel($channelId: ID!) {\n    joinChannel(channelId: $channelId) {\n      id\n    }\n  }\n": types.JoinChannelDocument,
@@ -127,11 +127,11 @@ const documents: Documents = {
     "\n  subscription SessionEventsLive($sessionId: ID!, $organizationId: ID!) {\n    sessionEvents(sessionId: $sessionId, organizationId: $organizationId) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n": types.SessionEventsLiveDocument,
     "\n  query Channels($organizationId: ID!, $memberOnly: Boolean) {\n    channels(organizationId: $organizationId, memberOnly: $memberOnly) {\n      id\n      name\n      type\n      position\n      groupId\n      baseBranch\n      setupScript\n      runScripts\n      repo { id name }\n    }\n  }\n": types.ChannelsDocument,
     "\n  query ChannelGroups($organizationId: ID!) {\n    channelGroups(organizationId: $organizationId) {\n      id\n      name\n      position\n      isCollapsed\n    }\n  }\n": types.ChannelGroupsDocument,
-    "\n  query Repos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": types.ReposDocument,
+    "\n  query Repos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webPreviewPort\n      webhookActive\n    }\n  }\n": types.ReposDocument,
     "\n  query Chats {\n    chats {\n      id\n      type\n      name\n      members {\n        user {\n          id\n          name\n          avatarUrl\n        }\n        joinedAt\n      }\n      createdAt\n      updatedAt\n    }\n  }\n": types.ChatsDocument,
     "\n  query InboxItems($organizationId: ID!) {\n    inboxItems(organizationId: $organizationId) {\n      id\n      itemType\n      status\n      title\n      summary\n      payload\n      userId\n      sourceType\n      sourceId\n      createdAt\n      resolvedAt\n    }\n  }\n": types.InboxItemsDocument,
     "\n  query OnboardingApiTokens {\n    myApiTokens {\n      provider\n      isSet\n    }\n  }\n": types.OnboardingApiTokensDocument,
-    "\n  query OnboardingRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": types.OnboardingReposDocument,
+    "\n  query OnboardingRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webPreviewPort\n      webhookActive\n    }\n  }\n": types.OnboardingReposDocument,
 };
 
 /**
@@ -271,7 +271,7 @@ export function graphql(source: "\n  query SearchUsers($query: String!) {\n    s
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n"): (typeof documents)["\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n"];
+export function graphql(source: "\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webPreviewPort\n      webhookActive\n    }\n  }\n"): (typeof documents)["\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webPreviewPort\n      webhookActive\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -363,7 +363,7 @@ export function graphql(source: "\n  query ChannelGroups($organizationId: ID!) {
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query Repos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n"): (typeof documents)["\n  query Repos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n"];
+export function graphql(source: "\n  query Repos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webPreviewPort\n      webhookActive\n    }\n  }\n"): (typeof documents)["\n  query Repos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webPreviewPort\n      webhookActive\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -379,7 +379,7 @@ export function graphql(source: "\n  query OnboardingApiTokens {\n    myApiToken
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query OnboardingRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n"): (typeof documents)["\n  query OnboardingRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n"];
+export function graphql(source: "\n  query OnboardingRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webPreviewPort\n      webhookActive\n    }\n  }\n"): (typeof documents)["\n  query OnboardingRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webPreviewPort\n      webhookActive\n    }\n  }\n"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};

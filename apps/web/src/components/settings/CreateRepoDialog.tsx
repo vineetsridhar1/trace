@@ -41,6 +41,7 @@ export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
   // Manual fallback fields (browser only)
   const [manualName, setManualName] = useState("");
   const [manualRemoteUrl, setManualRemoteUrl] = useState("");
+  const [webPreviewPort, setWebPreviewPort] = useState("");
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const isMobile = useIsMobile();
 
@@ -73,6 +74,24 @@ export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
         : null);
     if (!repo || !activeOrgId) return;
 
+    const trimmedPort = webPreviewPort.trim();
+    const parsedPort =
+      trimmedPort === ""
+        ? null
+        : Number.isInteger(Number(trimmedPort))
+          ? Number(trimmedPort)
+          : Number.NaN;
+    if (
+      trimmedPort !== "" &&
+      (typeof parsedPort !== "number" ||
+        !Number.isInteger(parsedPort) ||
+        parsedPort < 1 ||
+        parsedPort > 65535)
+    ) {
+      setError("Preview port must be between 1 and 65535.");
+      return;
+    }
+
     setCreating(true);
     try {
       const result = await client
@@ -82,6 +101,7 @@ export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
             name: repo.name,
             remoteUrl: repo.remoteUrl,
             defaultBranch: repo.defaultBranch,
+            webPreviewPort: parsedPort,
           },
         })
         .toPromise();
@@ -110,6 +130,7 @@ export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
     setError(null);
     setManualName("");
     setManualRemoteUrl("");
+    setWebPreviewPort("");
     setOpen(false);
   }
 
@@ -181,6 +202,19 @@ export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
               </div>
             </>
           )}
+
+          <div>
+            <label className="mb-1.5 block text-sm text-muted-foreground">
+              Web preview port
+            </label>
+            <Input
+              value={webPreviewPort}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setWebPreviewPort(e.target.value)}
+              placeholder="Optional, e.g. 3000"
+              inputMode="numeric"
+              pattern="[0-9]*"
+            />
+          </div>
         </div>
 
         <DialogFooter>

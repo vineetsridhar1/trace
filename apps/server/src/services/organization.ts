@@ -17,6 +17,15 @@ const PROJECT_INCLUDE = {
   tickets: { include: { ticket: true } },
 } as const;
 
+function normalizeWebPreviewPort(port: number | null | undefined): number | null | undefined {
+  if (port === undefined) return undefined;
+  if (port === null) return null;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("Web preview port must be between 1 and 65535");
+  }
+  return port;
+}
+
 export class OrganizationService {
   async getOrganization(id: string, userId: string) {
     await prisma.orgMember.findUniqueOrThrow({
@@ -109,6 +118,8 @@ export class OrganizationService {
   }
 
   async createRepo(input: CreateRepoInput, actorType: ActorType, actorId: string) {
+    const webPreviewPort = normalizeWebPreviewPort(input.webPreviewPort ?? undefined) ?? null;
+
     // Deduplicate by remote URL within the org — if it already exists, return it
     const existing = await prisma.repo.findUnique({
       where: {
@@ -128,6 +139,7 @@ export class OrganizationService {
           name: input.name,
           remoteUrl: input.remoteUrl,
           defaultBranch: input.defaultBranch ?? "main",
+          webPreviewPort,
           organizationId: input.organizationId,
         },
         include: { projects: true, sessions: true },
@@ -145,6 +157,7 @@ export class OrganizationService {
               name: repo.name,
               remoteUrl: repo.remoteUrl,
               defaultBranch: repo.defaultBranch,
+              webPreviewPort: repo.webPreviewPort,
               webhookActive: !!repo.webhookId,
             },
           },
@@ -167,6 +180,8 @@ export class OrganizationService {
     actorType: ActorType,
     actorId: string,
   ) {
+    const webPreviewPort = normalizeWebPreviewPort(input.webPreviewPort);
+
     const [repo] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Verify repo belongs to caller's org before updating
       await tx.repo.findFirstOrThrow({
@@ -179,6 +194,7 @@ export class OrganizationService {
         data: {
           ...(input.name != null && { name: input.name }),
           ...(input.defaultBranch != null && { defaultBranch: input.defaultBranch }),
+          ...(webPreviewPort !== undefined && { webPreviewPort }),
         },
         include: { projects: true, sessions: true },
       });
@@ -195,6 +211,7 @@ export class OrganizationService {
               name: repo.name,
               remoteUrl: repo.remoteUrl,
               defaultBranch: repo.defaultBranch,
+              webPreviewPort: repo.webPreviewPort,
               webhookActive: !!repo.webhookId,
             },
           },
