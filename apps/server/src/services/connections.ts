@@ -109,62 +109,86 @@ class ConnectionsService {
       channelByRepoId.set(channel.repoId, channel);
     }
 
-    const attachedSessionGroupIds = new Set<string>();
-    for (const runtime of liveById.values()) {
-      for (const checkout of runtime.linkedCheckouts.values()) {
-        if (!checkout.isAttached || !checkout.attachedSessionGroupId) continue;
-        attachedSessionGroupIds.add(checkout.attachedSessionGroupId);
+    const repoContexts: Array<{
+      bridge: BridgeWithAccess;
+      runtime: RuntimeInstance;
+      repoId: string;
+      channel: VisibleChannel;
+    }> = [];
+    for (const bridge of bridges) {
+      const runtime = liveById.get(bridge.instanceId);
+      if (!runtime) continue;
+      for (const repoId of runtime.registeredRepoIds) {
+        const channel = channelByRepoId.get(repoId);
+        if (!channel?.repo) continue;
+        repoContexts.push({
+          bridge,
+          runtime,
+          repoId,
+          channel,
+        });
       }
     }
 
-    const attachedSessionGroups = attachedSessionGroupIds.size
-      ? await prisma.sessionGroup.findMany({
-          where: {
-            organizationId: input.organizationId,
-            id: { in: [...attachedSessionGroupIds] },
-          },
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            branch: true,
-          },
-        })
-      : [];
-    const attachedSessionGroupById = new Map(
-      (attachedSessionGroups ?? []).map((group) => [group.id, group]),
+    const resolvedRepoContexts = await Promise.all(
+      repoContexts.map(async (context) => {
+        const cachedCheckout = context.runtime.linkedCheckouts.get(context.repoId) ?? null;
+        const checkout =
+          cachedCheckout ??
+          (await webPreviewService.resolveLinkedCheckoutStatus({
+            runtimeInstanceId: context.runtime.id,
+            repoId: context.repoId,
+          }));
+        return {
+          ...context,
+          checkout,
+        };
+      }),
     );
+
+    const attachedSessionGroupById = await webPreviewService.listVisibleSessionGroupsById({
+      organizationId: input.organizationId,
+      userId: input.userId,
+      ids: resolvedRepoContexts.flatMap((context) =>
+        context.checkout?.isAttached && context.checkout.attachedSessionGroupId
+          ? [context.checkout.attachedSessionGroupId]
+          : [],
+      ),
+    });
+
+    const reposByBridgeId = new Map<string, ConnectionsRepoEntry[]>();
+    for (const context of resolvedRepoContexts) {
+      const repos = reposByBridgeId.get(context.bridge.instanceId) ?? [];
+      const visibleAttachedSessionGroup =
+        context.checkout?.attachedSessionGroupId != null
+          ? (attachedSessionGroupById.get(context.checkout.attachedSessionGroupId) ?? null)
+          : null;
+      repos.push({
+        repo: context.channel.repo!,
+        channel: context.channel,
+        runScripts: context.channel.runScripts,
+        linkedCheckout:
+          context.checkout?.isAttached &&
+          (context.checkout.attachedSessionGroupId == null || visibleAttachedSessionGroup != null)
+            ? context.checkout
+            : null,
+        webPreview: webPreviewService.buildConnectionsRepoPreview({
+          userId: input.userId,
+          ownerUserId: context.bridge.ownerUserId,
+          repo: context.channel.repo,
+          sessionGroup: visibleAttachedSessionGroup,
+          runtimeInstanceId: context.runtime.id,
+          connected: !context.runtime.ws || context.runtime.ws.readyState === context.runtime.ws.OPEN,
+          tunnelSlots: context.runtime.tunnelSlots ? [...context.runtime.tunnelSlots.values()] : [],
+          attachedSessionGroupId: context.checkout?.attachedSessionGroupId ?? null,
+        }),
+      });
+      reposByBridgeId.set(context.bridge.instanceId, repos);
+    }
 
     return bridges.map((bridge) => {
       const runtime = liveById.get(bridge.instanceId);
-      const repos: ConnectionsRepoEntry[] = [];
-
-      if (runtime) {
-        for (const repoId of runtime.registeredRepoIds) {
-          const channel = channelByRepoId.get(repoId);
-          if (!channel?.repo) continue;
-          const checkout = runtime.linkedCheckouts.get(repoId) ?? null;
-          repos.push({
-            repo: channel.repo,
-            channel,
-            runScripts: channel.runScripts,
-            linkedCheckout: checkout?.isAttached ? checkout : null,
-            webPreview: webPreviewService.buildConnectionsRepoPreview({
-              userId: input.userId,
-              ownerUserId: bridge.ownerUserId,
-              repo: channel.repo,
-              sessionGroup:
-                checkout?.attachedSessionGroupId
-                  ? (attachedSessionGroupById.get(checkout.attachedSessionGroupId) ?? null)
-                  : null,
-              runtimeInstanceId: runtime.id,
-              connected: !runtime.ws || runtime.ws.readyState === runtime.ws.OPEN,
-              tunnelSlots: runtime.tunnelSlots ? [...runtime.tunnelSlots.values()] : [],
-              attachedSessionGroupId: checkout?.attachedSessionGroupId ?? null,
-            }),
-          });
-        }
-      }
+      const repos = runtime ? (reposByBridgeId.get(bridge.instanceId) ?? []) : [];
 
       return {
         bridge,

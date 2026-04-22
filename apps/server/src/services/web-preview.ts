@@ -1,4 +1,10 @@
-import { isCloudMachineRuntimeId, type BridgeTunnelSlot, type JsonObject } from "@trace/shared";
+import { Prisma } from "@prisma/client";
+import {
+  isCloudMachineRuntimeId,
+  type BridgeLinkedCheckoutStatus,
+  type BridgeTunnelSlot,
+  type JsonObject,
+} from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import {
   readBridgeTunnelSlotsFromMetadata,
@@ -50,6 +56,17 @@ interface BuildWebPreviewInput {
   isOwner: boolean;
 }
 
+type VisibleSessionGroupRecord = NonNullable<WebPreviewRecord["sessionGroup"]>;
+
+function buildSessionGroupVisibilityWhere(userId: string): Prisma.SessionGroupWhereInput {
+  return {
+    OR: [
+      { channelId: null },
+      { channel: { members: { some: { userId, leftAt: null } } } },
+    ],
+  };
+}
+
 function isSlotActive(slot: BridgeTunnelSlot): boolean {
   if (slot.mode === "manual") {
     return slot.state === "configured" || slot.state === "running";
@@ -59,15 +76,17 @@ function isSlotActive(slot: BridgeTunnelSlot): boolean {
 
 export function buildWebPreview(input: BuildWebPreviewInput): WebPreviewRecord {
   const port = input.repo?.webPreviewPort ?? null;
-  const slot =
+  const selectedSlot =
     typeof port === "number" ? selectBridgeTunnelSlot(input.tunnelSlots, port) : null;
+  const hasVisibleSyncedSession =
+    !!input.sessionGroup && input.attachedSessionGroupId === input.sessionGroup.id;
   const base: WebPreviewRecord = {
     available: false,
     reason: null,
-    url: slot?.publicUrl ?? null,
+    url: hasVisibleSyncedSession ? selectedSlot?.publicUrl ?? null : null,
     port,
     runtimeInstanceId: input.runtimeInstanceId,
-    slot,
+    slot: hasVisibleSyncedSession ? selectedSlot : null,
     repo: input.repo,
     sessionGroup: input.sessionGroup,
     isOwner: input.isOwner,
@@ -89,10 +108,10 @@ export function buildWebPreview(input: BuildWebPreviewInput): WebPreviewRecord {
   if (!input.sessionGroup || input.attachedSessionGroupId !== input.sessionGroup.id) {
     return { ...base, reason: "not_synced_to_main_worktree" };
   }
-  if (!slot) {
+  if (!selectedSlot) {
     return { ...base, reason: "no_matching_tunnel" };
   }
-  if (!isSlotActive(slot)) {
+  if (!isSlotActive(selectedSlot)) {
     return { ...base, reason: "tunnel_inactive" };
   }
 
@@ -100,7 +119,8 @@ export function buildWebPreview(input: BuildWebPreviewInput): WebPreviewRecord {
     ...base,
     available: true,
     reason: null,
-    url: slot.publicUrl,
+    url: selectedSlot.publicUrl,
+    slot: selectedSlot,
   };
 }
 
@@ -123,24 +143,63 @@ function isLocalRuntime(runtimeInstanceId: string | null): boolean {
   return !!runtimeInstanceId && !isCloudMachineRuntimeId(runtimeInstanceId);
 }
 
-async function getAttachedSessionGroupId(
-  runtimeInstanceId: string | null,
-  repoId: string | null,
-): Promise<string | null> {
-  if (!runtimeInstanceId || !repoId) return null;
-  const runtime = sessionRouter.getRuntime(runtimeInstanceId);
-  const cached = runtime?.linkedCheckouts.get(repoId) ?? null;
-  if (cached) return cached.attachedSessionGroupId ?? null;
-  if (!runtime || runtime.ws.readyState !== runtime.ws.OPEN) return null;
-  try {
-    const status = await sessionRouter.getLinkedCheckoutStatus(runtimeInstanceId, repoId, 5_000);
-    return status.attachedSessionGroupId ?? null;
-  } catch {
-    return null;
-  }
-}
-
 class WebPreviewService {
+  async resolveLinkedCheckoutStatus(input: {
+    runtimeInstanceId: string | null;
+    repoId: string | null;
+    timeoutMs?: number;
+  }): Promise<BridgeLinkedCheckoutStatus | null> {
+    if (!input.runtimeInstanceId || !input.repoId) return null;
+    const runtime = sessionRouter.getRuntime(input.runtimeInstanceId);
+    const cached = runtime?.linkedCheckouts.get(input.repoId) ?? null;
+    if (cached) return cached;
+    if (!runtime || runtime.ws.readyState !== runtime.ws.OPEN) return null;
+    try {
+      return await sessionRouter.getLinkedCheckoutStatus(
+        input.runtimeInstanceId,
+        input.repoId,
+        input.timeoutMs ?? 5_000,
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  async listVisibleSessionGroupsById(input: {
+    organizationId: string;
+    userId: string;
+    ids: Iterable<string>;
+  }): Promise<Map<string, VisibleSessionGroupRecord>> {
+    const ids = [...new Set([...input.ids].filter(Boolean))];
+    if (ids.length === 0) return new Map();
+
+    const groups = await prisma.sessionGroup.findMany({
+      where: {
+        id: { in: ids },
+        organizationId: input.organizationId,
+        ...buildSessionGroupVisibilityWhere(input.userId),
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        branch: true,
+      },
+    });
+
+    return new Map(
+      groups.map((group) => [
+        group.id,
+        {
+          id: group.id,
+          name: group.name,
+          slug: group.slug,
+          branch: group.branch,
+        },
+      ]),
+    );
+  }
+
   async getSessionGroupPreview(input: {
     sessionGroupId: string;
     organizationId: string;
@@ -150,10 +209,7 @@ class WebPreviewService {
       where: {
         id: input.sessionGroupId,
         organizationId: input.organizationId,
-        OR: [
-          { channelId: null },
-          { channel: { members: { some: { userId: input.userId, leftAt: null } } } },
-        ],
+        ...buildSessionGroupVisibilityWhere(input.userId),
       },
       select: {
         id: true,
@@ -191,10 +247,10 @@ class WebPreviewService {
     const tunnelSlots = liveRuntime
       ? getLiveTunnelSlots(runtimeInstanceId)
       : readBridgeTunnelSlotsFromMetadata(persistedRuntime?.metadata);
-    const attachedSessionGroupId = await getAttachedSessionGroupId(
+    const linkedCheckout = await this.resolveLinkedCheckoutStatus({
       runtimeInstanceId,
-      group.repo?.id ?? null,
-    );
+      repoId: group.repo?.id ?? null,
+    });
 
     return buildWebPreview({
       repo: group.repo,
@@ -208,7 +264,7 @@ class WebPreviewService {
       isLocalRuntime: isLocalRuntime(runtimeInstanceId),
       connected: !!liveRuntime && liveRuntime.ws.readyState === liveRuntime.ws.OPEN,
       tunnelSlots,
-      attachedSessionGroupId,
+      attachedSessionGroupId: linkedCheckout?.attachedSessionGroupId ?? null,
       isOwner:
         (persistedRuntime?.ownerUserId ?? liveRuntime?.ownerUserId ?? null) === input.userId,
     });

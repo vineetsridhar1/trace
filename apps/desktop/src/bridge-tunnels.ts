@@ -16,6 +16,8 @@ interface SlotRuntimeState {
   signature: string | null;
 }
 
+const NGROK_STARTUP_TIMEOUT_MS = 10_000;
+
 function slotSignature(slot: BridgeTunnelSlotConfig): string {
   return JSON.stringify([
     slot.provider,
@@ -63,6 +65,60 @@ function formatNgrokExitError(
   if (trimmed) return trimmed;
   if (signal) return `ngrok exited with signal ${signal}`;
   return `ngrok exited with code ${code ?? "unknown"}`;
+}
+
+function parseNgrokLogRecord(line: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(line);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function isNgrokReadyLine(line: string, publicUrl: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+
+  const lowerPublicUrl = publicUrl.toLowerCase();
+  const rawRecord = parseNgrokLogRecord(trimmed);
+  if (!rawRecord) {
+    const lowerLine = trimmed.toLowerCase();
+    return (
+      lowerLine.includes(lowerPublicUrl) &&
+      (lowerLine.includes("started") ||
+        lowerLine.includes("forwarding") ||
+        lowerLine.includes("endpoint"))
+    );
+  }
+
+  const message = [
+    rawRecord.msg,
+    rawRecord.message,
+    rawRecord.event,
+    rawRecord.name,
+    rawRecord.obj,
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+  const text = JSON.stringify(rawRecord).toLowerCase();
+  const hasExpectedUrl =
+    text.includes(lowerPublicUrl) ||
+    [rawRecord.url, rawRecord.public_url].some(
+      (value) => typeof value === "string" && value.toLowerCase() === lowerPublicUrl,
+    );
+
+  if (!hasExpectedUrl) return false;
+  return (
+    message.includes("started") ||
+    message.includes("forwarding") ||
+    message.includes("endpoint") ||
+    text.includes("started tunnel") ||
+    text.includes("started endpoint")
+  );
 }
 
 export class BridgeTunnelManager {
@@ -161,9 +217,19 @@ export class BridgeTunnelManager {
     }
 
     const now = new Date().toISOString();
-    const child = spawn("ngrok", ["http", String(slot.targetPort), `--url=${slot.publicUrl}`], {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const child = spawn(
+      "ngrok",
+      [
+        "http",
+        String(slot.targetPort),
+        `--url=${slot.publicUrl}`,
+        "--log=stdout",
+        "--log-format=json",
+      ],
+      {
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
 
     let stderr = "";
     child.stderr.on("data", (chunk: Buffer) => {
@@ -172,7 +238,7 @@ export class BridgeTunnelManager {
 
     const runtimeState: SlotRuntimeState = {
       process: child,
-      state: "running",
+      state: defaultState(slot),
       lastError: null,
       updatedAt: now,
       signature: slotSignature(slot),
@@ -207,47 +273,90 @@ export class BridgeTunnelManager {
 
     return new Promise<BridgeTunnelActionResultPayload>((resolve) => {
       let settled = false;
+      let stdoutBuffer = "";
 
       const finish = (payload: BridgeTunnelActionResultPayload) => {
         if (settled) return;
         settled = true;
+        child.stdout.off("data", onStdoutData);
+        child.off("error", onStartupError);
+        child.off("exit", onStartupExit);
+        clearTimeout(startupTimer);
         resolve(payload);
       };
 
-      const startupTimer = setTimeout(() => {
-        finish({
-          ok: true,
-          slot: this.getSlotSnapshot(slotId),
-          error: null,
-        });
-      }, 1500);
-
-      child.once("error", (error: Error) => {
-        clearTimeout(startupTimer);
+      const markStartupError = (error: string) => {
         const current = this.runtimeBySlotId.get(slotId);
-        if (current && current.process === child) {
-          current.process = null;
-          current.state = "error";
-          current.lastError = error.message;
-          current.updatedAt = new Date().toISOString();
-          this.emit();
+        if (!current || current.process !== child) return;
+        current.process = null;
+        current.state = "error";
+        current.lastError = error;
+        current.updatedAt = new Date().toISOString();
+        this.emit();
+      };
+
+      const onStdoutData = (chunk: Buffer) => {
+        stdoutBuffer += chunk.toString("utf-8");
+        const lines = stdoutBuffer.split(/\r?\n/);
+        stdoutBuffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!isNgrokReadyLine(line, slot.publicUrl)) continue;
+          const current = this.runtimeBySlotId.get(slotId);
+          if (current && current.process === child) {
+            current.state = "running";
+            current.lastError = null;
+            current.updatedAt = new Date().toISOString();
+            this.emit();
+          }
+          finish({
+            ok: true,
+            slot: this.getSlotSnapshot(slotId),
+            error: null,
+          });
+          return;
         }
+      };
+
+      const startupTimer = setTimeout(() => {
+        const error =
+          "ngrok did not report that the tunnel was ready. Check the tunnel URL, ngrok auth, and local port.";
+        markStartupError(error);
+        child.kill("SIGTERM");
+        setTimeout(() => {
+          try {
+            child.kill("SIGKILL");
+          } catch {
+            // The process may have already exited between timeout and escalation.
+          }
+        }, 1500);
+        finish({
+          ok: false,
+          slot: this.getSlotSnapshot(slotId),
+          error,
+        });
+      }, NGROK_STARTUP_TIMEOUT_MS);
+
+      const onStartupError = (error: Error) => {
+        markStartupError(error.message);
         finish({
           ok: false,
           slot: this.getSlotSnapshot(slotId),
           error: error.message,
         });
-      });
+      };
 
-      child.once("exit", () => {
-        clearTimeout(startupTimer);
+      const onStartupExit = () => {
         const snapshot = this.getSlotSnapshot(slotId);
         finish({
           ok: false,
           slot: snapshot,
           error: snapshot?.lastError ?? "ngrok exited before the tunnel was ready.",
         });
-      });
+      };
+
+      child.stdout.on("data", onStdoutData);
+      child.once("error", onStartupError);
+      child.once("exit", onStartupExit);
     });
   }
 
