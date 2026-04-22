@@ -339,6 +339,12 @@ export function SessionGroupDetailView({
   const selectedSessionBridgeInteractionAllowed = isBridgeInteractionAllowed(
     selectedSessionBridgeAccess,
   );
+  const moveMergedDisabled = selectedSession?.sessionStatus === "merged";
+  const moveDisabledReason = moveMergedDisabled
+    ? "Cannot move a merged session"
+    : !selectedSessionBridgeInteractionAllowed
+      ? "You don't have access to this bridge"
+      : undefined;
   const linkedCheckoutAllowed =
     bridgeInteractionAllowed &&
     !!groupRuntimeInstanceId &&
@@ -470,6 +476,7 @@ export function SessionGroupDetailView({
             selectedSessionStatus={selectedSessionStatus}
             selectedSessionId={selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)}
             canMoveSession={canMoveSelectedSession && selectedSessionBridgeInteractionAllowed}
+            moveDisabledReason={moveDisabledReason}
             groupPrUrl={groupPrUrl}
             panelMode={panelMode}
             isFullscreen={isFullscreen}

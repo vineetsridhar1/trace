@@ -29,6 +29,7 @@ interface GroupHeaderProps {
   selectedSessionStatus: string;
   selectedSessionId: string | null;
   canMoveSession: boolean;
+  moveDisabledReason?: string;
   groupPrUrl: string | null | undefined;
   panelMode?: boolean;
   isFullscreen: boolean;
@@ -49,6 +50,7 @@ export function GroupHeader({
   selectedSessionStatus,
   selectedSessionId,
   canMoveSession,
+  moveDisabledReason,
   groupPrUrl,
   panelMode,
   isFullscreen,
@@ -135,7 +137,7 @@ export function GroupHeader({
         </button>
       )}
 
-      <SessionMoveButton sessionId={selectedSessionId} disabled={!canMoveSession} />
+      <SessionMoveButton sessionId={selectedSessionId} disabled={!canMoveSession} disabledReason={moveDisabledReason} />
 
       <button
         onClick={onToggleSidebar}

@@ -76,7 +76,7 @@ function renderItem({ item }: { item: HomeListItem }) {
   if (item.kind === "header") {
     return <HomeSectionHeader kind={item.section} count={item.count} />;
   }
-  return <SessionGroupRow groupId={item.groupId} hideStatusChip />;
+  return <SessionGroupRow groupId={item.groupId} hideStatusChip hideAvatar />;
 }
 
 function keyExtractor(item: HomeListItem): string {

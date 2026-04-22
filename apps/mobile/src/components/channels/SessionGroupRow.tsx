@@ -23,11 +23,13 @@ import { timeAgo } from "@/lib/time";
 export interface SessionGroupRowProps {
   groupId: string;
   hideStatusChip?: boolean;
+  hideAvatar?: boolean;
 }
 
 export const SessionGroupRow = memo(function SessionGroupRow({
   groupId,
   hideStatusChip = false,
+  hideAvatar = false,
 }: SessionGroupRowProps) {
   const theme = useTheme();
   const name = useEntityField("sessionGroups", groupId, "name");
@@ -134,7 +136,7 @@ export const SessionGroupRow = memo(function SessionGroupRow({
             },
           ]}
         >
-          {createdBy?.name ? (
+          {!hideAvatar && createdBy?.name ? (
             <Avatar
               name={createdBy.name}
               uri={createdBy.avatarUrl ?? null}

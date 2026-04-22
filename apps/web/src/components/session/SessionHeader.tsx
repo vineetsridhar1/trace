@@ -77,8 +77,14 @@ export function SessionHeader({
     moveRuntimeInstanceId,
     sessionGroupId ?? null,
   );
-  const canMoveSession =
-    sessionStatus !== "merged" && isBridgeInteractionAllowed(moveBridgeAccess);
+  const bridgeInteractionAllowed = isBridgeInteractionAllowed(moveBridgeAccess);
+  const canMoveSession = sessionStatus !== "merged" && bridgeInteractionAllowed;
+  const moveDisabledReason =
+    sessionStatus === "merged"
+      ? "Cannot move a merged session"
+      : !bridgeInteractionAllowed
+        ? "You don't have access to this bridge"
+        : undefined;
 
   // Show "Reconnecting" for a grace period before showing "Connection Lost"
   const [pastGracePeriod, setPastGracePeriod] = useState(false);
@@ -206,7 +212,7 @@ export function SessionHeader({
           </button>
         )}
 
-        <SessionMoveButton sessionId={sessionId} disabled={!canMoveSession} />
+        <SessionMoveButton sessionId={sessionId} disabled={!canMoveSession} disabledReason={moveDisabledReason} />
 
         <div className="relative" ref={historyRef}>
           <button
