@@ -43,8 +43,16 @@ const CHANNEL_GROUPS_QUERY = gql`
 `;
 
 const MY_SESSIONS_QUERY = gql`
-  query MobileMySessions($organizationId: ID!) {
-    mySessions(organizationId: $organizationId) {
+  query MobileMySessions(
+    $organizationId: ID!
+    $includeMerged: Boolean
+    $includeArchived: Boolean
+  ) {
+    mySessions(
+      organizationId: $organizationId
+      includeMerged: $includeMerged
+      includeArchived: $includeArchived
+    ) {
       id
       name
       agentStatus
@@ -55,7 +63,7 @@ const MY_SESSIONS_QUERY = gql`
       createdBy { id name avatarUrl }
       repo { id name }
       sessionGroupId
-      sessionGroup { id name slug status }
+      sessionGroup { id name slug status archivedAt }
       channel { id name }
       branch
       workdir
@@ -104,7 +112,13 @@ export async function refreshOrgData(activeOrgId: string): Promise<boolean> {
   const [orgResult, groupsResult, sessionsResult] = await Promise.all([
     client.query(ORGANIZATION_QUERY, { id: activeOrgId }).toPromise(),
     client.query(CHANNEL_GROUPS_QUERY, { organizationId: activeOrgId }).toPromise(),
-    client.query(MY_SESSIONS_QUERY, { organizationId: activeOrgId }).toPromise(),
+    client
+      .query(MY_SESSIONS_QUERY, {
+        organizationId: activeOrgId,
+        includeMerged: false,
+        includeArchived: false,
+      })
+      .toPromise(),
   ]);
   if (
     isUnauthorized(orgResult.error) ||
