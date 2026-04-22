@@ -513,6 +513,13 @@ function buildMigrationPrompt(context: string | null): string {
   return `${context}\n\nContinue this session on the new runtime.`;
 }
 
+function buildToolSessionRecoveryPrompt(context: string | null): string {
+  if (!context) {
+    return "Continue this session. The previous local tool session was unavailable.";
+  }
+  return `${context}\n\nContinue this session using the latest user message in the conversation history above.`;
+}
+
 async function getSessionStartMetadata(sessionId: string): Promise<SessionStartMetadata> {
   const startEvent = await prisma.event.findFirst({
     where: { scopeId: sessionId, scopeType: "session", eventType: "session_started" },
@@ -2617,8 +2624,13 @@ export class SessionService {
     }
 
     if (!session.toolSessionId) {
-      const startMeta = await getSessionStartMetadata(sessionId);
-      prompt = await prependSourceSessionContext(startMeta.sourceSessionId, prompt);
+      const context = await buildConversationContext(sessionId);
+      if (context) {
+        prompt = `${context}\n\n${prompt}`;
+      } else {
+        const startMeta = await getSessionStartMetadata(sessionId);
+        prompt = await prependSourceSessionContext(startMeta.sourceSessionId, prompt);
+      }
     }
 
     // Append system instructions (title, auto-save) to the prompt
@@ -3324,6 +3336,119 @@ export class SessionService {
     await prisma.session.update({
       where: { id: sessionId },
       data: { toolSessionId },
+    });
+  }
+
+  async recoverMissingToolSession(
+    sessionId: string,
+    options: {
+      toolSessionId: string;
+      message?: string;
+      interactionMode?: string;
+      checkpointContext?: GitCheckpointContext | null;
+      imageUrls?: string[];
+    },
+  ) {
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: {
+        organizationId: true,
+        agentStatus: true,
+        sessionStatus: true,
+        tool: true,
+        model: true,
+        workdir: true,
+        toolSessionId: true,
+        repoId: true,
+        sessionGroupId: true,
+        connection: true,
+      },
+    });
+    if (!session) return;
+    if (session.toolSessionId !== options.toolSessionId) return;
+    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) return;
+
+    const context = await buildConversationContext(sessionId);
+    let prompt = buildToolSessionRecoveryPrompt(context);
+    prompt = appendPromptInstructions(prompt, { hasRepo: !!session.repoId });
+
+    const promptEvent = await prisma.event.findFirst({
+      where: {
+        scopeId: sessionId,
+        scopeType: "session",
+        eventType: { in: ["message_sent", "session_started"] },
+      },
+      orderBy: { timestamp: "desc" },
+      select: { id: true },
+    });
+    const checkpointContext =
+      options.checkpointContext ??
+      (session.repoId && session.sessionGroupId
+        ? createCheckpointContext({
+            checkpointContextId: randomUUID(),
+            promptEventId: promptEvent?.id ?? null,
+            sessionId,
+            sessionGroupId: session.sessionGroupId,
+            repoId: session.repoId,
+          })
+        : null);
+    const conn = this.parseConnection(session.connection);
+
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { toolSessionId: null },
+    });
+
+    const deliveryResult = sessionRouter.send(
+      sessionId,
+      {
+        type: "send",
+        sessionId,
+        prompt,
+        tool: session.tool,
+        model: session.model ?? undefined,
+        interactionMode: options.interactionMode,
+        cwd: session.workdir ?? undefined,
+        checkpointContext,
+        imageUrls: options.imageUrls,
+      },
+      { expectedHomeRuntimeId: conn.runtimeInstanceId },
+    );
+
+    if (deliveryResult !== "delivered") {
+      await this.persistConnectionFailure(
+        sessionId,
+        session.organizationId,
+        deliveryResult,
+        "tool_session_recovery",
+      );
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "session_output",
+        payload: {
+          type: "recovery_failed",
+          reason: "tool_session_missing",
+          message: options.message ?? "Local tool session was unavailable",
+        },
+        actorType: "system",
+        actorId: "system",
+      });
+      return;
+    }
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: {
+        type: "tool_session_recovered",
+        oldToolSessionId: options.toolSessionId,
+      },
+      actorType: "system",
+      actorId: "system",
     });
   }
 

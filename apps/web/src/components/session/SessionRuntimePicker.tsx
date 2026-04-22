@@ -9,6 +9,7 @@ import {
 } from "@trace/client-core";
 import { navigateToSession } from "../../stores/ui";
 import { useEntityField } from "@trace/client-core";
+import { cn } from "../../lib/utils";
 
 interface RuntimeInstance {
   id: string;
@@ -22,15 +23,28 @@ interface RuntimeInstance {
 export function SessionRuntimePicker({
   sessionId,
   onClose,
+  className,
 }: {
   sessionId: string;
   onClose: () => void;
+  className?: string;
 }) {
   const [runtimes, setRuntimes] = useState<RuntimeInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [moving, setMoving] = useState<string | null>(null);
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
   const channel = useEntityField("sessions", sessionId, "channel") as { id: string } | null | undefined;
+  const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
+  const connection = useEntityField("sessions", sessionId, "connection") as
+    | { runtimeInstanceId?: string | null }
+    | null
+    | undefined;
+  const groupConnection = useEntityField("sessionGroups", sessionGroupId ?? "", "connection") as
+    | { runtimeInstanceId?: string | null }
+    | null
+    | undefined;
+  const currentRuntimeInstanceId =
+    groupConnection?.runtimeInstanceId ?? connection?.runtimeInstanceId ?? null;
 
   useEffect(() => {
     client
@@ -101,8 +115,11 @@ export function SessionRuntimePicker({
     }
   }, [channel?.id, onClose, sessionGroupId, sessionId]);
 
+  const localRuntimes = runtimes.filter((rt: RuntimeInstance) => rt.id !== currentRuntimeInstanceId);
+  const canMoveToCloud = hosting !== "cloud";
+
   return (
-    <div className="mt-2 rounded-lg border border-border bg-surface p-3">
+    <div className={cn("mt-2 rounded-lg border border-border bg-surface p-3", className)}>
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-xs font-semibold text-foreground">Move to another instance</h3>
         <button
@@ -119,23 +136,24 @@ export function SessionRuntimePicker({
         </div>
       ) : (
         <div className="space-y-1">
-          {/* Cloud option — always available */}
-          <button
-            onClick={handleMoveToCloud}
-            disabled={moving !== null}
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm hover:bg-surface-elevated transition-colors disabled:opacity-50"
-          >
-            <Cloud size={14} className="shrink-0 text-blue-400" />
-            <div className="min-w-0 flex-1">
-              <span className="text-foreground">Cloud</span>
-            </div>
-            {moving === "cloud" && (
-              <Loader2 size={12} className="animate-spin text-muted-foreground" />
-            )}
-          </button>
+          {canMoveToCloud && (
+            <button
+              onClick={handleMoveToCloud}
+              disabled={moving !== null}
+              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm hover:bg-surface-elevated transition-colors disabled:opacity-50"
+            >
+              <Cloud size={14} className="shrink-0 text-blue-400" />
+              <div className="min-w-0 flex-1">
+                <span className="text-foreground">Cloud</span>
+              </div>
+              {moving === "cloud" && (
+                <Loader2 size={12} className="animate-spin text-muted-foreground" />
+              )}
+            </button>
+          )}
 
           {/* Local bridges */}
-          {runtimes.map((rt: RuntimeInstance) => (
+          {localRuntimes.map((rt: RuntimeInstance) => (
             <button
               key={rt.id}
               onClick={() => handleMove(rt.id)}
@@ -158,9 +176,14 @@ export function SessionRuntimePicker({
             </button>
           ))}
 
-          {runtimes.length === 0 && (
+          {localRuntimes.length === 0 && !canMoveToCloud && (
             <p className="py-1 text-xs text-muted-foreground">
-              No local bridges connected.
+              No other runtimes available.
+            </p>
+          )}
+          {localRuntimes.length === 0 && canMoveToCloud && (
+            <p className="py-1 text-xs text-muted-foreground">
+              No other local bridges connected.
             </p>
           )}
         </div>

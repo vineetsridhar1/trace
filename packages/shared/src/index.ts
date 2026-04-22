@@ -15,7 +15,12 @@ export type {
   QuestionBlock,
   PlanBlock,
 } from "./adapters/coding-tool.js";
-export { hasPlanBlock, hasQuestionBlock, parseQuestion } from "./adapters/coding-tool.js";
+export {
+  hasPlanBlock,
+  hasQuestionBlock,
+  isMissingToolSessionError,
+  parseQuestion,
+} from "./adapters/coding-tool.js";
 export type {
   BridgeClient,
   BridgeCommand,
@@ -36,6 +41,7 @@ export type {
   BridgeWorkspaceReady,
   BridgeWorkspaceFailed,
   BridgeToolSessionId,
+  BridgeToolSessionMissing,
   BridgeGitCheckpoint,
   BridgeRepoLinked,
   BridgeBranchesResult,

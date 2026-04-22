@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import type {
   BridgeLinkedCheckoutStatus,
   BridgeLinkedCheckoutActionResultPayload,
+  GitCheckpointContext,
 } from "@trace/shared";
 import { sessionRouter } from "./session-router.js";
 import { sessionService } from "../services/session.js";
@@ -372,6 +373,25 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             msg.sessionId as string,
             msg.toolSessionId as string,
           );
+        });
+      } else if (msg.type === "tool_session_missing" && msg.sessionId && msg.toolSessionId) {
+        const imageUrls = Array.isArray(msg.imageUrls)
+          ? (msg.imageUrls as unknown[]).filter((url): url is string => typeof url === "string")
+          : undefined;
+        enqueueEvent(msg.sessionId, async () => {
+          await sessionService.recoverMissingToolSession(msg.sessionId as string, {
+            toolSessionId: msg.toolSessionId as string,
+            message: typeof msg.message === "string" ? msg.message : undefined,
+            interactionMode:
+              typeof msg.interactionMode === "string" ? msg.interactionMode : undefined,
+            checkpointContext:
+              msg.checkpointContext &&
+              typeof msg.checkpointContext === "object" &&
+              !Array.isArray(msg.checkpointContext)
+                ? (msg.checkpointContext as GitCheckpointContext)
+                : null,
+            imageUrls,
+          });
         });
       } else if (msg.type === "git_checkpoint" && msg.sessionId && msg.checkpoint) {
         enqueueEvent(msg.sessionId, async () => {
