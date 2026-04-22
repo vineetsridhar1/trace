@@ -335,6 +335,54 @@ describe("SessionService", () => {
     });
   });
 
+  describe("listByUser", () => {
+    it("filters merged and archived groups when requested", async () => {
+      prismaMock.session.findMany.mockResolvedValueOnce([]);
+
+      await service.listByUser("org-1", "user-1", {
+        includeMerged: false,
+        includeArchived: false,
+      });
+
+      expect(prismaMock.session.findMany).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-1",
+          createdById: "user-1",
+          sessionStatus: { not: "merged" },
+          OR: [
+            { sessionGroupId: null },
+            {
+              sessionGroup: {
+                is: {
+                  archivedAt: null,
+                  sessions: { none: { sessionStatus: "merged" } },
+                },
+              },
+            },
+          ],
+        },
+        orderBy: { updatedAt: "desc" },
+        include: expect.any(Object),
+      });
+    });
+
+    it("keeps the existing behavior when no visibility options are provided", async () => {
+      prismaMock.session.findMany.mockResolvedValueOnce([]);
+
+      await service.listByUser("org-1", "user-1", { agentStatus: "active" });
+
+      expect(prismaMock.session.findMany).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-1",
+          createdById: "user-1",
+          agentStatus: "active",
+        },
+        orderBy: { updatedAt: "desc" },
+        include: expect.any(Object),
+      });
+    });
+  });
+
   describe("search", () => {
     it("returns empty results when the trimmed query is shorter than 2 chars", async () => {
       const result = await service.search("org-1", "  a  ");

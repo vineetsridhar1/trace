@@ -22,6 +22,7 @@ import { SymbolView, type SFSymbol } from "expo-symbols";
 import { BlurView } from "expo-blur";
 import { Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
+import { useMobileUIStore } from "@/stores/ui";
 import { useTheme } from "@/theme";
 
 const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
@@ -86,6 +87,25 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
       });
     }
   }, [open, progress, theme.motion.springs.morph.open, theme.motion.springs.morph.close]);
+
+  // Register a close callback so the Session Player's body-area scrim can
+  // dismiss this menu. In-header taps are still handled by the local
+  // backdropHit Pressable below.
+  //
+  // The cleanup's identity guard is load-bearing: if another menu opens
+  // between this one closing and this effect's cleanup running, that
+  // menu's callback is already in the store — an unconditional clear
+  // would stomp it. Keep the `=== close` check.
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    useMobileUIStore.getState().setActiveMenuClose(close);
+    return () => {
+      if (useMobileUIStore.getState().activeMenuClose === close) {
+        useMobileUIStore.getState().setActiveMenuClose(null);
+      }
+    };
+  }, [open]);
 
   // Shape morph: pill -> rounded rect, anchored at the trigger's top-right
   // corner. A translateY arc dips the surface down through the middle and

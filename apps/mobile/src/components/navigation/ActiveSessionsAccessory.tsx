@@ -27,8 +27,10 @@ export function ActiveSessionsAccessory() {
   // "self" = our own onMomentumScrollEnd pushed the index, so the sync effect
   // should skip scrolling (the list is already there). "external" = 15b swipe.
   const indexSource = useRef<"self" | "external">("external");
-  // First sync-scroll after layout shouldn't animate — nothing to animate from.
-  const hasScrolledRef = useRef(false);
+  // Tracks the last index we scrolled to so width-only re-runs of the sync
+  // effect (tab-bar minimize shrinks the container mid-animation) jump
+  // instead of animating through intermediate pages.
+  const lastScrolledIndexRef = useRef<number | null>(null);
   const [width, setWidth] = useState(0);
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
@@ -51,11 +53,16 @@ export function ActiveSessionsAccessory() {
   useEffect(() => {
     if (indexSource.current === "self") {
       indexSource.current = "external";
+      lastScrolledIndexRef.current = index;
       return;
     }
     if (width === 0 || ids.length === 0) return;
-    const animated = hasScrolledRef.current;
-    hasScrolledRef.current = true;
+    // Animate only on real index changes. A width change (tab-bar minimize
+    // shrinks the accessory) must snap to the same page, not animate through
+    // neighbouring sessions.
+    const animated = lastScrolledIndexRef.current !== null
+      && lastScrolledIndexRef.current !== index;
+    lastScrolledIndexRef.current = index;
     listRef.current?.scrollToOffset({ offset: index * width, animated });
   }, [index, width, ids.length]);
 

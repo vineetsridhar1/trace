@@ -1000,7 +1000,12 @@ type Query {
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
-  mySessions(organizationId: ID!, agentStatus: AgentStatus): [Session!]!
+  mySessions(
+    organizationId: ID!
+    agentStatus: AgentStatus
+    includeMerged: Boolean
+    includeArchived: Boolean
+  ): [Session!]!
   searchSessions(query: String!, channelId: ID): SessionSearchResults!
   tickets(organizationId: ID!, filters: TicketFilters): [Ticket!]!
   ticket(id: ID!): Ticket

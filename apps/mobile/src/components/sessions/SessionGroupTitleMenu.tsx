@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Modal, Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { BlurView } from "expo-blur";
 import Animated, {
@@ -11,12 +11,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useEntityField } from "@trace/client-core";
 import type { SessionGroupStatus } from "@trace/gql";
-import {
-  Chip,
-  Spinner,
-  Text,
-  type ChipVariant,
-} from "@/components/design-system";
+import { Spinner, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
@@ -37,22 +32,14 @@ interface SessionGroupTitleMenuProps {
   fullWidth: number;
 }
 
-function prChip(
-  prUrl: string | null | undefined,
-  status: string | null | undefined,
-): { label: string; variant: ChipVariant } | null {
-  if (!prUrl) return null;
-  if (status === "merged") return { label: "PR merged", variant: "done" };
-  if (status === "failed" || status === "stopped" || status === "archived") {
-    return { label: "PR closed", variant: "failed" };
-  }
-  return { label: "PR open", variant: "inReview" };
-}
-
 /**
- * Liquid Glass session-title affordance: the title pill morphs into a
- * full-width panel on tap, mirroring the SessionActionsMenu morph. Panel
- * contents are a placeholder for now — real options will land here later.
+ * Liquid Glass session-title affordance: the inline pill reserves layout
+ * space in the header row and captures the open tap. On open, we
+ * measureInWindow the pill and render the morphing glass inside a
+ * transparent Modal at the same screen coordinates — this escapes the
+ * header's ancestor hit-test frame so controls in the expanded panel
+ * (e.g. sync/restore buttons that sit below the header baseline) remain
+ * tappable. The Modal's full-screen backdrop dismisses on tap.
  * Older OS versions fall back to a static blurred title pill.
  */
 export function SessionGroupTitleMenu({
@@ -74,16 +61,31 @@ function MorphingTitle({ groupId, sessionId, fullWidth }: SessionGroupTitleMenuP
   // Keeps panel content mounted through the close animation so it can fade out.
   const [mounted, setMounted] = useState(false);
   const [triggerWidth, setTriggerWidth] = useState(0);
+  // Where the pill sits in window coordinates — captured on open so the
+  // Modal glass renders at the same screen position.
+  const [triggerPos, setTriggerPos] = useState<{ x: number; y: number; width: number } | null>(null);
+  const anchorRef = useRef<View>(null);
   const progress = useSharedValue(0);
 
-  const handleTriggerLayout = useCallback((e: LayoutChangeEvent) => {
+  const handleAnchorLayout = useCallback((e: LayoutChangeEvent) => {
     setTriggerWidth(e.nativeEvent.layout.width);
   }, []);
 
+  const close = useCallback(() => setOpen(false), []);
+
   const handleToggle = useCallback(() => {
     void haptic.light();
-    setOpen((prev) => !prev);
-  }, []);
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    // Measure the pill's window position so the Modal's glass lines up with
+    // it. Without this the morph would snap to the screen origin.
+    anchorRef.current?.measureInWindow((x, y, width) => {
+      setTriggerPos({ x, y, width });
+      setOpen(true);
+    });
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -96,7 +98,7 @@ function MorphingTitle({ groupId, sessionId, fullWidth }: SessionGroupTitleMenuP
     }
   }, [open, progress, theme.motion.springs.morph.open, theme.motion.springs.morph.close]);
 
-  const startWidth = triggerWidth || PILL_HEIGHT;
+  const startWidth = triggerPos?.width ?? triggerWidth ?? PILL_HEIGHT;
   const endWidth = Math.max(fullWidth, startWidth);
 
   // Shape morph: rounded pill -> wider rounded card, anchored at the trigger's
@@ -127,25 +129,57 @@ function MorphingTitle({ groupId, sessionId, fullWidth }: SessionGroupTitleMenuP
 
   return (
     <>
-      {open ? (
-        <Pressable
-          accessibilityLabel="Dismiss menu"
-          onPress={() => setOpen(false)}
-          style={styles.backdropHit}
-        />
-      ) : null}
-
+      {/* Inline pill. Reserves space in the header row, captures the tap to
+          open, and is hidden while the Modal morph is on screen. */}
       <View
-        style={[styles.anchor, open ? styles.anchorActive : null]}
-        onLayout={handleTriggerLayout}
+        ref={anchorRef}
+        style={[styles.anchor, { opacity: mounted ? 0 : 1 }]}
+        onLayout={handleAnchorLayout}
+        pointerEvents={mounted ? "none" : "auto"}
       >
-        <AnimatedGlassView
+        <GlassView
           isInteractive
           glassEffectStyle="regular"
           colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-          style={[styles.morphingGlass, glassStyle]}
+          style={styles.inlinePill}
         >
-          {mounted ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Workspace details"
+            onPress={handleToggle}
+            style={styles.triggerInner}
+          >
+            <TitleRow groupId={groupId} sessionId={sessionId} />
+          </Pressable>
+        </GlassView>
+      </View>
+
+      {/* Portal: morph + panel live here so the expanded surface isn't
+          clipped by the header's ancestor chain. Tap anywhere outside the
+          glass to dismiss. */}
+      <Modal
+        transparent
+        visible={mounted}
+        animationType="none"
+        onRequestClose={close}
+        statusBarTranslucent
+      >
+        <Pressable
+          accessibilityLabel="Dismiss panel"
+          onPress={close}
+          style={StyleSheet.absoluteFill}
+        />
+        {triggerPos ? (
+          <AnimatedGlassView
+            isInteractive
+            glassEffectStyle="regular"
+            colorScheme={theme.scheme === "dark" ? "dark" : "light"}
+            style={[
+              styles.portalGlass,
+              { top: triggerPos.y, left: triggerPos.x },
+              glassStyle,
+            ]}
+          >
             <Animated.View
               pointerEvents={open ? "auto" : "none"}
               style={[
@@ -156,27 +190,27 @@ function MorphingTitle({ groupId, sessionId, fullWidth }: SessionGroupTitleMenuP
             >
               <PanelContent groupId={groupId} sessionId={sessionId} />
             </Animated.View>
-          ) : null}
 
-          <Animated.View
-            pointerEvents={open ? "none" : "auto"}
-            style={[
-              styles.triggerLayer,
-              { width: startWidth || "100%", height: PILL_HEIGHT },
-              triggerStyle,
-            ]}
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Workspace details"
-              onPress={handleToggle}
-              style={styles.triggerInner}
+            <Animated.View
+              pointerEvents={open ? "none" : "auto"}
+              style={[
+                styles.triggerLayer,
+                { width: startWidth || "100%", height: PILL_HEIGHT },
+                triggerStyle,
+              ]}
             >
-              <TitleRow groupId={groupId} sessionId={sessionId} />
-            </Pressable>
-          </Animated.View>
-        </AnimatedGlassView>
-      </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Workspace details"
+                onPress={handleToggle}
+                style={styles.triggerInner}
+              >
+                <TitleRow groupId={groupId} sessionId={sessionId} />
+              </Pressable>
+            </Animated.View>
+          </AnimatedGlassView>
+        ) : null}
+      </Modal>
     </>
   );
 }
@@ -199,10 +233,6 @@ function TitleRow({
     | string
     | null
     | undefined;
-  const prUrl = useEntityField("sessionGroups", groupId, "prUrl") as
-    | string
-    | null
-    | undefined;
   const status = useEntityField("sessionGroups", groupId, "status") as
     | string
     | null
@@ -212,8 +242,6 @@ function TitleRow({
     sessionId ?? "",
     "agentStatus",
   ) as string | null | undefined;
-
-  const chip = prChip(prUrl, status);
 
   return (
     <View style={[styles.titleRow, { paddingHorizontal: theme.spacing.md }]}>
@@ -241,7 +269,6 @@ function TitleRow({
           </Text>
         ) : null}
       </View>
-      {chip ? <Chip label={chip.label} variant={chip.variant} /> : null}
     </View>
   );
 }
@@ -294,15 +321,18 @@ const styles = StyleSheet.create({
     minWidth: 0,
     height: PILL_HEIGHT,
   },
-  // Lift the title morph above the actions-menu sibling only while it's
-  // open, so whichever menu the user just opened renders on top.
-  anchorActive: {
-    zIndex: 60,
+  // Keep `inlinePill.borderRadius` matched to the morph's start value
+  // (PILL_RADIUS) so the handoff from the inline glass to the Modal glass
+  // is visually seamless. The portal glass animates its own borderRadius
+  // from PILL_RADIUS → PANEL_RADIUS in `glassStyle`.
+  inlinePill: {
+    width: "100%",
+    height: PILL_HEIGHT,
+    borderRadius: PILL_RADIUS,
+    overflow: "hidden",
   },
-  morphingGlass: {
+  portalGlass: {
     position: "absolute",
-    top: 0,
-    left: 0,
     overflow: "hidden",
   },
   triggerLayer: {
@@ -345,13 +375,5 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     overflow: "hidden",
-  },
-  backdropHit: {
-    ...StyleSheet.absoluteFillObject,
-    top: -1000,
-    bottom: -2000,
-    left: -1000,
-    right: -1000,
-    zIndex: 50,
   },
 });
