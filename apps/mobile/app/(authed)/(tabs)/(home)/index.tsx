@@ -10,8 +10,9 @@ import { HomeSectionHeader } from "@/components/home/HomeSectionHeader";
 import { HomeSessionRow } from "@/components/home/HomeSessionRow";
 import { useHomeSections, type HomeSectionKind } from "@/hooks/useHomeSections";
 import { refreshOrgData } from "@/hooks/useHydrate";
-import { useMyBridges } from "@/hooks/useMyBridges";
+import { refreshMyBridges } from "@/hooks/useMyBridges";
 import { haptic } from "@/lib/haptics";
+import { useBridgeSummaries } from "@/stores/bridges";
 import { useMobileUIStore, type MobileUIState } from "@/stores/ui";
 
 type HomeListItem =
@@ -25,7 +26,7 @@ export default function AuthedHome() {
   const logout = useAuthStore((s: AuthState) => s.logout);
   const repoFilter = useMobileUIStore((s: MobileUIState) => s.homeRepoFilter);
   const sections = useHomeSections(userId, repoFilter);
-  const { bridges, refresh: refreshBridges } = useMyBridges(activeOrgId);
+  const bridges = useBridgeSummaries();
   const [refreshing, setRefreshing] = useState(false);
 
   const items = useMemo<HomeListItem[]>(() => {
@@ -44,7 +45,10 @@ export default function AuthedHome() {
     void haptic.medium();
     setRefreshing(true);
     try {
-      const [ok] = await Promise.all([refreshOrgData(activeOrgId), refreshBridges()]);
+      const [ok] = await Promise.all([
+        refreshOrgData(activeOrgId),
+        refreshMyBridges(activeOrgId),
+      ]);
       if (!ok) {
         useEntityStore.getState().reset();
         await logout();
@@ -52,7 +56,7 @@ export default function AuthedHome() {
     } finally {
       setRefreshing(false);
     }
-  }, [activeOrgId, logout, refreshBridges]);
+  }, [activeOrgId, logout]);
 
   // Bridges status banner sits above the repo filter chips so it reads as
   // ambient status, not part of the filter UI.

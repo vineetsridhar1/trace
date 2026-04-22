@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo } from "react";
 import { Pressable, StyleSheet, View, type NativeSyntheticEvent } from "react-native";
 import Animated from "react-native-reanimated";
 import * as Clipboard from "expo-clipboard";
+import { SymbolView } from "expo-symbols";
 import ContextMenu, {
   type ContextMenuAction,
   type ContextMenuOnPressNativeEvent,
@@ -13,6 +14,7 @@ import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
 import { usePressScale } from "@/lib/motion";
 import { prefetchSessionPlayer, tryOpenSessionPlayer } from "@/lib/sessionPlayer";
+import { useAttachedCheckoutForGroup } from "@/stores/bridges";
 import { useTheme } from "@/theme";
 import { useLatestSessionIdForGroup } from "@/hooks/useChannelSessionGroups";
 import { CHIP_LABELS, mapStatusToChipVariant } from "@/lib/sessionGroupStatus";
@@ -32,6 +34,7 @@ export const SessionGroupRow = memo(function SessionGroupRow({
   const status = useEntityField("sessionGroups", groupId, "status");
   const branch = useEntityField("sessionGroups", groupId, "branch");
   const archivedAt = useEntityField("sessionGroups", groupId, "archivedAt");
+  const attached = useAttachedCheckoutForGroup(groupId);
 
   const latestSessionId = useLatestSessionIdForGroup(groupId);
   const lastMessageAt = useEntityField("sessions", latestSessionId ?? "", "lastMessageAt");
@@ -116,7 +119,7 @@ export const SessionGroupRow = memo(function SessionGroupRow({
       <Animated.View style={pressScaleStyle}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={name}
+          accessibilityLabel={attached ? `${name}, synced to ${attached.bridgeLabel}` : name}
           onPress={handlePress}
           onPressIn={handlePressIn}
           onPressOut={onPressOut}
@@ -150,6 +153,14 @@ export const SessionGroupRow = memo(function SessionGroupRow({
               >
                 {name}
               </Text>
+              {attached ? (
+                <SymbolView
+                  name="laptopcomputer"
+                  size={14}
+                  tintColor={theme.colors.success}
+                  style={styles.linkedIcon}
+                />
+              ) : null}
             </View>
             {branch ? (
               <Text
@@ -205,7 +216,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: { fontWeight: "600" },
-  titleText: { flex: 1, minWidth: 0 },
+  titleText: { flexShrink: 1, minWidth: 0 },
+  linkedIcon: { width: 14, height: 14 },
   branch: { marginTop: 2 },
   preview: { marginTop: 4 },
   accessory: {
