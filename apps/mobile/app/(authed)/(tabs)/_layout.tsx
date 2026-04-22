@@ -44,6 +44,9 @@ export default function TabsLayout() {
 
   return (
     <NativeTabs
+      // Pin Home as the default tab. expo-router picks the alphabetically
+      // first route otherwise, and `(connections)` sorts before `(home)`.
+      initialRouteName="(home)"
       minimizeBehavior="onScrollDown"
       renderBottomAccessoryView={renderAccessory}
     >
