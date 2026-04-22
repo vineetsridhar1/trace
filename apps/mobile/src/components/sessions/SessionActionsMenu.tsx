@@ -139,7 +139,7 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
       <View style={styles.anchor}>
         <AnimatedGlassView
           isInteractive
-          glassEffectStyle="clear"
+          glassEffectStyle="regular"
           colorScheme={theme.scheme === "dark" ? "dark" : "light"}
           style={[styles.morphingGlass, glassStyle]}
         >

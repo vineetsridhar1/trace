@@ -23,7 +23,7 @@ import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { haptic } from "@/lib/haptics";
 import { useMobileUIStore } from "@/stores/ui";
-import { alpha, useTheme } from "@/theme";
+import { useTheme } from "@/theme";
 
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 800;
@@ -174,7 +174,7 @@ export function SessionPlayerOverlay() {
             <View
               style={[
                 styles.dragHandle,
-                { backgroundColor: alpha(theme.colors.background, 0.78) },
+                { backgroundColor: "rgba(12,20,46,0.9)" },
               ]}
             >
               <View style={{ height: insets.top }} />
