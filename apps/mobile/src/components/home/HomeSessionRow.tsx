@@ -89,7 +89,7 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
           title={name}
         />
       }
-      previewBackgroundColor="transparent"
+      previewBackgroundColor={theme.colors.surface}
       borderRadius={theme.radius.lg}
     >
       <Animated.View style={pressScaleStyle}>

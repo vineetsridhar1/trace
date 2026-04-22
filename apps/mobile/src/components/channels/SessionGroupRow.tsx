@@ -148,7 +148,7 @@ export const SessionGroupRow = memo(function SessionGroupRow({
           title={name}
         />
       }
-      previewBackgroundColor="transparent"
+      previewBackgroundColor={theme.colors.surface}
       borderRadius={theme.radius.lg}
     >
       <Animated.View style={pressScaleStyle}>
