@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text as NativeText, TextInput, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Image, Pressable, StyleSheet, Text as NativeText, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import Animated, {
+  FadeIn,
   FadeInDown,
-  FadeOutUp,
+  FadeOut,
+  FadeOutDown,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -56,6 +58,8 @@ const MODE_PILL_HEIGHT = 38;
 const MODE_PILL_HORIZONTAL_PADDING = 10;
 const MODE_CONTENT_GAP = 5;
 const MODE_FALLBACK_WIDTH = 70;
+const MODEL_FALLBACK_WIDTH = 160;
+const CHIP_EXPAND_HOLD_MS = 1800;
 const MIN_INPUT_HEIGHT = 28;
 const MAX_INPUT_HEIGHT = 260;
 const ACTION_SIZE = 46;
@@ -63,6 +67,9 @@ const ACTION_GAP = 8;
 const ACTION_CLUSTER_WIDTH = ACTION_SIZE * 2 + ACTION_GAP;
 const MAX_IMAGES = 5;
 const EMPTY_IMAGES: ImageAttachment[] = [];
+// Matches ACTION_SIZE so the leading model chip is the same visual size
+// as the mode chip and the trailing image/send button.
+const MODEL_CHIP_SIZE = ACTION_SIZE;
 
 /**
  * Session composer: a single-line-start liquid glass input next to a
@@ -109,6 +116,27 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
 
   const images = useDraftsStore((s) => s.images[sessionId] ?? EMPTY_IMAGES);
   const setImages = useDraftsStore((s) => s.setImages);
+
+  // `focused` drives the collapsed ↔ expanded split. Focus (not keyboard
+  // height) is the source of truth so external keyboards and focus-before-
+  // show frames both behave correctly.
+  const [focused, setFocused] = useState(false);
+  const inputRef = useRef<TextInput>(null);
+  // Mode chip behaviour (when focused): starts icon-only. First tap reveals
+  // the label; subsequent taps (while the label is visible) cycle modes.
+  // Auto-collapses after CHIP_EXPAND_HOLD_MS of no interaction.
+  const [modeLabelVisible, setModeLabelVisible] = useState(false);
+  const modeCollapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Model chip mirrors the mode chip: collapsed icon (tool logo) → first tap
+  // reveals the full ComposerMorphPill label → subsequent taps on the pill
+  // open the selection menu (handled by ComposerMorphPill itself). Auto-
+  // collapses back to icon after CHIP_EXPAND_HOLD_MS of no interaction.
+  const [modelLabelVisible, setModelLabelVisible] = useState(false);
+  const modelCollapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [modelMeasuredWidth, setModelMeasuredWidth] = useState<number | null>(null);
+  // True while the model selection menu is open — pauses the auto-collapse
+  // timer so the pill doesn't shrink out from under the menu.
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
 
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
@@ -161,12 +189,33 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
     chipTextAnimatedStyle,
   } = useComposerModePalette(mode);
 
-  const modeTargetWidth = modeWidths[mode] ?? MODE_FALLBACK_WIDTH;
+  const modeMeasuredWidth = modeWidths[mode] ?? MODE_FALLBACK_WIDTH;
+  const modeTargetWidth = modeLabelVisible ? modeMeasuredWidth : ACTION_SIZE;
   const modeWidth = useSharedValue(modeTargetWidth);
   useEffect(() => {
     modeWidth.value = withTiming(modeTargetWidth, { duration: theme.motion.durations.base });
   }, [modeTargetWidth, modeWidth, theme.motion.durations.base]);
-  const modeWidthAnimatedStyle = useAnimatedStyle(() => ({ width: modeWidth.value }));
+
+  const modelTargetWidth = modelLabelVisible
+    ? (modelMeasuredWidth ?? MODEL_FALLBACK_WIDTH)
+    : MODEL_CHIP_SIZE;
+  const modelWidth = useSharedValue(MODEL_CHIP_SIZE);
+  useEffect(() => {
+    modelWidth.value = withTiming(modelTargetWidth, { duration: theme.motion.durations.base });
+  }, [modelTargetWidth, modelWidth, theme.motion.durations.base]);
+
+  // Drives width/opacity of the two leading chip slots so that when the
+  // user starts typing, the chips smoothly shrink and the input flexes
+  // into their space (rather than the chips popping out).
+  const chipsSlotProgress = useSharedValue(0);
+  const modeWidthAnimatedStyle = useAnimatedStyle(() => ({
+    width: modeWidth.value * chipsSlotProgress.value,
+    opacity: chipsSlotProgress.value,
+  }));
+  const modelWidthAnimatedStyle = useAnimatedStyle(() => ({
+    width: modelWidth.value * chipsSlotProgress.value,
+    opacity: chipsSlotProgress.value,
+  }));
 
   const inputHeight = useSharedValue(MIN_INPUT_HEIGHT);
   const stopProgress = useSharedValue(isActive ? 1 : 0);
@@ -203,6 +252,88 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
     return { transform: [{ scale: 1 + pulse * 0.08 }] };
   });
 
+  const clearModeCollapseTimer = useCallback(() => {
+    if (modeCollapseTimer.current) {
+      clearTimeout(modeCollapseTimer.current);
+      modeCollapseTimer.current = null;
+    }
+  }, []);
+  const scheduleModeCollapse = useCallback(() => {
+    clearModeCollapseTimer();
+    modeCollapseTimer.current = setTimeout(() => {
+      setModeLabelVisible(false);
+      modeCollapseTimer.current = null;
+    }, CHIP_EXPAND_HOLD_MS);
+  }, [clearModeCollapseTimer]);
+  const clearModelCollapseTimer = useCallback(() => {
+    if (modelCollapseTimer.current) {
+      clearTimeout(modelCollapseTimer.current);
+      modelCollapseTimer.current = null;
+    }
+  }, []);
+  const scheduleModelCollapse = useCallback(() => {
+    clearModelCollapseTimer();
+    // If the user has opened the selection menu, the pill should stay
+    // expanded for as long as they're interacting with it. Restart the
+    // timer once the menu closes.
+    if (modelMenuOpen) return;
+    modelCollapseTimer.current = setTimeout(() => {
+      setModelLabelVisible(false);
+      modelCollapseTimer.current = null;
+    }, CHIP_EXPAND_HOLD_MS);
+  }, [clearModelCollapseTimer, modelMenuOpen]);
+  // When the menu closes, restart the auto-collapse timer so the pill
+  // returns to icon-only after the usual idle window.
+  useEffect(() => {
+    if (modelMenuOpen) {
+      clearModelCollapseTimer();
+      return;
+    }
+    if (!modelLabelVisible) return;
+    clearModelCollapseTimer();
+    modelCollapseTimer.current = setTimeout(() => {
+      setModelLabelVisible(false);
+      modelCollapseTimer.current = null;
+    }, CHIP_EXPAND_HOLD_MS);
+  }, [clearModelCollapseTimer, modelLabelVisible, modelMenuOpen]);
+  const handleFocus = useCallback(() => {
+    setFocused(true);
+    setInputFocused(true);
+    refreshClipboard();
+  }, [refreshClipboard]);
+  const handleBlur = useCallback(() => {
+    setFocused(false);
+    setInputFocused(false);
+    clearModeCollapseTimer();
+    setModeLabelVisible(false);
+    clearModelCollapseTimer();
+    setModelLabelVisible(false);
+  }, [clearModeCollapseTimer, clearModelCollapseTimer]);
+  // Ensure timers clean up on unmount.
+  useEffect(() => clearModeCollapseTimer, [clearModeCollapseTimer]);
+  useEffect(() => clearModelCollapseTimer, [clearModelCollapseTimer]);
+  const expanded = focused;
+  // Leading chips take real width off the input. Once the user starts
+  // typing, hide them so the input gets more room; they come back when the
+  // field is cleared (still focused).
+  const hasText = text.length > 0;
+  // Leading chips stay up while the model menu is open, even if focus
+  // leaves the text input during backdrop interaction. While the agent
+  // is running the chips hide too — mode/model can't be changed mid-run.
+  const chipsVisible = (expanded && !hasText && !isActive) || modelMenuOpen;
+  useEffect(() => {
+    chipsSlotProgress.value = withTiming(chipsVisible ? 1 : 0, {
+      duration: theme.motion.durations.base,
+    });
+  }, [chipsVisible, chipsSlotProgress, theme.motion.durations.base]);
+  useEffect(() => {
+    if (!hasText) return;
+    clearModeCollapseTimer();
+    setModeLabelVisible(false);
+    if (modelMenuOpen) return;
+    clearModelCollapseTimer();
+    setModelLabelVisible(false);
+  }, [clearModeCollapseTimer, clearModelCollapseTimer, hasText, modelMenuOpen]);
   const handleChangeText = useCallback((next: string) => {
     // §16 budget: <16ms from keystroke to next painted frame.
     // Stamp the callback start, then sample at the next animation
@@ -303,20 +434,22 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
     },
     [sessionId, setImages],
   );
-  const handleInputFocus = useCallback(() => {
-    setInputFocused(true);
-    refreshClipboard();
-  }, [refreshClipboard]);
-  const handleInputBlur = useCallback(() => {
-    setInputFocused(false);
-  }, []);
   const handleModePress = useCallback(() => {
     void haptic.selection();
+    if (!modeLabelVisible) {
+      // First tap: reveal the label so the user sees the current mode.
+      setModeLabelVisible(true);
+      scheduleModeCollapse();
+      return;
+    }
+    // Subsequent taps while the label is visible cycle the mode and
+    // keep the label on screen by resetting the collapse timer.
     setMode((current) => {
       const idx = MODE_CYCLE.indexOf(current);
       return MODE_CYCLE[(idx + 1) % MODE_CYCLE.length] ?? "code";
     });
-  }, []);
+    scheduleModeCollapse();
+  }, [modeLabelVisible, scheduleModeCollapse]);
   const handleModeMeasure = useCallback((measuredMode: ComposerMode, width: number) => {
     const roundedWidth = Math.ceil(width);
     setModeWidths((current) => {
@@ -324,6 +457,23 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
       return { ...current, [measuredMode]: roundedWidth };
     });
   }, []);
+  const handleModelChipPress = useCallback(() => {
+    void haptic.selection();
+    if (!modelLabelVisible) {
+      setModelLabelVisible(true);
+      scheduleModelCollapse();
+    }
+  }, [modelLabelVisible, scheduleModelCollapse]);
+  const handleModelMeasure = useCallback((width: number) => {
+    const rounded = Math.ceil(width);
+    setModelMeasuredWidth((current) => (current === rounded ? current : rounded));
+  }, []);
+  // Re-measure when the natural content of the pill changes (tool swap or
+  // model swap changes icon and label text). The onLayout in the measurement
+  // node will fire again once the new content lays out.
+  useEffect(() => {
+    setModelMeasuredWidth(null);
+  }, [currentTool, model]);
   const handleRetry = useCallback(() => {
     if (errorDraft && !isTerminal) void runSubmit(errorDraft, mode);
   }, [errorDraft, isTerminal, mode, runSubmit]);
@@ -560,6 +710,14 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             <NativeText style={styles.modeText}>{MODE_LABEL[measuredMode]}</NativeText>
           </View>
         ))}
+        <View
+          key={`model-measure:${currentTool}:${modelLabel}`}
+          onLayout={(event) => handleModelMeasure(event.nativeEvent.layout.width)}
+          style={styles.modelMeasurePill}
+        >
+          <ToolLogo tool={currentTool} size={13} />
+          <NativeText style={styles.modelMeasureText}>{modelLabel}</NativeText>
+        </View>
       </View>
       {isDisconnected ? (
         <ComposerConnectionNotice sessionId={sessionId} canRetry={canRetryConnection} />
@@ -571,6 +729,115 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
       <ImageAttachmentBar images={images} onRemove={handleRemoveImage} />
       <View style={styles.composerStack}>
         <View style={styles.inputActionRow}>
+          {expanded ? (
+            <Animated.View
+              entering={FadeIn.duration(140)}
+              exiting={FadeOut.duration(100)}
+              pointerEvents={chipsVisible ? "auto" : "none"}
+              style={[styles.modeChipSlot, modeWidthAnimatedStyle]}
+            >
+              <Pressable
+                onPress={handleModePress}
+                disabled={!canInteract}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  modeLabelVisible
+                    ? `Interaction mode: ${MODE_LABEL[mode]}. Tap to cycle.`
+                    : `Interaction mode: ${MODE_LABEL[mode]}. Tap to reveal.`
+                }
+                hitSlop={8}
+                style={styles.modeChipPressable}
+              >
+                {({ pressed }) => (
+                  <Glass
+                    preset="input"
+                    tint="rgba(0,0,0,0)"
+                    animatedProps={glassAnimatedProps}
+                    interactive
+                    style={[
+                      styles.modeChip,
+                      chipAnimatedStyle,
+                      { opacity: canInteract ? (pressed ? 0.78 : 1) : 0.45 },
+                    ]}
+                  >
+                    <SymbolView
+                      name={MODE_ICON[mode]}
+                      size={16}
+                      tintColor={modeIconTint}
+                      weight="medium"
+                      resizeMode="scaleAspectFit"
+                      style={styles.modeChipIcon}
+                    />
+                    {modeLabelVisible ? (
+                      <Animated.Text
+                        entering={FadeIn.duration(140)}
+                        exiting={FadeOut.duration(100)}
+                        numberOfLines={1}
+                        style={[styles.modeText, chipTextAnimatedStyle]}
+                      >
+                        {MODE_LABEL[mode]}
+                      </Animated.Text>
+                    ) : null}
+                  </Glass>
+                )}
+              </Pressable>
+            </Animated.View>
+          ) : null}
+          {expanded ? (
+            <Animated.View
+              key="model-chip"
+              entering={FadeIn.duration(140)}
+              exiting={FadeOut.duration(100)}
+              pointerEvents={chipsVisible ? "auto" : "none"}
+              style={[styles.modelChipSlot, modelWidthAnimatedStyle]}
+            >
+              {modelLabelVisible ? (
+                <Animated.View
+                  key="model-expanded"
+                  entering={FadeIn.duration(140)}
+                  exiting={FadeOut.duration(100)}
+                  onTouchStart={scheduleModelCollapse}
+                  style={styles.modelExpandedWrapper}
+                >
+                  <ComposerMorphPill
+                    label={modelLabel}
+                    accessibilityLabel="Model"
+                    disabled={!canInteract}
+                    headerItems={toolHeaderItems}
+                    items={modelItems}
+                    minWidth={0}
+                    tintAnimatedProps={glassAnimatedProps}
+                    onOpenChange={setModelMenuOpen}
+                  />
+                </Animated.View>
+              ) : (
+                <Animated.View
+                  key="model-collapsed"
+                  entering={FadeIn.duration(140)}
+                  exiting={FadeOut.duration(100)}
+                  style={styles.modelChipCollapsedWrapper}
+                >
+                  <Glass
+                    preset="input"
+                    tint="rgba(0,0,0,0)"
+                    animatedProps={glassAnimatedProps}
+                    interactive
+                    style={[styles.modelChipCollapsed, { opacity: canInteract ? 1 : 0.4 }]}
+                  >
+                    <Pressable
+                      onPress={handleModelChipPress}
+                      disabled={!canInteract}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Model: ${modelLabel}. Tap to reveal.`}
+                      style={styles.modelChipPressable}
+                    >
+                      <ToolLogo tool={currentTool} size={22} />
+                    </Pressable>
+                  </Glass>
+                </Animated.View>
+              )}
+            </Animated.View>
+          ) : null}
           <Glass
             preset="pinnedBar"
             tint="rgba(0,0,0,0)"
@@ -586,10 +853,11 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             ) : null}
             <Animated.View style={[styles.inputWrapper, inputAnimatedStyle]}>
               <TextInput
+                ref={inputRef}
                 value={text}
                 onChangeText={handleChangeText}
-                onFocus={handleInputFocus}
-                onBlur={handleInputBlur}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
                 onContentSizeChange={(e) => {
                   const h = e.nativeEvent.contentSize.height;
                   const next = Math.min(MAX_INPUT_HEIGHT, Math.max(MIN_INPUT_HEIGHT, h));
@@ -609,115 +877,77 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             onPress={() => void handlePickFromLibrary()}
           />
 
-          <Animated.View style={[styles.actionCluster, actionClusterAnimatedStyle]}>
-            <View style={styles.actionGlassContainer}>
-              <Glass
-                preset="input"
-                tint={alpha(theme.colors.success, 0.18)}
-                interactive
-                style={[
-                  styles.sendGlass,
-                  cardBorderAnimatedStyle,
-                  { opacity: canSubmit ? 1 : 0.35 },
-                  sendPulseAnimatedStyle,
-                ]}
-              >
-                <Pressable
-                  onPress={handleSend}
-                  disabled={!canSubmit}
-                  accessibilityRole="button"
-                  accessibilityLabel={isActive ? "Queue message" : "Send message"}
-                  style={styles.actionPressable}
-                >
-                  <SymbolView name="paperplane.fill" size={16} tintColor={theme.colors.accentForeground} resizeMode="scaleAspectFit" style={styles.sendIcon} />
-                </Pressable>
-              </Glass>
-
-              <Glass
-                preset="input"
-                tint={alpha(theme.colors.destructive, 0.22)}
-                interactive
-                style={[
-                  styles.stopGlass,
-                  { borderColor: alpha(theme.colors.destructive, 0.42) },
-                ]}
-              >
-                <Pressable
-                  onPress={handleStop}
-                  disabled={!canStop}
-                  accessibilityRole="button"
-                  accessibilityLabel="Stop session"
-                  style={styles.actionPressable}
-                >
-                  <SymbolView name="stop.fill" size={14} tintColor={theme.colors.destructive} resizeMode="scaleAspectFit" style={styles.stopIcon} />
-                </Pressable>
-              </Glass>
-            </View>
-          </Animated.View>
-        </View>
-
-        <View style={styles.pillsRow}>
-          <Animated.View style={[styles.modeWidthWrapper, modeWidthAnimatedStyle]}>
-            <Pressable
-              onPress={handleModePress}
-              disabled={!canInteract}
-              accessibilityRole="button"
-              accessibilityLabel={`Interaction mode: ${MODE_LABEL[mode]}. Tap to cycle.`}
-              hitSlop={6}
-              style={styles.modePressable}
+          {expanded ? (
+            <Animated.View
+              key="send-cluster"
+              entering={FadeIn.duration(140)}
+              exiting={FadeOut.duration(100)}
+              style={[styles.actionCluster, actionClusterAnimatedStyle]}
             >
-              {({ pressed }) => (
+              <View style={styles.actionGlassContainer}>
                 <Glass
                   preset="input"
-                  tint="rgba(0,0,0,0)"
-                  animatedProps={glassAnimatedProps}
+                  tint={alpha(theme.colors.success, 0.18)}
                   interactive
                   style={[
-                    styles.modePill,
-                    chipAnimatedStyle,
-                    { opacity: canInteract ? (pressed ? 0.78 : 1) : 0.45 },
+                    styles.sendGlass,
+                    cardBorderAnimatedStyle,
+                    { opacity: canSubmit ? 1 : 0.35 },
+                    sendPulseAnimatedStyle,
                   ]}
                 >
-                  <Animated.View
-                    key={mode}
-                    entering={FadeInDown.duration(150)}
-                    exiting={FadeOutUp.duration(150)}
-                    style={styles.modeContent}
+                  <Pressable
+                    onPress={handleSend}
+                    disabled={!canSubmit}
+                    accessibilityRole="button"
+                    accessibilityLabel={isActive ? "Queue message" : "Send message"}
+                    style={styles.actionPressable}
                   >
-                    <SymbolView
-                      name={MODE_ICON[mode]}
-                      size={14}
-                      tintColor={modeIconTint}
-                      weight="medium"
-                      resizeMode="scaleAspectFit"
-                      style={styles.modeIcon}
-                    />
-                    <Animated.Text style={[styles.modeText, chipTextAnimatedStyle]}>{MODE_LABEL[mode]}</Animated.Text>
-                  </Animated.View>
+                    <SymbolView name="paperplane.fill" size={16} tintColor={theme.colors.accentForeground} resizeMode="scaleAspectFit" style={styles.sendIcon} />
+                  </Pressable>
                 </Glass>
-              )}
-            </Pressable>
-          </Animated.View>
-          <ComposerMorphPill
-            label={modelLabel}
-            accessibilityLabel="Model"
-            disabled={!canInteract}
-            headerItems={toolHeaderItems}
-            items={modelItems}
-            minWidth={0}
-            tintAnimatedProps={glassAnimatedProps}
-          />
-          <ComposerMorphPill
-            label={bridgeLabel}
-            accessibilityLabel="Bridge"
-            disabled={!canChangeBridge}
-            items={bridgeItems}
-            systemIcon={bridgeIcon}
-            align="right"
-            minWidth={88}
-            tintAnimatedProps={glassAnimatedProps}
-          />
+
+                <Glass
+                  preset="input"
+                  tint={alpha(theme.colors.destructive, 0.22)}
+                  interactive
+                  style={[
+                    styles.stopGlass,
+                    { borderColor: alpha(theme.colors.destructive, 0.42) },
+                  ]}
+                >
+                  <Pressable
+                    onPress={handleStop}
+                    disabled={!canStop}
+                    accessibilityRole="button"
+                    accessibilityLabel="Stop session"
+                    style={styles.actionPressable}
+                  >
+                    <SymbolView name="stop.fill" size={14} tintColor={theme.colors.destructive} resizeMode="scaleAspectFit" style={styles.stopIcon} />
+                  </Pressable>
+                </Glass>
+              </View>
+            </Animated.View>
+          ) : null}
         </View>
+
+        {expanded && canChangeBridge ? (
+          <Animated.View
+            entering={FadeInDown.duration(160)}
+            exiting={FadeOutDown.duration(120)}
+            style={styles.bridgeRow}
+          >
+            <ComposerMorphPill
+              label={bridgeLabel}
+              accessibilityLabel="Bridge"
+              items={bridgeItems}
+              systemIcon={bridgeIcon}
+              align="left"
+              minWidth={88}
+              tintAnimatedProps={glassAnimatedProps}
+            />
+          </Animated.View>
+        ) : null}
       </View>
     </View>
   );
@@ -738,6 +968,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
+  modeChipSlot: {
+    height: ACTION_SIZE,
+    overflow: "hidden",
+  },
+  modeChipPressable: {
+    width: "100%",
+    height: ACTION_SIZE,
+  },
+  modeChip: {
+    width: "100%",
+    height: ACTION_SIZE,
+    borderRadius: ACTION_SIZE / 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: MODE_PILL_HORIZONTAL_PADDING,
+    gap: MODE_CONTENT_GAP,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  modeChipIcon: { width: 16, height: 16 },
   inputWrapper: { overflow: "hidden" },
   input: { fontSize: 16, lineHeight: 21, paddingHorizontal: 2, paddingVertical: 2, textAlignVertical: "top" },
   actionCluster: {
@@ -772,7 +1023,36 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   stopIcon: { width: 14, height: 14 },
-  pillsRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  bridgeRow: { flexDirection: "row", justifyContent: "center", alignItems: "center" },
+  modelChipSlot: {
+    height: MODEL_CHIP_SIZE,
+    justifyContent: "center",
+    // Allow the expanded menu to render above the input card instead of
+    // being clipped by the row bounds.
+    overflow: "visible",
+  },
+  modelExpandedWrapper: {
+    // Elevate above the input card so the morph pill and its menu render
+    // on top instead of being covered by the input.
+    zIndex: 20,
+  },
+  modelChipCollapsedWrapper: {
+    width: MODEL_CHIP_SIZE,
+    height: MODEL_CHIP_SIZE,
+  },
+  modelChipCollapsed: {
+    width: MODEL_CHIP_SIZE,
+    height: MODEL_CHIP_SIZE,
+    borderRadius: MODEL_CHIP_SIZE / 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  modelChipPressable: {
+    width: MODEL_CHIP_SIZE,
+    height: MODEL_CHIP_SIZE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   modeMeasureRoot: {
     position: "absolute",
     left: -1000,
@@ -789,19 +1069,33 @@ const styles = StyleSheet.create({
     gap: MODE_CONTENT_GAP,
     paddingHorizontal: MODE_PILL_HORIZONTAL_PADDING,
   },
-  modePressable: { width: "100%", height: MODE_PILL_HEIGHT },
-  modeWidthWrapper: { height: MODE_PILL_HEIGHT },
-  modePill: {
-    width: "100%",
-    height: MODE_PILL_HEIGHT,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  modeContent: { ...StyleSheet.absoluteFillObject, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: MODE_CONTENT_GAP },
   modeIcon: { width: 14, height: 14 },
   modeText: { fontSize: 13, fontWeight: "700" },
+  // Matches the intrinsic width of ComposerMorphPill's PillLabel contents
+  // (paddingHorizontal 12, gap 6, icon 13, caption1 text). Used to size the
+  // collapsed→expanded width animation to the pill's natural width.
+  modelMeasurePill: {
+    height: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+  },
+  modelMeasureText: { fontSize: 12, fontWeight: "600" },
   retryRow: { paddingBottom: 4 },
 });
+
+function ToolLogo({ tool, size }: { tool: CodingTool; size: number }) {
+  return (
+    <Image
+      source={
+        tool === "codex"
+          ? require("../../../assets/images/codex-logo.png")
+          : require("../../../assets/images/claude-logo.png")
+      }
+      style={{ width: size, height: size }}
+      resizeMode="contain"
+    />
+  );
+}
