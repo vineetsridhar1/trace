@@ -433,70 +433,6 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
         <ComposerConnectionNotice sessionId={sessionId} canRetry={canRetryConnection} />
       ) : null}
       <View style={styles.composerStack}>
-        <View style={styles.pillsRowWrapper}>
-          <Glass
-            preset="input"
-            animatedProps={glassAnimatedProps}
-            style={styles.pillsPill}
-          >
-            <Animated.View style={[styles.modeWidthWrapper, modeWidthAnimatedStyle]}>
-              <Pressable
-                onPress={handleModePress}
-                disabled={!canInteract}
-                accessibilityRole="button"
-                accessibilityLabel={`Interaction mode: ${MODE_LABEL[mode]}. Tap to cycle.`}
-                hitSlop={6}
-                style={styles.modePressable}
-              >
-                {({ pressed }) => (
-                  <Animated.View
-                    style={[
-                      styles.modePill,
-                      chipAnimatedStyle,
-                      { opacity: canInteract ? (pressed ? 0.78 : 1) : 0.45 },
-                    ]}
-                  >
-                    <Animated.View
-                      key={mode}
-                      entering={FadeInDown.duration(150)}
-                      exiting={FadeOutUp.duration(150)}
-                      style={styles.modeContent}
-                    >
-                      <SymbolView
-                        name={MODE_ICON[mode]}
-                        size={14}
-                        tintColor={modeIconTint}
-                        weight="medium"
-                        resizeMode="scaleAspectFit"
-                        style={styles.modeIcon}
-                      />
-                      <Animated.Text style={[styles.modeText, chipTextAnimatedStyle]}>{MODE_LABEL[mode]}</Animated.Text>
-                    </Animated.View>
-                  </Animated.View>
-                )}
-              </Pressable>
-            </Animated.View>
-            <ComposerMorphPill
-              label={modelLabel}
-              accessibilityLabel="Model"
-              disabled={!canInteract}
-              headerItems={toolHeaderItems}
-              items={modelItems}
-              minWidth={0}
-              tintAnimatedProps={glassAnimatedProps}
-            />
-            <ComposerMorphPill
-              label={bridgeLabel}
-              accessibilityLabel="Bridge"
-              disabled={!canChangeBridge}
-              items={bridgeItems}
-              systemIcon={bridgeIcon}
-              minWidth={88}
-              tintAnimatedProps={glassAnimatedProps}
-            />
-          </Glass>
-        </View>
-
         <View style={styles.inputActionRow}>
           <Glass
             preset="pinnedBar"
@@ -573,6 +509,69 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             </View>
           </Animated.View>
         </View>
+
+        <View style={styles.pillsRow}>
+          <Animated.View style={[styles.modeWidthWrapper, modeWidthAnimatedStyle]}>
+            <Pressable
+              onPress={handleModePress}
+              disabled={!canInteract}
+              accessibilityRole="button"
+              accessibilityLabel={`Interaction mode: ${MODE_LABEL[mode]}. Tap to cycle.`}
+              hitSlop={6}
+              style={styles.modePressable}
+            >
+              {({ pressed }) => (
+                <Glass
+                  preset="input"
+                  tint="rgba(0,0,0,0)"
+                  animatedProps={glassAnimatedProps}
+                  interactive
+                  style={[
+                    styles.modePill,
+                    chipAnimatedStyle,
+                    { opacity: canInteract ? (pressed ? 0.78 : 1) : 0.45 },
+                  ]}
+                >
+                  <Animated.View
+                    key={mode}
+                    entering={FadeInDown.duration(150)}
+                    exiting={FadeOutUp.duration(150)}
+                    style={styles.modeContent}
+                  >
+                    <SymbolView
+                      name={MODE_ICON[mode]}
+                      size={14}
+                      tintColor={modeIconTint}
+                      weight="medium"
+                      resizeMode="scaleAspectFit"
+                      style={styles.modeIcon}
+                    />
+                    <Animated.Text style={[styles.modeText, chipTextAnimatedStyle]}>{MODE_LABEL[mode]}</Animated.Text>
+                  </Animated.View>
+                </Glass>
+              )}
+            </Pressable>
+          </Animated.View>
+          <ComposerMorphPill
+            label={modelLabel}
+            accessibilityLabel="Model"
+            disabled={!canInteract}
+            headerItems={toolHeaderItems}
+            items={modelItems}
+            minWidth={0}
+            tintAnimatedProps={glassAnimatedProps}
+          />
+          <ComposerMorphPill
+            label={bridgeLabel}
+            accessibilityLabel="Bridge"
+            disabled={!canChangeBridge}
+            items={bridgeItems}
+            systemIcon={bridgeIcon}
+            align="right"
+            minWidth={88}
+            tintAnimatedProps={glassAnimatedProps}
+          />
+        </View>
       </View>
     </View>
   );
@@ -627,14 +626,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   stopIcon: { width: 14, height: 14 },
-  pillsRowWrapper: { alignSelf: "flex-start", maxWidth: "100%" },
-  pillsPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-  },
+  pillsRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   modeMeasureRoot: {
     position: "absolute",
     left: -1000,
