@@ -25,6 +25,19 @@ const messageEnter = new Keyframe({
   100: { opacity: 1, transform: [{ translateY: 0 }] },
 }).duration(260);
 
+// FlashList identity for an item. For user-sent events we key on
+// `clientMutationId` (which both the optimistic and the real event carry in
+// their payload) so the optimistic→real id swap stays the same logical item —
+// no remount, no replayed entrance animation.
+function stableNodeKey(item: SessionNode, scopedEvents: Record<string, Event>): string {
+  if (item.kind !== "event") return nodeKey(item);
+  const payload = scopedEvents[item.id]?.payload as
+    | { clientMutationId?: unknown }
+    | undefined;
+  const cm = payload?.clientMutationId;
+  return typeof cm === "string" ? `cm:${cm}` : nodeKey(item);
+}
+
 interface SessionStreamListProps {
   sessionId: string;
   nodes: SessionNode[];
@@ -87,31 +100,17 @@ export function SessionStreamList({
   // last row is *actually new*, not just re-rendered (e.g., when its event
   // payload changed but its identity didn't).
   const lastSeenKeyRef = useRef<string | null>(null);
-  // The optimistic→real swap changes the event id (and thus the row key), so
-  // a key-only check would replay the entrance. Track clientMutationId to
-  // recognize the swap and suppress the second animation.
-  const seenMutationIdsRef = useRef<Set<string>>(new Set());
 
   const renderItem = useCallback(
     ({ item, index }: { item: SessionNode; index: number }) => {
       const isLast = index === nodes.length - 1;
-      const key = nodeKey(item);
-      const event = item.kind === "event" ? scopedEvents[item.id] : undefined;
-      const mutationId =
-        event && typeof (event.payload as { clientMutationId?: unknown })?.clientMutationId === "string"
-          ? ((event.payload as { clientMutationId: string }).clientMutationId)
-          : undefined;
-      const alreadySeenViaMutation = mutationId
-        ? seenMutationIdsRef.current.has(mutationId)
-        : false;
+      const key = stableNodeKey(item, scopedEvents);
       const isFreshLast =
         isLast
         && acceptEntering
         && isNearBottomRef.current
-        && lastSeenKeyRef.current !== key
-        && !alreadySeenViaMutation;
+        && lastSeenKeyRef.current !== key;
       if (isLast) lastSeenKeyRef.current = key;
-      if (isFreshLast && mutationId) seenMutationIdsRef.current.add(mutationId);
       const body = (
         <TimestampRevealRow
           paddingHorizontal={horizontalPadding}
@@ -139,7 +138,10 @@ export function SessionStreamList({
     ],
   );
 
-  const keyExtractor = useCallback((item: SessionNode) => nodeKey(item), []);
+  const keyExtractor = useCallback(
+    (item: SessionNode) => stableNodeKey(item, scopedEvents),
+    [scopedEvents],
+  );
   const getItemType = useCallback(
     (item: SessionNode) => itemTypeFor(item, scopedEvents),
     [scopedEvents],

@@ -43,10 +43,9 @@ export function useComposerSubmit({
       setSending(true);
       const wrapped = wrapPrompt(mode, draft);
       const interactionMode = mode === "code" ? undefined : mode;
-      // Clear the input the same frame the message visibly leaves it — for
-      // the inactive path, that's right after the optimistic event is inserted
-      // into the stream; for the queue path, the user expects the draft to
-      // empty as soon as they tap. Either way we restore the draft on failure.
+      // Clear the draft the same frame the message visibly leaves the input —
+      // either as it lands in the queue, or as the optimistic bubble appears.
+      // `onFailure(draft)` restores it on error.
       try {
         if (isActive) {
           onSuccess();
