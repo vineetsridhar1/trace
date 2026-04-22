@@ -282,6 +282,16 @@ export interface BridgeToolSessionId {
   toolSessionId: string;
 }
 
+export interface BridgeToolSessionMissing {
+  type: "tool_session_missing";
+  sessionId: string;
+  toolSessionId: string;
+  message?: string;
+  interactionMode?: string;
+  checkpointContext?: GitCheckpointContext | null;
+  imageUrls?: string[];
+}
+
 export interface BridgeGitCheckpoint {
   type: "git_checkpoint";
   sessionId: string;
@@ -417,6 +427,7 @@ export type BridgeMessage =
   | BridgeWorkspaceReady
   | BridgeWorkspaceFailed
   | BridgeToolSessionId
+  | BridgeToolSessionMissing
   | BridgeGitCheckpoint
   | BridgeRepoLinked
   | BridgeLinkedCheckoutStatusResult

@@ -314,6 +314,8 @@ export function SessionGroupDetailView({
         groupArchivedAt ?? null,
       )
     : "in_progress";
+  const canMoveSelectedSession =
+    !!selectedSession && !selectedSessionIsOptimistic && selectedSession.sessionStatus !== "merged";
   const linkedCheckoutRepoId =
     groupRepo?.id ?? (selectedSession?.repo as { id: string } | null | undefined)?.id ?? null;
   const linkedCheckoutBranch = groupBranch ?? selectedSession?.branch ?? null;
@@ -456,6 +458,7 @@ export function SessionGroupDetailView({
             canInteract={bridgeInteractionAllowed}
             selectedSessionStatus={selectedSessionStatus}
             selectedSessionId={selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)}
+            canMoveSession={canMoveSelectedSession && bridgeInteractionAllowed}
             groupPrUrl={groupPrUrl}
             panelMode={panelMode}
             isFullscreen={isFullscreen}
