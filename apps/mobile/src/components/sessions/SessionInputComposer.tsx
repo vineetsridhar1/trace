@@ -5,9 +5,7 @@ import { SymbolView, type SFSymbol } from "expo-symbols";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import Animated, {
-  FadeIn,
   FadeInDown,
-  FadeOut,
   FadeOutUp,
   useAnimatedStyle,
   useSharedValue,
@@ -37,11 +35,13 @@ import { applyOptimisticPatch } from "@/lib/optimisticEntity";
 import { getClient } from "@/lib/urql";
 import { useDraftsStore, type ImageAttachment } from "@/stores/drafts";
 import { alpha, useTheme } from "@/theme";
+import { ComposerAttachButton } from "./ComposerAttachButton";
 import { ComposerConnectionNotice } from "./ComposerConnectionNotice";
 import {
   ComposerMorphPill,
   type ComposerMorphPillItem,
 } from "./ComposerMorphPill";
+import { ComposerPasteButton } from "./ComposerPasteButton";
 import { ImageAttachmentBar } from "./ImageAttachmentBar";
 
 interface SessionInputComposerProps { sessionId: string }
@@ -102,6 +102,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const [modeWidths, setModeWidths] = useState<Partial<Record<ComposerMode, number>>>({});
   const [height, setHeight] = useState(MIN_INPUT_HEIGHT);
   const [errorDraft, setErrorDraft] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const [pastingImage, setPastingImage] = useState(false);
@@ -118,8 +119,16 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   // are truly closed.
   const isTerminal = worktreeDeleted === true || sessionStatus === "merged";
 
-  const onFailure = useCallback((draft: string) => { setText(draft); setErrorDraft(draft); }, []);
-  const onSuccess = useCallback(() => { setText(""); setErrorDraft(null); }, []);
+  const onFailure = useCallback((draft: string, message: string) => {
+    setText(draft);
+    setErrorDraft(draft);
+    setErrorMessage(message);
+  }, []);
+  const onSuccess = useCallback(() => {
+    setText("");
+    setErrorDraft(null);
+    setErrorMessage(null);
+  }, []);
   const { submit: runSubmit, sending } = useComposerSubmit({ sessionId, isActive, onFailure, onSuccess });
 
   const trimmed = text.trim();
@@ -254,29 +263,26 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
     void haptic.selection();
     try {
       const remaining = MAX_IMAGES - images.length;
+      // Skip `base64: true` — a 5MB JPEG becomes ~7MB of base64 in JS heap
+      // per attachment. We keep the file URI in the draft and read bytes
+      // lazily at upload time via `fetch(uri).blob()`.
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
-        base64: true,
         quality: 0.9,
         allowsMultipleSelection: true,
         selectionLimit: remaining,
       });
       if (result.canceled) return;
-      const attachments: ImageAttachment[] = [];
-      for (const asset of result.assets) {
-        if (!asset.base64) continue;
-        const mimeType = asset.mimeType ?? "image/jpeg";
-        attachments.push({
-          id: generateUUID(),
-          mimeType,
-          base64: asset.base64,
-          previewUri: asset.uri,
-          width: asset.width || null,
-          height: asset.height || null,
-          s3Key: null,
-          uploading: false,
-        });
-      }
+      const attachments: ImageAttachment[] = result.assets.map((asset) => ({
+        id: generateUUID(),
+        mimeType: asset.mimeType ?? "image/jpeg",
+        fileUri: asset.uri,
+        previewUri: asset.uri,
+        width: asset.width || null,
+        height: asset.height || null,
+        s3Key: null,
+        uploading: false,
+      }));
       if (attachments.length === 0) return;
       setImages(sessionId, (prev) => {
         const room = MAX_IMAGES - prev.length;
@@ -558,38 +564,10 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
       {isDisconnected ? (
         <ComposerConnectionNotice sessionId={sessionId} canRetry={canRetryConnection} />
       ) : null}
-      {showPasteButton ? (
-        <Animated.View
-          entering={FadeIn.duration(220)}
-          exiting={FadeOut.duration(140)}
-          style={styles.pasteRow}
-        >
-          <Pressable
-            onPress={() => void handlePasteImage()}
-            accessibilityRole="button"
-            accessibilityLabel="Paste image from clipboard"
-            hitSlop={8}
-            style={({ pressed }) => ({ opacity: pressed ? 0.78 : 1 })}
-          >
-            <Glass
-              preset="input"
-              glassStyleEffect="clear"
-              style={[styles.pastePill, { paddingHorizontal: theme.spacing.md }]}
-            >
-              <SymbolView
-                name="photo.on.rectangle"
-                size={14}
-                tintColor={theme.colors.foreground}
-                resizeMode="scaleAspectFit"
-                style={styles.pasteIcon}
-              />
-              <Text variant="footnote" color="foreground">
-                Paste image
-              </Text>
-            </Glass>
-          </Pressable>
-        </Animated.View>
-      ) : null}
+      <ComposerPasteButton
+        visible={showPasteButton}
+        onPress={() => void handlePasteImage()}
+      />
       <ImageAttachmentBar images={images} onRemove={handleRemoveImage} />
       <View style={styles.composerStack}>
         <View style={styles.inputActionRow}>
@@ -601,7 +579,9 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
           >
             {errorDraft ? (
               <Pressable onPress={handleRetry} accessibilityRole="button" accessibilityLabel="Retry send" style={styles.retryRow}>
-                <Text variant="caption1" style={{ color: theme.colors.destructive }}>Failed to send. Tap to retry.</Text>
+                <Text variant="caption1" style={{ color: theme.colors.destructive }}>
+                  {errorMessage ?? "Failed to send"}. Tap to retry.
+                </Text>
               </Pressable>
             ) : null}
             <Animated.View style={[styles.inputWrapper, inputAnimatedStyle]}>
@@ -624,32 +604,10 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             </Animated.View>
           </Glass>
 
-          <Glass
-            preset="input"
-            tint="rgba(0,0,0,0)"
-            interactive
-            style={[
-              styles.attachGlass,
-              { borderColor: theme.colors.border, opacity: canAttach ? 1 : 0.45 },
-            ]}
-          >
-            <Pressable
-              onPress={() => void handlePickFromLibrary()}
-              disabled={!canAttach}
-              accessibilityRole="button"
-              accessibilityLabel="Attach image from library"
-              style={styles.actionPressable}
-            >
-              <SymbolView
-                name="photo.on.rectangle"
-                size={18}
-                tintColor={theme.colors.foreground}
-                weight="medium"
-                resizeMode="scaleAspectFit"
-                style={styles.attachIcon}
-              />
-            </Pressable>
-          </Glass>
+          <ComposerAttachButton
+            enabled={canAttach}
+            onPress={() => void handlePickFromLibrary()}
+          />
 
           <Animated.View style={[styles.actionCluster, actionClusterAnimatedStyle]}>
             <View style={styles.actionGlassContainer}>
@@ -846,23 +804,4 @@ const styles = StyleSheet.create({
   modeIcon: { width: 14, height: 14 },
   modeText: { fontSize: 13, fontWeight: "700" },
   retryRow: { paddingBottom: 4 },
-  pasteRow: { flexDirection: "row", paddingBottom: 6 },
-  pastePill: {
-    height: 32,
-    borderRadius: 999,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    overflow: "hidden",
-    alignSelf: "flex-start",
-  },
-  pasteIcon: { width: 14, height: 14 },
-  attachGlass: {
-    width: ACTION_SIZE,
-    height: ACTION_SIZE,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999,
-    overflow: "hidden",
-  },
-  attachIcon: { width: 18, height: 18 },
 });

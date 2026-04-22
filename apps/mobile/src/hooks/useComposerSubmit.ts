@@ -20,10 +20,16 @@ interface UseComposerSubmitOptions {
   sessionId: string;
   /** Whether the agent is actively working — send switches to queue. */
   isActive: boolean;
-  /** Called with the draft text when send/queue fails so the UI can restore it. */
-  onFailure: (draft: string) => void;
+  /** Called with the draft text + a human error message when send/queue fails. */
+  onFailure: (draft: string, message: string) => void;
   /** Called on success so the UI can clear the draft + error state. */
   onSuccess: () => void;
+}
+
+function messageFromError(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === "string" && err.length > 0) return err;
+  return fallback;
 }
 
 export function useComposerSubmit({
@@ -79,6 +85,7 @@ export function useComposerSubmit({
               savedImages.map((img) =>
                 uploadImage({
                   base64: img.base64,
+                  fileUri: img.fileUri,
                   mimeType: img.mimeType,
                   organizationId: orgId,
                 }),
@@ -134,8 +141,8 @@ export function useComposerSubmit({
           ]);
           throw err;
         }
-      } catch {
-        onFailure(draft);
+      } catch (err) {
+        onFailure(draft, messageFromError(err, "Failed to send. Tap to retry."));
       } finally {
         setSending(false);
       }

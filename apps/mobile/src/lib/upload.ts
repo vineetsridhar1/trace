@@ -4,8 +4,10 @@ import { API_URL } from "./env";
 const MAX_BYTES = 5 * 1024 * 1024;
 
 interface UploadArgs {
-  /** Raw base64 payload (no `data:` prefix). */
-  base64: string;
+  /** Raw base64 payload (no `data:` prefix). One of `base64`/`fileUri` is required. */
+  base64?: string;
+  /** Local `file://` or `content://` URI — the gallery picker path uses this. */
+  fileUri?: string;
   /** e.g. `image/png` — also used as the S3 PUT `Content-Type`. */
   mimeType: string;
   organizationId: string;
@@ -21,30 +23,38 @@ function extensionFor(mimeType: string): string {
   return "img";
 }
 
-function base64ByteLength(base64: string): number {
-  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
-  return Math.floor((base64.length * 3) / 4) - padding;
+async function bodyFromArgs(args: UploadArgs): Promise<Blob> {
+  if (args.fileUri) {
+    // RN's fetch handles both `file://` (iOS cached asset from the picker)
+    // and `content://` (Android) URIs and returns a real Blob we can PUT.
+    const res = await fetch(args.fileUri);
+    if (!res.ok) throw new Error("Could not read picked image");
+    return await res.blob();
+  }
+  if (args.base64) {
+    const dataUrl = `data:${args.mimeType};base64,${args.base64}`;
+    return await (await fetch(dataUrl)).blob();
+  }
+  throw new Error("uploadImage requires base64 or fileUri");
 }
 
 /**
- * Uploads a base64 image to S3 via the presign endpoint and returns the S3
- * key. Mirrors `apps/web/src/lib/upload.ts` but takes base64 + mime instead
- * of a `File`, since RN has no File object and `expo-clipboard` returns
- * base64.
+ * Uploads an image to S3 via the presign endpoint and returns the S3 key.
+ * Accepts either raw base64 (clipboard path) or a local URI (gallery picker
+ * path). Reads bytes lazily so a URI-only attachment doesn't need base64
+ * buffered in JS memory until send time.
  */
-export async function uploadImage({
-  base64,
-  mimeType,
-  organizationId,
-}: UploadArgs): Promise<string> {
-  if (!mimeType.startsWith("image/")) {
+export async function uploadImage(args: UploadArgs): Promise<string> {
+  if (!args.mimeType.startsWith("image/")) {
     throw new Error("File must be an image");
   }
-  if (base64ByteLength(base64) > MAX_BYTES) {
+
+  const blob = await bodyFromArgs(args);
+  if (blob.size > MAX_BYTES) {
     throw new Error("Image must be 5MB or smaller");
   }
 
-  const filename = `clipboard-${Date.now()}.${extensionFor(mimeType)}`;
+  const filename = `attachment-${Date.now()}.${extensionFor(args.mimeType)}`;
 
   const presignResponse = await fetch(`${API_URL}/uploads/presign`, {
     method: "POST",
@@ -52,7 +62,11 @@ export async function uploadImage({
       "Content-Type": "application/json",
       ...getAuthHeaders(),
     },
-    body: JSON.stringify({ filename, contentType: mimeType, organizationId }),
+    body: JSON.stringify({
+      filename,
+      contentType: args.mimeType,
+      organizationId: args.organizationId,
+    }),
   });
 
   if (!presignResponse.ok) {
@@ -67,14 +81,9 @@ export async function uploadImage({
     throw new Error("Invalid upload response");
   }
 
-  // Convert base64 → Blob using a data URL round-trip. React Native's fetch
-  // supports `data:` URLs and returns a real Blob we can PUT directly to S3.
-  const dataUrl = `data:${mimeType};base64,${base64}`;
-  const blob = await (await fetch(dataUrl)).blob();
-
   const uploadResponse = await fetch(uploadUrl, {
     method: "PUT",
-    headers: { "Content-Type": mimeType },
+    headers: { "Content-Type": args.mimeType },
     body: blob,
   });
   if (!uploadResponse.ok) {
