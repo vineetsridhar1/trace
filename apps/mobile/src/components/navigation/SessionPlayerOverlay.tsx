@@ -16,6 +16,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { BlurView } from "expo-blur";
 import { useEntityField } from "@trace/client-core";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
 import { SessionSurface, SessionSurfaceEmpty } from "@/components/sessions/SessionSurface";
@@ -46,6 +47,7 @@ export function SessionPlayerOverlay() {
   const open = useMobileUIStore((s) => s.sessionPlayerOpen);
   const sessionId = useMobileUIStore((s) => s.overlaySessionId);
   const setOverlaySessionId = useMobileUIStore((s) => s.setOverlaySessionId);
+  const activeMenuClose = useMobileUIStore((s) => s.activeMenuClose);
   const headerGroupId = useEntityField("sessions", sessionId ?? "", "sessionGroupId") as
     | string
     | null
@@ -156,16 +158,26 @@ export function SessionPlayerOverlay() {
           )}
         </View>
 
+        {activeMenuClose ? (
+          <Pressable
+            accessibilityLabel="Dismiss menu"
+            onPress={activeMenuClose}
+            style={styles.menuScrim}
+          />
+        ) : null}
+
         <View
           style={styles.topInset}
           onLayout={handleTopInsetLayout}
           pointerEvents="box-none"
         >
           <GestureDetector gesture={pan}>
-            <View style={styles.dragHandle}>
-              <View
-                style={{ height: insets.top, backgroundColor: theme.colors.background }}
-              />
+            <BlurView
+              tint="systemThickMaterialDark"
+              intensity={65}
+              style={[styles.dragHandle, { backgroundColor: "rgba(0,0,0,0.3)" }]}
+            >
+              <View style={{ height: insets.top }} />
               {sessionId ? (
                 <SessionGroupHeader groupId={headerGroupId ?? ""} sessionId={sessionId} />
               ) : null}
@@ -176,7 +188,7 @@ export function SessionPlayerOverlay() {
                   onSelect={handleSelectSession}
                 />
               ) : null}
-            </View>
+            </BlurView>
           </GestureDetector>
         </View>
       </Animated.View>
@@ -202,6 +214,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
+  },
+  // Layering contract: zIndex must stay below `topInset` (10) so header
+  // taps still reach menu items and above `surface` (0) so body taps
+  // hit the scrim and dismiss the active menu.
+  menuScrim: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 5,
   },
   dragHandle: {
     overflow: "visible",
