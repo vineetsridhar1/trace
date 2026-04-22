@@ -65,6 +65,8 @@ interface ComposerMorphPillProps {
   style?: StyleProp<ViewStyle>;
   /** Animated glass tint props shared with the composer mode palette. */
   tintAnimatedProps?: GlassAnimatedProps;
+  /** Fires whenever the menu opens or closes. */
+  onOpenChange?: (open: boolean) => void;
 }
 
 const PILL_HEIGHT = 38;
@@ -86,6 +88,7 @@ export function ComposerMorphPill({
   style,
   systemIcon,
   tintAnimatedProps,
+  onOpenChange,
 }: ComposerMorphPillProps) {
   if (!isLiquidGlassAvailable()) {
     return (
@@ -114,6 +117,7 @@ export function ComposerMorphPill({
       style={style}
       systemIcon={systemIcon}
       tintAnimatedProps={tintAnimatedProps}
+      onOpenChange={onOpenChange}
     />
   );
 }
@@ -129,10 +133,14 @@ function MorphingPill({
   style,
   systemIcon,
   tintAnimatedProps,
+  onOpenChange,
 }: Required<Pick<ComposerMorphPillProps, "accessibilityLabel" | "align" | "items" | "label" | "minWidth">> &
-  Pick<ComposerMorphPillProps, "disabled" | "headerItems" | "style" | "systemIcon" | "tintAnimatedProps">) {
+  Pick<ComposerMorphPillProps, "disabled" | "headerItems" | "style" | "systemIcon" | "tintAnimatedProps" | "onOpenChange">) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    onOpenChange?.(open);
+  }, [onOpenChange, open]);
   const [mounted, setMounted] = useState(false);
   const [triggerWidth, setTriggerWidth] = useState(minWidth);
   const progress = useSharedValue(0);
