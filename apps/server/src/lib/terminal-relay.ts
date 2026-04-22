@@ -6,6 +6,10 @@ import { sessionRouter } from "./session-router.js";
 interface TerminalEntry {
   sessionId: string;
   sessionGroupId: string | null;
+  kind: "session" | "channel";
+  channelId?: string;
+  organizationId?: string;
+  repoId?: string;
   /**
    * The runtime this terminal lives on. Every terminal command is pinned to
    * this runtime via `expectedHomeRuntimeId` — without it, an unbound session
@@ -47,6 +51,8 @@ class TerminalRelay {
   private sessionTerminals = new Map<string, Set<string>>();
   /** Reverse index: sessionGroupId → Set<terminalId> for group-scoped terminal tabs */
   private sessionGroupTerminals = new Map<string, Set<string>>();
+  /** Reverse index for repo/channel terminals on a specific runtime. */
+  private channelTerminals = new Map<string, Set<string>>();
 
   /**
    * Create a terminal on the bridge for a given session.
@@ -70,6 +76,7 @@ class TerminalRelay {
     this.terminals.set(terminalId, {
       sessionId,
       sessionGroupId,
+      kind: "session",
       runtimeInstanceId,
       frontendWs: null,
       attachedUserId: null,
@@ -105,9 +112,71 @@ class TerminalRelay {
 
     if (result !== "delivered") {
       // Bridge not available — buffer an error so the frontend gets feedback on attach
-      const errorMsg = JSON.stringify({ type: "error", message: `Terminal creation failed: ${result}` });
+      const errorMsg = JSON.stringify({
+        type: "error",
+        message: `Terminal creation failed: ${result}`,
+      });
       const entry = this.terminals.get(terminalId);
       if (entry) entry.buffer.push(errorMsg);
+    }
+
+    return terminalId;
+  }
+
+  createChannelTerminal(
+    channelId: string,
+    organizationId: string,
+    repoId: string,
+    runtimeInstanceId: string,
+    cols: number,
+    rows: number,
+    cwd: string,
+  ): string {
+    const terminalId = randomUUID();
+    const sessionId = `channel:${channelId}`;
+
+    this.terminals.set(terminalId, {
+      sessionId,
+      sessionGroupId: null,
+      kind: "channel",
+      channelId,
+      organizationId,
+      repoId,
+      runtimeInstanceId,
+      frontendWs: null,
+      attachedUserId: null,
+      ready: false,
+      terminated: false,
+      buffer: [],
+      scrollback: [],
+      scrollbackBytes: 0,
+      orphanTimer: null,
+    });
+
+    const sessionIds = this.sessionTerminals.get(sessionId) ?? new Set();
+    sessionIds.add(terminalId);
+    this.sessionTerminals.set(sessionId, sessionIds);
+    const channelKey = this.channelTerminalKey(channelId, runtimeInstanceId);
+    const channelIds = this.channelTerminals.get(channelKey) ?? new Set();
+    channelIds.add(terminalId);
+    this.channelTerminals.set(channelKey, channelIds);
+
+    const result = sessionRouter.sendToRuntime(runtimeInstanceId, {
+      type: "terminal_create",
+      terminalId,
+      sessionId,
+      cols,
+      rows,
+      cwd,
+    });
+
+    if (result !== "delivered") {
+      const entry = this.terminals.get(terminalId);
+      if (entry) {
+        entry.buffer.push(
+          JSON.stringify({ type: "error", message: `Terminal creation failed: ${result}` }),
+        );
+      }
     }
 
     return terminalId;
@@ -183,14 +252,18 @@ class TerminalRelay {
     terminals: Array<{ terminalId: string; sessionId: string }>,
   ): Promise<void> {
     const sessionIds = [...new Set(terminals.map(({ sessionId }) => sessionId))];
-    const sessions = sessionIds.length === 0
-      ? []
-      : await prisma.session.findMany({
-          where: { id: { in: sessionIds } },
-          select: { id: true, sessionGroupId: true },
-        });
+    const sessions =
+      sessionIds.length === 0
+        ? []
+        : await prisma.session.findMany({
+            where: { id: { in: sessionIds } },
+            select: { id: true, sessionGroupId: true },
+          });
     const sessionGroupIds = new Map<string, string | null>(
-      sessions.map((session: { id: string; sessionGroupId: string | null }) => [session.id, session.sessionGroupId ?? null]),
+      sessions.map((session: { id: string; sessionGroupId: string | null }) => [
+        session.id,
+        session.sessionGroupId ?? null,
+      ]),
     );
 
     for (const { terminalId, sessionId } of terminals) {
@@ -200,6 +273,7 @@ class TerminalRelay {
       this.terminals.set(terminalId, {
         sessionId,
         sessionGroupId,
+        kind: "session",
         runtimeInstanceId,
         frontendWs: null,
         attachedUserId: null,
@@ -248,13 +322,24 @@ class TerminalRelay {
     return result;
   }
 
+  getTerminalsForChannel(channelId: string, runtimeInstanceId: string): string[] {
+    const ids = this.channelTerminals.get(this.channelTerminalKey(channelId, runtimeInstanceId));
+    if (!ids) return [];
+    const result: string[] = [];
+    for (const id of ids) {
+      const entry = this.terminals.get(id);
+      if (entry && !entry.terminated) result.push(id);
+    }
+    return result;
+  }
+
   /** Attach a frontend WebSocket to an existing terminal. Flushes any buffered messages. */
   attachFrontend(terminalId: string, ws: WebSocket, userId: string): boolean {
     const entry = this.terminals.get(terminalId);
     if (!entry) return false;
     entry.frontendWs = ws;
     entry.attachedUserId = userId;
-    const hadBufferedReady = entry.buffer.some((msg) => msg.includes("\"type\":\"ready\""));
+    const hadBufferedReady = entry.buffer.some((msg) => msg.includes('"type":"ready"'));
 
     // Cancel orphan cleanup — a frontend has attached
     this.cancelOrphanCleanup(terminalId);
@@ -311,6 +396,41 @@ class TerminalRelay {
     return this.terminals.get(terminalId)?.runtimeInstanceId;
   }
 
+  getTerminalAuthContext(terminalId: string):
+    | {
+        kind: "session";
+        sessionId: string;
+        sessionGroupId: string | null;
+        runtimeInstanceId: string;
+      }
+    | {
+        kind: "channel";
+        channelId: string;
+        organizationId: string;
+        repoId: string;
+        runtimeInstanceId: string;
+      }
+    | null {
+    const entry = this.terminals.get(terminalId);
+    if (!entry) return null;
+    if (entry.kind === "channel") {
+      if (!entry.channelId || !entry.organizationId || !entry.repoId) return null;
+      return {
+        kind: "channel",
+        channelId: entry.channelId,
+        organizationId: entry.organizationId,
+        repoId: entry.repoId,
+        runtimeInstanceId: entry.runtimeInstanceId,
+      };
+    }
+    return {
+      kind: "session",
+      sessionId: entry.sessionId,
+      sessionGroupId: entry.sessionGroupId,
+      runtimeInstanceId: entry.runtimeInstanceId,
+    };
+  }
+
   /** Forward a message from the bridge to the attached frontend WebSocket. */
   relayFromBridge(msg: { type: string; terminalId: string; [key: string]: unknown }): void {
     const entry = this.terminals.get(msg.terminalId);
@@ -322,7 +442,10 @@ class TerminalRelay {
       entry.scrollback.push(data);
       entry.scrollbackBytes += data.length;
       // Trim oldest chunks when over budget
-      while (entry.scrollbackBytes > TerminalRelay.MAX_SCROLLBACK_BYTES && entry.scrollback.length > 1) {
+      while (
+        entry.scrollbackBytes > TerminalRelay.MAX_SCROLLBACK_BYTES &&
+        entry.scrollback.length > 1
+      ) {
         entry.scrollbackBytes -= entry.scrollback.shift()!.length;
       }
     }
@@ -369,31 +492,27 @@ class TerminalRelay {
   }
 
   /** Forward input/resize from the frontend to the bridge. */
-  relayFromFrontend(terminalId: string, type: "input" | "resize", payload: Record<string, unknown>): void {
+  relayFromFrontend(
+    terminalId: string,
+    type: "input" | "resize",
+    payload: Record<string, unknown>,
+  ): void {
     const entry = this.terminals.get(terminalId);
     if (!entry) return;
 
     if (type === "input") {
-      sessionRouter.send(
-        entry.sessionId,
-        {
-          type: "terminal_input",
-          terminalId,
-          data: payload.data as string,
-        },
-        { expectedHomeRuntimeId: entry.runtimeInstanceId },
-      );
+      this.sendTerminalCommand(entry, {
+        type: "terminal_input",
+        terminalId,
+        data: payload.data as string,
+      });
     } else if (type === "resize") {
-      sessionRouter.send(
-        entry.sessionId,
-        {
-          type: "terminal_resize",
-          terminalId,
-          cols: payload.cols as number,
-          rows: payload.rows as number,
-        },
-        { expectedHomeRuntimeId: entry.runtimeInstanceId },
-      );
+      this.sendTerminalCommand(entry, {
+        type: "terminal_resize",
+        terminalId,
+        cols: payload.cols as number,
+        rows: payload.rows as number,
+      });
     }
   }
 
@@ -402,14 +521,10 @@ class TerminalRelay {
     const entry = this.terminals.get(terminalId);
     if (!entry) return;
 
-    sessionRouter.send(
-      entry.sessionId,
-      {
-        type: "terminal_destroy",
-        terminalId,
-      },
-      { expectedHomeRuntimeId: entry.runtimeInstanceId },
-    );
+    this.sendTerminalCommand(entry, {
+      type: "terminal_destroy",
+      terminalId,
+    });
 
     this.removeTerminal(terminalId);
   }
@@ -422,11 +537,7 @@ class TerminalRelay {
       const entry = this.terminals.get(terminalId);
       if (!entry) continue;
       // Kill the terminal process on the bridge
-      sessionRouter.send(
-        entry.sessionId,
-        { type: "terminal_destroy", terminalId },
-        { expectedHomeRuntimeId: entry.runtimeInstanceId },
-      );
+      this.sendTerminalCommand(entry, { type: "terminal_destroy", terminalId });
       if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
         entry.frontendWs.send(JSON.stringify({ type: "exit", exitCode: -1 }));
       }
@@ -450,11 +561,7 @@ class TerminalRelay {
       const entry = this.terminals.get(terminalId);
       if (!entry) continue;
       // Kill the terminal process on the bridge
-      sessionRouter.send(
-        entry.sessionId,
-        { type: "terminal_destroy", terminalId },
-        { expectedHomeRuntimeId: entry.runtimeInstanceId },
-      );
+      this.sendTerminalCommand(entry, { type: "terminal_destroy", terminalId });
       if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
         entry.frontendWs.send(JSON.stringify({ type: "exit", exitCode: -1 }));
       }
@@ -493,9 +600,7 @@ class TerminalRelay {
       if (entry.attachedUserId !== userId) continue;
       if (sessionIds && !sessionIds.has(entry.sessionId)) continue;
       if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
-        entry.frontendWs.send(
-          JSON.stringify({ type: "error", message: "Bridge access revoked" }),
-        );
+        entry.frontendWs.send(JSON.stringify({ type: "error", message: "Bridge access revoked" }));
         entry.frontendWs.close(1008, "Bridge access revoked");
       }
       this.destroyTerminal(terminalId);
@@ -528,6 +633,26 @@ class TerminalRelay {
     }
   }
 
+  private sendTerminalCommand(
+    entry: TerminalEntry,
+    command:
+      | { type: "terminal_input"; terminalId: string; data: string }
+      | { type: "terminal_resize"; terminalId: string; cols: number; rows: number }
+      | { type: "terminal_destroy"; terminalId: string },
+  ): void {
+    if (entry.kind === "channel") {
+      sessionRouter.sendToRuntime(entry.runtimeInstanceId, command);
+      return;
+    }
+    sessionRouter.send(entry.sessionId, command, {
+      expectedHomeRuntimeId: entry.runtimeInstanceId,
+    });
+  }
+
+  private channelTerminalKey(channelId: string, runtimeInstanceId: string): string {
+    return `${channelId}:${runtimeInstanceId}`;
+  }
+
   private removeTerminal(terminalId: string): void {
     const entry = this.terminals.get(terminalId);
     if (entry) {
@@ -542,6 +667,14 @@ class TerminalRelay {
         if (groupIds) {
           groupIds.delete(terminalId);
           if (groupIds.size === 0) this.sessionGroupTerminals.delete(entry.sessionGroupId);
+        }
+      }
+      if (entry.kind === "channel" && entry.channelId) {
+        const channelKey = this.channelTerminalKey(entry.channelId, entry.runtimeInstanceId);
+        const channelIds = this.channelTerminals.get(channelKey);
+        if (channelIds) {
+          channelIds.delete(terminalId);
+          if (channelIds.size === 0) this.channelTerminals.delete(channelKey);
         }
       }
     }

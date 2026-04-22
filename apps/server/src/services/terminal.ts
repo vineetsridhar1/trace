@@ -69,6 +69,71 @@ class TerminalService {
     return runtimeInstanceId;
   }
 
+  private async resolveChannelTerminalTarget(input: {
+    channelId: string;
+    bridgeRuntimeId: string;
+    organizationId: string;
+    userId: string;
+    requireRepoPath: boolean;
+  }): Promise<{
+    channelId: string;
+    repoId: string;
+    runtimeInstanceId: string;
+    repoPath: string | null;
+  }> {
+    const channel = await prisma.channel.findFirst({
+      where: {
+        id: input.channelId,
+        organizationId: input.organizationId,
+        type: "coding",
+        members: { some: { userId: input.userId } },
+      },
+      select: { id: true, repoId: true },
+    });
+    if (!channel?.repoId) throw new Error("Channel not found");
+
+    const bridge = await prisma.bridgeRuntime.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        OR: [{ id: input.bridgeRuntimeId }, { instanceId: input.bridgeRuntimeId }],
+      },
+      select: { instanceId: true },
+    });
+    if (!bridge) throw new Error("Bridge not found");
+
+    const runtime = sessionRouter.getRuntime(bridge.instanceId);
+    if (!runtime || !sessionRouter.isRuntimeAvailable(runtime.id)) {
+      throw new AuthorizationError(TERMINAL_NO_RUNTIME_ERROR);
+    }
+    if (runtime.organizationId !== input.organizationId) {
+      throw new AuthorizationError(TERMINAL_NO_RUNTIME_ERROR);
+    }
+    if (runtime.hostingMode === "local" && !runtime.registeredRepoIds.includes(channel.repoId)) {
+      throw new Error("Repo is not linked on this bridge");
+    }
+
+    await runtimeAccessService.assertAccess({
+      userId: input.userId,
+      organizationId: input.organizationId,
+      runtimeInstanceId: runtime.id,
+      capability: "terminal",
+    });
+
+    let repoPath: string | null = null;
+    if (input.requireRepoPath) {
+      const status = await sessionRouter.getLinkedCheckoutStatus(runtime.id, channel.repoId);
+      repoPath = status.repoPath ?? null;
+      if (!repoPath) throw new Error("Repo is not linked on this bridge");
+    }
+
+    return {
+      channelId: channel.id,
+      repoId: channel.repoId,
+      runtimeInstanceId: runtime.id,
+      repoPath,
+    };
+  }
+
   async create({
     sessionId,
     cols,
@@ -158,18 +223,19 @@ class TerminalService {
       .map((id) => terminalRelay.getSessionId(id))
       .filter((id): id is string => !!id);
 
-    const owningSessions = terminalSessionIds.length === 0
+    const owningSessions =
+      terminalSessionIds.length === 0
         ? []
         : await prisma.session.findMany({
-          where: { id: { in: terminalSessionIds }, organizationId },
-          select: {
-            id: true,
-            organizationId: true,
-            sessionGroupId: true,
-            connection: true,
-            sessionGroup: { select: { connection: true } },
-          },
-        });
+            where: { id: { in: terminalSessionIds }, organizationId },
+            select: {
+              id: true,
+              organizationId: true,
+              sessionGroupId: true,
+              connection: true,
+              sessionGroup: { select: { connection: true } },
+            },
+          });
     type OwningSession = {
       id: string;
       organizationId: string;
@@ -177,7 +243,9 @@ class TerminalService {
       connection: unknown;
       sessionGroup: { connection: unknown } | null;
     };
-    const owningSessionMap = new Map<string, OwningSession>(owningSessions.map((item: OwningSession) => [item.id, item]));
+    const owningSessionMap = new Map<string, OwningSession>(
+      owningSessions.map((item: OwningSession) => [item.id, item]),
+    );
 
     const results: Array<{ id: string; sessionId: string }> = [];
     for (const id of terminalIds) {
@@ -196,6 +264,66 @@ class TerminalService {
     return results;
   }
 
+  async createForChannel({
+    channelId,
+    bridgeRuntimeId,
+    cols,
+    rows,
+    organizationId,
+    userId,
+  }: {
+    channelId: string;
+    bridgeRuntimeId: string;
+    cols: number;
+    rows: number;
+    organizationId: string;
+    userId: string;
+  }): Promise<{ id: string; sessionId: string }> {
+    const target = await this.resolveChannelTerminalTarget({
+      channelId,
+      bridgeRuntimeId,
+      organizationId,
+      userId,
+      requireRepoPath: true,
+    });
+    if (!target.repoPath) throw new Error("Repo is not linked on this bridge");
+
+    const terminalId = terminalRelay.createChannelTerminal(
+      target.channelId,
+      organizationId,
+      target.repoId,
+      target.runtimeInstanceId,
+      cols,
+      rows,
+      target.repoPath,
+    );
+    return { id: terminalId, sessionId: target.channelId };
+  }
+
+  async listForChannel({
+    channelId,
+    bridgeRuntimeId,
+    organizationId,
+    userId,
+  }: {
+    channelId: string;
+    bridgeRuntimeId: string;
+    organizationId: string;
+    userId: string;
+  }): Promise<Array<{ id: string; sessionId: string }>> {
+    const target = await this.resolveChannelTerminalTarget({
+      channelId,
+      bridgeRuntimeId,
+      organizationId,
+      userId,
+      requireRepoPath: false,
+    });
+
+    return terminalRelay
+      .getTerminalsForChannel(target.channelId, target.runtimeInstanceId)
+      .map((id: string) => ({ id, sessionId: target.channelId }));
+  }
+
   async destroy({
     terminalId,
     organizationId,
@@ -205,11 +333,31 @@ class TerminalService {
     organizationId: string;
     userId: string;
   }): Promise<boolean> {
-    const sessionId = terminalRelay.getSessionId(terminalId);
-    if (!sessionId) return true; // Already gone — no-op
+    const authContext = terminalRelay.getTerminalAuthContext(terminalId);
+    if (!authContext) return true; // Already gone — no-op
+
+    if (authContext.kind === "channel") {
+      const channel = await prisma.channel.findFirst({
+        where: {
+          id: authContext.channelId,
+          organizationId,
+          members: { some: { userId } },
+        },
+        select: { organizationId: true },
+      });
+      if (!channel) throw new Error("Terminal not found");
+      await runtimeAccessService.assertAccess({
+        userId,
+        organizationId: channel.organizationId,
+        runtimeInstanceId: authContext.runtimeInstanceId,
+        capability: "terminal",
+      });
+      terminalRelay.destroyTerminal(terminalId);
+      return true;
+    }
 
     const session = await prisma.session.findFirst({
-      where: { id: sessionId, organizationId },
+      where: { id: authContext.sessionId, organizationId },
       select: {
         id: true,
         organizationId: true,

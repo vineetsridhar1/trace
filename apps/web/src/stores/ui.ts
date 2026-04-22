@@ -13,7 +13,7 @@ import {
   resolveSessionGroupIdForSession,
 } from "./ui-navigation";
 
-export type ActivePage = "main" | "settings" | "inbox" | "tickets" | "agent-debug";
+export type ActivePage = "main" | "settings" | "inbox" | "connections" | "tickets" | "agent-debug";
 export type ChannelSubPage = "sessions" | "merged-archived" | null;
 export interface NavigationState {
   channelId: string | null;
@@ -186,6 +186,10 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
     }
     if (page === "inbox") {
       pushNav(null, null, null, "inbox");
+      return;
+    }
+    if (page === "connections") {
+      pushNav(null, null, null, "connections");
       return;
     }
     if (page === "tickets") {
@@ -438,7 +442,14 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
     }
   },
 
-  _restoreNav: (channelId: string | null, sessionGroupId: string | null, sessionId: string | null, page?: ActivePage, chatId?: string | null, channelSubPage?: ChannelSubPage) => {
+  _restoreNav: (
+    channelId: string | null,
+    sessionGroupId: string | null,
+    sessionId: string | null,
+    page?: ActivePage,
+    chatId?: string | null,
+    channelSubPage?: ChannelSubPage,
+  ) => {
     persistActiveChannelId(channelId);
     if (chatId) persistActiveChatId(chatId);
     if (page === "main" && !chatId) persistActiveSessionNav(sessionGroupId, sessionId);

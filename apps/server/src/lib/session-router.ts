@@ -691,7 +691,7 @@ export class SessionRouter {
   }
 
   /** Send a command directly to a runtime (not session-scoped). */
-  private sendToRuntime(runtimeId: string, command: Record<string, unknown>): DeliveryResult {
+  sendToRuntime(runtimeId: string, command: Record<string, unknown>): DeliveryResult {
     const runtime = this.runtimes.get(runtimeId);
     if (!runtime) return "no_runtime";
     if (runtime.ws.readyState !== runtime.ws.OPEN) return "runtime_disconnected";
@@ -1070,10 +1070,7 @@ export class SessionRouter {
    * fresh status (status_result or action_result), so foreground sync actions
    * keep the home-screen view warm without extra round-trips.
    */
-  private cacheLinkedCheckoutStatus(
-    runtimeId: string,
-    status: BridgeLinkedCheckoutStatus,
-  ): void {
+  private cacheLinkedCheckoutStatus(runtimeId: string, status: BridgeLinkedCheckoutStatus): void {
     const runtime = this.runtimes.get(runtimeId);
     if (!runtime) return;
     runtime.linkedCheckouts.set(status.repoId, status);
@@ -1270,7 +1267,6 @@ export class SessionRouter {
       waitForBridge: (sid, timeoutMs?, runtimeId?) => this.waitForBridge(sid, timeoutMs, runtimeId),
     });
   }
-
 }
 
 export const sessionRouter = new SessionRouter();

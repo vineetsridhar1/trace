@@ -38,16 +38,8 @@ export const SEND_SESSION_MESSAGE_MUTATION = gql`
 `;
 
 export const QUEUE_SESSION_MESSAGE_MUTATION = gql`
-  mutation QueueSessionMessage(
-    $sessionId: ID!
-    $text: String!
-    $interactionMode: String
-  ) {
-    queueSessionMessage(
-      sessionId: $sessionId
-      text: $text
-      interactionMode: $interactionMode
-    ) {
+  mutation QueueSessionMessage($sessionId: ID!, $text: String!, $interactionMode: String) {
+    queueSessionMessage(sessionId: $sessionId, text: $text, interactionMode: $interactionMode) {
       id
       sessionId
       text
@@ -334,6 +326,103 @@ export const MY_BRIDGE_RUNTIMES_FOR_HOME_QUERY = gql`
   }
 `;
 
+export const MY_CONNECTIONS_QUERY = gql`
+  query MyConnections {
+    myConnections {
+      bridge {
+        id
+        instanceId
+        label
+        hostingMode
+        lastSeenAt
+        connectedAt
+        disconnectedAt
+        connected
+        ownerUser {
+          id
+          name
+          email
+        }
+        accessRequests {
+          id
+          scopeType
+          requestedExpiresAt
+          requestedCapabilities
+          status
+          createdAt
+          requesterUser {
+            id
+            name
+            email
+          }
+          sessionGroup {
+            id
+            name
+          }
+        }
+        accessGrants {
+          id
+          scopeType
+          capabilities
+          expiresAt
+          revokedAt
+          createdAt
+          granteeUser {
+            id
+            name
+            email
+          }
+          grantedByUser {
+            id
+            name
+          }
+          sessionGroup {
+            id
+            name
+          }
+        }
+      }
+      repos {
+        repo {
+          id
+          name
+          defaultBranch
+        }
+        channel {
+          id
+          name
+          baseBranch
+        }
+        runScripts
+        linkedCheckout {
+          repoId
+          repoPath
+          isAttached
+          attachedSessionGroupId
+          targetBranch
+          autoSyncEnabled
+          currentBranch
+          currentCommitSha
+          lastSyncedCommitSha
+          lastSyncError
+          restoreBranch
+          restoreCommitSha
+          attachedSessionGroup {
+            id
+            name
+            slug
+            branch
+            channel {
+              id
+              name
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
 export const REQUEST_BRIDGE_ACCESS_MUTATION = gql`
   mutation RequestBridgeAccess(
     $runtimeInstanceId: ID!
@@ -402,10 +491,7 @@ export const REVOKE_BRIDGE_ACCESS_GRANT_MUTATION = gql`
 `;
 
 export const UPDATE_BRIDGE_ACCESS_GRANT_MUTATION = gql`
-  mutation UpdateBridgeAccessGrant(
-    $grantId: ID!
-    $capabilities: [BridgeAccessCapability!]!
-  ) {
+  mutation UpdateBridgeAccessGrant($grantId: ID!, $capabilities: [BridgeAccessCapability!]!) {
     updateBridgeAccessGrant(grantId: $grantId, capabilities: $capabilities) {
       id
       capabilities
@@ -586,9 +672,32 @@ export const SESSION_TERMINALS_QUERY = gql`
   }
 `;
 
+export const CHANNEL_TERMINALS_QUERY = gql`
+  query ChannelTerminals($channelId: ID!, $bridgeRuntimeId: ID!) {
+    channelTerminals(channelId: $channelId, bridgeRuntimeId: $bridgeRuntimeId) {
+      id
+      sessionId
+    }
+  }
+`;
+
 export const CREATE_TERMINAL_MUTATION = gql`
   mutation CreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) {
     createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) {
+      id
+      sessionId
+    }
+  }
+`;
+
+export const CREATE_CHANNEL_TERMINAL_MUTATION = gql`
+  mutation CreateChannelTerminal($channelId: ID!, $bridgeRuntimeId: ID!, $cols: Int!, $rows: Int!) {
+    createChannelTerminal(
+      channelId: $channelId
+      bridgeRuntimeId: $bridgeRuntimeId
+      cols: $cols
+      rows: $rows
+    ) {
       id
       sessionId
     }

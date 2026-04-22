@@ -782,6 +782,21 @@ type BridgeRuntimeAccess {
   pendingRequest: BridgeAccessRequest
 }
 
+type ConnectionsRepoEntry {
+  repo: Repo!
+  """
+  Channel used to authorize terminal creation + source of runScripts.
+  """
+  channel: Channel!
+  runScripts: JSON
+  linkedCheckout: LinkedCheckoutStatus
+}
+
+type ConnectionsBridge {
+  bridge: BridgeRuntime!
+  repos: [ConnectionsRepoEntry!]!
+}
+
 type BranchDiffFile {
   path: String!
   status: String!
@@ -1027,6 +1042,7 @@ type Query {
   availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!
   availableRuntimes(tool: CodingTool!, sessionGroupId: ID): [SessionRuntimeInstance!]!
   myBridgeRuntimes: [BridgeRuntime!]!
+  myConnections: [ConnectionsBridge!]!
   bridgeRuntimeAccess(runtimeInstanceId: ID!, sessionGroupId: ID): BridgeRuntimeAccess!
   repoBranches(repoId: ID!, runtimeInstanceId: ID, sessionGroupId: ID): [String!]!
   sessionGroupFiles(sessionGroupId: ID!): [String!]!
@@ -1045,6 +1061,7 @@ type Query {
   participants(scopeType: String!, scopeId: ID!): [Participant!]!
   myApiTokens: [ApiTokenStatus!]!
   sessionTerminals(sessionId: ID!): [Terminal!]!
+  channelTerminals(channelId: ID!, bridgeRuntimeId: ID!): [Terminal!]!
   agentIdentity(organizationId: ID!): AgentIdentity
   resolvedAiMode(organizationId: ID!, scopeType: String!, scopeId: ID!): AutonomyMode!
   agentExecutionLogs(
@@ -1189,6 +1206,7 @@ type Mutation {
   registerPushToken(token: String!, platform: PushPlatform!): Boolean!
   unregisterPushToken(token: String!): Boolean!
   createTerminal(sessionId: ID!, cols: Int!, rows: Int!): Terminal!
+  createChannelTerminal(channelId: ID!, bridgeRuntimeId: ID!, cols: Int!, rows: Int!): Terminal!
   destroyTerminal(terminalId: ID!): Boolean!
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!

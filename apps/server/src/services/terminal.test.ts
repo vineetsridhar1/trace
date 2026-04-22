@@ -8,9 +8,12 @@ vi.mock("../lib/db.js", async () => {
 vi.mock("../lib/terminal-relay.js", () => ({
   terminalRelay: {
     createTerminal: vi.fn().mockReturnValue("term-1"),
+    createChannelTerminal: vi.fn().mockReturnValue("term-channel-1"),
     getTerminalsForSession: vi.fn().mockReturnValue([]),
     getTerminalsForSessionGroup: vi.fn().mockReturnValue([]),
+    getTerminalsForChannel: vi.fn().mockReturnValue([]),
     getSessionId: vi.fn(),
+    getTerminalAuthContext: vi.fn(),
     destroyTerminal: vi.fn(),
   },
 }));
@@ -18,6 +21,9 @@ vi.mock("../lib/terminal-relay.js", () => ({
 vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
     getRuntimeForSession: vi.fn(),
+    getRuntime: vi.fn(),
+    isRuntimeAvailable: vi.fn(),
+    getLinkedCheckoutStatus: vi.fn(),
   },
 }));
 
@@ -49,6 +55,7 @@ describe("TerminalService", () => {
     vi.clearAllMocks();
     runtimeAccessServiceMock.assertAccess.mockResolvedValue(undefined);
     sessionRouterMock.getRuntimeForSession.mockReturnValue(undefined);
+    terminalRelayMock.getTerminalAuthContext.mockReturnValue(null);
   });
 
   describe("create", () => {
@@ -460,6 +467,8 @@ describe("TerminalService", () => {
       // previous `it` block.
       prismaMock.session.findFirst.mockReset();
       prismaMock.session.findMany.mockReset();
+      terminalRelayMock.getTerminalsForSessionGroup.mockReset();
+      terminalRelayMock.getSessionId.mockReset();
       prismaMock.session.findFirst.mockImplementation(() =>
         Promise.resolve({
           id: "session-1",
@@ -468,6 +477,7 @@ describe("TerminalService", () => {
           hosting: "cloud",
           createdById: "user-1",
           connection: { runtimeInstanceId: "runtime-1" },
+          sessionGroup: { connection: null },
         }),
       );
       terminalRelayMock.getTerminalsForSessionGroup.mockReturnValueOnce(["term-1", "term-2"]);
@@ -517,12 +527,18 @@ describe("TerminalService", () => {
 
   describe("destroy", () => {
     it("destroys a terminal successfully", async () => {
-      terminalRelayMock.getSessionId.mockReturnValueOnce("session-1");
+      terminalRelayMock.getTerminalAuthContext.mockReturnValueOnce({
+        kind: "session",
+        sessionId: "session-1",
+        sessionGroupId: "group-1",
+        runtimeInstanceId: "runtime-1",
+      });
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
-        hosting: "cloud",
-        createdById: "user-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
         connection: { runtimeInstanceId: "runtime-1" },
+        sessionGroup: { connection: null },
       });
 
       const result = await terminalService.destroy({
@@ -536,7 +552,7 @@ describe("TerminalService", () => {
     });
 
     it("returns true when terminal already gone (no-op)", async () => {
-      terminalRelayMock.getSessionId.mockReturnValueOnce(null);
+      terminalRelayMock.getTerminalAuthContext.mockReturnValueOnce(null);
 
       const result = await terminalService.destroy({
         terminalId: "term-gone",
@@ -549,7 +565,12 @@ describe("TerminalService", () => {
     });
 
     it("throws when session not found for terminal", async () => {
-      terminalRelayMock.getSessionId.mockReturnValueOnce("session-1");
+      terminalRelayMock.getTerminalAuthContext.mockReturnValueOnce({
+        kind: "session",
+        sessionId: "session-1",
+        sessionGroupId: "group-1",
+        runtimeInstanceId: "runtime-1",
+      });
       prismaMock.session.findFirst.mockResolvedValueOnce(null);
 
       await expect(
@@ -562,7 +583,12 @@ describe("TerminalService", () => {
     });
 
     it("no-ops fail-closed when no runtime resolves", async () => {
-      terminalRelayMock.getSessionId.mockReturnValueOnce("session-1");
+      terminalRelayMock.getTerminalAuthContext.mockReturnValueOnce({
+        kind: "session",
+        sessionId: "session-1",
+        sessionGroupId: "group-1",
+        runtimeInstanceId: "runtime-1",
+      });
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
         organizationId: "org-1",
@@ -584,12 +610,18 @@ describe("TerminalService", () => {
       runtimeAccessServiceMock.assertAccess.mockRejectedValueOnce(
         new Error("Access denied: you do not have permission to use this local bridge"),
       );
-      terminalRelayMock.getSessionId.mockReturnValueOnce("session-1");
+      terminalRelayMock.getTerminalAuthContext.mockReturnValueOnce({
+        kind: "session",
+        sessionId: "session-1",
+        sessionGroupId: "group-1",
+        runtimeInstanceId: "runtime-1",
+      });
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
-        hosting: "local",
-        createdById: "user-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
         connection: { runtimeInstanceId: "runtime-1" },
+        sessionGroup: { connection: null },
       });
 
       await expect(
