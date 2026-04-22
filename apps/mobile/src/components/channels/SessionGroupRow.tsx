@@ -7,7 +7,7 @@ import ContextMenu, {
   type ContextMenuOnPressNativeEvent,
 } from "react-native-context-menu-view";
 import { ARCHIVE_SESSION_GROUP_MUTATION, useEntityField } from "@trace/client-core";
-import { Chip, Text } from "@/components/design-system";
+import { Avatar, Chip, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
@@ -38,6 +38,10 @@ export const SessionGroupRow = memo(function SessionGroupRow({
   const updatedAt = useEntityField("sessions", latestSessionId ?? "", "updatedAt");
   const agentStatus = useEntityField("sessions", latestSessionId ?? "", "agentStatus");
   const lastEventPreview = useEntityField("sessions", latestSessionId ?? "", "_lastEventPreview");
+  const createdBy = useEntityField("sessions", latestSessionId ?? "", "createdBy") as
+    | { name?: string | null; avatarUrl?: string | null }
+    | null
+    | undefined;
 
   const handlePress = useCallback(() => {
     if (!latestSessionId) return;
@@ -127,6 +131,14 @@ export const SessionGroupRow = memo(function SessionGroupRow({
             },
           ]}
         >
+          {createdBy?.name ? (
+            <Avatar
+              name={createdBy.name}
+              uri={createdBy.avatarUrl ?? null}
+              size="sm"
+              style={styles.avatar}
+            />
+          ) : null}
           <View style={styles.main}>
             <View style={styles.titleRow}>
               <SessionStatusIndicator status={status} agentStatus={agentStatus} />
@@ -184,6 +196,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     minHeight: 60,
   },
+  avatar: { marginRight: 10, marginTop: 2 },
   main: { flex: 1, minWidth: 0 },
   titleRow: {
     flexDirection: "row",
