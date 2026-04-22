@@ -877,7 +877,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
             onPress={() => void handlePickFromLibrary()}
           />
 
-          {expanded ? (
+          {expanded && (trimmed.length > 0 || images.length > 0 || isActive) ? (
             <Animated.View
               key="send-cluster"
               entering={FadeIn.duration(140)}
