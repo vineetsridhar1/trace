@@ -105,5 +105,41 @@ export const bridgeAccessMutations = {
 export const bridgeAccessTypeResolvers = {
   BridgeRuntime: {
     connected: (runtime: { instanceId: string }) => sessionRouter.isRuntimeAvailable(runtime.instanceId),
+    linkedCheckouts: (runtime: { instanceId: string }) => {
+      const live = sessionRouter.getRuntime(runtime.instanceId);
+      if (!live || live.ws.readyState !== live.ws.OPEN) return [];
+      // Filter by current registeredRepoIds so stale cache entries from
+      // previously-linked-but-now-unlinked repos don't surface.
+      const activeRepos = new Set(live.registeredRepoIds);
+      return [...live.linkedCheckouts.values()].filter(
+        (status) => status.isAttached && activeRepos.has(status.repoId),
+      );
+    },
+  },
+  LinkedCheckoutStatus: {
+    // Batch via DataLoader so a polled `myBridgeRuntimes` with N checkouts
+    // becomes a single `IN (…)` query per type, not N findUnique calls.
+    // Org-scope post-load: every parent path is already owner-gated, but
+    // filter here so a future entry point can't bypass it.
+    attachedSessionGroup: async (
+      status: { attachedSessionGroupId?: string | null },
+      _args: unknown,
+      ctx: Context,
+    ) => {
+      if (!status.attachedSessionGroupId || !ctx.organizationId) return null;
+      const group = (await ctx.sessionGroupLoader.load(status.attachedSessionGroupId)) as
+        | { organizationId: string }
+        | null;
+      if (!group || group.organizationId !== ctx.organizationId) return null;
+      return group;
+    },
+    repo: async (status: { repoId: string }, _args: unknown, ctx: Context) => {
+      if (!ctx.organizationId) return null;
+      const repo = (await ctx.repoLoader.load(status.repoId)) as
+        | { organizationId: string }
+        | null;
+      if (!repo || repo.organizationId !== ctx.organizationId) return null;
+      return repo;
+    },
   },
 };
