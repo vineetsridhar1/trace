@@ -85,6 +85,7 @@ function buildPrismaDevDatabaseUrl(port) {
   const params = new URLSearchParams({
     sslmode: "disable",
     connection_limit: "1",
+    pgbouncer: "true",
     connect_timeout: "0",
     max_idle_connection_lifetime: "0",
     pool_timeout: "0",
@@ -96,8 +97,10 @@ function buildPrismaDevDatabaseUrl(port) {
 function normalizeLocalDatabaseUrl(url) {
   const parsed = new URL(url);
   parsed.searchParams.set("sslmode", "disable");
-  // Prisma's local Postgres server accepts one connection at a time.
+  // Prisma's local Postgres server accepts one connection at a time and
+  // behaves like a pooled/proxied connection path for prepared statements.
   parsed.searchParams.set("connection_limit", "1");
+  parsed.searchParams.set("pgbouncer", "true");
   parsed.searchParams.set("connect_timeout", "0");
   parsed.searchParams.set("max_idle_connection_lifetime", "0");
   parsed.searchParams.set("pool_timeout", "0");
