@@ -49,6 +49,10 @@ export interface MobileUIState {
   clearSessionDone: (id: string) => void;
   clearSessionGroupDone: (id: string) => void;
 
+  /** Repo ID currently selected as the home filter; null = show all repos. */
+  homeRepoFilter: string | null;
+  setHomeRepoFilter: (id: string | null) => void;
+
   reset: () => void;
 }
 
@@ -65,6 +69,7 @@ const initial = {
   channelDoneBadges: {} as Record<string, boolean>,
   sessionDoneBadges: {} as Record<string, boolean>,
   sessionGroupDoneBadges: {} as Record<string, boolean>,
+  homeRepoFilter: null as string | null,
 };
 
 export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUIState>) => ({
@@ -104,6 +109,8 @@ export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUISta
       delete next[id];
       return { sessionGroupDoneBadges: next };
     }),
+
+  setHomeRepoFilter: (id) => set({ homeRepoFilter: id }),
 
   reset: () => set(initial),
 }));

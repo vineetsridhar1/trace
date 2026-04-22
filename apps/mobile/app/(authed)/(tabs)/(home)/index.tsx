@@ -4,11 +4,13 @@ import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import { EmptyState } from "@/components/design-system";
 import { useTheme } from "@/theme";
+import { HomeRepoFilter } from "@/components/home/HomeRepoFilter";
 import { HomeSectionHeader } from "@/components/home/HomeSectionHeader";
 import { HomeSessionRow } from "@/components/home/HomeSessionRow";
 import { useHomeSections, type HomeSectionKind } from "@/hooks/useHomeSections";
 import { refreshOrgData } from "@/hooks/useHydrate";
 import { haptic } from "@/lib/haptics";
+import { useMobileUIStore, type MobileUIState } from "@/stores/ui";
 
 type HomeListItem =
   | { kind: "header"; section: HomeSectionKind; count: number }
@@ -19,7 +21,8 @@ export default function AuthedHome() {
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
   const logout = useAuthStore((s: AuthState) => s.logout);
-  const sections = useHomeSections(userId);
+  const repoFilter = useMobileUIStore((s: MobileUIState) => s.homeRepoFilter);
+  const sections = useHomeSections(userId, repoFilter);
   const [refreshing, setRefreshing] = useState(false);
 
   const items = useMemo<HomeListItem[]>(() => {
@@ -57,7 +60,8 @@ export default function AuthedHome() {
       contentInsetAdjustmentBehavior="automatic"
       onRefresh={handleRefresh}
       refreshing={refreshing}
-      ListEmptyComponent={<HomeEmpty />}
+      ListHeaderComponent={<HomeRepoFilter userId={userId} />}
+      ListEmptyComponent={<HomeEmpty hasRepoFilter={repoFilter !== null} />}
       style={{ flex: 1, backgroundColor: theme.colors.background }}
     />
   );
@@ -78,13 +82,17 @@ function getItemType(item: HomeListItem): string {
   return item.kind;
 }
 
-function HomeEmpty() {
+function HomeEmpty({ hasRepoFilter }: { hasRepoFilter: boolean }) {
   return (
     <View style={styles.empty}>
       <EmptyState
-        icon="checkmark.seal"
-        title="All clear"
-        subtitle="Sessions that need you will show up here."
+        icon={hasRepoFilter ? "line.3.horizontal.decrease.circle" : "checkmark.seal"}
+        title={hasRepoFilter ? "Nothing in this repo" : "All clear"}
+        subtitle={
+          hasRepoFilter
+            ? "No sessions for the selected repo right now."
+            : "Sessions that need you will show up here."
+        }
       />
     </View>
   );
