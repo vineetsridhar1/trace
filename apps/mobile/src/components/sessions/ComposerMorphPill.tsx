@@ -226,7 +226,12 @@ function MorphingPill({
           glassEffectStyle="regular"
           colorScheme={theme.scheme === "dark" ? "dark" : "light"}
           animatedProps={tintAnimatedProps}
-          style={[styles.glass, anchorEdge, glassStyle]}
+          style={[
+            styles.glass,
+            anchorEdge,
+            { backgroundColor: theme.glass.input.tint ?? theme.colors.glassTint },
+            glassStyle,
+          ]}
         >
           {mounted ? (
             <Animated.View

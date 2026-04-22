@@ -19,7 +19,6 @@ export function ComposerAttachButton({ enabled, onPress }: Props) {
   return (
     <Glass
       preset="input"
-      tint="rgba(0,0,0,0)"
       interactive
       style={[
         styles.glass,
