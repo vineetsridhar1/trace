@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -55,19 +55,17 @@ export function NewActivityPill({ count, visible, onPress, bottomOffset = 0 }: N
         onPress={handlePress}
         hitSlop={8}
       >
-        <Glass preset="input" style={styles.pill}>
-          <View style={[styles.content, { paddingHorizontal: theme.spacing.md }]}>
-            <SymbolView
-              name="arrow.down"
-              size={14}
-              tintColor={theme.colors.foreground}
-              resizeMode="scaleAspectFit"
-              style={styles.icon}
-            />
-            <Text variant="footnote" color="foreground">
-              {label}
-            </Text>
-          </View>
+        <Glass preset="input" style={[styles.pill, { paddingHorizontal: theme.spacing.md }]}>
+          <SymbolView
+            name="arrow.down"
+            size={14}
+            tintColor={theme.colors.foreground}
+            resizeMode="scaleAspectFit"
+            style={styles.icon}
+          />
+          <Text variant="footnote" color="foreground">
+            {label}
+          </Text>
         </Glass>
       </Pressable>
     </Animated.View>
@@ -81,13 +79,12 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   pill: {
-    overflow: "hidden",
-  },
-  content: {
+    height: 32,
+    borderRadius: 999,
     flexDirection: "row",
     alignItems: "center",
-    height: 32,
     gap: 6,
+    overflow: "hidden",
   },
   icon: {
     width: 14,
