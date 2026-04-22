@@ -647,8 +647,8 @@ export class ChannelService {
   }
 
   async delete(id: string, organizationId: string, actorType: ActorType, actorId: string) {
-    if (actorType === "user") {
-      throw new AuthorizationError("Users cannot delete channels directly");
+    if (actorType === "agent") {
+      throw new AuthorizationError("Agents cannot delete channels directly");
     }
 
     const channel = await prisma.channel.findUniqueOrThrow({
