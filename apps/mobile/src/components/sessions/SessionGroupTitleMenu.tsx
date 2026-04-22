@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Modal, Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { BlurView } from "expo-blur";
+import { SymbolView, type SFSymbol } from "expo-symbols";
 import Animated, {
   interpolate,
   runOnJS,
@@ -10,7 +11,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { useEntityField } from "@trace/client-core";
-import type { SessionGroupStatus } from "@trace/gql";
+import type { SessionConnection, SessionGroupStatus } from "@trace/gql";
 import { Spinner, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { haptic } from "@/lib/haptics";
@@ -229,10 +230,6 @@ function TitleRow({
     | string
     | null
     | undefined;
-  const branch = useEntityField("sessionGroups", groupId, "branch") as
-    | string
-    | null
-    | undefined;
   const status = useEntityField("sessionGroups", groupId, "status") as
     | string
     | null
@@ -242,6 +239,18 @@ function TitleRow({
     sessionId ?? "",
     "agentStatus",
   ) as string | null | undefined;
+  const hosting = useEntityField("sessions", sessionId ?? "", "hosting") as
+    | string
+    | null
+    | undefined;
+  const connection = useEntityField("sessions", sessionId ?? "", "connection") as
+    | SessionConnection
+    | null
+    | undefined;
+  const bridgeIcon: SFSymbol = hosting === "cloud" ? "cloud" : "laptopcomputer";
+  const bridgeLabel =
+    hosting === "cloud" ? "Cloud" : (connection?.runtimeLabel ?? "Local");
+  const showBridge = !!sessionId && !!hosting;
 
   return (
     <View style={[styles.titleRow, { paddingHorizontal: theme.spacing.md }]}>
@@ -258,15 +267,25 @@ function TitleRow({
         ) : (
           <Spinner size="small" color="mutedForeground" />
         )}
-        {branch ? (
-          <Text
-            variant="caption1"
-            numberOfLines={1}
-            color="mutedForeground"
-            style={styles.branch}
-          >
-            {branch}
-          </Text>
+        {showBridge ? (
+          <View style={styles.bridgeRow}>
+            <SymbolView
+              name={bridgeIcon}
+              size={11}
+              tintColor={theme.colors.mutedForeground}
+              weight="medium"
+              resizeMode="scaleAspectFit"
+              style={styles.bridgeIcon}
+            />
+            <Text
+              variant="caption1"
+              numberOfLines={1}
+              color="mutedForeground"
+              style={styles.bridgeLabel}
+            >
+              {bridgeLabel}
+            </Text>
+          </View>
         ) : null}
       </View>
     </View>
@@ -281,11 +300,29 @@ function PanelContent({
   sessionId?: string;
 }) {
   const theme = useTheme();
+  const branch = useEntityField("sessionGroups", groupId, "branch") as
+    | string
+    | null
+    | undefined;
   return (
     <View style={styles.panelBody}>
       <View style={[styles.panelTitleSlot, { paddingVertical: theme.spacing.sm }]}>
         <TitleRow groupId={groupId} sessionId={sessionId} nameLines={2} />
       </View>
+      {branch ? (
+        <View style={[styles.branchRow, { paddingHorizontal: theme.spacing.md }]}>
+          <Text variant="caption1" color="mutedForeground">
+            Branch
+          </Text>
+          <Text
+            variant="caption1"
+            numberOfLines={1}
+            style={styles.branchValue}
+          >
+            {branch}
+          </Text>
+        </View>
+      ) : null}
       <LinkedCheckoutPanelSection groupId={groupId} />
     </View>
   );
@@ -355,9 +392,23 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  branch: {
-    marginTop: 1,
+  bridgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+    gap: 4,
+  },
+  bridgeIcon: { width: 11, height: 11 },
+  bridgeLabel: {},
+  branchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 6,
+  },
+  branchValue: {
     fontFamily: "Menlo",
+    flex: 1,
   },
   panelLayer: {
     position: "absolute",
