@@ -20,17 +20,32 @@ type BridgeTunnelMutationResult = {
   error?: string | null;
 };
 
+function describeCurrentTunnelUsage(
+  connection: ConnectionBridge,
+  entry: ConnectionRepoEntry,
+  slot: ConnectionTunnelSlot,
+): string | null {
+  const activeEntry = connection.repos.find(
+    (candidate) => candidate.repo.id !== entry.repo.id && candidate.webPreview?.slot?.id === slot.id,
+  );
+  if (!activeEntry) return null;
+  const activeGroup =
+    activeEntry.webPreview?.sessionGroup ?? activeEntry.linkedCheckout?.attachedSessionGroup ?? null;
+  return activeGroup?.name ? `${activeEntry.repo.name} (${activeGroup.name})` : activeEntry.repo.name;
+}
+
 export function ConnectionsRepoPreviewActions({
-  bridge,
+  connection,
   entry,
   onChanged,
 }: {
-  bridge: ConnectionBridge["bridge"];
+  connection: ConnectionBridge;
   entry: ConnectionRepoEntry;
   onChanged: () => Promise<void>;
 }) {
   const theme = useTheme();
   const router = useRouter();
+  const bridge = connection.bridge;
   const preview = entry.webPreview ?? null;
   const runtimeInstanceId = preview?.runtimeInstanceId ?? bridge.instanceId;
   const repoPort = entry.repo.webPreviewPort ?? null;
@@ -64,13 +79,17 @@ export function ConnectionsRepoPreviewActions({
 
   function retarget(slot: ConnectionTunnelSlot) {
     if (!repoPort) return;
+    const currentUsage = describeCurrentTunnelUsage(connection, entry, slot);
+    const description = currentUsage
+      ? `${slot.label} is currently serving ${currentUsage}. Point it at port ${repoPort} for ${entry.repo.name} instead?`
+      : `Point ${slot.label} at port ${repoPort} for ${entry.repo.name}? This will take over the shared URL if another repo is using it.`;
     Alert.alert(
       "Retarget tunnel",
-      `Point ${slot.label} at port ${repoPort} for ${entry.repo.name}?`,
+      description,
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Retarget",
+          text: currentUsage ? "Take Over" : "Retarget",
           onPress: () => {
             void runMutation(`retarget:${slot.id}`, async () => {
               const result = await getClient()

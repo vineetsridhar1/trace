@@ -10,11 +10,11 @@ import { ConnectionsRepoSyncActions } from "./ConnectionsRepoSyncActions";
 import { ConnectionsRepoPreviewActions } from "./ConnectionsRepoPreviewActions";
 
 export function ConnectionsRepoAccordion({
-  bridge,
+  connection,
   entry,
   onChanged,
 }: {
-  bridge: ConnectionBridge["bridge"];
+  connection: ConnectionBridge;
   entry: ConnectionRepoEntry;
   onChanged: () => Promise<void>;
 }) {
@@ -91,7 +91,7 @@ export function ConnectionsRepoAccordion({
               {entry.webPreview.url}
             </Text>
           ) : null}
-          <ConnectionsRepoPreviewActions bridge={bridge} entry={entry} onChanged={onChanged} />
+          <ConnectionsRepoPreviewActions connection={connection} entry={entry} onChanged={onChanged} />
         </View>
       ) : null}
     </View>

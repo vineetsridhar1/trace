@@ -66,10 +66,10 @@ export function ConnectionsBridgeSection({
       </View>
 
       {bridge.connected
-        ? repos.map((entry) => (
+          ? repos.map((entry) => (
             <ConnectionsRepoAccordion
               key={entry.repo.id}
-              bridge={bridge}
+              connection={connection}
               entry={entry}
               onChanged={onRefresh}
             />
