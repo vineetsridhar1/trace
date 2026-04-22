@@ -174,8 +174,8 @@ export function SessionPlayerOverlay() {
           <GestureDetector gesture={pan}>
             <BlurView
               tint="systemThickMaterialDark"
-              intensity={85}
-              style={styles.dragHandle}
+              intensity={65}
+              style={[styles.dragHandle, { backgroundColor: "rgba(0,0,0,0.3)" }]}
             >
               <View style={{ height: insets.top }} />
               {sessionId ? (
