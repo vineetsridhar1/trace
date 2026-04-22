@@ -1,10 +1,5 @@
 import { useCallback, useMemo, useRef } from "react";
-import {
-  StyleSheet,
-  View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-} from "react-native";
+import { StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { type FlashListRef } from "@shopify/flash-list";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue, withSpring } from "react-native-reanimated";
@@ -80,20 +75,13 @@ export function SessionStream({ sessionId, topInset, bottomInset }: SessionStrea
       gitCheckpointsByPromptEventId,
       sessionActive: agentStatus === "active",
     }),
-    [
-      sessionId,
-      completedAgentTools,
-      toolResultByUseId,
-      gitCheckpointsByPromptEventId,
-      agentStatus,
-    ],
+    [sessionId, completedAgentTools, toolResultByUseId, gitCheckpointsByPromptEventId, agentStatus],
   );
 
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-      const distanceFromBottom =
-        contentSize.height - contentOffset.y - layoutMeasurement.height;
+      const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
       const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
       isNearBottomRef.current = nearBottom;
       if (nearBottom) clearNewActivity();

@@ -23,7 +23,12 @@ interface NewActivityPillProps {
  * Floating pill that appears above the session input composer when new events
  * arrive while the user has scrolled up. Tap to jump to the bottom.
  */
-export function NewActivityPill({ count, visible, onPress, bottomOffset = 0 }: NewActivityPillProps) {
+export function NewActivityPill({
+  count,
+  visible,
+  onPress,
+  bottomOffset = 0,
+}: NewActivityPillProps) {
   const theme = useTheme();
   const progress = useSharedValue(0);
 
@@ -55,7 +60,11 @@ export function NewActivityPill({ count, visible, onPress, bottomOffset = 0 }: N
         onPress={handlePress}
         hitSlop={8}
       >
-        <Glass preset="input" style={[styles.pill, { paddingHorizontal: theme.spacing.md }]}>
+        <Glass
+          preset="input"
+          style={[styles.pill, { paddingHorizontal: theme.spacing.md }]}
+          glassStyleEffect="clear"
+        >
           <SymbolView
             name="arrow.down"
             size={14}
