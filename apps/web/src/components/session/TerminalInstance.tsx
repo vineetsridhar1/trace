@@ -10,6 +10,8 @@ export function TerminalInstance({ terminalId, visible }: { terminalId: string; 
   const termRef = useRef<Terminal | null>(null);
   const socketRef = useRef<TerminalSocket | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const reconnectingRef = useRef(false);
+  const initialCommandSentRef = useRef(false);
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
   const setTerminalStatus = useTerminalStore((s) => s.setTerminalStatus);
@@ -52,9 +54,11 @@ export function TerminalInstance({ terminalId, visible }: { terminalId: string; 
     socket.onEvent((event) => {
       switch (event.type) {
         case "ready": {
+          reconnectingRef.current = false;
           setTerminalStatus(terminalId, "active");
           const entry = useTerminalStore.getState().terminals[terminalId];
-          if (entry?.initialCommand) {
+          if (entry?.initialCommand && !initialCommandSentRef.current) {
+            initialCommandSentRef.current = true;
             socket.write(entry.initialCommand + "\n");
           }
           break;
@@ -71,12 +75,17 @@ export function TerminalInstance({ terminalId, visible }: { terminalId: string; 
           term.write(`\r\n\x1b[31m[Error: ${event.message}]\x1b[0m\r\n`);
           break;
         case "reconnecting":
-          term.write("\r\n\x1b[33m[Reconnecting...]\x1b[0m\r\n");
+          if (!reconnectingRef.current) {
+            reconnectingRef.current = true;
+            term.write("\r\n\x1b[33m[Reconnecting...]\x1b[0m\r\n");
+          }
           break;
         case "reconnected":
+          reconnectingRef.current = false;
           setTerminalStatus(terminalId, "active");
           break;
         case "disconnected":
+          reconnectingRef.current = false;
           setTerminalStatus(terminalId, "exited");
           term.write("\r\n\x1b[33m[Connection lost]\x1b[0m\r\n");
           break;

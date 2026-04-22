@@ -385,6 +385,23 @@ export type CodingTool =
   | 'codex'
   | 'custom';
 
+export type ConnectionsBridge = {
+  __typename?: 'ConnectionsBridge';
+  bridge: BridgeRuntime;
+  /** Whether the calling user has terminal capability on this bridge. */
+  canTerminal: Scalars['Boolean']['output'];
+  repos: Array<ConnectionsRepoEntry>;
+};
+
+export type ConnectionsRepoEntry = {
+  __typename?: 'ConnectionsRepoEntry';
+  /** Channel used to authorize terminal creation + source of runScripts. */
+  channel: Channel;
+  linkedCheckout?: Maybe<LinkedCheckoutStatus>;
+  repo: Repo;
+  runScripts?: Maybe<Scalars['JSON']['output']>;
+};
+
 export type CostBudget = {
   __typename?: 'CostBudget';
   dailyLimitCents: Scalars['Int']['output'];
@@ -665,6 +682,7 @@ export type Mutation = {
   createAiConversation: AiConversation;
   createChannel: Channel;
   createChannelGroup: ChannelGroup;
+  createChannelTerminal: Terminal;
   createChat: Chat;
   createProject: Project;
   createRepo: Repo;
@@ -800,6 +818,14 @@ export type MutationCreateChannelArgs = {
 
 export type MutationCreateChannelGroupArgs = {
   input: CreateChannelGroupInput;
+};
+
+
+export type MutationCreateChannelTerminalArgs = {
+  bridgeRuntimeId: Scalars['ID']['input'];
+  channelId: Scalars['ID']['input'];
+  cols: Scalars['Int']['input'];
+  rows: Scalars['Int']['input'];
 };
 
 
@@ -1304,6 +1330,7 @@ export type Query = {
   channel?: Maybe<Channel>;
   channelGroups: Array<ChannelGroup>;
   channelMessages: Array<Message>;
+  channelTerminals: Array<Terminal>;
   channels: Array<Channel>;
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
@@ -1313,6 +1340,7 @@ export type Query = {
   linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
   myBridgeRuntimes: Array<BridgeRuntime>;
+  myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
   organization?: Maybe<Organization>;
@@ -1424,6 +1452,12 @@ export type QueryChannelMessagesArgs = {
   before?: InputMaybe<Scalars['DateTime']['input']>;
   channelId: Scalars['ID']['input'];
   limit?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryChannelTerminalsArgs = {
+  bridgeRuntimeId: Scalars['ID']['input'];
+  channelId: Scalars['ID']['input'];
 };
 
 
@@ -2133,6 +2167,8 @@ export type ResolversTypes = ResolversObject<{
   ChatMember: ResolverTypeWrapper<ChatMember>;
   ChatType: ChatType;
   CodingTool: CodingTool;
+  ConnectionsBridge: ResolverTypeWrapper<ConnectionsBridge>;
+  ConnectionsRepoEntry: ResolverTypeWrapper<ConnectionsRepoEntry>;
   CostBudget: ResolverTypeWrapper<CostBudget>;
   CreateAiConversationInput: CreateAiConversationInput;
   CreateChannelGroupInput: CreateChannelGroupInput;
@@ -2244,6 +2280,8 @@ export type ResolversParentTypes = ResolversObject<{
   ChannelMember: ChannelMember;
   Chat: Chat;
   ChatMember: ChatMember;
+  ConnectionsBridge: ConnectionsBridge;
+  ConnectionsRepoEntry: ConnectionsRepoEntry;
   CostBudget: CostBudget;
   CreateAiConversationInput: CreateAiConversationInput;
   CreateChannelGroupInput: CreateChannelGroupInput;
@@ -2589,6 +2627,21 @@ export type ChatMemberResolvers<ContextType = Context, ParentType extends Resolv
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type ConnectionsBridgeResolvers<ContextType = Context, ParentType extends ResolversParentTypes['ConnectionsBridge'] = ResolversParentTypes['ConnectionsBridge']> = ResolversObject<{
+  bridge?: Resolver<ResolversTypes['BridgeRuntime'], ParentType, ContextType>;
+  canTerminal?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  repos?: Resolver<Array<ResolversTypes['ConnectionsRepoEntry']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ConnectionsRepoEntryResolvers<ContextType = Context, ParentType extends ResolversParentTypes['ConnectionsRepoEntry'] = ResolversParentTypes['ConnectionsRepoEntry']> = ResolversObject<{
+  channel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType>;
+  linkedCheckout?: Resolver<Maybe<ResolversTypes['LinkedCheckoutStatus']>, ParentType, ContextType>;
+  repo?: Resolver<ResolversTypes['Repo'], ParentType, ContextType>;
+  runScripts?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type CostBudgetResolvers<ContextType = Context, ParentType extends ResolversParentTypes['CostBudget'] = ResolversParentTypes['CostBudget']> = ResolversObject<{
   dailyLimitCents?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
@@ -2707,6 +2760,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   createAiConversation?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType, RequireFields<MutationCreateAiConversationArgs, 'input' | 'organizationId'>>;
   createChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationCreateChannelArgs, 'input'>>;
   createChannelGroup?: Resolver<ResolversTypes['ChannelGroup'], ParentType, ContextType, RequireFields<MutationCreateChannelGroupArgs, 'input'>>;
+  createChannelTerminal?: Resolver<ResolversTypes['Terminal'], ParentType, ContextType, RequireFields<MutationCreateChannelTerminalArgs, 'bridgeRuntimeId' | 'channelId' | 'cols' | 'rows'>>;
   createChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationCreateChatArgs, 'input'>>;
   createProject?: Resolver<ResolversTypes['Project'], ParentType, ContextType, RequireFields<MutationCreateProjectArgs, 'input'>>;
   createRepo?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationCreateRepoArgs, 'input'>>;
@@ -2850,6 +2904,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelArgs, 'id'>>;
   channelGroups?: Resolver<Array<ResolversTypes['ChannelGroup']>, ParentType, ContextType, RequireFields<QueryChannelGroupsArgs, 'organizationId'>>;
   channelMessages?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType, RequireFields<QueryChannelMessagesArgs, 'channelId'>>;
+  channelTerminals?: Resolver<Array<ResolversTypes['Terminal']>, ParentType, ContextType, RequireFields<QueryChannelTerminalsArgs, 'bridgeRuntimeId' | 'channelId'>>;
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelsArgs, 'organizationId'>>;
   chat?: Resolver<Maybe<ResolversTypes['Chat']>, ParentType, ContextType, RequireFields<QueryChatArgs, 'id'>>;
   chatMessages?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType, RequireFields<QueryChatMessagesArgs, 'chatId'>>;
@@ -2859,6 +2914,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   linkedCheckoutStatus?: Resolver<ResolversTypes['LinkedCheckoutStatus'], ParentType, ContextType, RequireFields<QueryLinkedCheckoutStatusArgs, 'repoId' | 'sessionGroupId'>>;
   myApiTokens?: Resolver<Array<ResolversTypes['ApiTokenStatus']>, ParentType, ContextType>;
   myBridgeRuntimes?: Resolver<Array<ResolversTypes['BridgeRuntime']>, ParentType, ContextType>;
+  myConnections?: Resolver<Array<ResolversTypes['ConnectionsBridge']>, ParentType, ContextType>;
   myOrganizations?: Resolver<Array<ResolversTypes['OrgMember']>, ParentType, ContextType>;
   mySessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QueryMySessionsArgs, 'organizationId'>>;
   organization?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<QueryOrganizationArgs, 'id'>>;
@@ -3114,6 +3170,8 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   ChannelMember?: ChannelMemberResolvers<ContextType>;
   Chat?: ChatResolvers<ContextType>;
   ChatMember?: ChatMemberResolvers<ContextType>;
+  ConnectionsBridge?: ConnectionsBridgeResolvers<ContextType>;
+  ConnectionsRepoEntry?: ConnectionsRepoEntryResolvers<ContextType>;
   CostBudget?: CostBudgetResolvers<ContextType>;
   DateTime?: GraphQLScalarType;
   Event?: EventResolvers<ContextType>;

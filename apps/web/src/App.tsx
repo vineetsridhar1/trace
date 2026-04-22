@@ -9,6 +9,7 @@ import { SettingsPage } from "./components/settings/SettingsPage";
 import { NoOrgWelcome } from "./components/onboarding/NoOrgWelcome";
 import { HomeView } from "./components/onboarding/HomeView";
 import { InboxView } from "./components/inbox/InboxView";
+import { ConnectionsView } from "./components/connections/ConnectionsView";
 import { TicketsView } from "./components/tickets/TicketsView";
 import { AgentDebugPage } from "./components/agent-debug/AgentDebugPage";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
@@ -173,6 +174,8 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
                   <AgentDebugPage />
                 ) : activePage === "inbox" ? (
                   <InboxView />
+                ) : activePage === "connections" ? (
+                  <ConnectionsView />
                 ) : activePage === "tickets" && features.tickets ? (
                   <TicketsView />
                 ) : shouldRenderChatView ? (
@@ -193,7 +196,11 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
               onClosed={() => setDisplayedSessionGroupId(null)}
             >
               {displayedSessionGroupId && (
-                <SessionGroupDetailView key={displayedSessionGroupId} sessionGroupId={displayedSessionGroupId} panelMode />
+                <SessionGroupDetailView
+                  key={displayedSessionGroupId}
+                  sessionGroupId={displayedSessionGroupId}
+                  panelMode
+                />
               )}
             </DetailPanel>
           </div>

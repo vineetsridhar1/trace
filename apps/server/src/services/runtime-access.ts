@@ -1026,7 +1026,11 @@ class RuntimeAccessService {
       scopedSessionIds = new Set(sessions.map((s: { id: string }) => s.id));
     }
 
-    terminalRelay.destroyTerminalsForUser(input.granteeUserId, scopedSessionIds);
+    terminalRelay.destroyTerminalsForUser(
+      input.granteeUserId,
+      scopedSessionIds,
+      input.organizationId,
+    );
   }
 }
 
