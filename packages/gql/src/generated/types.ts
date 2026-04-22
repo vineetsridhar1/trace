@@ -278,6 +278,12 @@ export type BridgeRuntime = {
   instanceId: Scalars['ID']['output'];
   label: Scalars['String']['output'];
   lastSeenAt: Scalars['DateTime']['output'];
+  /**
+   * Currently-attached linked checkouts on this bridge, one per repo at most.
+   * Empty when nothing is synced or the bridge is offline. Sourced from the
+   * in-memory router cache, which is warmed on bridge connect.
+   */
+  linkedCheckouts: Array<LinkedCheckoutStatus>;
   metadata?: Maybe<Scalars['JSON']['output']>;
   ownerUser: User;
 };
@@ -598,6 +604,7 @@ export type LinkedCheckoutActionResult = {
 
 export type LinkedCheckoutStatus = {
   __typename?: 'LinkedCheckoutStatus';
+  attachedSessionGroup?: Maybe<SessionGroup>;
   attachedSessionGroupId?: Maybe<Scalars['ID']['output']>;
   autoSyncEnabled: Scalars['Boolean']['output'];
   currentBranch?: Maybe<Scalars['String']['output']>;
@@ -605,6 +612,7 @@ export type LinkedCheckoutStatus = {
   isAttached: Scalars['Boolean']['output'];
   lastSyncError?: Maybe<Scalars['String']['output']>;
   lastSyncedCommitSha?: Maybe<Scalars['String']['output']>;
+  repo?: Maybe<Repo>;
   repoId: Scalars['ID']['output'];
   repoPath?: Maybe<Scalars['String']['output']>;
   restoreBranch?: Maybe<Scalars['String']['output']>;

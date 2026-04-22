@@ -30,13 +30,13 @@ function selectNeedsInputCount(state: EntityState): number {
 const renderAccessory = () => <ActiveSessionsAccessory />;
 
 const homeIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
-  sfSymbol: "bolt.horizontal",
+  sfSymbol: "house",
 });
 const channelsIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
   sfSymbol: "tray",
 });
-const settingsIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
-  sfSymbol: "gearshape",
+const connectionsIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
+  sfSymbol: "laptopcomputer.and.iphone",
 });
 
 export default function TabsLayout() {
@@ -44,6 +44,9 @@ export default function TabsLayout() {
 
   return (
     <NativeTabs
+      // Pin Home as the default tab. expo-router picks the alphabetically
+      // first route otherwise, and `(connections)` sorts before `(home)`.
+      initialRouteName="(home)"
       minimizeBehavior="onScrollDown"
       renderBottomAccessoryView={renderAccessory}
     >
@@ -60,8 +63,8 @@ export default function TabsLayout() {
         options={{ title: "Channels", tabBarIcon: channelsIcon }}
       />
       <NativeTabs.Screen
-        name="(settings)"
-        options={{ title: "Settings", tabBarIcon: settingsIcon }}
+        name="(connections)"
+        options={{ title: "Connections", tabBarIcon: connectionsIcon }}
       />
     </NativeTabs>
   );

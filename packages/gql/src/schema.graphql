@@ -758,6 +758,12 @@ type BridgeRuntime {
   connected: Boolean!
   accessRequests: [BridgeAccessRequest!]!
   accessGrants: [BridgeAccessGrant!]!
+  """
+  Currently-attached linked checkouts on this bridge, one per repo at most.
+  Empty when nothing is synced or the bridge is offline. Sourced from the
+  in-memory router cache, which is warmed on bridge connect.
+  """
+  linkedCheckouts: [LinkedCheckoutStatus!]!
 }
 
 type BridgeRuntimeAccess {
@@ -1065,6 +1071,8 @@ type LinkedCheckoutStatus {
   repoPath: String
   isAttached: Boolean!
   attachedSessionGroupId: ID
+  attachedSessionGroup: SessionGroup
+  repo: Repo
   targetBranch: String
   autoSyncEnabled: Boolean!
   currentBranch: String

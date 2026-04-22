@@ -3,6 +3,7 @@ import { useSidebarData } from "../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../hooks/useSidebarTabScroll";
 import { features } from "../lib/features";
 import { useUIStore, type UIState } from "../stores/ui";
+import { SidebarBridgesPanel } from "./sidebar/SidebarBridgesPanel";
 import { SidebarChannelsPane } from "./sidebar/SidebarChannelsPane";
 import { SidebarDirectMessagesPane } from "./sidebar/SidebarDirectMessagesPane";
 import { PeekOverlay } from "./sidebar/PeekOverlay";
@@ -149,6 +150,7 @@ export function AppSidebar() {
               </div>
             )}
             <div className="border-t border-border/70">
+              <SidebarBridgesPanel />
               <UserMenu />
             </div>
           </SidebarFooter>

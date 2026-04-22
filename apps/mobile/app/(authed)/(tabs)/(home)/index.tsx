@@ -4,11 +4,13 @@ import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import { EmptyState } from "@/components/design-system";
 import { useTheme } from "@/theme";
+import { HomeBridgesSection } from "@/components/home/HomeBridgesSection";
 import { HomeRepoFilter } from "@/components/home/HomeRepoFilter";
 import { HomeSectionHeader } from "@/components/home/HomeSectionHeader";
 import { HomeSessionRow } from "@/components/home/HomeSessionRow";
 import { useHomeSections, type HomeSectionKind } from "@/hooks/useHomeSections";
 import { refreshOrgData } from "@/hooks/useHydrate";
+import { useMyBridges } from "@/hooks/useMyBridges";
 import { haptic } from "@/lib/haptics";
 import { useMobileUIStore, type MobileUIState } from "@/stores/ui";
 
@@ -23,6 +25,7 @@ export default function AuthedHome() {
   const logout = useAuthStore((s: AuthState) => s.logout);
   const repoFilter = useMobileUIStore((s: MobileUIState) => s.homeRepoFilter);
   const sections = useHomeSections(userId, repoFilter);
+  const { bridges, refresh: refreshBridges } = useMyBridges(activeOrgId);
   const [refreshing, setRefreshing] = useState(false);
 
   const items = useMemo<HomeListItem[]>(() => {
@@ -41,7 +44,7 @@ export default function AuthedHome() {
     void haptic.medium();
     setRefreshing(true);
     try {
-      const ok = await refreshOrgData(activeOrgId);
+      const [ok] = await Promise.all([refreshOrgData(activeOrgId), refreshBridges()]);
       if (!ok) {
         useEntityStore.getState().reset();
         await logout();
@@ -49,7 +52,19 @@ export default function AuthedHome() {
     } finally {
       setRefreshing(false);
     }
-  }, [activeOrgId, logout]);
+  }, [activeOrgId, logout, refreshBridges]);
+
+  // Bridges status banner sits above the repo filter chips so it reads as
+  // ambient status, not part of the filter UI.
+  const ListHeader = useMemo(
+    () => (
+      <>
+        {bridges.length > 0 ? <HomeBridgesSection bridges={bridges} /> : null}
+        <HomeRepoFilter userId={userId} />
+      </>
+    ),
+    [bridges, userId],
+  );
 
   return (
     <FlashList
@@ -60,7 +75,7 @@ export default function AuthedHome() {
       contentInsetAdjustmentBehavior="automatic"
       onRefresh={handleRefresh}
       refreshing={refreshing}
-      ListHeaderComponent={<HomeRepoFilter userId={userId} />}
+      ListHeaderComponent={ListHeader}
       ListEmptyComponent={<HomeEmpty hasRepoFilter={repoFilter !== null} />}
       style={{ flex: 1, backgroundColor: theme.colors.background }}
     />

@@ -24,7 +24,7 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
   const theme = useTheme();
   const name = useEntityField("sessions", sessionId, "name");
   const branch = useEntityField("sessions", sessionId, "branch");
-  const channel = useEntityField("sessions", sessionId, "channel");
+  const repo = useEntityField("sessions", sessionId, "repo");
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId");
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus");
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
@@ -61,7 +61,7 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
   if (!name) return null;
 
   const timestamp = lastMessageAt ?? updatedAt ?? null;
-  const channelName = (channel as { name?: string } | null | undefined)?.name ?? null;
+  const repoName = (repo as { name?: string } | null | undefined)?.name ?? null;
 
   return (
     <ContextMenu actions={actions} onPress={onMenuPress} preview={null}>
@@ -126,9 +126,20 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
                 {timeAgo(timestamp)}
               </Text>
             ) : null}
-            {channelName ? (
-              <Text variant="caption2" color="dimForeground" numberOfLines={1}>
-                #{channelName}
+            {repoName ? (
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.repoPill,
+                  {
+                    fontFamily: theme.typography.mono.fontFamily,
+                    backgroundColor: theme.colors.surfaceElevated,
+                    color: theme.colors.dimForeground,
+                    borderRadius: theme.radius.sm,
+                  },
+                ]}
+              >
+                {repoName}
               </Text>
             ) : null}
           </View>
@@ -161,4 +172,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   timestamp: {},
+  repoPill: {
+    fontSize: 11,
+    lineHeight: 13,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    maxWidth: 140,
+    overflow: "hidden",
+  },
 });

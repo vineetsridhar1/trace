@@ -292,6 +292,48 @@ export const MY_BRIDGE_RUNTIMES_QUERY = gql`
   }
 `;
 
+/**
+ * Slim variant of `MY_BRIDGE_RUNTIMES_QUERY` polled by the home/sidebar
+ * "Syncing" panels every 10s. Skips access requests/grants — those are only
+ * needed by the settings page — and only pulls the linked-checkout fields the
+ * panels render. Keeping the polling payload small matters because every
+ * mounted client refetches this on cadence.
+ */
+export const MY_BRIDGE_RUNTIMES_FOR_HOME_QUERY = gql`
+  query MyBridgeRuntimesForHome {
+    myBridgeRuntimes {
+      id
+      instanceId
+      label
+      hostingMode
+      lastSeenAt
+      connected
+      linkedCheckouts {
+        repoId
+        currentBranch
+        currentCommitSha
+        lastSyncedCommitSha
+        autoSyncEnabled
+        attachedSessionGroupId
+        repo {
+          id
+          name
+        }
+        attachedSessionGroup {
+          id
+          name
+          slug
+          branch
+          channel {
+            id
+            name
+          }
+        }
+      }
+    }
+  }
+`;
+
 export const REQUEST_BRIDGE_ACCESS_MUTATION = gql`
   mutation RequestBridgeAccess(
     $runtimeInstanceId: ID!
