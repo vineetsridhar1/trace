@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Cloud, Monitor, Loader2 } from "lucide-react";
+import { AlertTriangle, Cloud, Monitor, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import {
@@ -18,6 +18,7 @@ interface RuntimeInstance {
   supportedTools: string[];
   connected: boolean;
   sessionCount: number;
+  registeredRepoIds: string[];
 }
 
 export function SessionRuntimePicker({
@@ -35,6 +36,7 @@ export function SessionRuntimePicker({
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
   const channel = useEntityField("sessions", sessionId, "channel") as { id: string } | null | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
+  const repoId = useEntityField("sessions", sessionId, "repoId") as string | null | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | { runtimeInstanceId?: string | null }
     | null
@@ -44,7 +46,7 @@ export function SessionRuntimePicker({
     | null
     | undefined;
   const currentRuntimeInstanceId =
-    groupConnection?.runtimeInstanceId ?? connection?.runtimeInstanceId ?? null;
+    connection?.runtimeInstanceId ?? groupConnection?.runtimeInstanceId ?? null;
 
   useEffect(() => {
     client
@@ -153,28 +155,41 @@ export function SessionRuntimePicker({
           )}
 
           {/* Local bridges */}
-          {localRuntimes.map((rt: RuntimeInstance) => (
-            <button
-              key={rt.id}
-              onClick={() => handleMove(rt.id)}
-              disabled={!rt.connected || moving !== null}
-              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm hover:bg-surface-elevated transition-colors disabled:opacity-50"
-            >
-              <Monitor size={14} className="shrink-0 text-green-400" />
-              <div className="min-w-0 flex-1">
-                <span className="text-foreground">{rt.label}</span>
-                <span className="ml-2 text-xs text-muted-foreground">
-                  {rt.sessionCount} session{rt.sessionCount !== 1 ? "s" : ""}
-                </span>
-              </div>
-              {moving === rt.id && (
-                <Loader2 size={12} className="animate-spin text-muted-foreground" />
-              )}
-              {!rt.connected && (
-                <span className="text-xs text-muted-foreground">offline</span>
-              )}
-            </button>
-          ))}
+          {localRuntimes.map((rt: RuntimeInstance) => {
+            const lacksRepo =
+              !!repoId &&
+              rt.hostingMode === "local" &&
+              !rt.registeredRepoIds.includes(repoId);
+
+            return (
+              <button
+                key={rt.id}
+                onClick={() => handleMove(rt.id)}
+                disabled={!rt.connected || lacksRepo || moving !== null}
+                className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm hover:bg-surface-elevated transition-colors disabled:opacity-50"
+              >
+                <Monitor size={14} className="shrink-0 text-green-400" />
+                <div className="min-w-0 flex-1">
+                  <span className="text-foreground">{rt.label}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {rt.sessionCount} session{rt.sessionCount !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                {moving === rt.id && (
+                  <Loader2 size={12} className="animate-spin text-muted-foreground" />
+                )}
+                {lacksRepo && (
+                  <span className="flex items-center gap-1 text-xs text-amber-500">
+                    <AlertTriangle size={10} />
+                    repo not linked
+                  </span>
+                )}
+                {!lacksRepo && !rt.connected && (
+                  <span className="text-xs text-muted-foreground">offline</span>
+                )}
+              </button>
+            );
+          })}
 
           {localRuntimes.length === 0 && !canMoveToCloud && (
             <p className="py-1 text-xs text-muted-foreground">

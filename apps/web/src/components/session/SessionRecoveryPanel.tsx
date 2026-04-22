@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw, ArrowRightLeft, WifiOff, Loader2 } from "lucide-react";
+import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
 import {
   RETRY_SESSION_CONNECTION_MUTATION,
 } from "@trace/client-core";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
+import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
+import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 
 /** Max number of automatic retry attempts before giving up */
 const MAX_AUTO_RETRIES = 5;
@@ -24,10 +27,20 @@ export function SessionRecoveryPanel({
   const [showPicker, setShowPicker] = useState(false);
   const [autoRetryCount, setAutoRetryCount] = useState(0);
   const autoRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
+    | string
+    | undefined;
 
   const lastError = (connection?.lastError as string) ?? undefined;
   const canRetry = (connection?.canRetry as boolean | undefined) ?? true;
-  const canMove = (connection?.canMove as boolean | undefined) ?? true;
+  const moveRuntimeInstanceId = getLinkedCheckoutRuntimeInstanceId(connection);
+  const { access: moveBridgeAccess } = useBridgeRuntimeAccess(
+    moveRuntimeInstanceId,
+    sessionGroupId ?? null,
+  );
+  const canMove =
+    ((connection?.canMove as boolean | undefined) ?? true) &&
+    isBridgeInteractionAllowed(moveBridgeAccess);
   const autoRetryable = (connection?.autoRetryable as boolean | undefined) ?? true;
 
   const doRetry = useCallback(async () => {
