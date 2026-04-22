@@ -3,7 +3,6 @@ import { useSidebarData } from "../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../hooks/useSidebarTabScroll";
 import { features } from "../lib/features";
 import { useUIStore, type UIState } from "../stores/ui";
-import { BridgeSyncHydrator } from "./sidebar/BridgeSyncHydrator";
 import { ConnectionsButton } from "./sidebar/ConnectionsButton";
 import { SidebarChannelsPane } from "./sidebar/SidebarChannelsPane";
 import { SidebarDirectMessagesPane } from "./sidebar/SidebarDirectMessagesPane";
@@ -93,7 +92,6 @@ export function AppSidebar() {
 
   return (
     <>
-      <BridgeSyncHydrator />
       <Sidebar collapsible="offcanvas" className="border-none">
         <div
           className="flex size-full flex-col"

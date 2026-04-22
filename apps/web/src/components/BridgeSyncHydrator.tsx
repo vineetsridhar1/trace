@@ -1,4 +1,4 @@
-import { useMyBridges } from "../../hooks/useMyBridges";
+import { useMyBridges } from "../hooks/useMyBridges";
 
 export function BridgeSyncHydrator() {
   useMyBridges();
