@@ -192,17 +192,25 @@ export function useHydrate(activeOrgId: string | null): void {
     };
   }, [activeOrgId, logout]);
 
-  // Re-fetch /auth/me on app foreground if it's been more than 24h.
+  // On foreground: refetch org data so sessions/channels/unread counts catch
+  // up on anything missed while the WS was disconnected. Also re-check
+  // /auth/me if it's been more than 24h since any successful request.
   useEffect(() => {
     function onChange(state: AppStateStatus) {
       if (state !== "active") return;
       void (async () => {
         try {
+          // Capture staleness BEFORE refreshOrgData, since it bumps the key on success.
           const last = await getPlatform().storage.getItem(ME_REFRESH_KEY);
           const lastMs = last ? Number(last) : 0;
-          if (Date.now() - lastMs < ME_REFRESH_THRESHOLD_MS) return;
-          await useAuthStore.getState().fetchMe();
-          await getPlatform().storage.setItem(ME_REFRESH_KEY, String(Date.now()));
+          const shouldFetchMe = Date.now() - lastMs >= ME_REFRESH_THRESHOLD_MS;
+
+          if (activeOrgId) void refreshOrgData(activeOrgId);
+
+          if (shouldFetchMe) {
+            await useAuthStore.getState().fetchMe();
+            await getPlatform().storage.setItem(ME_REFRESH_KEY, String(Date.now()));
+          }
         } catch (err) {
           console.warn("[hydrate] foreground refresh failed", err);
         }
@@ -210,5 +218,5 @@ export function useHydrate(activeOrgId: string | null): void {
     }
     const sub = AppState.addEventListener("change", onChange);
     return () => sub.remove();
-  }, []);
+  }, [activeOrgId]);
 }

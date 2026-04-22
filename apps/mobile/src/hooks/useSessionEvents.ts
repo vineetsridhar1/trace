@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState, type AppStateStatus } from "react-native";
 import {
   HIDDEN_SESSION_PAYLOAD_TYPES,
   handleSessionEvent,
@@ -139,6 +140,17 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
       statusSub.unsubscribe();
     };
   }, [activeOrgId, sessionId]);
+
+  // Refetch on foreground: the WS subscription only streams events going
+  // forward from reconnect, so anything the agent emitted while the app was
+  // backgrounded is missing from the store until we re-query.
+  useEffect(() => {
+    function onChange(state: AppStateStatus) {
+      if (state === "active") void fetchEvents();
+    }
+    const sub = AppState.addEventListener("change", onChange);
+    return () => sub.remove();
+  }, [fetchEvents]);
 
   const fetchOlderEvents = useCallback(async () => {
     if (
