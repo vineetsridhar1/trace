@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import { gql } from "@urql/core";
 import {
@@ -12,6 +12,7 @@ import type { Channel, ChannelGroup, Event, Session } from "@trace/gql";
 import { isUnauthorized } from "@/lib/auth";
 import { timedEventIngest } from "@/lib/perf";
 import { getClient } from "@/lib/urql";
+import { useConnectionStore, type ConnectionState } from "@/stores/connection";
 
 const ORGANIZATION_QUERY = gql`
   query MobileOrganization($id: ID!) {
@@ -192,25 +193,35 @@ export function useHydrate(activeOrgId: string | null): void {
     };
   }, [activeOrgId, logout]);
 
-  // On foreground: refetch org data so sessions/channels/unread counts catch
-  // up on anything missed while the WS was disconnected. Also re-check
-  // /auth/me if it's been more than 24h since any successful request.
+  // Catch up list-level state (sessions, channels, unread counts) after a WS
+  // reconnect: the server's in-memory pubsub has no replay, so events emitted
+  // while the socket was down are lost to the live subscription.
+  const reconnectCounter = useConnectionStore(
+    (s: ConnectionState) => s.reconnectCounter,
+  );
+  const baselineReconnectCounter = useRef(reconnectCounter);
+  useEffect(() => {
+    if (!activeOrgId) return;
+    if (reconnectCounter <= baselineReconnectCounter.current) return;
+    baselineReconnectCounter.current = reconnectCounter;
+    refreshOrgData(activeOrgId).catch((err: unknown) => {
+      console.warn("[hydrate] reconnect refresh failed", err);
+    });
+  }, [reconnectCounter, activeOrgId]);
+
+  // Re-fetch /auth/me on app foreground if it's been more than 24h since any
+  // successful request. Unrelated to WS state — this is a periodic auth-staleness
+  // check, independent of the reconnect-driven data refresh above.
   useEffect(() => {
     function onChange(state: AppStateStatus) {
       if (state !== "active") return;
       void (async () => {
         try {
-          // Capture staleness BEFORE refreshOrgData, since it bumps the key on success.
           const last = await getPlatform().storage.getItem(ME_REFRESH_KEY);
           const lastMs = last ? Number(last) : 0;
-          const shouldFetchMe = Date.now() - lastMs >= ME_REFRESH_THRESHOLD_MS;
-
-          if (activeOrgId) void refreshOrgData(activeOrgId);
-
-          if (shouldFetchMe) {
-            await useAuthStore.getState().fetchMe();
-            await getPlatform().storage.setItem(ME_REFRESH_KEY, String(Date.now()));
-          }
+          if (Date.now() - lastMs < ME_REFRESH_THRESHOLD_MS) return;
+          await useAuthStore.getState().fetchMe();
+          await getPlatform().storage.setItem(ME_REFRESH_KEY, String(Date.now()));
         } catch (err) {
           console.warn("[hydrate] foreground refresh failed", err);
         }
@@ -218,5 +229,5 @@ export function useHydrate(activeOrgId: string | null): void {
     }
     const sub = AppState.addEventListener("change", onChange);
     return () => sub.remove();
-  }, [activeOrgId]);
+  }, []);
 }

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppState, type AppStateStatus } from "react-native";
 import {
   HIDDEN_SESSION_PAYLOAD_TYPES,
   handleSessionEvent,
@@ -12,6 +11,7 @@ import type { Event, Session } from "@trace/gql";
 import { handleUnauthorized, isUnauthorized } from "@/lib/auth";
 import { timedEventIngest } from "@/lib/perf";
 import { getClient } from "@/lib/urql";
+import { useConnectionStore, type ConnectionState } from "@/stores/connection";
 import {
   SESSION_EVENTS_QUERY,
   SESSION_EVENTS_SUBSCRIPTION,
@@ -141,16 +141,18 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
     };
   }, [activeOrgId, sessionId]);
 
-  // Refetch on foreground: the WS subscription only streams events going
-  // forward from reconnect, so anything the agent emitted while the app was
-  // backgrounded is missing from the store until we re-query.
+  // Catch up missed events after a WS reconnect: the server's pubsub has no
+  // replay, so anything the agent emitted while we were disconnected is lost
+  // to the live subscription and must be re-queried over HTTP.
+  const reconnectCounter = useConnectionStore(
+    (s: ConnectionState) => s.reconnectCounter,
+  );
+  const baselineReconnectCounter = useRef(reconnectCounter);
   useEffect(() => {
-    function onChange(state: AppStateStatus) {
-      if (state === "active") void fetchEvents();
-    }
-    const sub = AppState.addEventListener("change", onChange);
-    return () => sub.remove();
-  }, [fetchEvents]);
+    if (reconnectCounter <= baselineReconnectCounter.current) return;
+    baselineReconnectCounter.current = reconnectCounter;
+    void fetchEvents();
+  }, [reconnectCounter, fetchEvents]);
 
   const fetchOlderEvents = useCallback(async () => {
     if (
