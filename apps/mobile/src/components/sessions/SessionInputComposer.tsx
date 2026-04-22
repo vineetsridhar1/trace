@@ -725,7 +725,6 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
                 {({ pressed }) => (
                   <Glass
                     preset="input"
-                    tint="rgba(0,0,0,0)"
                     animatedProps={glassAnimatedProps}
                     interactive
                     style={[
@@ -793,7 +792,6 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
                 >
                   <Glass
                     preset="input"
-                    tint="rgba(0,0,0,0)"
                     animatedProps={glassAnimatedProps}
                     interactive
                     style={[styles.modelChipCollapsed, { opacity: canInteract ? 1 : 0.4 }]}
@@ -814,7 +812,6 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
           ) : null}
           <Glass
             preset="pinnedBar"
-            tint="rgba(0,0,0,0)"
             animatedProps={glassAnimatedProps}
             style={[styles.inputCard, cardBorderAnimatedStyle]}
           >
