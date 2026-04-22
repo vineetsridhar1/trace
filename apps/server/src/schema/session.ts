@@ -37,14 +37,19 @@ export const sessionQueries = {
   },
   mySessions: (
     _: unknown,
-    args: { organizationId: string; agentStatus?: AgentStatus },
+    args: {
+      organizationId: string;
+      agentStatus?: AgentStatus | null;
+      includeMerged?: boolean | null;
+      includeArchived?: boolean | null;
+    },
     ctx: Context,
   ) => {
-    return sessionService.listByUser(
-      args.organizationId,
-      ctx.userId,
-      args.agentStatus ?? undefined,
-    );
+    return sessionService.listByUser(args.organizationId, ctx.userId, {
+      agentStatus: args.agentStatus ?? undefined,
+      includeMerged: args.includeMerged ?? true,
+      includeArchived: args.includeArchived ?? true,
+    });
   },
   searchSessions: (
     _: unknown,

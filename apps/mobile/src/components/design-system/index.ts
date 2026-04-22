@@ -15,6 +15,7 @@ export {
   type IconMenuItem,
 } from "./IconButton";
 export { Glass, type GlassProps } from "./Glass";
+export { GlassGroup, type GlassGroupProps } from "./GlassGroup";
 export {
   Card,
   type CardProps,

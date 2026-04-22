@@ -30,6 +30,15 @@ export interface MobileUIState {
   sessionPlayerOpen: boolean;
   setSessionPlayerOpen: (open: boolean) => void;
 
+  /**
+   * Registered by whichever header menu (title/actions) is currently open.
+   * The Session Player renders a full-screen scrim when non-null so taps in
+   * the message body can dismiss the menu — the menu's own in-header
+   * backdrop is clipped by ancestor bounds and can't reach the body.
+   */
+  activeMenuClose: (() => void) | null;
+  setActiveMenuClose: (close: (() => void) | null) => void;
+
   channelDoneBadges: Record<string, boolean>;
   sessionDoneBadges: Record<string, boolean>;
   sessionGroupDoneBadges: Record<string, boolean>;
@@ -52,6 +61,7 @@ const initial = {
   activeAccessoryIndex: 0,
   overlaySessionId: null as string | null,
   sessionPlayerOpen: false,
+  activeMenuClose: null as (() => void) | null,
   channelDoneBadges: {} as Record<string, boolean>,
   sessionDoneBadges: {} as Record<string, boolean>,
   sessionGroupDoneBadges: {} as Record<string, boolean>,
@@ -67,6 +77,7 @@ export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUISta
   setActiveAccessoryIndex: (i) => set({ activeAccessoryIndex: i }),
   setOverlaySessionId: (id) => set({ overlaySessionId: id }),
   setSessionPlayerOpen: (open) => set({ sessionPlayerOpen: open }),
+  setActiveMenuClose: (close) => set({ activeMenuClose: close }),
 
   markChannelDone: (id) =>
     set((s) => ({ channelDoneBadges: { ...s.channelDoneBadges, [id]: true } })),

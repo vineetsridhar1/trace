@@ -59,7 +59,8 @@ export function UserMessageBubble({
                 borderColor: alpha(theme.colors.accent, 0.32),
                 borderRadius: theme.radius.lg,
                 paddingHorizontal: theme.spacing.md,
-                paddingVertical: theme.spacing.sm,
+                paddingTop: theme.spacing.sm,
+                paddingBottom: theme.spacing.xs,
                 gap: theme.spacing.xs,
               },
             ]}
@@ -69,7 +70,7 @@ export function UserMessageBubble({
                 {displayName}
               </Text>
             </View>
-            <Markdown>{displayText}</Markdown>
+            <Markdown compactSpacing>{displayText}</Markdown>
           </View>
         </ContextMenu>
         {checkpoints && checkpoints.length > 0 ? (

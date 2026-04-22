@@ -27,6 +27,7 @@ export interface GlassProps {
    * Android).
    */
   animatedProps?: AnimatedProps<GlassViewProps>;
+  interactive?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -52,6 +53,7 @@ export function Glass({
   children,
   tint,
   animatedProps,
+  interactive,
   style,
 }: GlassProps) {
   const theme = useTheme();
@@ -68,6 +70,7 @@ export function Glass({
     return (
       <AnimatedGlassView
         glassEffectStyle="regular"
+        isInteractive={interactive}
         {...(resolvedTint ? { tintColor: resolvedTint } : {})}
         colorScheme={theme.scheme === "dark" ? "dark" : "light"}
         style={[baseStyle, style]}

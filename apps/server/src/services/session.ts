@@ -1004,9 +1004,28 @@ export class SessionService {
     return prisma.session.findUnique({ where: { id }, include: SESSION_INCLUDE });
   }
 
-  async listByUser(organizationId: string, userId: string, agentStatus?: string | null) {
-    const where: Record<string, unknown> = { organizationId, createdById: userId };
-    if (agentStatus) where.agentStatus = agentStatus;
+  async listByUser(
+    organizationId: string,
+    userId: string,
+    options?: {
+      agentStatus?: string | null;
+      includeMerged?: boolean;
+      includeArchived?: boolean;
+    },
+  ) {
+    const where: Prisma.SessionWhereInput = { organizationId, createdById: userId };
+    if (options?.agentStatus) where.agentStatus = options.agentStatus as AgentStatus;
+    if (options?.includeMerged === false) where.sessionStatus = { not: "merged" };
+
+    const groupFilter: Prisma.SessionGroupWhereInput = {};
+    if (options?.includeArchived === false) groupFilter.archivedAt = null;
+    if (options?.includeMerged === false) {
+      groupFilter.sessions = { none: { sessionStatus: "merged" } };
+    }
+    if (Object.keys(groupFilter).length > 0) {
+      where.OR = [{ sessionGroupId: null }, { sessionGroup: { is: groupFilter } }];
+    }
+
     return prisma.session.findMany({
       where,
       orderBy: { updatedAt: "desc" },

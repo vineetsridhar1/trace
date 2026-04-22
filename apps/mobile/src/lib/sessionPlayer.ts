@@ -1,5 +1,7 @@
 import { useEntityStore } from "@trace/client-core";
 import { selectActiveSessionIds } from "@/lib/activeSessions";
+import { fetchSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
+import { fetchSessionDetail } from "@/hooks/useSessionDetail";
 import { useMobileUIStore } from "@/stores/ui";
 
 /**
@@ -28,4 +30,30 @@ export function tryOpenSessionPlayer(
 
 export function closeSessionPlayer(): void {
   useMobileUIStore.getState().setSessionPlayerOpen(false);
+}
+
+/**
+ * Warms the Zustand entity store with the data the Session Player needs
+ * before it mounts. Intended to be called on `onPressIn` of session rows so
+ * the ~150–300 ms between touch-down and the spring landing overlaps with
+ * the network round-trip. When the overlay mounts, its fetch hooks reuse
+ * the in-flight promise (dedup lives in the fetch helpers) and the spinner
+ * branch short-circuits if the group has already hydrated.
+ *
+ * Fire-and-forget. A prefetch failure only logs a warning — the overlay's
+ * own fetch will run and surface the canonical error state.
+ */
+export function prefetchSessionPlayer(sessionId: string): void {
+  void fetchSessionDetail(sessionId).catch((error) => {
+    console.warn("[prefetchSessionPlayer] session detail failed", error);
+  });
+
+  const groupId = useEntityStore.getState().sessions[sessionId]?.sessionGroupId;
+  if (groupId) {
+    void fetchSessionGroupDetail(groupId).catch((error) => {
+      console.warn("[prefetchSessionPlayer] group detail failed", error);
+    });
+  }
+  // If groupId isn't in the store yet (deep link / push tap), the session
+  // fetch chains the group fetch itself once the response lands.
 }
