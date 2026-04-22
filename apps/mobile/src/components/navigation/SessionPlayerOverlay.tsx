@@ -16,6 +16,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { BlurView } from "expo-blur";
 import { useEntityField } from "@trace/client-core";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
 import { SessionSurface, SessionSurfaceEmpty } from "@/components/sessions/SessionSurface";
@@ -171,11 +172,10 @@ export function SessionPlayerOverlay() {
           pointerEvents="box-none"
         >
           <GestureDetector gesture={pan}>
-            <View
-              style={[
-                styles.dragHandle,
-                { backgroundColor: "rgba(12,20,46,0.9)" },
-              ]}
+            <BlurView
+              tint="systemThickMaterialDark"
+              intensity={85}
+              style={styles.dragHandle}
             >
               <View style={{ height: insets.top }} />
               {sessionId ? (
@@ -188,7 +188,7 @@ export function SessionPlayerOverlay() {
                   onSelect={handleSelectSession}
                 />
               ) : null}
-            </View>
+            </BlurView>
           </GestureDetector>
         </View>
       </Animated.View>
