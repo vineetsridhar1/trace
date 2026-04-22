@@ -877,14 +877,18 @@ export class SessionService {
         "Linked checkout is only available on session groups backed by a local runtime.",
       );
     }
-    await this.assertRuntimeAccess({
+    const runtimeAccess = await runtimeAccessService.getAccessState({
       userId,
       organizationId,
       runtimeInstanceId: runtimeId,
       sessionGroupId,
-      failureMessage:
-        "Linked checkout is only available on session groups backed by a bridge you can access.",
+      capability: "session",
     });
+    if (runtimeAccess.hostingMode !== "local" || !runtimeAccess.isOwner) {
+      throw new Error(
+        "Linked checkout is only available on session groups backed by your local runtime.",
+      );
+    }
 
     const runtime = sessionRouter.getRuntime(runtimeId);
     if (!runtime || runtime.hostingMode !== "local" || runtime.ws.readyState !== runtime.ws.OPEN) {
@@ -2606,6 +2610,8 @@ export class SessionService {
     // If the tool was recently switched and no user message has been sent since,
     // prepend conversation history so the new coding tool has context.
     let prompt = text;
+    let conversationContext: string | null | undefined;
+    let hasPrependedConversationContext = false;
     if (session.toolChangedAt) {
       const msgSinceSwitch = await prisma.event.findFirst({
         where: {
@@ -2616,18 +2622,23 @@ export class SessionService {
         },
       });
       if (!msgSinceSwitch) {
-        const context = await buildConversationContext(sessionId);
+        conversationContext = await buildConversationContext(sessionId);
+        const context = conversationContext;
         if (context) {
           prompt = `${context}\n\n${text}`;
+          hasPrependedConversationContext = true;
         }
       }
     }
 
     if (!session.toolSessionId) {
-      const context = await buildConversationContext(sessionId);
-      if (context) {
+      const context =
+        conversationContext === undefined
+          ? await buildConversationContext(sessionId)
+          : conversationContext;
+      if (context && !hasPrependedConversationContext) {
         prompt = `${context}\n\n${prompt}`;
-      } else {
+      } else if (!context) {
         const startMeta = await getSessionStartMetadata(sessionId);
         prompt = await prependSourceSessionContext(startMeta.sourceSessionId, prompt);
       }
@@ -2974,7 +2985,13 @@ export class SessionService {
       async (tx: Prisma.TransactionClient) => {
         const prev = await tx.session.findUniqueOrThrow({
           where: { id: sessionId },
-          select: { pendingRun: true, agentStatus: true, sessionStatus: true },
+          select: {
+            pendingRun: true,
+            agentStatus: true,
+            sessionStatus: true,
+            readOnlyWorkspace: true,
+            workdir: true,
+          },
         });
 
         const updated = await tx.session.update({
@@ -2985,7 +3002,9 @@ export class SessionService {
             workdir,
             ...(branch && { branch }),
             pendingRun: Prisma.DbNull,
-            readOnlyWorkspace: false,
+            // Read-only sessions keep their repo checkout until an explicit
+            // workspace upgrade creates a writable worktree.
+            readOnlyWorkspace: Boolean(prev.readOnlyWorkspace && !prev.workdir),
           },
           include: SESSION_INCLUDE,
         });
@@ -3706,6 +3725,7 @@ export class SessionService {
           defaultBranch: session.repo.defaultBranch,
           branch: session.branch ?? undefined,
           checkpointSha: startMeta.restoreCheckpointSha ?? undefined,
+          readOnly: session.readOnlyWorkspace,
         },
         { expectedHomeRuntimeId: runtime.id },
       );
@@ -3927,6 +3947,13 @@ export class SessionService {
     if (!targetRuntime.supportedTools.includes(session.tool)) {
       throw new Error("Selected runtime does not support this tool");
     }
+    if (
+      targetRuntime.hostingMode === "local" &&
+      session.repoId &&
+      !(targetRuntime.registeredRepoIds ?? []).includes(session.repoId)
+    ) {
+      throw new Error("Selected runtime does not have this repo linked");
+    }
 
     // Build conversation context from the old session
     const context = await buildConversationContext(sessionId);
@@ -3948,7 +3975,7 @@ export class SessionService {
           branch: session.branch ?? undefined,
           channelId: session.channelId ?? undefined,
           sessionGroupId: session.sessionGroupId ?? undefined,
-          workdir: session.repoId ? undefined : (session.workdir ?? undefined),
+          readOnlyWorkspace: session.readOnlyWorkspace,
           pendingRun: {
             type: "run",
             prompt: bootstrapPrompt,
@@ -3986,7 +4013,7 @@ export class SessionService {
       return child;
     });
     await this.syncGroupWorkspaceState(session.sessionGroupId, {
-      workdir: childSession.repo ? null : (session.workdir ?? null),
+      workdir: null,
       connection: childSession.connection as Prisma.InputJsonValue,
       worktreeDeleted: false,
     });
@@ -4032,6 +4059,7 @@ export class SessionService {
         branch: childSession.branch ?? undefined,
         createdById: actorId,
         organizationId: childSession.organizationId,
+        readOnly: childSession.readOnlyWorkspace,
         onFailed: (error) => this.workspaceFailed(childSession.id, error),
         onWorkspaceReady: (workdir) => this.workspaceReady(childSession.id, workdir),
       });
@@ -4126,7 +4154,7 @@ export class SessionService {
           branch: session.branch ?? undefined,
           channelId: session.channelId ?? undefined,
           sessionGroupId: session.sessionGroupId ?? undefined,
-          workdir: session.repoId ? undefined : (session.workdir ?? undefined),
+          readOnlyWorkspace: session.readOnlyWorkspace,
           pendingRun: {
             type: "run",
             prompt: bootstrapPrompt,
@@ -4159,7 +4187,7 @@ export class SessionService {
       return child;
     });
     await this.syncGroupWorkspaceState(session.sessionGroupId, {
-      workdir: childSession.repo ? null : (session.workdir ?? null),
+      workdir: null,
       connection: childSession.connection as Prisma.InputJsonValue,
       worktreeDeleted: false,
     });
@@ -4202,6 +4230,7 @@ export class SessionService {
       branch: childSession.branch ?? undefined,
       createdById: actorId,
       organizationId: childSession.organizationId,
+      readOnly: childSession.readOnlyWorkspace,
       onFailed: (error) => this.workspaceFailed(childSession.id, error),
       onWorkspaceReady: (workdir) => this.workspaceReady(childSession.id, workdir),
     });
