@@ -1917,7 +1917,7 @@ describe("SessionService", () => {
       );
     });
 
-    it("clears readOnlyWorkspace after upgrading to a writable worktree", async () => {
+    it("preserves readOnlyWorkspace when reconnecting an existing read-only checkout", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
         pendingRun: null,
         agentStatus: "done",
@@ -1927,14 +1927,74 @@ describe("SessionService", () => {
       });
       prismaMock.session.update.mockResolvedValueOnce(
         makeSession({
-          readOnlyWorkspace: false,
-          workdir: "/tmp/trace/worktree",
+          readOnlyWorkspace: true,
+          workdir: "/Users/vineet/src/trace",
         }),
       );
       prismaMock.sessionGroup.update.mockResolvedValueOnce(
-        makeSessionGroup({ workdir: "/tmp/trace/worktree" }),
+        makeSessionGroup({ workdir: "/Users/vineet/src/trace" }),
       );
       prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      await service.workspaceReady("session-1", "/Users/vineet/src/trace");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ readOnlyWorkspace: true }),
+        }),
+      );
+    });
+
+    it("clears readOnlyWorkspace after upgrading to a writable worktree", async () => {
+      prismaMock.session.findUniqueOrThrow
+        .mockResolvedValueOnce({
+          pendingRun: {
+            type: "send",
+            prompt: "Continue in code mode",
+            interactionMode: "code",
+            workspaceUpgrade: true,
+          },
+          agentStatus: "done",
+          sessionStatus: "in_progress",
+          readOnlyWorkspace: true,
+          workdir: "/Users/vineet/src/trace",
+        })
+        .mockResolvedValueOnce({
+          organizationId: "org-1",
+          tool: "claude_code",
+          model: "claude-sonnet-4-20250514",
+          workdir: "/tmp/trace/worktree",
+          toolSessionId: null,
+          repoId: "repo-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-a",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+          sessionGroupId: "group-1",
+        });
+      prismaMock.session.update
+        .mockResolvedValueOnce(
+          makeSession({
+            readOnlyWorkspace: false,
+            workdir: "/tmp/trace/worktree",
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeSession({
+            agentStatus: "active",
+            sessionStatus: "in_progress",
+            readOnlyWorkspace: false,
+            workdir: "/tmp/trace/worktree",
+          }),
+        );
+      prismaMock.sessionGroup.update
+        .mockResolvedValueOnce(makeSessionGroup({ workdir: "/tmp/trace/worktree" }))
+        .mockResolvedValueOnce(makeSessionGroup({ workdir: "/tmp/trace/worktree" }));
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
 
       await service.workspaceReady("session-1", "/tmp/trace/worktree");
 

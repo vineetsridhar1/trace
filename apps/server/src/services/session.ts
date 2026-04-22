@@ -116,6 +116,7 @@ type PendingSessionCommand =
       prompt?: string | null;
       interactionMode?: string | null;
       checkpointContext?: GitCheckpointContext | null;
+      workspaceUpgrade?: boolean;
     }
   | {
       type: "send";
@@ -123,6 +124,7 @@ type PendingSessionCommand =
       interactionMode?: string | null;
       checkpointContext?: GitCheckpointContext | null;
       imageKeys?: string[] | null;
+      workspaceUpgrade?: boolean;
     };
 
 type GroupWorkspaceStatePatch = {
@@ -2993,6 +2995,7 @@ export class SessionService {
             workdir: true,
           },
         });
+        const pendingCommand = this.parsePendingCommand(prev.pendingRun);
 
         const updated = await tx.session.update({
           where: { id: sessionId },
@@ -3004,7 +3007,9 @@ export class SessionService {
             pendingRun: Prisma.DbNull,
             // Read-only sessions keep their repo checkout until an explicit
             // workspace upgrade creates a writable worktree.
-            readOnlyWorkspace: Boolean(prev.readOnlyWorkspace && !prev.workdir),
+            readOnlyWorkspace: Boolean(
+              prev.readOnlyWorkspace && pendingCommand?.workspaceUpgrade !== true,
+            ),
           },
           include: SESSION_INCLUDE,
         });
@@ -4910,6 +4915,7 @@ export class SessionService {
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
         imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
+        workspaceUpgrade: pending.workspaceUpgrade === true,
       };
     }
     if (pending.type === "run" || pending.type == null) {
@@ -4919,6 +4925,7 @@ export class SessionService {
         interactionMode:
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
+        workspaceUpgrade: pending.workspaceUpgrade === true,
       };
     }
     return null;
@@ -4941,7 +4948,11 @@ export class SessionService {
     pendingCommand: PendingSessionCommand,
     extraData?: Partial<Prisma.SessionUpdateInput>,
   ) {
-    await this.storePendingCommand(sessionId, pendingCommand, extraData);
+    await this.storePendingCommand(
+      sessionId,
+      { ...pendingCommand, workspaceUpgrade: true },
+      extraData,
+    );
 
     const repo = session.repo;
     if (!repo) return;
