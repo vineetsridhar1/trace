@@ -35,7 +35,6 @@ export function NewActivityPill({ count, visible, onPress, bottomOffset = 0 }: N
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
-    transform: [{ translateY: (1 - progress.value) * 16 }, { scale: 0.96 + progress.value * 0.04 }],
   }));
 
   function handlePress() {
@@ -78,8 +77,8 @@ export function NewActivityPill({ count, visible, onPress, bottomOffset = 0 }: N
 const styles = StyleSheet.create({
   wrapper: {
     position: "absolute",
-    right: 16,
-    alignItems: "flex-end",
+    left: 16,
+    alignItems: "flex-start",
   },
   pill: {
     overflow: "hidden",
