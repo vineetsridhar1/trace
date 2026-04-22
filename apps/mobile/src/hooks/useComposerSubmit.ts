@@ -126,10 +126,11 @@ export function useComposerSubmit({
           reconcileOptimisticSessionMessage(sessionId, eventId, realId);
         } catch (err) {
           removeOptimisticSessionMessage(sessionId, eventId);
-          // Restore images so the user can retry without repicking.
+          // Restore the failed images at the end of the draft, so anything the
+          // user added during the in-flight send keeps its original position.
           useDraftsStore.getState().setImages(sessionId, (prev) => [
-            ...savedImages.map((img) => ({ ...img, uploading: false })),
             ...prev,
+            ...savedImages.map((img) => ({ ...img, uploading: false })),
           ]);
           throw err;
         }

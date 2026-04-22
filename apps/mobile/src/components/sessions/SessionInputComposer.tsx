@@ -212,14 +212,19 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
     setPastingImage(true);
     void haptic.selection();
     try {
-      const result = await Clipboard.getImageAsync({ format: "png" });
+      // JPEG at q=0.85 keeps a Mac screenshot comfortably under the 5MB
+      // upload cap — PNG at full quality routinely blew past it. Alpha is
+      // flattened, which is fine for the chat-screenshot use case.
+      const result = await Clipboard.getImageAsync({ format: "jpeg", jpegQuality: 0.85 });
       if (!result?.data) return;
-      // expo-clipboard returns `data` as a full `data:image/<fmt>;base64,...`
-      // URI, not raw base64. Split off the prefix so we have the same shape
-      // as the gallery picker path (raw base64 + explicit mimeType).
+      // expo-clipboard returns `data` as a full `data:image/jpeg;base64,...`
+      // URI. Split off the prefix so the rest of the pipeline (upload,
+      // optimistic preview) sees the same shape as the gallery picker.
       const prefixMatch = result.data.match(/^data:([^;,]+);base64,(.+)$/);
-      const mimeType = prefixMatch?.[1] ?? "image/png";
-      const rawBase64 = prefixMatch?.[2] ?? result.data;
+      if (!prefixMatch) {
+        throw new Error("expo-clipboard returned an unexpected data shape");
+      }
+      const [, mimeType, rawBase64] = prefixMatch;
       const attachment: ImageAttachment = {
         id: generateUUID(),
         mimeType,
@@ -265,7 +270,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
           id: generateUUID(),
           mimeType,
           base64: asset.base64,
-          previewUri: asset.uri || `data:${mimeType};base64,${asset.base64}`,
+          previewUri: asset.uri,
           width: asset.width || null,
           height: asset.height || null,
           s3Key: null,

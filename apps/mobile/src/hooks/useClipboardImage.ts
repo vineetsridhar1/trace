@@ -36,7 +36,6 @@ export function useClipboardImage(): {
   }, []);
 
   useEffect(() => {
-    mountedRef.current = true;
     refresh();
     return () => {
       mountedRef.current = false;
