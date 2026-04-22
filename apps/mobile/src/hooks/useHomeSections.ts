@@ -33,6 +33,11 @@ function ownedBy(session: SessionEntity, userId: string): boolean {
   return typeof createdBy?.id === "string" && createdBy.id === userId;
 }
 
+function sessionRepoId(session: SessionEntity): string | null {
+  const repo = session.repo as { id?: string } | null | undefined;
+  return typeof repo?.id === "string" ? repo.id : null;
+}
+
 function hiddenFromHome(state: EntityState, session: SessionEntity): boolean {
   if (session.sessionStatus === "merged") return true;
 
@@ -110,10 +115,14 @@ const SECTION_ORDER: HomeSectionKind[] = ["needs_input", "working_now", "recentl
  *     with `updatedAt` inside the trailing 24h, sorted by recency desc.
  *
  * Merged sessions and sessions in merged/archived groups are hidden from Home.
- * Empty buckets are omitted. Uses a custom equality fn so the hook only
- * triggers a render when the membership/order actually changes.
+ * When `repoId` is non-null, sessions whose `repo.id` doesn't match are also
+ * filtered out. Empty buckets are omitted. Uses a custom equality fn so the
+ * hook only triggers a render when the membership/order actually changes.
  */
-export function useHomeSections(userId: string | null): HomeSection[] {
+export function useHomeSections(
+  userId: string | null,
+  repoId: string | null = null,
+): HomeSection[] {
   return useStoreWithEqualityFn(
     useEntityStore,
     (state: EntityState): HomeSection[] => {
@@ -128,6 +137,7 @@ export function useHomeSections(userId: string | null): HomeSection[] {
       for (const session of Object.values(state.sessions) as SessionEntity[]) {
         if (!ownedBy(session, userId)) continue;
         if (hiddenFromHome(state, session)) continue;
+        if (repoId && sessionRepoId(session) !== repoId) continue;
 
         const sortTs = sortTimestamp(session);
 
@@ -169,5 +179,47 @@ export function useHomeSections(userId: string | null): HomeSection[] {
       return sections;
     },
     areSectionsEqual,
+  );
+}
+
+export interface HomeRepoOption {
+  id: string;
+  name: string;
+}
+
+function areRepoOptionsEqual(a: HomeRepoOption[], b: HomeRepoOption[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i]!.id !== b[i]!.id || a[i]!.name !== b[i]!.name) return false;
+  }
+  return true;
+}
+
+/**
+ * Distinct repos referenced by the current user's home sessions, sorted by
+ * name. Drives the home repo filter chip row — repos with no sessions in
+ * any home bucket aren't shown because filtering to them would empty the
+ * list. Mirrors `useHomeSections`'s ownership/visibility rules so the
+ * available repos and the filtered sessions stay in sync.
+ */
+export function useHomeRepos(userId: string | null): HomeRepoOption[] {
+  return useStoreWithEqualityFn(
+    useEntityStore,
+    (state: EntityState): HomeRepoOption[] => {
+      if (!userId) return [];
+      const seen = new Map<string, string>();
+      for (const session of Object.values(state.sessions) as SessionEntity[]) {
+        if (!ownedBy(session, userId)) continue;
+        if (hiddenFromHome(state, session)) continue;
+        const repo = session.repo as { id?: string; name?: string } | null | undefined;
+        if (!repo?.id) continue;
+        if (seen.has(repo.id)) continue;
+        seen.set(repo.id, repo.name ?? repo.id);
+      }
+      return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
+    },
+    areRepoOptionsEqual,
   );
 }
