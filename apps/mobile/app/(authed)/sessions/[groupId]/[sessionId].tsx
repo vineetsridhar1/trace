@@ -101,17 +101,21 @@ export default function SessionStreamScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={styles.headerStack}>
-        <View style={[styles.backRow, { paddingHorizontal: theme.spacing.sm }]}>
-          <IconButton
-            symbol="chevron.left"
-            onPress={closeSessionPlayer}
-            accessibilityLabel="Back"
-          />
-        </View>
-
         {showLoading ? null : (
           <>
-            <SessionGroupHeader groupId={hydratedGroupId} sessionId={sessionId} />
+            <SessionGroupHeader
+              groupId={hydratedGroupId}
+              sessionId={sessionId}
+              leadingAccessory={
+                <View style={{ paddingLeft: theme.spacing.sm }}>
+                  <IconButton
+                    symbol="chevron.left"
+                    onPress={closeSessionPlayer}
+                    accessibilityLabel="Back"
+                  />
+                </View>
+              }
+            />
             <SessionTabStrip
               groupId={hydratedGroupId}
               activeSessionId={sessionId}
@@ -169,10 +173,6 @@ const styles = StyleSheet.create({
   },
   headerStack: {
     zIndex: 10,
-  },
-  backRow: {
-    alignItems: "flex-start",
-    paddingTop: 4,
   },
   content: {
     flex: 1,
