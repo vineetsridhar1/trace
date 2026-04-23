@@ -53,10 +53,6 @@ interface SessionInputComposerProps {
   keyboardVisible?: boolean;
 }
 
-// Sentinel used by the bridge picker for the "Cloud" option. Mirrors the
-// web `CLOUD_RUNTIME_ID` so the shared mental model is identical.
-const CLOUD_RUNTIME_ID = "__cloud__";
-
 const MODE_LABEL: Record<ComposerMode, string> = { code: "Code", plan: "Plan", ask: "Ask" };
 const MODE_ICON: Record<ComposerMode, SFSymbol> = { code: "pencil", plan: "map", ask: "questionmark.circle" };
 const MODE_PILL_HEIGHT = 38;
@@ -516,8 +512,7 @@ export function SessionInputComposer({
   // optimistic), the pill locks to the current bridge.
   const canChangeBridge = isNotStarted && !isOptimistic;
   const runtimeInstanceId = connection?.runtimeInstanceId ?? null;
-  const currentRuntimeValue =
-    hosting === "cloud" ? CLOUD_RUNTIME_ID : (runtimeInstanceId ?? CLOUD_RUNTIME_ID);
+  const currentRuntimeValue = hosting === "local" ? runtimeInstanceId : null;
 
   useEffect(() => {
     if (!canChangeBridge) return;
@@ -544,11 +539,8 @@ export function SessionInputComposer({
   const handleBridgeChange = useCallback(
     async (value: string) => {
       if (!canChangeBridge || value === currentRuntimeValue) return;
-      const newIsCloud = value === CLOUD_RUNTIME_ID;
       const rt = runtimes.find((r) => r.id === value);
-      const nextHosting: HostingMode = newIsCloud
-        ? "cloud"
-        : (rt?.hostingMode ?? "local");
+      const nextHosting: HostingMode = rt?.hostingMode ?? "local";
       const nextConnection: SessionConnection = {
         __typename: connection?.__typename ?? "SessionConnection",
         autoRetryable: connection?.autoRetryable ?? null,
@@ -558,8 +550,8 @@ export function SessionInputComposer({
         lastError: connection?.lastError ?? null,
         lastSeen: connection?.lastSeen ?? null,
         retryCount: connection?.retryCount ?? 0,
-        runtimeInstanceId: newIsCloud ? null : value,
-        runtimeLabel: newIsCloud ? null : (rt?.label ?? null),
+        runtimeInstanceId: value,
+        runtimeLabel: rt?.label ?? null,
         state: connection?.state ?? "disconnected",
       };
       const rollback = applyOptimisticPatch("sessions", sessionId, {
@@ -570,8 +562,7 @@ export function SessionInputComposer({
         const result = await getClient()
           .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
             sessionId,
-            hosting: newIsCloud ? "cloud" : undefined,
-            runtimeInstanceId: newIsCloud ? undefined : value,
+            runtimeInstanceId: value,
           })
           .toPromise();
         if (result.error) throw result.error;
@@ -647,15 +638,7 @@ export function SessionInputComposer({
     [canInteract, handleModelChange, model, modelOptions],
   );
   const bridgeItems = useMemo<ComposerMorphPillItem[]>(() => {
-    const items: ComposerMorphPillItem[] = [
-      {
-        key: `bridge:${CLOUD_RUNTIME_ID}`,
-        label: "Cloud",
-        systemIcon: "cloud",
-        selected: hosting === "cloud",
-        onPress: () => void handleBridgeChange(CLOUD_RUNTIME_ID),
-      },
-    ];
+    const items: ComposerMorphPillItem[] = [];
     for (const r of runtimes) {
       if (r.hostingMode !== "local" || !r.connected) continue;
       const lacksRepo = channelRepoId
@@ -676,7 +659,6 @@ export function SessionInputComposer({
   }, [
     channelRepoId,
     handleBridgeChange,
-    hosting,
     runtimeInstanceId,
     runtimes,
     theme.colors.warning,

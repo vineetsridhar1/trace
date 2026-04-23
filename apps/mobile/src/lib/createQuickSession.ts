@@ -9,17 +9,17 @@ import {
   useEntityStore,
 } from "@trace/client-core";
 import { getDefaultModel } from "@trace/shared";
-import type { CodingTool, HostingMode } from "@trace/gql";
+import type { CodingTool } from "@trace/gql";
 import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
 import { closeSessionPlayer, tryOpenSessionPlayer } from "@/lib/sessionPlayer";
 import { useMobileUIStore } from "@/stores/ui";
 
 const DEFAULT_TOOL: CodingTool = "claude_code";
-// Mobile has no preferences store yet, so the create path always routes to
-// cloud. TODO(mobile-v1): once ticket 36 lands a preferences store, honor a
-// connected local bridge the same way web's `resolveDefaultRuntime` does.
-const DEFAULT_HOSTING: HostingMode = "cloud";
+// Mobile only supports local sessions for now. The server resolves the
+// caller's default accessible local runtime when no explicit runtime id is
+// provided.
+const DEFAULT_HOSTING = "local";
 
 /**
  * Mobile twin of web's `createQuickSession`: inserts optimistic session
