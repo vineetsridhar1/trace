@@ -11,6 +11,7 @@ import {
 } from "@trace/client-core";
 import type { Channel, ChannelGroup, Event, Session, SessionGroup } from "@trace/gql";
 import { isUnauthorized } from "@/lib/auth";
+import { latestTimestamp, mergeSessionGroupEntity } from "@/lib/session-group";
 import { timedEventIngest } from "@/lib/perf";
 import { getClient } from "@/lib/urql";
 import { useConnectionStore, type ConnectionState } from "@/stores/connection";
@@ -63,7 +64,7 @@ const MY_SESSIONS_QUERY = gql`
       model
       hosting
       createdBy { id name avatarUrl }
-      repo { id name }
+      repo { id name remoteUrl }
       sessionGroupId
       sessionGroup {
         id
@@ -79,7 +80,7 @@ const MY_SESSIONS_QUERY = gql`
         createdAt
         updatedAt
         channel { id }
-        repo { id name defaultBranch }
+        repo { id name remoteUrl defaultBranch }
       }
       channel { id name }
       branch
@@ -169,21 +170,6 @@ export async function refreshOrgData(activeOrgId: string): Promise<boolean> {
   return true;
 }
 
-function timestampMs(value: string | null | undefined): number {
-  if (!value) return 0;
-  const t = new Date(value).getTime();
-  return Number.isFinite(t) ? t : 0;
-}
-
-function latestTimestamp(
-  current: string | null | undefined,
-  candidate: string | null | undefined,
-): string | undefined {
-  if (!current) return candidate ?? undefined;
-  if (!candidate) return current;
-  return timestampMs(candidate) > timestampMs(current) ? candidate : current;
-}
-
 function sessionGroupsFromSessions(
   sessions: Array<Session & { id: string }>,
 ): Array<SessionGroupEntity & { id: string }> {
@@ -205,11 +191,7 @@ function sessionGroupsFromSessions(
     }
 
     const existing = existingGroups[group.id];
-    byId.set(group.id, {
-      ...(existing ?? {}),
-      ...group,
-      _sortTimestamp: latestTimestamp(existing?._sortTimestamp, sortTimestamp),
-    });
+    byId.set(group.id, mergeSessionGroupEntity(existing, group, sortTimestamp));
   }
 
   return Array.from(byId.values());

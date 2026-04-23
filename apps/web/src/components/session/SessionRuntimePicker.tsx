@@ -36,7 +36,8 @@ export function SessionRuntimePicker({
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
   const channel = useEntityField("sessions", sessionId, "channel") as { id: string } | null | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
-  const repoId = useEntityField("sessions", sessionId, "repoId") as string | null | undefined;
+  const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
+  const repoId = repo?.id ?? null;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | { runtimeInstanceId?: string | null }
     | null

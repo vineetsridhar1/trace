@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView } from "expo-symbols";
 import WebView, { type WebViewNavigation } from "react-native-webview";
 import { Text } from "@/components/design-system";
+import { normalizeBrowserInputUrl } from "@/lib/browser";
 import { useTheme } from "@/theme";
 
 interface BrowserPanelProps {
@@ -28,13 +29,22 @@ interface BrowserPanelProps {
 export function BrowserPanel({ initialUrl, topInset = 0 }: BrowserPanelProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const resolvedInitialUrl = initialUrl ?? "";
 
-  const [url, setUrl] = useState(initialUrl ?? "");
-  const [inputText, setInputText] = useState(initialUrl ?? "");
+  const [url, setUrl] = useState(resolvedInitialUrl);
+  const [inputText, setInputText] = useState(resolvedInitialUrl);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
   const [loading, setLoading] = useState(false);
   const webViewRef = useRef<WebView>(null);
+
+  useEffect(() => {
+    setUrl(resolvedInitialUrl);
+    setInputText(resolvedInitialUrl);
+    setCanGoBack(false);
+    setCanGoForward(false);
+    setLoading(false);
+  }, [resolvedInitialUrl]);
 
   const handleNavStateChange = useCallback((state: WebViewNavigation) => {
     setCanGoBack(state.canGoBack);
@@ -45,12 +55,8 @@ export function BrowserPanel({ initialUrl, topInset = 0 }: BrowserPanelProps) {
 
   const handleSubmit = useCallback(
     (e: NativeSyntheticEvent<TextInputSubmitEditingEventData>) => {
-      let raw = e.nativeEvent.text.trim();
+      const raw = normalizeBrowserInputUrl(e.nativeEvent.text);
       if (!raw) return;
-      // If it looks like a bare domain or path, prepend https://
-      if (!/^https?:\/\//i.test(raw)) {
-        raw = `https://${raw}`;
-      }
       setUrl(raw);
       setInputText(raw);
     },
@@ -59,7 +65,14 @@ export function BrowserPanel({ initialUrl, topInset = 0 }: BrowserPanelProps) {
 
   const handleBack = useCallback(() => webViewRef.current?.goBack(), []);
   const handleForward = useCallback(() => webViewRef.current?.goForward(), []);
-  const handleReload = useCallback(() => webViewRef.current?.reload(), []);
+  const handleToolbarReload = useCallback(() => {
+    if (loading) {
+      webViewRef.current?.stopLoading();
+      setLoading(false);
+      return;
+    }
+    webViewRef.current?.reload();
+  }, [loading]);
 
   return (
     <View
@@ -144,7 +157,7 @@ export function BrowserPanel({ initialUrl, topInset = 0 }: BrowserPanelProps) {
         </View>
 
         <Pressable
-          onPress={handleReload}
+          onPress={handleToolbarReload}
           accessibilityLabel={loading ? "Stop loading" : "Reload"}
           style={styles.navBtn}
         >

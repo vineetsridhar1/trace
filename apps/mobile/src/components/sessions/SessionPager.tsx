@@ -5,6 +5,7 @@ import { useEntityField } from "@trace/client-core";
 import type { Repo } from "@trace/gql";
 import { BrowserPanel } from "@/components/sessions/BrowserPanel";
 import { SessionSurface, SessionSurfaceEmpty } from "@/components/sessions/SessionSurface";
+import { resolveBrowserUrl } from "@/lib/browser";
 import { useMobileUIStore } from "@/stores/ui";
 
 interface SessionPagerProps {
@@ -57,20 +58,7 @@ export function SessionPager({
     | undefined;
   const remoteUrl = repo?.remoteUrl ?? null;
 
-  // Build a browser-friendly URL from the remote git URL when no PR exists yet.
-  // e.g. git@github.com:org/repo.git  →  https://github.com/org/repo
-  const gitToHttps = useCallback((gitUrl: string): string => {
-    // SSH format: git@github.com:owner/repo.git
-    const sshMatch = gitUrl.match(/^git@([^:]+):(.+?)(?:\.git)?$/);
-    if (sshMatch) return `https://${sshMatch[1]}/${sshMatch[2]}`;
-    // Already https or http
-    if (/^https?:\/\//.test(gitUrl)) return gitUrl.replace(/\.git$/, "");
-    return gitUrl;
-  }, []);
-
-  const initialUrl =
-    browserUrl ??
-    (prUrl || (remoteUrl ? gitToHttps(remoteUrl) : ""));
+  const initialUrl = resolveBrowserUrl(browserUrl, prUrl, remoteUrl);
 
   const handlePageSelected = useCallback(
     (e: { nativeEvent: { position: number } }) => {
