@@ -120,12 +120,10 @@ export function SessionSurface({
   // Both the keyboard frame and the native tab bar height include the home-
   // indicator inset. The composer already pads for that internally, so only
   // apply the remaining covered height here.
-  const sceneBottomOffset =
+  const overlayBottom =
     keyboardHeight > 0
       ? Math.max(0, keyboardHeight - insets.bottom)
       : Math.max(0, tabBarHeight - insets.bottom);
-  const overlayBottom = sceneBottomOffset;
-  const streamBottomInset = composerHeight + overlayBottom;
 
   useEffect(() => {
     if (!groupId) return;
@@ -162,12 +160,12 @@ export function SessionSurface({
         />
       )}
       {hideHeader ? null : <ActiveTodoStrip sessionId={sessionId} />}
-      <View style={styles.streamWrapper}>
+      <View style={[styles.streamWrapper, { marginBottom: overlayBottom }]}>
         <SessionStream
           key={sessionId}
           sessionId={sessionId}
           topInset={topInset}
-          bottomInset={streamBottomInset}
+          bottomInset={composerHeight}
           loadEvents={loadStreamEvents}
           commitEvents={commitStreamEvents}
           renderEvents={renderStreamEvents}
