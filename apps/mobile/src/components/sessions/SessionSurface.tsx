@@ -49,8 +49,10 @@ interface SessionSurfaceProps {
    * behind it.
    */
   topInset?: number;
-  /** Delay event fetching/subscription while an outer sheet transition settles. */
-  hydrateStreamEvents?: boolean;
+  /** Start stream fetch/subscription work. Disabled while the sheet is closed. */
+  loadStreamEvents?: boolean;
+  /** Apply fetched/live stream events to state. Delayed until sheet open settles. */
+  commitStreamEvents?: boolean;
 }
 
 /**
@@ -63,7 +65,8 @@ export function SessionSurface({
   onSelectSession,
   hideHeader = false,
   topInset,
-  hydrateStreamEvents = true,
+  loadStreamEvents = true,
+  commitStreamEvents = true,
 }: SessionSurfaceProps) {
   const theme = useTheme();
   const groupId = useEntityField("sessions", sessionId, "sessionGroupId") as
@@ -164,7 +167,8 @@ export function SessionSurface({
           sessionId={sessionId}
           topInset={topInset}
           bottomInset={composerHeight}
-          hydrateEvents={hydrateStreamEvents}
+          loadEvents={loadStreamEvents}
+          commitEvents={commitStreamEvents}
         />
       </View>
       <View

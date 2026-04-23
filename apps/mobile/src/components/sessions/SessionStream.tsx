@@ -1,8 +1,13 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { type FlashListRef } from "@shopify/flash-list";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { useSharedValue, withSpring } from "react-native-reanimated";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { useEntityField } from "@trace/client-core";
 import { useNewActivityTracker } from "@/hooks/useNewActivityTracker";
 import { useSessionEvents } from "@/hooks/useSessionEvents";
@@ -37,10 +42,15 @@ interface SessionStreamProps {
    */
   bottomInset?: number;
   /**
-   * Keep the stream visually stable during container transitions. Cached rows
-   * can render, but network hydration and full-payload subscriptions wait.
+   * Starts network work for the stream. The Session Player keeps this false
+   * while closed so a hidden sheet does no event work.
    */
-  hydrateEvents?: boolean;
+  loadEvents?: boolean;
+  /**
+   * Allows fetched/live events to update the entity store. The Session Player
+   * starts loading during its open animation, then commits once the sheet lands.
+   */
+  commitEvents?: boolean;
 }
 
 const NEAR_BOTTOM_THRESHOLD = 120;
@@ -49,16 +59,21 @@ const NEAR_BOTTOM_THRESHOLD = 120;
 // `TIMESTAMP_REVEAL_DISTANCE`), so the pill lags the finger and feels rubbery.
 const TIMESTAMP_REVEAL_ACTIVATION = 24;
 const TIMESTAMP_REVEAL_RESISTANCE = 0.5;
+const CONTENT_FADE_MS = 180;
 
 export function SessionStream({
   sessionId,
   topInset,
   bottomInset,
-  hydrateEvents = true,
+  loadEvents = true,
+  commitEvents = true,
 }: SessionStreamProps) {
   const theme = useTheme();
   const { loading, loadingOlder, hasOlder, error, fetchEvents, fetchOlderEvents } =
-    useSessionEvents(sessionId, hydrateEvents);
+    useSessionEvents(sessionId, {
+      fetchEnabled: loadEvents,
+      commitEnabled: commitEvents,
+    });
   const {
     nodes,
     completedAgentTools,
@@ -72,6 +87,8 @@ export function SessionStream({
   const listRef = useRef<FlashListRef<SessionStreamListItem>>(null);
   const isNearBottomRef = useRef(true);
   const timestampRevealX = useSharedValue(0);
+  const contentOpacity = useSharedValue(nodes.length > 0 ? 1 : 0);
+  const hasRenderedNodesRef = useRef(nodes.length > 0);
   const { newActivityCount, clearNewActivity } = useNewActivityTracker(
     nodes,
     listRef,
@@ -98,6 +115,23 @@ export function SessionStream({
     streamItemCacheRef.current = result.cache;
     return result.items;
   }, [nodes, scopedEvents]);
+  useEffect(() => {
+    if (nodes.length === 0) {
+      hasRenderedNodesRef.current = false;
+      contentOpacity.value = 0;
+      return;
+    }
+    if (!hasRenderedNodesRef.current) {
+      contentOpacity.value = 0;
+      contentOpacity.value = withTiming(1, { duration: CONTENT_FADE_MS });
+      hasRenderedNodesRef.current = true;
+      return;
+    }
+    contentOpacity.value = 1;
+  }, [contentOpacity, nodes.length]);
+  const contentFadeStyle = useAnimatedStyle(() => ({
+    opacity: contentOpacity.value,
+  }));
 
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -145,7 +179,7 @@ export function SessionStream({
   return (
     <View style={styles.wrapper}>
       <GestureDetector gesture={timestampRevealGesture}>
-        <View style={styles.listGestureSurface}>
+        <Animated.View style={[styles.listGestureSurface, contentFadeStyle]}>
           <SessionStreamList
             sessionId={sessionId}
             items={streamItems}
@@ -162,7 +196,7 @@ export function SessionStream({
             onScroll={handleScroll}
             fetchOlderEvents={fetchOlderEvents}
           />
-        </View>
+        </Animated.View>
       </GestureDetector>
       <NewActivityPill
         count={newActivityCount}

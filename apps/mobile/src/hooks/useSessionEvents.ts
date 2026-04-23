@@ -29,6 +29,19 @@ interface UseSessionEventsResult {
   fetchOlderEvents: () => Promise<void>;
 }
 
+interface UseSessionEventsOptions {
+  /** Starts network work. When false, fetches/subscriptions are stopped. */
+  fetchEnabled?: boolean;
+  /** Allows fetched/live events to enter Zustand. When false, events are buffered. */
+  commitEnabled?: boolean;
+}
+
+interface PendingFetchedEvents {
+  events: Array<Event & { id: string }>;
+  hasOlder: boolean;
+  oldestTimestamp: string | null;
+}
+
 /**
  * Mirrors web's useSessionEvents: fetches the most recent page on mount,
  * subscribes to live session events (full payloads) and session status updates,
@@ -37,7 +50,12 @@ interface UseSessionEventsResult {
  * Subscriptions tear down when the hook unmounts (screen blur in expo-router
  * unmounts the screen component, so useEffect cleanup is the correct unit).
  */
-export function useSessionEvents(sessionId: string, enabled = true): UseSessionEventsResult {
+export function useSessionEvents(
+  sessionId: string,
+  options: UseSessionEventsOptions = {},
+): UseSessionEventsResult {
+  const fetchEnabled = options.fetchEnabled ?? true;
+  const commitEnabled = options.commitEnabled ?? fetchEnabled;
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlder, setHasOlder] = useState(true);
@@ -46,9 +64,53 @@ export function useSessionEvents(sessionId: string, enabled = true): UseSessionE
   const oldestTimestampRef = useRef<string | null>(null);
   const loadingOlderRef = useRef(false);
   const hasOlderRef = useRef(true);
+  const commitEnabledRef = useRef(commitEnabled);
+  const pendingFetchedEventsRef = useRef<PendingFetchedEvents | null>(null);
+  const pendingLiveEventsRef = useRef<Array<Event & { id: string }>>([]);
+  const pendingErrorRef = useRef<string | null>(null);
+
+  const commitFetchedEvents = useCallback(
+    (pending: PendingFetchedEvents) => {
+      upsertFetchedSessionEventsWithOptimisticResolution(sessionId, pending.events);
+      setHasOlder(pending.hasOlder);
+      hasOlderRef.current = pending.hasOlder;
+      oldestTimestampRef.current = pending.oldestTimestamp;
+      setError(null);
+    },
+    [sessionId],
+  );
+
+  const commitLiveEvent = useCallback(
+    (event: Event & { id: string }) => {
+      timedEventIngest(event.eventType, () => {
+        handleSessionEvent(sessionId, event);
+      });
+    },
+    [sessionId],
+  );
+
+  const flushBufferedEvents = useCallback(() => {
+    const pendingFetchedEvents = pendingFetchedEventsRef.current;
+    pendingFetchedEventsRef.current = null;
+    if (pendingFetchedEvents) {
+      commitFetchedEvents(pendingFetchedEvents);
+    }
+
+    const pendingError = pendingErrorRef.current;
+    pendingErrorRef.current = null;
+    if (pendingError) {
+      setError(pendingError);
+    }
+
+    const pendingLiveEvents = pendingLiveEventsRef.current;
+    pendingLiveEventsRef.current = [];
+    for (const event of pendingLiveEvents) {
+      commitLiveEvent(event);
+    }
+  }, [commitFetchedEvents, commitLiveEvent]);
 
   const fetchEvents = useCallback(async () => {
-    if (!enabled) return;
+    if (!fetchEnabled) return;
     if (!activeOrgId) {
       setLoading(false);
       return;
@@ -56,6 +118,7 @@ export function useSessionEvents(sessionId: string, enabled = true): UseSessionE
 
     setLoading(true);
     setError(null);
+    pendingErrorRef.current = null;
     const result = await getClient()
       .query(SESSION_EVENTS_QUERY, {
         organizationId: activeOrgId,
@@ -72,37 +135,52 @@ export function useSessionEvents(sessionId: string, enabled = true): UseSessionE
       return;
     }
     if (result.error) {
-      setError(result.error.message);
+      pendingFetchedEventsRef.current = null;
+      if (commitEnabledRef.current) {
+        setError(result.error.message);
+      } else {
+        pendingErrorRef.current = result.error.message;
+      }
       setLoading(false);
       return;
     }
 
     if (result.data?.events) {
       const events = result.data.events as Array<Event & { id: string }>;
-      upsertFetchedSessionEventsWithOptimisticResolution(sessionId, events);
-
-      if (events.length < PAGE_SIZE) {
-        setHasOlder(false);
-        hasOlderRef.current = false;
-      }
-      if (events.length > 0) {
-        oldestTimestampRef.current = events[0].timestamp;
+      const pending = {
+        events,
+        hasOlder: events.length >= PAGE_SIZE,
+        oldestTimestamp: events[0]?.timestamp ?? null,
+      };
+      if (commitEnabledRef.current) {
+        commitFetchedEvents(pending);
+      } else {
+        pendingErrorRef.current = null;
+        pendingFetchedEventsRef.current = pending;
       }
     }
     setLoading(false);
-  }, [activeOrgId, enabled, sessionId]);
+  }, [activeOrgId, commitFetchedEvents, fetchEnabled, sessionId]);
 
   useEffect(() => {
-    if (!enabled) {
+    commitEnabledRef.current = commitEnabled;
+    if (commitEnabled) flushBufferedEvents();
+  }, [commitEnabled, flushBufferedEvents]);
+
+  useEffect(() => {
+    if (!fetchEnabled) {
+      pendingFetchedEventsRef.current = null;
+      pendingLiveEventsRef.current = [];
+      pendingErrorRef.current = null;
       setLoading(true);
       setError(null);
       return;
     }
     void fetchEvents();
-  }, [enabled, fetchEvents]);
+  }, [fetchEnabled, fetchEvents]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!fetchEnabled) return;
     if (!activeOrgId) return;
 
     const client = getClient();
@@ -121,9 +199,11 @@ export function useSessionEvents(sessionId: string, enabled = true): UseSessionE
         }
         if (!result.data?.sessionEvents) return;
         const event = result.data.sessionEvents as Event & { id: string };
-        timedEventIngest(event.eventType, () => {
-          handleSessionEvent(sessionId, event);
-        });
+        if (commitEnabledRef.current) {
+          commitLiveEvent(event);
+        } else {
+          pendingLiveEventsRef.current.push(event);
+        }
       });
 
     const statusSub = client
@@ -146,7 +226,7 @@ export function useSessionEvents(sessionId: string, enabled = true): UseSessionE
       eventSub.unsubscribe();
       statusSub.unsubscribe();
     };
-  }, [activeOrgId, enabled, sessionId]);
+  }, [activeOrgId, commitLiveEvent, fetchEnabled, sessionId]);
 
   // Catch up missed events after a WS reconnect: the server's pubsub has no
   // replay, so anything the agent emitted while we were disconnected is lost
@@ -156,15 +236,16 @@ export function useSessionEvents(sessionId: string, enabled = true): UseSessionE
   );
   const baselineReconnectCounter = useRef(reconnectCounter);
   useEffect(() => {
-    if (!enabled) return;
+    if (!fetchEnabled) return;
     if (reconnectCounter <= baselineReconnectCounter.current) return;
     baselineReconnectCounter.current = reconnectCounter;
     void fetchEvents();
-  }, [enabled, reconnectCounter, fetchEvents]);
+  }, [fetchEnabled, reconnectCounter, fetchEvents]);
 
   const fetchOlderEvents = useCallback(async () => {
     if (
-      !enabled ||
+      !fetchEnabled ||
+      !commitEnabled ||
       !activeOrgId ||
       !oldestTimestampRef.current ||
       loadingOlderRef.current ||
@@ -212,13 +293,13 @@ export function useSessionEvents(sessionId: string, enabled = true): UseSessionE
     }
     loadingOlderRef.current = false;
     setLoadingOlder(false);
-  }, [activeOrgId, enabled, sessionId]);
+  }, [activeOrgId, commitEnabled, fetchEnabled, sessionId]);
 
   return {
-    loading: enabled ? loading : true,
+    loading: fetchEnabled ? loading : true,
     loadingOlder,
     hasOlder,
-    error: enabled ? error : null,
+    error: fetchEnabled ? error : null,
     fetchEvents,
     fetchOlderEvents,
   };

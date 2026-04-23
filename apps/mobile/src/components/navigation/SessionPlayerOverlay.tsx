@@ -157,7 +157,8 @@ export function SessionPlayerOverlay() {
               onSelectSession={handleSelectSession}
               hideHeader
               topInset={topInsetHeight}
-              hydrateStreamEvents={streamHydrationReady}
+              loadStreamEvents={open}
+              commitStreamEvents={streamHydrationReady}
             />
           ) : (
             <SessionSurfaceEmpty />
