@@ -9,13 +9,7 @@ import {
   type LayoutChangeEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  eventScopeKey,
-  useEntityField,
-  useScopedEventIds,
-  useScopedEvents,
-} from "@trace/client-core";
-import type { Event } from "@trace/gql";
+import { useEntityField } from "@trace/client-core";
 import { Spinner, Text } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { PendingInputBar } from "@/components/sessions/PendingInputBar";
@@ -27,7 +21,7 @@ import { SessionStream } from "@/components/sessions/SessionStream";
 import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
 import { useEnsureSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { useSessionDetail } from "@/hooks/useSessionDetail";
-import { findMostRecentPendingInput } from "@/lib/pending-input";
+import { useSessionPendingInput } from "@/hooks/useSessionPendingInput";
 import { useTheme } from "@/theme";
 import { useMobileUIStore } from "@/stores/ui";
 
@@ -85,13 +79,9 @@ export function SessionSurface({
     | string
     | null
     | undefined;
-  const scopeKey = eventScopeKey("session", sessionId);
-  const eventIds = useScopedEventIds(scopeKey, byTimestamp);
-  const events = useScopedEvents(scopeKey);
-  const pendingInput = useMemo(
-    () => findMostRecentPendingInput(eventIds, events),
-    [eventIds, events],
-  );
+  const pendingInput = useSessionPendingInput(sessionId, {
+    enabled: renderStreamEvents,
+  });
   const insets = useSafeAreaInsets();
   const [composerHeight, setComposerHeight] = useState(0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -195,10 +185,6 @@ export function SessionSurface({
       </View>
     </View>
   );
-}
-
-function byTimestamp(a: Event, b: Event): number {
-  return a.timestamp.localeCompare(b.timestamp);
 }
 
 interface SessionSurfaceEmptyProps {

@@ -21,9 +21,19 @@ export interface UseSessionNodesResult {
   events: Record<string, Event>;
 }
 
+interface UseSessionNodesOptions {
+  enabled?: boolean;
+}
+
 function sortEventsByTimestamp(a: Event, b: Event): number {
   return a.timestamp.localeCompare(b.timestamp);
 }
+
+const DISABLED_SCOPE_KEY = "__session_nodes_disabled__";
+const EMPTY_NODES: SessionNode[] = [];
+const EMPTY_COMPLETED_AGENT_TOOLS = new Map<string, AgentToolResult>();
+const EMPTY_TOOL_RESULTS = new Map<string, unknown>();
+const EMPTY_GIT_CHECKPOINTS = new Map<string, GitCheckpoint[]>();
 
 /**
  * Derive the renderable SessionNode[] for a session from its scoped events,
@@ -38,8 +48,12 @@ function sortEventsByTimestamp(a: Event, b: Event): number {
  * inconsistent shapes (crash: "Attempt to recycle a mounted view"); the
  * simpler contract is "every node the list sees produces visible output."
  */
-export function useSessionNodes(sessionId: string): UseSessionNodesResult {
-  const scopeKey = eventScopeKey("session", sessionId);
+export function useSessionNodes(
+  sessionId: string,
+  options: UseSessionNodesOptions = {},
+): UseSessionNodesResult {
+  const enabled = options.enabled ?? true;
+  const scopeKey = enabled ? eventScopeKey("session", sessionId) : DISABLED_SCOPE_KEY;
   const eventIds = useScopedEventIds(scopeKey, sortEventsByTimestamp);
   const events = useScopedEvents(scopeKey);
   const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
@@ -47,6 +61,13 @@ export function useSessionNodes(sessionId: string): UseSessionNodesResult {
     | undefined;
 
   const built = useMemo(() => {
+    if (!enabled) {
+      return {
+        nodes: EMPTY_NODES,
+        completedAgentTools: EMPTY_COMPLETED_AGENT_TOOLS,
+        toolResultByUseId: EMPTY_TOOL_RESULTS,
+      };
+    }
     const built = buildSessionNodes(eventIds, events);
     return {
       ...built,
@@ -54,7 +75,7 @@ export function useSessionNodes(sessionId: string): UseSessionNodesResult {
         node.kind !== "event" ? true : willEventRender(events[node.id]),
       ),
     };
-  }, [eventIds, events]);
+  }, [enabled, eventIds, events]);
   const completedAgentTools = useStableMap(
     built.completedAgentTools,
     (a, b) => Object.is(a.content, b.content),
@@ -62,6 +83,7 @@ export function useSessionNodes(sessionId: string): UseSessionNodesResult {
   const toolResultByUseId = useStableMap(built.toolResultByUseId);
 
   const gitCheckpointsByPromptEventId = useMemo(() => {
+    if (!enabled) return EMPTY_GIT_CHECKPOINTS;
     const map = new Map<string, GitCheckpoint[]>();
     for (const checkpoint of gitCheckpoints ?? []) {
       const pid = checkpoint.promptEventId;
@@ -71,7 +93,7 @@ export function useSessionNodes(sessionId: string): UseSessionNodesResult {
       map.set(pid, list);
     }
     return map;
-  }, [gitCheckpoints]);
+  }, [enabled, gitCheckpoints]);
 
   return {
     nodes: built.nodes,

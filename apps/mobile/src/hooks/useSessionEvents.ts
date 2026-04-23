@@ -12,6 +12,7 @@ import { handleUnauthorized, isUnauthorized } from "@/lib/auth";
 import { timedEventIngest } from "@/lib/perf";
 import { getClient } from "@/lib/urql";
 import { useConnectionStore, type ConnectionState } from "@/stores/connection";
+import { PendingFetchedEvents, SessionEventBuffer } from "./session-events-buffer";
 import {
   SESSION_EVENTS_QUERY,
   SESSION_EVENTS_SUBSCRIPTION,
@@ -36,12 +37,6 @@ interface UseSessionEventsOptions {
   commitEnabled?: boolean;
 }
 
-interface PendingFetchedEvents {
-  events: Array<Event & { id: string }>;
-  hasOlder: boolean;
-  oldestTimestamp: string | null;
-}
-
 /**
  * Mirrors web's useSessionEvents: fetches the most recent page on mount,
  * subscribes to live session events (full payloads) and session status updates,
@@ -64,10 +59,9 @@ export function useSessionEvents(
   const oldestTimestampRef = useRef<string | null>(null);
   const loadingOlderRef = useRef(false);
   const hasOlderRef = useRef(true);
+  const fetchEnabledRef = useRef(fetchEnabled);
   const commitEnabledRef = useRef(commitEnabled);
-  const pendingFetchedEventsRef = useRef<PendingFetchedEvents | null>(null);
-  const pendingLiveEventsRef = useRef<Array<Event & { id: string }>>([]);
-  const pendingErrorRef = useRef<string | null>(null);
+  const eventBufferRef = useRef(new SessionEventBuffer());
 
   const commitFetchedEvents = useCallback(
     (pending: PendingFetchedEvents) => {
@@ -90,21 +84,16 @@ export function useSessionEvents(
   );
 
   const flushBufferedEvents = useCallback(() => {
-    const pendingFetchedEvents = pendingFetchedEventsRef.current;
-    pendingFetchedEventsRef.current = null;
-    if (pendingFetchedEvents) {
-      commitFetchedEvents(pendingFetchedEvents);
+    const flushed = eventBufferRef.current.flush();
+    if (flushed.fetched) {
+      commitFetchedEvents(flushed.fetched);
     }
 
-    const pendingError = pendingErrorRef.current;
-    pendingErrorRef.current = null;
-    if (pendingError) {
-      setError(pendingError);
+    if (flushed.error) {
+      setError(flushed.error);
     }
 
-    const pendingLiveEvents = pendingLiveEventsRef.current;
-    pendingLiveEventsRef.current = [];
-    for (const event of pendingLiveEvents) {
+    for (const event of flushed.liveEvents) {
       commitLiveEvent(event);
     }
   }, [commitFetchedEvents, commitLiveEvent]);
@@ -118,7 +107,8 @@ export function useSessionEvents(
 
     setLoading(true);
     setError(null);
-    pendingErrorRef.current = null;
+    eventBufferRef.current.clearError();
+    const requestToken = eventBufferRef.current.beginFetch();
     const result = await getClient()
       .query(SESSION_EVENTS_QUERY, {
         organizationId: activeOrgId,
@@ -129,17 +119,19 @@ export function useSessionEvents(
       })
       .toPromise();
 
+    if (!fetchEnabledRef.current || !eventBufferRef.current.isCurrentRequest(requestToken)) {
+      return;
+    }
     if (isUnauthorized(result.error)) {
       setLoading(false);
       void handleUnauthorized();
       return;
     }
     if (result.error) {
-      pendingFetchedEventsRef.current = null;
       if (commitEnabledRef.current) {
         setError(result.error.message);
       } else {
-        pendingErrorRef.current = result.error.message;
+        eventBufferRef.current.storeError(requestToken, result.error.message);
       }
       setLoading(false);
       return;
@@ -155,8 +147,7 @@ export function useSessionEvents(
       if (commitEnabledRef.current) {
         commitFetchedEvents(pending);
       } else {
-        pendingErrorRef.current = null;
-        pendingFetchedEventsRef.current = pending;
+        eventBufferRef.current.storeFetched(requestToken, pending);
       }
     }
     setLoading(false);
@@ -168,10 +159,12 @@ export function useSessionEvents(
   }, [commitEnabled, flushBufferedEvents]);
 
   useEffect(() => {
+    fetchEnabledRef.current = fetchEnabled;
+  }, [fetchEnabled]);
+
+  useEffect(() => {
     if (!fetchEnabled) {
-      pendingFetchedEventsRef.current = null;
-      pendingLiveEventsRef.current = [];
-      pendingErrorRef.current = null;
+      eventBufferRef.current.invalidateFetches();
       setLoading(true);
       setError(null);
       return;
@@ -202,7 +195,7 @@ export function useSessionEvents(
         if (commitEnabledRef.current) {
           commitLiveEvent(event);
         } else {
-          pendingLiveEventsRef.current.push(event);
+          eventBufferRef.current.storeLiveEvent(event);
         }
       });
 
@@ -241,6 +234,14 @@ export function useSessionEvents(
     baselineReconnectCounter.current = reconnectCounter;
     void fetchEvents();
   }, [fetchEnabled, reconnectCounter, fetchEvents]);
+
+  useEffect(
+    () => () => {
+      fetchEnabledRef.current = false;
+      eventBufferRef.current.invalidateFetches();
+    },
+    [],
+  );
 
   const fetchOlderEvents = useCallback(async () => {
     if (

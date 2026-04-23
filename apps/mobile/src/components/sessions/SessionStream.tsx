@@ -86,7 +86,7 @@ export function SessionStream({
     toolResultByUseId,
     gitCheckpointsByPromptEventId,
     events: scopedEvents,
-  } = useSessionNodes(sessionId);
+  } = useSessionNodes(sessionId, { enabled: renderEvents });
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
   const connection = useEntityField("sessions", sessionId, "connection");
 
