@@ -87,6 +87,7 @@ export function SessionInputComposer({
 }: SessionInputComposerProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const resolvedBottomSafeAreaInset = bottomSafeAreaInset ?? insets.bottom;
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus");
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted");
@@ -682,7 +683,7 @@ export function SessionInputComposer({
     <View
       style={{
         paddingHorizontal: theme.spacing.md,
-        paddingBottom: theme.spacing.sm + (bottomSafeAreaInset ?? insets.bottom),
+        paddingBottom: theme.spacing.sm + resolvedBottomSafeAreaInset,
         paddingTop: theme.spacing.xs,
       }}
     >

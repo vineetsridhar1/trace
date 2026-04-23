@@ -6,7 +6,7 @@ import {
 } from "@bottom-tabs/react-navigation";
 import { useEntityField } from "@trace/client-core";
 import type { Repo } from "@trace/gql";
-import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import { Platform, Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   EmptyState,
@@ -15,6 +15,7 @@ import {
 } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { BrowserPanel } from "@/components/sessions/BrowserPanel";
+import { SessionBottomAccessoryComposer } from "@/components/sessions/SessionBottomAccessoryComposer";
 import { SessionPageHeader } from "@/components/sessions/SessionPageHeader";
 import { SessionSurface } from "@/components/sessions/SessionSurface";
 import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel";
@@ -57,6 +58,8 @@ export default function SessionStreamScreen() {
   }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const supportsBottomAccessory =
+    Platform.OS === "ios" && Number.parseFloat(String(Platform.Version)) >= 26;
   const loadingGroup = useEnsureSessionGroupDetail(groupId);
   const sessionIds = useSessionGroupSessionIds(groupId);
   const activeMenuClose = useMobileUIStore((s) => s.activeMenuClose);
@@ -85,6 +88,9 @@ export default function SessionStreamScreen() {
     return remoteUrl;
   }, [prUrl, repo?.remoteUrl]);
   const [browserUrl, setBrowserUrl] = useState(defaultBrowserUrl);
+  const [activeBottomTab, setActiveBottomTab] =
+    useState<keyof SessionBottomTabsParamList>("session");
+  const [bottomAccessoryHeight, setBottomAccessoryHeight] = useState(0);
 
   useEffect(() => {
     if (!groupId || !sessionId || sessionIds.length === 0) return;
@@ -107,6 +113,16 @@ export default function SessionStreamScreen() {
     const nextHeight = e.nativeEvent.layout.height;
     setOverlayHeight((current) => (current === nextHeight ? current : nextHeight));
   }, []);
+  const handleBottomAccessoryHeight = useCallback((height: number) => {
+    setBottomAccessoryHeight((current) => (current === height ? current : height));
+  }, []);
+  const useBottomAccessoryInput = supportsBottomAccessory && activeBottomTab === "session";
+
+  useEffect(() => {
+    if (!useBottomAccessoryInput && bottomAccessoryHeight !== 0) {
+      setBottomAccessoryHeight(0);
+    }
+  }, [bottomAccessoryHeight, useBottomAccessoryInput]);
 
   const showLoading = loadingGroup || (sessionIds.length === 0 && !groupName);
 
@@ -149,22 +165,37 @@ export default function SessionStreamScreen() {
             key={hydratedGroupId}
             initialRouteName="session"
             minimizeBehavior="onScrollDown"
+            renderBottomAccessoryView={
+              useBottomAccessoryInput
+                ? ({ placement }) => (
+                    <SessionBottomAccessoryComposer
+                      sessionId={sessionId}
+                      placement={placement}
+                      onHeightChange={handleBottomAccessoryHeight}
+                    />
+                  )
+                : undefined
+            }
           >
             <SessionBottomTabs.Screen
               name="session"
               options={{ title: "Session", tabBarIcon: sessionIcon }}
+              listeners={{ focus: () => setActiveBottomTab("session") }}
             >
               {() => (
                 <SessionSurface
                   sessionId={sessionId}
                   onSelectSession={handleSelectSession}
                   hideHeader
+                  useBottomAccessoryInput={useBottomAccessoryInput}
+                  bottomAccessoryHeight={bottomAccessoryHeight}
                 />
               )}
             </SessionBottomTabs.Screen>
             <SessionBottomTabs.Screen
               name="browser"
               options={{ title: "Browser", tabBarIcon: browserIcon }}
+              listeners={{ focus: () => setActiveBottomTab("browser") }}
             >
               {() => (
                 <View style={[styles.overlayPaddedScene, { paddingTop: overlayHeight }]}>
@@ -175,6 +206,7 @@ export default function SessionStreamScreen() {
             <SessionBottomTabs.Screen
               name="terminal"
               options={{ title: "Terminal", tabBarIcon: terminalIcon }}
+              listeners={{ focus: () => setActiveBottomTab("terminal") }}
             >
               {() => (
                 <View style={[styles.overlayPaddedScene, { paddingTop: overlayHeight }]}>
