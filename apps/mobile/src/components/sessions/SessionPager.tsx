@@ -38,7 +38,6 @@ export function SessionPager({
 }: SessionPagerProps) {
   const pagerRef = useRef<PagerView>(null);
   const browserUrl = useMobileUIStore((s) => s.browserUrl);
-  const setBrowserUrl = useMobileUIStore((s) => s.setBrowserUrl);
 
   // Derive initial browser URL: prefer stored URL, fall back to the session
   // group's PR URL, then the repo's remote URL.
@@ -59,7 +58,7 @@ export function SessionPager({
     | undefined;
   const remoteUrl = repo?.remoteUrl ?? null;
 
-  const resolvedBrowserUrl = resolveBrowserUrl(browserUrl, prUrl, remoteUrl);
+  const initialUrl = resolveBrowserUrl(browserUrl, prUrl, remoteUrl);
 
   const handlePageSelected = useCallback(
     (e: { nativeEvent: { position: number } }) => {
@@ -98,7 +97,7 @@ export function SessionPager({
 
       {/* Page 1: browser */}
       <View key="browser" style={styles.page}>
-        <BrowserPanel url={resolvedBrowserUrl} onUrlChange={setBrowserUrl} />
+        <BrowserPanel initialUrl={initialUrl} topInset={topInset} />
       </View>
     </PagerView>
   );
