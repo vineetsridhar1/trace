@@ -141,6 +141,7 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
   const theme = useTheme();
   const webViewRef = useRef<WebView>(null);
   const socketRef = useRef<TerminalSocket | null>(null);
+  const webReadyRef = useRef(false);
   const pendingWritesRef = useRef<string[]>([]);
   const needsClearRef = useRef(false);
   const [webReady, setWebReady] = useState(false);
@@ -158,22 +159,22 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
   }, []);
 
   const clearTerminal = useCallback(() => {
-    if (!webReady) {
+    if (!webReadyRef.current) {
       needsClearRef.current = true;
       return;
     }
     inject("window.__traceClear && window.__traceClear();");
-  }, [inject, webReady]);
+  }, [inject]);
 
   const writeTerminal = useCallback(
     (data: string) => {
-      if (!webReady) {
+      if (!webReadyRef.current) {
         pendingWritesRef.current.push(data);
         return;
       }
       inject(`window.__traceWrite && window.__traceWrite(${JSON.stringify(data)});`);
     },
-    [inject, webReady],
+    [inject],
   );
 
   const createTerminal = useCallback(async (): Promise<string> => {
@@ -269,7 +270,12 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
   );
 
   useEffect(() => {
+    webReadyRef.current = webReady;
+  }, [webReady]);
+
+  useEffect(() => {
     setWebReady(false);
+    webReadyRef.current = false;
     pendingWritesRef.current = [];
     needsClearRef.current = true;
     void ensureTerminal();
@@ -302,6 +308,7 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
           | { type: "resize"; cols: number; rows: number };
 
         if (message.type === "ready") {
+          webReadyRef.current = true;
           setWebReady(true);
           return;
         }
