@@ -7,6 +7,7 @@ import {
 import { useEntityField } from "@trace/client-core";
 import type { Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   EmptyState,
   Screen,
@@ -55,6 +56,7 @@ export default function SessionStreamScreen() {
     sessionId: string;
   }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const loadingGroup = useEnsureSessionGroupDetail(groupId);
   const sessionIds = useSessionGroupSessionIds(groupId);
   const activeMenuClose = useMobileUIStore((s) => s.activeMenuClose);
@@ -110,7 +112,7 @@ export default function SessionStreamScreen() {
 
   return (
     <Screen
-      edges={["top", "left", "right"]}
+      edges={["left", "right"]}
       background="background"
       style={styles.root}
     >
@@ -118,7 +120,7 @@ export default function SessionStreamScreen() {
 
       <View pointerEvents="box-none" style={styles.headerOverlay}>
         {showLoading ? null : (
-          <View onLayout={handleOverlayLayout}>
+          <View onLayout={handleOverlayLayout} style={{ paddingTop: insets.top }}>
             <SessionPageHeader
               groupId={hydratedGroupId}
               sessionId={sessionId}
