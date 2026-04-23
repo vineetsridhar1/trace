@@ -165,7 +165,7 @@ export function SessionStream({
     Gesture.Native(),
   );
 
-  if (loading && nodes.length === 0) return <SessionStreamSkeleton />;
+  if ((loading || !commitEvents) && nodes.length === 0) return <SessionStreamSkeleton />;
   // A not_started session has no events yet by design — the initial events
   // query commonly 404s for optimistic/pending session ids. Fall through to
   // the friendly empty state instead of surfacing a retry banner.

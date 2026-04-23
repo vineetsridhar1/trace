@@ -1,11 +1,15 @@
 import { StyleSheet, View } from "react-native";
 import type { AgentStatus } from "@trace/gql";
-import { Button, Text } from "@/components/design-system";
+import { Button, Spinner, Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
 
 /** Solid stream surface shown while initial events are loading. */
 export function SessionStreamSkeleton() {
-  return <View style={styles.blackState} />;
+  return (
+    <View style={styles.loadingState}>
+      <Spinner size="small" color="mutedForeground" />
+    </View>
+  );
 }
 
 /** Retry-capable error state when the initial events query fails. */
@@ -37,5 +41,11 @@ export function SessionStreamEmpty(_props: { agentStatus?: AgentStatus | null })
 
 const styles = StyleSheet.create({
   blackState: { flex: 1, backgroundColor: "#000" },
+  loadingState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#000",
+  },
   errorState: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
 });
