@@ -145,6 +145,9 @@ export default function SessionStreamScreen() {
     setAccessoryComposerOpen(true);
     setAccessoryFocusRequest((current) => current + 1);
   }, [activeBottomTab]);
+  const handleCloseAccessoryComposer = useCallback(() => {
+    setAccessoryComposerOpen(false);
+  }, []);
 
   const showLoading = loadingGroup || (sessionIds.length === 0 && !groupName);
 
@@ -196,8 +199,6 @@ export default function SessionStreamScreen() {
                       sessionId={sessionId}
                       activeTab={activeBottomTab}
                       placement={placement}
-                      composerOpen={accessoryComposerOpen}
-                      focusRequest={accessoryFocusRequest}
                       onComposerOpen={handleOpenAccessoryComposer}
                       onHeightChange={handleBottomAccessoryHeight}
                     />
@@ -217,6 +218,9 @@ export default function SessionStreamScreen() {
                   hideHeader
                   useBottomAccessoryInput={useBottomAccessoryInput}
                   bottomAccessoryHeight={bottomAccessoryHeight}
+                  accessoryComposerOpen={accessoryComposerOpen}
+                  accessoryComposerFocusRequest={accessoryFocusRequest}
+                  onAccessoryComposerClose={handleCloseAccessoryComposer}
                 />
               )}
             </SessionBottomTabs.Screen>
