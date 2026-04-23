@@ -163,6 +163,8 @@ export function BrowserPanel({ url, onUrlChange }: BrowserPanelProps) {
           ref={webViewRef}
           source={{ uri: url }}
           style={styles.webView}
+          automaticallyAdjustContentInsets={false}
+          contentInsetAdjustmentBehavior="never"
           onNavigationStateChange={handleNavStateChange}
           onLoadStart={() => setLoading(true)}
           onLoadEnd={() => setLoading(false)}
