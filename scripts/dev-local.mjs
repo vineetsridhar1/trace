@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { access, readFile, readdir } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -18,31 +18,8 @@ const shadowDatabasePort = 5692 + portOffset;
 const serverUrl = `http://localhost:${serverPort}`;
 const webUrl = `http://localhost:${webPort}`;
 const prismaServerName = `trace-local-${hashValue(cwd)}-${portOffset}`;
-
-const jwtSecret = process.env.JWT_SECRET ?? randomHex(32);
-const tokenEncryptionKey = process.env.TOKEN_ENCRYPTION_KEY ?? randomHex(32);
-
-const sharedEnv = {
-  ...process.env,
-  TRACE_PORT: String(portOffset),
-  TRACE_LOCAL_MODE: "1",
-  JWT_SECRET: jwtSecret,
-  TOKEN_ENCRYPTION_KEY: tokenEncryptionKey,
-  TRACE_SERVER_PUBLIC_URL: serverUrl,
-  TRACE_SERVER_URL: serverUrl,
-  TRACE_WEB_URL: webUrl,
-  CORS_ALLOWED_ORIGINS: webUrl,
-  STORAGE_MODE: "local",
-  STORAGE_PUBLIC_URL: serverUrl,
-  NODE_ENV: process.env.NODE_ENV ?? "development",
-};
-
-const webEnv = {
-  ...sharedEnv,
-  VITE_TRACE_LOCAL_MODE: "1",
-  VITE_ENABLE_AGENT: "0",
-  VITE_ENABLE_AGENT_DEBUG: "0",
-};
+let sharedEnv = { ...process.env };
+let webEnv = { ...process.env };
 
 const children = new Set();
 let shuttingDown = false;
@@ -79,6 +56,88 @@ function getPrismaDevStateRoot() {
     process.env.XDG_DATA_HOME ?? path.join(home, ".local", "share"),
     "prisma-dev-nodejs",
   );
+}
+
+function getTraceLocalStateRoot() {
+  const home = homedir();
+  if (process.platform === "darwin") {
+    return path.join(home, "Library", "Application Support", "trace-local-nodejs");
+  }
+  if (process.platform === "win32") {
+    return path.join(
+      process.env.LOCALAPPDATA ?? path.join(home, "AppData", "Local"),
+      "trace-local-nodejs",
+    );
+  }
+  return path.join(
+    process.env.XDG_DATA_HOME ?? path.join(home, ".local", "share"),
+    "trace-local-nodejs",
+  );
+}
+
+function getLocalModeSecretsPath() {
+  return path.join(getTraceLocalStateRoot(), prismaServerName, "secrets.json");
+}
+
+async function loadLocalModeSecrets() {
+  const secretsPath = getLocalModeSecretsPath();
+  let persisted = null;
+
+  try {
+    const raw = await readFile(secretsPath, "utf8");
+    persisted = JSON.parse(raw);
+  } catch (error) {
+    if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) {
+      throw error;
+    }
+  }
+
+  const jwtSecret =
+    process.env.JWT_SECRET ??
+    (typeof persisted?.jwtSecret === "string" && persisted.jwtSecret.length > 0
+      ? persisted.jwtSecret
+      : randomHex(32));
+  const tokenEncryptionKey =
+    process.env.TOKEN_ENCRYPTION_KEY ??
+    (typeof persisted?.tokenEncryptionKey === "string" && persisted.tokenEncryptionKey.length > 0
+      ? persisted.tokenEncryptionKey
+      : randomHex(32));
+
+  if (!process.env.JWT_SECRET || !process.env.TOKEN_ENCRYPTION_KEY || !persisted) {
+    await mkdir(path.dirname(secretsPath), { recursive: true });
+    await writeFile(
+      secretsPath,
+      JSON.stringify({ jwtSecret, tokenEncryptionKey }, null, 2),
+      "utf8",
+    );
+  }
+
+  return { jwtSecret, tokenEncryptionKey };
+}
+
+async function initializeLocalModeEnv() {
+  const { jwtSecret, tokenEncryptionKey } = await loadLocalModeSecrets();
+  sharedEnv = {
+    ...process.env,
+    TRACE_PORT: String(portOffset),
+    TRACE_LOCAL_MODE: "1",
+    JWT_SECRET: jwtSecret,
+    TOKEN_ENCRYPTION_KEY: tokenEncryptionKey,
+    TRACE_SERVER_PUBLIC_URL: serverUrl,
+    TRACE_SERVER_URL: serverUrl,
+    TRACE_WEB_URL: webUrl,
+    CORS_ALLOWED_ORIGINS: webUrl,
+    STORAGE_MODE: "local",
+    STORAGE_PUBLIC_URL: serverUrl,
+    NODE_ENV: process.env.NODE_ENV ?? "development",
+  };
+
+  webEnv = {
+    ...sharedEnv,
+    VITE_TRACE_LOCAL_MODE: "1",
+    VITE_ENABLE_AGENT: "0",
+    VITE_ENABLE_AGENT_DEBUG: "0",
+  };
 }
 
 function buildPrismaDevDatabaseUrl(port) {
@@ -383,6 +442,13 @@ async function migrateAndSeed(databaseUrl) {
     }
   }
 
+  log("generating Prisma client");
+  await runCommand(
+    "prisma generate",
+    ["--filter", "@trace/server", "exec", "prisma", "generate"],
+    env,
+  );
+
   log("seeding baseline data");
   await runCommand("db:seed", ["--filter", "@trace/server", "db:seed"], env);
 
@@ -462,6 +528,7 @@ process.on("unhandledRejection", (error) => {
 
 async function main() {
   assertNodeVersion();
+  await initializeLocalModeEnv();
 
   log("starting local Prisma dev server");
   const databaseUrl = await ensurePrismaDev();
