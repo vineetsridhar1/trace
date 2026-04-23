@@ -1,14 +1,14 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import {
   Keyboard,
-  LayoutAnimation,
   Platform,
   StyleSheet,
-  UIManager,
   View,
+  type KeyboardEvent,
   type LayoutChangeEvent,
 } from "react-native";
 import { BottomTabBarHeightContext } from "react-native-bottom-tabs";
+import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEntityField } from "@trace/client-core";
 import { Spinner, Text } from "@/components/design-system";
@@ -52,6 +52,9 @@ interface SessionSurfaceProps {
   renderStreamEvents?: boolean;
 }
 
+const COMPOSER_KEYBOARD_GAP = 10;
+const STREAM_COMPOSER_CLEARANCE = 12;
+
 /**
  * The complete session surface: group header + sibling tab strip + event
  * stream. Rendered both inside the Session Player (§10.8) and by the
@@ -86,46 +89,48 @@ export function SessionSurface({
   const insets = useSafeAreaInsets();
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [composerHeight, setComposerHeight] = useState(0);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardInset, setKeyboardInset] = useState(0);
+  const restingBottomOffset = Math.max(0, tabBarHeight - insets.bottom);
   const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
     setComposerHeight(e.nativeEvent.layout.height);
   }, []);
 
   useEffect(() => {
+    const getKeyboardInset = (e: KeyboardEvent) =>
+      Math.max(0, e.endCoordinates.height - insets.bottom);
+    const handleShow = (e: KeyboardEvent) => {
+      setKeyboardVisible(true);
+      setKeyboardInset(getKeyboardInset(e));
+    };
+    const handleHide = () => {
+      setKeyboardVisible(false);
+      setKeyboardInset(0);
+    };
+    const handleChangeFrame = (e: KeyboardEvent) => {
+      const nextInset = getKeyboardInset(e);
+      setKeyboardVisible(nextInset > 0);
+      setKeyboardInset(nextInset);
+    };
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const animate = (duration: number | undefined) => {
-      if (Platform.OS === "ios" && duration) {
-        LayoutAnimation.configureNext({
-          duration,
-          update: { type: LayoutAnimation.Types.keyboard },
-        });
-      } else if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-        UIManager.setLayoutAnimationEnabledExperimental(true);
-      }
-    };
-    const show = Keyboard.addListener(showEvent, (e) => {
-      animate(e.duration);
-      setKeyboardHeight(e.endCoordinates.height);
-    });
-    const hide = Keyboard.addListener(hideEvent, (e) => {
-      animate(e.duration);
-      setKeyboardHeight(0);
-    });
+    const show = Keyboard.addListener(showEvent, handleShow);
+    const hide = Keyboard.addListener(hideEvent, handleHide);
+    const changeFrame =
+      Platform.OS === "ios"
+        ? Keyboard.addListener("keyboardWillChangeFrame", handleChangeFrame)
+        : null;
     return () => {
       show.remove();
       hide.remove();
+      changeFrame?.remove();
     };
-  }, []);
-  // Both the keyboard frame and the native tab bar height include the home-
-  // indicator inset. The composer already pads for that internally, so only
-  // apply the remaining covered height here.
-  const sceneBottomOffset =
-    keyboardHeight > 0
-      ? Math.max(0, keyboardHeight - insets.bottom)
-      : Math.max(0, tabBarHeight - insets.bottom);
-  const overlayBottom = sceneBottomOffset;
-  const streamBottomInset = composerHeight + overlayBottom;
+  }, [insets.bottom]);
+  const streamBottomInset =
+    composerHeight +
+    (keyboardVisible
+      ? keyboardInset + COMPOSER_KEYBOARD_GAP + STREAM_COMPOSER_CLEARANCE
+      : restingBottomOffset);
 
   useEffect(() => {
     if (!groupId) return;
@@ -173,24 +178,36 @@ export function SessionSurface({
           renderEvents={renderStreamEvents}
         />
       </View>
-      <View
-        style={[styles.overlay, { bottom: overlayBottom }]}
-        onLayout={handleComposerLayout}
+      <KeyboardStickyView
+        offset={{ opened: -COMPOSER_KEYBOARD_GAP }}
         pointerEvents="box-none"
+        style={styles.overlayHost}
       >
-        {pendingInput ? (
-          <>
-            <PendingInputBar sessionId={sessionId} />
-            <SessionErrorCard sessionId={sessionId} />
-          </>
-        ) : (
-          <>
-            <SessionErrorCard sessionId={sessionId} />
-            <QueuedMessagesStrip sessionId={sessionId} />
-            <SessionInputComposer sessionId={sessionId} />
-          </>
-        )}
-      </View>
+        <View
+          onLayout={handleComposerLayout}
+          style={[
+            styles.composerStack,
+            { paddingBottom: keyboardVisible ? 0 : restingBottomOffset },
+          ]}
+        >
+          {pendingInput ? (
+            <>
+              <PendingInputBar sessionId={sessionId} />
+              <SessionErrorCard sessionId={sessionId} />
+            </>
+          ) : (
+            <>
+              <SessionErrorCard sessionId={sessionId} />
+              <QueuedMessagesStrip sessionId={sessionId} />
+              <SessionInputComposer
+                sessionId={sessionId}
+                keyboardVisible={keyboardVisible}
+                bottomSafeAreaInset={keyboardVisible ? 0 : undefined}
+              />
+            </>
+          )}
+        </View>
+      </KeyboardStickyView>
     </View>
   );
 }
@@ -230,10 +247,11 @@ const styles = StyleSheet.create({
   streamWrapper: {
     flex: 1,
   },
-  overlay: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
+  overlayHost: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-end",
+  },
+  composerStack: {
+    backgroundColor: "transparent",
   },
 });

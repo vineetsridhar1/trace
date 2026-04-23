@@ -7,33 +7,54 @@ import {
   type NativeSyntheticEvent,
   type TextInputSubmitEditingEventData,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView } from "expo-symbols";
 import WebView, { type WebViewNavigation } from "react-native-webview";
 import { Text } from "@/components/design-system";
+import { normalizeBrowserInputUrl } from "@/lib/browser";
 import { useTheme } from "@/theme";
 
 interface BrowserPanelProps {
+  /** Current URL to load. Blank = empty state. */
   url: string;
+  /** Lift browser navigation so the route can persist it across remounts. */
   onUrlChange: (url: string) => void;
+  /** Top inset matching the Session Player's glass header height. */
+  topInset?: number;
 }
 
-export function BrowserPanel({ url, onUrlChange }: BrowserPanelProps) {
+/**
+ * Embedded browser panel shown when the user swipes over to the browser page
+ * in the Session Player. Renders a simple URL bar + back/forward/reload
+ * controls on top of a full-screen WebView.
+ */
+export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: BrowserPanelProps) {
   const theme = useTheme();
-  const webViewRef = useRef<WebView>(null);
-  const [inputText, setInputText] = useState(url);
+  const insets = useSafeAreaInsets();
+  const resolvedUrl = nextUrl;
+
+  const [url, setUrl] = useState(resolvedUrl);
+  const [inputText, setInputText] = useState(resolvedUrl);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
   const [loading, setLoading] = useState(false);
+  const webViewRef = useRef<WebView>(null);
 
   useEffect(() => {
-    setInputText(url);
-  }, [url]);
+    if (resolvedUrl === url) return;
+    setUrl(resolvedUrl);
+    setInputText(resolvedUrl);
+    setCanGoBack(false);
+    setCanGoForward(false);
+    setLoading(false);
+  }, [resolvedUrl, url]);
 
   const handleNavStateChange = useCallback(
     (state: WebViewNavigation) => {
       setCanGoBack(state.canGoBack);
       setCanGoForward(state.canGoForward);
       setInputText(state.url);
+      setUrl(state.url);
       onUrlChange(state.url);
     },
     [onUrlChange],
@@ -41,11 +62,9 @@ export function BrowserPanel({ url, onUrlChange }: BrowserPanelProps) {
 
   const handleSubmit = useCallback(
     (e: NativeSyntheticEvent<TextInputSubmitEditingEventData>) => {
-      let raw = e.nativeEvent.text.trim();
+      const raw = normalizeBrowserInputUrl(e.nativeEvent.text);
       if (!raw) return;
-      if (!/^https?:\/\//i.test(raw)) {
-        raw = `https://${raw}`;
-      }
+      setUrl(raw);
       setInputText(raw);
       if (raw === url) {
         webViewRef.current?.reload();
@@ -56,21 +75,26 @@ export function BrowserPanel({ url, onUrlChange }: BrowserPanelProps) {
     [onUrlChange, url],
   );
 
-  const handleBack = useCallback(() => {
-    webViewRef.current?.goBack();
-  }, []);
-
-  const handleForward = useCallback(() => {
-    webViewRef.current?.goForward();
-  }, []);
-
-  const handleReload = useCallback(() => {
-    if (!url) return;
+  const handleBack = useCallback(() => webViewRef.current?.goBack(), []);
+  const handleForward = useCallback(() => webViewRef.current?.goForward(), []);
+  const handleToolbarReload = useCallback(() => {
+    if (loading) {
+      webViewRef.current?.stopLoading();
+      setLoading(false);
+      return;
+    }
     webViewRef.current?.reload();
-  }, [url]);
+  }, [loading]);
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
+    <View
+      style={[
+        styles.root,
+        { backgroundColor: theme.colors.background },
+      ]}
+    >
+      <View style={{ height: topInset }} />
+
       <View
         style={[
           styles.toolbar,
@@ -138,20 +162,19 @@ export function BrowserPanel({ url, onUrlChange }: BrowserPanelProps) {
               },
             ]}
             placeholderTextColor={theme.colors.mutedForeground}
-            placeholder="Enter a URL"
+            placeholder="Enter a URL…"
           />
         </View>
 
         <Pressable
-          onPress={handleReload}
-          disabled={!url}
-          accessibilityLabel={loading ? "Loading" : "Reload"}
+          onPress={handleToolbarReload}
+          accessibilityLabel={loading ? "Stop loading" : "Reload"}
           style={styles.navBtn}
         >
           <SymbolView
-            name={loading ? "hourglass" : "arrow.clockwise"}
+            name={loading ? "xmark" : "arrow.clockwise"}
             size={16}
-            tintColor={url ? theme.colors.foreground : theme.colors.mutedForeground}
+            tintColor={theme.colors.foreground}
             weight="medium"
             resizeMode="scaleAspectFit"
           />
@@ -173,12 +196,19 @@ export function BrowserPanel({ url, onUrlChange }: BrowserPanelProps) {
           allowsBackForwardNavigationGestures
         />
       ) : (
-        <View style={[styles.empty, { backgroundColor: theme.colors.surfaceDeep }]}>
-          <Text variant="body" color="mutedForeground" align="center">
-            Enter a URL above to browse the repo or PR.
+        <View
+          style={[
+            styles.empty,
+            { backgroundColor: theme.colors.surfaceDeep },
+          ]}
+        >
+          <Text variant="body" color="mutedForeground">
+            Enter a URL above to get started
           </Text>
         </View>
       )}
+
+      <View style={{ height: insets.bottom }} />
     </View>
   );
 }
@@ -218,6 +248,5 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 24,
   },
 });

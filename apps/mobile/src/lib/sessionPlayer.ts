@@ -22,14 +22,12 @@ export function tryOpenSessionPlayer(sessionId: string | null | undefined): bool
   if (activeIndex >= 0) ui.setActiveAccessoryIndex(activeIndex);
 
   ui.setOverlaySessionId(sessionId);
-  ui.setSessionPlayerOpen(false);
   router.push(`/sessions/${sessionGroupId}/${sessionId}` as never);
   return true;
 }
 
 export function closeSessionPlayer(): void {
   const ui = useMobileUIStore.getState();
-  ui.setSessionPlayerOpen(false);
   ui.setOverlaySessionId(null);
   if (router.canGoBack()) {
     router.back();

@@ -90,6 +90,8 @@ export function SessionStream({
 
   const listRef = useRef<FlashListRef<SessionStreamListItem>>(null);
   const isNearBottomRef = useRef(true);
+  const currentScrollOffsetRef = useRef(0);
+  const previousBottomInsetRef = useRef(bottomInset ?? 0);
   const timestampRevealX = useSharedValue(0);
   const contentOpacity = useSharedValue(nodes.length > 0 ? 1 : 0);
   const hasRenderedNodesRef = useRef(nodes.length > 0);
@@ -139,6 +141,7 @@ export function SessionStream({
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+      currentScrollOffsetRef.current = contentOffset.y;
       const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
       const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
       isNearBottomRef.current = nearBottom;
@@ -146,6 +149,18 @@ export function SessionStream({
     },
     [clearNewActivity],
   );
+
+  useEffect(() => {
+    const nextBottomInset = bottomInset ?? 0;
+    const previousBottomInset = previousBottomInsetRef.current;
+    const insetDelta = nextBottomInset - previousBottomInset;
+    if (insetDelta !== 0 && isNearBottomRef.current) {
+      const nextOffset = Math.max(0, currentScrollOffsetRef.current + insetDelta);
+      listRef.current?.scrollToOffset({ animated: false, offset: nextOffset });
+      currentScrollOffsetRef.current = nextOffset;
+    }
+    previousBottomInsetRef.current = nextBottomInset;
+  }, [bottomInset]);
 
   const handlePillPress = useCallback(() => {
     clearNewActivity();

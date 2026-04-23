@@ -50,6 +50,7 @@ interface SessionInputComposerProps {
   sessionId: string;
   focusRequest?: number;
   bottomSafeAreaInset?: number;
+  keyboardVisible?: boolean;
 }
 
 // Sentinel used by the bridge picker for the "Cloud" option. Mirrors the
@@ -84,9 +85,11 @@ export function SessionInputComposer({
   sessionId,
   focusRequest,
   bottomSafeAreaInset,
+  keyboardVisible = false,
 }: SessionInputComposerProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const resolvedBottomSafeAreaInset = bottomSafeAreaInset ?? insets.bottom;
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus");
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted");
@@ -189,6 +192,7 @@ export function SessionInputComposer({
   const showPasteButton =
     canInteract &&
     inputFocused &&
+    keyboardVisible &&
     clipboardHasImage &&
     images.length === 0 &&
     !pastingImage;
@@ -295,7 +299,7 @@ export function SessionInputComposer({
   // Ensure timers clean up on unmount.
   useEffect(() => clearModeCollapseTimer, [clearModeCollapseTimer]);
   useEffect(() => clearModelCollapseTimer, [clearModelCollapseTimer]);
-  const expanded = focused;
+  const expanded = focused && keyboardVisible;
   // Anything that would make the send button appear: typed text or one
   // or more attached images. Mode/model chips and the send button are
   // mutually exclusive — showing both would crowd the row.
@@ -682,7 +686,7 @@ export function SessionInputComposer({
     <View
       style={{
         paddingHorizontal: theme.spacing.md,
-        paddingBottom: theme.spacing.sm + (bottomSafeAreaInset ?? insets.bottom),
+        paddingBottom: theme.spacing.sm + resolvedBottomSafeAreaInset,
         paddingTop: theme.spacing.xs,
       }}
     >
