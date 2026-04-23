@@ -665,7 +665,7 @@ export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   ]);
 
   return (
-    <View style={{ paddingHorizontal: theme.spacing.md, paddingBottom: insets.bottom, paddingTop: theme.spacing.xs }}>
+    <View style={{ paddingHorizontal: theme.spacing.md, paddingBottom: theme.spacing.sm + insets.bottom, paddingTop: theme.spacing.xs }}>
       <View pointerEvents="none" style={styles.modeMeasureRoot}>
         {MODE_CYCLE.map((measuredMode) => (
           <View
