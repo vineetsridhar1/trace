@@ -53,6 +53,21 @@ export interface MobileUIState {
   homeRepoFilter: string | null;
   setHomeRepoFilter: (id: string | null) => void;
 
+  /**
+   * URL currently loaded in the browser panel (Page 1 of SessionPager).
+   * Null = use the session's default URL (PR or repo).
+   */
+  browserUrl: string | null;
+  setBrowserUrl: (url: string | null) => void;
+
+  /**
+   * True while the user is viewing the browser panel (page 1) in the Session
+   * Player. Used to suppress the dismiss-on-swipe-left gesture that would
+   * conflict with PagerView navigation.
+   */
+  browserPanelActive: boolean;
+  setBrowserPanelActive: (active: boolean) => void;
+
   reset: () => void;
 }
 
@@ -70,6 +85,8 @@ const initial = {
   sessionDoneBadges: {} as Record<string, boolean>,
   sessionGroupDoneBadges: {} as Record<string, boolean>,
   homeRepoFilter: null as string | null,
+  browserUrl: null as string | null,
+  browserPanelActive: false,
 };
 
 export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUIState>) => ({
@@ -111,6 +128,9 @@ export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUISta
     }),
 
   setHomeRepoFilter: (id) => set({ homeRepoFilter: id }),
+
+  setBrowserUrl: (url) => set({ browserUrl: url }),
+  setBrowserPanelActive: (active) => set({ browserPanelActive: active }),
 
   reset: () => set(initial),
 }));

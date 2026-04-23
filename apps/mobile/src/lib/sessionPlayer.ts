@@ -27,7 +27,10 @@ export function tryOpenSessionPlayer(sessionId: string | null | undefined): bool
 }
 
 export function closeSessionPlayer(): void {
-  useMobileUIStore.getState().setSessionPlayerOpen(false);
+  const ui = useMobileUIStore.getState();
+  ui.setSessionPlayerOpen(false);
+  // Reset browser panel state so the next open always starts on the session page.
+  ui.setBrowserPanelActive(false);
 }
 
 /**
