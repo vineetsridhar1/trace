@@ -1,14 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Image,
-  Keyboard,
-  PanResponder,
-  Pressable,
-  StyleSheet,
-  Text as NativeText,
-  TextInput,
-  View,
-} from "react-native";
+import { Image, Pressable, StyleSheet, Text as NativeText, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import * as Clipboard from "expo-clipboard";
@@ -58,6 +49,7 @@ import { ImageAttachmentBar } from "./ImageAttachmentBar";
 interface SessionInputComposerProps {
   sessionId: string;
   focusRequest?: number;
+  inputNativeID?: string;
   bottomSafeAreaInset?: number;
   keyboardVisible?: boolean;
 }
@@ -93,6 +85,7 @@ const MODEL_CHIP_SIZE = ACTION_SIZE;
 export function SessionInputComposer({
   sessionId,
   focusRequest,
+  inputNativeID,
   bottomSafeAreaInset,
   keyboardVisible = false,
 }: SessionInputComposerProps) {
@@ -140,16 +133,12 @@ export function SessionInputComposer({
   // show frames both behave correctly.
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
-  const dismissTriggeredRef = useRef(false);
   useEffect(() => {
     if (focusRequest == null) return;
     requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
   }, [focusRequest]);
-  useEffect(() => {
-    dismissTriggeredRef.current = false;
-  }, [keyboardVisible]);
   // Mode chip behaviour (when focused): starts icon-only. First tap reveals
   // the label; subsequent taps (while the label is visible) cycle modes.
   // Auto-collapses after CHIP_EXPAND_HOLD_MS of no interaction.
@@ -352,29 +341,6 @@ export function SessionInputComposer({
   const handleSend = useCallback(() => {
     if (canSubmit) void runSubmit(trimmed, mode);
   }, [canSubmit, mode, runSubmit, trimmed]);
-  const inputDismissResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onStartShouldSetPanResponderCapture: () => false,
-        onMoveShouldSetPanResponderCapture: (_event, gestureState) =>
-          keyboardVisible &&
-          gestureState.dy > 8 &&
-          Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
-        onPanResponderMove: (_event, gestureState) => {
-          if (dismissTriggeredRef.current || gestureState.dy <= 18) return;
-          dismissTriggeredRef.current = true;
-          Keyboard.dismiss();
-        },
-        onPanResponderRelease: () => {
-          dismissTriggeredRef.current = false;
-        },
-        onPanResponderTerminate: () => {
-          dismissTriggeredRef.current = false;
-        },
-      }),
-    [keyboardVisible],
-  );
   const handlePasteImage = useCallback(async () => {
     if (pastingImage || images.length >= MAX_IMAGES) return;
     setPastingImage(true);
@@ -870,40 +836,39 @@ export function SessionInputComposer({
               )}
             </Animated.View>
           ) : null}
-          <View style={styles.inputCardGestureArea} {...inputDismissResponder.panHandlers}>
-            <Glass
-              preset="pinnedBar"
-              animatedProps={glassAnimatedProps}
-              style={[styles.inputCard, cardBorderAnimatedStyle]}
-            >
-              {errorDraft ? (
-                <Pressable onPress={handleRetry} accessibilityRole="button" accessibilityLabel="Retry send" style={styles.retryRow}>
-                  <Text variant="caption1" style={{ color: theme.colors.destructive }}>
-                    {errorMessage ?? "Failed to send"}. Tap to retry.
-                  </Text>
-                </Pressable>
-              ) : null}
-              <Animated.View style={[styles.inputWrapper, inputAnimatedStyle]}>
-                <TextInput
-                  ref={inputRef}
-                  value={text}
-                  onChangeText={handleChangeText}
-                  onFocus={handleFocus}
-                  onBlur={handleBlur}
-                  onContentSizeChange={(e) => {
-                    const h = e.nativeEvent.contentSize.height;
-                    const next = Math.min(MAX_INPUT_HEIGHT, Math.max(MIN_INPUT_HEIGHT, h));
-                    if (next !== height) setHeight(next);
-                  }}
-                  editable={canInteract}
-                  multiline
-                  placeholder={placeholder}
-                  placeholderTextColor={theme.colors.dimForeground}
-                  style={[styles.input, { color: theme.colors.foreground }]}
-                />
-              </Animated.View>
-            </Glass>
-          </View>
+          <Glass
+            preset="pinnedBar"
+            animatedProps={glassAnimatedProps}
+            style={[styles.inputCard, cardBorderAnimatedStyle]}
+          >
+            {errorDraft ? (
+              <Pressable onPress={handleRetry} accessibilityRole="button" accessibilityLabel="Retry send" style={styles.retryRow}>
+                <Text variant="caption1" style={{ color: theme.colors.destructive }}>
+                  {errorMessage ?? "Failed to send"}. Tap to retry.
+                </Text>
+              </Pressable>
+            ) : null}
+            <Animated.View style={[styles.inputWrapper, inputAnimatedStyle]}>
+              <TextInput
+                ref={inputRef}
+                nativeID={inputNativeID}
+                value={text}
+                onChangeText={handleChangeText}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+                onContentSizeChange={(e) => {
+                  const h = e.nativeEvent.contentSize.height;
+                  const next = Math.min(MAX_INPUT_HEIGHT, Math.max(MIN_INPUT_HEIGHT, h));
+                  if (next !== height) setHeight(next);
+                }}
+                editable={canInteract}
+                multiline
+                placeholder={placeholder}
+                placeholderTextColor={theme.colors.dimForeground}
+                style={[styles.input, { color: theme.colors.foreground }]}
+              />
+            </Animated.View>
+          </Glass>
 
           {isActive && !focused ? null : (
             <ComposerAttachButton
@@ -1000,9 +965,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 8,
-  },
-  inputCardGestureArea: {
-    flex: 1,
   },
   inputCard: {
     flex: 1,
