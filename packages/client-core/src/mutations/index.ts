@@ -575,6 +575,7 @@ const LINKED_CHECKOUT_STATUS_FIELDS = `
   lastSyncError
   restoreBranch
   restoreCommitSha
+  hasUncommittedChanges
 `;
 
 export const LINKED_CHECKOUT_STATUS_QUERY = gql`
@@ -628,6 +629,18 @@ export const SYNC_LINKED_CHECKOUT_MUTATION = gql`
 export const RESTORE_LINKED_CHECKOUT_MUTATION = gql`
   mutation RestoreLinkedCheckout($sessionGroupId: ID!, $repoId: ID!) {
     restoreLinkedCheckout(sessionGroupId: $sessionGroupId, repoId: $repoId) {
+      ok
+      error
+      status {
+        ${LINKED_CHECKOUT_STATUS_FIELDS}
+      }
+    }
+  }
+`;
+
+export const COMMIT_LINKED_CHECKOUT_CHANGES_MUTATION = gql`
+  mutation CommitLinkedCheckoutChanges($sessionGroupId: ID!, $repoId: ID!) {
+    commitLinkedCheckoutChanges(sessionGroupId: $sessionGroupId, repoId: $repoId) {
       ok
       error
       status {

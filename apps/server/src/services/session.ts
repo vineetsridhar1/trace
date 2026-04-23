@@ -14,11 +14,7 @@ import {
 import { prisma } from "../lib/db.js";
 import { AuthorizationError } from "../lib/errors.js";
 import { eventService } from "./event.js";
-import {
-  sessionRouter,
-  type DeliveryResult,
-  type RuntimeInstance,
-} from "../lib/session-router.js";
+import { sessionRouter, type DeliveryResult, type RuntimeInstance } from "../lib/session-router.js";
 import { inboxService } from "./inbox.js";
 import { runtimeDebug } from "../lib/runtime-debug.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
@@ -758,10 +754,7 @@ export class SessionService {
       select: { id: true, workdir: true, connection: true },
     });
 
-    const resolveSessionRuntimeId = (session: {
-      id: string;
-      connection: unknown;
-    }): string | null =>
+    const resolveSessionRuntimeId = (session: { id: string; connection: unknown }): string | null =>
       this.getConnectionRuntimeInstanceId(session.connection) ??
       sessionRouter.getRuntimeForSession(session.id)?.id ??
       null;
@@ -1046,11 +1039,7 @@ export class SessionService {
     });
   }
 
-  async search(
-    organizationId: string,
-    query: string,
-    channelId?: string | null,
-  ) {
+  async search(organizationId: string, query: string, channelId?: string | null) {
     const trimmed = query.trim().slice(0, 200);
     if (trimmed.length < 2) return { sessions: [], sessionGroups: [] };
 
@@ -2572,7 +2561,11 @@ export class SessionService {
           scopeType: "session",
           scopeId: sessionId,
           eventType: "message_sent",
-          payload: { text, ...(imageKeys?.length ? { imageKeys } : {}), ...(clientMutationId ? { clientMutationId } : {}) },
+          payload: {
+            text,
+            ...(imageKeys?.length ? { imageKeys } : {}),
+            ...(clientMutationId ? { clientMutationId } : {}),
+          },
           actorType,
           actorId,
         });
@@ -2590,19 +2583,21 @@ export class SessionService {
         checkpointContext: null,
         ...(imageKeys?.length ? { imageKeys } : {}),
       };
-      await this.triggerWorkspaceUpgrade(
-        sessionId,
-        session,
-        pendingCommand,
-        { lastMessageAt: new Date(), ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}) },
-      );
+      await this.triggerWorkspaceUpgrade(sessionId, session, pendingCommand, {
+        lastMessageAt: new Date(),
+        ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
+      });
       // Record the message event so it appears in the UI
       const event = await eventService.create({
         organizationId: session.organizationId,
         scopeType: "session",
         scopeId: sessionId,
         eventType: "message_sent",
-        payload: { text, ...(imageKeys?.length ? { imageKeys } : {}), ...(clientMutationId ? { clientMutationId } : {}) },
+        payload: {
+          text,
+          ...(imageKeys?.length ? { imageKeys } : {}),
+          ...(clientMutationId ? { clientMutationId } : {}),
+        },
         actorType,
         actorId,
       });
@@ -2699,7 +2694,10 @@ export class SessionService {
           checkpointContext,
           ...(imageKeys?.length ? { imageKeys } : {}),
         },
-        { lastMessageAt: new Date(), ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}) },
+        {
+          lastMessageAt: new Date(),
+          ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
+        },
       );
       await this.persistConnectionFailure(
         sessionId,
@@ -2783,7 +2781,11 @@ export class SessionService {
       scopeType: "session",
       scopeId: sessionId,
       eventType: "message_sent",
-      payload: { text, ...(imageKeys?.length ? { imageKeys } : {}), ...(clientMutationId ? { clientMutationId } : {}) },
+      payload: {
+        text,
+        ...(imageKeys?.length ? { imageKeys } : {}),
+        ...(clientMutationId ? { clientMutationId } : {}),
+      },
       metadata: checkpointMetadata,
       actorType,
       actorId,
@@ -4338,12 +4340,7 @@ export class SessionService {
       where: { id: sessionId, organizationId },
       select: { tool: true, sessionGroupId: true },
     });
-    return this.listRuntimesForTool(
-      session.tool,
-      organizationId,
-      userId,
-      session.sessionGroupId,
-    );
+    return this.listRuntimesForTool(session.tool, organizationId, userId, session.sessionGroupId);
   }
 
   /** List branches for a repo by delegating to the bridge runtime. */
@@ -4468,6 +4465,25 @@ export class SessionService {
       userId,
     );
     return sessionRouter.restoreLinkedCheckout(runtimeId, repoId);
+  }
+
+  async commitLinkedCheckoutChanges(
+    sessionGroupId: string,
+    repoId: string,
+    organizationId: string,
+    userId: string,
+  ) {
+    await this.assertRepoExists(repoId, organizationId);
+    const runtimeId = await this.resolveLinkedCheckoutRuntime(
+      sessionGroupId,
+      repoId,
+      organizationId,
+      userId,
+    );
+    return sessionRouter.commitLinkedCheckoutChanges(runtimeId, {
+      repoId,
+      sessionGroupId,
+    });
   }
 
   async setLinkedCheckoutAutoSync(

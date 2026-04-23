@@ -1152,6 +1152,25 @@ export class SessionRouter {
     );
   }
 
+  commitLinkedCheckoutChanges(
+    runtimeId: string,
+    input: {
+      repoId: string;
+      sessionGroupId: string;
+    },
+    timeoutMs = 60_000,
+  ): Promise<BridgeLinkedCheckoutActionResultPayload> {
+    return this.requestLinkedCheckoutAction(
+      runtimeId,
+      {
+        type: "linked_checkout_commit",
+        repoId: input.repoId,
+        sessionGroupId: input.sessionGroupId,
+      },
+      timeoutMs,
+    );
+  }
+
   restoreLinkedCheckout(
     runtimeId: string,
     repoId: string,
