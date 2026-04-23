@@ -8,10 +8,7 @@ import {
   type LayoutChangeEvent,
 } from "react-native";
 import { BottomTabBarHeightContext } from "react-native-bottom-tabs";
-import {
-  KeyboardGestureArea,
-  KeyboardStickyView,
-} from "react-native-keyboard-controller";
+import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEntityField } from "@trace/client-core";
 import { Spinner, Text } from "@/components/design-system";
@@ -89,7 +86,6 @@ export function SessionSurface({
   const pendingInput = useSessionPendingInput(sessionId, {
     enabled: renderStreamEvents,
   });
-  const composerInputNativeId = `session-input-${sessionId}`;
   const insets = useSafeAreaInsets();
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [composerHeight, setComposerHeight] = useState(0);
@@ -203,17 +199,11 @@ export function SessionSurface({
             <>
               <SessionErrorCard sessionId={sessionId} />
               <QueuedMessagesStrip sessionId={sessionId} />
-              <KeyboardGestureArea
-                offset={COMPOSER_KEYBOARD_GAP}
-                textInputNativeID={composerInputNativeId}
-              >
-                <SessionInputComposer
-                  sessionId={sessionId}
-                  inputNativeID={composerInputNativeId}
-                  keyboardVisible={keyboardVisible}
-                  bottomSafeAreaInset={keyboardVisible ? 0 : undefined}
-                />
-              </KeyboardGestureArea>
+              <SessionInputComposer
+                sessionId={sessionId}
+                keyboardVisible={keyboardVisible}
+                bottomSafeAreaInset={keyboardVisible ? 0 : undefined}
+              />
             </>
           )}
         </View>
