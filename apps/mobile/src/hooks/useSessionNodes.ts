@@ -76,10 +76,9 @@ export function useSessionNodes(
       ),
     };
   }, [enabled, eventIds, events]);
-  }, [enabled, eventIds, events]);
-  const completedAgentTools = useStableMap(
-    built.completedAgentTools,
-    (a, b) => Object.is(a.content, b.content),
+
+  const completedAgentTools = useStableMap(built.completedAgentTools, (a, b) =>
+    Object.is(a.content, b.content),
   );
   const toolResultByUseId = useStableMap(built.toolResultByUseId);
 
@@ -116,11 +115,7 @@ function useStableMap<K, V>(
   return ref.current;
 }
 
-function mapsEqual<K, V>(
-  a: Map<K, V>,
-  b: Map<K, V>,
-  valueEqual: (a: V, b: V) => boolean,
-): boolean {
+function mapsEqual<K, V>(a: Map<K, V>, b: Map<K, V>, valueEqual: (a: V, b: V) => boolean): boolean {
   if (a === b) return true;
   if (a.size !== b.size) return false;
   for (const [key, value] of a) {
