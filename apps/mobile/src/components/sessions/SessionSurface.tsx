@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   Keyboard,
   LayoutAnimation,
@@ -9,6 +9,8 @@ import {
   type LayoutChangeEvent,
 } from "react-native";
 import { BottomTabBarHeightContext } from "react-native-bottom-tabs";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { runOnJS, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEntityField } from "@trace/client-core";
 import { Spinner, Text } from "@/components/design-system";
@@ -25,6 +27,9 @@ import { useSessionDetail } from "@/hooks/useSessionDetail";
 import { useSessionPendingInput } from "@/hooks/useSessionPendingInput";
 import { useTheme } from "@/theme";
 import { useMobileUIStore } from "@/stores/ui";
+
+const KEYBOARD_DISMISS_DRAG = 12;
+const KEYBOARD_DISMISS_HORIZONTAL_TOLERANCE = 40;
 
 interface SessionSurfaceProps {
   sessionId: string;
@@ -87,8 +92,12 @@ export function SessionSurface({
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [composerHeight, setComposerHeight] = useState(0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const keyboardDismissTriggered = useSharedValue(false);
   const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
     setComposerHeight(e.nativeEvent.layout.height);
+  }, []);
+  const dismissKeyboard = useCallback(() => {
+    Keyboard.dismiss();
   }, []);
 
   useEffect(() => {
@@ -126,6 +135,32 @@ export function SessionSurface({
       : Math.max(0, tabBarHeight - insets.bottom);
   const overlayBottom = sceneBottomOffset;
   const streamBottomInset = composerHeight + overlayBottom;
+  // FlashList already dismisses interactively while dragging the transcript;
+  // this extends the same downward gesture to the pinned bottom controls.
+  const overlayKeyboardDismissGesture = useMemo(
+    () =>
+      Gesture.Simultaneous(
+        Gesture.Pan()
+          .enabled(keyboardHeight > 0)
+          .activeOffsetY([-KEYBOARD_DISMISS_DRAG, KEYBOARD_DISMISS_DRAG])
+          .failOffsetX([
+            -KEYBOARD_DISMISS_HORIZONTAL_TOLERANCE,
+            KEYBOARD_DISMISS_HORIZONTAL_TOLERANCE,
+          ])
+          .onChange((event) => {
+            if (keyboardDismissTriggered.value) return;
+            if (event.translationY <= 0) return;
+            if (event.translationY < Math.abs(event.translationX)) return;
+            keyboardDismissTriggered.value = true;
+            runOnJS(dismissKeyboard)();
+          })
+          .onFinalize(() => {
+            keyboardDismissTriggered.value = false;
+          }),
+        Gesture.Native(),
+      ),
+    [dismissKeyboard, keyboardDismissTriggered, keyboardHeight],
+  );
 
   useEffect(() => {
     if (!groupId) return;
@@ -173,24 +208,26 @@ export function SessionSurface({
           renderEvents={renderStreamEvents}
         />
       </View>
-      <View
-        style={[styles.overlay, { bottom: overlayBottom }]}
-        onLayout={handleComposerLayout}
-        pointerEvents="box-none"
-      >
-        {pendingInput ? (
-          <>
-            <PendingInputBar sessionId={sessionId} />
-            <SessionErrorCard sessionId={sessionId} />
-          </>
-        ) : (
-          <>
-            <SessionErrorCard sessionId={sessionId} />
-            <QueuedMessagesStrip sessionId={sessionId} />
-            <SessionInputComposer sessionId={sessionId} />
-          </>
-        )}
-      </View>
+      <GestureDetector gesture={overlayKeyboardDismissGesture}>
+        <View
+          style={[styles.overlay, { bottom: overlayBottom }]}
+          onLayout={handleComposerLayout}
+          pointerEvents="box-none"
+        >
+          {pendingInput ? (
+            <>
+              <PendingInputBar sessionId={sessionId} />
+              <SessionErrorCard sessionId={sessionId} />
+            </>
+          ) : (
+            <>
+              <SessionErrorCard sessionId={sessionId} />
+              <QueuedMessagesStrip sessionId={sessionId} />
+              <SessionInputComposer sessionId={sessionId} />
+            </>
+          )}
+        </View>
+      </GestureDetector>
     </View>
   );
 }
