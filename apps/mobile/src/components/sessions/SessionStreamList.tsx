@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
-import { StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { Keyboard, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import Animated, { Keyframe, type SharedValue } from "react-native-reanimated";
 import { Text } from "@/components/design-system";
@@ -31,6 +31,8 @@ interface SessionStreamListProps {
   topInset?: number;
   /** Extra bottom padding so content can scroll behind the composer overlay. */
   bottomInset?: number;
+  /** When true, the first transcript drag dismisses the keyboard. */
+  dismissKeyboardOnDrag?: boolean;
   /**
    * Mutable ref tracking whether the user is currently near the bottom of
    * the stream. When true, brand-new last-row mounts get a brief entrance
@@ -54,6 +56,7 @@ export function SessionStreamList({
   disconnectReason,
   topInset = 0,
   bottomInset = 0,
+  dismissKeyboardOnDrag = false,
   isNearBottomRef,
   onScroll,
   fetchOlderEvents,
@@ -108,6 +111,10 @@ export function SessionStreamList({
 
   const keyExtractor = useCallback((item: SessionStreamListItem) => item.key, []);
   const getItemType = useCallback((item: SessionStreamListItem) => item.itemType, []);
+  const handleScrollBeginDrag = useCallback(() => {
+    if (!dismissKeyboardOnDrag) return;
+    Keyboard.dismiss();
+  }, [dismissKeyboardOnDrag]);
 
   return (
     <FlashList
@@ -120,8 +127,9 @@ export function SessionStreamList({
       maxItemsInRecyclePool={24}
       inverted={false}
       onScroll={onScroll}
+      onScrollBeginDrag={handleScrollBeginDrag}
       scrollEventThrottle={16}
-      keyboardDismissMode="interactive"
+      keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
       onStartReached={hasOlder && !loadingOlder ? fetchOlderEvents : undefined}
       onStartReachedThreshold={0.2}

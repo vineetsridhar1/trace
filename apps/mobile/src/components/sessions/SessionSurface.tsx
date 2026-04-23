@@ -1,7 +1,8 @@
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Keyboard,
   LayoutAnimation,
+  PanResponder,
   Platform,
   StyleSheet,
   UIManager,
@@ -87,9 +88,14 @@ export function SessionSurface({
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [composerHeight, setComposerHeight] = useState(0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const overlayDismissedRef = useRef(false);
   const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
     setComposerHeight(e.nativeEvent.layout.height);
   }, []);
+  const dismissKeyboard = useCallback(() => {
+    if (keyboardHeight <= 0) return;
+    Keyboard.dismiss();
+  }, [keyboardHeight]);
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
@@ -126,6 +132,30 @@ export function SessionSurface({
       : Math.max(0, tabBarHeight - insets.bottom);
   const overlayBottom = sceneBottomOffset;
   const streamBottomInset = composerHeight + overlayBottom;
+  const overlayPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponderCapture: (_evt, gestureState) =>
+          keyboardHeight > 0 &&
+          gestureState.dy > 6 &&
+          Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+        onPanResponderGrant: () => {
+          overlayDismissedRef.current = false;
+        },
+        onPanResponderMove: (_evt, gestureState) => {
+          if (overlayDismissedRef.current || gestureState.dy < 12) return;
+          overlayDismissedRef.current = true;
+          dismissKeyboard();
+        },
+        onPanResponderRelease: () => {
+          overlayDismissedRef.current = false;
+        },
+        onPanResponderTerminate: () => {
+          overlayDismissedRef.current = false;
+        },
+      }),
+    [dismissKeyboard, keyboardHeight],
+  );
 
   useEffect(() => {
     if (!groupId) return;
@@ -168,6 +198,7 @@ export function SessionSurface({
           sessionId={sessionId}
           topInset={topInset}
           bottomInset={streamBottomInset}
+          dismissKeyboardOnDrag={keyboardHeight > 0}
           loadEvents={loadStreamEvents}
           commitEvents={commitStreamEvents}
           renderEvents={renderStreamEvents}
@@ -176,7 +207,8 @@ export function SessionSurface({
       <View
         style={[styles.overlay, { bottom: overlayBottom }]}
         onLayout={handleComposerLayout}
-        pointerEvents="box-none"
+        pointerEvents="auto"
+        {...overlayPanResponder.panHandlers}
       >
         {pendingInput ? (
           <>

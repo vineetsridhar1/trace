@@ -59,6 +59,8 @@ interface SessionStreamProps {
    * cached rows hidden during its open animation so text layout can't jank it.
    */
   renderEvents?: boolean;
+  /** Dismiss the keyboard as soon as the transcript starts dragging. */
+  dismissKeyboardOnDrag?: boolean;
 }
 
 const NEAR_BOTTOM_THRESHOLD = 120;
@@ -71,6 +73,7 @@ export function SessionStream({
   loadEvents = true,
   commitEvents = true,
   renderEvents = true,
+  dismissKeyboardOnDrag = false,
 }: SessionStreamProps) {
   const theme = useTheme();
   const { loading, loadingOlder, hasOlder, error, fetchEvents, fetchOlderEvents } =
@@ -194,6 +197,7 @@ export function SessionStream({
             disconnectReason={connection?.lastError ?? null}
             topInset={topInset}
             bottomInset={bottomInset}
+            dismissKeyboardOnDrag={dismissKeyboardOnDrag}
             isNearBottomRef={isNearBottomRef}
             onScroll={handleScroll}
             fetchOlderEvents={fetchOlderEvents}
