@@ -220,7 +220,10 @@ export function SessionSurface({
           <>
             <SessionErrorCard sessionId={sessionId} />
             <QueuedMessagesStrip sessionId={sessionId} />
-            <SessionInputComposer sessionId={sessionId} />
+            <SessionInputComposer
+              sessionId={sessionId}
+              keyboardVisible={keyboardHeight > 0}
+            />
           </>
         )}
       </Animated.View>
