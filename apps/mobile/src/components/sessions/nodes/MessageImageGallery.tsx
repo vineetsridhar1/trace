@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState } from "react";
-import { Image, Modal, Pressable, StyleSheet, View } from "react-native";
+import { Image, Modal, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
 import { Spinner, Text } from "@/components/design-system";
 import { getCachedUploadedImageUrl, getUploadedImageUrl } from "@/lib/upload";
 import { alpha, useTheme } from "@/theme";
@@ -107,7 +107,28 @@ function MessageImageModal({
   onClose: () => void;
 }) {
   const theme = useTheme();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const { uri, loading, failed } = useResolvedImageUri(item?.imageKey, item?.previewUrl);
+  const aspectRatio = useImageAspectRatio(uri);
+  const imageSurfaceStyle = useMemo(() => {
+    const maxWidth = Math.max(windowWidth - 40, 120);
+    const maxHeight = Math.max(windowHeight - 160, 160);
+    if (!aspectRatio || !Number.isFinite(aspectRatio) || aspectRatio <= 0) {
+      return {
+        width: maxWidth,
+        height: maxHeight,
+      };
+    }
+
+    let width = maxWidth;
+    let height = width / aspectRatio;
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = height * aspectRatio;
+    }
+
+    return { width, height };
+  }, [aspectRatio, windowHeight, windowWidth]);
 
   return (
     <Modal
@@ -120,7 +141,7 @@ function MessageImageModal({
         onPress={onClose}
         style={[styles.modalBackdrop, { backgroundColor: alpha("#000000", 0.94) }]}
       >
-        <View style={styles.modalChrome}>
+        <View pointerEvents="box-none" style={styles.modalChrome}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close image preview"
@@ -139,7 +160,7 @@ function MessageImageModal({
             {uri ? (
               <Pressable
                 onPress={(event) => event.stopPropagation()}
-                style={styles.modalImageSurface}
+                style={[styles.modalImageSurface, imageSurfaceStyle]}
               >
                 <Image
                   source={{ uri }}
@@ -202,6 +223,36 @@ function useResolvedImageUri(imageKey?: string, previewUrl?: string) {
 
 function cachedUri(imageKey?: string): string | null {
   return imageKey ? getCachedUploadedImageUrl(imageKey) : null;
+}
+
+function useImageAspectRatio(uri: string | null) {
+  const [aspectRatio, setAspectRatio] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!uri) {
+      setAspectRatio(null);
+      return;
+    }
+
+    let cancelled = false;
+    Image.getSize(
+      uri,
+      (width, height) => {
+        if (cancelled || height <= 0) return;
+        setAspectRatio(width / height);
+      },
+      () => {
+        if (cancelled) return;
+        setAspectRatio(null);
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [uri]);
+
+  return aspectRatio;
 }
 
 function buildImageItems(imageKeys?: string[], previewUrls?: string[]): MessageImageItem[] {
@@ -271,8 +322,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   modalImageSurface: {
-    width: "100%",
-    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
   },
   modalImage: {
     width: "100%",
