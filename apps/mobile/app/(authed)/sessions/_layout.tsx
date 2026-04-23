@@ -2,12 +2,7 @@ import { Stack } from "expo-router";
 
 export default function SessionsLayout() {
   return (
-    <Stack
-      screenOptions={{
-        gestureEnabled: true,
-        fullScreenGestureEnabled: true,
-      }}
-    >
+    <Stack>
       <Stack.Screen
         name="[groupId]"
         options={{
