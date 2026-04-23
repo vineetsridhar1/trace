@@ -50,12 +50,6 @@ interface SessionSurfaceProps {
   commitStreamEvents?: boolean;
   /** Mount transcript rows only after outer sheet transitions settle. */
   renderStreamEvents?: boolean;
-  /**
-   * Height of any persistent bottom overlay owned by the parent screen. The
-   * session composer already pads for the home indicator internally, so we
-   * subtract the safe-area inset before shifting it up.
-   */
-  bottomOverlayHeight?: number;
 }
 
 /**
@@ -71,7 +65,6 @@ export function SessionSurface({
   loadStreamEvents = true,
   commitStreamEvents = true,
   renderStreamEvents = true,
-  bottomOverlayHeight,
 }: SessionSurfaceProps) {
   const theme = useTheme();
   const groupId = useEntityField("sessions", sessionId, "sessionGroupId") as
@@ -127,11 +120,10 @@ export function SessionSurface({
   // Both the keyboard frame and the native tab bar height include the home-
   // indicator inset. The composer already pads for that internally, so only
   // apply the remaining covered height here.
-  const persistentBottomOverlayHeight = bottomOverlayHeight ?? tabBarHeight;
   const overlayBottom =
     keyboardHeight > 0
       ? Math.max(0, keyboardHeight - insets.bottom)
-      : Math.max(0, persistentBottomOverlayHeight - insets.bottom);
+      : Math.max(0, tabBarHeight - insets.bottom);
 
   useEffect(() => {
     if (!groupId) return;
