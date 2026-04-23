@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import {
   buildSessionNodes,
   eventScopeKey,
@@ -46,7 +46,7 @@ export function useSessionNodes(sessionId: string): UseSessionNodesResult {
     | GitCheckpoint[]
     | undefined;
 
-  const { nodes, completedAgentTools, toolResultByUseId } = useMemo(() => {
+  const built = useMemo(() => {
     const built = buildSessionNodes(eventIds, events);
     return {
       ...built,
@@ -55,6 +55,11 @@ export function useSessionNodes(sessionId: string): UseSessionNodesResult {
       ),
     };
   }, [eventIds, events]);
+  const completedAgentTools = useStableMap(
+    built.completedAgentTools,
+    (a, b) => Object.is(a.content, b.content),
+  );
+  const toolResultByUseId = useStableMap(built.toolResultByUseId);
 
   const gitCheckpointsByPromptEventId = useMemo(() => {
     const map = new Map<string, GitCheckpoint[]>();
@@ -68,7 +73,39 @@ export function useSessionNodes(sessionId: string): UseSessionNodesResult {
     return map;
   }, [gitCheckpoints]);
 
-  return { nodes, completedAgentTools, toolResultByUseId, gitCheckpointsByPromptEventId, events };
+  return {
+    nodes: built.nodes,
+    completedAgentTools,
+    toolResultByUseId,
+    gitCheckpointsByPromptEventId,
+    events,
+  };
+}
+
+function useStableMap<K, V>(
+  next: Map<K, V>,
+  valueEqual: (a: V, b: V) => boolean = Object.is,
+): Map<K, V> {
+  const ref = useRef(next);
+  if (!mapsEqual(ref.current, next, valueEqual)) {
+    ref.current = next;
+  }
+  return ref.current;
+}
+
+function mapsEqual<K, V>(
+  a: Map<K, V>,
+  b: Map<K, V>,
+  valueEqual: (a: V, b: V) => boolean,
+): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const [key, value] of a) {
+    const other = b.get(key);
+    if (other === undefined && !b.has(key)) return false;
+    if (!valueEqual(value, other as V)) return false;
+  }
+  return true;
 }
 
 /** Mirror of the mobile dispatcher's renderable event-type / payload-type set. */

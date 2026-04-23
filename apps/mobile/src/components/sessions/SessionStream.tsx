@@ -4,7 +4,6 @@ import { type FlashListRef } from "@shopify/flash-list";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue, withSpring } from "react-native-reanimated";
 import { useEntityField } from "@trace/client-core";
-import type { SessionNode } from "@trace/client-core";
 import { useNewActivityTracker } from "@/hooks/useNewActivityTracker";
 import { useSessionEvents } from "@/hooks/useSessionEvents";
 import { useSessionNodes } from "@/hooks/useSessionNodes";
@@ -17,6 +16,11 @@ import {
   SessionStreamSkeleton,
 } from "./SessionStreamStates";
 import { TIMESTAMP_REVEAL_DISTANCE } from "./TimestampRevealRow";
+import {
+  buildSessionStreamItems,
+  type SessionStreamItemCache,
+  type SessionStreamListItem,
+} from "./sessionStreamItems";
 import type { NodeRenderContext } from "./nodes";
 
 interface SessionStreamProps {
@@ -41,9 +45,6 @@ const NEAR_BOTTOM_THRESHOLD = 120;
 const TIMESTAMP_REVEAL_ACTIVATION = 24;
 const TIMESTAMP_REVEAL_RESISTANCE = 0.5;
 
-/** In-memory scroll offset per sessionId — preserved across re-mounts within a session. */
-const scrollOffsetMemory = new Map<string, number>();
-
 export function SessionStream({ sessionId, topInset, bottomInset }: SessionStreamProps) {
   const theme = useTheme();
   const { loading, loadingOlder, hasOlder, error, fetchEvents, fetchOlderEvents } =
@@ -58,7 +59,7 @@ export function SessionStream({ sessionId, topInset, bottomInset }: SessionStrea
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
   const connection = useEntityField("sessions", sessionId, "connection");
 
-  const listRef = useRef<FlashListRef<SessionNode>>(null);
+  const listRef = useRef<FlashListRef<SessionStreamListItem>>(null);
   const isNearBottomRef = useRef(true);
   const timestampRevealX = useSharedValue(0);
   const { newActivityCount, clearNewActivity } = useNewActivityTracker(
@@ -77,6 +78,16 @@ export function SessionStream({ sessionId, topInset, bottomInset }: SessionStrea
     }),
     [sessionId, completedAgentTools, toolResultByUseId, gitCheckpointsByPromptEventId, agentStatus],
   );
+  const streamItemCacheRef = useRef<SessionStreamItemCache | undefined>(undefined);
+  const streamItems = useMemo(() => {
+    const result = buildSessionStreamItems(
+      nodes,
+      scopedEvents,
+      streamItemCacheRef.current,
+    );
+    streamItemCacheRef.current = result.cache;
+    return result.items;
+  }, [nodes, scopedEvents]);
 
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -85,9 +96,8 @@ export function SessionStream({ sessionId, topInset, bottomInset }: SessionStrea
       const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
       isNearBottomRef.current = nearBottom;
       if (nearBottom) clearNewActivity();
-      scrollOffsetMemory.set(sessionId, contentOffset.y);
     },
-    [clearNewActivity, sessionId],
+    [clearNewActivity],
   );
 
   const handlePillPress = useCallback(() => {
@@ -111,12 +121,6 @@ export function SessionStream({ sessionId, topInset, bottomInset }: SessionStrea
     Gesture.Native(),
   );
 
-  const initialScrollIndex = useMemo(() => {
-    if (nodes.length === 0) return undefined;
-    if (scrollOffsetMemory.has(sessionId)) return undefined;
-    return nodes.length - 1;
-  }, [nodes.length, sessionId]);
-
   if (loading && nodes.length === 0) return <SessionStreamSkeleton />;
   // A not_started session has no events yet by design — the initial events
   // query commonly 404s for optimistic/pending session ids. Fall through to
@@ -134,16 +138,14 @@ export function SessionStream({ sessionId, topInset, bottomInset }: SessionStrea
         <View style={styles.listGestureSurface}>
           <SessionStreamList
             sessionId={sessionId}
-            nodes={nodes}
+            items={streamItems}
             renderContext={renderContext}
-            scopedEvents={scopedEvents}
             revealX={timestampRevealX}
             listRef={listRef}
             loadingOlder={loadingOlder}
             hasOlder={hasOlder}
             disconnected={disconnected}
             disconnectReason={connection?.lastError ?? null}
-            initialScrollIndex={initialScrollIndex}
             topInset={topInset}
             bottomInset={bottomInset}
             isNearBottomRef={isNearBottomRef}

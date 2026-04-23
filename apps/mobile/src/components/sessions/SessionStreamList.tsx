@@ -1,16 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
-import type { SessionNode } from "@trace/client-core";
-import type { Event } from "@trace/gql";
 import Animated, { Keyframe, type SharedValue } from "react-native-reanimated";
 import { Text } from "@/components/design-system";
-import { nodeKey } from "@/hooks/useNewActivityTracker";
 import { useTheme } from "@/theme";
 import { ConnectionLostBanner } from "./nodes/ConnectionLostBanner";
 import { renderNode, type NodeRenderContext } from "./nodes";
 import { TimestampRevealRow } from "./TimestampRevealRow";
-import { itemTypeFor, timestampLabelForNode } from "./sessionStreamItems";
+import type { SessionStreamListItem } from "./sessionStreamItems";
 
 // Subtle rise-into-place for a freshly-arrived last bubble. Default `FadeInDown`
 // translates from ~300px below which reads as a flash — this is a small,
@@ -20,31 +17,16 @@ const messageEnter = new Keyframe({
   100: { opacity: 1, transform: [{ translateY: 0 }] },
 }).duration(260);
 
-// FlashList identity for an item. For user-sent events we key on
-// `clientMutationId` (which both the optimistic and the real event carry in
-// their payload) so the optimistic→real id swap stays the same logical item —
-// no remount, no replayed entrance animation.
-function stableNodeKey(item: SessionNode, scopedEvents: Record<string, Event>): string {
-  if (item.kind !== "event") return nodeKey(item);
-  const payload = scopedEvents[item.id]?.payload as
-    | { clientMutationId?: unknown }
-    | undefined;
-  const cm = payload?.clientMutationId;
-  return typeof cm === "string" ? `cm:${cm}` : nodeKey(item);
-}
-
 interface SessionStreamListProps {
   sessionId: string;
-  nodes: SessionNode[];
+  items: SessionStreamListItem[];
   renderContext: NodeRenderContext;
-  scopedEvents: Record<string, Event>;
   revealX: SharedValue<number>;
-  listRef: MutableRefObject<FlashListRef<SessionNode> | null>;
+  listRef: MutableRefObject<FlashListRef<SessionStreamListItem> | null>;
   loadingOlder: boolean;
   hasOlder: boolean;
   disconnected: boolean;
   disconnectReason?: string | null;
-  initialScrollIndex?: number;
   /** Extra top padding so content can scroll behind an overlay header. */
   topInset?: number;
   /** Extra bottom padding so content can scroll behind the composer overlay. */
@@ -62,16 +44,14 @@ interface SessionStreamListProps {
 
 export function SessionStreamList({
   sessionId,
-  nodes,
+  items,
   renderContext,
-  scopedEvents,
   revealX,
   listRef,
   loadingOlder,
   hasOlder,
   disconnected,
   disconnectReason,
-  initialScrollIndex,
   topInset = 0,
   bottomInset = 0,
   isNearBottomRef,
@@ -80,10 +60,7 @@ export function SessionStreamList({
 }: SessionStreamListProps) {
   const theme = useTheme();
   const horizontalPadding = theme.spacing.lg;
-  const extraData = useMemo(
-    () => ({ lastIndex: nodes.length - 1, context: renderContext, scopedEvents }),
-    [nodes.length, renderContext, scopedEvents],
-  );
+  const extraData = useMemo(() => ({ context: renderContext }), [renderContext]);
   // Suppress entrance on the initial render so the first batch doesn't
   // cascade-fade. After one frame, brand-new last-row mounts animate in.
   const [acceptEntering, setAcceptEntering] = useState(false);
@@ -97,22 +74,23 @@ export function SessionStreamList({
   const lastSeenKeyRef = useRef<string | null>(null);
 
   const renderItem = useCallback(
-    ({ item, index }: { item: SessionNode; index: number }) => {
-      const isLast = index === nodes.length - 1;
-      const key = stableNodeKey(item, scopedEvents);
+    ({ item }: { item: SessionStreamListItem }) => {
       const isFreshLast =
-        isLast && acceptEntering && isNearBottomRef.current && lastSeenKeyRef.current !== key;
-      if (isLast) lastSeenKeyRef.current = key;
+        item.isLast &&
+        acceptEntering &&
+        isNearBottomRef.current &&
+        lastSeenKeyRef.current !== item.key;
+      if (item.isLast) lastSeenKeyRef.current = item.key;
       const body = (
         <TimestampRevealRow
           paddingHorizontal={horizontalPadding}
           revealX={revealX}
-          timestampLabel={timestampLabelForNode(item, scopedEvents)}
+          timestampLabel={item.timestampLabel}
         >
           {renderNode({
-            node: item,
+            node: item.node,
             context: renderContext,
-            isLast,
+            isLast: item.isLast,
           })}
         </TimestampRevealRow>
       );
@@ -123,26 +101,18 @@ export function SessionStreamList({
       acceptEntering,
       horizontalPadding,
       isNearBottomRef,
-      nodes.length,
       renderContext,
-      scopedEvents,
       revealX,
     ],
   );
 
-  const keyExtractor = useCallback(
-    (item: SessionNode) => stableNodeKey(item, scopedEvents),
-    [scopedEvents],
-  );
-  const getItemType = useCallback(
-    (item: SessionNode) => itemTypeFor(item, scopedEvents),
-    [scopedEvents],
-  );
+  const keyExtractor = useCallback((item: SessionStreamListItem) => item.key, []);
+  const getItemType = useCallback((item: SessionStreamListItem) => item.itemType, []);
 
   return (
     <FlashList
       ref={listRef}
-      data={nodes}
+      data={items}
       extraData={extraData}
       renderItem={renderItem}
       keyExtractor={keyExtractor}
@@ -155,10 +125,10 @@ export function SessionStreamList({
       keyboardShouldPersistTaps="handled"
       onStartReached={hasOlder && !loadingOlder ? fetchOlderEvents : undefined}
       onStartReachedThreshold={0.2}
-      initialScrollIndex={initialScrollIndex}
       maintainVisibleContentPosition={{
         autoscrollToBottomThreshold: 0.2,
         animateAutoScrollToBottom: true,
+        startRenderingFromBottom: true,
       }}
       contentContainerStyle={{
         paddingTop: theme.spacing.md + topInset,
