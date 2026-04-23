@@ -76,6 +76,7 @@ export function useSessionNodes(
       ),
     };
   }, [enabled, eventIds, events]);
+  }, [enabled, eventIds, events]);
   const completedAgentTools = useStableMap(
     built.completedAgentTools,
     (a, b) => Object.is(a.content, b.content),
