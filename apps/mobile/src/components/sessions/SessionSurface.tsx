@@ -1,18 +1,12 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import {
   Keyboard,
-  PanResponder,
+  KeyboardAvoidingView,
   Platform,
   StyleSheet,
   View,
-  type LayoutChangeEvent,
 } from "react-native";
 import { BottomTabBarHeightContext } from "react-native-bottom-tabs";
-import Animated, { useAnimatedStyle } from "react-native-reanimated";
-import {
-  KeyboardController,
-  useReanimatedKeyboardAnimation,
-} from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEntityField } from "@trace/client-core";
 import { Spinner, Text } from "@/components/design-system";
@@ -89,65 +83,19 @@ export function SessionSurface({
   });
   const insets = useSafeAreaInsets();
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
-  const [composerHeight, setComposerHeight] = useState(0);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const { height: keyboardTranslation } = useReanimatedKeyboardAnimation();
-  const composerInputNativeId = useMemo(
-    () => `session-composer-input-${sessionId}`,
-    [sessionId],
-  );
-  const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
-    setComposerHeight(e.nativeEvent.layout.height);
-  }, []);
-  const composerDismissPanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, gestureState) =>
-          keyboardHeight > 0 &&
-          gestureState.dy > 10 &&
-          Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
-        onPanResponderTerminationRequest: () => true,
-        onPanResponderRelease: (_, gestureState) => {
-          if (gestureState.dy > 28 || gestureState.vy > 0.2) {
-            void KeyboardController.dismiss();
-          }
-        },
-      }),
-    [keyboardHeight],
-  );
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const restingBottomOffset = Math.max(0, tabBarHeight - insets.bottom);
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const show = Keyboard.addListener(showEvent, (e) => {
-      setKeyboardHeight(Math.max(0, e.endCoordinates.height));
-    });
-    const hide = Keyboard.addListener(hideEvent, () => {
-      setKeyboardHeight(0);
-    });
+    const show = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
     return () => {
       show.remove();
       hide.remove();
     };
   }, []);
-  // Both the keyboard frame and the native tab bar height include the home-
-  // indicator inset. The composer already pads for that internally, so only
-  // apply the remaining covered height here.
-  const sceneBottomOffset = Math.max(
-    restingBottomOffset,
-    Math.max(0, keyboardHeight - insets.bottom),
-  );
-  const overlayBottom = sceneBottomOffset;
-  const streamBottomInset = composerHeight + overlayBottom;
-  const overlayAnimatedStyle = useAnimatedStyle(() => {
-    const keyboardOffset = Math.max(0, -keyboardTranslation.value - insets.bottom);
-    const overlayOffset = Math.max(restingBottomOffset, keyboardOffset);
-    return {
-      transform: [{ translateY: restingBottomOffset - overlayOffset }],
-    };
-  }, [insets.bottom, keyboardTranslation, restingBottomOffset]);
 
   useEffect(() => {
     if (!groupId) return;
@@ -184,23 +132,23 @@ export function SessionSurface({
         />
       )}
       {hideHeader ? null : <ActiveTodoStrip sessionId={sessionId} />}
-      <View style={styles.streamWrapper}>
-        <SessionStream
-          key={sessionId}
-          sessionId={sessionId}
-          topInset={topInset}
-          bottomInset={streamBottomInset}
-          loadEvents={loadStreamEvents}
-          commitEvents={commitStreamEvents}
-          renderEvents={renderStreamEvents}
-        />
-      </View>
-      <View style={[styles.overlay, { bottom: restingBottomOffset }]}>
-        <Animated.View
-          style={overlayAnimatedStyle}
-          onLayout={handleComposerLayout}
-          pointerEvents="auto"
-        >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={restingBottomOffset}
+        style={styles.content}
+      >
+        <View style={styles.streamWrapper}>
+          <SessionStream
+            key={sessionId}
+            sessionId={sessionId}
+            topInset={topInset}
+            bottomInset={0}
+            loadEvents={loadStreamEvents}
+            commitEvents={commitStreamEvents}
+            renderEvents={renderStreamEvents}
+          />
+        </View>
+        <View style={[styles.composerStack, { paddingBottom: restingBottomOffset }]}>
           {pendingInput ? (
             <>
               <PendingInputBar sessionId={sessionId} />
@@ -210,17 +158,14 @@ export function SessionSurface({
             <>
               <SessionErrorCard sessionId={sessionId} />
               <QueuedMessagesStrip sessionId={sessionId} />
-              <View {...composerDismissPanResponder.panHandlers}>
-                <SessionInputComposer
-                  sessionId={sessionId}
-                  keyboardVisible={keyboardHeight > 0}
-                  textInputNativeId={composerInputNativeId}
-                />
-              </View>
+              <SessionInputComposer
+                sessionId={sessionId}
+                keyboardVisible={keyboardVisible}
+              />
             </>
           )}
-        </Animated.View>
-      </View>
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -260,10 +205,10 @@ const styles = StyleSheet.create({
   streamWrapper: {
     flex: 1,
   },
-  overlay: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
+  content: {
+    flex: 1,
+  },
+  composerStack: {
+    backgroundColor: "transparent",
   },
 });

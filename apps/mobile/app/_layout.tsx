@@ -7,7 +7,6 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useAuthStore, type AuthState } from "@trace/client-core";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 import {
   markAppBackgrounded,
   markAppForegrounded,
@@ -52,9 +51,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <StatusBar style="light" />
-      <KeyboardProvider>
-        <Stack screenOptions={{ headerShown: false }} />
-      </KeyboardProvider>
+      <Stack screenOptions={{ headerShown: false }} />
     </GestureHandlerRootView>
   );
 }

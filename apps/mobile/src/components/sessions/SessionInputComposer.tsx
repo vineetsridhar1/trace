@@ -51,7 +51,6 @@ interface SessionInputComposerProps {
   focusRequest?: number;
   bottomSafeAreaInset?: number;
   keyboardVisible?: boolean;
-  textInputNativeId?: string;
 }
 
 // Sentinel used by the bridge picker for the "Cloud" option. Mirrors the
@@ -87,7 +86,6 @@ export function SessionInputComposer({
   focusRequest,
   bottomSafeAreaInset,
   keyboardVisible = false,
-  textInputNativeId,
 }: SessionInputComposerProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -851,7 +849,6 @@ export function SessionInputComposer({
             <Animated.View style={[styles.inputWrapper, inputAnimatedStyle]}>
               <TextInput
                 ref={inputRef}
-                nativeID={textInputNativeId}
                 value={text}
                 onChangeText={handleChangeText}
                 onFocus={handleFocus}
