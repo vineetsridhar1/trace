@@ -21,15 +21,12 @@ export interface MobileUIState {
   activeAccessoryIndex: number;
   setActiveAccessoryIndex: (i: number) => void;
   /**
-   * Legacy navigation target used by session-entry helpers and optimistic
+   * Session id currently targeted by session-entry helpers and optimistic
    * temp→real handoff during session creation. Null = no routed session page
    * is currently being tracked by those helpers.
    */
   overlaySessionId: string | null;
   setOverlaySessionId: (id: string | null) => void;
-  /** Legacy overlay flag retained for compatibility with old helpers. */
-  sessionPlayerOpen: boolean;
-  setSessionPlayerOpen: (open: boolean) => void;
 
   /**
    * Registered by whichever header menu (title/actions) is currently open.
@@ -55,18 +52,12 @@ export interface MobileUIState {
   setHomeRepoFilter: (id: string | null) => void;
 
   /**
-   * Legacy browser-panel URL state. Null = use the session's default URL
-   * (PR or repo).
+   * Browser URL override for the currently viewed session group. Null = use
+   * that group's default URL (PR or repo).
    */
   browserUrl: string | null;
-  setBrowserUrl: (url: string | null) => void;
-
-  /**
-   * Legacy browser-panel visibility flag retained for compatibility with
-   * older session-player state helpers.
-   */
-  browserPanelActive: boolean;
-  setBrowserPanelActive: (active: boolean) => void;
+  browserUrlGroupId: string | null;
+  setBrowserUrl: (url: string | null, groupId: string | null) => void;
 
   reset: () => void;
 }
@@ -79,14 +70,13 @@ const initial = {
   activeSessionGroupId: null as string | null,
   activeAccessoryIndex: 0,
   overlaySessionId: null as string | null,
-  sessionPlayerOpen: false,
   activeMenuClose: null as (() => void) | null,
   channelDoneBadges: {} as Record<string, boolean>,
   sessionDoneBadges: {} as Record<string, boolean>,
   sessionGroupDoneBadges: {} as Record<string, boolean>,
   homeRepoFilter: null as string | null,
   browserUrl: null as string | null,
-  browserPanelActive: false,
+  browserUrlGroupId: null as string | null,
 };
 
 export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUIState>) => ({
@@ -98,7 +88,6 @@ export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUISta
 
   setActiveAccessoryIndex: (i) => set({ activeAccessoryIndex: i }),
   setOverlaySessionId: (id) => set({ overlaySessionId: id }),
-  setSessionPlayerOpen: (open) => set({ sessionPlayerOpen: open }),
   setActiveMenuClose: (close) => set({ activeMenuClose: close }),
 
   markChannelDone: (id) =>
@@ -129,8 +118,7 @@ export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUISta
 
   setHomeRepoFilter: (id) => set({ homeRepoFilter: id }),
 
-  setBrowserUrl: (url) => set({ browserUrl: url }),
-  setBrowserPanelActive: (active) => set({ browserPanelActive: active }),
+  setBrowserUrl: (url, groupId) => set({ browserUrl: url, browserUrlGroupId: groupId }),
 
   reset: () => set(initial),
 }));

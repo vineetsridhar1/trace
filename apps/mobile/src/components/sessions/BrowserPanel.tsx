@@ -15,8 +15,10 @@ import { normalizeBrowserInputUrl } from "@/lib/browser";
 import { useTheme } from "@/theme";
 
 interface BrowserPanelProps {
-  /** Initial URL to load. Falls back to a blank page. */
-  initialUrl?: string;
+  /** Current URL to load. Blank = empty state. */
+  url: string;
+  /** Lift browser navigation so the route can persist it across remounts. */
+  onUrlChange: (url: string) => void;
   /** Top inset matching the Session Player's glass header height. */
   topInset?: number;
 }
@@ -26,32 +28,37 @@ interface BrowserPanelProps {
  * in the Session Player. Renders a simple URL bar + back/forward/reload
  * controls on top of a full-screen WebView.
  */
-export function BrowserPanel({ initialUrl, topInset = 0 }: BrowserPanelProps) {
+export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: BrowserPanelProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const resolvedInitialUrl = initialUrl ?? "";
+  const resolvedUrl = nextUrl;
 
-  const [url, setUrl] = useState(resolvedInitialUrl);
-  const [inputText, setInputText] = useState(resolvedInitialUrl);
+  const [url, setUrl] = useState(resolvedUrl);
+  const [inputText, setInputText] = useState(resolvedUrl);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
   const [loading, setLoading] = useState(false);
   const webViewRef = useRef<WebView>(null);
 
   useEffect(() => {
-    setUrl(resolvedInitialUrl);
-    setInputText(resolvedInitialUrl);
+    if (resolvedUrl === url) return;
+    setUrl(resolvedUrl);
+    setInputText(resolvedUrl);
     setCanGoBack(false);
     setCanGoForward(false);
     setLoading(false);
-  }, [resolvedInitialUrl]);
+  }, [resolvedUrl, url]);
 
-  const handleNavStateChange = useCallback((state: WebViewNavigation) => {
-    setCanGoBack(state.canGoBack);
-    setCanGoForward(state.canGoForward);
-    setInputText(state.url);
-    setUrl(state.url);
-  }, []);
+  const handleNavStateChange = useCallback(
+    (state: WebViewNavigation) => {
+      setCanGoBack(state.canGoBack);
+      setCanGoForward(state.canGoForward);
+      setInputText(state.url);
+      setUrl(state.url);
+      onUrlChange(state.url);
+    },
+    [onUrlChange],
+  );
 
   const handleSubmit = useCallback(
     (e: NativeSyntheticEvent<TextInputSubmitEditingEventData>) => {
@@ -59,8 +66,13 @@ export function BrowserPanel({ initialUrl, topInset = 0 }: BrowserPanelProps) {
       if (!raw) return;
       setUrl(raw);
       setInputText(raw);
+      if (raw === url) {
+        webViewRef.current?.reload();
+        return;
+      }
+      onUrlChange(raw);
     },
-    [],
+    [onUrlChange, url],
   );
 
   const handleBack = useCallback(() => webViewRef.current?.goBack(), []);
@@ -174,6 +186,8 @@ export function BrowserPanel({ initialUrl, topInset = 0 }: BrowserPanelProps) {
           ref={webViewRef}
           source={{ uri: url }}
           style={styles.webView}
+          automaticallyAdjustContentInsets={false}
+          contentInsetAdjustmentBehavior="never"
           onNavigationStateChange={handleNavStateChange}
           onLoadStart={() => setLoading(true)}
           onLoadEnd={() => setLoading(false)}

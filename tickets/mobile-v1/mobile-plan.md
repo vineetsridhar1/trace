@@ -94,7 +94,7 @@ The app is built on the same event-driven, service-layer-owned, event-sourced ar
 - **expo-glass-effect** (or custom Expo module wrapping `UIGlassEffect`) — Liquid Glass on iOS 26+
 - **@shopify/flash-list** — virtualized lists (all session/message lists)
 - **@gorhom/bottom-sheet** OR `react-native-screens` native bottomSheet presentation (prefer native)
-- **React Native core `Keyboard` + `LayoutAnimation`** — keyboard avoidance (ticket 23 landed on this after evaluating `react-native-keyboard-controller`; the native listeners match the iOS keyboard curve cleanly without the extra native module)
+- **react-native-keyboard-controller** + native `Keyboard` events — keyboard avoidance (ticket 23 uses `KeyboardStickyView` for composer tracking while native keyboard listeners drive stream/composer insets)
 - **react-native-safe-area-context** — safe area insets
 - **react-native-context-menu-view** — native long-press menus
 
@@ -563,7 +563,7 @@ Full-screen modals for:
 - Auto-scroll to bottom when new events arrive *and* user is already near the bottom. If user has scrolled up, do not yank them — instead show a "New activity" pill floating above the input that taps to jump down.
 - Haptic `light` on send/queue; `medium` on stop confirmation.
 - Assistant message "typing" effect when the most recent event is streaming: subtle cursor block at end of text.
-- Keyboard-avoiding via native `Keyboard` listeners + `LayoutAnimation.keyboard` (ticket 23) — the input rises smoothly, stream adjusts, no jank.
+- Keyboard-avoiding via `KeyboardStickyView` plus native `Keyboard` listeners (ticket 23) — the input rises smoothly, stream adjusts, no jank.
 - Liquid Glass on the input container and any pinned bars (pending-input, queued strip) on iOS 26+.
 - Long-press on a message bubble → native context menu: "Copy".
 
@@ -613,13 +613,12 @@ Full-screen modals for:
 5. **Pending-input bar / active-todo strip / queued-messages strip / input composer** — all of §10.6's surfaces mount here as their tickets (22/23/24) land.
 
 **State model:**
-- `useMobileUIStore.overlaySessionId: string | null` — the session currently shown by the Player. `null` = Player closed.
+- `useMobileUIStore.overlaySessionId: string | null` — the session currently targeted by Player entry helpers and optimistic temp→real handoff logic. `null` = no routed Player page is currently being tracked.
 - `useMobileUIStore.activeAccessoryIndex: number` — purely the bottom-accessory pager's visible index; kept in sync with `overlaySessionId` when the Player is open *and* the shown session is in the active-sessions list.
-- Setting `overlaySessionId` to non-null mounts the Player; clearing it (or setting `sessionPlayerOpen = false`) dismisses.
+- `tryOpenSessionPlayer(sessionId)` sets `overlaySessionId` and routes to `/sessions/[groupId]/[sessionId]`; `closeSessionPlayer()` clears it and pops the route.
 
-**Gesture model (V1):**
-- Single detent: Player is either fully open or fully dismissed.
-- Pull-down past threshold (120pt or velocity > 800) dismisses.
+**Navigation model (V1):**
+- The Player is a full-screen routed surface.
 - Horizontal swipe across sessions is a V2 evolution (the tab strip handles sibling switching within a group; the bottom accessory handles scrubbing across parallel active sessions while the Player is closed).
 - The `"playerAndList"` "Up Next" detent from earlier drafts is **dropped** — the bottom accessory already provides the across-sessions scrub surface.
 

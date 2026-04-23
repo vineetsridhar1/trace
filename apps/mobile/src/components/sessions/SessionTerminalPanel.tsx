@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { Asset } from "expo-asset";
 import { File } from "expo-file-system";
 import {
@@ -61,6 +61,7 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
   const requestTokenRef = useRef(0);
   const pendingWritesRef = useRef<string[]>([]);
   const needsClearRef = useRef(false);
+  const surfaceHeightRef = useRef(0);
   const [runtimeTemplate, setRuntimeTemplate] = useState<string | null>(null);
   const [webReady, setWebReady] = useState(false);
   const [terminalId, setTerminalId] = useState<string | null>(null);
@@ -257,6 +258,18 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
     inject("window.__traceFit && window.__traceFit();");
   }, [inject, webReady]);
 
+  const handleSurfaceLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const nextHeight = Math.round(event.nativeEvent.layout.height);
+      if (surfaceHeightRef.current === nextHeight) return;
+      surfaceHeightRef.current = nextHeight;
+      if (webReadyRef.current) {
+        inject("window.__traceFit && window.__traceFit();");
+      }
+    },
+    [inject],
+  );
+
   const handleWebMessage = useCallback(
     (event: WebViewMessageEvent) => {
       try {
@@ -334,7 +347,10 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
         />
       </View>
 
-      <View style={[styles.surface, { backgroundColor: theme.colors.surfaceDeep }]}>
+      <View
+        style={[styles.surface, { backgroundColor: theme.colors.surfaceDeep }]}
+        onLayout={handleSurfaceLayout}
+      >
         {terminalHtml ? (
           <WebView
             ref={webViewRef}
@@ -344,6 +360,8 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
             style={styles.webView}
             scrollEnabled={false}
             bounces={false}
+            automaticallyAdjustContentInsets={false}
+            contentInsetAdjustmentBehavior="never"
           />
         ) : null}
 

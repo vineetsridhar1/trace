@@ -19,6 +19,7 @@ import { BrowserPanel } from "@/components/sessions/BrowserPanel";
 import { SessionPageHeader } from "@/components/sessions/SessionPageHeader";
 import { SessionSurface } from "@/components/sessions/SessionSurface";
 import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel";
+import { resolveBrowserUrl } from "@/lib/browser";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { useMobileUIStore } from "@/stores/ui";
 import {
@@ -62,6 +63,9 @@ export default function SessionStreamScreen() {
   const loadingGroup = useEnsureSessionGroupDetail(groupId);
   const sessionIds = useSessionGroupSessionIds(groupId);
   const activeMenuClose = useMobileUIStore((s) => s.activeMenuClose);
+  const browserUrl = useMobileUIStore((s) => s.browserUrl);
+  const browserUrlGroupId = useMobileUIStore((s) => s.browserUrlGroupId);
+  const setBrowserUrl = useMobileUIStore((s) => s.setBrowserUrl);
   const hydratedGroupId =
     (useEntityField("sessions", sessionId, "sessionGroupId") as string | null | undefined)
     ?? groupId;
@@ -77,16 +81,15 @@ export default function SessionStreamScreen() {
     | string
     | null
     | undefined;
-  const defaultBrowserUrl = useMemo(() => {
-    if (prUrl) return prUrl;
-    const remoteUrl = repo?.remoteUrl;
-    if (!remoteUrl) return "";
-    const sshMatch = remoteUrl.match(/^git@([^:]+):(.+?)(?:\.git)?$/);
-    if (sshMatch) return `https://${sshMatch[1]}/${sshMatch[2]}`;
-    if (/^https?:\/\//.test(remoteUrl)) return remoteUrl.replace(/\.git$/, "");
-    return remoteUrl;
-  }, [prUrl, repo?.remoteUrl]);
-  const [browserUrl, setBrowserUrl] = useState(defaultBrowserUrl);
+  const resolvedBrowserUrl = useMemo(
+    () =>
+      resolveBrowserUrl(
+        browserUrlGroupId === hydratedGroupId ? browserUrl : null,
+        prUrl,
+        repo?.remoteUrl,
+      ),
+    [browserUrl, browserUrlGroupId, hydratedGroupId, prUrl, repo?.remoteUrl],
+  );
 
   useEffect(() => {
     if (!groupId || !sessionId || sessionIds.length === 0) return;
@@ -94,15 +97,17 @@ export default function SessionStreamScreen() {
     router.replace(`/sessions/${groupId}/${sessionIds[0]}`);
   }, [groupId, router, sessionId, sessionIds]);
 
-  useEffect(() => {
-    setBrowserUrl(defaultBrowserUrl);
-  }, [defaultBrowserUrl, hydratedGroupId]);
-
   const handleSelectSession = useCallback(
     (nextId: string) => {
       router.replace(`/sessions/${groupId}/${nextId}`);
     },
     [groupId, router],
+  );
+  const handleBrowserUrlChange = useCallback(
+    (nextUrl: string) => {
+      setBrowserUrl(nextUrl, hydratedGroupId);
+    },
+    [hydratedGroupId, setBrowserUrl],
   );
   const [overlayHeight, setOverlayHeight] = useState(0);
   const handleOverlayLayout = useCallback((e: LayoutChangeEvent) => {
@@ -189,7 +194,11 @@ export default function SessionStreamScreen() {
             >
               {() => (
                 <View style={styles.overlayPaddedScene}>
-                  <BrowserPanel initialUrl={browserUrl} topInset={overlayHeight} />
+                  <BrowserPanel
+                    url={resolvedBrowserUrl}
+                    onUrlChange={handleBrowserUrlChange}
+                    topInset={overlayHeight}
+                  />
                 </View>
               )}
             </SessionBottomTabs.Screen>
