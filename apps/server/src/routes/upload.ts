@@ -6,6 +6,8 @@ import {
   getRequestToken,
   isExternalLocalModeRequest,
 } from "../lib/auth.js";
+import { isLocalMode } from "../lib/mode.js";
+import { getCanonicalLocalOrganizationId } from "../services/local-bootstrap.js";
 import { storage } from "../lib/storage/index.js";
 
 const router: RouterType = Router();
@@ -60,8 +62,21 @@ router.post("/uploads/presign", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "organizationId is required" });
   }
 
+  const effectiveOrganizationId =
+    isLocalMode()
+      ? await getCanonicalLocalOrganizationId()
+      : organizationId;
+  if (!effectiveOrganizationId) {
+    return res.status(403).json({ error: "No active organization found" });
+  }
+
   const membership = await prisma.orgMember.findUnique({
-    where: { userId_organizationId: { userId: auth.userId, organizationId } },
+    where: {
+      userId_organizationId: {
+        userId: auth.userId,
+        organizationId: effectiveOrganizationId,
+      },
+    },
     select: { role: true },
   });
   if (!membership) {
@@ -81,7 +96,7 @@ router.post("/uploads/presign", async (req: Request, res: Response) => {
   }
 
   const sanitizedFilename = sanitizeFilename(filename);
-  const key = `uploads/${organizationId}/${randomUUID()}-${sanitizedFilename}`;
+  const key = `uploads/${effectiveOrganizationId}/${randomUUID()}-${sanitizedFilename}`;
   const uploadUrl = await storage.getPutUrl(key, contentType);
 
   return res.json({ uploadUrl, key });
@@ -118,6 +133,10 @@ router.get("/uploads/url", async (req: Request, res: Response) => {
   const segments = key.split("/");
   if (segments.length >= 3 && segments[1]) {
     const orgId = segments[1];
+    const canonicalOrgId = isLocalMode() ? await getCanonicalLocalOrganizationId() : null;
+    if (canonicalOrgId && orgId !== canonicalOrgId) {
+      return res.status(403).json({ error: "Local mode only supports one organization" });
+    }
     const membership = await prisma.orgMember.findUnique({
       where: { userId_organizationId: { userId: auth.userId, organizationId: orgId } },
       select: { role: true },

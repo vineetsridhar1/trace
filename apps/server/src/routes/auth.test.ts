@@ -90,6 +90,10 @@ describe("local login", () => {
       id: "org-1",
       name: "Trace",
     });
+    prismaMock.organization.findUnique.mockResolvedValue({
+      id: "org-1",
+      name: "Trace",
+    });
     prismaMock.user.upsert
       .mockResolvedValueOnce({
         id: TRACE_AI_USER_ID,
@@ -275,6 +279,62 @@ describe("local-mode external auth", () => {
         name: "Local User",
         avatarUrl: null,
         orgMemberships: [],
+      },
+    });
+  });
+
+  it("returns only the canonical organization in local mode auth/me", async () => {
+    prismaMock.organization.findFirst.mockResolvedValueOnce({ id: "org-1" });
+    prismaMock.localMobileDevice.findUnique.mockResolvedValueOnce({
+      id: "device-1",
+      ownerUserId: "user-1",
+      organizationId: "org-2",
+      revokedAt: null,
+    });
+    prismaMock.localMobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: "user-1",
+      email: "local@trace.dev",
+      name: "Local User",
+      avatarUrl: null,
+      orgMemberships: [
+        {
+          organizationId: "org-1",
+          role: "admin",
+          joinedAt: new Date("2024-01-01T00:00:00.000Z"),
+          organization: { id: "org-1", name: "Trace" },
+        },
+        {
+          organizationId: "org-2",
+          role: "member",
+          joinedAt: new Date("2024-01-02T00:00:00.000Z"),
+          organization: { id: "org-2", name: "Other" },
+        },
+      ],
+    });
+
+    const res = await fetch(`${baseUrl}/auth/me`, {
+      headers: {
+        Authorization: "Bearer opaque-device-secret",
+        "X-Forwarded-For": "203.0.113.10",
+      },
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      user: {
+        id: "user-1",
+        email: "local@trace.dev",
+        name: "Local User",
+        avatarUrl: null,
+        orgMemberships: [
+          {
+            organizationId: "org-1",
+            role: "admin",
+            joinedAt: "2024-01-01T00:00:00.000Z",
+            organization: { id: "org-1", name: "Trace" },
+          },
+        ],
       },
     });
   });

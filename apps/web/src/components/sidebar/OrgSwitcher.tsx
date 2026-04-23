@@ -10,11 +10,29 @@ export function OrgSwitcher({ large }: { large?: boolean }) {
 
   const activeOrg = orgMemberships.find((m: OrgMembership) => m.organizationId === activeOrgId)?.organization;
   const orgList = orgMemberships.map((m: OrgMembership) => m.organization);
+  const triggerClassName = `flex h-full w-full items-center gap-2 px-3 transition-colors ${orgList.length > 1 ? "cursor-pointer hover:bg-surface-elevated" : ""} ${large ? "py-2.5" : ""}`;
+
+  if (orgList.length <= 1) {
+    return (
+      <div className={triggerClassName}>
+        <div
+          className={`flex shrink-0 items-center justify-center rounded-lg bg-accent font-bold text-accent-foreground ${large ? "h-7.5 w-7.5 text-xs" : "h-7 w-7 text-xs"}`}
+        >
+          {getInitials(activeOrg?.name ?? "")}
+        </div>
+        <span
+          className={`flex-1 truncate text-left font-semibold text-foreground ${large ? "text-[15px]" : "text-sm"}`}
+        >
+          {activeOrg?.name ?? "Workspace"}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <Popover>
       <PopoverTrigger
-        className={`flex h-full w-full cursor-pointer items-center gap-2 px-3 transition-colors hover:bg-surface-elevated ${large ? "py-2.5" : ""}`}
+        className={triggerClassName}
       >
         <div
           className={`flex shrink-0 items-center justify-center rounded-lg bg-accent font-bold text-accent-foreground ${large ? "h-7.5 w-7.5 text-xs" : "h-7 w-7 text-xs"}`}

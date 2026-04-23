@@ -164,6 +164,31 @@ describe("auth helpers", () => {
     ).rejects.toThrow("External local-mode access requires a paired mobile token");
   });
 
+  it("forces HTTP auth context onto the canonical local organization", async () => {
+    vi.stubEnv("TRACE_LOCAL_MODE", "1");
+
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-2", email: "local@trace.dev" });
+    prismaMock.organization.findFirst.mockResolvedValueOnce({ id: "org-local" });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({
+      role: "member",
+    });
+
+    const token = jwt.sign({ userId: "user-2" }, JWT_SECRET);
+    const context = await buildContext({
+      req: {
+        headers: {
+          authorization: `Bearer ${token}`,
+          "x-organization-id": "org-stale",
+        },
+        cookies: {},
+        socket: { remoteAddress: "127.0.0.1" },
+      },
+    } as unknown as Parameters<typeof buildContext>[0]);
+
+    expect(context.organizationId).toBe("org-local");
+    expect(context.role).toBe("member");
+  });
+
   it("rejects invalid websocket auth", async () => {
     await expect(buildWsContext({ token: "bad-token" })).rejects.toThrow("Invalid token");
     await expect(buildWsContext()).rejects.toThrow("Missing auth token for WebSocket");
@@ -183,6 +208,25 @@ describe("auth helpers", () => {
         },
       ),
     ).rejects.toThrow("External local-mode access requires a paired mobile token");
+  });
+
+  it("forces websocket auth context onto the canonical local organization", async () => {
+    vi.stubEnv("TRACE_LOCAL_MODE", "1");
+
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-3", email: "local@trace.dev" });
+    prismaMock.organization.findFirst.mockResolvedValueOnce({ id: "org-local" });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({
+      role: "admin",
+    });
+
+    const token = jwt.sign({ userId: "user-3" }, JWT_SECRET);
+    const context = await buildWsContext({
+      token,
+      organizationId: "org-stale",
+    });
+
+    expect(context.organizationId).toBe("org-local");
+    expect(context.role).toBe("admin");
   });
 
   it("builds websocket context from cookies", async () => {

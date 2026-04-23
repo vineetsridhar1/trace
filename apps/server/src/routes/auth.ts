@@ -12,6 +12,7 @@ import { isLocalMode } from "../lib/mode.js";
 import {
   ensureLocalUserWorkspace,
   findMostRecentLocalUserWorkspace,
+  getCanonicalLocalOrganizationId,
   normalizeLocalLoginName,
 } from "../services/local-bootstrap.js";
 import {
@@ -151,6 +152,16 @@ async function resolveRequestedOrganizationId(
   userId: string,
   requestedOrgId: string | null,
 ): Promise<string | null> {
+  if (isLocalMode()) {
+    const canonicalOrgId = await getCanonicalLocalOrganizationId();
+    if (!canonicalOrgId) return null;
+    const membership = await prisma.orgMember.findUnique({
+      where: { userId_organizationId: { userId, organizationId: canonicalOrgId } },
+      select: { organizationId: true },
+    });
+    return membership?.organizationId ?? null;
+  }
+
   if (requestedOrgId) {
     const membership = await prisma.orgMember.findUnique({
       where: { userId_organizationId: { userId, organizationId: requestedOrgId } },
@@ -541,12 +552,21 @@ router.get("/auth/me", async (req: Request, res: Response) => {
       return res.status(401).json({ error: "User not found" });
     }
 
+    const canonicalOrgId = isLocalMode() ? await getCanonicalLocalOrganizationId() : null;
+    const orgMemberships =
+      canonicalOrgId
+        ? user.orgMemberships.filter((membership) => membership.organizationId === canonicalOrgId)
+        : user.orgMemberships;
+
     // Include the session token so the client can store it in localStorage.
     // This is necessary when the user authenticated via httpOnly cookie
     // (e.g. after an OAuth popup where window.opener was severed) and the
     // client-side JS doesn't have the raw JWT for the desktop bridge.
     res.json({
-      user,
+      user: {
+        ...user,
+        orgMemberships,
+      },
       token: authenticated.auth.kind === "session" ? authenticated.token : undefined,
     });
   } catch {
@@ -563,11 +583,15 @@ router.get("/auth/bridge-token", async (req: Request, res: Response) => {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
-  const organizationId = readOrganizationIdHeader(req);
+  const organizationId = await resolveRequestedOrganizationId(
+    authenticated.auth.userId,
+    readOrganizationIdHeader(req),
+  );
   if (!organizationId) {
-    return res.status(400).json({ error: "Missing X-Organization-Id header" });
+    return res.status(403).json({ error: "No active organization found" });
   }
   if (
+    !isLocalMode() &&
     authenticated.auth.kind === "local_mobile" &&
     authenticated.auth.organizationId !== organizationId
   ) {

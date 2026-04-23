@@ -4,6 +4,7 @@ import type { IncomingHttpHeaders } from "http";
 import jwt from "jsonwebtoken";
 import type { Context } from "../context.js";
 import { authenticateLocalMobileSecret, type LocalMobileAuthSubject } from "../services/local-mobile-auth.js";
+import { getCanonicalLocalOrganizationId } from "../services/local-bootstrap.js";
 import { AuthenticationError } from "./errors.js";
 import { prisma } from "./db.js";
 import { isLocalMode } from "./mode.js";
@@ -188,6 +189,21 @@ async function getFirstOrgMembership(userId: string) {
   });
 }
 
+async function getLocalModeOrgMembership(userId: string): Promise<{
+  organizationId: string;
+  role: Context["role"];
+} | null> {
+  if (!isLocalMode()) return null;
+  const organizationId = await getCanonicalLocalOrganizationId();
+  if (!organizationId) return null;
+  const membership = await resolveOrgMembership(userId, organizationId);
+  if (!membership) return null;
+  return {
+    organizationId,
+    role: membership.role as Context["role"],
+  };
+}
+
 export function getRequestToken(req: Pick<Request, "headers" | "cookies">): string | undefined {
   const authHeader = req.headers.authorization;
   return authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : req.cookies?.trace_token;
@@ -235,7 +251,11 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
   let organizationId: string | null = null;
   let role: Context["role"] = null;
 
-  if (authSubject?.kind === "local_mobile") {
+  const localModeMembership = await getLocalModeOrgMembership(user.id);
+  if (localModeMembership) {
+    organizationId = localModeMembership.organizationId;
+    role = isSuperAdmin ? "admin" : localModeMembership.role;
+  } else if (authSubject?.kind === "local_mobile") {
     if (requestedOrgId && requestedOrgId !== authSubject.organizationId) {
       throw new AuthenticationError("This mobile device is only paired for one organization");
     }
@@ -314,7 +334,11 @@ export async function buildWsContext(
   let organizationId: string | null = null;
   let role: Context["role"] = null;
 
-  if (authSubject.kind === "local_mobile") {
+  const localModeMembership = await getLocalModeOrgMembership(user.id);
+  if (localModeMembership) {
+    organizationId = localModeMembership.organizationId;
+    role = isSuperAdmin ? "admin" : localModeMembership.role;
+  } else if (authSubject.kind === "local_mobile") {
     if (requestedOrgId && requestedOrgId !== authSubject.organizationId) {
       throw new AuthenticationError("This mobile device is only paired for one organization");
     }

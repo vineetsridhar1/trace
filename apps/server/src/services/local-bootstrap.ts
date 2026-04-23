@@ -21,6 +21,14 @@ function localEmailForName(name: string): string {
   return `${slugifyLocalName(name)}@${LOCAL_EMAIL_DOMAIN}`;
 }
 
+export async function getCanonicalLocalOrganizationId(): Promise<string | null> {
+  const organization = await prisma.organization.findFirst({
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  return organization?.id ?? null;
+}
+
 export async function findMostRecentLocalUserWorkspace(): Promise<{
   organizationId: string;
   user: {
@@ -71,10 +79,14 @@ export async function ensureLocalUserWorkspace(name: string): Promise<{
     },
   });
 
-  let organization = await prisma.organization.findFirst({
-    orderBy: { createdAt: "asc" },
-    select: { id: true, name: true },
-  });
+  const canonicalOrganizationId = await getCanonicalLocalOrganizationId();
+  let organization =
+    canonicalOrganizationId
+      ? await prisma.organization.findUnique({
+          where: { id: canonicalOrganizationId },
+          select: { id: true, name: true },
+        })
+      : null;
 
   if (!organization) {
     organization = await prisma.organization.create({
