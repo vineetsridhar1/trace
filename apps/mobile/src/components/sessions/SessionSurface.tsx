@@ -56,6 +56,8 @@ interface SessionSurfaceProps {
   renderStreamEvents?: boolean;
 }
 
+const COMPOSER_KEYBOARD_DURATION_MULTIPLIER = 0.72;
+
 /**
  * The complete session surface: group header + sibling tab strip + event
  * stream. Rendered both inside the Session Player (§10.8) and by the
@@ -108,7 +110,11 @@ export function SessionSurface({
       const nextLift = Math.max(0, keyboardOffset - restingBottomOffset);
       overlayLift.value =
         duration && duration > 0
-          ? withTiming(nextLift, { duration })
+          ? withTiming(nextLift, {
+              duration: Math.round(
+                duration * COMPOSER_KEYBOARD_DURATION_MULTIPLIER,
+              ),
+            })
           : nextLift;
     };
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
