@@ -46,8 +46,9 @@ export function SessionComposerInputCard({
 
   return (
     <Glass
-      preset="pinnedBar"
+      preset="input"
       animatedProps={glassAnimatedProps}
+      interactive
       style={[styles.inputCard, cardBorderAnimatedStyle]}
     >
       {errorDraft ? (
