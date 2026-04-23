@@ -39,6 +39,9 @@ export function LinkedCheckoutActions({ state }: Props) {
     }
   };
 
+  const iconButtonVariant = "secondary" as const;
+  const iconButtonClassName = "rounded-md";
+
   if (requiresRepoLink && canLinkRepo) {
     return (
       <Button
@@ -58,24 +61,26 @@ export function LinkedCheckoutActions({ state }: Props) {
     <>
       {isAttachedToThisGroup && hasUncommittedChanges && (
         <Button
-          variant="secondary"
-          size="sm"
+          variant={iconButtonVariant}
+          size="icon"
+          className={iconButtonClassName}
           onClick={() => void runAction("commit", onCommitChanges)}
           disabled={pending}
+          aria-label="Commit main worktree changes"
+          title="Commit main worktree changes"
         >
           {pendingAction === "commit" ? (
             <Loader2 size={14} className="animate-spin" />
           ) : (
             <GitCommitHorizontal size={14} />
           )}
-          <span>{pendingAction === "commit" ? "Committing..." : "Commit Changes"}</span>
         </Button>
       )}
 
       <Button
-        variant={isAttachedToThisGroup ? "secondary" : "outline"}
+        variant={iconButtonVariant}
         size="icon"
-        className="rounded-md"
+        className={iconButtonClassName}
         onClick={() => void runAction("sync", onSync)}
         disabled={pending}
         aria-label={isAttachedToThisGroup ? "Sync main worktree now" : "Sync to main worktree"}
@@ -91,9 +96,9 @@ export function LinkedCheckoutActions({ state }: Props) {
       {isAttachedToThisGroup && (
         <>
           <Button
-            variant="ghost"
+            variant={iconButtonVariant}
             size="icon"
-            className="rounded-md"
+            className={iconButtonClassName}
             onClick={() => void runAction("toggle-auto-sync", onToggleAutoSync)}
             disabled={pending}
             aria-label={autoSyncEnabled ? "Pause auto-sync" : "Resume auto-sync"}
@@ -108,9 +113,9 @@ export function LinkedCheckoutActions({ state }: Props) {
             )}
           </Button>
           <Button
-            variant="outline"
+            variant={iconButtonVariant}
             size="icon"
-            className="rounded-md"
+            className={iconButtonClassName}
             onClick={() => void runAction("restore", onRestore)}
             disabled={pending}
             aria-label="Restore main worktree"
