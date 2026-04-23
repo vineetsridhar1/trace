@@ -57,7 +57,7 @@ interface SessionSurfaceProps {
 }
 
 const COMPOSER_KEYBOARD_OPEN_DURATION_MULTIPLIER = 0.72;
-const COMPOSER_KEYBOARD_CLOSE_DURATION_MULTIPLIER = 0.5;
+const COMPOSER_KEYBOARD_CLOSE_DURATION_MULTIPLIER = 0.62;
 
 /**
  * The complete session surface: group header + sibling tab strip + event
