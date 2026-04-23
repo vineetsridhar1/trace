@@ -10,6 +10,10 @@ import {
   type LayoutChangeEvent,
 } from "react-native";
 import { BottomTabBarHeightContext } from "react-native-bottom-tabs";
+import Animated, {
+  useAnimatedKeyboard,
+  useAnimatedStyle,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEntityField } from "@trace/client-core";
 import { Spinner, Text } from "@/components/design-system";
@@ -86,6 +90,7 @@ export function SessionSurface({
   });
   const insets = useSafeAreaInsets();
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
+  const animatedKeyboard = useAnimatedKeyboard();
   const [composerHeight, setComposerHeight] = useState(0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const overlayDismissedRef = useRef(false);
@@ -137,6 +142,13 @@ export function SessionSurface({
   );
   const overlayBottom = sceneBottomOffset;
   const streamBottomInset = composerHeight + overlayBottom;
+  const overlayAnimatedStyle = useAnimatedStyle(() => {
+    const keyboardOffset = Math.max(0, animatedKeyboard.height.value - insets.bottom);
+    const overlayOffset = Math.max(restingBottomOffset, keyboardOffset);
+    return {
+      transform: [{ translateY: restingBottomOffset - overlayOffset }],
+    };
+  }, [animatedKeyboard, insets.bottom, restingBottomOffset]);
   const overlayPanResponder = useMemo(
     () =>
       PanResponder.create({
@@ -209,8 +221,12 @@ export function SessionSurface({
           renderEvents={renderStreamEvents}
         />
       </View>
-      <View
-        style={[styles.overlay, { bottom: overlayBottom }]}
+      <Animated.View
+        style={[
+          styles.overlay,
+          { bottom: restingBottomOffset },
+          overlayAnimatedStyle,
+        ]}
         onLayout={handleComposerLayout}
         pointerEvents="auto"
         {...overlayPanResponder.panHandlers}
@@ -227,7 +243,7 @@ export function SessionSurface({
             <SessionInputComposer sessionId={sessionId} />
           </>
         )}
-      </View>
+      </Animated.View>
     </View>
   );
 }
