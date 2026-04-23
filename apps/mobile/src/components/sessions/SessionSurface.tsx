@@ -1,7 +1,6 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   Keyboard,
-  PanResponder,
   Platform,
   StyleSheet,
   View,
@@ -9,7 +8,10 @@ import {
 } from "react-native";
 import { BottomTabBarHeightContext } from "react-native-bottom-tabs";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
-import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
+import {
+  KeyboardGestureArea,
+  useReanimatedKeyboardAnimation,
+} from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEntityField } from "@trace/client-core";
 import { Spinner, Text } from "@/components/design-system";
@@ -88,15 +90,14 @@ export function SessionSurface({
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [composerHeight, setComposerHeight] = useState(0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const overlayDismissedRef = useRef(false);
   const { height: keyboardTranslation } = useReanimatedKeyboardAnimation();
+  const composerInputNativeId = useMemo(
+    () => `session-composer-input-${sessionId}`,
+    [sessionId],
+  );
   const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
     setComposerHeight(e.nativeEvent.layout.height);
   }, []);
-  const dismissKeyboard = useCallback(() => {
-    if (keyboardHeight <= 0) return;
-    Keyboard.dismiss();
-  }, [keyboardHeight]);
   const restingBottomOffset = Math.max(0, tabBarHeight - insets.bottom);
 
   useEffect(() => {
@@ -129,30 +130,6 @@ export function SessionSurface({
       transform: [{ translateY: restingBottomOffset - overlayOffset }],
     };
   }, [insets.bottom, keyboardTranslation, restingBottomOffset]);
-  const overlayPanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponderCapture: (_evt, gestureState) =>
-          keyboardHeight > 0 &&
-          gestureState.dy > 6 &&
-          Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
-        onPanResponderGrant: () => {
-          overlayDismissedRef.current = false;
-        },
-        onPanResponderMove: (_evt, gestureState) => {
-          if (overlayDismissedRef.current || gestureState.dy < 12) return;
-          overlayDismissedRef.current = true;
-          dismissKeyboard();
-        },
-        onPanResponderRelease: () => {
-          overlayDismissedRef.current = false;
-        },
-        onPanResponderTerminate: () => {
-          overlayDismissedRef.current = false;
-        },
-      }),
-    [dismissKeyboard, keyboardHeight],
-  );
 
   useEffect(() => {
     if (!groupId) return;
@@ -201,32 +178,34 @@ export function SessionSurface({
           renderEvents={renderStreamEvents}
         />
       </View>
-      <Animated.View
-        style={[
-          styles.overlay,
-          { bottom: restingBottomOffset },
-          overlayAnimatedStyle,
-        ]}
-        onLayout={handleComposerLayout}
-        pointerEvents="auto"
-        {...overlayPanResponder.panHandlers}
+      <KeyboardGestureArea
+        style={[styles.overlay, { bottom: restingBottomOffset }]}
+        offset={composerHeight}
+        textInputNativeID={composerInputNativeId}
       >
-        {pendingInput ? (
-          <>
-            <PendingInputBar sessionId={sessionId} />
-            <SessionErrorCard sessionId={sessionId} />
-          </>
-        ) : (
-          <>
-            <SessionErrorCard sessionId={sessionId} />
-            <QueuedMessagesStrip sessionId={sessionId} />
-            <SessionInputComposer
-              sessionId={sessionId}
-              keyboardVisible={keyboardHeight > 0}
-            />
-          </>
-        )}
-      </Animated.View>
+        <Animated.View
+          style={overlayAnimatedStyle}
+          onLayout={handleComposerLayout}
+          pointerEvents="auto"
+        >
+          {pendingInput ? (
+            <>
+              <PendingInputBar sessionId={sessionId} />
+              <SessionErrorCard sessionId={sessionId} />
+            </>
+          ) : (
+            <>
+              <SessionErrorCard sessionId={sessionId} />
+              <QueuedMessagesStrip sessionId={sessionId} />
+              <SessionInputComposer
+                sessionId={sessionId}
+                keyboardVisible={keyboardHeight > 0}
+                textInputNativeId={composerInputNativeId}
+              />
+            </>
+          )}
+        </Animated.View>
+      </KeyboardGestureArea>
     </View>
   );
 }
