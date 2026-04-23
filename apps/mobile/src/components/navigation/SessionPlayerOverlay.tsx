@@ -19,7 +19,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { BlurView } from "expo-blur";
 import { useEntityField } from "@trace/client-core";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
-import { SessionSurface, SessionSurfaceEmpty } from "@/components/sessions/SessionSurface";
+import { SessionPager } from "@/components/sessions/SessionPager";
 import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { haptic } from "@/lib/haptics";
@@ -48,6 +48,7 @@ export function SessionPlayerOverlay() {
   const sessionId = useMobileUIStore((s) => s.overlaySessionId);
   const setOverlaySessionId = useMobileUIStore((s) => s.setOverlaySessionId);
   const activeMenuClose = useMobileUIStore((s) => s.activeMenuClose);
+  const browserPanelActive = useMobileUIStore((s) => s.browserPanelActive);
   const headerGroupId = useEntityField("sessions", sessionId ?? "", "sessionGroupId") as
     | string
     | null
@@ -59,6 +60,12 @@ export function SessionPlayerOverlay() {
 
   const progress = useSharedValue(0);
   const dragY = useSharedValue(0);
+  // Mirror JS-thread state into a shared value so the UI-thread pan worklet
+  // can read it without crossing the thread boundary mid-gesture.
+  const browserActiveShared = useSharedValue(false);
+  useEffect(() => {
+    browserActiveShared.value = browserPanelActive;
+  }, [browserPanelActive, browserActiveShared]);
 
   useEffect(() => {
     if (open) {
@@ -79,11 +86,19 @@ export function SessionPlayerOverlay() {
   const pan = Gesture.Pan()
     .enabled(open)
     .activeOffsetY([-16, 16])
+    // When the browser panel is visible the user swipes left to return to the
+    // session — let that gesture pass to PagerView by failing on any horizontal
+    // movement. When on the session page keep the original ±12 tolerance so
+    // slight diagonal drags still trigger dismiss.
     .failOffsetX([-12, 12])
     .onChange((event) => {
+      // Don't track drag when on the browser page — horizontal gestures there
+      // belong to PagerView, not the dismiss handler.
+      if (browserActiveShared.value) return;
       dragY.value = Math.max(0, event.translationY);
     })
     .onEnd((event) => {
+      if (browserActiveShared.value) return;
       if (
         event.translationY > DISMISS_DISTANCE ||
         event.velocityY > DISMISS_VELOCITY
@@ -146,16 +161,12 @@ export function SessionPlayerOverlay() {
         ]}
       >
         <View style={styles.surface}>
-          {sessionId ? (
-            <SessionSurface
-              sessionId={sessionId}
-              onSelectSession={handleSelectSession}
-              hideHeader
-              topInset={topInsetHeight}
-            />
-          ) : (
-            <SessionSurfaceEmpty />
-          )}
+          <SessionPager
+            sessionId={sessionId}
+            onSelectSession={handleSelectSession}
+            hideHeader
+            topInset={topInsetHeight}
+          />
         </View>
 
         {activeMenuClose ? (
