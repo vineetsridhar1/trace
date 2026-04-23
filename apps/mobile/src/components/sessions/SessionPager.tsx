@@ -19,8 +19,8 @@ interface SessionPagerProps {
 
 /**
  * Two-page horizontal pager:
- *   Page 0 — SessionSurface (the session stream)
- *   Page 1 — BrowserPanel (embedded WebView)
+ *   Page 0 — BrowserPanel (embedded WebView)
+ *   Page 1 — SessionSurface (the session stream)
  *
  * The user swipes right to reveal the browser, left to return to the session.
  * The PagerView's own scroll gesture is restricted to horizontal movement so
@@ -75,7 +75,7 @@ export function SessionPager({
   const handlePageSelected = useCallback(
     (e: { nativeEvent: { position: number } }) => {
       // Store the active pager page so SessionPlayerOverlay can read it if needed.
-      useMobileUIStore.getState().setBrowserPanelActive(e.nativeEvent.position === 1);
+      useMobileUIStore.getState().setBrowserPanelActive(e.nativeEvent.position === 0);
     },
     [],
   );
@@ -84,13 +84,18 @@ export function SessionPager({
     <PagerView
       ref={pagerRef}
       style={styles.pager}
-      initialPage={0}
+      initialPage={1}
       orientation="horizontal"
       onPageSelected={handlePageSelected}
       // overdrag gives a subtle bounce cue at both ends
       overdrag
     >
-      {/* Page 0: session stream */}
+      {/* Page 0: browser */}
+      <View key="browser" style={styles.page}>
+        <BrowserPanel initialUrl={initialUrl} topInset={topInset} />
+      </View>
+
+      {/* Page 1: session stream */}
       <View key="session" style={styles.page}>
         {sessionId ? (
           <SessionSurface
@@ -105,11 +110,6 @@ export function SessionPager({
         ) : (
           <SessionSurfaceEmpty />
         )}
-      </View>
-
-      {/* Page 1: browser */}
-      <View key="browser" style={styles.page}>
-        <BrowserPanel initialUrl={initialUrl} topInset={topInset} />
       </View>
     </PagerView>
   );
