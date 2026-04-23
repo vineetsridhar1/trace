@@ -8,6 +8,7 @@ import { Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
 import { haptic } from "@/lib/haptics";
 import { CheckpointMarker } from "./CheckpointMarker";
+import { MessageImageGallery } from "./MessageImageGallery";
 import { Markdown } from "./Markdown";
 import { COPY_CONTEXT_MENU, stripPromptWrapping } from "./utils";
 
@@ -15,6 +16,8 @@ interface UserMessageBubbleProps {
   text: string;
   actorId?: string;
   actorName?: string | null;
+  imageKeys?: string[];
+  imagePreviewUrls?: string[];
   checkpoints?: GitCheckpoint[];
 }
 
@@ -27,6 +30,8 @@ export const UserMessageBubble = memo(function UserMessageBubble({
   text,
   actorId,
   actorName,
+  imageKeys,
+  imagePreviewUrls,
   checkpoints,
 }: UserMessageBubbleProps) {
   const theme = useTheme();
@@ -68,7 +73,8 @@ export const UserMessageBubble = memo(function UserMessageBubble({
                 {displayName}
               </Text>
             </View>
-            <Markdown compactSpacing>{displayText}</Markdown>
+            <MessageImageGallery imageKeys={imageKeys} previewUrls={imagePreviewUrls} />
+            {displayText ? <Markdown compactSpacing>{displayText}</Markdown> : null}
           </View>
         </ContextMenu>
         {checkpoints && checkpoints.length > 0 ? (

@@ -1,7 +1,9 @@
 import { getAuthHeaders } from "@trace/client-core";
 import { getActiveApiUrl } from "./connection-target";
+import { UploadedImageUrlCache } from "./upload-url-cache";
 
 const MAX_BYTES = 5 * 1024 * 1024;
+const uploadedImageUrlCache = new UploadedImageUrlCache();
 
 interface UploadArgs {
   /** Raw base64 payload (no `data:` prefix). One of `base64`/`fileUri` is required. */
@@ -95,4 +97,33 @@ export async function uploadImage(args: UploadArgs): Promise<string> {
   }
 
   return key;
+}
+
+export function getCachedUploadedImageUrl(key: string): string | null {
+  return uploadedImageUrlCache.get(key);
+}
+
+export async function getUploadedImageUrl(key: string): Promise<string> {
+  const cached = getCachedUploadedImageUrl(key);
+  if (cached) return cached;
+
+  const apiUrl = getActiveApiUrl();
+  if (!apiUrl) {
+    throw new Error("No active Trace host is configured");
+  }
+
+  const response = await fetch(`${apiUrl}/uploads/url?key=${encodeURIComponent(key)}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to load image URL");
+  }
+
+  const { url } = (await response.json()) as { url?: string };
+  if (!url) {
+    throw new Error("Invalid image URL response");
+  }
+
+  uploadedImageUrlCache.set(key, url);
+  return url;
 }

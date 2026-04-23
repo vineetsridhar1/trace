@@ -87,6 +87,45 @@ function readForwardedFor(headers: IncomingHttpHeaders): string | null {
   return trimmed || null;
 }
 
+function readHeaderValue(headers: IncomingHttpHeaders, key: string): string | null {
+  const rawValue = headers[key];
+  const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function readForwardedHost(headers: IncomingHttpHeaders): string | null {
+  const value = readHeaderValue(headers, "x-forwarded-host");
+  if (!value) return null;
+  const [first] = value.split(",");
+  const trimmed = first?.trim() ?? "";
+  return trimmed || null;
+}
+
+function readRequestHost(headers: IncomingHttpHeaders): string | null {
+  return readForwardedHost(headers) ?? readHeaderValue(headers, "host");
+}
+
+function extractHostname(value: string): string | null {
+  try {
+    const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `http://${value}`;
+    const hostname = new URL(candidate).hostname.toLowerCase();
+    if (hostname.startsWith("[") && hostname.endsWith("]")) {
+      return hostname.slice(1, -1);
+    }
+    return hostname || null;
+  } catch {
+    return null;
+  }
+}
+
+function isTrustedLocalHostname(value: string | null): boolean {
+  const hostname = value ? extractHostname(value) : null;
+  if (!hostname) return false;
+  return hostname === "localhost" || isLoopbackAddress(hostname);
+}
+
 export function isLoopbackAddress(value: string | null | undefined): boolean {
   if (!value) return false;
   const normalized = normalizeIpAddress(value);
@@ -99,9 +138,24 @@ export function isLoopbackRequest(request: RequestAuthSource): boolean {
     return false;
   }
   const forwardedFor = readForwardedFor(request.headers);
-  if (forwardedFor) {
-    return isLoopbackAddress(forwardedFor);
+  if (forwardedFor && !isLoopbackAddress(forwardedFor)) {
+    return false;
   }
+
+  if (!isTrustedLocalHostname(readRequestHost(request.headers))) {
+    return false;
+  }
+
+  const origin = readHeaderValue(request.headers, "origin");
+  if (origin && !isTrustedLocalHostname(origin)) {
+    return false;
+  }
+
+  const referer = readHeaderValue(request.headers, "referer");
+  if (referer && !isTrustedLocalHostname(referer)) {
+    return false;
+  }
+
   return true;
 }
 

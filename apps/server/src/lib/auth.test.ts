@@ -55,22 +55,55 @@ describe("auth helpers", () => {
   it("only treats requests as loopback when the socket and forwarded client are loopback", () => {
     expect(
       isLoopbackRequest({
-        headers: {},
+        headers: { host: "localhost:4000" },
         socket: { remoteAddress: "127.0.0.1" },
       }),
     ).toBe(true);
     expect(
       isLoopbackRequest({
-        headers: { "x-forwarded-for": "203.0.113.10" },
+        headers: {
+          host: "localhost:4000",
+          "x-forwarded-for": "203.0.113.10",
+        },
         socket: { remoteAddress: "127.0.0.1" },
       }),
     ).toBe(false);
     expect(
       isLoopbackRequest({
-        headers: { "x-forwarded-for": "127.0.0.1" },
+        headers: {
+          host: "localhost:4000",
+          "x-forwarded-for": "127.0.0.1",
+        },
         socket: { remoteAddress: "203.0.113.10" },
       }),
     ).toBe(false);
+  });
+
+  it("requires a local host and browser origin for loopback trust", () => {
+    expect(
+      isLoopbackRequest({
+        headers: { host: "trace.example.com" },
+        socket: { remoteAddress: "127.0.0.1" },
+      }),
+    ).toBe(false);
+    expect(
+      isLoopbackRequest({
+        headers: {
+          host: "localhost:4000",
+          origin: "https://trace.example.com",
+        },
+        socket: { remoteAddress: "127.0.0.1" },
+      }),
+    ).toBe(false);
+    expect(
+      isLoopbackRequest({
+        headers: {
+          host: "localhost:4000",
+          referer: "http://localhost:3000/settings",
+        },
+        socket: { remoteAddress: "127.0.0.1" },
+      }),
+    ).toBe(true);
   });
 
   it("verifies valid tokens and rejects invalid ones", () => {
@@ -155,7 +188,26 @@ describe("auth helpers", () => {
         req: {
           headers: {
             authorization: `Bearer ${token}`,
+            host: "localhost:4000",
             "x-forwarded-for": "203.0.113.10",
+          },
+          cookies: {},
+          socket: { remoteAddress: "127.0.0.1" },
+        },
+      } as unknown as Parameters<typeof buildContext>[0]),
+    ).rejects.toThrow("External local-mode access requires a paired mobile token");
+  });
+
+  it("rejects local-mode HTTP access when the request host is public", async () => {
+    vi.stubEnv("TRACE_LOCAL_MODE", "1");
+
+    const token = jwt.sign({ userId: "user-2" }, JWT_SECRET);
+    await expect(
+      buildContext({
+        req: {
+          headers: {
+            authorization: `Bearer ${token}`,
+            host: "trace.example.com",
           },
           cookies: {},
           socket: { remoteAddress: "127.0.0.1" },
@@ -178,6 +230,7 @@ describe("auth helpers", () => {
       req: {
         headers: {
           authorization: `Bearer ${token}`,
+          host: "localhost:4000",
           "x-organization-id": "org-stale",
         },
         cookies: {},
@@ -203,7 +256,29 @@ describe("auth helpers", () => {
         { token },
         undefined,
         {
-          headers: { "x-forwarded-for": "203.0.113.20" },
+          headers: {
+            host: "localhost:4000",
+            "x-forwarded-for": "203.0.113.20",
+          },
+          socket: { remoteAddress: "127.0.0.1" },
+        },
+      ),
+    ).rejects.toThrow("External local-mode access requires a paired mobile token");
+  });
+
+  it("rejects local-mode websocket access when the browser origin is public", async () => {
+    vi.stubEnv("TRACE_LOCAL_MODE", "1");
+
+    const token = jwt.sign({ userId: "user-3" }, JWT_SECRET);
+    await expect(
+      buildWsContext(
+        { token },
+        undefined,
+        {
+          headers: {
+            host: "localhost:4000",
+            origin: "https://trace.example.com",
+          },
           socket: { remoteAddress: "127.0.0.1" },
         },
       ),

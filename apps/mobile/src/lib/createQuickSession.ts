@@ -10,16 +10,14 @@ import {
 } from "@trace/client-core";
 import { getDefaultModel } from "@trace/shared";
 import type { CodingTool } from "@trace/gql";
+import { getConnectionMode } from "@/lib/connection-target";
 import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
+import { resolveMobileSessionHosting } from "@/lib/session-hosting";
 import { closeSessionPlayer, tryOpenSessionPlayer } from "@/lib/sessionPlayer";
 import { useMobileUIStore } from "@/stores/ui";
 
 const DEFAULT_TOOL: CodingTool = "claude_code";
-// Mobile only supports local sessions for now. The server resolves the
-// caller's default accessible local runtime when no explicit runtime id is
-// provided.
-const DEFAULT_HOSTING = "local";
 
 /**
  * Mobile twin of web's `createQuickSession`: inserts optimistic session
@@ -35,7 +33,7 @@ export async function createQuickSession(channelId: string): Promise<void> {
   const tempGroupId = generateUUID();
   const tool = DEFAULT_TOOL;
   const model = getDefaultModel(tool);
-  const hosting = DEFAULT_HOSTING;
+  const hosting = resolveMobileSessionHosting(getConnectionMode());
 
   insertOptimisticSessionPair({
     tempSessionId,

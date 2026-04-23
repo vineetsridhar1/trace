@@ -107,4 +107,29 @@ describe("upload routes in local mode", () => {
     });
     expect(storageMock.getGetUrl).not.toHaveBeenCalled();
   });
+
+  it("rejects proxied external uploads without a paired mobile token", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/uploads/presign`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "X-Forwarded-Host": "trace.example.com",
+      },
+      body: JSON.stringify({
+        filename: "screen.png",
+        contentType: "image/png",
+        organizationId: "org-local",
+      }),
+    });
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({
+      error: "External local-mode access requires a paired mobile token",
+    });
+    expect(storageMock.getPutUrl).not.toHaveBeenCalled();
+  });
 });

@@ -207,6 +207,20 @@ describe("local login", () => {
     expect(res.status).toBe(403);
     expect(prismaMock.user.upsert).not.toHaveBeenCalled();
   });
+
+  it("rejects proxied local logins without forwarded-for when the forwarded host is public", async () => {
+    const res = await fetch(`${baseUrl}/auth/local/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Forwarded-Host": "trace.example.com",
+      },
+      body: JSON.stringify({ name: "Jane Developer" }),
+    });
+
+    expect(res.status).toBe(403);
+    expect(prismaMock.user.upsert).not.toHaveBeenCalled();
+  });
 });
 
 describe("local-mode external auth", () => {
@@ -239,6 +253,21 @@ describe("local-mode external auth", () => {
       headers: {
         Authorization: `Bearer ${token}`,
         "X-Forwarded-For": "203.0.113.10",
+      },
+    });
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({
+      error: "External local-mode access requires a paired mobile token",
+    });
+  });
+
+  it("rejects external auth/me requests when the public origin is tunneled over localhost", async () => {
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Origin: "https://trace.example.com",
       },
     });
 
