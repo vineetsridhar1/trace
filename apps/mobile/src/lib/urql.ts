@@ -1,11 +1,12 @@
 import { createGqlClient, type GqlClient } from "@trace/client-core";
-import { HTTP_GRAPHQL_URL, WS_GRAPHQL_URL } from "@/lib/env";
+import { getGraphqlUrls } from "@/lib/connection-target";
 import { useConnectionStore } from "@/stores/connection";
 
 function build(): GqlClient {
+  const { httpUrl, wsUrl } = getGraphqlUrls();
   return createGqlClient({
-    httpUrl: HTTP_GRAPHQL_URL,
-    wsUrl: WS_GRAPHQL_URL,
+    httpUrl,
+    wsUrl,
     onConnectionChange: (connected: boolean) => {
       useConnectionStore.getState().setConnected(connected);
     },

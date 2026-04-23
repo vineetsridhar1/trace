@@ -25,6 +25,7 @@ import {
   authRouter,
   createOAuthStateToken,
   getAllowedOAuthOrigins,
+  isLoopbackHost,
   verifyOAuthStateToken,
 } from "./auth.js";
 
@@ -57,6 +58,15 @@ describe("oauth state token", () => {
 
   it("rejects unsigned / garbage input", () => {
     expect(verifyOAuthStateToken("not-a-jwt")).toBeNull();
+  });
+});
+
+describe("loopback host checks", () => {
+  it("allows localhost hosts and rejects tunneled hosts", () => {
+    expect(isLoopbackHost("localhost:4000")).toBe(true);
+    expect(isLoopbackHost("127.0.0.1:4000")).toBe(true);
+    expect(isLoopbackHost("[::1]:4000")).toBe(true);
+    expect(isLoopbackHost("trace.ngrok-free.app")).toBe(false);
   });
 });
 
@@ -154,6 +164,143 @@ describe("local login", () => {
 
     expect(res.status).toBe(400);
     expect(prismaMock.user.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("local mobile pairing", () => {
+  let server: Server;
+  let baseUrl: string;
+
+  beforeEach(async () => {
+    vi.stubEnv("TRACE_LOCAL_MODE", "1");
+
+    prismaMock.$transaction.mockImplementation(async (callback: (tx: PrismaMock) => unknown) =>
+      callback(prismaMock),
+    );
+
+    const app = express();
+    app.use(express.json());
+    app.use(authRouter);
+
+    server = createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const { port } = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${port}`;
+  });
+
+  afterEach(async () => {
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
+    vi.unstubAllEnvs();
+  });
+
+  it("creates a one-time pairing token for an authenticated local session", async () => {
+    prismaMock.orgMember.findUnique.mockResolvedValue({ organizationId: "org-1" });
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/auth/local-mobile/pairing-token`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Organization-Id": "org-1",
+      },
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { pairingToken: string; expiresAt: string };
+    expect(body.pairingToken.length).toBeGreaterThan(20);
+    expect(new Date(body.expiresAt).toString()).not.toBe("Invalid Date");
+    expect(prismaMock.localMobilePairingToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        ownerUserId: "user-1",
+        organizationId: "org-1",
+        tokenHash: expect.any(String),
+      }),
+    });
+  });
+
+  it("redeems a pairing token into a revocable device secret", async () => {
+    prismaMock.localMobilePairingToken.findUnique
+      .mockResolvedValueOnce({
+        id: "pair-1",
+        ownerUserId: "user-1",
+        organizationId: "org-1",
+        expiresAt: new Date(Date.now() + 60_000),
+        usedAt: null,
+      })
+      .mockResolvedValueOnce({
+        id: "pair-1",
+        ownerUserId: "user-1",
+        organizationId: "org-1",
+        expiresAt: new Date(Date.now() + 60_000),
+        usedAt: null,
+      });
+    prismaMock.localMobileDevice.upsert.mockResolvedValue({ id: "device-1" });
+    prismaMock.localMobilePairingToken.update.mockResolvedValue({ id: "pair-1" });
+
+    const res = await fetch(`${baseUrl}/auth/local-mobile/pair`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pairingToken: "pair-token-1234567890",
+        installId: "install-12345678",
+        deviceName: "Vineet's iPhone",
+        platform: "ios",
+        appVersion: "0.0.1",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      token: string;
+      deviceId: string;
+      organizationId: string;
+    };
+    expect(body.token.length).toBeGreaterThan(20);
+    expect(body.deviceId).toBe("device-1");
+    expect(body.organizationId).toBe("org-1");
+    expect(prismaMock.localMobileDevice.upsert).toHaveBeenCalledWith({
+      where: {
+        ownerUserId_organizationId_installId: {
+          ownerUserId: "user-1",
+          organizationId: "org-1",
+          installId: "install-12345678",
+        },
+      },
+      update: expect.objectContaining({
+        deviceName: "Vineet's iPhone",
+        platform: "ios",
+        appVersion: "0.0.1",
+        revokedAt: null,
+      }),
+      create: expect.objectContaining({
+        ownerUserId: "user-1",
+        organizationId: "org-1",
+        installId: "install-12345678",
+      }),
+      select: {
+        id: true,
+      },
+    });
+  });
+
+  it("revokes local mobile device secrets on logout", async () => {
+    prismaMock.localMobileDevice.findUnique.mockResolvedValue({
+      id: "device-1",
+      ownerUserId: "user-1",
+      organizationId: "org-1",
+      revokedAt: null,
+    });
+    prismaMock.localMobileDevice.updateMany.mockResolvedValue({ count: 1 });
+
+    const res = await fetch(`${baseUrl}/auth/logout`, {
+      method: "POST",
+      headers: { Authorization: "Bearer opaque-device-secret" },
+    });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.localMobileDevice.updateMany).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -7,11 +7,18 @@ import {
   Text,
   View,
 } from "react-native";
+import { useRouter } from "expo-router";
 import * as ExpoLinking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { useAuthStore, type AuthState } from "@trace/client-core";
-import { API_URL, isApiUrlConfigured } from "@/lib/env";
+import {
+  activateHostedConnection,
+  getHostedApiUrl,
+  getPairedLocalApiUrl,
+  hasHostedApiUrlConfigured,
+} from "@/lib/connection-target";
 import { haptic } from "@/lib/haptics";
+import { recreateClient } from "@/lib/urql";
 
 const REDIRECT_URL = "trace://auth/callback";
 const TERMS_URL = "https://trace.app/terms";
@@ -28,14 +35,16 @@ function tokenFromCallback(rawUrl: string): string | null {
 }
 
 export default function SignInScreen() {
+  const router = useRouter();
   const signInWithToken = useAuthStore((s: AuthState) => s.signInWithToken);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pairedLocalUrl = getPairedLocalApiUrl();
 
   async function handleSignIn() {
     if (loading) return;
     setError(null);
-    if (!isApiUrlConfigured()) {
+    if (!hasHostedApiUrlConfigured()) {
       // Validation fails before the request even goes out — fire only the
       // error haptic so the user doesn't feel a confusing tap+error pair.
       setError(
@@ -48,8 +57,10 @@ export default function SignInScreen() {
     void haptic.light();
     setLoading(true);
     try {
+      activateHostedConnection();
+      recreateClient();
       const result = await WebBrowser.openAuthSessionAsync(
-        `${API_URL}/auth/github?origin=trace-mobile`,
+        `${getHostedApiUrl()}/auth/github?origin=trace-mobile`,
         REDIRECT_URL,
       );
       if (result.type !== "success") {
@@ -79,21 +90,38 @@ export default function SignInScreen() {
     <View style={styles.container}>
       <View style={styles.center}>
         <Text style={styles.wordmark}>trace</Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={handleSignIn}
-          disabled={loading}
-          style={({ pressed }) => [
-            styles.button,
-            (pressed || loading) && styles.buttonPressed,
-          ]}
-        >
-          {loading ? (
-            <ActivityIndicator color="#000" />
-          ) : (
-            <Text style={styles.buttonText}>Continue with GitHub</Text>
-          )}
-        </Pressable>
+        <View style={styles.actions}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={handleSignIn}
+            disabled={loading}
+            style={({ pressed }) => [
+              styles.button,
+              (pressed || loading) && styles.buttonPressed,
+            ]}
+          >
+            {loading ? (
+              <ActivityIndicator color="#000" />
+            ) : (
+              <Text style={styles.buttonText}>Continue with GitHub</Text>
+            )}
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/pair-local")}
+            disabled={loading}
+            style={({ pressed }) => [
+              styles.secondaryButton,
+              (pressed || loading) && styles.buttonPressed,
+            ]}
+          >
+            <Text style={styles.secondaryButtonText}>Pair with local session</Text>
+            <Text style={styles.secondaryHint}>
+              {pairedLocalUrl ? `Saved host: ${pairedLocalUrl}` : "Scan a QR code from your local Trace app"}
+            </Text>
+          </Pressable>
+        </View>
         {error && <Text style={styles.error}>{error}</Text>}
       </View>
 
@@ -123,6 +151,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 32,
   },
+  actions: {
+    width: "100%",
+    gap: 12,
+    alignItems: "center",
+  },
   wordmark: {
     color: "#fff",
     fontSize: 36,
@@ -137,6 +170,18 @@ const styles = StyleSheet.create({
     minWidth: 240,
     alignItems: "center",
   },
+  secondaryButton: {
+    width: "100%",
+    maxWidth: 320,
+    borderRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#2f2f2f",
+    backgroundColor: "#111",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 4,
+    alignItems: "center",
+  },
   buttonPressed: {
     opacity: 0.7,
   },
@@ -144,6 +189,16 @@ const styles = StyleSheet.create({
     color: "#000",
     fontSize: 16,
     fontWeight: "600",
+  },
+  secondaryButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  secondaryHint: {
+    color: "#888",
+    fontSize: 12,
+    textAlign: "center",
   },
   error: {
     color: "#ff6b6b",

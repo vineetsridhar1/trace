@@ -1,5 +1,5 @@
 import { getAuthHeaders } from "@trace/client-core";
-import { API_URL } from "./env";
+import { getActiveApiUrl } from "./connection-target";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -55,8 +55,12 @@ export async function uploadImage(args: UploadArgs): Promise<string> {
   }
 
   const filename = `attachment-${Date.now()}.${extensionFor(args.mimeType)}`;
+  const apiUrl = getActiveApiUrl();
+  if (!apiUrl) {
+    throw new Error("No active Trace host is configured");
+  }
 
-  const presignResponse = await fetch(`${API_URL}/uploads/presign`, {
+  const presignResponse = await fetch(`${apiUrl}/uploads/presign`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

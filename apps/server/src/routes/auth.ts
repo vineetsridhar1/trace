@@ -1,12 +1,21 @@
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import jwt from "jsonwebtoken";
+import type { PushPlatform } from "@prisma/client";
 import { prisma } from "../lib/db.js";
-import { createBridgeAuthToken, getRequestToken, verifyToken } from "../lib/auth.js";
+import { authenticateAccessToken, createBridgeAuthToken, getRequestToken } from "../lib/auth.js";
 import { isLocalMode } from "../lib/mode.js";
 import {
   ensureLocalUserWorkspace,
   normalizeLocalLoginName,
 } from "../services/local-bootstrap.js";
+import {
+  createLocalMobilePairingToken,
+  listLocalMobileDevices,
+  LocalMobileAuthError,
+  pairLocalMobileDevice,
+  revokeLocalMobileDevice,
+  revokeLocalMobileDeviceByToken,
+} from "../services/local-mobile-auth.js";
 
 const router: RouterType = Router();
 
@@ -93,9 +102,86 @@ function setSessionCookie(res: Response, token: string): void {
   });
 }
 
+function readHostValue(req: Request): string {
+  const forwardedHost = req.headers["x-forwarded-host"];
+  const host =
+    (typeof forwardedHost === "string" && forwardedHost) ||
+    (Array.isArray(forwardedHost) ? forwardedHost[0] : "") ||
+    req.headers.host ||
+    req.hostname ||
+    "";
+  return host.trim();
+}
+
+function hostnameFromHost(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("[")) {
+    const end = trimmed.indexOf("]");
+    return end === -1 ? trimmed.slice(1).toLowerCase() : trimmed.slice(1, end).toLowerCase();
+  }
+  const [hostname] = trimmed.split(":");
+  return hostname.toLowerCase();
+}
+
+export function isLoopbackHost(value: string): boolean {
+  const hostname = hostnameFromHost(value);
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function isLoopbackRequest(req: Request): boolean {
+  return isLoopbackHost(readHostValue(req));
+}
+
+function readOrganizationIdHeader(req: Request): string | null {
+  const rawOrgId = req.headers["x-organization-id"];
+  const organizationId = Array.isArray(rawOrgId) ? rawOrgId[0] : rawOrgId;
+  return typeof organizationId === "string" && organizationId.trim()
+    ? organizationId.trim()
+    : null;
+}
+
+async function resolveAuthenticatedUser(req: Request): Promise<{
+  token: string;
+  auth: Exclude<Awaited<ReturnType<typeof authenticateAccessToken>>, null>;
+} | null> {
+  const token = getRequestToken(req);
+  if (!token) return null;
+  const auth = await authenticateAccessToken(token);
+  if (!auth) return null;
+  return { token, auth };
+}
+
+async function resolveRequestedOrganizationId(
+  userId: string,
+  requestedOrgId: string | null,
+): Promise<string | null> {
+  if (requestedOrgId) {
+    const membership = await prisma.orgMember.findUnique({
+      where: { userId_organizationId: { userId, organizationId: requestedOrgId } },
+      select: { organizationId: true },
+    });
+    return membership?.organizationId ?? null;
+  }
+
+  const firstMembership = await prisma.orgMember.findFirst({
+    where: { userId },
+    orderBy: { joinedAt: "asc" },
+    select: { organizationId: true },
+  });
+  return firstMembership?.organizationId ?? null;
+}
+
+function parsePushPlatform(value: unknown): PushPlatform | null {
+  return value === "ios" || value === "android" ? value : null;
+}
+
 router.post("/auth/local/login", async (req: Request, res: Response) => {
   if (!isLocalMode()) {
     return res.status(404).json({ error: "Local login is only available in local mode" });
+  }
+  if (!isLoopbackRequest(req)) {
+    return res.status(403).json({ error: "Local login is only available on localhost" });
   }
 
   const rawName = typeof req.body?.name === "string" ? req.body.name : "";
@@ -112,6 +198,131 @@ router.post("/auth/local/login", async (req: Request, res: Response) => {
     organizationId,
     user,
   });
+});
+
+router.post("/auth/local-mobile/pairing-token", async (req: Request, res: Response) => {
+  if (!isLocalMode()) {
+    return res.status(404).json({ error: "Local mobile pairing is only available in local mode" });
+  }
+
+  const authenticated = await resolveAuthenticatedUser(req);
+  if (!authenticated) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  if (authenticated.auth.kind !== "session") {
+    return res.status(403).json({ error: "Pairing must be started from the local app" });
+  }
+
+  const organizationId = await resolveRequestedOrganizationId(
+    authenticated.auth.userId,
+    readOrganizationIdHeader(req),
+  );
+  if (!organizationId) {
+    return res.status(403).json({ error: "No active organization found" });
+  }
+
+  const pairing = await createLocalMobilePairingToken({
+    ownerUserId: authenticated.auth.userId,
+    organizationId,
+  });
+  res.json(pairing);
+});
+
+router.post("/auth/local-mobile/pair", async (req: Request, res: Response) => {
+  if (!isLocalMode()) {
+    return res.status(404).json({ error: "Local mobile pairing is only available in local mode" });
+  }
+
+  const pairingToken = typeof req.body?.pairingToken === "string" ? req.body.pairingToken : "";
+  const installId = typeof req.body?.installId === "string" ? req.body.installId : "";
+  const deviceName = typeof req.body?.deviceName === "string" ? req.body.deviceName : undefined;
+  const appVersion = typeof req.body?.appVersion === "string" ? req.body.appVersion : undefined;
+  const platform = parsePushPlatform(req.body?.platform);
+
+  try {
+    const result = await pairLocalMobileDevice({
+      pairingToken,
+      installId,
+      deviceName,
+      appVersion,
+      platform,
+    });
+    res.json(result);
+  } catch (error) {
+    if (error instanceof LocalMobileAuthError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    throw error;
+  }
+});
+
+router.get("/auth/local-mobile/devices", async (req: Request, res: Response) => {
+  if (!isLocalMode()) {
+    return res.status(404).json({ error: "Local mobile pairing is only available in local mode" });
+  }
+
+  const authenticated = await resolveAuthenticatedUser(req);
+  if (!authenticated) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  if (authenticated.auth.kind !== "session") {
+    return res.status(403).json({ error: "Paired devices can only be managed from the local app" });
+  }
+
+  const organizationId = await resolveRequestedOrganizationId(
+    authenticated.auth.userId,
+    readOrganizationIdHeader(req),
+  );
+  if (!organizationId) {
+    return res.status(403).json({ error: "No active organization found" });
+  }
+
+  const devices = await listLocalMobileDevices({
+    ownerUserId: authenticated.auth.userId,
+    organizationId,
+  });
+  res.json({ devices });
+});
+
+router.delete("/auth/local-mobile/devices/:deviceId", async (req: Request, res: Response) => {
+  if (!isLocalMode()) {
+    return res.status(404).json({ error: "Local mobile pairing is only available in local mode" });
+  }
+
+  const authenticated = await resolveAuthenticatedUser(req);
+  if (!authenticated) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  if (authenticated.auth.kind !== "session") {
+    return res.status(403).json({ error: "Paired devices can only be managed from the local app" });
+  }
+
+  const organizationId = await resolveRequestedOrganizationId(
+    authenticated.auth.userId,
+    readOrganizationIdHeader(req),
+  );
+  if (!organizationId) {
+    return res.status(403).json({ error: "No active organization found" });
+  }
+  const deviceId =
+    typeof req.params.deviceId === "string" ? req.params.deviceId : req.params.deviceId?.[0] ?? "";
+  if (!deviceId) {
+    return res.status(400).json({ error: "deviceId is required" });
+  }
+
+  try {
+    await revokeLocalMobileDevice({
+      ownerUserId: authenticated.auth.userId,
+      organizationId,
+      deviceId,
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    if (error instanceof LocalMobileAuthError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    throw error;
+  }
 });
 
 // Redirect to GitHub OAuth
@@ -288,19 +499,14 @@ function resolveStateOrigin(rawState: unknown): string | null {
 
 // Get current user with org memberships
 router.get("/auth/me", async (req: Request, res: Response) => {
-  const token = getRequestToken(req);
-  if (!token) {
+  const authenticated = await resolveAuthenticatedUser(req);
+  if (!authenticated) {
     return res.status(401).json({ error: "Not authenticated" });
-  }
-
-  const userId = verifyToken(token);
-  if (!userId) {
-    return res.status(401).json({ error: "Invalid token" });
   }
 
   try {
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: authenticated.auth.userId },
       select: {
         id: true,
         email: true,
@@ -325,23 +531,30 @@ router.get("/auth/me", async (req: Request, res: Response) => {
     // This is necessary when the user authenticated via httpOnly cookie
     // (e.g. after an OAuth popup where window.opener was severed) and the
     // client-side JS doesn't have the raw JWT for the desktop bridge.
-    res.json({ user, token });
+    res.json({
+      user,
+      token: authenticated.auth.kind === "session" ? authenticated.token : undefined,
+    });
   } catch {
     return res.status(401).json({ error: "Invalid token" });
   }
 });
 
 router.get("/auth/bridge-token", async (req: Request, res: Response) => {
-  const token = getRequestToken(req);
-  const userId = token ? verifyToken(token) : null;
-  if (!userId) {
+  const authenticated = await resolveAuthenticatedUser(req);
+  if (!authenticated) {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
-  const rawOrgId = req.headers["x-organization-id"];
-  const organizationId = Array.isArray(rawOrgId) ? rawOrgId[0] : rawOrgId;
-  if (typeof organizationId !== "string" || !organizationId.trim()) {
+  const organizationId = readOrganizationIdHeader(req);
+  if (!organizationId) {
     return res.status(400).json({ error: "Missing X-Organization-Id header" });
+  }
+  if (
+    authenticated.auth.kind === "local_mobile" &&
+    authenticated.auth.organizationId !== organizationId
+  ) {
+    return res.status(403).json({ error: "This mobile device is not paired for that organization" });
   }
 
   const instanceId = typeof req.query.instanceId === "string" ? req.query.instanceId.trim() : "";
@@ -350,14 +563,23 @@ router.get("/auth/bridge-token", async (req: Request, res: Response) => {
   }
 
   const membership = await prisma.orgMember.findUnique({
-    where: { userId_organizationId: { userId, organizationId } },
+    where: {
+      userId_organizationId: {
+        userId: authenticated.auth.userId,
+        organizationId,
+      },
+    },
     select: { userId: true },
   });
   if (!membership) {
     return res.status(403).json({ error: "Not a member of this organization" });
   }
 
-  const bridgeToken = createBridgeAuthToken({ userId, organizationId, instanceId });
+  const bridgeToken = createBridgeAuthToken({
+    userId: authenticated.auth.userId,
+    organizationId,
+    instanceId,
+  });
   res.json({
     token: bridgeToken.token,
     expiresAt: bridgeToken.expiresAt.toISOString(),
@@ -365,7 +587,11 @@ router.get("/auth/bridge-token", async (req: Request, res: Response) => {
 });
 
 // Logout
-router.post("/auth/logout", (_req: Request, res: Response) => {
+router.post("/auth/logout", async (req: Request, res: Response) => {
+  const authenticated = await resolveAuthenticatedUser(req);
+  if (authenticated?.auth.kind === "local_mobile") {
+    await revokeLocalMobileDeviceByToken(authenticated.token);
+  }
   res.clearCookie("trace_token", {
     path: "/",
     secure: process.env.NODE_ENV === "production",

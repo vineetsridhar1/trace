@@ -79,6 +79,17 @@ export function createPrismaMock() {
       delete: vi.fn(),
       deleteMany: vi.fn(),
     },
+    localMobilePairingToken: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
+    localMobileDevice: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      upsert: vi.fn(),
+      updateMany: vi.fn(),
+    },
     event: {
       create: vi.fn(),
       findMany: vi.fn(),

@@ -24,6 +24,7 @@ vi.mock("./dataloader.js", () => ({
 import { prisma } from "./db.js";
 import { createUserLoader } from "./dataloader.js";
 import {
+  authenticateAccessToken,
   buildContext,
   buildWsContext,
   createBridgeAuthToken,
@@ -66,6 +67,23 @@ describe("auth helpers", () => {
       organizationId: "org-1",
       instanceId: "bridge-1",
       tokenType: "bridge_auth",
+    });
+  });
+
+  it("authenticates opaque local mobile device secrets", async () => {
+    prismaMock.localMobileDevice.findUnique.mockResolvedValueOnce({
+      id: "device-1",
+      ownerUserId: "user-1",
+      organizationId: "org-1",
+      revokedAt: null,
+    });
+    prismaMock.localMobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
+
+    await expect(authenticateAccessToken("opaque-device-secret")).resolves.toEqual({
+      kind: "local_mobile",
+      userId: "user-1",
+      organizationId: "org-1",
+      deviceId: "device-1",
     });
   });
 
@@ -126,5 +144,28 @@ describe("auth helpers", () => {
 
     expect(context.userId).toBe("user-3");
     expect(context.role).toBe("observer");
+  });
+
+  it("pins local mobile websocket auth to its paired organization", async () => {
+    prismaMock.localMobileDevice.findUnique.mockResolvedValueOnce({
+      id: "device-2",
+      ownerUserId: "user-4",
+      organizationId: "org-local",
+      revokedAt: null,
+    });
+    prismaMock.localMobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-4", email: "local@trace.dev" });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({
+      role: "admin",
+    });
+
+    const context = await buildWsContext({
+      token: "opaque-device-secret",
+      organizationId: "org-local",
+    });
+
+    expect(context.userId).toBe("user-4");
+    expect(context.organizationId).toBe("org-local");
+    expect(context.role).toBe("admin");
   });
 });

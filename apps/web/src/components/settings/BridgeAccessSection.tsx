@@ -18,6 +18,7 @@ import {
   getBridgeAccessApprovalExpiresAt,
 } from "../../lib/bridge-access";
 import { cn } from "../../lib/utils";
+import { isLocalMode } from "../../lib/runtime-mode";
 import { Button, buttonVariants } from "../ui/button";
 import {
   DropdownMenu,
@@ -25,6 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import { LocalMobilePairingSection } from "./LocalMobilePairingSection";
 
 type BridgeUser = {
   id: string;
@@ -163,6 +165,7 @@ export function BridgeAccessSection() {
 
   return (
     <div>
+      {isLocalMode ? <LocalMobilePairingSection /> : null}
       <div className="mb-4">
         <h2 className="text-base font-semibold text-foreground">Bridge Access</h2>
         <p className="text-sm text-muted-foreground">

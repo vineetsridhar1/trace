@@ -30,6 +30,12 @@
     "plugins": [
       "expo-router",
       "expo-dev-client",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Trace to scan a QR code from your local app."
+        }
+      ],
       "expo-secure-store",
       "expo-notifications",
       "react-native-bottom-tabs",

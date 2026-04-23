@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { prisma } from "../lib/db.js";
-import { getRequestToken, verifyToken } from "../lib/auth.js";
+import { authenticateAccessToken, getRequestToken } from "../lib/auth.js";
 import { storage } from "../lib/storage/index.js";
 
 const router: RouterType = Router();
@@ -29,13 +29,13 @@ router.post("/uploads/presign", async (req: Request, res: Response) => {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
-  const userId = verifyToken(token);
-  if (!userId) {
+  const auth = await authenticateAccessToken(token);
+  if (!auth) {
     return res.status(401).json({ error: "Invalid token" });
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: auth.userId },
     select: { id: true },
   });
   if (!user) {
@@ -53,7 +53,7 @@ router.post("/uploads/presign", async (req: Request, res: Response) => {
   }
 
   const membership = await prisma.orgMember.findUnique({
-    where: { userId_organizationId: { userId, organizationId } },
+    where: { userId_organizationId: { userId: auth.userId, organizationId } },
     select: { role: true },
   });
   if (!membership) {
@@ -85,13 +85,13 @@ router.get("/uploads/url", async (req: Request, res: Response) => {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
-  const userId = verifyToken(token);
-  if (!userId) {
+  const auth = await authenticateAccessToken(token);
+  if (!auth) {
     return res.status(401).json({ error: "Invalid token" });
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: auth.userId },
     select: { id: true },
   });
   if (!user) {
@@ -108,7 +108,7 @@ router.get("/uploads/url", async (req: Request, res: Response) => {
   if (segments.length >= 3 && segments[1]) {
     const orgId = segments[1];
     const membership = await prisma.orgMember.findUnique({
-      where: { userId_organizationId: { userId, organizationId: orgId } },
+      where: { userId_organizationId: { userId: auth.userId, organizationId: orgId } },
       select: { role: true },
     });
     if (!membership) {

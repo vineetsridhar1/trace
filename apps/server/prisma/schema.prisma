@@ -259,6 +259,8 @@ model Organization {
 
   orgMembers OrgMember[]
   pushTokens PushToken[]
+  localMobilePairingTokens LocalMobilePairingToken[]
+  localMobileDevices LocalMobileDevice[]
   repos    Repo[]
   projects Project[]
   bridgeRuntimes BridgeRuntime[]
@@ -430,6 +432,8 @@ model User {
   githubId       Int?         @unique
 
   orgMemberships    OrgMember[]
+  localMobilePairingTokens LocalMobilePairingToken[] @relation("LocalMobilePairingTokenOwner")
+  localMobileDevices LocalMobileDevice[] @relation("LocalMobileDeviceOwner")
   ownedBridgeRuntimes BridgeRuntime[] @relation("BridgeRuntimeOwner")
   bridgeAccessGrants BridgeAccessGrant[] @relation("BridgeAccessGrantGrantee")
   grantedBridgeAccessGrants BridgeAccessGrant[] @relation("BridgeAccessGrantGrantedBy")
@@ -851,6 +855,43 @@ model BridgeRuntime {
 
   @@index([organizationId, ownerUserId])
   @@index([organizationId, connectedAt])
+}
+
+model LocalMobilePairingToken {
+  id             String       @id @default(uuid())
+  ownerUserId    String
+  ownerUser      User         @relation("LocalMobilePairingTokenOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tokenHash      String       @unique
+  expiresAt      DateTime
+  usedAt         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerUserId, organizationId, usedAt, expiresAt])
+}
+
+model LocalMobileDevice {
+  id             String       @id @default(uuid())
+  ownerUserId    String
+  ownerUser      User         @relation("LocalMobileDeviceOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  installId      String
+  deviceName     String?
+  platform       PushPlatform?
+  appVersion     String?
+  tokenHash      String       @unique
+  lastSeenAt     DateTime?
+  revokedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ownerUserId, organizationId, installId])
+  @@index([organizationId, ownerUserId, revokedAt, lastSeenAt])
 }
 
 model BridgeAccessGrant {

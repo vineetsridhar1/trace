@@ -2,6 +2,7 @@ import type { ExpressContextFunctionArgument } from "@as-integrations/express5";
 import type { Request } from "express";
 import jwt from "jsonwebtoken";
 import type { Context } from "../context.js";
+import { authenticateLocalMobileSecret, type LocalMobileAuthSubject } from "../services/local-mobile-auth.js";
 import { AuthenticationError } from "./errors.js";
 import { prisma } from "./db.js";
 import {
@@ -34,6 +35,13 @@ type BridgeAuthTokenPayload = {
   tokenType: "bridge_auth";
 };
 
+type SessionAuthSubject = {
+  kind: "session";
+  userId: string;
+};
+
+export type AccessTokenAuthSubject = SessionAuthSubject | LocalMobileAuthSubject;
+
 function parseSessionToken(token: string): SessionTokenPayload | null {
   try {
     const payload = jwt.verify(token, JWT_SECRET) as SessionTokenPayload | BridgeAuthTokenPayload;
@@ -60,6 +68,20 @@ export function parseCookieToken(cookieHeader?: string): string | undefined {
 /** Verify a JWT and return the userId, or null if invalid. */
 export function verifyToken(token: string): string | null {
   return parseSessionToken(token)?.userId ?? null;
+}
+
+export async function authenticateAccessToken(
+  token: string,
+): Promise<AccessTokenAuthSubject | null> {
+  const payload = parseSessionToken(token);
+  if (payload) {
+    return {
+      kind: "session",
+      userId: payload.userId,
+    };
+  }
+
+  return authenticateLocalMobileSecret(token);
 }
 
 export function createBridgeAuthToken(input: {
@@ -130,15 +152,16 @@ export function getRequestToken(req: Pick<Request, "headers" | "cookies">): stri
 
 export async function buildContext({ req }: ExpressContextFunctionArgument): Promise<Context> {
   let userId: string | undefined;
+  let authSubject: AccessTokenAuthSubject | null = null;
 
   // Accept token from Authorization header, cookie, or x-user-id fallback
   const token = getRequestToken(req);
   if (token) {
-    const payload = parseSessionToken(token);
-    if (!payload) {
+    authSubject = await authenticateAccessToken(token);
+    if (!authSubject) {
       throw new AuthenticationError("Invalid token");
     }
-    userId = payload.userId;
+    userId = authSubject.userId;
   } else {
     const rawUserId = req.headers["x-user-id"];
     userId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
@@ -166,7 +189,17 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
   let organizationId: string | null = null;
   let role: Context["role"] = null;
 
-  if (requestedOrgId) {
+  if (authSubject?.kind === "local_mobile") {
+    if (requestedOrgId && requestedOrgId !== authSubject.organizationId) {
+      throw new AuthenticationError("This mobile device is only paired for one organization");
+    }
+    const membership = await resolveOrgMembership(user.id, authSubject.organizationId);
+    if (!membership) {
+      throw new AuthenticationError("Not a member of this organization");
+    }
+    organizationId = authSubject.organizationId;
+    role = isSuperAdmin ? "admin" : (membership.role as Context["role"]);
+  } else if (requestedOrgId) {
     const membership = await resolveOrgMembership(user.id, requestedOrgId);
     if (!membership) {
       throw new AuthenticationError("Not a member of this organization");
@@ -208,11 +241,11 @@ export async function buildWsContext(connectionParams?: Record<string, unknown>,
 
   if (!token) throw new AuthenticationError("Missing auth token for WebSocket");
 
-  const payload = parseSessionToken(token);
-  if (!payload) {
+  const authSubject = await authenticateAccessToken(token);
+  if (!authSubject) {
     throw new AuthenticationError("Invalid token");
   }
-  const userId = payload.userId;
+  const userId = authSubject.userId;
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -228,7 +261,17 @@ export async function buildWsContext(connectionParams?: Record<string, unknown>,
   let organizationId: string | null = null;
   let role: Context["role"] = null;
 
-  if (requestedOrgId) {
+  if (authSubject.kind === "local_mobile") {
+    if (requestedOrgId && requestedOrgId !== authSubject.organizationId) {
+      throw new AuthenticationError("This mobile device is only paired for one organization");
+    }
+    const membership = await resolveOrgMembership(user.id, authSubject.organizationId);
+    if (!membership) {
+      throw new AuthenticationError("Not a member of this organization");
+    }
+    organizationId = authSubject.organizationId;
+    role = isSuperAdmin ? "admin" : (membership.role as Context["role"]);
+  } else if (requestedOrgId) {
     const membership = await resolveOrgMembership(user.id, requestedOrgId);
     if (membership) {
       organizationId = requestedOrgId;
