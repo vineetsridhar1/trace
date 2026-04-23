@@ -1,6 +1,6 @@
 # Session Autopilot — Ticket Index
 
-Tickets for building Session Autopilot in Trace. Work through milestones in order. See [SESSION_AUTOPILOT_PLAN.md](../../SESSION_AUTOPILOT_PLAN.md) for the full product and engineering spec.
+Tickets for building Session Autopilot in Trace. Work through milestones in order. See [session-autopilot-plan.md](session-autopilot-plan.md) for the full product and engineering spec. The root-level [SESSION_AUTOPILOT_PLAN.md](../../SESSION_AUTOPILOT_PLAN.md) remains as the mirrored copy outside this folder.
 
 ## M0 — Contracts and Durable State
 
@@ -115,12 +115,13 @@ Post-V1
 - `## 27. Suggested Build Order` maps directly to the milestone structure in this README.
 - `## 28. Example GraphQL Operations`, `## 29. Example Event Payloads`, `## 30. Controller Prompt Draft`, and `## 31. Example Worker Follow-Up Messages` are executable reference material for tickets 02, 09, 11, and 12.
 - `## 32. Acceptance Criteria By Milestone` is split across the `Completion requirements` and `How to test` sections in tickets 01-16.
+- `## 33. Final Recommendation` is encoded in the v1 scope guardrails and milestone ordering here: session-group scope, hidden controller session, inbox-first human handoff, and QA-first playbook.
 
 If the plan gains a new actionable requirement, add or update its owning ticket in the same change and keep this coverage map in sync.
 
 ## Scope guardrails
 
-If you are unsure whether something belongs in v1, check [SESSION_AUTOPILOT_PLAN.md](../../SESSION_AUTOPILOT_PLAN.md). The intended v1 is:
+If you are unsure whether something belongs in v1, check [session-autopilot-plan.md](session-autopilot-plan.md). The intended v1 is:
 
 - session-group scoped
 - hidden controller session

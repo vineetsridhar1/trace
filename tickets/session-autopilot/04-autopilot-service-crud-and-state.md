@@ -16,6 +16,8 @@ Create the service-layer entry point for Session Autopilot. This service owns en
 - Emit Autopilot lifecycle events through the event service.
 - Create or reuse the hidden controller session when enabling Autopilot.
 - Resolve the current active worker session in the group.
+- Enforce service-layer authorization for read/write actions on the target session group.
+- Validate that the requested controller tool/model/runtime is allowed for the org and execution environment.
 - Add GraphQL resolvers that delegate to the service.
 
 ## Dependencies
@@ -30,12 +32,15 @@ Create the service-layer entry point for Session Autopilot. This service owns en
 - [ ] Disable mutation turns Autopilot off without touching the worker session.
 - [ ] `runNow` marks a run as requested and is safe to call repeatedly.
 - [ ] Enabling Autopilot creates or reuses a controller session with `role = autopilot_controller`.
+- [ ] Unauthorized callers cannot read or mutate Autopilot state.
+- [ ] Invalid or unavailable controller config is rejected before persistence.
 - [ ] All state changes emit events.
 
 ## Implementation notes
 
 - Keep this ticket limited to service CRUD and state transitions. The controller review loop comes later.
 - Default enabled state should land in `waiting` unless there is an immediate run requested.
+- Permissions belong here in the service layer, not in GraphQL resolvers or the UI.
 
 ## How to test
 
@@ -44,4 +49,3 @@ Create the service-layer entry point for Session Autopilot. This service owns en
 3. Verify a controller session is created once.
 4. Update the config and confirm it reuses the same controller session.
 5. Disable Autopilot and verify status and event emission.
-
