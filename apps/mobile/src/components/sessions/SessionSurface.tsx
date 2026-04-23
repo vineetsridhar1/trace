@@ -56,7 +56,8 @@ interface SessionSurfaceProps {
   renderStreamEvents?: boolean;
 }
 
-const COMPOSER_KEYBOARD_DURATION_MULTIPLIER = 0.72;
+const COMPOSER_KEYBOARD_OPEN_DURATION_MULTIPLIER = 0.72;
+const COMPOSER_KEYBOARD_CLOSE_DURATION_MULTIPLIER = 0.5;
 
 /**
  * The complete session surface: group header + sibling tab strip + event
@@ -108,12 +109,14 @@ export function SessionSurface({
     const animateOverlayLift = (nextKeyboardHeight: number, duration?: number) => {
       const keyboardOffset = Math.max(0, nextKeyboardHeight - insets.bottom);
       const nextLift = Math.max(0, keyboardOffset - restingBottomOffset);
+      const durationMultiplier =
+        nextKeyboardHeight > 0
+          ? COMPOSER_KEYBOARD_OPEN_DURATION_MULTIPLIER
+          : COMPOSER_KEYBOARD_CLOSE_DURATION_MULTIPLIER;
       overlayLift.value =
         duration && duration > 0
           ? withTiming(nextLift, {
-              duration: Math.round(
-                duration * COMPOSER_KEYBOARD_DURATION_MULTIPLIER,
-              ),
+              duration: Math.round(duration * durationMultiplier),
             })
           : nextLift;
     };
