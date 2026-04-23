@@ -1,11 +1,9 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Keyboard,
-  LayoutAnimation,
   PanResponder,
   Platform,
   StyleSheet,
-  UIManager,
   View,
   type LayoutChangeEvent,
 } from "react-native";
@@ -103,32 +101,16 @@ export function SessionSurface({
   }, [keyboardHeight]);
 
   useEffect(() => {
-    const animate = (e: { duration?: number; endCoordinates: { height: number } }) => {
-      if (Platform.OS === "ios") {
-        Keyboard.scheduleLayoutAnimation(e);
-      } else if (UIManager.setLayoutAnimationEnabledExperimental) {
-        UIManager.setLayoutAnimationEnabledExperimental(true);
-        if (e.duration) {
-          LayoutAnimation.configureNext({
-            duration: e.duration,
-            update: { type: LayoutAnimation.Types.keyboard },
-          });
-        }
-      }
-    };
-    const handleKeyboardFrame = (e: { duration?: number; endCoordinates: { height: number } }) => {
-      animate(e);
-      setKeyboardHeight(Math.max(0, e.endCoordinates.height));
-    };
-    const frameEvent = Platform.OS === "ios" ? "keyboardWillChangeFrame" : "keyboardDidShow";
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const frame = Keyboard.addListener(frameEvent, handleKeyboardFrame);
-    const hide = Keyboard.addListener(hideEvent, (e) => {
-      animate(e);
+    const show = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(Math.max(0, e.endCoordinates.height));
+    });
+    const hide = Keyboard.addListener(hideEvent, () => {
       setKeyboardHeight(0);
     });
     return () => {
-      frame.remove();
+      show.remove();
       hide.remove();
     };
   }, []);
