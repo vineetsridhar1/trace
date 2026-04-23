@@ -50,10 +50,6 @@ interface SessionSurfaceProps {
   commitStreamEvents?: boolean;
   /** Mount transcript rows only after outer sheet transitions settle. */
   renderStreamEvents?: boolean;
-  /** When true, the composer is hosted by the navigator accessory instead of this surface. */
-  useBottomAccessoryInput?: boolean;
-  /** Measured height of the navigator's bottom accessory composer. */
-  bottomAccessoryHeight?: number;
 }
 
 /**
@@ -69,8 +65,6 @@ export function SessionSurface({
   loadStreamEvents = true,
   commitStreamEvents = true,
   renderStreamEvents = true,
-  useBottomAccessoryInput = false,
-  bottomAccessoryHeight = 0,
 }: SessionSurfaceProps) {
   const theme = useTheme();
   const groupId = useEntityField("sessions", sessionId, "sessionGroupId") as
@@ -91,10 +85,10 @@ export function SessionSurface({
   });
   const insets = useSafeAreaInsets();
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
-  const [overlayHeight, setOverlayHeight] = useState(0);
+  const [composerHeight, setComposerHeight] = useState(0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const handleOverlayLayout = useCallback((e: LayoutChangeEvent) => {
-    setOverlayHeight(e.nativeEvent.layout.height);
+  const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
+    setComposerHeight(e.nativeEvent.layout.height);
   }, []);
 
   useEffect(() => {
@@ -126,13 +120,10 @@ export function SessionSurface({
   // Both the keyboard frame and the native tab bar height include the home-
   // indicator inset. The composer already pads for that internally, so only
   // apply the remaining covered height here.
-  const sceneBottomOffset =
+  const overlayBottom =
     keyboardHeight > 0
       ? Math.max(0, keyboardHeight - insets.bottom)
       : Math.max(0, tabBarHeight - insets.bottom);
-  const accessoryComposerActive = useBottomAccessoryInput && !pendingInput;
-  const overlayBottom = sceneBottomOffset + (accessoryComposerActive ? bottomAccessoryHeight : 0);
-  const streamBottomInset = overlayHeight + (accessoryComposerActive ? bottomAccessoryHeight : 0);
 
   useEffect(() => {
     if (!groupId) return;
@@ -169,12 +160,12 @@ export function SessionSurface({
         />
       )}
       {hideHeader ? null : <ActiveTodoStrip sessionId={sessionId} />}
-      <View style={[styles.streamWrapper, { marginBottom: sceneBottomOffset }]}>
+      <View style={[styles.streamWrapper, { marginBottom: overlayBottom }]}>
         <SessionStream
           key={sessionId}
           sessionId={sessionId}
           topInset={topInset}
-          bottomInset={streamBottomInset}
+          bottomInset={composerHeight}
           loadEvents={loadStreamEvents}
           commitEvents={commitStreamEvents}
           renderEvents={renderStreamEvents}
@@ -182,18 +173,13 @@ export function SessionSurface({
       </View>
       <View
         style={[styles.overlay, { bottom: overlayBottom }]}
-        onLayout={handleOverlayLayout}
+        onLayout={handleComposerLayout}
         pointerEvents="box-none"
       >
         {pendingInput ? (
           <>
             <PendingInputBar sessionId={sessionId} />
             <SessionErrorCard sessionId={sessionId} />
-          </>
-        ) : useBottomAccessoryInput ? (
-          <>
-            <SessionErrorCard sessionId={sessionId} />
-            <QueuedMessagesStrip sessionId={sessionId} />
           </>
         ) : (
           <>
