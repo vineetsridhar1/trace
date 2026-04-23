@@ -117,7 +117,6 @@ export default function SessionStreamScreen() {
             <SessionPageHeader
               groupId={hydratedGroupId}
               sessionId={sessionId}
-              sessionCount={sessionIds.length}
               onBack={closeSessionPlayer}
             />
             <ActiveTodoStrip sessionId={sessionId} />
