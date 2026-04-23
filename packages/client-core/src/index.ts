@@ -27,7 +27,7 @@ export {
 } from "./stores/entity.js";
 
 export type { AuthState, OrgMembership } from "./stores/auth.js";
-export { getAuthHeaders, useAuthStore } from "./stores/auth.js";
+export { getAuthHeaders, LOCAL_LOGIN_NAME_KEY, useAuthStore } from "./stores/auth.js";
 
 export { generateUUID } from "./utils/uuid.js";
 
