@@ -14,8 +14,8 @@ export function SessionComposerToolLogo({
     <Image
       source={
         tool === "codex"
-          ? require("../../../assets/images/codex-logo.png")
-          : require("../../../assets/images/claude-logo.png")
+          ? require("../../../../assets/images/codex-logo.png")
+          : require("../../../../assets/images/claude-logo.png")
       }
       style={{ width: size, height: size }}
       resizeMode="contain"
