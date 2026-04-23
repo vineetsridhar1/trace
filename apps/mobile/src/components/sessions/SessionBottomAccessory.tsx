@@ -12,7 +12,6 @@ import { asJsonObject } from "@trace/shared";
 import { Glass, Text } from "@/components/design-system";
 import { findMostRecentPendingInput } from "@/lib/pending-input";
 import { useTheme } from "@/theme";
-import { SessionInputComposer } from "./SessionInputComposer";
 
 type SessionAccessoryTab = "session" | "browser" | "terminal";
 
@@ -20,8 +19,6 @@ interface SessionBottomAccessoryProps {
   sessionId: string;
   activeTab: SessionAccessoryTab;
   placement: "inline" | "expanded" | "none";
-  composerOpen: boolean;
-  focusRequest: number;
   onComposerOpen: () => void;
   onHeightChange: (height: number) => void;
 }
@@ -30,8 +27,6 @@ export function SessionBottomAccessory({
   sessionId,
   activeTab,
   placement,
-  composerOpen,
-  focusRequest,
   onComposerOpen,
   onHeightChange,
 }: SessionBottomAccessoryProps) {
@@ -49,7 +44,6 @@ export function SessionBottomAccessory({
   );
 
   const visible = placement !== "none" && !(activeTab === "session" && pendingInput);
-  const showComposer = activeTab === "session" && composerOpen && placement === "expanded";
   const showInputPreview = activeTab === "session";
 
   const handleLayout = useCallback(
@@ -64,18 +58,6 @@ export function SessionBottomAccessory({
   }, [onHeightChange, visible]);
 
   if (!visible) return null;
-
-  if (showComposer) {
-    return (
-      <View onLayout={handleLayout}>
-        <SessionInputComposer
-          sessionId={sessionId}
-          focusRequest={focusRequest}
-          bottomSafeAreaInset={0}
-        />
-      </View>
-    );
-  }
 
   const previewText = showInputPreview
     ? "Message…"
@@ -103,7 +85,7 @@ export function SessionBottomAccessory({
           >
             <View style={styles.previewRow}>
               <SymbolView
-                name={showInputPreview ? "square.and.pencil" : "text.bubble"}
+                name="text.bubble"
                 size={16}
                 tintColor={showInputPreview ? theme.colors.dimForeground : theme.colors.mutedForeground}
                 weight="medium"
