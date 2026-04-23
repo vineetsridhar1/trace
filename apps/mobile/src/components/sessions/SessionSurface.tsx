@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import {
   Keyboard,
   LayoutAnimation,
@@ -50,16 +50,6 @@ interface SessionSurfaceProps {
   commitStreamEvents?: boolean;
   /** Mount transcript rows only after outer sheet transitions settle. */
   renderStreamEvents?: boolean;
-  /** When true, the session composer is hosted by the navigator accessory. */
-  useBottomAccessoryInput?: boolean;
-  /** Current measured height of the navigator bottom accessory. */
-  bottomAccessoryHeight?: number;
-  /** Whether the accessory-triggered composer is currently open. */
-  accessoryComposerOpen?: boolean;
-  /** Focus token for the accessory-triggered composer. */
-  accessoryComposerFocusRequest?: number;
-  /** Called after the keyboard dismisses the accessory-triggered composer. */
-  onAccessoryComposerClose?: () => void;
 }
 
 /**
@@ -75,11 +65,6 @@ export function SessionSurface({
   loadStreamEvents = true,
   commitStreamEvents = true,
   renderStreamEvents = true,
-  useBottomAccessoryInput = false,
-  bottomAccessoryHeight = 0,
-  accessoryComposerOpen = false,
-  accessoryComposerFocusRequest,
-  onAccessoryComposerClose,
 }: SessionSurfaceProps) {
   const theme = useTheme();
   const groupId = useEntityField("sessions", sessionId, "sessionGroupId") as
@@ -102,7 +87,6 @@ export function SessionSurface({
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [composerHeight, setComposerHeight] = useState(0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const accessoryKeyboardSeenRef = useRef(false);
   const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
     setComposerHeight(e.nativeEvent.layout.height);
   }, []);
@@ -140,26 +124,8 @@ export function SessionSurface({
     keyboardHeight > 0
       ? Math.max(0, keyboardHeight - insets.bottom)
       : Math.max(0, tabBarHeight - insets.bottom);
-  const showAccessoryComposer =
-    useBottomAccessoryInput && accessoryComposerOpen && !pendingInput;
-  const accessoryComposerActive = useBottomAccessoryInput && !pendingInput && !showAccessoryComposer;
-  const overlayBottom =
-    sceneBottomOffset + (accessoryComposerActive ? bottomAccessoryHeight : 0);
+  const overlayBottom = sceneBottomOffset;
   const streamBottomInset = composerHeight + overlayBottom;
-
-  useEffect(() => {
-    if (!showAccessoryComposer) {
-      accessoryKeyboardSeenRef.current = false;
-      return;
-    }
-    if (keyboardHeight > 0) {
-      accessoryKeyboardSeenRef.current = true;
-      return;
-    }
-    if (!accessoryKeyboardSeenRef.current) return;
-    accessoryKeyboardSeenRef.current = false;
-    onAccessoryComposerClose?.();
-  }, [keyboardHeight, onAccessoryComposerClose, showAccessoryComposer]);
 
   useEffect(() => {
     if (!groupId) return;
@@ -216,17 +182,6 @@ export function SessionSurface({
           <>
             <PendingInputBar sessionId={sessionId} />
             <SessionErrorCard sessionId={sessionId} />
-          </>
-        ) : useBottomAccessoryInput ? (
-          <>
-            <SessionErrorCard sessionId={sessionId} />
-            <QueuedMessagesStrip sessionId={sessionId} />
-            {showAccessoryComposer ? (
-              <SessionInputComposer
-                sessionId={sessionId}
-                focusRequest={accessoryComposerFocusRequest}
-              />
-            ) : null}
           </>
         ) : (
           <>
