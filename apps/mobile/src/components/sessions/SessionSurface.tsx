@@ -1,10 +1,11 @@
-import { useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
   View,
+  type LayoutChangeEvent,
 } from "react-native";
 import { BottomTabBarHeightContext } from "react-native-bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -83,8 +84,12 @@ export function SessionSurface({
   });
   const insets = useSafeAreaInsets();
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
+  const [composerHeight, setComposerHeight] = useState(0);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const restingBottomOffset = Math.max(0, tabBarHeight - insets.bottom);
+  const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
+    setComposerHeight(e.nativeEvent.layout.height);
+  }, []);
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
@@ -96,6 +101,7 @@ export function SessionSurface({
       hide.remove();
     };
   }, []);
+  const streamBottomInset = composerHeight + (keyboardVisible ? 0 : restingBottomOffset);
 
   useEffect(() => {
     if (!groupId) return;
@@ -132,23 +138,25 @@ export function SessionSurface({
         />
       )}
       {hideHeader ? null : <ActiveTodoStrip sessionId={sessionId} />}
+      <View style={styles.streamWrapper}>
+        <SessionStream
+          key={sessionId}
+          sessionId={sessionId}
+          topInset={topInset}
+          bottomInset={streamBottomInset}
+          loadEvents={loadStreamEvents}
+          commitEvents={commitStreamEvents}
+          renderEvents={renderStreamEvents}
+        />
+      </View>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={0}
-        style={styles.content}
+        style={styles.overlayHost}
+        pointerEvents="box-none"
       >
-        <View style={styles.streamWrapper}>
-          <SessionStream
-            key={sessionId}
-            sessionId={sessionId}
-            topInset={topInset}
-            bottomInset={0}
-            loadEvents={loadStreamEvents}
-            commitEvents={commitStreamEvents}
-            renderEvents={renderStreamEvents}
-          />
-        </View>
         <View
+          onLayout={handleComposerLayout}
           style={[
             styles.composerStack,
             { paddingBottom: keyboardVisible ? 0 : restingBottomOffset },
@@ -211,8 +219,9 @@ const styles = StyleSheet.create({
   streamWrapper: {
     flex: 1,
   },
-  content: {
-    flex: 1,
+  overlayHost: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-end",
   },
   composerStack: {
     backgroundColor: "transparent",
