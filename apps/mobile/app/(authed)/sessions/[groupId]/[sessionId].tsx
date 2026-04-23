@@ -9,19 +9,16 @@ import type { Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View } from "react-native";
 import {
   EmptyState,
-  IconButton,
   Screen,
   Spinner,
 } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { BrowserPanel } from "@/components/sessions/BrowserPanel";
-import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
+import { SessionPageHeader } from "@/components/sessions/SessionPageHeader";
 import { SessionSurface } from "@/components/sessions/SessionSurface";
-import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
 import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { useMobileUIStore } from "@/stores/ui";
-import { useTheme } from "@/theme";
 import {
   useEnsureSessionGroupDetail,
   useSessionGroupSessionIds,
@@ -58,7 +55,6 @@ export default function SessionStreamScreen() {
     sessionId: string;
   }>();
   const router = useRouter();
-  const theme = useTheme();
   const loadingGroup = useEnsureSessionGroupDetail(groupId);
   const sessionIds = useSessionGroupSessionIds(groupId);
   const activeMenuClose = useMobileUIStore((s) => s.activeMenuClose);
@@ -118,23 +114,11 @@ export default function SessionStreamScreen() {
       <View style={styles.headerStack}>
         {showLoading ? null : (
           <>
-            <SessionGroupHeader
+            <SessionPageHeader
               groupId={hydratedGroupId}
               sessionId={sessionId}
-              leadingAccessory={
-                <View style={{ paddingLeft: theme.spacing.sm }}>
-                  <IconButton
-                    symbol="chevron.left"
-                    onPress={closeSessionPlayer}
-                    accessibilityLabel="Back"
-                  />
-                </View>
-              }
-            />
-            <SessionTabStrip
-              groupId={hydratedGroupId}
-              activeSessionId={sessionId}
-              onSelect={handleSelectSession}
+              sessionCount={sessionIds.length}
+              onBack={closeSessionPlayer}
             />
             <ActiveTodoStrip sessionId={sessionId} />
           </>
