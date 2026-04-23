@@ -172,7 +172,6 @@ export function SessionSurface({
           sessionId={sessionId}
           topInset={topInset}
           bottomInset={streamBottomInset}
-          dismissKeyboardOnDrag={keyboardHeight > 0}
           loadEvents={loadStreamEvents}
           commitEvents={commitStreamEvents}
           renderEvents={renderStreamEvents}
