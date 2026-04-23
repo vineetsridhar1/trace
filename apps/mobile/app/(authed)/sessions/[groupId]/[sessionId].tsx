@@ -18,6 +18,7 @@ import { BrowserPanel } from "@/components/sessions/BrowserPanel";
 import { SessionPageHeader } from "@/components/sessions/SessionPageHeader";
 import { SessionSurface } from "@/components/sessions/SessionSurface";
 import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel";
+import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { useMobileUIStore } from "@/stores/ui";
 import {
   useEnsureSessionGroupDetail,
@@ -95,24 +96,6 @@ export default function SessionStreamScreen() {
     setBrowserUrl(defaultBrowserUrl);
   }, [defaultBrowserUrl, hydratedGroupId]);
 
-  useEffect(() => {
-    useMobileUIStore.getState().setSessionPlayerOpen(false);
-    return () => {
-      const ui = useMobileUIStore.getState();
-      ui.setSessionPlayerOpen(false);
-      if (ui.overlaySessionId === sessionId) ui.setOverlaySessionId(null);
-    };
-  }, [sessionId]);
-
-  const handleBack = useCallback(() => {
-    useMobileUIStore.getState().setSessionPlayerOpen(false);
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-    router.replace("/(authed)/(tabs)/(home)");
-  }, [router]);
-
   const handleSelectSession = useCallback(
     (nextId: string) => {
       router.replace(`/sessions/${groupId}/${nextId}`);
@@ -141,7 +124,7 @@ export default function SessionStreamScreen() {
             <SessionPageHeader
               groupId={hydratedGroupId}
               sessionId={sessionId}
-              onBack={handleBack}
+              onBack={closeSessionPlayer}
             />
             <ActiveTodoStrip sessionId={sessionId} />
           </View>

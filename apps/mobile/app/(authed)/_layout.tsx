@@ -16,14 +16,7 @@ export default function AuthedLayout() {
     <View style={{ flex: 1 }}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="sessions"
-          options={{
-            headerShown: false,
-            gestureEnabled: true,
-            fullScreenGestureEnabled: true,
-          }}
-        />
+        <Stack.Screen name="sessions" options={{ headerShown: false }} />
       </Stack>
     </View>
   );
