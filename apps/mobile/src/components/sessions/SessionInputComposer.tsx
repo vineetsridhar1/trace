@@ -46,10 +46,7 @@ import {
 import { ComposerPasteButton } from "./ComposerPasteButton";
 import { ImageAttachmentBar } from "./ImageAttachmentBar";
 
-interface SessionInputComposerProps {
-  sessionId: string;
-  bottomSafeAreaInset?: number;
-}
+interface SessionInputComposerProps { sessionId: string }
 
 // Sentinel used by the bridge picker for the "Cloud" option. Mirrors the
 // web `CLOUD_RUNTIME_ID` so the shared mental model is identical.
@@ -79,13 +76,9 @@ const MODEL_CHIP_SIZE = ACTION_SIZE;
  * to Queue whenever the agent is running.
  * On failure the draft is restored with an inline retry affordance.
  */
-export function SessionInputComposer({
-  sessionId,
-  bottomSafeAreaInset,
-}: SessionInputComposerProps) {
+export function SessionInputComposer({ sessionId }: SessionInputComposerProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const resolvedBottomSafeAreaInset = bottomSafeAreaInset ?? insets.bottom;
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus");
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted");
@@ -672,13 +665,7 @@ export function SessionInputComposer({
   ]);
 
   return (
-    <View
-      style={{
-        paddingHorizontal: theme.spacing.md,
-        paddingBottom: theme.spacing.sm + resolvedBottomSafeAreaInset,
-        paddingTop: theme.spacing.xs,
-      }}
-    >
+    <View style={{ paddingHorizontal: theme.spacing.md, paddingBottom: theme.spacing.sm + insets.bottom, paddingTop: theme.spacing.xs }}>
       <View pointerEvents="none" style={styles.modeMeasureRoot}>
         {MODE_CYCLE.map((measuredMode) => (
           <View
