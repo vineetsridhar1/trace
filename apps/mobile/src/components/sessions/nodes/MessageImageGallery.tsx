@@ -137,7 +137,10 @@ function MessageImageModal({
           </Pressable>
           <View style={styles.modalImageFrame}>
             {uri ? (
-              <Pressable onPress={(event) => event.stopPropagation()}>
+              <Pressable
+                onPress={(event) => event.stopPropagation()}
+                style={styles.modalImageSurface}
+              >
                 <Image
                   source={{ uri }}
                   resizeMode="contain"
@@ -266,6 +269,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  modalImageSurface: {
+    width: "100%",
+    height: "100%",
   },
   modalImage: {
     width: "100%",
