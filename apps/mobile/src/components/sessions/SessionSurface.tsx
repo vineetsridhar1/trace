@@ -53,6 +53,7 @@ interface SessionSurfaceProps {
 }
 
 const COMPOSER_KEYBOARD_GAP = 10;
+const STREAM_COMPOSER_CLEARANCE = 12;
 
 /**
  * The complete session surface: group header + sibling tab strip + event
@@ -127,7 +128,9 @@ export function SessionSurface({
   }, [insets.bottom]);
   const streamBottomInset =
     composerHeight +
-    (keyboardVisible ? keyboardInset + COMPOSER_KEYBOARD_GAP : restingBottomOffset);
+    (keyboardVisible
+      ? keyboardInset + COMPOSER_KEYBOARD_GAP + STREAM_COMPOSER_CLEARANCE
+      : restingBottomOffset);
 
   useEffect(() => {
     if (!groupId) return;
