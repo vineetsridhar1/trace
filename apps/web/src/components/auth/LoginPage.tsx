@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { useAuthStore, type AuthState } from "@trace/client-core";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { LOCAL_LOGIN_NAME_KEY, useAuthStore, type AuthState } from "@trace/client-core";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { isLocalMode } from "../../lib/runtime-mode";
@@ -10,6 +10,7 @@ export function LoginPage() {
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
 
   useEffect(() => {
     if (isLocalMode) return;
@@ -55,11 +56,9 @@ export function LoginPage() {
     };
   }, [fetchMe, signInWithToken]);
 
-  async function handleLocalLogin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmedName = name.trim();
+  const loginWithLocalName = useCallback(async (rawName: string) => {
+    const trimmedName = rawName.trim();
     if (trimmedName.length < 2 || submitting) return;
-
     setSubmitting(true);
     setError(null);
     try {
@@ -74,12 +73,29 @@ export function LoginPage() {
       if (!response.ok || typeof payload.token !== "string") {
         throw new Error(payload.error ?? "Failed to sign in");
       }
+      localStorage.setItem(LOCAL_LOGIN_NAME_KEY, trimmedName);
       await signInWithToken(payload.token);
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : "Failed to sign in");
     } finally {
       setSubmitting(false);
     }
+  }, [signInWithToken, submitting]);
+
+  useEffect(() => {
+    if (!isLocalMode || autoLoginAttempted) return;
+    setAutoLoginAttempted(true);
+
+    const rememberedName = localStorage.getItem(LOCAL_LOGIN_NAME_KEY)?.trim() ?? "";
+    if (rememberedName.length < 2) return;
+
+    setName(rememberedName);
+    void loginWithLocalName(rememberedName);
+  }, [autoLoginAttempted, loginWithLocalName]);
+
+  async function handleLocalLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await loginWithLocalName(name);
   }
 
   function openGithubLogin() {

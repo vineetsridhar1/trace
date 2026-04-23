@@ -4,6 +4,7 @@ import { getPlatform } from "../platform.js";
 import { useEntityStore } from "./entity.js";
 
 const ACTIVE_ORG_KEY = "trace_active_org";
+export const LOCAL_LOGIN_NAME_KEY = "trace_local_login_name";
 
 export interface OrgMembership {
   organizationId: string;
@@ -122,6 +123,7 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
     try {
       await platform.secureStorage.clearToken();
       await platform.storage.removeItem(ACTIVE_ORG_KEY);
+      await platform.storage.removeItem(LOCAL_LOGIN_NAME_KEY);
       // Time-box the server call: clearing local state doesn't require a
       // successful response, and without a cap a slow/offline network would
       // leave the UI stuck on "Sign out" for the fetch default (30s+).
