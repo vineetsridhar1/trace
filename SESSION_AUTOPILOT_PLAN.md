@@ -97,7 +97,6 @@ When the user turns on Autopilot, they configure:
 
 - controller tool: `claude_code` or `codex`
 - controller model
-- controller hosting: `cloud` or `local`
 - controller runtime, when local
 - playbook template
 - optional custom instructions
@@ -566,7 +565,7 @@ type SessionAutopilotContext = {
   projectIds: string[];
   playbook: string;
   customInstructions: string | null;
-}
+};
 ```
 
 ---
@@ -849,15 +848,15 @@ The session header gets:
 
 Suggested states and copy:
 
-| State | User-facing meaning | Suggested copy |
-|------|----------------------|----------------|
-| Off | Autopilot is disabled | `Autopilot Off` |
-| Waiting | Worker is still running | `Autopilot Waiting` |
-| Reviewing | Controller is reviewing the last pass | `Autopilot Reviewing` |
-| Continuing | Controller decided to continue the worker | `Autopilot Continuing` |
+| State       | User-facing meaning                         | Suggested copy          |
+| ----------- | ------------------------------------------- | ----------------------- |
+| Off         | Autopilot is disabled                       | `Autopilot Off`         |
+| Waiting     | Worker is still running                     | `Autopilot Waiting`     |
+| Reviewing   | Controller is reviewing the last pass       | `Autopilot Reviewing`   |
+| Continuing  | Controller decided to continue the worker   | `Autopilot Continuing`  |
 | Needs Human | Controller requested validation or judgment | `Autopilot Needs Human` |
-| Paused | Human explicitly paused it | `Autopilot Paused` |
-| Error | Autopilot could not complete a review pass | `Autopilot Error` |
+| Paused      | Human explicitly paused it                  | `Autopilot Paused`      |
+| Error       | Autopilot could not complete a review pass  | `Autopilot Error`       |
 
 ### Autopilot settings popover
 
