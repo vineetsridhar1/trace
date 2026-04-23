@@ -123,6 +123,15 @@ describe("connectionsService", () => {
     );
     expect(result[1].bridge.id).toBe("bridge-2");
     expect(result[1].repos).toEqual([]);
+    expect(prismaMock.bridgeRuntime.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+        }),
+      }),
+    );
+    expect(prismaMock.bridgeRuntime.findMany.mock.calls[0]?.[0]?.where).not.toHaveProperty("OR");
     expect(prismaMock.channel.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
@@ -131,5 +140,26 @@ describe("connectionsService", () => {
         }),
       }),
     );
+  });
+
+  it("does not query bridges only granted to the user", async () => {
+    prismaMock.bridgeRuntime.findMany.mockResolvedValueOnce([]);
+    sessionRouterMock.listRuntimes.mockReturnValueOnce([]);
+
+    await connectionsService.listMine({
+      userId: "user-1",
+      organizationId: "org-1",
+    });
+
+    expect(prismaMock.bridgeRuntime.findMany.mock.calls[0]?.[0]?.where).toEqual(
+      expect.objectContaining({
+        organizationId: "org-1",
+        ownerUserId: "user-1",
+      }),
+    );
+    expect(prismaMock.bridgeRuntime.findMany.mock.calls[0]?.[0]?.where).not.toHaveProperty(
+      "accessGrants",
+    );
+    expect(prismaMock.bridgeRuntime.findMany.mock.calls[0]?.[0]?.where).not.toHaveProperty("OR");
   });
 });

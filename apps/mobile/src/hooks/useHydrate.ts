@@ -7,8 +7,9 @@ import {
   useAuthStore,
   useEntityStore,
   type AuthState,
+  type SessionGroupEntity,
 } from "@trace/client-core";
-import type { Channel, ChannelGroup, Event, Session } from "@trace/gql";
+import type { Channel, ChannelGroup, Event, Session, SessionGroup } from "@trace/gql";
 import { isUnauthorized } from "@/lib/auth";
 import { timedEventIngest } from "@/lib/perf";
 import { getClient } from "@/lib/urql";
@@ -64,7 +65,22 @@ const MY_SESSIONS_QUERY = gql`
       createdBy { id name avatarUrl }
       repo { id name }
       sessionGroupId
-      sessionGroup { id name slug status archivedAt }
+      sessionGroup {
+        id
+        name
+        slug
+        status
+        branch
+        prUrl
+        worktreeDeleted
+        archivedAt
+        setupStatus
+        setupError
+        createdAt
+        updatedAt
+        channel { id }
+        repo { id name defaultBranch }
+      }
       channel { id name }
       branch
       workdir
@@ -145,10 +161,58 @@ export async function refreshOrgData(activeOrgId: string): Promise<boolean> {
   if (channelGroups.length > 0) upsertMany("channelGroups", channelGroups);
 
   const sessions = (sessionsResult.data?.mySessions ?? []) as Array<Session & { id: string }>;
+  const sessionGroups = sessionGroupsFromSessions(sessions);
+  if (sessionGroups.length > 0) upsertMany("sessionGroups", sessionGroups);
   if (sessions.length > 0) upsertMany("sessions", sessions);
 
   void getPlatform().storage.setItem(ME_REFRESH_KEY, String(Date.now()));
   return true;
+}
+
+function timestampMs(value: string | null | undefined): number {
+  if (!value) return 0;
+  const t = new Date(value).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+function latestTimestamp(
+  current: string | null | undefined,
+  candidate: string | null | undefined,
+): string | undefined {
+  if (!current) return candidate ?? undefined;
+  if (!candidate) return current;
+  return timestampMs(candidate) > timestampMs(current) ? candidate : current;
+}
+
+function sessionGroupsFromSessions(
+  sessions: Array<Session & { id: string }>,
+): Array<SessionGroupEntity & { id: string }> {
+  const existingGroups = useEntityStore.getState().sessionGroups;
+  const byId = new Map<string, SessionGroupEntity & { id: string }>();
+
+  for (const session of sessions) {
+    const group = session.sessionGroup as (SessionGroup & { id: string }) | null | undefined;
+    if (!group?.id) continue;
+
+    const sortTimestamp = session.lastMessageAt ?? session.updatedAt ?? group.updatedAt;
+    const current = byId.get(group.id);
+    if (current) {
+      byId.set(group.id, {
+        ...current,
+        _sortTimestamp: latestTimestamp(current._sortTimestamp, sortTimestamp),
+      });
+      continue;
+    }
+
+    const existing = existingGroups[group.id];
+    byId.set(group.id, {
+      ...(existing ?? {}),
+      ...group,
+      _sortTimestamp: latestTimestamp(existing?._sortTimestamp, sortTimestamp),
+    });
+  }
+
+  return Array.from(byId.values());
 }
 
 export function useHydrate(activeOrgId: string | null): void {

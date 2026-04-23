@@ -39,24 +39,13 @@ export interface ConnectionsBridge {
   canTerminal: boolean;
 }
 
-function activeGrantWhere(userId: string, now: Date): Prisma.BridgeAccessGrantWhereInput {
-  return {
-    granteeUserId: userId,
-    revokedAt: null,
-    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-  };
-}
-
 class ConnectionsService {
   async listMine(input: { userId: string; organizationId: string }): Promise<ConnectionsBridge[]> {
     const now = new Date();
     const bridges = await prisma.bridgeRuntime.findMany({
       where: {
         organizationId: input.organizationId,
-        OR: [
-          { ownerUserId: input.userId },
-          { accessGrants: { some: activeGrantWhere(input.userId, now) } },
-        ],
+        ownerUserId: input.userId,
       },
       orderBy: [{ connectedAt: "desc" }, { updatedAt: "desc" }],
       include: {
@@ -136,24 +125,10 @@ class ConnectionsService {
         }
       }
 
-      // canTerminal: owner always has terminal; grantees need an all_sessions grant
-      // with the terminal capability (channel terminals aren't session-group scoped).
-      const canTerminal =
-        bridge.ownerUserId === input.userId ||
-        bridge.accessGrants.some(
-          (g) =>
-            g.granteeUserId === input.userId &&
-            g.scopeType === "all_sessions" &&
-            (g.capabilities as string[] | null ?? []).includes("terminal"),
-        );
-
       return {
-        bridge:
-          bridge.ownerUserId === input.userId
-            ? bridge
-            : { ...bridge, accessRequests: [], accessGrants: [] },
+        bridge,
         repos,
-        canTerminal,
+        canTerminal: true,
       };
     });
   }
