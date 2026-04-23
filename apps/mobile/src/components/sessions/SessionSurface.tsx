@@ -50,6 +50,10 @@ interface SessionSurfaceProps {
   commitStreamEvents?: boolean;
   /** Mount transcript rows only after outer sheet transitions settle. */
   renderStreamEvents?: boolean;
+  /** When true, the session composer is hosted by the navigator accessory. */
+  useBottomAccessoryInput?: boolean;
+  /** Current measured height of the navigator bottom accessory. */
+  bottomAccessoryHeight?: number;
 }
 
 /**
@@ -65,6 +69,8 @@ export function SessionSurface({
   loadStreamEvents = true,
   commitStreamEvents = true,
   renderStreamEvents = true,
+  useBottomAccessoryInput = false,
+  bottomAccessoryHeight = 0,
 }: SessionSurfaceProps) {
   const theme = useTheme();
   const groupId = useEntityField("sessions", sessionId, "sessionGroupId") as
@@ -120,10 +126,14 @@ export function SessionSurface({
   // Both the keyboard frame and the native tab bar height include the home-
   // indicator inset. The composer already pads for that internally, so only
   // apply the remaining covered height here.
-  const overlayBottom =
+  const sceneBottomOffset =
     keyboardHeight > 0
       ? Math.max(0, keyboardHeight - insets.bottom)
       : Math.max(0, tabBarHeight - insets.bottom);
+  const accessoryComposerActive = useBottomAccessoryInput && !pendingInput;
+  const overlayBottom =
+    sceneBottomOffset + (accessoryComposerActive ? bottomAccessoryHeight : 0);
+  const streamBottomInset = composerHeight + overlayBottom;
 
   useEffect(() => {
     if (!groupId) return;
@@ -165,7 +175,7 @@ export function SessionSurface({
           key={sessionId}
           sessionId={sessionId}
           topInset={topInset}
-          bottomInset={composerHeight + overlayBottom}
+          bottomInset={streamBottomInset}
           loadEvents={loadStreamEvents}
           commitEvents={commitStreamEvents}
           renderEvents={renderStreamEvents}
@@ -180,6 +190,11 @@ export function SessionSurface({
           <>
             <PendingInputBar sessionId={sessionId} />
             <SessionErrorCard sessionId={sessionId} />
+          </>
+        ) : useBottomAccessoryInput ? (
+          <>
+            <SessionErrorCard sessionId={sessionId} />
+            <QueuedMessagesStrip sessionId={sessionId} />
           </>
         ) : (
           <>
