@@ -1,6 +1,7 @@
 import { View } from "react-native";
 import { Redirect, Stack } from "expo-router";
 import { useAuthStore, type AuthState } from "@trace/client-core";
+import { SessionPlayerOverlay } from "@/components/navigation/SessionPlayerOverlay";
 import { useHydrate } from "@/hooks/useHydrate";
 import { useMyBridges } from "@/hooks/useMyBridges";
 
@@ -18,6 +19,7 @@ export default function AuthedLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="sessions" options={{ headerShown: false }} />
       </Stack>
+      <SessionPlayerOverlay />
     </View>
   );
 }
