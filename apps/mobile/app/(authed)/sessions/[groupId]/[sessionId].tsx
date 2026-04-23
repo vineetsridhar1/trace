@@ -6,7 +6,7 @@ import {
 } from "@bottom-tabs/react-navigation";
 import { useEntityField } from "@trace/client-core";
 import type { Repo } from "@trace/gql";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import {
   EmptyState,
   Screen,
@@ -100,6 +100,11 @@ export default function SessionStreamScreen() {
     },
     [groupId, router],
   );
+  const [overlayHeight, setOverlayHeight] = useState(0);
+  const handleOverlayLayout = useCallback((e: LayoutChangeEvent) => {
+    const nextHeight = e.nativeEvent.layout.height;
+    setOverlayHeight((current) => (current === nextHeight ? current : nextHeight));
+  }, []);
 
   const showLoading = loadingGroup || (sessionIds.length === 0 && !groupName);
 
@@ -111,16 +116,16 @@ export default function SessionStreamScreen() {
     >
       <Stack.Screen options={{ headerShown: false }} />
 
-      <View style={styles.headerStack}>
+      <View pointerEvents="box-none" style={styles.headerOverlay}>
         {showLoading ? null : (
-          <>
+          <View onLayout={handleOverlayLayout}>
             <SessionPageHeader
               groupId={hydratedGroupId}
               sessionId={sessionId}
               onBack={closeSessionPlayer}
             />
             <ActiveTodoStrip sessionId={sessionId} />
-          </>
+          </View>
         )}
       </View>
 
@@ -159,13 +164,21 @@ export default function SessionStreamScreen() {
               name="browser"
               options={{ title: "Browser", tabBarIcon: browserIcon }}
             >
-              {() => <BrowserPanel url={browserUrl} onUrlChange={setBrowserUrl} />}
+              {() => (
+                <View style={[styles.overlayPaddedScene, { paddingTop: overlayHeight }]}>
+                  <BrowserPanel url={browserUrl} onUrlChange={setBrowserUrl} />
+                </View>
+              )}
             </SessionBottomTabs.Screen>
             <SessionBottomTabs.Screen
               name="terminal"
               options={{ title: "Terminal", tabBarIcon: terminalIcon }}
             >
-              {() => <SessionTerminalPanel sessionId={sessionId} />}
+              {() => (
+                <View style={[styles.overlayPaddedScene, { paddingTop: overlayHeight }]}>
+                  <SessionTerminalPanel sessionId={sessionId} />
+                </View>
+              )}
             </SessionBottomTabs.Screen>
           </SessionBottomTabs.Navigator>
         )}
@@ -186,10 +199,18 @@ const styles = StyleSheet.create({
   root: {
     position: "relative",
   },
-  headerStack: {
+  headerOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
     zIndex: 10,
   },
   content: {
+    flex: 1,
+    minHeight: 0,
+  },
+  overlayPaddedScene: {
     flex: 1,
     minHeight: 0,
   },
