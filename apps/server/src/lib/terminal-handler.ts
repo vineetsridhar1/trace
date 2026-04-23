@@ -1,5 +1,9 @@
 import type { WebSocket } from "ws";
-import { parseCookieToken, verifyToken } from "./auth.js";
+import {
+  authenticateAccessToken,
+  isExternalLocalModeRequest,
+  parseCookieToken,
+} from "./auth.js";
 import { terminalRelay } from "./terminal-relay.js";
 import { prisma } from "./db.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
@@ -23,10 +27,15 @@ import { AuthorizationError } from "./errors.js";
 
 /** Interval between server→client pings to keep the WebSocket alive. */
 const PING_INTERVAL_MS = 30_000;
+const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a paired mobile token";
 
 export function handleTerminalConnection(
   ws: WebSocket,
-  req: { headers: { cookie?: string }; url?: string },
+  req: {
+    headers: Record<string, string | string[] | undefined> & { cookie?: string };
+    url?: string;
+    socket?: { remoteAddress?: string | null } | null;
+  },
 ) {
   const sendFatalError = (message: string): void => {
     ws.send(JSON.stringify({ type: "error", message }));
@@ -35,18 +44,14 @@ export function handleTerminalConnection(
 
   let attachedTerminalId: string | null = null;
   let attachPending = false;
+  let authReady = false;
+  let userId: string | null = null;
 
   // Authenticate from query param (preferred) or cookie fallback
   const url = new URL(req.url ?? "", "http://localhost");
   const token = url.searchParams.get("token") ?? parseCookieToken(req.headers.cookie);
   if (!token) {
     sendFatalError("Unauthorized");
-    return;
-  }
-
-  const userId = verifyToken(token);
-  if (!userId) {
-    sendFatalError("Invalid token");
     return;
   }
 
@@ -71,10 +76,14 @@ export function handleTerminalConnection(
   let pendingMessages: Array<{ type: string; [key: string]: unknown }> = [];
 
   function processPending(): void {
-    for (const msg of pendingMessages) {
+    if (!authReady || attachPending) {
+      return;
+    }
+    while (pendingMessages.length > 0 && authReady && !attachPending) {
+      const msg = pendingMessages.shift();
+      if (!msg) return;
       handleMessage(msg);
     }
-    pendingMessages = [];
   }
 
   function handleMessage(msg: { type: string; [key: string]: unknown }): void {
@@ -116,6 +125,10 @@ export function handleTerminalConnection(
 
         (async () => {
           try {
+            if (!userId) {
+              ws.send(JSON.stringify({ type: "error", message: "Unauthorized" }));
+              return;
+            }
             const user = await prisma.user.findUnique({
               where: { id: userId },
               select: { id: true },
@@ -205,8 +218,8 @@ export function handleTerminalConnection(
         return;
       }
 
-      // If attach is still in-flight, buffer the message
-      if (attachPending) {
+      // Buffer messages until the connection auth and attach auth complete.
+      if (!authReady || attachPending) {
         pendingMessages.push(msg);
         return;
       }
@@ -226,4 +239,24 @@ export function handleTerminalConnection(
     pendingMessages = [];
     terminalRelay.detachAllForFrontend(ws);
   });
+
+  void (async () => {
+    try {
+      const auth = await authenticateAccessToken(token);
+      if (!auth) {
+        sendFatalError("Invalid token");
+        return;
+      }
+      if (isExternalLocalModeRequest(req) && auth.kind !== "local_mobile") {
+        sendFatalError(EXTERNAL_LOCAL_MODE_AUTH_ERROR);
+        return;
+      }
+      userId = auth.userId;
+      authReady = true;
+      processPending();
+    } catch (err) {
+      console.error("[terminal-handler] authentication failed:", err);
+      sendFatalError("Authorization check failed");
+    }
+  })();
 }

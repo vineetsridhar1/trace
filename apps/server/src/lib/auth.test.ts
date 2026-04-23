@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./db.js", async () => {
   const { createPrismaMock } = await import("../../test/helpers.js");
@@ -28,6 +28,7 @@ import {
   buildContext,
   buildWsContext,
   createBridgeAuthToken,
+  isLoopbackRequest,
   parseCookieToken,
   verifyBridgeAuthToken,
   verifyToken,
@@ -42,9 +43,34 @@ describe("auth helpers", () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("parses the auth cookie token", () => {
     expect(parseCookieToken("foo=bar; trace_token=abc123; baz=qux")).toBe("abc123");
     expect(parseCookieToken("foo=bar")).toBeUndefined();
+  });
+
+  it("only treats requests as loopback when the socket and forwarded client are loopback", () => {
+    expect(
+      isLoopbackRequest({
+        headers: {},
+        socket: { remoteAddress: "127.0.0.1" },
+      }),
+    ).toBe(true);
+    expect(
+      isLoopbackRequest({
+        headers: { "x-forwarded-for": "203.0.113.10" },
+        socket: { remoteAddress: "127.0.0.1" },
+      }),
+    ).toBe(false);
+    expect(
+      isLoopbackRequest({
+        headers: { "x-forwarded-for": "127.0.0.1" },
+        socket: { remoteAddress: "203.0.113.10" },
+      }),
+    ).toBe(false);
   });
 
   it("verifies valid tokens and rejects invalid ones", () => {
@@ -109,27 +135,54 @@ describe("auth helpers", () => {
     expect(createUserLoaderMock).toHaveBeenCalled();
   });
 
-  it("falls back to x-user-id headers when no token is present", async () => {
-    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-2" });
-    prismaMock.orgMember.findFirst.mockResolvedValueOnce({
-      organizationId: "org-2",
-      role: "member",
-    });
+  it("requires a token for HTTP context construction", async () => {
+    await expect(
+      buildContext({
+        req: {
+          headers: {},
+          cookies: {},
+        },
+      } as unknown as Parameters<typeof buildContext>[0]),
+    ).rejects.toThrow("Not authenticated");
+  });
 
-    const context = await buildContext({
-      req: {
-        headers: { "x-user-id": "user-2" },
-        cookies: {},
-      },
-    } as unknown as Parameters<typeof buildContext>[0]);
+  it("rejects session tokens for external local-mode HTTP access", async () => {
+    vi.stubEnv("TRACE_LOCAL_MODE", "1");
 
-    expect(context.userId).toBe("user-2");
-    expect(context.organizationId).toBe("org-2");
+    const token = jwt.sign({ userId: "user-2" }, JWT_SECRET);
+    await expect(
+      buildContext({
+        req: {
+          headers: {
+            authorization: `Bearer ${token}`,
+            "x-forwarded-for": "203.0.113.10",
+          },
+          cookies: {},
+          socket: { remoteAddress: "127.0.0.1" },
+        },
+      } as unknown as Parameters<typeof buildContext>[0]),
+    ).rejects.toThrow("External local-mode access requires a paired mobile token");
   });
 
   it("rejects invalid websocket auth", async () => {
     await expect(buildWsContext({ token: "bad-token" })).rejects.toThrow("Invalid token");
     await expect(buildWsContext()).rejects.toThrow("Missing auth token for WebSocket");
+  });
+
+  it("rejects session tokens for external local-mode websocket access", async () => {
+    vi.stubEnv("TRACE_LOCAL_MODE", "1");
+
+    const token = jwt.sign({ userId: "user-3" }, JWT_SECRET);
+    await expect(
+      buildWsContext(
+        { token },
+        undefined,
+        {
+          headers: { "x-forwarded-for": "203.0.113.20" },
+          socket: { remoteAddress: "127.0.0.1" },
+        },
+      ),
+    ).rejects.toThrow("External local-mode access requires a paired mobile token");
   });
 
   it("builds websocket context from cookies", async () => {

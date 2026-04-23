@@ -2,7 +2,12 @@ import { Router, type Router as RouterType, type Request, type Response } from "
 import jwt from "jsonwebtoken";
 import type { PushPlatform } from "@prisma/client";
 import { prisma } from "../lib/db.js";
-import { authenticateAccessToken, createBridgeAuthToken, getRequestToken } from "../lib/auth.js";
+import {
+  authenticateAccessToken,
+  createBridgeAuthToken,
+  getRequestToken,
+  isExternalLocalModeRequest,
+} from "../lib/auth.js";
 import { isLocalMode } from "../lib/mode.js";
 import {
   ensureLocalUserWorkspace,
@@ -34,6 +39,7 @@ const GITHUB_CALLBACK_URL = `${SERVER_PUBLIC_URL.replace(/\/$/, "")}/auth/github
 const MOBILE_ORIGIN = "trace-mobile";
 const MOBILE_REDIRECT_URL = "trace://auth/callback";
 const OAUTH_STATE_TTL_SECONDS = 5 * 60;
+const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a paired mobile token";
 
 type OAuthStatePayload = { origin: string; tokenType: "oauth_state" };
 
@@ -103,37 +109,6 @@ function setSessionCookie(res: Response, token: string): void {
   });
 }
 
-function readHostValue(req: Request): string {
-  const forwardedHost = req.headers["x-forwarded-host"];
-  const host =
-    (typeof forwardedHost === "string" && forwardedHost) ||
-    (Array.isArray(forwardedHost) ? forwardedHost[0] : "") ||
-    req.headers.host ||
-    req.hostname ||
-    "";
-  return host.trim();
-}
-
-function hostnameFromHost(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-  if (trimmed.startsWith("[")) {
-    const end = trimmed.indexOf("]");
-    return end === -1 ? trimmed.slice(1).toLowerCase() : trimmed.slice(1, end).toLowerCase();
-  }
-  const [hostname] = trimmed.split(":");
-  return hostname.toLowerCase();
-}
-
-export function isLoopbackHost(value: string): boolean {
-  const hostname = hostnameFromHost(value);
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-}
-
-function isLoopbackRequest(req: Request): boolean {
-  return isLoopbackHost(readHostValue(req));
-}
-
 function readOrganizationIdHeader(req: Request): string | null {
   const rawOrgId = req.headers["x-organization-id"];
   const organizationId = Array.isArray(rawOrgId) ? rawOrgId[0] : rawOrgId;
@@ -151,6 +126,25 @@ async function resolveAuthenticatedUser(req: Request): Promise<{
   const auth = await authenticateAccessToken(token);
   if (!auth) return null;
   return { token, auth };
+}
+
+function rejectExternalLocalModeRequest(
+  req: Request,
+  res: Response,
+  authenticated: Awaited<ReturnType<typeof resolveAuthenticatedUser>>,
+): boolean {
+  if (!isExternalLocalModeRequest(req)) {
+    return false;
+  }
+  if (!authenticated) {
+    res.status(401).json({ error: EXTERNAL_LOCAL_MODE_AUTH_ERROR });
+    return true;
+  }
+  if (authenticated.auth.kind !== "local_mobile") {
+    res.status(403).json({ error: EXTERNAL_LOCAL_MODE_AUTH_ERROR });
+    return true;
+  }
+  return false;
 }
 
 async function resolveRequestedOrganizationId(
@@ -181,7 +175,7 @@ router.post("/auth/local/login", async (req: Request, res: Response) => {
   if (!isLocalMode()) {
     return res.status(404).json({ error: "Local login is only available in local mode" });
   }
-  if (!isLoopbackRequest(req)) {
+  if (isExternalLocalModeRequest(req)) {
     return res.status(403).json({ error: "Local login is only available on localhost" });
   }
 
@@ -214,6 +208,9 @@ router.post("/auth/local-mobile/pairing-token", async (req: Request, res: Respon
   }
 
   const authenticated = await resolveAuthenticatedUser(req);
+  if (rejectExternalLocalModeRequest(req, res, authenticated)) {
+    return;
+  }
   if (!authenticated) {
     return res.status(401).json({ error: "Not authenticated" });
   }
@@ -270,6 +267,9 @@ router.get("/auth/local-mobile/devices", async (req: Request, res: Response) => 
   }
 
   const authenticated = await resolveAuthenticatedUser(req);
+  if (rejectExternalLocalModeRequest(req, res, authenticated)) {
+    return;
+  }
   if (!authenticated) {
     return res.status(401).json({ error: "Not authenticated" });
   }
@@ -298,6 +298,9 @@ router.delete("/auth/local-mobile/devices/:deviceId", async (req: Request, res: 
   }
 
   const authenticated = await resolveAuthenticatedUser(req);
+  if (rejectExternalLocalModeRequest(req, res, authenticated)) {
+    return;
+  }
   if (!authenticated) {
     return res.status(401).json({ error: "Not authenticated" });
   }
@@ -508,6 +511,9 @@ function resolveStateOrigin(rawState: unknown): string | null {
 // Get current user with org memberships
 router.get("/auth/me", async (req: Request, res: Response) => {
   const authenticated = await resolveAuthenticatedUser(req);
+  if (rejectExternalLocalModeRequest(req, res, authenticated)) {
+    return;
+  }
   if (!authenticated) {
     return res.status(401).json({ error: "Not authenticated" });
   }
@@ -550,6 +556,9 @@ router.get("/auth/me", async (req: Request, res: Response) => {
 
 router.get("/auth/bridge-token", async (req: Request, res: Response) => {
   const authenticated = await resolveAuthenticatedUser(req);
+  if (rejectExternalLocalModeRequest(req, res, authenticated)) {
+    return;
+  }
   if (!authenticated) {
     return res.status(401).json({ error: "Not authenticated" });
   }
@@ -597,6 +606,9 @@ router.get("/auth/bridge-token", async (req: Request, res: Response) => {
 // Logout
 router.post("/auth/logout", async (req: Request, res: Response) => {
   const authenticated = await resolveAuthenticatedUser(req);
+  if (rejectExternalLocalModeRequest(req, res, authenticated)) {
+    return;
+  }
   if (authenticated?.auth.kind === "local_mobile") {
     await revokeLocalMobileDeviceByToken(authenticated.token);
   }

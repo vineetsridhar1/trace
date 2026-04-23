@@ -1,12 +1,17 @@
 import { randomUUID } from "crypto";
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { prisma } from "../lib/db.js";
-import { authenticateAccessToken, getRequestToken } from "../lib/auth.js";
+import {
+  authenticateAccessToken,
+  getRequestToken,
+  isExternalLocalModeRequest,
+} from "../lib/auth.js";
 import { storage } from "../lib/storage/index.js";
 
 const router: RouterType = Router();
 const MAX_FILENAME_LENGTH = 100;
 const FALLBACK_BASENAME = "image";
+const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a paired mobile token";
 
 function sanitizeFilename(filename: string): string {
   const trimmed = filename.trim();
@@ -32,6 +37,9 @@ router.post("/uploads/presign", async (req: Request, res: Response) => {
   const auth = await authenticateAccessToken(token);
   if (!auth) {
     return res.status(401).json({ error: "Invalid token" });
+  }
+  if (isExternalLocalModeRequest(req) && auth.kind !== "local_mobile") {
+    return res.status(403).json({ error: EXTERNAL_LOCAL_MODE_AUTH_ERROR });
   }
 
   const user = await prisma.user.findUnique({
@@ -88,6 +96,9 @@ router.get("/uploads/url", async (req: Request, res: Response) => {
   const auth = await authenticateAccessToken(token);
   if (!auth) {
     return res.status(401).json({ error: "Invalid token" });
+  }
+  if (isExternalLocalModeRequest(req) && auth.kind !== "local_mobile") {
+    return res.status(403).json({ error: EXTERNAL_LOCAL_MODE_AUTH_ERROR });
   }
 
   const user = await prisma.user.findUnique({

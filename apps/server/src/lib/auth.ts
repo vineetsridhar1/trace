@@ -93,11 +93,15 @@ export function isLoopbackAddress(value: string | null | undefined): boolean {
 }
 
 export function isLoopbackRequest(request: RequestAuthSource): boolean {
+  const remoteAddressIsLoopback = isLoopbackAddress(request.socket?.remoteAddress);
+  if (!remoteAddressIsLoopback) {
+    return false;
+  }
   const forwardedFor = readForwardedFor(request.headers);
   if (forwardedFor) {
     return isLoopbackAddress(forwardedFor);
   }
-  return isLoopbackAddress(request.socket?.remoteAddress);
+  return true;
 }
 
 export function isExternalLocalModeRequest(request: RequestAuthSource): boolean {

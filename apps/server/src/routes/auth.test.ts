@@ -21,11 +21,11 @@ vi.mock("../lib/db.js", async () => {
 
 import { prisma } from "../lib/db.js";
 import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
+import { isLoopbackAddress } from "../lib/auth.js";
 import {
   authRouter,
   createOAuthStateToken,
   getAllowedOAuthOrigins,
-  isLoopbackHost,
   verifyOAuthStateToken,
 } from "./auth.js";
 
@@ -61,12 +61,12 @@ describe("oauth state token", () => {
   });
 });
 
-describe("loopback host checks", () => {
-  it("allows localhost hosts and rejects tunneled hosts", () => {
-    expect(isLoopbackHost("localhost:4000")).toBe(true);
-    expect(isLoopbackHost("127.0.0.1:4000")).toBe(true);
-    expect(isLoopbackHost("[::1]:4000")).toBe(true);
-    expect(isLoopbackHost("trace.ngrok-free.app")).toBe(false);
+describe("loopback address checks", () => {
+  it("allows loopback IPs and rejects external addresses", () => {
+    expect(isLoopbackAddress("127.0.0.1")).toBe(true);
+    expect(isLoopbackAddress("::1")).toBe(true);
+    expect(isLoopbackAddress("::ffff:127.0.0.1")).toBe(true);
+    expect(isLoopbackAddress("203.0.113.10")).toBe(false);
   });
 });
 
@@ -187,6 +187,95 @@ describe("local login", () => {
       },
       orderBy: { updatedAt: "desc" },
       select: { name: true },
+    });
+  });
+
+  it("rejects tunneled local logins from external clients", async () => {
+    const res = await fetch(`${baseUrl}/auth/local/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Forwarded-For": "203.0.113.10",
+      },
+      body: JSON.stringify({ name: "Jane Developer" }),
+    });
+
+    expect(res.status).toBe(403);
+    expect(prismaMock.user.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("local-mode external auth", () => {
+  let server: Server;
+  let baseUrl: string;
+
+  beforeEach(async () => {
+    vi.stubEnv("TRACE_LOCAL_MODE", "1");
+
+    const app = express();
+    app.use(express.json());
+    app.use(authRouter);
+
+    server = createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const { port } = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${port}`;
+  });
+
+  afterEach(async () => {
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
+    vi.unstubAllEnvs();
+  });
+
+  it("rejects external auth/me requests that use a local session token", async () => {
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Forwarded-For": "203.0.113.10",
+      },
+    });
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({
+      error: "External local-mode access requires a paired mobile token",
+    });
+  });
+
+  it("allows external auth/me requests with a paired mobile token", async () => {
+    prismaMock.localMobileDevice.findUnique.mockResolvedValueOnce({
+      id: "device-1",
+      ownerUserId: "user-1",
+      organizationId: "org-1",
+      revokedAt: null,
+    });
+    prismaMock.localMobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: "user-1",
+      email: "local@trace.dev",
+      name: "Local User",
+      avatarUrl: null,
+      orgMemberships: [],
+    });
+
+    const res = await fetch(`${baseUrl}/auth/me`, {
+      headers: {
+        Authorization: "Bearer opaque-device-secret",
+        "X-Forwarded-For": "203.0.113.10",
+      },
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      user: {
+        id: "user-1",
+        email: "local@trace.dev",
+        name: "Local User",
+        avatarUrl: null,
+        orgMemberships: [],
+      },
     });
   });
 });
