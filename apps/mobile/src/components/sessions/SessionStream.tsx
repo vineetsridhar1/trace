@@ -51,6 +51,11 @@ interface SessionStreamProps {
    * starts loading during its open animation, then commits once the sheet lands.
    */
   commitEvents?: boolean;
+  /**
+   * Controls whether transcript rows mount at all. The Session Player keeps
+   * cached rows hidden during its open animation so text layout can't jank it.
+   */
+  renderEvents?: boolean;
 }
 
 const NEAR_BOTTOM_THRESHOLD = 120;
@@ -67,6 +72,7 @@ export function SessionStream({
   bottomInset,
   loadEvents = true,
   commitEvents = true,
+  renderEvents = true,
 }: SessionStreamProps) {
   const theme = useTheme();
   const { loading, loadingOlder, hasOlder, error, fetchEvents, fetchOlderEvents } =
@@ -116,7 +122,7 @@ export function SessionStream({
     return result.items;
   }, [nodes, scopedEvents]);
   useEffect(() => {
-    if (nodes.length === 0) {
+    if (!renderEvents || nodes.length === 0) {
       hasRenderedNodesRef.current = false;
       contentOpacity.value = 0;
       return;
@@ -128,7 +134,7 @@ export function SessionStream({
       return;
     }
     contentOpacity.value = 1;
-  }, [contentOpacity, nodes.length]);
+  }, [contentOpacity, nodes.length, renderEvents]);
   const contentFadeStyle = useAnimatedStyle(() => ({
     opacity: contentOpacity.value,
   }));
@@ -165,7 +171,9 @@ export function SessionStream({
     Gesture.Native(),
   );
 
-  if ((loading || !commitEvents) && nodes.length === 0) return <SessionStreamSkeleton />;
+  if (!renderEvents || ((loading || !commitEvents) && nodes.length === 0)) {
+    return <SessionStreamSkeleton />;
+  }
   // A not_started session has no events yet by design — the initial events
   // query commonly 404s for optimistic/pending session ids. Fall through to
   // the friendly empty state instead of surfacing a retry banner.

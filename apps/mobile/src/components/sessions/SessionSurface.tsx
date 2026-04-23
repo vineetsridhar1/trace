@@ -53,6 +53,8 @@ interface SessionSurfaceProps {
   loadStreamEvents?: boolean;
   /** Apply fetched/live stream events to state. Delayed until sheet open settles. */
   commitStreamEvents?: boolean;
+  /** Mount transcript rows only after outer sheet transitions settle. */
+  renderStreamEvents?: boolean;
 }
 
 /**
@@ -67,6 +69,7 @@ export function SessionSurface({
   topInset,
   loadStreamEvents = true,
   commitStreamEvents = true,
+  renderStreamEvents = true,
 }: SessionSurfaceProps) {
   const theme = useTheme();
   const groupId = useEntityField("sessions", sessionId, "sessionGroupId") as
@@ -169,6 +172,7 @@ export function SessionSurface({
           bottomInset={composerHeight}
           loadEvents={loadStreamEvents}
           commitEvents={commitStreamEvents}
+          renderEvents={renderStreamEvents}
         />
       </View>
       <View

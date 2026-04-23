@@ -159,6 +159,7 @@ export function SessionPlayerOverlay() {
               topInset={topInsetHeight}
               loadStreamEvents={open}
               commitStreamEvents={streamHydrationReady}
+              renderStreamEvents={streamHydrationReady}
             />
           ) : (
             <SessionSurfaceEmpty />
