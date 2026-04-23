@@ -102,7 +102,10 @@ export function SessionGroupHeader({
     status,
   ]);
 
-  const expandLeftInset = leadingAccessory ? leadingWidth + theme.spacing.sm : 0;
+  const titleWidth = Math.max(
+    0,
+    rowWidth - (leadingAccessory ? leadingWidth + theme.spacing.sm : 0),
+  );
 
   return (
     <View
@@ -124,8 +127,7 @@ export function SessionGroupHeader({
         <SessionGroupTitleMenu
           groupId={groupId}
           sessionId={sessionId}
-          fullWidth={rowWidth}
-          expandLeftInset={expandLeftInset}
+          fullWidth={titleWidth}
         />
         <SessionActionsMenu actions={menuItems} accessibilityLabel="Session actions" />
       </View>
