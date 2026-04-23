@@ -683,7 +683,7 @@ export function SessionInputComposer({
     <View
       style={{
         paddingHorizontal: theme.spacing.md,
-        paddingBottom: resolvedBottomSafeAreaInset,
+        paddingBottom: theme.spacing.sm + resolvedBottomSafeAreaInset,
         paddingTop: theme.spacing.xs,
       }}
     >

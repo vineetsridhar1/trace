@@ -160,12 +160,12 @@ export function SessionSurface({
         />
       )}
       {hideHeader ? null : <ActiveTodoStrip sessionId={sessionId} />}
-      <View style={[styles.streamWrapper, { marginBottom: overlayBottom }]}>
+      <View style={styles.streamWrapper}>
         <SessionStream
           key={sessionId}
           sessionId={sessionId}
           topInset={topInset}
-          bottomInset={composerHeight}
+          bottomInset={composerHeight + overlayBottom}
           loadEvents={loadStreamEvents}
           commitEvents={commitStreamEvents}
           renderEvents={renderStreamEvents}
