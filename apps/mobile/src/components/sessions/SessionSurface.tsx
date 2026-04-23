@@ -87,6 +87,7 @@ export function SessionSurface({
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [composerHeight, setComposerHeight] = useState(0);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardInset, setKeyboardInset] = useState(0);
   const restingBottomOffset = Math.max(0, tabBarHeight - insets.bottom);
   const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
     setComposerHeight(e.nativeEvent.layout.height);
@@ -95,11 +96,18 @@ export function SessionSurface({
   useEffect(() => {
     const getKeyboardInset = (e: KeyboardEvent) =>
       Math.max(0, e.endCoordinates.height - insets.bottom);
-    const handleShow = () => setKeyboardVisible(true);
-    const handleHide = () => setKeyboardVisible(false);
+    const handleShow = (e: KeyboardEvent) => {
+      setKeyboardVisible(true);
+      setKeyboardInset(getKeyboardInset(e));
+    };
+    const handleHide = () => {
+      setKeyboardVisible(false);
+      setKeyboardInset(0);
+    };
     const handleChangeFrame = (e: KeyboardEvent) => {
       const nextInset = getKeyboardInset(e);
       setKeyboardVisible(nextInset > 0);
+      setKeyboardInset(nextInset);
     };
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
@@ -115,7 +123,8 @@ export function SessionSurface({
       changeFrame?.remove();
     };
   }, [insets.bottom]);
-  const streamBottomInset = composerHeight + (keyboardVisible ? 0 : restingBottomOffset);
+  const streamBottomInset =
+    composerHeight + (keyboardVisible ? keyboardInset : restingBottomOffset);
 
   useEffect(() => {
     if (!groupId) return;
