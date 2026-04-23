@@ -9,8 +9,9 @@ import {
 } from "react-native";
 import { BottomTabBarHeightContext } from "react-native-bottom-tabs";
 import Animated, {
-  useAnimatedKeyboard,
   useAnimatedStyle,
+  useSharedValue,
+  withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEntityField } from "@trace/client-core";
@@ -88,10 +89,10 @@ export function SessionSurface({
   });
   const insets = useSafeAreaInsets();
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
-  const animatedKeyboard = useAnimatedKeyboard();
   const [composerHeight, setComposerHeight] = useState(0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const overlayDismissedRef = useRef(false);
+  const overlayLift = useSharedValue(0);
   const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
     setComposerHeight(e.nativeEvent.layout.height);
   }, []);
@@ -99,25 +100,35 @@ export function SessionSurface({
     if (keyboardHeight <= 0) return;
     Keyboard.dismiss();
   }, [keyboardHeight]);
+  const restingBottomOffset = Math.max(0, tabBarHeight - insets.bottom);
 
   useEffect(() => {
+    const animateOverlayLift = (nextKeyboardHeight: number, duration?: number) => {
+      const keyboardOffset = Math.max(0, nextKeyboardHeight - insets.bottom);
+      const nextLift = Math.max(0, keyboardOffset - restingBottomOffset);
+      overlayLift.value =
+        duration && duration > 0
+          ? withTiming(nextLift, { duration })
+          : nextLift;
+    };
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
     const show = Keyboard.addListener(showEvent, (e) => {
       setKeyboardHeight(Math.max(0, e.endCoordinates.height));
+      animateOverlayLift(e.endCoordinates.height, e.duration);
     });
-    const hide = Keyboard.addListener(hideEvent, () => {
+    const hide = Keyboard.addListener(hideEvent, (e) => {
       setKeyboardHeight(0);
+      animateOverlayLift(0, e.duration);
     });
     return () => {
       show.remove();
       hide.remove();
     };
-  }, []);
+  }, [insets.bottom, overlayLift, restingBottomOffset]);
   // Both the keyboard frame and the native tab bar height include the home-
   // indicator inset. The composer already pads for that internally, so only
   // apply the remaining covered height here.
-  const restingBottomOffset = Math.max(0, tabBarHeight - insets.bottom);
   const sceneBottomOffset = Math.max(
     restingBottomOffset,
     Math.max(0, keyboardHeight - insets.bottom),
@@ -125,12 +136,10 @@ export function SessionSurface({
   const overlayBottom = sceneBottomOffset;
   const streamBottomInset = composerHeight + overlayBottom;
   const overlayAnimatedStyle = useAnimatedStyle(() => {
-    const keyboardOffset = Math.max(0, animatedKeyboard.height.value - insets.bottom);
-    const overlayOffset = Math.max(restingBottomOffset, keyboardOffset);
     return {
-      transform: [{ translateY: restingBottomOffset - overlayOffset }],
+      transform: [{ translateY: -overlayLift.value }],
     };
-  }, [animatedKeyboard, insets.bottom, restingBottomOffset]);
+  });
   const overlayPanResponder = useMemo(
     () =>
       PanResponder.create({
