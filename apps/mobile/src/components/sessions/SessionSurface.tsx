@@ -1,10 +1,11 @@
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
+  Animated,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
   StyleSheet,
   View,
+  type KeyboardEvent,
   type LayoutChangeEvent,
 } from "react-native";
 import { BottomTabBarHeightContext } from "react-native-bottom-tabs";
@@ -86,21 +87,57 @@ export function SessionSurface({
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [composerHeight, setComposerHeight] = useState(0);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const keyboardOffset = useRef(new Animated.Value(0)).current;
   const restingBottomOffset = Math.max(0, tabBarHeight - insets.bottom);
   const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
     setComposerHeight(e.nativeEvent.layout.height);
   }, []);
+  const animateKeyboardOffset = useCallback(
+    (toValue: number, duration: number = 0) => {
+      keyboardOffset.stopAnimation();
+      if (duration > 0) {
+        Animated.timing(keyboardOffset, {
+          toValue,
+          duration,
+          useNativeDriver: true,
+        }).start();
+        return;
+      }
+      keyboardOffset.setValue(toValue);
+    },
+    [keyboardOffset],
+  );
 
   useEffect(() => {
+    const getKeyboardInset = (e: KeyboardEvent) =>
+      Math.max(0, e.endCoordinates.height - insets.bottom);
+    const handleShow = (e: KeyboardEvent) => {
+      setKeyboardVisible(true);
+      animateKeyboardOffset(getKeyboardInset(e), e.duration ?? 0);
+    };
+    const handleHide = (e: KeyboardEvent) => {
+      setKeyboardVisible(false);
+      animateKeyboardOffset(0, e.duration ?? 0);
+    };
+    const handleChangeFrame = (e: KeyboardEvent) => {
+      const nextInset = getKeyboardInset(e);
+      setKeyboardVisible(nextInset > 0);
+      keyboardOffset.setValue(nextInset);
+    };
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const show = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
-    const hide = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    const show = Keyboard.addListener(showEvent, handleShow);
+    const hide = Keyboard.addListener(hideEvent, handleHide);
+    const changeFrame =
+      Platform.OS === "ios"
+        ? Keyboard.addListener("keyboardWillChangeFrame", handleChangeFrame)
+        : null;
     return () => {
       show.remove();
       hide.remove();
+      changeFrame?.remove();
     };
-  }, []);
+  }, [animateKeyboardOffset, insets.bottom, keyboardOffset]);
   const streamBottomInset = composerHeight + (keyboardVisible ? 0 : restingBottomOffset);
 
   useEffect(() => {
@@ -149,11 +186,14 @@ export function SessionSurface({
           renderEvents={renderStreamEvents}
         />
       </View>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={0}
-        style={styles.overlayHost}
+      <Animated.View
         pointerEvents="box-none"
+        style={[
+          styles.overlayHost,
+          {
+            transform: [{ translateY: Animated.multiply(keyboardOffset, -1) }],
+          },
+        ]}
       >
         <View
           onLayout={handleComposerLayout}
@@ -179,7 +219,7 @@ export function SessionSurface({
             </>
           )}
         </View>
-      </KeyboardAvoidingView>
+      </Animated.View>
     </View>
   );
 }
