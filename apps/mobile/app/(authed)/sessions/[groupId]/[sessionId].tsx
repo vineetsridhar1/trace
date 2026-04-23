@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import {
+  createNativeBottomTabNavigator,
+  type NativeBottomTabNavigationOptions,
+} from "@bottom-tabs/react-navigation";
 import { useEntityField } from "@trace/client-core";
 import type { Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View } from "react-native";
@@ -12,10 +16,6 @@ import {
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { BrowserPanel } from "@/components/sessions/BrowserPanel";
 import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
-import {
-  SessionPageBottomNav,
-  type SessionPageTab,
-} from "@/components/sessions/SessionPageBottomNav";
 import { SessionSurface } from "@/components/sessions/SessionSurface";
 import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
 import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel";
@@ -26,6 +26,26 @@ import {
   useEnsureSessionGroupDetail,
   useSessionGroupSessionIds,
 } from "@/hooks/useSessionGroupDetail";
+
+type SessionBottomTabsParamList = {
+  session: undefined;
+  browser: undefined;
+  terminal: undefined;
+};
+
+const SessionBottomTabs = createNativeBottomTabNavigator<SessionBottomTabsParamList>();
+
+const sessionIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
+  sfSymbol: "text.bubble",
+});
+
+const browserIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
+  sfSymbol: "globe",
+});
+
+const terminalIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
+  sfSymbol: "chevron.left.forwardslash.chevron.right",
+});
 
 /**
  * Standalone mobile session page. Reuses the session surface building blocks
@@ -57,7 +77,6 @@ export default function SessionStreamScreen() {
     | string
     | null
     | undefined;
-  const [activeTab, setActiveTab] = useState<SessionPageTab>("session");
   const defaultBrowserUrl = useMemo(() => {
     if (prUrl) return prUrl;
     const remoteUrl = repo?.remoteUrl;
@@ -74,10 +93,6 @@ export default function SessionStreamScreen() {
     if (sessionIds.includes(sessionId)) return;
     router.replace(`/sessions/${groupId}/${sessionIds[0]}`);
   }, [groupId, router, sessionId, sessionIds]);
-
-  useEffect(() => {
-    setActiveTab("session");
-  }, [groupId]);
 
   useEffect(() => {
     setBrowserUrl(defaultBrowserUrl);
@@ -139,21 +154,38 @@ export default function SessionStreamScreen() {
               subtitle="This workspace has not started a session yet."
             />
           </View>
-        ) : activeTab === "session" ? (
-          <SessionSurface
-            sessionId={sessionId}
-            onSelectSession={handleSelectSession}
-            hideHeader
-          />
-        ) : activeTab === "browser" ? (
-          <BrowserPanel url={browserUrl} onUrlChange={setBrowserUrl} />
         ) : (
-          <SessionTerminalPanel sessionId={sessionId} />
+          <SessionBottomTabs.Navigator
+            key={hydratedGroupId}
+            initialRouteName="session"
+            minimizeBehavior="onScrollDown"
+          >
+            <SessionBottomTabs.Screen
+              name="session"
+              options={{ title: "Session", tabBarIcon: sessionIcon }}
+            >
+              {() => (
+                <SessionSurface
+                  sessionId={sessionId}
+                  onSelectSession={handleSelectSession}
+                  hideHeader
+                />
+              )}
+            </SessionBottomTabs.Screen>
+            <SessionBottomTabs.Screen
+              name="browser"
+              options={{ title: "Browser", tabBarIcon: browserIcon }}
+            >
+              {() => <BrowserPanel url={browserUrl} onUrlChange={setBrowserUrl} />}
+            </SessionBottomTabs.Screen>
+            <SessionBottomTabs.Screen
+              name="terminal"
+              options={{ title: "Terminal", tabBarIcon: terminalIcon }}
+            >
+              {() => <SessionTerminalPanel sessionId={sessionId} />}
+            </SessionBottomTabs.Screen>
+          </SessionBottomTabs.Navigator>
         )}
-      </View>
-
-      <View style={styles.navWrap}>
-        <SessionPageBottomNav activeTab={activeTab} onTabChange={setActiveTab} />
       </View>
 
       {activeMenuClose ? (
@@ -183,9 +215,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
-  },
-  navWrap: {
-    zIndex: 10,
   },
   menuScrim: {
     ...StyleSheet.absoluteFillObject,
