@@ -7,8 +7,7 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 import { Text } from "@/components/design-system";
-
-export const TIMESTAMP_REVEAL_DISTANCE = 72;
+import { TIMESTAMP_REVEAL_DISTANCE } from "@/lib/timestampReveal";
 
 interface TimestampRevealRowProps {
   children: ReactNode;

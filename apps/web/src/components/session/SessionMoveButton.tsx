@@ -18,20 +18,22 @@ export function SessionMoveButton({
 }) {
   const [open, setOpen] = useState(false);
   const unavailable = disabled || !sessionId;
+  const title = !sessionId ? undefined : disabledReason && unavailable ? disabledReason : "Move session";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        disabled={unavailable}
-        className={cn(
-          "flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:pointer-events-none disabled:opacity-40",
-          open ? "bg-surface-elevated text-foreground" : undefined,
-          className,
-        )}
-        title={!sessionId ? undefined : disabledReason && unavailable ? disabledReason : "Move session"}
-      >
-        <ArrowRightLeft size={14} />
-      </PopoverTrigger>
+      <span title={title} className="inline-flex">
+        <PopoverTrigger
+          disabled={unavailable}
+          className={cn(
+            "flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:pointer-events-none disabled:opacity-40",
+            open ? "bg-surface-elevated text-foreground" : undefined,
+            className,
+          )}
+        >
+          <ArrowRightLeft size={14} />
+        </PopoverTrigger>
+      </span>
       {sessionId && (
         <PopoverContent align="end" className="w-80 bg-transparent p-0 shadow-none ring-0">
           <SessionRuntimePicker

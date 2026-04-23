@@ -5,9 +5,9 @@ import {
   type EntityState,
   useEntityStore,
   type SessionEntity,
-  type SessionGroupEntity,
 } from "@trace/client-core";
 import type { Session, SessionGroup } from "@trace/gql";
+import { mergeSessionGroupEntity } from "@/lib/session-group";
 import { getClient } from "@/lib/urql";
 
 const SESSION_GROUP_DETAIL_QUERY = gql`
@@ -36,6 +36,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       repo {
         id
         name
+        remoteUrl
         defaultBranch
       }
       connection {
@@ -130,12 +131,15 @@ async function doFetchSessionGroupDetail(groupId: string): Promise<void> {
     .slice()
     .sort((a, b) => sessionTime(b) - sessionTime(a) || a.id.localeCompare(b.id));
 
-  existing.upsert("sessionGroups", group.id, {
-    ...(existing.sessionGroups[group.id] ?? {}),
-    ...group,
-    _sortTimestamp:
+  existing.upsert(
+    "sessionGroups",
+    group.id,
+    mergeSessionGroupEntity(
+      existing.sessionGroups[group.id],
+      group,
       sortedSessions[0]?.lastMessageAt ?? sortedSessions[0]?.updatedAt ?? group.updatedAt,
-  } as SessionGroupEntity);
+    ),
+  );
   if (mergedSessions.length > 0) {
     existing.upsertMany("sessions", mergedSessions);
   }

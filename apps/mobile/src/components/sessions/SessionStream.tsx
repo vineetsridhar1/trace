@@ -12,6 +12,10 @@ import { useEntityField } from "@trace/client-core";
 import { useNewActivityTracker } from "@/hooks/useNewActivityTracker";
 import { useSessionEvents } from "@/hooks/useSessionEvents";
 import { useSessionNodes } from "@/hooks/useSessionNodes";
+import {
+  calculateTimestampRevealX,
+  TIMESTAMP_REVEAL_ACTIVATION,
+} from "@/lib/timestampReveal";
 import { useTheme } from "@/theme";
 import { NewActivityPill } from "./NewActivityPill";
 import { SessionStreamList } from "./SessionStreamList";
@@ -20,7 +24,6 @@ import {
   SessionStreamError,
   SessionStreamSkeleton,
 } from "./SessionStreamStates";
-import { TIMESTAMP_REVEAL_DISTANCE } from "./TimestampRevealRow";
 import {
   buildSessionStreamItems,
   type SessionStreamItemCache,
@@ -59,11 +62,6 @@ interface SessionStreamProps {
 }
 
 const NEAR_BOTTOM_THRESHOLD = 120;
-// Finger must travel this many pixels horizontally before the reveal engages;
-// past that, `overshoot * RESISTANCE` maps to the reveal distance (capped at
-// `TIMESTAMP_REVEAL_DISTANCE`), so the pill lags the finger and feels rubbery.
-const TIMESTAMP_REVEAL_ACTIVATION = 24;
-const TIMESTAMP_REVEAL_RESISTANCE = 0.5;
 const CONTENT_FADE_MS = 180;
 
 export function SessionStream({
@@ -159,11 +157,7 @@ export function SessionStream({
     Gesture.Pan()
       .activeOffsetX([-TIMESTAMP_REVEAL_ACTIVATION, TIMESTAMP_REVEAL_ACTIVATION])
       .onChange((event) => {
-        const overshoot = Math.max(0, -event.translationX - TIMESTAMP_REVEAL_ACTIVATION);
-        timestampRevealX.value = Math.min(
-          TIMESTAMP_REVEAL_DISTANCE,
-          overshoot * TIMESTAMP_REVEAL_RESISTANCE,
-        );
+        timestampRevealX.value = calculateTimestampRevealX(event.translationX);
       })
       .onFinalize(() => {
         timestampRevealX.value = withSpring(0, theme.motion.springs.smooth);
