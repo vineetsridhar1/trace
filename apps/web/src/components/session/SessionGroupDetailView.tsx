@@ -323,6 +323,11 @@ export function SessionGroupDetailView({
     getLinkedCheckoutRuntimeInstanceId(groupConnection) ??
     getLinkedCheckoutRuntimeInstanceId(selectedSession?.connection) ??
     null;
+  const groupRuntimeLabel =
+    (typeof groupConnection?.runtimeLabel === "string" && groupConnection.runtimeLabel.trim()) ||
+    (((selectedSession?.connection as { runtimeLabel?: string } | null | undefined)?.runtimeLabel
+      ?? "")
+      .trim() || null);
   const selectedSessionRuntimeInstanceId =
     getLinkedCheckoutRuntimeInstanceId(selectedSession?.connection) ??
     getLinkedCheckoutRuntimeInstanceId(groupConnection) ??
@@ -470,6 +475,7 @@ export function SessionGroupDetailView({
             sessionGroupId={sessionGroupId}
             repoId={linkedCheckoutRepoId}
             groupBranch={linkedCheckoutBranch}
+            linkedCheckoutRuntimeLabel={groupRuntimeLabel}
             linkedCheckoutRuntimeInstanceId={groupRuntimeInstanceId}
             canManageLinkedCheckout={linkedCheckoutAllowed}
             canInteract={bridgeInteractionAllowed}

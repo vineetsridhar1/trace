@@ -11,6 +11,7 @@ import {
 interface UseLinkedCheckoutHeaderStateProps {
   repoId: string | null | undefined;
   groupBranch: string | null | undefined;
+  runtimeLabel: string | null | undefined;
   runtimeInstanceId: string | null | undefined;
   sessionGroupId: string;
   enabled: boolean;
@@ -37,6 +38,7 @@ export interface LinkedCheckoutHeaderState {
 export function useLinkedCheckoutHeaderState({
   repoId,
   groupBranch,
+  runtimeLabel,
   runtimeInstanceId,
   sessionGroupId,
   enabled,
@@ -59,6 +61,7 @@ export function useLinkedCheckoutHeaderState({
   const pending = syncPending || linking;
   const syncedCommitSha = status?.lastSyncedCommitSha ?? status?.currentCommitSha ?? null;
   const summaryBranch = isAttachedToThisGroup && groupBranch ? groupBranch : status?.targetBranch;
+  const runtimeDisplayLabel = runtimeLabel?.trim() || "this bridge";
 
   const onLinkRepo = async () => {
     if (!repoId || !runtimeInstanceId || pending) return;
@@ -118,7 +121,7 @@ export function useLinkedCheckoutHeaderState({
       }
 
       toast.success("Main worktree synced", {
-        description: `Now following ${groupBranch}.`,
+        description: `Now following ${groupBranch} on ${runtimeDisplayLabel}.`,
       });
     } catch (error) {
       toast.error("Failed to sync main worktree", {
