@@ -49,6 +49,8 @@ interface SessionSurfaceProps {
    * behind it.
    */
   topInset?: number;
+  /** Delay event fetching/subscription while an outer sheet transition settles. */
+  hydrateStreamEvents?: boolean;
 }
 
 /**
@@ -61,6 +63,7 @@ export function SessionSurface({
   onSelectSession,
   hideHeader = false,
   topInset,
+  hydrateStreamEvents = true,
 }: SessionSurfaceProps) {
   const theme = useTheme();
   const groupId = useEntityField("sessions", sessionId, "sessionGroupId") as
@@ -161,6 +164,7 @@ export function SessionSurface({
           sessionId={sessionId}
           topInset={topInset}
           bottomInset={composerHeight}
+          hydrateEvents={hydrateStreamEvents}
         />
       </View>
       <View

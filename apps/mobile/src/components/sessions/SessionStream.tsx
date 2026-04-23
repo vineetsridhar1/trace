@@ -36,6 +36,11 @@ interface SessionStreamProps {
    * messages overlay at the bottom of the surface.
    */
   bottomInset?: number;
+  /**
+   * Keep the stream visually stable during container transitions. Cached rows
+   * can render, but network hydration and full-payload subscriptions wait.
+   */
+  hydrateEvents?: boolean;
 }
 
 const NEAR_BOTTOM_THRESHOLD = 120;
@@ -45,10 +50,15 @@ const NEAR_BOTTOM_THRESHOLD = 120;
 const TIMESTAMP_REVEAL_ACTIVATION = 24;
 const TIMESTAMP_REVEAL_RESISTANCE = 0.5;
 
-export function SessionStream({ sessionId, topInset, bottomInset }: SessionStreamProps) {
+export function SessionStream({
+  sessionId,
+  topInset,
+  bottomInset,
+  hydrateEvents = true,
+}: SessionStreamProps) {
   const theme = useTheme();
   const { loading, loadingOlder, hasOlder, error, fetchEvents, fetchOlderEvents } =
-    useSessionEvents(sessionId);
+    useSessionEvents(sessionId, hydrateEvents);
   const {
     nodes,
     completedAgentTools,

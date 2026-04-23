@@ -37,7 +37,7 @@ interface UseSessionEventsResult {
  * Subscriptions tear down when the hook unmounts (screen blur in expo-router
  * unmounts the screen component, so useEffect cleanup is the correct unit).
  */
-export function useSessionEvents(sessionId: string): UseSessionEventsResult {
+export function useSessionEvents(sessionId: string, enabled = true): UseSessionEventsResult {
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlder, setHasOlder] = useState(true);
@@ -48,6 +48,7 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
   const hasOlderRef = useRef(true);
 
   const fetchEvents = useCallback(async () => {
+    if (!enabled) return;
     if (!activeOrgId) {
       setLoading(false);
       return;
@@ -89,13 +90,19 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
       }
     }
     setLoading(false);
-  }, [activeOrgId, sessionId]);
+  }, [activeOrgId, enabled, sessionId]);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(true);
+      setError(null);
+      return;
+    }
     void fetchEvents();
-  }, [fetchEvents]);
+  }, [enabled, fetchEvents]);
 
   useEffect(() => {
+    if (!enabled) return;
     if (!activeOrgId) return;
 
     const client = getClient();
@@ -139,7 +146,7 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
       eventSub.unsubscribe();
       statusSub.unsubscribe();
     };
-  }, [activeOrgId, sessionId]);
+  }, [activeOrgId, enabled, sessionId]);
 
   // Catch up missed events after a WS reconnect: the server's pubsub has no
   // replay, so anything the agent emitted while we were disconnected is lost
@@ -149,13 +156,15 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
   );
   const baselineReconnectCounter = useRef(reconnectCounter);
   useEffect(() => {
+    if (!enabled) return;
     if (reconnectCounter <= baselineReconnectCounter.current) return;
     baselineReconnectCounter.current = reconnectCounter;
     void fetchEvents();
-  }, [reconnectCounter, fetchEvents]);
+  }, [enabled, reconnectCounter, fetchEvents]);
 
   const fetchOlderEvents = useCallback(async () => {
     if (
+      !enabled ||
       !activeOrgId ||
       !oldestTimestampRef.current ||
       loadingOlderRef.current ||
@@ -203,7 +212,14 @@ export function useSessionEvents(sessionId: string): UseSessionEventsResult {
     }
     loadingOlderRef.current = false;
     setLoadingOlder(false);
-  }, [activeOrgId, sessionId]);
+  }, [activeOrgId, enabled, sessionId]);
 
-  return { loading, loadingOlder, hasOlder, error, fetchEvents, fetchOlderEvents };
+  return {
+    loading: enabled ? loading : true,
+    loadingOlder,
+    hasOlder,
+    error: enabled ? error : null,
+    fetchEvents,
+    fetchOlderEvents,
+  };
 }

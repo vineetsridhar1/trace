@@ -53,6 +53,7 @@ export function SessionPlayerOverlay() {
     | null
     | undefined;
   const [measuredTopInset, setMeasuredTopInset] = useState<number | null>(null);
+  const [streamHydrationReady, setStreamHydrationReady] = useState(false);
   const topInsetHeight =
     measuredTopInset
     ?? insets.top + ESTIMATED_HEADER_HEIGHT + ESTIMATED_TAB_STRIP_HEIGHT;
@@ -62,9 +63,13 @@ export function SessionPlayerOverlay() {
 
   useEffect(() => {
     if (open) {
+      setStreamHydrationReady(false);
       dragY.value = 0;
-      progress.value = withSpring(1, theme.motion.springs.gentle);
+      progress.value = withSpring(1, theme.motion.springs.gentle, (finished) => {
+        if (finished) runOnJS(setStreamHydrationReady)(true);
+      });
     } else {
+      setStreamHydrationReady(false);
       dragY.value = withTiming(0, { duration: theme.motion.durations.base });
       progress.value = withTiming(0, { duration: theme.motion.durations.base });
     }
@@ -152,6 +157,7 @@ export function SessionPlayerOverlay() {
               onSelectSession={handleSelectSession}
               hideHeader
               topInset={topInsetHeight}
+              hydrateStreamEvents={streamHydrationReady}
             />
           ) : (
             <SessionSurfaceEmpty />
