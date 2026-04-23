@@ -31,6 +31,8 @@ interface SessionGroupTitleMenuProps {
   sessionId?: string;
   /** Width the morph should expand to when open — usually the full header row. */
   fullWidth: number;
+  /** How far left the expanded surface should pull from the title pill origin. */
+  expandLeftInset?: number;
 }
 
 /**
@@ -47,16 +49,27 @@ export function SessionGroupTitleMenu({
   groupId,
   sessionId,
   fullWidth,
+  expandLeftInset = 0,
 }: SessionGroupTitleMenuProps) {
   if (!isLiquidGlassAvailable()) {
     return <FallbackTitlePill groupId={groupId} sessionId={sessionId} />;
   }
   return (
-    <MorphingTitle groupId={groupId} sessionId={sessionId} fullWidth={fullWidth} />
+    <MorphingTitle
+      groupId={groupId}
+      sessionId={sessionId}
+      fullWidth={fullWidth}
+      expandLeftInset={expandLeftInset}
+    />
   );
 }
 
-function MorphingTitle({ groupId, sessionId, fullWidth }: SessionGroupTitleMenuProps) {
+function MorphingTitle({
+  groupId,
+  sessionId,
+  fullWidth,
+  expandLeftInset = 0,
+}: SessionGroupTitleMenuProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   // Keeps panel content mounted through the close animation so it can fade out.
@@ -103,9 +116,14 @@ function MorphingTitle({ groupId, sessionId, fullWidth }: SessionGroupTitleMenuP
   const endWidth = Math.max(fullWidth, startWidth);
 
   // Shape morph: rounded pill -> wider rounded card, anchored at the trigger's
-  // top-left corner. The translateY arc dips the surface down and springs back
-  // so the motion reads as "unfold from the trigger" instead of drifting.
+  // top-left corner. The expanded state also pulls left into the full header
+  // row so the open card spans the same width as the header chrome.
   const glassStyle = useAnimatedStyle(() => ({
+    left: interpolate(
+      progress.value,
+      [0, 1],
+      [triggerPos?.x ?? 0, (triggerPos?.x ?? 0) - expandLeftInset],
+    ),
     width: interpolate(progress.value, [0, 1], [startWidth, endWidth]),
     height: interpolate(progress.value, [0, 1], [PILL_HEIGHT, PANEL_HEIGHT]),
     borderRadius: interpolate(
@@ -122,6 +140,7 @@ function MorphingTitle({ groupId, sessionId, fullWidth }: SessionGroupTitleMenuP
 
   // Cross-fade: trigger out in the first 40% of the morph, panel in during the last 45%.
   const triggerStyle = useAnimatedStyle(() => ({
+    left: interpolate(progress.value, [0, 1], [0, expandLeftInset]),
     opacity: interpolate(progress.value, [0, 0.4], [1, 0], "clamp"),
   }));
   const panelStyle = useAnimatedStyle(() => ({
@@ -177,7 +196,7 @@ function MorphingTitle({ groupId, sessionId, fullWidth }: SessionGroupTitleMenuP
             colorScheme={theme.scheme === "dark" ? "dark" : "light"}
             style={[
               styles.portalGlass,
-              { top: triggerPos.y, left: triggerPos.x },
+              { top: triggerPos.y },
               glassStyle,
             ]}
           >
