@@ -6,6 +6,7 @@ import { authenticateAccessToken, createBridgeAuthToken, getRequestToken } from 
 import { isLocalMode } from "../lib/mode.js";
 import {
   ensureLocalUserWorkspace,
+  findMostRecentLocalUserWorkspace,
   normalizeLocalLoginName,
 } from "../services/local-bootstrap.js";
 import {
@@ -186,11 +187,18 @@ router.post("/auth/local/login", async (req: Request, res: Response) => {
 
   const rawName = typeof req.body?.name === "string" ? req.body.name : "";
   const name = normalizeLocalLoginName(rawName);
-  if (name.length < 2) {
+  if (name.length > 0 && name.length < 2) {
     return res.status(400).json({ error: "Name must be at least 2 characters" });
   }
+  const workspace =
+    name.length >= 2
+      ? await ensureLocalUserWorkspace(name)
+      : await findMostRecentLocalUserWorkspace();
+  if (!workspace) {
+    return res.status(404).json({ error: "No saved local user found" });
+  }
 
-  const { user, organizationId } = await ensureLocalUserWorkspace(name);
+  const { user, organizationId } = workspace;
   const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "30d" });
   setSessionCookie(res, token);
   res.json({

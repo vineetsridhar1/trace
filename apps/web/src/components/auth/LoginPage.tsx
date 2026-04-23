@@ -56,27 +56,42 @@ export function LoginPage() {
     };
   }, [fetchMe, signInWithToken]);
 
-  const loginWithLocalName = useCallback(async (rawName: string) => {
+  const loginWithLocalName = useCallback(async (
+    rawName: string,
+    options?: { allowEmpty?: boolean; silent?: boolean },
+  ) => {
     const trimmedName = rawName.trim();
-    if (trimmedName.length < 2 || submitting) return;
+    if ((!options?.allowEmpty && trimmedName.length < 2) || submitting) return false;
     setSubmitting(true);
-    setError(null);
+    if (!options?.silent) {
+      setError(null);
+    }
     try {
       const apiUrl = import.meta.env.VITE_API_URL ?? "";
       const response = await fetch(`${apiUrl}/auth/local/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name: trimmedName }),
+        body: JSON.stringify(trimmedName ? { name: trimmedName } : {}),
       });
-      const payload = await response.json().catch(() => ({} as { error?: string; token?: string }));
+      const payload = await response.json().catch(
+        () => ({} as { error?: string; token?: string; user?: { name?: string } }),
+      );
       if (!response.ok || typeof payload.token !== "string") {
         throw new Error(payload.error ?? "Failed to sign in");
       }
-      localStorage.setItem(LOCAL_LOGIN_NAME_KEY, trimmedName);
+      const persistedName =
+        typeof payload.user?.name === "string" ? payload.user.name.trim() : trimmedName;
+      if (persistedName.length >= 2) {
+        localStorage.setItem(LOCAL_LOGIN_NAME_KEY, persistedName);
+      }
       await signInWithToken(payload.token);
+      return true;
     } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : "Failed to sign in");
+      if (!options?.silent) {
+        setError(loginError instanceof Error ? loginError.message : "Failed to sign in");
+      }
+      return false;
     } finally {
       setSubmitting(false);
     }
@@ -87,10 +102,13 @@ export function LoginPage() {
     setAutoLoginAttempted(true);
 
     const rememberedName = localStorage.getItem(LOCAL_LOGIN_NAME_KEY)?.trim() ?? "";
-    if (rememberedName.length < 2) return;
+    if (rememberedName.length >= 2) {
+      setName(rememberedName);
+      void loginWithLocalName(rememberedName);
+      return;
+    }
 
-    setName(rememberedName);
-    void loginWithLocalName(rememberedName);
+    void loginWithLocalName("", { allowEmpty: true, silent: true });
   }, [autoLoginAttempted, loginWithLocalName]);
 
   async function handleLocalLogin(event: FormEvent<HTMLFormElement>) {

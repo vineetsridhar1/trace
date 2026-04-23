@@ -82,6 +82,7 @@ async function main() {
           const context = await buildWsContext(
             ctx.connectionParams as Record<string, unknown> | undefined,
             ctx.extra?.request?.headers?.cookie,
+            ctx.extra?.request,
           );
           (ctx.extra as Record<string, unknown>).__context = context;
           return true;

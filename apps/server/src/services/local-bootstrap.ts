@@ -21,6 +21,29 @@ function localEmailForName(name: string): string {
   return `${slugifyLocalName(name)}@${LOCAL_EMAIL_DOMAIN}`;
 }
 
+export async function findMostRecentLocalUserWorkspace(): Promise<{
+  organizationId: string;
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    avatarUrl: string | null;
+  };
+} | null> {
+  const localUser = await prisma.user.findFirst({
+    where: {
+      email: {
+        endsWith: `@${LOCAL_EMAIL_DOMAIN}`,
+      },
+    },
+    orderBy: { updatedAt: "desc" },
+    select: { name: true },
+  });
+
+  if (!localUser) return null;
+  return ensureLocalUserWorkspace(localUser.name);
+}
+
 export async function ensureLocalUserWorkspace(name: string): Promise<{
   organizationId: string;
   user: {

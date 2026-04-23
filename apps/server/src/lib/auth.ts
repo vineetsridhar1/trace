@@ -1,10 +1,12 @@
 import type { ExpressContextFunctionArgument } from "@as-integrations/express5";
 import type { Request } from "express";
+import type { IncomingHttpHeaders } from "http";
 import jwt from "jsonwebtoken";
 import type { Context } from "../context.js";
 import { authenticateLocalMobileSecret, type LocalMobileAuthSubject } from "../services/local-mobile-auth.js";
 import { AuthenticationError } from "./errors.js";
 import { prisma } from "./db.js";
+import { isLocalMode } from "./mode.js";
 import {
   createUserLoader,
   createSessionLoader,
@@ -42,6 +44,11 @@ type SessionAuthSubject = {
 
 export type AccessTokenAuthSubject = SessionAuthSubject | LocalMobileAuthSubject;
 
+type RequestAuthSource = {
+  headers: IncomingHttpHeaders;
+  socket?: { remoteAddress?: string | null } | null;
+};
+
 function parseSessionToken(token: string): SessionTokenPayload | null {
   try {
     const payload = jwt.verify(token, JWT_SECRET) as SessionTokenPayload | BridgeAuthTokenPayload;
@@ -63,6 +70,38 @@ export function parseCookieToken(cookieHeader?: string): string | undefined {
   if (!cookieHeader) return undefined;
   const match = cookieHeader.match(/trace_token=([^;]+)/);
   return match?.[1];
+}
+
+function normalizeIpAddress(value: string): string {
+  const trimmed = value.trim().toLowerCase();
+  return trimmed.startsWith("::ffff:") ? trimmed.slice(7) : trimmed;
+}
+
+function readForwardedFor(headers: IncomingHttpHeaders): string | null {
+  const rawValue = headers["x-forwarded-for"];
+  const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+  if (typeof value !== "string") return null;
+  const [first] = value.split(",");
+  const trimmed = first?.trim() ?? "";
+  return trimmed || null;
+}
+
+export function isLoopbackAddress(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const normalized = normalizeIpAddress(value);
+  return normalized === "127.0.0.1" || normalized === "::1";
+}
+
+export function isLoopbackRequest(request: RequestAuthSource): boolean {
+  const forwardedFor = readForwardedFor(request.headers);
+  if (forwardedFor) {
+    return isLoopbackAddress(forwardedFor);
+  }
+  return isLoopbackAddress(request.socket?.remoteAddress);
+}
+
+export function isExternalLocalModeRequest(request: RequestAuthSource): boolean {
+  return isLocalMode() && !isLoopbackRequest(request);
 }
 
 /** Verify a JWT and return the userId, or null if invalid. */
@@ -154,7 +193,7 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
   let userId: string | undefined;
   let authSubject: AccessTokenAuthSubject | null = null;
 
-  // Accept token from Authorization header, cookie, or x-user-id fallback
+  // Accept token from Authorization header or cookie.
   const token = getRequestToken(req);
   if (token) {
     authSubject = await authenticateAccessToken(token);
@@ -162,9 +201,12 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
       throw new AuthenticationError("Invalid token");
     }
     userId = authSubject.userId;
-  } else {
-    const rawUserId = req.headers["x-user-id"];
-    userId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
+  }
+
+  if (isExternalLocalModeRequest(req)) {
+    if (authSubject?.kind !== "local_mobile") {
+      throw new AuthenticationError("External local-mode access requires a paired mobile token");
+    }
   }
 
   if (!userId) {
@@ -235,7 +277,11 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
   };
 }
 
-export async function buildWsContext(connectionParams?: Record<string, unknown>, cookieHeader?: string): Promise<Context> {
+export async function buildWsContext(
+  connectionParams?: Record<string, unknown>,
+  cookieHeader?: string,
+  request?: RequestAuthSource,
+): Promise<Context> {
   const token =
     (connectionParams?.token as string) ?? parseCookieToken(cookieHeader);
 
@@ -244,6 +290,9 @@ export async function buildWsContext(connectionParams?: Record<string, unknown>,
   const authSubject = await authenticateAccessToken(token);
   if (!authSubject) {
     throw new AuthenticationError("Invalid token");
+  }
+  if (request && isExternalLocalModeRequest(request) && authSubject.kind !== "local_mobile") {
+    throw new AuthenticationError("External local-mode access requires a paired mobile token");
   }
   const userId = authSubject.userId;
 

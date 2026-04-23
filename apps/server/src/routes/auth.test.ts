@@ -159,11 +159,35 @@ describe("local login", () => {
     const res = await fetch(`${baseUrl}/auth/local/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: " " }),
+      body: JSON.stringify({ name: "A" }),
     });
 
     expect(res.status).toBe(400);
     expect(prismaMock.user.upsert).not.toHaveBeenCalled();
+  });
+
+  it("resumes the most recently used local user when no name is provided", async () => {
+    prismaMock.user.findFirst.mockResolvedValueOnce({ name: "Jane Developer" });
+
+    const res = await fetch(`${baseUrl}/auth/local/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { token: string; organizationId: string };
+    expect(jwt.verify(body.token, JWT_SECRET)).toMatchObject({ userId: "user-1" });
+    expect(body.organizationId).toBe("org-1");
+    expect(prismaMock.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        email: {
+          endsWith: "@trace.local",
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+      select: { name: true },
+    });
   });
 });
 
