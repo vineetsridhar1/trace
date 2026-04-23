@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
-import { StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { Platform, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import Animated, { Keyframe, type SharedValue } from "react-native-reanimated";
 import { Text } from "@/components/design-system";
@@ -121,7 +121,7 @@ export function SessionStreamList({
       inverted={false}
       onScroll={onScroll}
       scrollEventThrottle={16}
-      keyboardDismissMode="none"
+      keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
       keyboardShouldPersistTaps="handled"
       onStartReached={hasOlder && !loadingOlder ? fetchOlderEvents : undefined}
       onStartReachedThreshold={0.2}

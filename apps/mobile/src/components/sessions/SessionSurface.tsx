@@ -134,7 +134,7 @@ export function SessionSurface({
       {hideHeader ? null : <ActiveTodoStrip sessionId={sessionId} />}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={restingBottomOffset}
+        keyboardVerticalOffset={0}
         style={styles.content}
       >
         <View style={styles.streamWrapper}>
@@ -148,7 +148,12 @@ export function SessionSurface({
             renderEvents={renderStreamEvents}
           />
         </View>
-        <View style={[styles.composerStack, { paddingBottom: restingBottomOffset }]}>
+        <View
+          style={[
+            styles.composerStack,
+            { paddingBottom: keyboardVisible ? 0 : restingBottomOffset },
+          ]}
+        >
           {pendingInput ? (
             <>
               <PendingInputBar sessionId={sessionId} />
@@ -161,6 +166,7 @@ export function SessionSurface({
               <SessionInputComposer
                 sessionId={sessionId}
                 keyboardVisible={keyboardVisible}
+                bottomSafeAreaInset={keyboardVisible ? 0 : undefined}
               />
             </>
           )}
