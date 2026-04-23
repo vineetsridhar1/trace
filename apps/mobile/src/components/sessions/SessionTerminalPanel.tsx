@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
+import { Asset } from "expo-asset";
+import { File } from "expo-file-system";
 import {
   CREATE_TERMINAL_MUTATION,
   SESSION_TERMINALS_QUERY,
@@ -25,116 +27,29 @@ type TerminalViewStatus =
 
 const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 32;
-const XTERM_VERSION = "5.5.0";
-const FIT_ADDON_VERSION = "0.10.0";
+const TERMINAL_RUNTIME_HTML = require("../../assets/terminal-runtime.html");
+const TERMINAL_RUNTIME_ERROR = "Couldn't load the terminal runtime";
 
-function buildTerminalHtml(themeBackground: string, themeForeground: string): string {
-  return `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
-    />
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/@xterm/xterm@${XTERM_VERSION}/css/xterm.css"
-    />
-    <style>
-      html, body, #terminal {
-        margin: 0;
-        width: 100%;
-        height: 100%;
-        background: ${themeBackground};
-        overflow: hidden;
-      }
-      body {
-        color: ${themeForeground};
-        font-family: ui-monospace, Menlo, monospace;
-      }
-    </style>
-  </head>
-  <body>
-    <div id="terminal"></div>
-    <script src="https://unpkg.com/@xterm/xterm@${XTERM_VERSION}/lib/xterm.js"></script>
-    <script src="https://unpkg.com/@xterm/addon-fit@${FIT_ADDON_VERSION}/lib/addon-fit.js"></script>
-    <script>
-      (function () {
-        const post = (message) => {
-          if (window.ReactNativeWebView) {
-            window.ReactNativeWebView.postMessage(JSON.stringify(message));
-          }
-        };
-        let attempts = 0;
-        let term = null;
-        let fitAddon = null;
-        let resizeTimer = null;
+function buildTerminalHtml(
+  template: string,
+  themeBackground: string,
+  themeForeground: string,
+): string {
+  return template
+    .replaceAll("__TRACE_THEME_BACKGROUND__", themeBackground)
+    .replaceAll("__TRACE_THEME_FOREGROUND__", themeForeground);
+}
 
-        function fit() {
-          if (!term || !fitAddon) return;
-          try {
-            fitAddon.fit();
-            post({ type: "resize", cols: term.cols, rows: term.rows });
-          } catch (error) {
-            // Ignore transient layout errors while the view settles.
-          }
-        }
-
-        function boot() {
-          if (!window.Terminal || !window.FitAddon || !document.getElementById("terminal")) {
-            attempts += 1;
-            if (attempts > 120) {
-              post({ type: "bootstrap_error" });
-              return;
-            }
-            setTimeout(boot, 50);
-            return;
-          }
-
-          term = new window.Terminal({
-            cursorBlink: true,
-            fontSize: 13,
-            fontFamily: "Menlo, ui-monospace, monospace",
-            theme: {
-              background: "${themeBackground}",
-              foreground: "${themeForeground}",
-              cursor: "${themeForeground}",
-              selectionBackground: "rgba(161,161,170,0.32)"
-            }
-          });
-
-          fitAddon = new window.FitAddon.FitAddon();
-          term.loadAddon(fitAddon);
-          term.open(document.getElementById("terminal"));
-          term.focus();
-          term.onData((data) => post({ type: "input", data }));
-
-          window.__traceWrite = function (data) {
-            if (term) term.write(data);
-          };
-          window.__traceClear = function () {
-            if (term) term.clear();
-          };
-          window.__traceFocus = function () {
-            if (term) term.focus();
-          };
-          window.__traceFit = fit;
-
-          fit();
-          post({ type: "ready" });
-
-          window.addEventListener("resize", function () {
-            clearTimeout(resizeTimer);
-            resizeTimer = setTimeout(fit, 100);
-          });
-        }
-
-        boot();
-      })();
-    </script>
-  </body>
-</html>`;
+function pickLatestSessionTerminal(
+  terminals: Terminal[] | undefined,
+  sessionId: string,
+): Terminal | null {
+  if (!terminals || terminals.length === 0) return null;
+  for (let i = terminals.length - 1; i >= 0; i -= 1) {
+    const terminal = terminals[i];
+    if (terminal?.sessionId === sessionId) return terminal;
+  }
+  return null;
 }
 
 export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
@@ -142,17 +57,27 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
   const webViewRef = useRef<WebView>(null);
   const socketRef = useRef<TerminalSocket | null>(null);
   const webReadyRef = useRef(false);
+  const mountedRef = useRef(true);
+  const requestTokenRef = useRef(0);
   const pendingWritesRef = useRef<string[]>([]);
   const needsClearRef = useRef(false);
+  const [runtimeTemplate, setRuntimeTemplate] = useState<string | null>(null);
   const [webReady, setWebReady] = useState(false);
   const [terminalId, setTerminalId] = useState<string | null>(null);
   const [status, setStatus] = useState<TerminalViewStatus>("loading");
   const [message, setMessage] = useState<string | null>(null);
 
   const terminalHtml = useMemo(
-    () => buildTerminalHtml(theme.colors.surfaceDeep, theme.colors.foreground),
-    [theme.colors.foreground, theme.colors.surfaceDeep],
+    () =>
+      runtimeTemplate
+        ? buildTerminalHtml(runtimeTemplate, theme.colors.surfaceDeep, theme.colors.foreground)
+        : null,
+    [runtimeTemplate, theme.colors.foreground, theme.colors.surfaceDeep],
   );
+
+  const isRequestCurrent = useCallback((token: number) => {
+    return mountedRef.current && requestTokenRef.current === token;
+  }, []);
 
   const inject = useCallback((script: string) => {
     webViewRef.current?.injectJavaScript(`${script}\ntrue;`);
@@ -176,6 +101,31 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
     },
     [inject],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const asset = Asset.fromModule(TERMINAL_RUNTIME_HTML);
+        await asset.downloadAsync();
+        const uri = asset.localUri ?? asset.uri;
+        if (!uri) throw new Error("Missing terminal runtime asset URI");
+        const template = await new File(uri).text();
+        if (cancelled) return;
+        setRuntimeTemplate(template);
+      } catch (error) {
+        if (cancelled) return;
+        console.warn("[terminal-panel] runtime asset load failed", error);
+        setStatus("error");
+        setMessage(TERMINAL_RUNTIME_ERROR);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const createTerminal = useCallback(async (): Promise<string> => {
     const result = await getClient()
@@ -241,7 +191,10 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
 
   const ensureTerminal = useCallback(
     async (forceNew = false) => {
+      const requestToken = requestTokenRef.current + 1;
+      requestTokenRef.current = requestToken;
       try {
+        if (!isRequestCurrent(requestToken)) return;
         setStatus("loading");
         setMessage(null);
 
@@ -250,23 +203,24 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
           const result = await getClient()
             .query<{ sessionTerminals: Terminal[] }>(SESSION_TERMINALS_QUERY, { sessionId })
             .toPromise();
-          const existing = result.data?.sessionTerminals?.find(
-            (terminal) => terminal.sessionId === sessionId,
-          );
+          if (!isRequestCurrent(requestToken)) return;
+          const existing = pickLatestSessionTerminal(result.data?.sessionTerminals, sessionId);
           nextTerminalId = existing?.id ?? null;
         }
 
         if (!nextTerminalId) {
           nextTerminalId = await createTerminal();
+          if (!isRequestCurrent(requestToken)) return;
         }
 
         attachSocket(nextTerminalId);
       } catch (error) {
+        if (!isRequestCurrent(requestToken)) return;
         setStatus("error");
         setMessage(error instanceof Error ? error.message : "Couldn't open terminal");
       }
     },
-    [attachSocket, createTerminal, sessionId],
+    [attachSocket, createTerminal, isRequestCurrent, sessionId],
   );
 
   useEffect(() => {
@@ -274,16 +228,21 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
   }, [webReady]);
 
   useEffect(() => {
+    mountedRef.current = true;
     setWebReady(false);
     webReadyRef.current = false;
     pendingWritesRef.current = [];
     needsClearRef.current = true;
-    void ensureTerminal();
+    if (runtimeTemplate) {
+      void ensureTerminal();
+    }
     return () => {
+      mountedRef.current = false;
+      requestTokenRef.current += 1;
       socketRef.current?.close();
       socketRef.current = null;
     };
-  }, [ensureTerminal]);
+  }, [ensureTerminal, runtimeTemplate]);
 
   useEffect(() => {
     if (!webReady) return;
@@ -314,7 +273,7 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
         }
         if (message.type === "bootstrap_error") {
           setStatus("error");
-          setMessage("Couldn't load the terminal runtime");
+          setMessage(TERMINAL_RUNTIME_ERROR);
           return;
         }
         if (message.type === "input") {
@@ -368,6 +327,7 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
           title="New"
           size="sm"
           variant="secondary"
+          disabled={!runtimeTemplate}
           onPress={() => {
             void ensureTerminal(true);
           }}
@@ -375,15 +335,17 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
       </View>
 
       <View style={[styles.surface, { backgroundColor: theme.colors.surfaceDeep }]}>
-        <WebView
-          ref={webViewRef}
-          originWhitelist={["*"]}
-          source={{ html: terminalHtml }}
-          onMessage={handleWebMessage}
-          style={styles.webView}
-          scrollEnabled={false}
-          bounces={false}
-        />
+        {terminalHtml ? (
+          <WebView
+            ref={webViewRef}
+            originWhitelist={["*"]}
+            source={{ html: terminalHtml }}
+            onMessage={handleWebMessage}
+            style={styles.webView}
+            scrollEnabled={false}
+            bounces={false}
+          />
+        ) : null}
 
         {!webReady && status === "loading" ? (
           <View style={styles.overlay}>

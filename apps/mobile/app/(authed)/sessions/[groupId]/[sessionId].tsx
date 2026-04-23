@@ -9,6 +9,7 @@ import type { Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
+  Button,
   EmptyState,
   Screen,
   Spinner,
@@ -21,6 +22,7 @@ import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { useMobileUIStore } from "@/stores/ui";
 import {
+  fetchSessionGroupDetail,
   useEnsureSessionGroupDetail,
   useSessionGroupSessionIds,
 } from "@/hooks/useSessionGroupDetail";
@@ -107,8 +109,14 @@ export default function SessionStreamScreen() {
     const nextHeight = e.nativeEvent.layout.height;
     setOverlayHeight((current) => (current === nextHeight ? current : nextHeight));
   }, []);
+  const handleRetryGroup = useCallback(() => {
+    const targetGroupId = hydratedGroupId || groupId;
+    if (!targetGroupId) return;
+    void fetchSessionGroupDetail(targetGroupId);
+  }, [groupId, hydratedGroupId]);
 
-  const showLoading = loadingGroup || (sessionIds.length === 0 && !groupName);
+  const showLoading = loadingGroup;
+  const missingGroup = !showLoading && !groupName;
 
   return (
     <Screen
@@ -135,6 +143,17 @@ export default function SessionStreamScreen() {
         {showLoading ? (
           <View style={styles.center}>
             <Spinner size="small" color="mutedForeground" />
+          </View>
+        ) : missingGroup ? (
+          <View style={styles.center}>
+            <EmptyState
+              icon="exclamationmark.triangle"
+              title="Couldn't load workspace"
+              subtitle="The workspace couldn't be loaded. Try again or go back."
+            />
+            <View style={styles.retryButton}>
+              <Button title="Retry" variant="secondary" onPress={handleRetryGroup} />
+            </View>
           </View>
         ) : sessionIds.length === 0 ? (
           <View style={styles.center}>
@@ -223,6 +242,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
+  },
+  retryButton: {
+    marginTop: 16,
   },
   menuScrim: {
     ...StyleSheet.absoluteFillObject,
