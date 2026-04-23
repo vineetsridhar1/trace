@@ -116,9 +116,11 @@ function MessageImageModal({
       transparent
       onRequestClose={onClose}
     >
-      <View style={[styles.modalBackdrop, { backgroundColor: alpha("#000000", 0.94) }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={styles.modalCard}>
+      <Pressable
+        onPress={onClose}
+        style={[styles.modalBackdrop, { backgroundColor: alpha("#000000", 0.94) }]}
+      >
+        <View style={styles.modalChrome}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close image preview"
@@ -135,11 +137,13 @@ function MessageImageModal({
           </Pressable>
           <View style={styles.modalImageFrame}>
             {uri ? (
-              <Image
-                source={{ uri }}
-                resizeMode="contain"
-                style={styles.modalImage}
-              />
+              <Pressable onPress={(event) => event.stopPropagation()}>
+                <Image
+                  source={{ uri }}
+                  resizeMode="contain"
+                  style={styles.modalImage}
+                />
+              </Pressable>
             ) : loading ? (
               <Spinner size="large" />
             ) : (
@@ -147,7 +151,7 @@ function MessageImageModal({
             )}
           </View>
         </View>
-      </View>
+      </Pressable>
     </Modal>
   );
 }
@@ -246,7 +250,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 20,
   },
-  modalCard: {
+  modalChrome: {
     flex: 1,
     justifyContent: "center",
     gap: 12,
