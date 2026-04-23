@@ -37,6 +37,11 @@ enum SessionStatus {
   merged
 }
 
+enum SessionRole {
+  primary
+  autopilot_controller
+}
+
 enum TicketStatus {
   backlog
   todo
@@ -56,6 +61,16 @@ enum Priority {
 enum HostingMode {
   cloud
   local
+}
+
+enum SessionAutopilotStatus {
+  disabled
+  waiting
+  reviewing
+  continuing
+  needs_human
+  paused
+  error
 }
 
 enum BridgeAccessScopeType {
@@ -78,6 +93,12 @@ enum CodingTool {
   claude_code
   codex
   custom
+}
+
+enum AutopilotDecisionAction {
+  continue_worker
+  request_human_validation
+  stop
 }
 
 enum ChatType {
@@ -104,6 +125,7 @@ enum InboxItemType {
   question
   agent_escalation
   agent_suggestion
+  autopilot_validation_request
   ticket_suggestion
   link_suggestion
   session_suggestion
@@ -237,6 +259,12 @@ enum EventType {
   session_pr_opened
   session_pr_merged
   session_pr_closed
+  session_autopilot_created
+  session_autopilot_updated
+  session_autopilot_disabled
+  session_autopilot_review_requested
+  session_autopilot_decision_applied
+  session_autopilot_handoff_requested
   session_group_archived
   ticket_assigned
   ticket_unassigned
@@ -265,6 +293,7 @@ model Organization {
   channelGroups ChannelGroup[]
   channels Channel[]
   sessionGroups SessionGroup[]
+  sessionAutopilots SessionAutopilot[]
   sessions Session[]
   tickets  Ticket[]
   events        Event[]
@@ -449,6 +478,7 @@ model User {
   aiConversations   AiConversation[] @relation("AiConversationCreator")
   aiBranches        AiBranch[]       @relation("AiBranchCreator")
   queuedMessages    QueuedMessage[]  @relation("QueuedMessageCreator")
+  ownedSessionAutopilots SessionAutopilot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -584,6 +614,7 @@ model SessionGroup {
 
   sessions Session[]
   gitCheckpoints GitCheckpoint[]
+  autopilot SessionAutopilot?
   bridgeAccessGrants BridgeAccessGrant[]
   bridgeAccessRequests BridgeAccessRequest[]
 
@@ -600,6 +631,7 @@ model Session {
   name           String
   agentStatus    AgentStatus   @default(not_started)
   sessionStatus  SessionStatus @default(in_progress)
+  role           SessionRole   @default(primary)
   tool           CodingTool
   model          String?
   toolChangedAt      DateTime?
@@ -635,6 +667,34 @@ model Session {
   @@index([sessionGroupId, updatedAt])
   @@index([organizationId, agentStatus])
   @@index([channelId, updatedAt])
+}
+
+model SessionAutopilot {
+  id                        String                   @id @default(uuid())
+  organizationId            String
+  organization              Organization             @relation(fields: [organizationId], references: [id])
+  sessionGroupId            String                   @unique
+  sessionGroup              SessionGroup             @relation(fields: [sessionGroupId], references: [id])
+  ownerUserId               String
+  ownerUser                 User                     @relation(fields: [ownerUserId], references: [id])
+  status                    SessionAutopilotStatus   @default(disabled)
+  enabled                   Boolean                  @default(false)
+  controllerTool            CodingTool
+  controllerModel           String?
+  controllerHosting         HostingMode
+  controllerRuntimeInstanceId String?
+  controllerSessionId       String?
+  activeSessionId           String?
+  playbook                  String
+  customInstructions        String?
+  lastCheckpointSha         String?
+  lastDecisionAction        AutopilotDecisionAction?
+  lastDecisionSummary       String?
+  lastEvaluatedAt           DateTime?
+  lastHumanInboxItemId      String?
+  consecutiveAutoTurns      Int                      @default(0)
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
 }
 
 model QueuedMessage {
