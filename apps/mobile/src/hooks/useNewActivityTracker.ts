@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
-import type { FlashListRef } from "@shopify/flash-list";
 import type { SessionNode } from "@trace/client-core";
 
 function nodeKey(node: SessionNode): string {
@@ -14,6 +13,10 @@ interface UseNewActivityTrackerResult {
   clearNewActivity: () => void;
 }
 
+interface ScrollToEndRef {
+  scrollToEnd: (params?: { animated?: boolean | undefined }) => void;
+}
+
 /**
  * Watches the tail of the node list and either auto-scrolls (when the user
  * is near the bottom) or increments a counter surfaced by the "new activity"
@@ -22,7 +25,7 @@ interface UseNewActivityTrackerResult {
  */
 export function useNewActivityTracker(
   nodes: SessionNode[],
-  listRef: MutableRefObject<FlashListRef<SessionNode> | null>,
+  listRef: MutableRefObject<ScrollToEndRef | null>,
   isNearBottomRef: MutableRefObject<boolean>,
 ): UseNewActivityTrackerResult {
   const prevTailKeyRef = useRef<string | null>(null);

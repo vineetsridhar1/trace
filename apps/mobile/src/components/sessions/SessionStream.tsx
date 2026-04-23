@@ -1,10 +1,14 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { type FlashListRef } from "@shopify/flash-list";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { useSharedValue, withSpring } from "react-native-reanimated";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { useEntityField } from "@trace/client-core";
-import type { SessionNode } from "@trace/client-core";
 import { useNewActivityTracker } from "@/hooks/useNewActivityTracker";
 import { useSessionEvents } from "@/hooks/useSessionEvents";
 import { useSessionNodes } from "@/hooks/useSessionNodes";
@@ -17,6 +21,11 @@ import {
   SessionStreamSkeleton,
 } from "./SessionStreamStates";
 import { TIMESTAMP_REVEAL_DISTANCE } from "./TimestampRevealRow";
+import {
+  buildSessionStreamItems,
+  type SessionStreamItemCache,
+  type SessionStreamListItem,
+} from "./sessionStreamItems";
 import type { NodeRenderContext } from "./nodes";
 
 interface SessionStreamProps {
@@ -32,6 +41,21 @@ interface SessionStreamProps {
    * messages overlay at the bottom of the surface.
    */
   bottomInset?: number;
+  /**
+   * Starts network work for the stream. The Session Player keeps this false
+   * while closed so a hidden sheet does no event work.
+   */
+  loadEvents?: boolean;
+  /**
+   * Allows fetched/live events to update the entity store. The Session Player
+   * starts loading during its open animation, then commits once the sheet lands.
+   */
+  commitEvents?: boolean;
+  /**
+   * Controls whether transcript rows mount at all. The Session Player keeps
+   * cached rows hidden during its open animation so text layout can't jank it.
+   */
+  renderEvents?: boolean;
 }
 
 const NEAR_BOTTOM_THRESHOLD = 120;
@@ -40,27 +64,37 @@ const NEAR_BOTTOM_THRESHOLD = 120;
 // `TIMESTAMP_REVEAL_DISTANCE`), so the pill lags the finger and feels rubbery.
 const TIMESTAMP_REVEAL_ACTIVATION = 24;
 const TIMESTAMP_REVEAL_RESISTANCE = 0.5;
+const CONTENT_FADE_MS = 180;
 
-/** In-memory scroll offset per sessionId — preserved across re-mounts within a session. */
-const scrollOffsetMemory = new Map<string, number>();
-
-export function SessionStream({ sessionId, topInset, bottomInset }: SessionStreamProps) {
+export function SessionStream({
+  sessionId,
+  topInset,
+  bottomInset,
+  loadEvents = true,
+  commitEvents = true,
+  renderEvents = true,
+}: SessionStreamProps) {
   const theme = useTheme();
   const { loading, loadingOlder, hasOlder, error, fetchEvents, fetchOlderEvents } =
-    useSessionEvents(sessionId);
+    useSessionEvents(sessionId, {
+      fetchEnabled: loadEvents,
+      commitEnabled: commitEvents,
+    });
   const {
     nodes,
     completedAgentTools,
     toolResultByUseId,
     gitCheckpointsByPromptEventId,
     events: scopedEvents,
-  } = useSessionNodes(sessionId);
+  } = useSessionNodes(sessionId, { enabled: renderEvents });
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
   const connection = useEntityField("sessions", sessionId, "connection");
 
-  const listRef = useRef<FlashListRef<SessionNode>>(null);
+  const listRef = useRef<FlashListRef<SessionStreamListItem>>(null);
   const isNearBottomRef = useRef(true);
   const timestampRevealX = useSharedValue(0);
+  const contentOpacity = useSharedValue(nodes.length > 0 ? 1 : 0);
+  const hasRenderedNodesRef = useRef(nodes.length > 0);
   const { newActivityCount, clearNewActivity } = useNewActivityTracker(
     nodes,
     listRef,
@@ -77,6 +111,33 @@ export function SessionStream({ sessionId, topInset, bottomInset }: SessionStrea
     }),
     [sessionId, completedAgentTools, toolResultByUseId, gitCheckpointsByPromptEventId, agentStatus],
   );
+  const streamItemCacheRef = useRef<SessionStreamItemCache | undefined>(undefined);
+  const streamItems = useMemo(() => {
+    const result = buildSessionStreamItems(
+      nodes,
+      scopedEvents,
+      streamItemCacheRef.current,
+    );
+    streamItemCacheRef.current = result.cache;
+    return result.items;
+  }, [nodes, scopedEvents]);
+  useEffect(() => {
+    if (!renderEvents || nodes.length === 0) {
+      hasRenderedNodesRef.current = false;
+      contentOpacity.value = 0;
+      return;
+    }
+    if (!hasRenderedNodesRef.current) {
+      contentOpacity.value = 0;
+      contentOpacity.value = withTiming(1, { duration: CONTENT_FADE_MS });
+      hasRenderedNodesRef.current = true;
+      return;
+    }
+    contentOpacity.value = 1;
+  }, [contentOpacity, nodes.length, renderEvents]);
+  const contentFadeStyle = useAnimatedStyle(() => ({
+    opacity: contentOpacity.value,
+  }));
 
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -85,9 +146,8 @@ export function SessionStream({ sessionId, topInset, bottomInset }: SessionStrea
       const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
       isNearBottomRef.current = nearBottom;
       if (nearBottom) clearNewActivity();
-      scrollOffsetMemory.set(sessionId, contentOffset.y);
     },
-    [clearNewActivity, sessionId],
+    [clearNewActivity],
   );
 
   const handlePillPress = useCallback(() => {
@@ -111,13 +171,9 @@ export function SessionStream({ sessionId, topInset, bottomInset }: SessionStrea
     Gesture.Native(),
   );
 
-  const initialScrollIndex = useMemo(() => {
-    if (nodes.length === 0) return undefined;
-    if (scrollOffsetMemory.has(sessionId)) return undefined;
-    return nodes.length - 1;
-  }, [nodes.length, sessionId]);
-
-  if (loading && nodes.length === 0) return <SessionStreamSkeleton />;
+  if (!renderEvents || ((loading || !commitEvents) && nodes.length === 0)) {
+    return <SessionStreamSkeleton />;
+  }
   // A not_started session has no events yet by design — the initial events
   // query commonly 404s for optimistic/pending session ids. Fall through to
   // the friendly empty state instead of surfacing a retry banner.
@@ -131,26 +187,24 @@ export function SessionStream({ sessionId, topInset, bottomInset }: SessionStrea
   return (
     <View style={styles.wrapper}>
       <GestureDetector gesture={timestampRevealGesture}>
-        <View style={styles.listGestureSurface}>
+        <Animated.View style={[styles.listGestureSurface, contentFadeStyle]}>
           <SessionStreamList
             sessionId={sessionId}
-            nodes={nodes}
+            items={streamItems}
             renderContext={renderContext}
-            scopedEvents={scopedEvents}
             revealX={timestampRevealX}
             listRef={listRef}
             loadingOlder={loadingOlder}
             hasOlder={hasOlder}
             disconnected={disconnected}
             disconnectReason={connection?.lastError ?? null}
-            initialScrollIndex={initialScrollIndex}
             topInset={topInset}
             bottomInset={bottomInset}
             isNearBottomRef={isNearBottomRef}
             onScroll={handleScroll}
             fetchOlderEvents={fetchOlderEvents}
           />
-        </View>
+        </Animated.View>
       </GestureDetector>
       <NewActivityPill
         count={newActivityCount}

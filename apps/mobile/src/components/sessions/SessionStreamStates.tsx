@@ -1,21 +1,13 @@
 import { StyleSheet, View } from "react-native";
-import { SymbolView } from "expo-symbols";
 import type { AgentStatus } from "@trace/gql";
-import { Button, Skeleton, Text } from "@/components/design-system";
+import { Button, Spinner, Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
 
-/** Skeleton rows shown while the initial events query is in flight. */
+/** Solid stream surface shown while initial events are loading. */
 export function SessionStreamSkeleton() {
-  const theme = useTheme();
   return (
-    <View style={[styles.placeholder, { paddingHorizontal: theme.spacing.lg }]}>
-      {Array.from({ length: 4 }).map((_, i) => (
-        <View key={i} style={styles.skeletonRow}>
-          <Skeleton width="35%" height={12} />
-          <Skeleton width="80%" height={12} />
-          <Skeleton width="55%" height={12} />
-        </View>
-      ))}
+    <View style={styles.loadingState}>
+      <Spinner size="small" color="mutedForeground" />
     </View>
   );
 }
@@ -42,32 +34,18 @@ export function SessionStreamError({
   );
 }
 
-/** Placeholder shown once hydration completes but no events have arrived. */
-export function SessionStreamEmpty({ agentStatus }: { agentStatus?: AgentStatus | null }) {
-  const theme = useTheme();
-  const notStarted = agentStatus === "not_started";
-  return (
-    <View style={[styles.emptyState, { paddingHorizontal: theme.spacing.lg }]}>
-      <SymbolView
-        name={notStarted ? "sparkles" : "hourglass"}
-        size={28}
-        tintColor={theme.colors.mutedForeground}
-      />
-      <Text variant="headline" color="foreground" align="center">
-        {notStarted ? "Ready when you are" : "Waiting for the agent…"}
-      </Text>
-      <Text variant="footnote" color="mutedForeground" align="center">
-        {notStarted
-          ? "Type a prompt below to kick off the session."
-          : "The first response should arrive shortly."}
-      </Text>
-    </View>
-  );
+/** Solid stream surface shown once hydration completes but no events exist. */
+export function SessionStreamEmpty(_props: { agentStatus?: AgentStatus | null }) {
+  return <View style={styles.blackState} />;
 }
 
 const styles = StyleSheet.create({
-  placeholder: { flex: 1, paddingTop: 24, gap: 18 },
-  skeletonRow: { gap: 6 },
-  emptyState: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
+  blackState: { flex: 1, backgroundColor: "#000" },
+  loadingState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#000",
+  },
   errorState: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
 });
