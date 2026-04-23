@@ -98,38 +98,43 @@ export function SessionSurface({
   }, [keyboardHeight]);
 
   useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const animate = (duration: number | undefined) => {
-      if (Platform.OS === "ios" && duration) {
-        LayoutAnimation.configureNext({
-          duration,
-          update: { type: LayoutAnimation.Types.keyboard },
-        });
-      } else if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+    const animate = (e: { duration?: number; endCoordinates: { height: number } }) => {
+      if (Platform.OS === "ios") {
+        Keyboard.scheduleLayoutAnimation(e);
+      } else if (UIManager.setLayoutAnimationEnabledExperimental) {
         UIManager.setLayoutAnimationEnabledExperimental(true);
+        if (e.duration) {
+          LayoutAnimation.configureNext({
+            duration: e.duration,
+            update: { type: LayoutAnimation.Types.keyboard },
+          });
+        }
       }
     };
-    const show = Keyboard.addListener(showEvent, (e) => {
-      animate(e.duration);
-      setKeyboardHeight(e.endCoordinates.height);
-    });
+    const handleKeyboardFrame = (e: { duration?: number; endCoordinates: { height: number } }) => {
+      animate(e);
+      setKeyboardHeight(Math.max(0, e.endCoordinates.height));
+    };
+    const frameEvent = Platform.OS === "ios" ? "keyboardWillChangeFrame" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const frame = Keyboard.addListener(frameEvent, handleKeyboardFrame);
     const hide = Keyboard.addListener(hideEvent, (e) => {
-      animate(e.duration);
+      animate(e);
       setKeyboardHeight(0);
     });
     return () => {
-      show.remove();
+      frame.remove();
       hide.remove();
     };
   }, []);
   // Both the keyboard frame and the native tab bar height include the home-
   // indicator inset. The composer already pads for that internally, so only
   // apply the remaining covered height here.
-  const sceneBottomOffset =
-    keyboardHeight > 0
-      ? Math.max(0, keyboardHeight - insets.bottom)
-      : Math.max(0, tabBarHeight - insets.bottom);
+  const restingBottomOffset = Math.max(0, tabBarHeight - insets.bottom);
+  const sceneBottomOffset = Math.max(
+    restingBottomOffset,
+    Math.max(0, keyboardHeight - insets.bottom),
+  );
   const overlayBottom = sceneBottomOffset;
   const streamBottomInset = composerHeight + overlayBottom;
   const overlayPanResponder = useMemo(
