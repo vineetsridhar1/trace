@@ -13,8 +13,7 @@ export default function SessionsLayout() {
       <Stack.Screen
         name="[groupId]/[sessionId]"
         options={{
-          title: "Session",
-          headerBackTitle: "Back",
+          headerShown: false,
         }}
       />
     </Stack>

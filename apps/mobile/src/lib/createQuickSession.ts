@@ -1,3 +1,4 @@
+import { router } from "expo-router";
 import { Alert } from "react-native";
 import {
   generateUUID,
@@ -22,11 +23,9 @@ const DEFAULT_HOSTING: HostingMode = "cloud";
 
 /**
  * Mobile twin of web's `createQuickSession`: inserts optimistic session
- * entities, opens the Session Player (§10.8) overlay pointed at the temp
- * session, and fires the real mutation in the background. When the server
- * responds, the temp entities are swapped for the real ones and the
- * overlay's target session id is updated in place — so the user can start
- * typing before the round-trip completes.
+ * entities, routes to the temp session page, and fires the real mutation
+ * in the background. When the server responds, the temp entities are
+ * swapped for the real ones and the route is updated in place.
  */
 export async function createQuickSession(channelId: string): Promise<void> {
   const channel = useEntityStore.getState().channels[channelId];
@@ -71,8 +70,8 @@ export async function createQuickSession(channelId: string): Promise<void> {
       throw new Error("Server did not return a session id");
     }
 
-    // Swap entities first, then retarget the overlay so the SessionSurface
-    // never dereferences a deleted temp id. React batches these updates.
+    // Swap entities first, then retarget the route so the page never
+    // dereferences a deleted temp id. React batches these updates.
     reconcileOptimisticSessionPair({
       tempSessionId,
       tempGroupId,
@@ -87,16 +86,16 @@ export async function createQuickSession(channelId: string): Promise<void> {
     const ui = useMobileUIStore.getState();
     if (ui.overlaySessionId === tempSessionId) {
       ui.setOverlaySessionId(session.id);
+      router.replace(`/sessions/${session.sessionGroupId}/${session.id}` as never);
     }
   } catch (err) {
     rollbackOptimisticSessionPair({ tempSessionId, tempGroupId });
-    // Only collapse the Player if it's still pointed at the temp session —
-    // the user may have swiped it away and tapped into an unrelated session
-    // while the mutation was in flight.
+    // Only close the routed session view if it's still pointed at the temp
+    // session — the user may have navigated elsewhere while the mutation
+    // was in flight.
     const ui = useMobileUIStore.getState();
     if (ui.overlaySessionId === tempSessionId) {
       closeSessionPlayer();
-      ui.setOverlaySessionId(null);
     }
     const message = err instanceof Error ? err.message : "Please try again.";
     void haptic.error();
