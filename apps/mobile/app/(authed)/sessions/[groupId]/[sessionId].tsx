@@ -188,8 +188,8 @@ export default function SessionStreamScreen() {
               options={{ title: "Browser", tabBarIcon: browserIcon }}
             >
               {() => (
-                <View style={[styles.overlayPaddedScene, { paddingTop: overlayHeight }]}>
-                  <BrowserPanel url={browserUrl} onUrlChange={setBrowserUrl} />
+                <View style={styles.overlayPaddedScene}>
+                  <BrowserPanel initialUrl={browserUrl} topInset={overlayHeight} />
                 </View>
               )}
             </SessionBottomTabs.Screen>

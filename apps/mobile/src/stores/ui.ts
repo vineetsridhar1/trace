@@ -55,16 +55,15 @@ export interface MobileUIState {
   setHomeRepoFilter: (id: string | null) => void;
 
   /**
-   * URL currently loaded in the browser panel (Page 1 of SessionPager).
-   * Null = use the session's default URL (PR or repo).
+   * Legacy browser-panel URL state. Null = use the session's default URL
+   * (PR or repo).
    */
   browserUrl: string | null;
   setBrowserUrl: (url: string | null) => void;
 
   /**
-   * True while the user is viewing the browser panel (page 1) in the Session
-   * Player. Used to suppress the pull-down dismiss gesture while horizontal
-   * pager navigation is active.
+   * Legacy browser-panel visibility flag retained for compatibility with
+   * older session-player state helpers.
    */
   browserPanelActive: boolean;
   setBrowserPanelActive: (active: boolean) => void;
