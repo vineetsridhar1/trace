@@ -1,13 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Keyboard,
+  LayoutAnimation,
+  Platform,
+  StyleSheet,
+  UIManager,
+  View,
+  type LayoutChangeEvent,
+} from "react-native";
 import { Asset } from "expo-asset";
 import { File } from "expo-file-system";
+import { BottomTabBarHeightContext } from "react-native-bottom-tabs";
 import {
   CREATE_TERMINAL_MUTATION,
   SESSION_TERMINALS_QUERY,
 } from "@trace/client-core";
 import type { Terminal } from "@trace/gql";
 import WebView, { type WebViewMessageEvent } from "react-native-webview";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, Spinner, Text } from "@/components/design-system";
 import { TerminalSocket } from "@/lib/terminal-ws";
 import { getClient } from "@/lib/urql";
@@ -54,6 +64,8 @@ function pickLatestSessionTerminal(
 
 export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const webViewRef = useRef<WebView>(null);
   const socketRef = useRef<TerminalSocket | null>(null);
   const webReadyRef = useRef(false);
@@ -61,11 +73,13 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
   const requestTokenRef = useRef(0);
   const pendingWritesRef = useRef<string[]>([]);
   const needsClearRef = useRef(false);
+  const surfaceHeightRef = useRef(0);
   const [runtimeTemplate, setRuntimeTemplate] = useState<string | null>(null);
   const [webReady, setWebReady] = useState(false);
   const [terminalId, setTerminalId] = useState<string | null>(null);
   const [status, setStatus] = useState<TerminalViewStatus>("loading");
   const [message, setMessage] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const terminalHtml = useMemo(
     () =>
@@ -228,6 +242,33 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
   }, [webReady]);
 
   useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const animate = (duration: number | undefined) => {
+      if (Platform.OS === "ios" && duration) {
+        LayoutAnimation.configureNext({
+          duration,
+          update: { type: LayoutAnimation.Types.keyboard },
+        });
+      } else if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+        UIManager.setLayoutAnimationEnabledExperimental(true);
+      }
+    };
+    const show = Keyboard.addListener(showEvent, (e) => {
+      animate(e.duration);
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hide = Keyboard.addListener(hideEvent, (e) => {
+      animate(e.duration);
+      setKeyboardHeight(0);
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     mountedRef.current = true;
     setWebReady(false);
     webReadyRef.current = false;
@@ -256,6 +297,18 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
     pendingWritesRef.current = [];
     inject("window.__traceFit && window.__traceFit();");
   }, [inject, webReady]);
+
+  const handleSurfaceLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const nextHeight = Math.round(event.nativeEvent.layout.height);
+      if (surfaceHeightRef.current === nextHeight) return;
+      surfaceHeightRef.current = nextHeight;
+      if (webReadyRef.current) {
+        inject("window.__traceFit && window.__traceFit();");
+      }
+    },
+    [inject],
+  );
 
   const handleWebMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -302,9 +355,23 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
             : status === "exited"
               ? "Exited"
               : "Error";
+  // Unlike the session composer, the terminal surface doesn't add its own
+  // bottom safe-area padding, so reserve the full covered height here.
+  const bottomInset =
+    keyboardHeight > 0
+      ? Math.max(keyboardHeight, insets.bottom)
+      : Math.max(tabBarHeight, insets.bottom);
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
+    <View
+      style={[
+        styles.root,
+        {
+          backgroundColor: theme.colors.background,
+          paddingBottom: bottomInset,
+        },
+      ]}
+    >
       <View
         style={[
           styles.toolbar,
@@ -334,7 +401,10 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
         />
       </View>
 
-      <View style={[styles.surface, { backgroundColor: theme.colors.surfaceDeep }]}>
+      <View
+        style={[styles.surface, { backgroundColor: theme.colors.surfaceDeep }]}
+        onLayout={handleSurfaceLayout}
+      >
         {terminalHtml ? (
           <WebView
             ref={webViewRef}
@@ -344,6 +414,8 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
             style={styles.webView}
             scrollEnabled={false}
             bounces={false}
+            automaticallyAdjustContentInsets={false}
+            contentInsetAdjustmentBehavior="never"
           />
         ) : null}
 
