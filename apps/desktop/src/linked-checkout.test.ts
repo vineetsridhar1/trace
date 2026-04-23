@@ -80,7 +80,8 @@ async function createRepoFixture(): Promise<{
   await git(repoPath, ["config", "user.email", "trace@example.com"]);
 
   fs.writeFileSync(path.join(repoPath, "app.txt"), "base\n");
-  await git(repoPath, ["add", "app.txt"]);
+  fs.writeFileSync(path.join(repoPath, "notes.txt"), "notes base\n");
+  await git(repoPath, ["add", "app.txt", "notes.txt"]);
   await git(repoPath, ["commit", "-m", "initial commit"]);
   await git(repoPath, ["worktree", "add", "-b", "trace/raccoon", worktreePath, "HEAD"]);
 
@@ -158,5 +159,64 @@ describe("linked checkout commit-back", () => {
     expect(result.error).toContain("app.txt");
     expect(await git(worktreePath, ["log", "-1", "--pretty=%s"])).toBe("initial commit");
     expect(await git(repoPath, ["status", "--porcelain", "--untracked-files=all"])).not.toBe("");
+  }, 15_000);
+
+  it("commits only the imported detached-main paths and preserves unrelated worktree changes", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    const syncResult = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+    expect(syncResult.ok).toBe(true);
+
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "from root checkout\n");
+    fs.writeFileSync(path.join(worktreePath, "notes.txt"), "staged worktree change\n");
+    await git(worktreePath, ["add", "notes.txt"]);
+
+    const result = await commitLinkedCheckoutChanges({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(await git(worktreePath, ["diff", "--name-only", "HEAD^", "HEAD"])).toBe("app.txt");
+    expect(await git(worktreePath, ["status", "--porcelain", "--untracked-files=all"])).toBe(
+      "M  notes.txt",
+    );
+    expect(fs.readFileSync(path.join(worktreePath, "notes.txt"), "utf8")).toBe(
+      "staged worktree change\n",
+    );
+  }, 15_000);
+
+  it("refuses to flatten staged Trace worktree changes on the same paths", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    const syncResult = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+    expect(syncResult.ok).toBe(true);
+
+    fs.writeFileSync(path.join(worktreePath, "app.txt"), "from staged worktree\n");
+    await git(worktreePath, ["add", "app.txt"]);
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "from root checkout\n");
+
+    const result = await commitLinkedCheckoutChanges({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("staged changes");
+    expect(result.error).toContain("app.txt");
+    expect(await git(worktreePath, ["log", "-1", "--pretty=%s"])).toBe("initial commit");
+    expect(await git(worktreePath, ["status", "--porcelain", "--untracked-files=all"])).toBe(
+      "M  app.txt",
+    );
   }, 15_000);
 });

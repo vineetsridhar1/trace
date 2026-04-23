@@ -129,6 +129,35 @@ async function listChangedPaths(repoPath: string): Promise<string[]> {
   ];
 }
 
+async function listStagedPaths(repoPath: string): Promise<string[]> {
+  const { stdout } = await execFileAsync("git", ["diff", "--name-only", "-z", "--cached", "HEAD"], {
+    cwd: repoPath,
+    maxBuffer: GIT_MAX_BUFFER,
+  });
+  return parseNullSeparated(stdout);
+}
+
+async function hasUncommittedChangesForPaths(
+  repoPath: string,
+  changedPaths: string[],
+): Promise<boolean> {
+  if (changedPaths.length === 0) return false;
+  const { stdout } = await execFileAsync(
+    "git",
+    ["status", "--porcelain", "--untracked-files=all", "--", ...changedPaths],
+    {
+      cwd: repoPath,
+      maxBuffer: GIT_MAX_BUFFER,
+    },
+  );
+  return stdout.length > 0;
+}
+
+function previewPaths(paths: string[]): string {
+  const preview = paths.slice(0, 5).join(", ");
+  return `${preview}${paths.length > 5 ? "..." : ""}`;
+}
+
 async function refExists(repoPath: string, ref: string): Promise<boolean> {
   assertSafeGitRef(ref);
   return execFileAsync("git", ["rev-parse", "--verify", `${ref}^{commit}`], {
@@ -630,23 +659,44 @@ export function commitLinkedCheckoutChanges(
         throw new Error("Trace worktree is not available for the attached branch.");
       }
 
+      const overlappingStagedPaths = (await listStagedPaths(worktreePath)).filter((changedPath) =>
+        changedPaths.includes(changedPath),
+      );
+      if (overlappingStagedPaths.length > 0) {
+        throw new Error(
+          `Cannot commit main worktree changes because the Trace worktree already has staged changes on the same paths: ${previewPaths(
+            overlappingStagedPaths,
+          )}`,
+        );
+      }
+
       const changedPathStates = await loadChangedPathStates(repoPath, changedPaths);
       const conflicts = findConflictingPaths(worktreePath, changedPathStates);
       if (conflicts.length > 0) {
-        const preview = conflicts.slice(0, 5).join(", ");
-        const suffix = conflicts.length > 5 ? "..." : "";
         throw new Error(
-          `Cannot commit main worktree changes because the Trace worktree also changed: ${preview}${suffix}`,
+          `Cannot commit main worktree changes because the Trace worktree also changed: ${previewPaths(
+            conflicts,
+          )}`,
         );
       }
 
       applyChangedPathsToWorktree(repoPath, worktreePath, changedPathStates);
 
       let targetCommitSha = await getCurrentCommitSha(worktreePath);
-      const worktreeDirty = await hasUncommittedChanges(worktreePath);
-      if (worktreeDirty) {
-        await runGit(worktreePath, ["add", "-A"]);
-        await runGit(worktreePath, ["commit", "-m", LINKED_CHECKOUT_COMMIT_MESSAGE]);
+      const importedChangesDirty = await hasUncommittedChangesForPaths(worktreePath, changedPaths);
+      if (importedChangesDirty) {
+        await execFileAsync("git", ["add", "-A", "--", ...changedPaths], {
+          cwd: worktreePath,
+          maxBuffer: GIT_MAX_BUFFER,
+        });
+        await execFileAsync(
+          "git",
+          ["commit", "--only", "-m", LINKED_CHECKOUT_COMMIT_MESSAGE, "--", ...changedPaths],
+          {
+            cwd: worktreePath,
+            maxBuffer: GIT_MAX_BUFFER,
+          },
+        );
         targetCommitSha = await getCurrentCommitSha(worktreePath);
       }
 
