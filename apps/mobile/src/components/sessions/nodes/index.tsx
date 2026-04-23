@@ -14,7 +14,6 @@ import type { NodeRenderContext } from "./render-context";
 interface RenderNodeProps {
   node: SessionNode;
   context: NodeRenderContext;
-  isLast: boolean;
 }
 
 /**
@@ -27,7 +26,7 @@ interface RenderNodeProps {
  * `useSessionNodes`, so this switch only needs to handle the known cases.
  */
 export function renderNode(props: RenderNodeProps): ReactNode {
-  const { node, context, isLast } = props;
+  const { node, context } = props;
   switch (node.kind) {
     case "command-execution":
       return (
@@ -49,14 +48,13 @@ export function renderNode(props: RenderNodeProps): ReactNode {
     case "ask-user-question":
       return <AskUserQuestionCard questions={node.questions} />;
     case "event":
-      return <EventNode id={node.id} context={context} isLast={isLast} />;
+      return <EventNode id={node.id} context={context} />;
   }
 }
 
 interface EventNodeProps {
   id: string;
   context: NodeRenderContext;
-  isLast: boolean;
 }
 
 /**
@@ -65,7 +63,7 @@ interface EventNodeProps {
  * switch doesn't handle, but the `default` returns null defensively in
  * case an event mutates after the filter pass.
  */
-const EventNode = memo(function EventNode({ id, context, isLast }: EventNodeProps) {
+const EventNode = memo(function EventNode({ id, context }: EventNodeProps) {
   const scopeKey = eventScopeKey("session", context.sessionId);
   const eventType = useScopedEventField(scopeKey, id, "eventType");
   const payload = asJsonObject(useScopedEventField(scopeKey, id, "payload"));
@@ -100,7 +98,7 @@ const EventNode = memo(function EventNode({ id, context, isLast }: EventNodeProp
       );
 
     case "session_output":
-      return payload ? renderSessionOutput(payload, context, isLast) : null;
+      return payload ? renderSessionOutput(payload, context) : null;
 
     case "session_pr_opened":
       return <PRCard kind="opened" prUrl={prUrlFrom(payload)} />;

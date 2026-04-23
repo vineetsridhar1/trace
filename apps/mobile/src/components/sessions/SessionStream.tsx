@@ -105,9 +105,8 @@ export function SessionStream({
       completedAgentTools,
       toolResultByUseId,
       gitCheckpointsByPromptEventId,
-      sessionActive: agentStatus === "active",
     }),
-    [sessionId, completedAgentTools, toolResultByUseId, gitCheckpointsByPromptEventId, agentStatus],
+    [sessionId, completedAgentTools, toolResultByUseId, gitCheckpointsByPromptEventId],
   );
   const streamItemCacheRef = useRef<SessionStreamItemCache | undefined>(undefined);
   const streamItems = useMemo(() => {
@@ -192,6 +191,7 @@ export function SessionStream({
             hasOlder={hasOlder}
             disconnected={disconnected}
             disconnectReason={connection?.lastError ?? null}
+            showTypingIndicator={agentStatus === "active"}
             topInset={topInset}
             bottomInset={bottomInset}
             isNearBottomRef={isNearBottomRef}

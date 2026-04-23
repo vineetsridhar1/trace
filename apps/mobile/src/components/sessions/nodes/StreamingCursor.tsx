@@ -11,8 +11,8 @@ import Animated, {
 import { useTheme } from "@/theme";
 
 /**
- * Blinking cursor shown at the end of the latest in-progress assistant
- * message. Animation runs on the UI thread so it's free of JS-thread jank.
+ * Shared blinking cursor used by the mobile typing indicator. Animation runs
+ * on the UI thread so it's free of JS-thread jank.
  */
 export function StreamingCursor() {
   const theme = useTheme();

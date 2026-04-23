@@ -13,11 +13,10 @@ const AGENT_NAMES = new Set(["agent", "task"]);
 export function renderSessionOutput(
   payload: JsonObject,
   context: NodeRenderContext,
-  isLast: boolean,
 ): ReactNode {
   const type = payload.type;
   if (type === "assistant" || type === "user") {
-    return renderAssistantContent(payload, context, isLast);
+    return renderAssistantContent(payload, context);
   }
   if (type === "result") return <CompletionRow />;
   if (type === "error") {
@@ -30,21 +29,10 @@ export function renderSessionOutput(
 function renderAssistantContent(
   payload: JsonObject,
   context: NodeRenderContext,
-  isLast: boolean,
 ): ReactNode {
   const message = asJsonObject(payload.message);
   const blocks = message?.content;
   if (!Array.isArray(blocks)) return null;
-
-  // Find the last non-empty text block — the streaming cursor attaches there.
-  let lastTextIndex = -1;
-  for (let i = 0; i < blocks.length; i++) {
-    const block = asJsonObject(blocks[i]);
-    if (!block) continue;
-    if (block.type === "text" && typeof block.text === "string" && block.text.trim()) {
-      lastTextIndex = i;
-    }
-  }
 
   const rendered: ReactNode[] = [];
   for (let i = 0; i < blocks.length; i++) {
@@ -57,7 +45,6 @@ function renderAssistantContent(
         <AssistantMessage
           key={i}
           text={block.text}
-          streaming={isLast && context.sessionActive && i === lastTextIndex}
         />,
       );
       continue;
