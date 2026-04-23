@@ -6,6 +6,4 @@ export interface NodeRenderContext {
   completedAgentTools: Map<string, AgentToolResult>;
   toolResultByUseId: Map<string, unknown>;
   gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
-  /** Session is actively streaming — drives the assistant streaming cursor. */
-  sessionActive: boolean;
 }

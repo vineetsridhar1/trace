@@ -6,6 +6,7 @@ import { Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
 import { ConnectionLostBanner } from "./nodes/ConnectionLostBanner";
 import { renderNode, type NodeRenderContext } from "./nodes";
+import { SessionTypingIndicator } from "./SessionTypingIndicator";
 import { TimestampRevealRow } from "./TimestampRevealRow";
 import type { SessionStreamListItem } from "./sessionStreamItems";
 
@@ -27,6 +28,7 @@ interface SessionStreamListProps {
   hasOlder: boolean;
   disconnected: boolean;
   disconnectReason?: string | null;
+  showTypingIndicator: boolean;
   /** Extra top padding so content can scroll behind an overlay header. */
   topInset?: number;
   /** Extra bottom padding so content can scroll behind the composer overlay. */
@@ -52,6 +54,7 @@ export function SessionStreamList({
   hasOlder,
   disconnected,
   disconnectReason,
+  showTypingIndicator,
   topInset = 0,
   bottomInset = 0,
   isNearBottomRef,
@@ -90,7 +93,6 @@ export function SessionStreamList({
           {renderNode({
             node: item.node,
             context: renderContext,
-            isLast: item.isLast,
           })}
         </TimestampRevealRow>
       );
@@ -151,9 +153,12 @@ export function SessionStreamList({
         ) : null
       }
       ListFooterComponent={
-        disconnected ? (
+        disconnected || showTypingIndicator ? (
           <View style={[styles.footer, { paddingHorizontal: theme.spacing.lg }]}>
-            <ConnectionLostBanner sessionId={sessionId} reason={disconnectReason ?? null} />
+            {disconnected ? (
+              <ConnectionLostBanner sessionId={sessionId} reason={disconnectReason ?? null} />
+            ) : null}
+            {showTypingIndicator ? <SessionTypingIndicator /> : null}
           </View>
         ) : null
       }
