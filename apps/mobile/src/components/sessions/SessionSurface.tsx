@@ -52,6 +52,8 @@ interface SessionSurfaceProps {
   renderStreamEvents?: boolean;
 }
 
+const COMPOSER_KEYBOARD_GAP = 10;
+
 /**
  * The complete session surface: group header + sibling tab strip + event
  * stream. Rendered both inside the Session Player (§10.8) and by the
@@ -124,7 +126,8 @@ export function SessionSurface({
     };
   }, [insets.bottom]);
   const streamBottomInset =
-    composerHeight + (keyboardVisible ? keyboardInset : restingBottomOffset);
+    composerHeight +
+    (keyboardVisible ? keyboardInset + COMPOSER_KEYBOARD_GAP : restingBottomOffset);
 
   useEffect(() => {
     if (!groupId) return;
@@ -173,6 +176,7 @@ export function SessionSurface({
         />
       </View>
       <KeyboardStickyView
+        offset={{ opened: -COMPOSER_KEYBOARD_GAP }}
         pointerEvents="box-none"
         style={styles.overlayHost}
       >
