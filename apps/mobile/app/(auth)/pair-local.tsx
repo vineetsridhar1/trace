@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -11,6 +10,7 @@ import {
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Button, Screen, Text } from "@/components/design-system";
 import {
@@ -217,11 +217,15 @@ export default function PairLocalScreen() {
 
   return (
     <Screen background="background">
-      <ScrollView
+      <KeyboardAwareScrollView
+        bottomOffset={theme.spacing.lg}
         contentContainerStyle={[
           styles.content,
           { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.lg },
         ]}
+        extraKeyboardSpace={theme.spacing.lg}
+        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={12}>
@@ -347,7 +351,7 @@ export default function PairLocalScreen() {
             </Text>
           ) : null}
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }
