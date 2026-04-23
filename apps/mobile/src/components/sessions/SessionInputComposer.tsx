@@ -13,6 +13,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import { KeyboardController } from "react-native-keyboard-controller";
 import {
   AVAILABLE_RUNTIMES_QUERY,
   DISMISS_SESSION_MUTATION,
@@ -315,6 +316,7 @@ export function SessionInputComposer({
   // stop. While idle, send shows iff the composer has text or images.
   const showSend = (isActive && focused) || (!isActive && hasSendable);
   const showStop = isActive && !focused;
+  const showKeyboardDismiss = keyboardVisible;
   useEffect(() => {
     chipsSlotProgress.value = withTiming(chipsVisible ? 1 : 0, {
       duration: theme.motion.durations.base,
@@ -870,6 +872,36 @@ export function SessionInputComposer({
             </Animated.View>
           </Glass>
 
+          {showKeyboardDismiss ? (
+            <Animated.View
+              key="keyboard-dismiss"
+              entering={FadeIn.duration(140)}
+              exiting={FadeOut.duration(100)}
+              style={styles.singleActionSlot}
+            >
+              <Glass
+                preset="input"
+                interactive
+                style={styles.singleActionGlass}
+              >
+                <Pressable
+                  onPress={() => void KeyboardController.dismiss()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close keyboard"
+                  style={styles.actionPressable}
+                >
+                  <SymbolView
+                    name="chevron.down"
+                    size={16}
+                    tintColor={theme.colors.foreground}
+                    resizeMode="scaleAspectFit"
+                    style={styles.keyboardDismissIcon}
+                  />
+                </Pressable>
+              </Glass>
+            </Animated.View>
+          ) : null}
+
           {isActive && !focused ? null : (
             <ComposerAttachButton
               enabled={canAttach}
@@ -1015,6 +1047,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sendIcon: { width: 16, height: 16 },
+  keyboardDismissIcon: { width: 16, height: 16 },
   stopIcon: { width: 14, height: 14 },
   bridgeRow: { flexDirection: "row", justifyContent: "center", alignItems: "center" },
   modelChipSlot: {
