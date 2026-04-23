@@ -62,8 +62,8 @@ export interface MobileUIState {
 
   /**
    * True while the user is viewing the browser panel (page 1) in the Session
-   * Player. Used to suppress the dismiss-on-swipe-left gesture that would
-   * conflict with PagerView navigation.
+   * Player. Used to suppress the pull-down dismiss gesture while horizontal
+   * pager navigation is active.
    */
   browserPanelActive: boolean;
   setBrowserPanelActive: (active: boolean) => void;

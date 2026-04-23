@@ -159,7 +159,7 @@ export function SessionStream({
     Gesture.Pan()
       .activeOffsetX([-TIMESTAMP_REVEAL_ACTIVATION, TIMESTAMP_REVEAL_ACTIVATION])
       .onChange((event) => {
-        const overshoot = Math.max(0, -event.translationX - TIMESTAMP_REVEAL_ACTIVATION);
+        const overshoot = Math.max(0, event.translationX - TIMESTAMP_REVEAL_ACTIVATION);
         timestampRevealX.value = Math.min(
           TIMESTAMP_REVEAL_DISTANCE,
           overshoot * TIMESTAMP_REVEAL_RESISTANCE,

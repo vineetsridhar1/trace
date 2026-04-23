@@ -24,7 +24,7 @@ export function TimestampRevealRow({
   timestampLabel,
 }: TimestampRevealRowProps) {
   const contentStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: -revealX.value }],
+    transform: [{ translateX: revealX.value }],
   }));
   const timestampStyle = useAnimatedStyle(() => ({
     opacity: timestampLabel
@@ -40,7 +40,7 @@ export function TimestampRevealRow({
         translateX: interpolate(
           revealX.value,
           [0, TIMESTAMP_REVEAL_DISTANCE],
-          [12, 0],
+          [-12, 0],
           Extrapolation.CLAMP,
         ),
       },
@@ -54,7 +54,7 @@ export function TimestampRevealRow({
           pointerEvents="none"
           style={[
             styles.timestampReveal,
-            { right: paddingHorizontal },
+            { left: paddingHorizontal },
             timestampStyle,
           ]}
         >
@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
     top: 6,
     bottom: 6,
     width: TIMESTAMP_REVEAL_DISTANCE,
-    alignItems: "flex-end",
+    alignItems: "flex-start",
     justifyContent: "center",
   },
 });

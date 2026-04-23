@@ -21,9 +21,9 @@ interface BrowserPanelProps {
 }
 
 /**
- * Embedded browser panel shown when the user swipes right in the Session
- * Player. Renders a simple URL bar + back/forward/reload controls on top of
- * a full-screen WebView.
+ * Embedded browser panel shown when the user swipes over to the browser page
+ * in the Session Player. Renders a simple URL bar + back/forward/reload
+ * controls on top of a full-screen WebView.
  */
 export function BrowserPanel({ initialUrl, topInset = 0 }: BrowserPanelProps) {
   const theme = useTheme();
