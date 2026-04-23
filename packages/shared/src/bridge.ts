@@ -159,6 +159,13 @@ export interface BridgeSyncLinkedCheckoutCommand {
   autoSyncEnabled?: boolean;
 }
 
+export interface BridgeCommitLinkedCheckoutCommand {
+  type: "linked_checkout_commit";
+  requestId: string;
+  repoId: string;
+  sessionGroupId: string;
+}
+
 export interface BridgeRestoreLinkedCheckoutCommand {
   type: "linked_checkout_restore";
   requestId: string;
@@ -219,6 +226,7 @@ export type BridgeCommand =
   | BridgeLinkedCheckoutStatusCommand
   | BridgeLinkLinkedCheckoutRepoCommand
   | BridgeSyncLinkedCheckoutCommand
+  | BridgeCommitLinkedCheckoutCommand
   | BridgeRestoreLinkedCheckoutCommand
   | BridgeSetLinkedCheckoutAutoSyncCommand
   | BridgeTerminalCreateCommand
@@ -317,6 +325,7 @@ export interface BridgeLinkedCheckoutStatus {
   lastSyncError: string | null;
   restoreBranch: string | null;
   restoreCommitSha: string | null;
+  hasUncommittedChanges: boolean;
 }
 
 export interface BridgeLinkedCheckoutActionResultPayload {
@@ -334,7 +343,7 @@ export interface BridgeLinkedCheckoutStatusResult {
 export interface BridgeLinkedCheckoutActionResult {
   type: "linked_checkout_action_result";
   requestId: string;
-  action: "link_repo" | "sync" | "restore" | "set_auto_sync";
+  action: "link_repo" | "sync" | "commit" | "restore" | "set_auto_sync";
   result: BridgeLinkedCheckoutActionResultPayload;
 }
 
@@ -974,7 +983,13 @@ function extractMarkdownSummary(content: string): string | undefined {
  * Shared between container and desktop bridges.
  */
 export interface ImageDownloadDeps {
-  fs: { promises: { mkdir: (p: string, opts: { recursive: boolean }) => Promise<unknown>; writeFile: (p: string, data: Buffer) => Promise<void>; unlink: (p: string) => Promise<void> } };
+  fs: {
+    promises: {
+      mkdir: (p: string, opts: { recursive: boolean }) => Promise<unknown>;
+      writeFile: (p: string, data: Buffer) => Promise<void>;
+      unlink: (p: string) => Promise<void>;
+    };
+  };
   path: { join: (...p: string[]) => string };
   tmpdir: () => string;
   randomUUID: () => string;

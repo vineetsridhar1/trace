@@ -85,6 +85,7 @@ describe("connectionsService", () => {
               lastSyncError: null,
               restoreBranch: null,
               restoreCommitSha: null,
+              hasUncommittedChanges: false,
             },
           ],
         ]),

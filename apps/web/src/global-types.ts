@@ -50,6 +50,7 @@ declare global {
     lastSyncError: string | null;
     restoreBranch: string | null;
     restoreCommitSha: string | null;
+    hasUncommittedChanges: boolean;
   };
 
   type DesktopLinkedCheckoutActionResult = {
@@ -106,10 +107,7 @@ declare global {
     getRepoGitHookStatus: (repoId: string) => Promise<DesktopRepoGitHookStatus | null>;
     repairRepoGitHooks: (repoId: string) => Promise<DesktopRepoGitHookStatus | null>;
     getBridgeStatus: () => Promise<DesktopBridgeConnectionStatus>;
-    setBridgeAuthContext: (
-      token: string | null,
-      organizationId: string | null,
-    ) => Promise<boolean>;
+    setBridgeAuthContext: (token: string | null, organizationId: string | null) => Promise<boolean>;
     onBridgeStatus: (callback: (status: DesktopBridgeConnectionStatus) => void) => () => void;
   }
 

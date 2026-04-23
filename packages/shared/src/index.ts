@@ -62,6 +62,7 @@ export type {
   BridgeLinkedCheckoutStatusCommand,
   BridgeLinkLinkedCheckoutRepoCommand,
   BridgeSyncLinkedCheckoutCommand,
+  BridgeCommitLinkedCheckoutCommand,
   BridgeRestoreLinkedCheckoutCommand,
   BridgeSetLinkedCheckoutAutoSyncCommand,
   BridgeSkillInfo,

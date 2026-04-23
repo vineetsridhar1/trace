@@ -35,6 +35,7 @@ import type { GitExecFn } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
 import {
+  commitLinkedCheckoutChanges,
   getLinkedCheckoutStatus,
   linkLinkedCheckoutRepo,
   restoreLinkedCheckout,
@@ -83,6 +84,7 @@ function emptyLinkedCheckoutStatus(repoId: string) {
     lastSyncError: null,
     restoreBranch: null,
     restoreCommitSha: null,
+    hasUncommittedChanges: false,
   };
 }
 
@@ -180,9 +182,7 @@ export class BridgeClient implements IBridgeClient {
         this.send({ type: "terminal_exit", terminalId, exitCode });
       },
     });
-    this.autoSyncManager = new LinkedCheckoutAutoSyncManager(
-      LINKED_CHECKOUT_AUTO_SYNC_INTERVAL_MS,
-    );
+    this.autoSyncManager = new LinkedCheckoutAutoSyncManager(LINKED_CHECKOUT_AUTO_SYNC_INTERVAL_MS);
     setAutoSyncManager(this.autoSyncManager);
   }
 
@@ -206,10 +206,7 @@ export class BridgeClient implements IBridgeClient {
   }
 
   setAuthContext(sessionToken: string | null, organizationId: string | null) {
-    const nextContext =
-      sessionToken && organizationId
-        ? { sessionToken, organizationId }
-        : null;
+    const nextContext = sessionToken && organizationId ? { sessionToken, organizationId } : null;
     const changed =
       this.authContext?.sessionToken !== nextContext?.sessionToken ||
       this.authContext?.organizationId !== nextContext?.organizationId;
@@ -363,10 +360,7 @@ export class BridgeClient implements IBridgeClient {
       throw new Error("Bridge auth context is not available");
     }
 
-    if (
-      this.bridgeAuthToken &&
-      this.bridgeAuthToken.expiresAt - Date.now() > 30_000
-    ) {
+    if (this.bridgeAuthToken && this.bridgeAuthToken.expiresAt - Date.now() > 30_000) {
       return this.bridgeAuthToken.token;
     }
 
@@ -606,7 +600,10 @@ export class BridgeClient implements IBridgeClient {
       runtimeDebug("downloading session images", { sessionId, count: imageUrls.length });
       try {
         imagePaths = await downloadImagesToTempFiles(imageUrls, {
-          fs, path, tmpdir: os.tmpdir, randomUUID: crypto.randomUUID,
+          fs,
+          path,
+          tmpdir: os.tmpdir,
+          randomUUID: crypto.randomUUID,
         });
         runtimeDebug("downloaded session images", { sessionId, count: imagePaths.length });
       } catch (err) {
@@ -1027,6 +1024,35 @@ export class BridgeClient implements IBridgeClient {
                 type: "linked_checkout_action_result",
                 requestId: cmd.requestId,
                 action: "sync",
+                result,
+              });
+            });
+          });
+        break;
+      }
+      case "linked_checkout_commit": {
+        void commitLinkedCheckoutChanges({
+          repoId: cmd.repoId,
+          sessionGroupId: cmd.sessionGroupId,
+        })
+          .then((result) => {
+            this.send({
+              type: "linked_checkout_action_result",
+              requestId: cmd.requestId,
+              action: "commit",
+              result,
+            });
+          })
+          .catch((error: unknown) => {
+            console.error(
+              `[bridge] failed to commit linked checkout changes for ${cmd.repoId}:`,
+              error,
+            );
+            void buildLinkedCheckoutFailureResult(cmd.repoId, error).then((result) => {
+              this.send({
+                type: "linked_checkout_action_result",
+                requestId: cmd.requestId,
+                action: "commit",
                 result,
               });
             });
