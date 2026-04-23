@@ -1,6 +1,7 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   Keyboard,
+  PanResponder,
   Platform,
   StyleSheet,
   View,
@@ -9,7 +10,7 @@ import {
 import { BottomTabBarHeightContext } from "react-native-bottom-tabs";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import {
-  KeyboardGestureArea,
+  KeyboardController,
   useReanimatedKeyboardAnimation,
 } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -98,6 +99,23 @@ export function SessionSurface({
   const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
     setComposerHeight(e.nativeEvent.layout.height);
   }, []);
+  const composerDismissPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          keyboardHeight > 0 &&
+          gestureState.dy > 10 &&
+          Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+        onPanResponderTerminationRequest: () => true,
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dy > 28 || gestureState.vy > 0.2) {
+            void KeyboardController.dismiss();
+          }
+        },
+      }),
+    [keyboardHeight],
+  );
   const restingBottomOffset = Math.max(0, tabBarHeight - insets.bottom);
 
   useEffect(() => {
@@ -177,11 +195,7 @@ export function SessionSurface({
           renderEvents={renderStreamEvents}
         />
       </View>
-      <KeyboardGestureArea
-        style={[styles.overlay, { bottom: restingBottomOffset }]}
-        offset={composerHeight}
-        textInputNativeID={composerInputNativeId}
-      >
+      <View style={[styles.overlay, { bottom: restingBottomOffset }]}>
         <Animated.View
           style={overlayAnimatedStyle}
           onLayout={handleComposerLayout}
@@ -196,15 +210,17 @@ export function SessionSurface({
             <>
               <SessionErrorCard sessionId={sessionId} />
               <QueuedMessagesStrip sessionId={sessionId} />
-              <SessionInputComposer
-                sessionId={sessionId}
-                keyboardVisible={keyboardHeight > 0}
-                textInputNativeId={composerInputNativeId}
-              />
+              <View {...composerDismissPanResponder.panHandlers}>
+                <SessionInputComposer
+                  sessionId={sessionId}
+                  keyboardVisible={keyboardHeight > 0}
+                  textInputNativeId={composerInputNativeId}
+                />
+              </View>
             </>
           )}
         </Animated.View>
-      </KeyboardGestureArea>
+      </View>
     </View>
   );
 }
