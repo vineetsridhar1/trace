@@ -116,10 +116,10 @@ function areIdsEqual(a: string[], b: string[]): boolean {
   return true;
 }
 
-async function doFetchSessionGroupDetail(groupId: string): Promise<void> {
+async function doFetchSessionGroupDetail(groupId: string): Promise<boolean> {
   const result = await getClient().query(SESSION_GROUP_DETAIL_QUERY, { id: groupId }).toPromise();
   const group = result.data?.sessionGroup as (SessionGroup & { id: string }) | null | undefined;
-  if (result.error || !group) return;
+  if (result.error || !group) return false;
 
   const existing = useEntityStore.getState();
   const sessions = (group.sessions ?? []) as Array<Session & { id: string }>;
@@ -143,6 +143,7 @@ async function doFetchSessionGroupDetail(groupId: string): Promise<void> {
   if (mergedSessions.length > 0) {
     existing.upsertMany("sessions", mergedSessions);
   }
+  return true;
 }
 
 /**
@@ -157,18 +158,20 @@ async function doFetchSessionGroupDetail(groupId: string): Promise<void> {
  * This guards against repeated open attempts and overlapping overlay-mount
  * fetches without requiring callers to reason about request coalescing.
  */
-const inflightGroupFetches = new Map<string, Promise<void>>();
+const inflightGroupFetches = new Map<string, Promise<boolean>>();
 const lastGroupFetchAt = new Map<string, number>();
 const FETCH_TTL_MS = 30_000;
 
-export function fetchSessionGroupDetail(groupId: string): Promise<void> {
+export function fetchSessionGroupDetail(groupId: string): Promise<boolean> {
   const existing = inflightGroupFetches.get(groupId);
   if (existing) return existing;
-  const lastAt = lastGroupFetchAt.get(groupId);
-  if (lastAt && Date.now() - lastAt < FETCH_TTL_MS) return Promise.resolve();
-  const promise = doFetchSessionGroupDetail(groupId).finally(() => {
+  const lastAt = lastGroupFetchAt.get(groupId) ?? 0;
+  if (lastAt && Date.now() - lastAt < FETCH_TTL_MS) return Promise.resolve(true);
+  const promise = doFetchSessionGroupDetail(groupId).then((success) => {
+    if (success) lastGroupFetchAt.set(groupId, Date.now());
+    return success;
+  }).finally(() => {
     inflightGroupFetches.delete(groupId);
-    lastGroupFetchAt.set(groupId, Date.now());
   });
   inflightGroupFetches.set(groupId, promise);
   return promise;

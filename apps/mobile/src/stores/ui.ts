@@ -15,26 +15,27 @@ export interface MobileUIState {
 
   /**
    * Pager position for the active-sessions bottom accessory (§9.2.1). Purely
-   * the accessory's visible index — the Session Player (§10.8) does not read
-   * or drive this value; Player targeting goes through `overlaySessionId`.
+   * the accessory's visible index — the session page does not read or drive
+   * this value; targeted navigation still goes through `overlaySessionId`.
    */
   activeAccessoryIndex: number;
   setActiveAccessoryIndex: (i: number) => void;
   /**
-   * Session currently rendered by the Session Player (§10.8). Null = Player
-   * closed. Set by any entry point (row tap, accessory tap, deep link) to
-   * both target the Player's content and open it.
+   * Legacy navigation target used by session-entry helpers and optimistic
+   * temp→real handoff during session creation. Null = no routed session page
+   * is currently being tracked by those helpers.
    */
   overlaySessionId: string | null;
   setOverlaySessionId: (id: string | null) => void;
+  /** Legacy overlay flag retained for compatibility with old helpers. */
   sessionPlayerOpen: boolean;
   setSessionPlayerOpen: (open: boolean) => void;
 
   /**
    * Registered by whichever header menu (title/actions) is currently open.
-   * The Session Player renders a full-screen scrim when non-null so taps in
-   * the message body can dismiss the menu — the menu's own in-header
-   * backdrop is clipped by ancestor bounds and can't reach the body.
+   * The standalone session page renders a body-area scrim when non-null so
+   * taps in the content region can dismiss the menu — the menu's own
+   * in-header backdrop is clipped by ancestor bounds and can't reach the body.
    */
   activeMenuClose: (() => void) | null;
   setActiveMenuClose: (close: (() => void) | null) => void;

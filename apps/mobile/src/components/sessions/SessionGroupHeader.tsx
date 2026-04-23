@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { Alert, Linking, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import {
@@ -15,11 +15,13 @@ interface SessionGroupHeaderProps {
   groupId: string;
   /** The session currently shown; drives the status dot's agentStatus overlay. */
   sessionId?: string;
+  leadingAccessory?: ReactNode;
 }
 
 export function SessionGroupHeader({
   groupId,
   sessionId,
+  leadingAccessory,
 }: SessionGroupHeaderProps) {
   const theme = useTheme();
   const prUrl = useEntityField("sessionGroups", groupId, "prUrl");
@@ -27,8 +29,12 @@ export function SessionGroupHeader({
   const archivedAt = useEntityField("sessionGroups", groupId, "archivedAt");
 
   const [rowWidth, setRowWidth] = useState(0);
+  const [leadingWidth, setLeadingWidth] = useState(0);
   const handleRowLayout = useCallback((e: LayoutChangeEvent) => {
     setRowWidth(e.nativeEvent.layout.width);
+  }, []);
+  const handleLeadingLayout = useCallback((e: LayoutChangeEvent) => {
+    setLeadingWidth(e.nativeEvent.layout.width);
   }, []);
 
   const handleOpenPr = useCallback(async () => {
@@ -96,6 +102,8 @@ export function SessionGroupHeader({
     status,
   ]);
 
+  const expandLeftInset = leadingAccessory ? leadingWidth + theme.spacing.sm : 0;
+
   return (
     <View
       style={[
@@ -108,10 +116,16 @@ export function SessionGroupHeader({
       ]}
     >
       <View style={styles.row} onLayout={handleRowLayout}>
+        {leadingAccessory ? (
+          <View onLayout={handleLeadingLayout} style={styles.leadingAccessory}>
+            {leadingAccessory}
+          </View>
+        ) : null}
         <SessionGroupTitleMenu
           groupId={groupId}
           sessionId={sessionId}
           fullWidth={rowWidth}
+          expandLeftInset={expandLeftInset}
         />
         <SessionActionsMenu actions={menuItems} accessibilityLabel="Session actions" />
       </View>
@@ -125,5 +139,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  leadingAccessory: {
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

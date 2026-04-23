@@ -7,84 +7,70 @@ import {
   type NativeSyntheticEvent,
   type TextInputSubmitEditingEventData,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView } from "expo-symbols";
 import WebView, { type WebViewNavigation } from "react-native-webview";
 import { Text } from "@/components/design-system";
-import { normalizeBrowserInputUrl } from "@/lib/browser";
 import { useTheme } from "@/theme";
 
 interface BrowserPanelProps {
-  /** Initial URL to load. Falls back to a blank page. */
-  initialUrl?: string;
-  /** Top inset matching the Session Player's glass header height. */
-  topInset?: number;
+  url: string;
+  onUrlChange: (url: string) => void;
 }
 
-/**
- * Embedded browser panel shown when the user swipes over to the browser page
- * in the Session Player. Renders a simple URL bar + back/forward/reload
- * controls on top of a full-screen WebView.
- */
-export function BrowserPanel({ initialUrl, topInset = 0 }: BrowserPanelProps) {
+export function BrowserPanel({ url, onUrlChange }: BrowserPanelProps) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
-  const resolvedInitialUrl = initialUrl ?? "";
-
-  const [url, setUrl] = useState(resolvedInitialUrl);
-  const [inputText, setInputText] = useState(resolvedInitialUrl);
+  const webViewRef = useRef<WebView>(null);
+  const [inputText, setInputText] = useState(url);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
   const [loading, setLoading] = useState(false);
-  const webViewRef = useRef<WebView>(null);
 
   useEffect(() => {
-    setUrl(resolvedInitialUrl);
-    setInputText(resolvedInitialUrl);
-    setCanGoBack(false);
-    setCanGoForward(false);
-    setLoading(false);
-  }, [resolvedInitialUrl]);
+    setInputText(url);
+  }, [url]);
 
-  const handleNavStateChange = useCallback((state: WebViewNavigation) => {
-    setCanGoBack(state.canGoBack);
-    setCanGoForward(state.canGoForward);
-    setInputText(state.url);
-    setUrl(state.url);
-  }, []);
+  const handleNavStateChange = useCallback(
+    (state: WebViewNavigation) => {
+      setCanGoBack(state.canGoBack);
+      setCanGoForward(state.canGoForward);
+      setInputText(state.url);
+      onUrlChange(state.url);
+    },
+    [onUrlChange],
+  );
 
   const handleSubmit = useCallback(
     (e: NativeSyntheticEvent<TextInputSubmitEditingEventData>) => {
-      const raw = normalizeBrowserInputUrl(e.nativeEvent.text);
+      let raw = e.nativeEvent.text.trim();
       if (!raw) return;
-      setUrl(raw);
+      if (!/^https?:\/\//i.test(raw)) {
+        raw = `https://${raw}`;
+      }
       setInputText(raw);
+      if (raw === url) {
+        webViewRef.current?.reload();
+        return;
+      }
+      onUrlChange(raw);
     },
-    [],
+    [onUrlChange, url],
   );
 
-  const handleBack = useCallback(() => webViewRef.current?.goBack(), []);
-  const handleForward = useCallback(() => webViewRef.current?.goForward(), []);
-  const handleToolbarReload = useCallback(() => {
-    if (loading) {
-      webViewRef.current?.stopLoading();
-      setLoading(false);
-      return;
-    }
+  const handleBack = useCallback(() => {
+    webViewRef.current?.goBack();
+  }, []);
+
+  const handleForward = useCallback(() => {
+    webViewRef.current?.goForward();
+  }, []);
+
+  const handleReload = useCallback(() => {
+    if (!url) return;
     webViewRef.current?.reload();
-  }, [loading]);
+  }, [url]);
 
   return (
-    <View
-      style={[
-        styles.root,
-        { backgroundColor: theme.colors.background },
-      ]}
-    >
-      {/* Spacer that matches the glass header above */}
-      <View style={{ height: topInset }} />
-
-      {/* Toolbar */}
+    <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
       <View
         style={[
           styles.toolbar,
@@ -152,55 +138,47 @@ export function BrowserPanel({ initialUrl, topInset = 0 }: BrowserPanelProps) {
               },
             ]}
             placeholderTextColor={theme.colors.mutedForeground}
-            placeholder="Enter a URL…"
+            placeholder="Enter a URL"
           />
         </View>
 
         <Pressable
-          onPress={handleToolbarReload}
-          accessibilityLabel={loading ? "Stop loading" : "Reload"}
+          onPress={handleReload}
+          disabled={!url}
+          accessibilityLabel={loading ? "Loading" : "Reload"}
           style={styles.navBtn}
         >
           <SymbolView
-            name={loading ? "xmark" : "arrow.clockwise"}
+            name={loading ? "hourglass" : "arrow.clockwise"}
             size={16}
-            tintColor={theme.colors.foreground}
+            tintColor={url ? theme.colors.foreground : theme.colors.mutedForeground}
             weight="medium"
             resizeMode="scaleAspectFit"
           />
         </Pressable>
       </View>
 
-      {/* WebView */}
       {url ? (
         <WebView
           ref={webViewRef}
           source={{ uri: url }}
           style={styles.webView}
+          automaticallyAdjustContentInsets={false}
+          contentInsetAdjustmentBehavior="never"
           onNavigationStateChange={handleNavStateChange}
           onLoadStart={() => setLoading(true)}
           onLoadEnd={() => setLoading(false)}
-          // Allow inline media so video previews work
           allowsInlineMediaPlayback
-          // Share cookies with system so GitHub auth carries over
           sharedCookiesEnabled
           allowsBackForwardNavigationGestures
         />
       ) : (
-        <View
-          style={[
-            styles.empty,
-            { backgroundColor: theme.colors.surfaceDeep },
-          ]}
-        >
-          <Text variant="body" color="mutedForeground">
-            Enter a URL above to get started
+        <View style={[styles.empty, { backgroundColor: theme.colors.surfaceDeep }]}>
+          <Text variant="body" color="mutedForeground" align="center">
+            Enter a URL above to browse the repo or PR.
           </Text>
         </View>
       )}
-
-      {/* Bottom safe area */}
-      <View style={{ height: insets.bottom }} />
     </View>
   );
 }
@@ -240,5 +218,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 24,
   },
 });

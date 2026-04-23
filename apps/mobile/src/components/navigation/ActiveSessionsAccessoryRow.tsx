@@ -42,7 +42,7 @@ export const ActiveSessionsAccessoryRow = memo(function ActiveSessionsAccessoryR
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Open session player — ${name}`}
+      accessibilityLabel={`Open session — ${name}`}
       style={[styles.row, { width }]}
       onPress={onPress}
     >

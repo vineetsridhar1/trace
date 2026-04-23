@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   Keyboard,
   LayoutAnimation,
@@ -8,6 +8,7 @@ import {
   View,
   type LayoutChangeEvent,
 } from "react-native";
+import { BottomTabBarHeightContext } from "react-native-bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEntityField } from "@trace/client-core";
 import { Spinner, Text } from "@/components/design-system";
@@ -83,6 +84,7 @@ export function SessionSurface({
     enabled: renderStreamEvents,
   });
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [composerHeight, setComposerHeight] = useState(0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
@@ -115,9 +117,15 @@ export function SessionSurface({
       hide.remove();
     };
   }, []);
-  // iOS's keyboard height already includes the home-indicator safe-area, so
-  // offset by insets.bottom to avoid double-padding the composer.
-  const overlayBottom = keyboardHeight > 0 ? Math.max(0, keyboardHeight - insets.bottom) : 0;
+  // Both the keyboard frame and the native tab bar height include the home-
+  // indicator inset. The composer already pads for that internally, so only
+  // apply the remaining covered height here.
+  const sceneBottomOffset =
+    keyboardHeight > 0
+      ? Math.max(0, keyboardHeight - insets.bottom)
+      : Math.max(0, tabBarHeight - insets.bottom);
+  const overlayBottom = sceneBottomOffset;
+  const streamBottomInset = composerHeight + overlayBottom;
 
   useEffect(() => {
     if (!groupId) return;
@@ -154,12 +162,12 @@ export function SessionSurface({
         />
       )}
       {hideHeader ? null : <ActiveTodoStrip sessionId={sessionId} />}
-      <View style={[styles.streamWrapper, { marginBottom: overlayBottom }]}>
+      <View style={styles.streamWrapper}>
         <SessionStream
           key={sessionId}
           sessionId={sessionId}
           topInset={topInset}
-          bottomInset={composerHeight}
+          bottomInset={streamBottomInset}
           loadEvents={loadStreamEvents}
           commitEvents={commitStreamEvents}
           renderEvents={renderStreamEvents}
