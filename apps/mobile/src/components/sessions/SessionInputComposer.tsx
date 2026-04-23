@@ -49,6 +49,7 @@ import { ImageAttachmentBar } from "./ImageAttachmentBar";
 interface SessionInputComposerProps {
   sessionId: string;
   focusRequest?: number;
+  inputNativeID?: string;
   bottomSafeAreaInset?: number;
   keyboardVisible?: boolean;
 }
@@ -84,6 +85,7 @@ const MODEL_CHIP_SIZE = ACTION_SIZE;
 export function SessionInputComposer({
   sessionId,
   focusRequest,
+  inputNativeID,
   bottomSafeAreaInset,
   keyboardVisible = false,
 }: SessionInputComposerProps) {
@@ -849,6 +851,7 @@ export function SessionInputComposer({
             <Animated.View style={[styles.inputWrapper, inputAnimatedStyle]}>
               <TextInput
                 ref={inputRef}
+                nativeID={inputNativeID}
                 value={text}
                 onChangeText={handleChangeText}
                 onFocus={handleFocus}
