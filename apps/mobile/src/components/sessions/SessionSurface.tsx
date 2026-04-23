@@ -1,8 +1,7 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import {
   Keyboard,
   LayoutAnimation,
-  PanResponder,
   Platform,
   StyleSheet,
   UIManager,
@@ -26,9 +25,6 @@ import { useSessionDetail } from "@/hooks/useSessionDetail";
 import { useSessionPendingInput } from "@/hooks/useSessionPendingInput";
 import { useTheme } from "@/theme";
 import { useMobileUIStore } from "@/stores/ui";
-
-const KEYBOARD_DISMISS_DRAG = 12;
-const KEYBOARD_DISMISS_HORIZONTAL_TOLERANCE = 40;
 
 interface SessionSurfaceProps {
   sessionId: string;
@@ -91,15 +87,8 @@ export function SessionSurface({
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [composerHeight, setComposerHeight] = useState(0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const keyboardDismissTriggeredRef = useRef(false);
   const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
     setComposerHeight(e.nativeEvent.layout.height);
-  }, []);
-  const dismissKeyboard = useCallback(() => {
-    Keyboard.dismiss();
-  }, []);
-  const resetKeyboardDismissGesture = useCallback(() => {
-    keyboardDismissTriggeredRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -137,31 +126,6 @@ export function SessionSurface({
       : Math.max(0, tabBarHeight - insets.bottom);
   const overlayBottom = sceneBottomOffset;
   const streamBottomInset = composerHeight + overlayBottom;
-  // FlashList already dismisses interactively while dragging the transcript;
-  // this extends the same downward gesture to the pinned bottom controls.
-  const overlayKeyboardDismissResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponderCapture: (_event, gestureState) => {
-          if (keyboardHeight <= 0) return false;
-          if (gestureState.dy <= KEYBOARD_DISMISS_DRAG) return false;
-          if (Math.abs(gestureState.dx) > KEYBOARD_DISMISS_HORIZONTAL_TOLERANCE) return false;
-          if (gestureState.dy < Math.abs(gestureState.dx)) return false;
-          return true;
-        },
-        onPanResponderMove: (_event, gestureState) => {
-          if (keyboardDismissTriggeredRef.current) return;
-          if (gestureState.dy <= KEYBOARD_DISMISS_DRAG) return;
-          if (gestureState.dy < Math.abs(gestureState.dx)) return;
-          keyboardDismissTriggeredRef.current = true;
-          dismissKeyboard();
-        },
-        onPanResponderRelease: resetKeyboardDismissGesture,
-        onPanResponderTerminate: resetKeyboardDismissGesture,
-        onPanResponderTerminationRequest: () => true,
-      }),
-    [dismissKeyboard, keyboardHeight, resetKeyboardDismissGesture],
-  );
 
   useEffect(() => {
     if (!groupId) return;
@@ -210,9 +174,9 @@ export function SessionSurface({
         />
       </View>
       <View
-        {...overlayKeyboardDismissResponder.panHandlers}
         style={[styles.overlay, { bottom: overlayBottom }]}
         onLayout={handleComposerLayout}
+        pointerEvents="box-none"
       >
         {pendingInput ? (
           <>
