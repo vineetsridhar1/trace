@@ -15,6 +15,7 @@ export function LinkedCheckoutSubtitle({ state }: Props) {
     summaryBranch,
     syncedCommitSha,
     autoSyncEnabled,
+    hasUncommittedChanges,
     lastSyncError,
   } = state;
 
@@ -37,6 +38,7 @@ export function LinkedCheckoutSubtitle({ state }: Props) {
           Main worktree following {summaryBranch}
           {syncedCommitSha ? ` at ${syncedCommitSha.slice(0, 7)}` : ""}
           {autoSyncEnabled ? "" : " (auto-sync paused)"}
+          {hasUncommittedChanges ? " (has live changes)" : ""}
         </p>
       ) : isAttachedElsewhere ? (
         <p className="mt-0.5 truncate text-xs text-muted-foreground">

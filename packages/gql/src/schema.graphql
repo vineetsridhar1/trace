@@ -795,7 +795,9 @@ type ConnectionsRepoEntry {
 type ConnectionsBridge {
   bridge: BridgeRuntime!
   repos: [ConnectionsRepoEntry!]!
-  """Whether the calling user has terminal capability on this bridge."""
+  """
+  Whether the calling user has terminal capability on this bridge.
+  """
   canTerminal: Boolean!
 }
 
@@ -1100,6 +1102,7 @@ type LinkedCheckoutStatus {
   lastSyncError: String
   restoreBranch: String
   restoreCommitSha: String
+  hasUncommittedChanges: Boolean!
 }
 
 type LinkedCheckoutActionResult {
@@ -1183,6 +1186,7 @@ type Mutation {
     commitSha: String
     autoSyncEnabled: Boolean
   ): LinkedCheckoutActionResult!
+  commitLinkedCheckoutChanges(sessionGroupId: ID!, repoId: ID!): LinkedCheckoutActionResult!
   restoreLinkedCheckout(sessionGroupId: ID!, repoId: ID!): LinkedCheckoutActionResult!
   setLinkedCheckoutAutoSync(
     sessionGroupId: ID!

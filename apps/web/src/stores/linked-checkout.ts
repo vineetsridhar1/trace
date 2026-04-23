@@ -4,6 +4,7 @@ import type { DocumentInput } from "@urql/core";
 import { client } from "../lib/urql";
 import { useUIStore, type UIState } from "./ui";
 import {
+  COMMIT_LINKED_CHECKOUT_CHANGES_MUTATION,
   LINKED_CHECKOUT_STATUS_QUERY,
   LINK_LINKED_CHECKOUT_REPO_MUTATION,
   RESTORE_LINKED_CHECKOUT_MUTATION,
@@ -22,6 +23,7 @@ type LinkedCheckoutQueryData = {
 type LinkedCheckoutMutationField =
   | "linkLinkedCheckoutRepo"
   | "syncLinkedCheckout"
+  | "commitLinkedCheckoutChanges"
   | "restoreLinkedCheckout"
   | "setLinkedCheckoutAutoSync";
 
@@ -63,6 +65,7 @@ function emptyStatus(repoId: string): DesktopLinkedCheckoutStatus {
     lastSyncError: null,
     restoreBranch: null,
     restoreCommitSha: null,
+    hasUncommittedChanges: false,
   };
 }
 
@@ -237,6 +240,37 @@ export async function restoreLinkedCheckout(
     const result = await runLinkedCheckoutMutation(
       RESTORE_LINKED_CHECKOUT_MUTATION,
       "restoreLinkedCheckout",
+      {
+        sessionGroupId,
+        repoId,
+      },
+    );
+    useLinkedCheckoutStore.getState().setStatus(key, result.status);
+    return result;
+  } finally {
+    useLinkedCheckoutStore.getState().setPending(key, false);
+  }
+}
+
+export async function commitLinkedCheckoutChanges(
+  repoId: string,
+  sessionGroupId: string,
+  runtimeInstanceId: string,
+): Promise<DesktopLinkedCheckoutActionResult> {
+  const key = getStoreKey(repoId, runtimeInstanceId);
+  if (!key) {
+    throw new Error("Missing linked checkout session group, repo, or runtime.");
+  }
+
+  if (isLinkedCheckoutPending(repoId, runtimeInstanceId)) {
+    throw new Error("A linked checkout sync is already in progress.");
+  }
+
+  useLinkedCheckoutStore.getState().setPending(key, true);
+  try {
+    const result = await runLinkedCheckoutMutation(
+      COMMIT_LINKED_CHECKOUT_CHANGES_MUTATION,
+      "commitLinkedCheckoutChanges",
       {
         sessionGroupId,
         repoId,

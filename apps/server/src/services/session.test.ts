@@ -47,6 +47,7 @@ vi.mock("../lib/session-router.js", () => ({
     getLinkedCheckoutStatus: vi.fn().mockResolvedValue(null),
     linkLinkedCheckoutRepo: vi.fn().mockResolvedValue(null),
     syncLinkedCheckout: vi.fn().mockResolvedValue(null),
+    commitLinkedCheckoutChanges: vi.fn().mockResolvedValue(null),
     restoreLinkedCheckout: vi.fn().mockResolvedValue(null),
     setLinkedCheckoutAutoSync: vi.fn().mockResolvedValue(null),
   },
@@ -2225,9 +2226,7 @@ describe("SessionService", () => {
     });
 
     it("rejects moving a repo session to a bridge without the repo linked", async () => {
-      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
-        makeSession({ projects: [] }),
-      );
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(makeSession({ projects: [] }));
       prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
       sessionRouterMock.getRuntime.mockReturnValueOnce({
         id: "runtime-2",
@@ -2576,6 +2575,7 @@ describe("SessionService", () => {
         lastSyncError: null,
         restoreBranch: "main",
         restoreCommitSha: "abc123",
+        hasUncommittedChanges: false,
       });
 
       await service.getLinkedCheckoutStatus("group-1", "repo-1", "org-1", "user-1");
@@ -2655,6 +2655,67 @@ describe("SessionService", () => {
       );
       expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
     });
+
+    it("routes commit-back actions through the session group's canonical runtime", async () => {
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        repoId: "repo-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-home",
+        },
+        sessions: [
+          {
+            id: "session-home",
+            repoId: "repo-1",
+            hosting: "local",
+            createdById: "user-1",
+            connection: { state: "connected", runtimeInstanceId: "runtime-home" },
+          },
+        ],
+      });
+      runtimeAccessServiceMock.getAccessState.mockResolvedValueOnce({
+        hostingMode: "local",
+        allowed: true,
+        isOwner: true,
+      });
+      sessionRouterMock.getRuntime.mockImplementation((runtimeId: string) =>
+        runtimeId === "runtime-home"
+          ? {
+              id: "runtime-home",
+              hostingMode: "local",
+              ws: { readyState: 1, OPEN: 1 },
+            }
+          : null,
+      );
+      sessionRouterMock.commitLinkedCheckoutChanges.mockResolvedValueOnce({
+        ok: true,
+        error: null,
+        status: {
+          repoId: "repo-1",
+          repoPath: "/tmp/trace",
+          isAttached: true,
+          attachedSessionGroupId: "group-1",
+          targetBranch: "trace/raccoon",
+          autoSyncEnabled: true,
+          currentBranch: null,
+          currentCommitSha: "def456",
+          lastSyncedCommitSha: "def456",
+          lastSyncError: null,
+          restoreBranch: "main",
+          restoreCommitSha: "abc123",
+          hasUncommittedChanges: false,
+        },
+      });
+
+      await service.commitLinkedCheckoutChanges("group-1", "repo-1", "org-1", "user-1");
+
+      expect(sessionRouterMock.commitLinkedCheckoutChanges).toHaveBeenCalledWith("runtime-home", {
+        repoId: "repo-1",
+        sessionGroupId: "group-1",
+      });
+    });
   });
 
   describe("pr lifecycle", () => {
@@ -2699,9 +2760,7 @@ describe("SessionService", () => {
 
       await expect(
         service.listBranches("repo-other", "org-1", "user-2", "runtime-1", "group-a"),
-      ).rejects.toThrow(
-        "Bridge access denied: this session group does not own the requested repo",
-      );
+      ).rejects.toThrow("Bridge access denied: this session group does not own the requested repo");
       expect(sessionRouterMock.listBranches).not.toHaveBeenCalled();
       expect(runtimeAccessServiceMock.assertAccess).not.toHaveBeenCalled();
     });

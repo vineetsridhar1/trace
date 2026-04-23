@@ -372,6 +372,20 @@ export const sessionMutations = {
       },
     );
   },
+  commitLinkedCheckoutChanges: (
+    _: unknown,
+    args: { sessionGroupId: string; repoId: string },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const orgId = requireOrgContext(ctx);
+    return sessionService.commitLinkedCheckoutChanges(
+      args.sessionGroupId,
+      args.repoId,
+      orgId,
+      ctx.userId,
+    );
+  },
   restoreLinkedCheckout: (
     _: unknown,
     args: { sessionGroupId: string; repoId: string },

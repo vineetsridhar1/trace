@@ -1,160 +1,222 @@
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { LinkedCheckoutConfig } from "./config.js";
 
-const { execFileAsyncMock, runGitMock } = vi.hoisted(() => ({
-  execFileAsyncMock: vi.fn(),
-  runGitMock: vi.fn(),
-}));
-
-vi.mock("@trace/shared", () => ({
-  assertValidCommitSha: (sha: string) => {
-    if (!/^[0-9a-f]{40}$/i.test(sha)) {
-      throw new Error(`Invalid commit SHA: ${sha}`);
-    }
-  },
-}));
-
-vi.mock("./config.js", () => ({
-  getRepoConfig: vi.fn(),
-  saveRepoPath: vi.fn(),
-  setRepoLinkedCheckout: vi.fn(),
-}));
+vi.mock("./config.js", () => {
+  const state: {
+    repos: Record<
+      string,
+      { path: string; gitHooksEnabled: boolean; linkedCheckout: LinkedCheckoutConfig | null }
+    >;
+  } = { repos: {} };
+  return {
+    getRepoConfig: (repoId: string) => state.repos[repoId] ?? null,
+    saveRepoPath: vi.fn(async (repoId: string, localPath: string) => {
+      const current = state.repos[repoId];
+      const next = {
+        path: localPath,
+        gitHooksEnabled: current?.gitHooksEnabled ?? false,
+        linkedCheckout: current?.linkedCheckout ?? null,
+      };
+      state.repos[repoId] = next;
+      return next;
+    }),
+    setRepoLinkedCheckout: vi.fn(async (repoId: string, next: LinkedCheckoutConfig | null) => {
+      const current = state.repos[repoId];
+      if (!current) return null;
+      state.repos[repoId] = { ...current, linkedCheckout: next };
+      return state.repos[repoId];
+    }),
+    __state: state,
+    __reset: () => {
+      for (const key of Object.keys(state.repos)) delete state.repos[key];
+    },
+  };
+});
 
 vi.mock("./repo-hooks.js", () => ({
-  installOrRepairRepoHooks: vi.fn(),
+  installOrRepairRepoHooks: vi.fn(async () => undefined),
 }));
 
-vi.mock("./git-utils.js", () => ({
-  assertSafeGitRef: (ref: string) => {
-    if (!ref || ref.startsWith("-") || ref.includes("..") || /[\x00-\x1f\x7f\s]/.test(ref)) {
-      throw new Error(`Unsafe git ref: ${ref}`);
-    }
-  },
-  execFileAsync: execFileAsyncMock,
-  formatGitError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
-  getCurrentBranch: vi.fn(),
-  GIT_MAX_BUFFER: 5 * 1024 * 1024,
-  isSafeGitRef: (ref: string) =>
-    !!ref && !ref.startsWith("-") && !ref.includes("..") && !/[\x00-\x1f\x7f\s]/.test(ref),
-  runGit: runGitMock,
-}));
+import * as config from "./config.js";
+import {
+  commitLinkedCheckoutChanges,
+  getLinkedCheckoutStatus,
+  syncLinkedCheckout,
+} from "./linked-checkout.js";
 
-import { resolveTargetCommitSha } from "./linked-checkout.js";
+const execFileAsync = promisify(execFile);
 
-const repoPath = "/tmp/repo";
+const configMock = config as unknown as {
+  __state: {
+    repos: Record<
+      string,
+      { path: string; gitHooksEnabled: boolean; linkedCheckout: LinkedCheckoutConfig | null }
+    >;
+  };
+  __reset: () => void;
+};
 
-function notFoundError(message: string, code = 128): Error & { code: number } {
-  return Object.assign(new Error(message), { code });
+async function git(cwd: string, args: string[]): Promise<string> {
+  const { stdout } = await execFileAsync("git", args, { cwd });
+  return stdout.trim();
 }
 
-function seedGitState({
-  refs = {},
-  ancestors = [],
-}: {
-  refs?: Record<string, string>;
-  ancestors?: Array<[string, string]>;
-} = {}) {
-  const refMap = new Map(Object.entries(refs));
-  const ancestorSet = new Set(ancestors.map(([ancestor, descendant]) => `${ancestor}->${descendant}`));
+async function createRepoFixture(): Promise<{
+  repoPath: string;
+  worktreePath: string;
+}> {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "trace-linked-checkout-"));
+  const repoPath = path.join(rootDir, "repo");
+  const worktreePath = path.join(rootDir, "worktree");
 
-  execFileAsyncMock.mockImplementation(async (_cmd: string, args: string[]) => {
-    if (args[0] === "rev-parse" && args[1] === "--verify") {
-      const ref = args[2]?.replace(/\^\{commit\}$/, "");
-      if (ref && refMap.has(ref)) return { stdout: "", stderr: "" };
-      throw notFoundError(`missing ref ${ref}`);
-    }
+  fs.mkdirSync(repoPath, { recursive: true });
+  await git(repoPath, ["init", "-b", "main"]);
+  await git(repoPath, ["config", "user.name", "Trace Test"]);
+  await git(repoPath, ["config", "user.email", "trace@example.com"]);
 
-    if (args[0] === "merge-base" && args[1] === "--is-ancestor") {
-      const ancestor = args[2];
-      const descendant = args[3];
-      if (ancestorSet.has(`${ancestor}->${descendant}`)) {
-        return { stdout: "", stderr: "" };
-      }
-      throw notFoundError("not ancestor", 1);
-    }
+  fs.writeFileSync(path.join(repoPath, "app.txt"), "base\n");
+  fs.writeFileSync(path.join(repoPath, "notes.txt"), "notes base\n");
+  await git(repoPath, ["add", "app.txt", "notes.txt"]);
+  await git(repoPath, ["commit", "-m", "initial commit"]);
+  await git(repoPath, ["worktree", "add", "-b", "trace/raccoon", worktreePath, "HEAD"]);
 
-    throw new Error(`Unexpected execFileAsync call: ${args.join(" ")}`);
-  });
+  return { repoPath, worktreePath };
+}
 
-  runGitMock.mockImplementation(async (_repoPath: string, args: string[]) => {
-    if (args[0] === "rev-parse") {
-      const ref = args[1]?.replace(/\^\{commit\}$/, "");
-      const sha = ref ? refMap.get(ref) : null;
-      if (sha) return sha;
-      throw new Error(`missing ref ${ref}`);
-    }
-
-    if (args[0] === "cat-file" && args[1] === "-e") {
-      return "";
-    }
-
-    throw new Error(`Unexpected runGit call: ${args.join(" ")}`);
-  });
+function seedRepo(repoId: string, repoPath: string): void {
+  configMock.__state.repos[repoId] = {
+    path: repoPath,
+    gitHooksEnabled: false,
+    linkedCheckout: null,
+  };
 }
 
 beforeEach(() => {
-  execFileAsyncMock.mockReset();
-  runGitMock.mockReset();
+  configMock.__reset();
 });
 
-describe("resolveTargetCommitSha", () => {
-  it("returns the local branch sha when there is no remote ref", async () => {
-    seedGitState({
-      refs: {
-        "trace/session": "a".repeat(40),
-      },
+describe("linked checkout commit-back", () => {
+  it("commits detached root-checkout changes onto the attached Trace worktree branch", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    const syncResult = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+    expect(syncResult.ok).toBe(true);
+
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "from root checkout\n");
+
+    const dirtyStatus = await getLinkedCheckoutStatus("repo-1");
+    expect(dirtyStatus.hasUncommittedChanges).toBe(true);
+
+    const result = await commitLinkedCheckoutChanges({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
     });
 
-    await expect(resolveTargetCommitSha(repoPath, "trace/session")).resolves.toBe("a".repeat(40));
-  });
-
-  it("returns the remote branch sha when there is no local ref", async () => {
-    seedGitState({
-      refs: {
-        "origin/trace/session": "b".repeat(40),
-      },
-    });
-
-    await expect(resolveTargetCommitSha(repoPath, "trace/session")).resolves.toBe("b".repeat(40));
-  });
-
-  it("prefers the remote ref when the local branch is behind", async () => {
-    const localSha = "a".repeat(40);
-    const remoteSha = "b".repeat(40);
-    seedGitState({
-      refs: {
-        "trace/session": localSha,
-        "origin/trace/session": remoteSha,
-      },
-      ancestors: [[localSha, remoteSha]],
-    });
-
-    await expect(resolveTargetCommitSha(repoPath, "trace/session")).resolves.toBe(remoteSha);
-  });
-
-  it("prefers the local ref when it is ahead of origin", async () => {
-    const localSha = "b".repeat(40);
-    const remoteSha = "a".repeat(40);
-    seedGitState({
-      refs: {
-        "trace/session": localSha,
-        "origin/trace/session": remoteSha,
-      },
-      ancestors: [[remoteSha, localSha]],
-    });
-
-    await expect(resolveTargetCommitSha(repoPath, "trace/session")).resolves.toBe(localSha);
-  });
-
-  it("throws when local and remote refs diverge", async () => {
-    seedGitState({
-      refs: {
-        "trace/session": "a".repeat(40),
-        "origin/trace/session": "b".repeat(40),
-      },
-    });
-
-    await expect(resolveTargetCommitSha(repoPath, "trace/session")).rejects.toThrow(
-      "Local and remote refs diverged for branch: trace/session",
+    expect(result.ok).toBe(true);
+    expect(result.status.hasUncommittedChanges).toBe(false);
+    expect(fs.readFileSync(path.join(worktreePath, "app.txt"), "utf8")).toBe(
+      "from root checkout\n",
     );
-  });
+    expect(fs.readFileSync(path.join(repoPath, "app.txt"), "utf8")).toBe("from root checkout\n");
+    expect(await git(repoPath, ["status", "--porcelain", "--untracked-files=all"])).toBe("");
+    expect(await git(worktreePath, ["log", "-1", "--pretty=%s"])).toBe(
+      "Commit linked checkout changes",
+    );
+    expect(result.status.currentCommitSha).toBe(await git(worktreePath, ["rev-parse", "HEAD"]));
+    expect(result.status.lastSyncedCommitSha).toBe(result.status.currentCommitSha);
+  }, 15_000);
+
+  it("refuses to overwrite conflicting live changes already present in the Trace worktree", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    const syncResult = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+    expect(syncResult.ok).toBe(true);
+
+    fs.writeFileSync(path.join(worktreePath, "app.txt"), "from worktree\n");
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "from root checkout\n");
+
+    const result = await commitLinkedCheckoutChanges({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("app.txt");
+    expect(await git(worktreePath, ["log", "-1", "--pretty=%s"])).toBe("initial commit");
+    expect(await git(repoPath, ["status", "--porcelain", "--untracked-files=all"])).not.toBe("");
+  }, 15_000);
+
+  it("commits only the imported detached-main paths and preserves unrelated worktree changes", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    const syncResult = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+    expect(syncResult.ok).toBe(true);
+
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "from root checkout\n");
+    fs.writeFileSync(path.join(worktreePath, "notes.txt"), "staged worktree change\n");
+    await git(worktreePath, ["add", "notes.txt"]);
+
+    const result = await commitLinkedCheckoutChanges({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(await git(worktreePath, ["diff", "--name-only", "HEAD^", "HEAD"])).toBe("app.txt");
+    expect(await git(worktreePath, ["status", "--porcelain", "--untracked-files=all"])).toBe(
+      "M  notes.txt",
+    );
+    expect(fs.readFileSync(path.join(worktreePath, "notes.txt"), "utf8")).toBe(
+      "staged worktree change\n",
+    );
+  }, 15_000);
+
+  it("refuses to flatten staged Trace worktree changes on the same paths", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    const syncResult = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+    expect(syncResult.ok).toBe(true);
+
+    fs.writeFileSync(path.join(worktreePath, "app.txt"), "from staged worktree\n");
+    await git(worktreePath, ["add", "app.txt"]);
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "from root checkout\n");
+
+    const result = await commitLinkedCheckoutChanges({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("staged changes");
+    expect(result.error).toContain("app.txt");
+    expect(await git(worktreePath, ["log", "-1", "--pretty=%s"])).toBe("initial commit");
+    expect(await git(worktreePath, ["status", "--porcelain", "--untracked-files=all"])).toBe(
+      "M  app.txt",
+    );
+  }, 15_000);
 });

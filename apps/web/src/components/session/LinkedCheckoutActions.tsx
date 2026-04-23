@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
+import { GitCommitHorizontal, Loader2, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
 import { Button } from "../ui/button";
 import type { LinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
 
@@ -7,7 +7,7 @@ interface Props {
   state: LinkedCheckoutHeaderState;
 }
 
-type PendingAction = "link" | "sync" | "restore" | "toggle-auto-sync" | null;
+type PendingAction = "link" | "sync" | "commit" | "restore" | "toggle-auto-sync" | null;
 
 export function LinkedCheckoutActions({ state }: Props) {
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
@@ -18,10 +18,12 @@ export function LinkedCheckoutActions({ state }: Props) {
     isAttachedToThisGroup,
     pending,
     autoSyncEnabled,
+    hasUncommittedChanges,
     canLinkRepo,
     requiresRepoLink,
     onLinkRepo,
     onSync,
+    onCommitChanges,
     onRestore,
     onToggleAutoSync,
   } = state;
@@ -36,6 +38,9 @@ export function LinkedCheckoutActions({ state }: Props) {
       setPendingAction((current) => (current === action ? null : current));
     }
   };
+
+  const iconButtonVariant = "secondary" as const;
+  const iconButtonClassName = "rounded-md";
 
   if (requiresRepoLink && canLinkRepo) {
     return (
@@ -54,10 +59,28 @@ export function LinkedCheckoutActions({ state }: Props) {
 
   return (
     <>
+      {isAttachedToThisGroup && hasUncommittedChanges && (
+        <Button
+          variant={iconButtonVariant}
+          size="icon"
+          className={iconButtonClassName}
+          onClick={() => void runAction("commit", onCommitChanges)}
+          disabled={pending}
+          aria-label="Commit main worktree changes"
+          title="Commit main worktree changes"
+        >
+          {pendingAction === "commit" ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <GitCommitHorizontal size={14} />
+          )}
+        </Button>
+      )}
+
       <Button
-        variant={isAttachedToThisGroup ? "secondary" : "outline"}
+        variant={iconButtonVariant}
         size="icon"
-        className="rounded-md"
+        className={iconButtonClassName}
         onClick={() => void runAction("sync", onSync)}
         disabled={pending}
         aria-label={isAttachedToThisGroup ? "Sync main worktree now" : "Sync to main worktree"}
@@ -73,9 +96,9 @@ export function LinkedCheckoutActions({ state }: Props) {
       {isAttachedToThisGroup && (
         <>
           <Button
-            variant="ghost"
+            variant={iconButtonVariant}
             size="icon"
-            className="rounded-md"
+            className={iconButtonClassName}
             onClick={() => void runAction("toggle-auto-sync", onToggleAutoSync)}
             disabled={pending}
             aria-label={autoSyncEnabled ? "Pause auto-sync" : "Resume auto-sync"}
@@ -90,9 +113,9 @@ export function LinkedCheckoutActions({ state }: Props) {
             )}
           </Button>
           <Button
-            variant="outline"
+            variant={iconButtonVariant}
             size="icon"
-            className="rounded-md"
+            className={iconButtonClassName}
             onClick={() => void runAction("restore", onRestore)}
             disabled={pending}
             aria-label="Restore main worktree"
