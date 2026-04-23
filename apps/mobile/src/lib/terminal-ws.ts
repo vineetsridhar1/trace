@@ -1,9 +1,5 @@
 import { useAuthStore } from "@trace/client-core";
-import { API_URL } from "@/lib/env";
-
-const wsBase = API_URL
-  ? API_URL.replace(/^https?:/, API_URL.startsWith("https") ? "wss:" : "ws:")
-  : "";
+import { getActiveApiUrl } from "@/lib/connection-target";
 
 const FATAL_TERMINAL_ERRORS = new Set([
   "Unauthorized",
@@ -18,6 +14,13 @@ const RECONNECT_MAX_MS = 30_000;
 
 function getToken(): string | null {
   return useAuthStore.getState().token;
+}
+
+function getTerminalWsBaseUrl(): string {
+  const apiUrl = getActiveApiUrl();
+  return apiUrl
+    ? apiUrl.replace(/^https?:/, apiUrl.startsWith("https://") ? "wss:" : "ws:")
+    : "";
 }
 
 export type TerminalSocketEvent =
@@ -82,6 +85,7 @@ export class TerminalSocket {
 
   private openSocket(): void {
     const token = getToken();
+    const wsBase = getTerminalWsBaseUrl();
     const url = token
       ? `${wsBase}/terminal?token=${encodeURIComponent(token)}`
       : `${wsBase}/terminal`;
