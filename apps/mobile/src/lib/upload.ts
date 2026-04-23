@@ -2,6 +2,8 @@ import { getAuthHeaders } from "@trace/client-core";
 import { API_URL } from "./env";
 
 const MAX_BYTES = 5 * 1024 * 1024;
+const URL_CACHE_TTL_MS = 5 * 60 * 1000;
+const uploadedImageUrlCache = new Map<string, { url: string; fetchedAt: number }>();
 
 interface UploadArgs {
   /** Raw base64 payload (no `data:` prefix). One of `base64`/`fileUri` is required. */
@@ -91,4 +93,34 @@ export async function uploadImage(args: UploadArgs): Promise<string> {
   }
 
   return key;
+}
+
+export function getCachedUploadedImageUrl(key: string): string | null {
+  const cached = uploadedImageUrlCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.fetchedAt > URL_CACHE_TTL_MS) {
+    uploadedImageUrlCache.delete(key);
+    return null;
+  }
+  return cached.url;
+}
+
+export async function getUploadedImageUrl(key: string): Promise<string> {
+  const cached = getCachedUploadedImageUrl(key);
+  if (cached) return cached;
+
+  const response = await fetch(`${API_URL}/uploads/url?key=${encodeURIComponent(key)}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to load image URL");
+  }
+
+  const { url } = (await response.json()) as { url?: string };
+  if (!url) {
+    throw new Error("Invalid image URL response");
+  }
+
+  uploadedImageUrlCache.set(key, { url, fetchedAt: Date.now() });
+  return url;
 }

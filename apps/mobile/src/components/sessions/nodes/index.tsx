@@ -81,6 +81,8 @@ const EventNode = memo(function EventNode({ id, context }: EventNodeProps) {
             text={payload.prompt}
             actorId={actor?.id}
             actorName={actor?.name}
+            imageKeys={asStringArray(payload?.imageKeys)}
+            imagePreviewUrls={asStringArray(payload?.imagePreviewUrls)}
             checkpoints={checkpoints}
           />
         );
@@ -93,6 +95,8 @@ const EventNode = memo(function EventNode({ id, context }: EventNodeProps) {
           text={typeof payload?.text === "string" ? payload.text : ""}
           actorId={actor?.id}
           actorName={actor?.name}
+          imageKeys={asStringArray(payload?.imageKeys)}
+          imagePreviewUrls={asStringArray(payload?.imagePreviewUrls)}
           checkpoints={checkpoints}
         />
       );
@@ -111,6 +115,11 @@ const EventNode = memo(function EventNode({ id, context }: EventNodeProps) {
       return null;
   }
 });
+
+function asStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.every((item) => typeof item === "string") ? value : undefined;
+}
 
 function prUrlFrom(payload: JsonObject | undefined): string | null {
   if (!payload) return null;
