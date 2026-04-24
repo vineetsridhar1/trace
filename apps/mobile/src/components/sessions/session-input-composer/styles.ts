@@ -18,9 +18,7 @@ export const styles = StyleSheet.create({
     flex: 1,
     position: "relative",
   },
-  leadingChipsContainer: {
-    paddingRight: INPUT_ACTION_GAP,
-  },
+  leadingChipsContainer: {},
   leadingChipsVisible: {
     overflow: "visible",
   },

@@ -88,6 +88,7 @@ export function useSessionComposerChips({
     width:
       (modeWidth.value + modelWidth.value + INPUT_ACTION_GAP * 2) *
       chipsSlotProgress.value,
+    paddingRight: INPUT_ACTION_GAP * chipsSlotProgress.value,
   }));
   const modeWidthAnimatedStyle = useAnimatedStyle(() => ({ width: modeWidth.value }));
   const modelWidthAnimatedStyle = useAnimatedStyle(() => ({ width: modelWidth.value }));
