@@ -197,7 +197,6 @@ export function SessionInputOptions({
       <Select
         value={currentTool}
         onValueChange={handleToolChange}
-        modal={false}
         disabled={isActive || isOptimistic}
       >
         <SelectTrigger className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
@@ -212,7 +211,7 @@ export function SessionInputOptions({
             </span>
           </SelectValue>
         </SelectTrigger>
-        <SelectContent alignItemWithTrigger={false}>
+        <SelectContent>
           <SelectItem value="claude_code">
             <span className="flex items-center gap-1.5">
               <ClaudeIcon className="size-3.5" /> Claude Code
@@ -229,13 +228,12 @@ export function SessionInputOptions({
         <Select
           value={currentModel ?? ""}
           onValueChange={handleModelChange}
-          modal={false}
           disabled={isActive || isOptimistic}
         >
           <SelectTrigger className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
             <SelectValue>{currentModel ? getModelLabel(currentModel) : ""}</SelectValue>
           </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
+          <SelectContent>
             {modelOptions.map((m: { value: string; label: string }) => (
               <SelectItem key={m.value} value={m.value}>
                 {m.label}
@@ -248,7 +246,6 @@ export function SessionInputOptions({
         <Select
           value={currentRuntimeValue}
           onValueChange={handleRuntimeChange}
-          modal={false}
           disabled={isOptimistic}
         >
           <SelectTrigger className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
@@ -270,7 +267,7 @@ export function SessionInputOptions({
               </span>
             </SelectValue>
           </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
+          <SelectContent>
             {!isLocalMode && (
               <SelectItem value={CLOUD_RUNTIME_ID}>
                 <span className="flex items-center gap-1.5">
