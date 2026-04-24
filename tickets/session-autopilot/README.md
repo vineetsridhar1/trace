@@ -58,7 +58,7 @@ Explicitly useful, but intentionally outside the smallest coherent v1.
 
 | # | Ticket | What it does |
 |---|--------|-------------|
-| 16 | [Playbook Expansion and Debug Follow-ups](16-playbook-expansion-and-debug-followups.md) | Additional playbooks, debug panel, and mobile follow-on surfaces |
+| 16 | [Playbook Expansion and Debug Follow-ups](16-playbook-expansion-and-debug-followups.md) | Additional playbooks, full controller-log inspector, and mobile follow-on surfaces |
 | 17 | [Runtime Action Wrapper and Auth Plumbing](17-runtime-action-wrapper-and-auth-plumbing.md) | Bundled wrapper/CLI plus short-lived runtime-token plumbing for direct bounded Trace actions from Codex/Claude |
 
 ## Dependency graph

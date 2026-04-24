@@ -1252,6 +1252,13 @@ Recommended shape:
 
 Expose the hidden controller session and raw decisions in an Autopilot debug panel for power users.
 
+Because the controller is implemented as a normal coding-tool session, this panel should prefer explicit service lookups plus reused session transcript/log components over inventing a second "Autopilot log" storage model.
+
+Product guardrail:
+
+- inspect the controller through an Autopilot-specific panel or drill-down
+- do not leak hidden controller sessions into normal session lists, tabs, or default navigation
+
 ### Mobile support
 
 - inbox surface
