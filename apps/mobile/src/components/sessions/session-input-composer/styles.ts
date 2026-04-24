@@ -66,6 +66,14 @@ export const styles = StyleSheet.create({
     paddingVertical: 2,
     textAlignVertical: "top",
   },
+  measurementText: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    opacity: 0,
+    zIndex: -1,
+  },
   attachButtonSlot: {
     marginLeft: INPUT_ACTION_GAP,
   },

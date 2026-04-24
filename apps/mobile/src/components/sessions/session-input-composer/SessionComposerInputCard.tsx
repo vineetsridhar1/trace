@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import { Pressable, TextInput, View } from "react-native";
+import { Pressable, Text as NativeText, TextInput, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { Glass, Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
@@ -49,6 +49,7 @@ export function SessionComposerInputCard({
   onRetry,
 }: SessionComposerInputCardProps) {
   const theme = useTheme();
+  const measurementText = text.length > 0 ? `${text}\u200b` : " ";
 
   return (
     <AnimatedGlass
@@ -71,6 +72,17 @@ export function SessionComposerInputCard({
       ) : null}
 
       <View style={[styles.inputWrapper, { minHeight: inputHeight }]}>
+        <NativeText
+          onTextLayout={(event) => {
+            const lines = event.nativeEvent.lines.length;
+            if (lines === 0) return;
+            const measuredHeight = lines * 21 + 4;
+            onContentHeightChange(measuredHeight);
+          }}
+          style={[styles.input, styles.measurementText]}
+        >
+          {measurementText}
+        </NativeText>
         <TextInput
           ref={inputRef}
           value={text}
