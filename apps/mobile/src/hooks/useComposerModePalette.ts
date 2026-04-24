@@ -11,6 +11,7 @@ import { alpha, useTheme } from "@/theme";
 
 export const MODE_CYCLE: InteractionMode[] = ["code", "plan", "ask"];
 const MODE_PROGRESS_INPUT = [0, 1, 2];
+const UNTINTED_GLASS = "rgba(255,255,255,0)";
 
 /**
  * Per-mode tint/border/text interpolation for the composer card. A single
@@ -30,7 +31,7 @@ export function useComposerModePalette(mode: InteractionMode) {
     const accent = theme.colors.accent;
     const plan = "#8b5cf6";
     const ask = "#ea580c";
-    const baseGlassTint = theme.glass.input.tint ?? theme.colors.glassTint;
+    const baseGlassTint = theme.glass.input.tint ?? UNTINTED_GLASS;
     return {
       glassTint: [baseGlassTint, "rgba(50,39,74,0.66)", "rgba(70,42,27,0.66)"],
       cardBorder: [alpha(fg, 0.08), alpha(plan, 0.25), alpha(ask, 0.25)],
@@ -42,7 +43,6 @@ export function useComposerModePalette(mode: InteractionMode) {
   }, [
     theme.colors.accent,
     theme.colors.foreground,
-    theme.colors.glassTint,
     theme.glass.input.tint,
   ]);
 

@@ -57,16 +57,17 @@ export function Glass({
 }: GlassProps) {
   const theme = useTheme();
   const config = theme.glass[preset];
+  const liquidGlassAvailable = isLiquidGlassAvailable();
   const radius = shapeRadius(config.shape, theme);
   const resolvedTint = tint ?? config.tint;
 
   const baseStyle: ViewStyle = {
-    backgroundColor: resolvedTint ?? theme.colors.glassTint,
+    backgroundColor: liquidGlassAvailable ? resolvedTint : resolvedTint ?? theme.colors.glassTint,
     borderRadius: radius,
     overflow: "hidden",
   };
 
-  if (isLiquidGlassAvailable()) {
+  if (liquidGlassAvailable) {
     return (
       <AnimatedGlassView
         glassEffectStyle={glassStyleEffect}
