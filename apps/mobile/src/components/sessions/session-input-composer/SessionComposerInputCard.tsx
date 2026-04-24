@@ -11,7 +11,6 @@ import {
 import Animated from "react-native-reanimated";
 import { Glass, Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
-import { MAX_INPUT_HEIGHT } from "./constants";
 import { styles } from "./styles";
 import type { ComposerAnimatedViewStyle, ComposerGlassAnimatedProps } from "./types";
 import type { ComposerSelection } from "@/lib/slashCommands";
@@ -111,7 +110,7 @@ export function SessionComposerInputCard({
           onSelectionChange={handleSelectionChange}
           editable={canInteract}
           multiline
-          scrollEnabled={inputHeight >= MAX_INPUT_HEIGHT}
+          scrollEnabled={false}
           placeholder={placeholder}
           placeholderTextColor={theme.colors.dimForeground}
           selection={selection}
