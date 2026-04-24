@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import type { CodingTool } from "@trace/gql";
 import { useComposerModePalette, MODE_CYCLE } from "@/hooks/useComposerModePalette";
@@ -12,6 +19,8 @@ import {
   MODEL_CHIP_SIZE,
   MODEL_FALLBACK_WIDTH,
 } from "./constants";
+
+const CHIP_COLLAPSE_DURATION_MS = 90;
 
 interface UseSessionComposerChipsOptions {
   currentTool: CodingTool;
@@ -41,12 +50,8 @@ export function useSessionComposerChips({
   const modeCollapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const modelCollapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const {
-    glassAnimatedProps,
-    cardBorderAnimatedStyle,
-    chipAnimatedStyle,
-    chipTextAnimatedStyle,
-  } = useComposerModePalette(mode);
+  const { glassAnimatedProps, cardBorderAnimatedStyle, chipAnimatedStyle, chipTextAnimatedStyle } =
+    useComposerModePalette(mode);
 
   const modeMeasuredWidth = modeWidths[mode] ?? MODE_FALLBACK_WIDTH;
   const modeTargetWidth = modeLabelVisible ? modeMeasuredWidth : MODEL_CHIP_SIZE;
@@ -73,14 +78,14 @@ export function useSessionComposerChips({
   const chipsVisible = (expanded && !hasSendable && !isActive) || modelMenuOpen;
   useEffect(() => {
     chipsSlotProgress.value = withTiming(chipsVisible ? 1 : 0, {
-      duration: theme.motion.durations.base,
+      duration: chipsVisible
+        ? theme.motion.durations.base
+        : Math.min(theme.motion.durations.fast, CHIP_COLLAPSE_DURATION_MS),
     });
-  }, [chipsSlotProgress, chipsVisible, theme.motion.durations.base]);
+  }, [chipsSlotProgress, chipsVisible, theme.motion.durations.base, theme.motion.durations.fast]);
 
   const leadingChipsAnimatedStyle = useAnimatedStyle(() => ({
-    width:
-      (modeWidth.value + modelWidth.value + INPUT_ACTION_GAP * 2) *
-      chipsSlotProgress.value,
+    width: (modeWidth.value + modelWidth.value + INPUT_ACTION_GAP * 2) * chipsSlotProgress.value,
     opacity: chipsSlotProgress.value,
   }));
   const modeWidthAnimatedStyle = useAnimatedStyle(() => ({ width: modeWidth.value }));
@@ -147,12 +152,7 @@ export function useSessionComposerChips({
     if (modelMenuOpen) return;
     clearModelCollapseTimer();
     setModelLabelVisible(false);
-  }, [
-    clearModeCollapseTimer,
-    clearModelCollapseTimer,
-    hasSendable,
-    modelMenuOpen,
-  ]);
+  }, [clearModeCollapseTimer, clearModelCollapseTimer, hasSendable, modelMenuOpen]);
 
   const handleModePress = useCallback(() => {
     void haptic.selection();
@@ -194,11 +194,7 @@ export function useSessionComposerChips({
   }, [currentTool, model]);
 
   const modeIconTint =
-    mode === "plan"
-      ? "#8b5cf6"
-      : mode === "ask"
-        ? "#ea580c"
-        : theme.colors.foreground;
+    mode === "plan" ? "#8b5cf6" : mode === "ask" ? "#ea580c" : theme.colors.foreground;
 
   return {
     cardBorderAnimatedStyle,

@@ -1,8 +1,7 @@
-import type { ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useCallback, type ReactNode } from "react";
+import { FlatList, Pressable, StyleSheet, View, type ListRenderItem } from "react-native";
 import { BlurView } from "expo-blur";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import { SymbolView } from "expo-symbols";
 import Animated, { FadeInDown, FadeOutDown } from "react-native-reanimated";
 import { Text } from "@/components/design-system";
 import type { SessionSlashCommand } from "@/lib/slashCommands";
@@ -14,79 +13,84 @@ interface SessionComposerSlashCommandMenuProps {
 }
 
 const MAX_MENU_HEIGHT = 280;
-
-function getSourceLabel(source: SessionSlashCommand["source"]): string {
-  if (source === "project_skill") return "Project";
-  if (source === "user_skill") return "Personal";
-  return "Built in";
-}
+const INITIAL_RENDER_COUNT = 8;
 
 export function SessionComposerSlashCommandMenu({
   commands,
   onSelect,
 }: SessionComposerSlashCommandMenuProps) {
   const theme = useTheme();
-  const surfaceTone = isLiquidGlassAvailable()
-    ? alpha(theme.colors.background, 0.18)
-    : alpha(theme.colors.background, 0.3);
+  const commandCount = commands.length;
+  const keyExtractor = useCallback(
+    (command: SessionSlashCommand) => `${command.source}:${command.name}`,
+    [],
+  );
+  const renderItem = useCallback<ListRenderItem<SessionSlashCommand>>(
+    ({ item: command, index }) => (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Use slash command /${command.name}`}
+        onPress={() => onSelect(command)}
+        style={({ pressed }) => [
+          styles.row,
+          {
+            marginBottom: index < commandCount - 1 ? 2 : 0,
+            backgroundColor: pressed ? "rgb(255, 255, 255, 0.05)" : undefined,
+          },
+        ]}
+      >
+        <View style={styles.copy}>
+          <View style={styles.titleRow}>
+            <Text
+              variant="subheadline"
+              numberOfLines={1}
+              style={[
+                styles.commandName,
+                {
+                  color: theme.colors.foreground,
+                  fontFamily: theme.typography.mono.fontFamily,
+                },
+              ]}
+            >
+              {`/${command.name}`}
+            </Text>
+          </View>
+          <Text
+            variant="caption1"
+            numberOfLines={2}
+            style={{ color: alpha(theme.colors.foreground, 0.88) }}
+          >
+            {command.description}
+          </Text>
+        </View>
+      </Pressable>
+    ),
+    [commandCount, onSelect, theme.colors.foreground, theme.typography.mono.fontFamily],
+  );
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(140)}
-      exiting={FadeOutDown.duration(100)}
+      entering={FadeInDown.duration(90)}
+      exiting={FadeOutDown.duration(80)}
       style={[styles.container, theme.shadows.lg]}
     >
       <MenuSurface>
-        <ScrollView
+        <FlatList
+          data={commands}
           keyboardDismissMode="none"
           keyboardShouldPersistTaps="always"
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
           nestedScrollEnabled
           showsVerticalScrollIndicator
           indicatorStyle={theme.scheme === "dark" ? "white" : "black"}
           style={styles.scrollView}
           contentContainerStyle={styles.content}
-        >
-          {commands.map((command, index) => (
-            <Pressable
-              key={`${command.source}:${command.name}`}
-              accessibilityRole="button"
-              accessibilityLabel={`Use slash command /${command.name}`}
-              onPress={() => onSelect(command)}
-              style={({ pressed }) => [
-                styles.row,
-                {
-                  marginBottom: index < commands.length - 1 ? 2 : 0,
-                  backgroundColor: pressed ? "rgb(255, 255, 255, 0.05)" : undefined,
-                },
-              ]}
-            >
-              <View style={styles.copy}>
-                <View style={styles.titleRow}>
-                  <Text
-                    variant="subheadline"
-                    numberOfLines={1}
-                    style={[
-                      styles.commandName,
-                      {
-                        color: theme.colors.foreground,
-                        fontFamily: theme.typography.mono.fontFamily,
-                      },
-                    ]}
-                  >
-                    {`/${command.name}`}
-                  </Text>
-                </View>
-                <Text
-                  variant="caption1"
-                  numberOfLines={2}
-                  style={{ color: alpha(theme.colors.foreground, 0.88) }}
-                >
-                  {command.description}
-                </Text>
-              </View>
-            </Pressable>
-          ))}
-        </ScrollView>
+          initialNumToRender={Math.min(commandCount, INITIAL_RENDER_COUNT)}
+          maxToRenderPerBatch={INITIAL_RENDER_COUNT}
+          windowSize={3}
+          removeClippedSubviews
+        />
       </MenuSurface>
     </Animated.View>
   );
@@ -128,11 +132,6 @@ const styles = StyleSheet.create({
     maxHeight: MAX_MENU_HEIGHT,
     overflow: "hidden",
   },
-  surfaceTone: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
   scrollView: { maxHeight: MAX_MENU_HEIGHT },
   content: {
     padding: 6,
@@ -146,18 +145,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  iconShell: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  icon: {
-    width: 14,
-    height: 14,
-  },
   copy: {
     flex: 1,
     gap: 3,
@@ -169,11 +156,5 @@ const styles = StyleSheet.create({
   },
   commandName: {
     flexShrink: 1,
-  },
-  sourceLabel: {
-    borderRadius: 999,
-    overflow: "hidden",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
   },
 });
