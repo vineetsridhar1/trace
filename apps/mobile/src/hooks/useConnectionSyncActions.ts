@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  COMMIT_LINKED_CHECKOUT_CHANGES_MUTATION,
   RESTORE_LINKED_CHECKOUT_MUTATION,
   SET_LINKED_CHECKOUT_AUTO_SYNC_MUTATION,
   SYNC_LINKED_CHECKOUT_MUTATION,
@@ -8,11 +9,12 @@ import type { LinkedCheckoutActionResult } from "@trace/gql";
 import { getClient } from "@/lib/urql";
 import type { ConnectionLinkedCheckout } from "@/hooks/useConnections";
 
-export type ConnectionSyncAction = "sync" | "restore" | "toggle-auto-sync";
+export type ConnectionSyncAction = "sync" | "commit" | "restore" | "toggle-auto-sync";
 
 type Outcome = { ok: boolean; error: string | null };
 type MutationData = {
   syncLinkedCheckout?: LinkedCheckoutActionResult | null;
+  commitLinkedCheckoutChanges?: LinkedCheckoutActionResult | null;
   restoreLinkedCheckout?: LinkedCheckoutActionResult | null;
   setLinkedCheckoutAutoSync?: LinkedCheckoutActionResult | null;
 };
@@ -84,6 +86,20 @@ export function useConnectionSyncActions({
     });
   }, [runAction, sessionGroupId, status.repoId]);
 
+  const commitChanges = useCallback(async () => {
+    if (!sessionGroupId) return { ok: false, error: "Missing synced session." };
+    return runAction("commit", async () => {
+      const result = await getClient()
+        .mutation(COMMIT_LINKED_CHECKOUT_CHANGES_MUTATION, {
+          sessionGroupId,
+          repoId: status.repoId,
+        })
+        .toPromise();
+      if (result.error) throw result.error;
+      return (result.data as MutationData | undefined)?.commitLinkedCheckoutChanges ?? null;
+    });
+  }, [runAction, sessionGroupId, status.repoId]);
+
   const toggleAutoSync = useCallback(async () => {
     if (!sessionGroupId) return { ok: false, error: "Missing synced session." };
     return runAction("toggle-auto-sync", async () => {
@@ -99,5 +115,5 @@ export function useConnectionSyncActions({
     });
   }, [runAction, sessionGroupId, status.autoSyncEnabled, status.repoId]);
 
-  return { status, branch, pendingAction, sync, restore, toggleAutoSync };
+  return { status, branch, pendingAction, sync, commitChanges, restore, toggleAutoSync };
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BRIDGE_RUNTIME_ACCESS_QUERY,
+  COMMIT_LINKED_CHECKOUT_CHANGES_MUTATION,
   LINKED_CHECKOUT_STATUS_QUERY,
   RESTORE_LINKED_CHECKOUT_MUTATION,
   SET_LINKED_CHECKOUT_AUTO_SYNC_MUTATION,
@@ -16,7 +17,7 @@ import type {
 } from "@trace/gql";
 import { getClient } from "@/lib/urql";
 
-export type LinkedCheckoutAction = "sync" | "restore" | "toggle-auto-sync";
+export type LinkedCheckoutAction = "sync" | "commit" | "restore" | "toggle-auto-sync";
 
 interface ActionOutcome {
   ok: boolean;
@@ -36,9 +37,11 @@ export interface UseLinkedCheckoutResult {
   repoLinked: boolean;
   isAttachedToThisGroup: boolean;
   isAttachedElsewhere: boolean;
+  hasUncommittedChanges: boolean;
   pendingAction: LinkedCheckoutAction | null;
   refresh: () => void;
   sync: () => Promise<ActionOutcome>;
+  commitChanges: () => Promise<ActionOutcome>;
   restore: () => Promise<ActionOutcome>;
   toggleAutoSync: () => Promise<ActionOutcome>;
 }
@@ -46,13 +49,17 @@ export interface UseLinkedCheckoutResult {
 type StatusQueryData = { linkedCheckoutStatus?: LinkedCheckoutStatus | null };
 type AccessQueryData = { bridgeRuntimeAccess?: BridgeRuntimeAccess | null };
 type SyncMutationData = { syncLinkedCheckout?: LinkedCheckoutActionResult | null };
+type CommitMutationData = {
+  commitLinkedCheckoutChanges?: LinkedCheckoutActionResult | null;
+};
 type RestoreMutationData = { restoreLinkedCheckout?: LinkedCheckoutActionResult | null };
 type AutoSyncMutationData = {
   setLinkedCheckoutAutoSync?: LinkedCheckoutActionResult | null;
 };
 
 /**
- * Drives the sync / pause / restore controls in the mobile session-title panel.
+ * Drives the sync / commit / pause / restore controls in the mobile
+ * session-title panel.
  * Mirrors the desktop `useLinkedCheckoutHeaderState`, minus the folder-pick
  * step (which only Trace Desktop can do). Mobile only consumes an existing
  * link and triggers actions against it.
@@ -165,6 +172,7 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
   const isAttachedElsewhere = !!status?.isAttached && !isAttachedToThisGroup;
   const repoLinked = !!status?.repoPath;
   const syncedCommitSha = status?.lastSyncedCommitSha ?? status?.currentCommitSha ?? null;
+  const hasUncommittedChanges = !!status?.hasUncommittedChanges;
 
   const refresh = useCallback(() => setRefreshTick((n) => n + 1), []);
 
@@ -224,6 +232,22 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
     });
   }, [groupId, repoId, runAction]);
 
+  const commitChanges = useCallback(async (): Promise<ActionOutcome> => {
+    if (!repoId) return { ok: false, error: "Missing repo." };
+    return runAction("commit", async () => {
+      const result = await getClient()
+        .mutation(COMMIT_LINKED_CHECKOUT_CHANGES_MUTATION, {
+          sessionGroupId: groupId,
+          repoId,
+        })
+        .toPromise();
+      if (result.error) throw result.error;
+      return (
+        (result.data as CommitMutationData | undefined)?.commitLinkedCheckoutChanges ?? null
+      );
+    });
+  }, [groupId, repoId, runAction]);
+
   const toggleAutoSync = useCallback(async (): Promise<ActionOutcome> => {
     if (!repoId || !status) return { ok: false, error: "Missing repo or status." };
     const next = !status.autoSyncEnabled;
@@ -252,9 +276,11 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
     repoLinked,
     isAttachedToThisGroup,
     isAttachedElsewhere,
+    hasUncommittedChanges,
     pendingAction,
     refresh,
     sync,
+    commitChanges,
     restore,
     toggleAutoSync,
   };

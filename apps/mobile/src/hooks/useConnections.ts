@@ -38,6 +38,7 @@ export interface ConnectionLinkedCheckout {
   attachedSessionGroupId?: string | null;
   targetBranch?: string | null;
   autoSyncEnabled: boolean;
+  hasUncommittedChanges: boolean;
   currentBranch?: string | null;
   currentCommitSha?: string | null;
   lastSyncedCommitSha?: string | null;

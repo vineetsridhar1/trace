@@ -402,6 +402,7 @@ export const MY_CONNECTIONS_QUERY = gql`
           attachedSessionGroupId
           targetBranch
           autoSyncEnabled
+          hasUncommittedChanges
           currentBranch
           currentCommitSha
           lastSyncedCommitSha
