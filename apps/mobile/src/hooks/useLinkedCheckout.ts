@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState, type AppStateStatus } from "react-native";
 import {
   BRIDGE_RUNTIME_ACCESS_QUERY,
   COMMIT_LINKED_CHECKOUT_CHANGES_MUTATION,
@@ -56,6 +57,7 @@ type RestoreMutationData = { restoreLinkedCheckout?: LinkedCheckoutActionResult 
 type AutoSyncMutationData = {
   setLinkedCheckoutAutoSync?: LinkedCheckoutActionResult | null;
 };
+const STATUS_POLL_INTERVAL_MS = 10_000;
 
 /**
  * Drives the sync / commit / pause / restore controls in the mobile
@@ -175,6 +177,20 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
   const hasUncommittedChanges = !!status?.hasUncommittedChanges;
 
   const refresh = useCallback(() => setRefreshTick((n) => n + 1), []);
+
+  useEffect(() => {
+    if (!available) return;
+    const intervalId = setInterval(() => {
+      if (AppState.currentState === "active") refresh();
+    }, STATUS_POLL_INTERVAL_MS);
+    const appStateSub = AppState.addEventListener("change", (state: AppStateStatus) => {
+      if (state === "active") refresh();
+    });
+    return () => {
+      clearInterval(intervalId);
+      appStateSub.remove();
+    };
+  }, [available, refresh]);
 
   const runAction = useCallback(
     async (
