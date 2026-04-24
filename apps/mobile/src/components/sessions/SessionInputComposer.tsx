@@ -500,8 +500,9 @@ export function SessionInputComposer({
           {showSend ? (
             <SessionComposerActionButton
               accessibilityLabel={isActive ? "Queue message" : "Send message"}
+              contentOpacity={canSubmit ? 1 : 0.35}
               disabled={!canSubmit}
-              glassStyle={[cardBorderAnimatedStyle, { opacity: canSubmit ? 1 : 0.35 }]}
+              glassStyle={cardBorderAnimatedStyle}
               iconName="paperplane.fill"
               iconSize={16}
               iconTint={theme.colors.accentForeground}

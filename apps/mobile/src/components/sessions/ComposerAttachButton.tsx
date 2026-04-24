@@ -22,7 +22,7 @@ export function ComposerAttachButton({ enabled, onPress }: Props) {
       interactive
       style={[
         styles.glass,
-        { borderColor: theme.colors.border, opacity: enabled ? 1 : 0.45 },
+        { borderColor: theme.colors.border },
       ]}
     >
       <Pressable
@@ -30,7 +30,10 @@ export function ComposerAttachButton({ enabled, onPress }: Props) {
         disabled={!enabled}
         accessibilityRole="button"
         accessibilityLabel="Attach image from library"
-        style={styles.pressable}
+        style={({ pressed }) => [
+          styles.pressable,
+          { opacity: enabled ? (pressed ? 0.78 : 1) : 0.45 },
+        ]}
       >
         <SymbolView
           name="photo.on.rectangle"

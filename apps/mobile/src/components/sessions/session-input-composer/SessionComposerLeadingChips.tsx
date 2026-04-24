@@ -96,27 +96,33 @@ export function SessionComposerLeadingChips({
                 style={[
                   styles.modeChip,
                   chipAnimatedStyle,
-                  { opacity: canInteract ? (pressed ? 0.78 : 1) : 0.45 },
                 ]}
               >
-                <SymbolView
-                  name={MODE_ICON[mode]}
-                  size={16}
-                  tintColor={modeIconTint}
-                  weight="medium"
-                  resizeMode="scaleAspectFit"
-                  style={styles.modeChipIcon}
-                />
-                {modeLabelVisible ? (
-                  <Animated.Text
-                    entering={FadeIn.duration(140)}
-                    exiting={FadeOut.duration(100)}
-                    numberOfLines={1}
-                    style={[styles.modeText, chipTextAnimatedStyle]}
-                  >
-                    {MODE_LABEL[mode]}
-                  </Animated.Text>
-                ) : null}
+                <View
+                  style={[
+                    styles.modeChipContent,
+                    { opacity: canInteract ? (pressed ? 0.78 : 1) : 0.45 },
+                  ]}
+                >
+                  <SymbolView
+                    name={MODE_ICON[mode]}
+                    size={16}
+                    tintColor={modeIconTint}
+                    weight="medium"
+                    resizeMode="scaleAspectFit"
+                    style={styles.modeChipIcon}
+                  />
+                  {modeLabelVisible ? (
+                    <Animated.Text
+                      entering={FadeIn.duration(140)}
+                      exiting={FadeOut.duration(100)}
+                      numberOfLines={1}
+                      style={[styles.modeText, chipTextAnimatedStyle]}
+                    >
+                      {MODE_LABEL[mode]}
+                    </Animated.Text>
+                  ) : null}
+                </View>
               </AnimatedGlass>
             )}
           </Pressable>
@@ -149,14 +155,17 @@ export function SessionComposerLeadingChips({
                 preset="input"
                 animatedProps={glassAnimatedProps}
                 interactive
-                style={[styles.modelChipCollapsed, { opacity: canInteract ? 1 : 0.4 }]}
+                style={styles.modelChipCollapsed}
               >
                 <Pressable
                   onPress={onModelChipPress}
                   disabled={!canInteract}
                   accessibilityRole="button"
                   accessibilityLabel={`Model: ${modelLabel}. Tap to reveal.`}
-                  style={styles.modelChipPressable}
+                  style={({ pressed }) => [
+                    styles.modelChipPressable,
+                    { opacity: canInteract ? (pressed ? 0.78 : 1) : 0.4 },
+                  ]}
                 >
                   <SessionComposerToolLogo tool={currentTool} size={22} />
                 </Pressable>
