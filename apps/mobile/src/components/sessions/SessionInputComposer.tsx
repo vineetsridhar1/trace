@@ -5,11 +5,11 @@ import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import { SymbolView } from "expo-symbols";
 import Animated, {
-  FadeInLeft,
-  FadeInRight,
-  FadeOutLeft,
-  FadeOutRight,
   LinearTransition,
+  SlideInLeft,
+  SlideInRight,
+  SlideOutLeft,
+  SlideOutRight,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -59,10 +59,10 @@ interface SessionInputComposerProps {
 const EMPTY_IMAGES: ImageAttachment[] = [];
 type ComposerSheet = "model" | "runtime" | null;
 const composerRowTransition = LinearTransition.springify().damping(22).stiffness(240);
-const leadingControlsEnter = FadeInLeft.duration(180);
-const leadingControlsExit = FadeOutLeft.duration(140);
-const trailingActionEnter = FadeInRight.duration(180);
-const trailingActionExit = FadeOutRight.duration(140);
+const leadingControlsEnter = SlideInLeft.duration(180);
+const leadingControlsExit = SlideOutLeft.duration(140);
+const trailingActionEnter = SlideInRight.duration(180);
+const trailingActionExit = SlideOutRight.duration(140);
 
 /**
  * Session composer: a single-line-start liquid glass input next to a
