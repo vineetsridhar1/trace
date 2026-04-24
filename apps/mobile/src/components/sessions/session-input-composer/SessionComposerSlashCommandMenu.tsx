@@ -1,9 +1,6 @@
 import { useCallback, type ReactNode } from "react";
 import { FlatList, Pressable, StyleSheet, View, type ListRenderItem } from "react-native";
-import { BlurView } from "expo-blur";
-import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import Animated, { FadeInDown, FadeOutDown } from "react-native-reanimated";
-import { Text } from "@/components/design-system";
+import { Glass, Text } from "@/components/design-system";
 import type { SessionSlashCommand } from "@/lib/slashCommands";
 import { alpha, useTheme } from "@/theme";
 
@@ -69,11 +66,7 @@ export function SessionComposerSlashCommandMenu({
   );
 
   return (
-    <Animated.View
-      entering={FadeInDown.duration(90)}
-      exiting={FadeOutDown.duration(80)}
-      style={[styles.container, theme.shadows.lg]}
-    >
+    <View style={[styles.container, theme.shadows.lg]}>
       <MenuSurface>
         <FlatList
           data={commands}
@@ -92,34 +85,15 @@ export function SessionComposerSlashCommandMenu({
           removeClippedSubviews
         />
       </MenuSurface>
-    </Animated.View>
+    </View>
   );
 }
 
 function MenuSurface({ children }: { children: ReactNode }) {
-  const theme = useTheme();
-
-  if (isLiquidGlassAvailable()) {
-    return (
-      <GlassView
-        glassEffectStyle="regular"
-        isInteractive
-        colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-        style={styles.surface}
-      >
-        {children}
-      </GlassView>
-    );
-  }
-
   return (
-    <BlurView
-      tint={theme.scheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
-      intensity={60}
-      style={styles.surface}
-    >
+    <Glass preset="card" interactive style={styles.surface}>
       {children}
-    </BlurView>
+    </Glass>
   );
 }
 
