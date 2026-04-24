@@ -16,6 +16,7 @@ interface SessionTabSwitcherContentProps {
   activeSessionId: string;
   onClose?: () => void;
   closeDelayMs?: number;
+  contentInset?: "none" | "sheet";
 }
 
 const ROW_HEIGHT = 68;
@@ -25,6 +26,7 @@ export function SessionTabSwitcherContent({
   activeSessionId,
   onClose,
   closeDelayMs,
+  contentInset = "none",
 }: SessionTabSwitcherContentProps) {
   const router = useRouter();
   const theme = useTheme();
@@ -98,7 +100,18 @@ export function SessionTabSwitcherContent({
   }
 
   return (
-    <View style={styles.root}>
+    <View
+      style={[
+        styles.root,
+        contentInset === "sheet"
+          ? {
+              paddingHorizontal: theme.spacing.lg,
+              paddingTop: theme.spacing.md,
+              paddingBottom: theme.spacing.lg,
+            }
+          : null,
+      ]}
+    >
       <View style={styles.header}>
         <Text variant="headline">Agent tabs</Text>
         <Text variant="footnote" color="mutedForeground">
