@@ -3926,6 +3926,161 @@ export class SessionService {
     });
   }
 
+  private async assertSessionCanMove(params: {
+    sessionId: string;
+    repoId?: string | null;
+    workdir?: string | null;
+    runtimeInstanceId?: string | null;
+  }) {
+    if (!params.repoId || !params.workdir || !params.runtimeInstanceId) return;
+
+    const status = await sessionRouter.inspectSessionGitSyncStatus(params.runtimeInstanceId, {
+      sessionId: params.sessionId,
+      workdirHint: params.workdir,
+    });
+
+    if (status.hasUncommittedChanges) {
+      throw new Error(
+        "Cannot move session: commit, stash, or discard local changes before moving.",
+      );
+    }
+
+    if (!status.upstreamBranch || !status.upstreamCommitSha) {
+      throw new Error(
+        "Cannot move session: push this branch to origin before moving to another bridge.",
+      );
+    }
+
+    if (status.aheadCount > 0 || status.behindCount > 0) {
+      throw new Error(
+        "Cannot move session: local branch must match its upstream before moving.",
+      );
+    }
+  }
+
+  private async moveSessionInPlace(params: {
+    session: Awaited<ReturnType<typeof prisma.session.findFirstOrThrow>>;
+    targetHosting: "cloud" | "local";
+    targetRuntimeInstanceId?: string | null;
+    targetRuntimeLabel?: string | null;
+    actorType: ActorType;
+    actorId: string;
+  }) {
+    const { session, targetHosting, targetRuntimeInstanceId, targetRuntimeLabel, actorType, actorId } =
+      params;
+    const sourceRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
+
+    await this.assertSessionCanMove({
+      sessionId: session.id,
+      repoId: session.repoId,
+      workdir: session.workdir,
+      runtimeInstanceId: sourceRuntimeId,
+    });
+
+    terminalRelay.destroyAllForSession(session.id);
+
+    try {
+      await sessionRouter.transitionRuntime(
+        session.id,
+        session.hosting as "cloud" | "local",
+        "terminate",
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[session-service] failed to terminate moved session ${session.id}: ${message}`);
+    }
+
+    sessionRouter.unbindSession(session.id);
+
+    const context = await buildConversationContext(session.id);
+    const bootstrapPrompt = buildMigrationPrompt(context);
+    const nextConnection = connJson(
+      targetHosting === "local"
+        ? defaultConnection({
+            runtimeInstanceId: targetRuntimeInstanceId ?? undefined,
+            runtimeLabel: targetRuntimeLabel ?? undefined,
+          })
+        : defaultConnection(),
+    );
+
+    const movedSession = await prisma.session.update({
+      where: { id: session.id },
+      data: {
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
+        hosting: targetHosting,
+        workdir: null,
+        pendingRun: {
+          type: "run",
+          prompt: bootstrapPrompt,
+          interactionMode: null,
+        } satisfies PendingSessionCommand,
+        toolSessionId: null,
+        connection: nextConnection,
+      },
+      include: SESSION_INCLUDE,
+    });
+
+    const sessionGroup = await this.syncGroupWorkspaceState(movedSession.sessionGroupId, {
+      workdir: null,
+      connection: nextConnection,
+      worktreeDeleted: false,
+    });
+
+    if (targetHosting === "local" && targetRuntimeInstanceId) {
+      sessionRouter.bindSession(movedSession.id, targetRuntimeInstanceId);
+    }
+
+    await eventService.create({
+      organizationId: movedSession.organizationId,
+      scopeType: "session",
+      scopeId: movedSession.id,
+      eventType: "session_started",
+      payload: {
+        session: serializeSession(movedSession),
+        ...(sessionGroup ? { sessionGroup } : {}),
+        prompt: bootstrapPrompt,
+      } as Prisma.InputJsonValue,
+      actorType,
+      actorId,
+    });
+
+    if (movedSession.repo || targetHosting === "cloud") {
+      this.provisionRuntime({
+        sessionId: movedSession.id,
+        sessionGroupId: movedSession.sessionGroupId,
+        slug: movedSession.sessionGroup?.slug,
+        hosting: targetHosting,
+        tool: movedSession.tool,
+        model: movedSession.model,
+        repo: movedSession.repo,
+        branch: movedSession.branch,
+        createdById: movedSession.createdById,
+        organizationId: movedSession.organizationId,
+        readOnly: movedSession.readOnlyWorkspace,
+      });
+    } else {
+      const deliveryResult = await this.deliverPendingCommand(
+        movedSession.id,
+        movedSession.pendingRun,
+      );
+      if (deliveryResult && deliveryResult !== "delivered") {
+        await this.persistConnectionFailure(
+          movedSession.id,
+          movedSession.organizationId,
+          deliveryResult,
+          "move_run",
+        );
+        return prisma.session.findUniqueOrThrow({
+          where: { id: movedSession.id },
+          include: SESSION_INCLUDE,
+        });
+      }
+    }
+
+    return movedSession;
+  }
+
   async moveToRuntime(
     sessionId: string,
     runtimeInstanceId: string,
@@ -3936,11 +4091,6 @@ export class SessionService {
     const session = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
       include: { ...SESSION_INCLUDE, projects: true },
-    });
-
-    // Fetch ticket links for this session
-    const ticketLinks = await prisma.ticketLink.findMany({
-      where: { entityType: "session", entityId: sessionId },
     });
 
     if (session.sessionStatus === "merged") {
@@ -3974,153 +4124,14 @@ export class SessionService {
       throw new Error("Selected runtime does not have this repo linked");
     }
 
-    // Build conversation context from the old session
-    const context = await buildConversationContext(sessionId);
-    const bootstrapPrompt = buildMigrationPrompt(context);
-
-    // Create child session and copy ticket links in a single transaction
-    const childSession = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const child = await tx.session.create({
-        data: {
-          name: session.name,
-          agentStatus: "not_started",
-          sessionStatus: "in_progress",
-          tool: session.tool,
-          model: session.model ?? undefined,
-          hosting: targetRuntime.hostingMode,
-          organizationId: session.organizationId,
-          createdById: actorId,
-          repoId: session.repoId ?? undefined,
-          branch: session.branch ?? undefined,
-          channelId: session.channelId ?? undefined,
-          sessionGroupId: session.sessionGroupId ?? undefined,
-          readOnlyWorkspace: session.readOnlyWorkspace,
-          pendingRun: {
-            type: "run",
-            prompt: bootstrapPrompt,
-            interactionMode: null,
-          } satisfies PendingSessionCommand,
-          lastUserMessageAt: session.lastUserMessageAt ?? undefined,
-          connection: connJson(
-            defaultConnection({
-              runtimeInstanceId,
-              runtimeLabel: targetRuntime.label,
-            }),
-          ),
-          ...(session.projects.length > 0 && {
-            projects: {
-              create: session.projects.map((sp: { projectId: string }) => ({
-                projectId: sp.projectId,
-              })),
-            },
-          }),
-        },
-        include: SESSION_INCLUDE,
-      });
-
-      if (ticketLinks.length > 0) {
-        await tx.ticketLink.createMany({
-          data: ticketLinks.map((tl: { ticketId: string }) => ({
-            ticketId: tl.ticketId,
-            entityType: "session",
-            entityId: child.id,
-          })),
-          skipDuplicates: true,
-        });
-      }
-
-      return child;
-    });
-    await this.syncGroupWorkspaceState(session.sessionGroupId, {
-      workdir: null,
-      connection: childSession.connection as Prisma.InputJsonValue,
-      worktreeDeleted: false,
-    });
-
-    // Bind the child session to the target runtime
-    sessionRouter.bindSession(childSession.id, runtimeInstanceId);
-
-    // Emit session_started for the child
-    const childSessionGroup = await this.loadSessionGroupSnapshot(childSession.sessionGroupId);
-    await eventService.create({
-      organizationId: session.organizationId,
-      scopeType: "session",
-      scopeId: childSession.id,
-      eventType: "session_started",
-      payload: {
-        session: serializeSession(childSession),
-        ...(childSessionGroup ? { sessionGroup: childSessionGroup } : {}),
-        prompt: bootstrapPrompt,
-        sourceSessionId: sessionId,
-        movedFromSessionId: sessionId,
-      } as Prisma.InputJsonValue,
+    return this.moveSessionInPlace({
+      session,
+      targetHosting: targetRuntime.hostingMode,
+      targetRuntimeInstanceId: runtimeInstanceId,
+      targetRuntimeLabel: targetRuntime.label,
       actorType,
       actorId,
     });
-
-    // Provision the runtime on the target
-    if (childSession.repo || targetRuntime.hostingMode === "cloud") {
-      sessionRouter.createRuntime({
-        sessionId: childSession.id,
-        sessionGroupId: childSession.sessionGroupId ?? undefined,
-        slug: childSession.sessionGroup?.slug ?? undefined,
-        hosting: targetRuntime.hostingMode,
-        tool: childSession.tool,
-        model: childSession.model ?? undefined,
-        repo: childSession.repo
-          ? {
-              id: childSession.repo.id,
-              name: childSession.repo.name,
-              remoteUrl: childSession.repo.remoteUrl,
-              defaultBranch: childSession.repo.defaultBranch,
-            }
-          : null,
-        branch: childSession.branch ?? undefined,
-        createdById: actorId,
-        organizationId: childSession.organizationId,
-        readOnly: childSession.readOnlyWorkspace,
-        onFailed: (error) => this.workspaceFailed(childSession.id, error),
-        onWorkspaceReady: (workdir) => this.workspaceReady(childSession.id, workdir),
-      });
-    } else {
-      const deliveryResult = await this.deliverPendingCommand(
-        childSession.id,
-        childSession.pendingRun,
-      );
-      if (deliveryResult && deliveryResult !== "delivered") {
-        await this.persistConnectionFailure(
-          childSession.id,
-          childSession.organizationId,
-          deliveryResult,
-          "move_run",
-        );
-      }
-    }
-
-    // Emit rehome event on old session
-    await eventService.create({
-      organizationId: session.organizationId,
-      scopeType: "session",
-      scopeId: sessionId,
-      eventType: "session_output",
-      payload: {
-        type: "session_rehomed",
-        newSessionId: childSession.id,
-        runtimeInstanceId,
-      },
-      actorType,
-      actorId,
-    });
-
-    await this.completeRehomedSourceSession({
-      sessionId,
-      hosting: session.hosting as "cloud" | "local",
-      organizationId: session.organizationId,
-      actorType,
-      actorId,
-    });
-
-    return childSession;
   }
 
   /**
@@ -4142,11 +4153,6 @@ export class SessionService {
       include: { ...SESSION_INCLUDE, projects: true },
     });
 
-    // Fetch ticket links for this session
-    const ticketLinks = await prisma.ticketLink.findMany({
-      where: { entityType: "session", entityId: sessionId },
-    });
-
     if (session.sessionStatus === "merged") {
       throw new Error("Cannot move a merged session");
     }
@@ -4157,131 +4163,14 @@ export class SessionService {
       sessionGroupId: session.sessionGroupId,
     });
 
-    // Build conversation context from the old session
-    const context = await buildConversationContext(sessionId);
-    const bootstrapPrompt = buildMigrationPrompt(context);
-
-    // Create child session and copy ticket links in a single transaction
-    const childSession = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const child = await tx.session.create({
-        data: {
-          name: session.name,
-          agentStatus: "not_started",
-          sessionStatus: "in_progress",
-          tool: session.tool,
-          model: session.model ?? undefined,
-          hosting: "cloud",
-          organizationId: session.organizationId,
-          createdById: actorId,
-          repoId: session.repoId ?? undefined,
-          branch: session.branch ?? undefined,
-          channelId: session.channelId ?? undefined,
-          sessionGroupId: session.sessionGroupId ?? undefined,
-          readOnlyWorkspace: session.readOnlyWorkspace,
-          pendingRun: {
-            type: "run",
-            prompt: bootstrapPrompt,
-            interactionMode: null,
-          } satisfies PendingSessionCommand,
-          lastUserMessageAt: session.lastUserMessageAt ?? undefined,
-          connection: connJson(defaultConnection()),
-          ...(session.projects.length > 0 && {
-            projects: {
-              create: session.projects.map((sp: { projectId: string }) => ({
-                projectId: sp.projectId,
-              })),
-            },
-          }),
-        },
-        include: SESSION_INCLUDE,
-      });
-
-      if (ticketLinks.length > 0) {
-        await tx.ticketLink.createMany({
-          data: ticketLinks.map((tl: { ticketId: string }) => ({
-            ticketId: tl.ticketId,
-            entityType: "session",
-            entityId: child.id,
-          })),
-          skipDuplicates: true,
-        });
-      }
-
-      return child;
-    });
-    await this.syncGroupWorkspaceState(session.sessionGroupId, {
-      workdir: null,
-      connection: childSession.connection as Prisma.InputJsonValue,
-      worktreeDeleted: false,
-    });
-
-    // Emit session_started for the child
-    const childSessionGroup = await this.loadSessionGroupSnapshot(childSession.sessionGroupId);
-    await eventService.create({
-      organizationId: session.organizationId,
-      scopeType: "session",
-      scopeId: childSession.id,
-      eventType: "session_started",
-      payload: {
-        session: serializeSession(childSession),
-        ...(childSessionGroup ? { sessionGroup: childSessionGroup } : {}),
-        prompt: bootstrapPrompt,
-        sourceSessionId: sessionId,
-        movedFromSessionId: sessionId,
-      } as Prisma.InputJsonValue,
+    return this.moveSessionInPlace({
+      session,
+      targetHosting: "cloud",
+      targetRuntimeInstanceId: null,
+      targetRuntimeLabel: null,
       actorType,
       actorId,
     });
-
-    // Provision cloud runtime — the CloudAdapter handles VM creation,
-    // waiting for bridge connection, and workspace setup.
-    sessionRouter.createRuntime({
-      sessionId: childSession.id,
-      sessionGroupId: childSession.sessionGroupId ?? undefined,
-      slug: childSession.sessionGroup?.slug ?? undefined,
-      hosting: "cloud",
-      tool: childSession.tool,
-      model: childSession.model ?? undefined,
-      repo: childSession.repo
-        ? {
-            id: childSession.repo.id,
-            name: childSession.repo.name,
-            remoteUrl: childSession.repo.remoteUrl,
-            defaultBranch: childSession.repo.defaultBranch,
-          }
-        : null,
-      branch: childSession.branch ?? undefined,
-      createdById: actorId,
-      organizationId: childSession.organizationId,
-      readOnly: childSession.readOnlyWorkspace,
-      onFailed: (error) => this.workspaceFailed(childSession.id, error),
-      onWorkspaceReady: (workdir) => this.workspaceReady(childSession.id, workdir),
-    });
-
-    // Emit rehome event on old session
-    await eventService.create({
-      organizationId: session.organizationId,
-      scopeType: "session",
-      scopeId: sessionId,
-      eventType: "session_output",
-      payload: {
-        type: "session_rehomed",
-        newSessionId: childSession.id,
-        runtimeInstanceId: null,
-      },
-      actorType,
-      actorId,
-    });
-
-    await this.completeRehomedSourceSession({
-      sessionId,
-      hosting: session.hosting as "cloud" | "local",
-      organizationId: session.organizationId,
-      actorType,
-      actorId,
-    });
-
-    return childSession;
   }
 
   async listRuntimesForTool(

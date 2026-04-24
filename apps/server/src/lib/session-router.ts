@@ -16,6 +16,7 @@ import type {
   BridgeSkillInfo,
   BridgeLinkedCheckoutStatus,
   BridgeLinkedCheckoutActionResultPayload,
+  BridgeSessionGitSyncStatus,
 } from "@trace/shared";
 import { prisma } from "./db.js";
 import { apiTokenService } from "../services/api-token.js";
@@ -44,6 +45,7 @@ export type SessionCommand =
   | BridgeBranchDiffCommand
   | BridgeFileAtRefCommand
   | BridgeListSkillsCommand
+  | { type: "session_git_sync_status"; requestId: string; sessionId: string; workdirHint?: string }
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
   | BridgeTerminalResizeCommand
@@ -354,6 +356,14 @@ export class SessionRouter {
     {
       runtimeId: string;
       resolve: (result: BridgeLinkedCheckoutActionResultPayload) => void;
+      reject: (err: Error) => void;
+    }
+  >();
+  /** Pending session git-sync-status requests: requestId → resolve/reject */
+  private pendingSessionGitSyncStatusRequests = new Map<
+    string,
+    {
+      resolve: (status: BridgeSessionGitSyncStatus) => void;
       reject: (err: Error) => void;
     }
   >();
@@ -1212,6 +1222,59 @@ export class SessionRouter {
     this.pendingLinkedCheckoutActionRequests.delete(requestId);
     if (result.status) this.cacheLinkedCheckoutStatus(pending.runtimeId, result.status);
     pending.resolve(result);
+  }
+
+  inspectSessionGitSyncStatus(
+    runtimeId: string,
+    input: {
+      sessionId: string;
+      workdirHint?: string | null;
+    },
+    timeoutMs = 15_000,
+  ): Promise<BridgeSessionGitSyncStatus> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, {
+      type: "session_git_sync_status",
+      requestId,
+      sessionId: input.sessionId,
+      workdirHint: input.workdirHint ?? undefined,
+    });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<BridgeSessionGitSyncStatus>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingSessionGitSyncStatusRequests.delete(requestId);
+        reject(new Error("Session git sync status request timed out"));
+      }, timeoutMs);
+
+      this.pendingSessionGitSyncStatusRequests.set(requestId, {
+        resolve: (status) => {
+          clearTimeout(timer);
+          resolve(status);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  resolveSessionGitSyncStatusRequest(
+    requestId: string,
+    status?: BridgeSessionGitSyncStatus,
+    error?: string,
+  ): void {
+    const pending = this.pendingSessionGitSyncStatusRequests.get(requestId);
+    if (!pending) return;
+    this.pendingSessionGitSyncStatusRequests.delete(requestId);
+    if (error || !status) {
+      pending.reject(new Error(error ?? "Missing session git sync status"));
+    } else {
+      pending.resolve(status);
+    }
   }
 
   // --- Adapter-dispatched lifecycle methods ---

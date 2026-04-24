@@ -7,7 +7,6 @@ import {
   MOVE_SESSION_TO_RUNTIME_MUTATION,
   MOVE_SESSION_TO_CLOUD_MUTATION,
 } from "@trace/client-core";
-import { navigateToSession } from "../../stores/ui";
 import { useEntityField } from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import { isLocalMode } from "../../lib/runtime-mode";
@@ -34,8 +33,9 @@ export function SessionRuntimePicker({
   const [runtimes, setRuntimes] = useState<RuntimeInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [moving, setMoving] = useState<string | null>(null);
-  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
-  const channel = useEntityField("sessions", sessionId, "channel") as { id: string } | null | undefined;
+  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
+    | string
+    | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
   const repoId = repo?.id ?? null;
@@ -73,10 +73,7 @@ export function SessionRuntimePicker({
           toast.error("Failed to move session", { description: result.error.message });
           return;
         }
-        const newSessionId = result.data?.moveSessionToRuntime?.id;
-        if (newSessionId && sessionGroupId) {
-          navigateToSession(channel?.id ?? null, sessionGroupId, newSessionId);
-        } else {
+        if (!result.data?.moveSessionToRuntime?.id) {
           toast.error("Failed to move session", { description: "No session returned" });
           return;
         }
@@ -89,7 +86,7 @@ export function SessionRuntimePicker({
         setMoving(null);
       }
     },
-    [channel?.id, onClose, sessionGroupId, sessionId],
+    [onClose, sessionId],
   );
 
   const handleMoveToCloud = useCallback(async () => {
@@ -103,10 +100,7 @@ export function SessionRuntimePicker({
         toast.error("Failed to move session to cloud", { description: result.error.message });
         return;
       }
-      const newSessionId = result.data?.moveSessionToCloud?.id;
-      if (newSessionId && sessionGroupId) {
-        navigateToSession(channel?.id ?? null, sessionGroupId, newSessionId);
-      } else {
+      if (!result.data?.moveSessionToCloud?.id) {
         toast.error("Failed to move session to cloud", { description: "No session returned" });
         return;
       }
@@ -118,7 +112,7 @@ export function SessionRuntimePicker({
     } finally {
       setMoving(null);
     }
-  }, [channel?.id, onClose, sessionGroupId, sessionId]);
+  }, [onClose, sessionId]);
 
   const localRuntimes = runtimes.filter((rt: RuntimeInstance) => rt.id !== currentRuntimeInstanceId);
   const canMoveToCloud = !isLocalMode && hosting !== "cloud";

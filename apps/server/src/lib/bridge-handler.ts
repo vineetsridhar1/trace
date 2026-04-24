@@ -244,6 +244,27 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         return;
       }
 
+      if (msg.type === "session_git_sync_status_result" && typeof msg.requestId === "string") {
+        sessionRouter.resolveSessionGitSyncStatusRequest(
+          msg.requestId,
+          msg.status &&
+            typeof msg.status === "object" &&
+            !Array.isArray(msg.status)
+            ? (msg.status as {
+                branch: string | null;
+                headCommitSha: string | null;
+                upstreamBranch: string | null;
+                upstreamCommitSha: string | null;
+                aheadCount: number;
+                behindCount: number;
+                hasUncommittedChanges: boolean;
+              })
+            : undefined,
+          typeof msg.error === "string" ? msg.error : undefined,
+        );
+        return;
+      }
+
       if (
         msg.type === "branches_result" &&
         typeof msg.requestId === "string" &&

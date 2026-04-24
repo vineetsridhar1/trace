@@ -179,6 +179,13 @@ export interface BridgeSetLinkedCheckoutAutoSyncCommand {
   enabled: boolean;
 }
 
+export interface BridgeSessionGitSyncStatusCommand {
+  type: "session_git_sync_status";
+  requestId: string;
+  sessionId: string;
+  workdirHint?: string;
+}
+
 // --- Terminal commands (Server → Bridge) ---
 
 export interface BridgeTerminalCreateCommand {
@@ -229,6 +236,7 @@ export type BridgeCommand =
   | BridgeCommitLinkedCheckoutCommand
   | BridgeRestoreLinkedCheckoutCommand
   | BridgeSetLinkedCheckoutAutoSyncCommand
+  | BridgeSessionGitSyncStatusCommand
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
   | BridgeTerminalResizeCommand
@@ -347,6 +355,23 @@ export interface BridgeLinkedCheckoutActionResult {
   result: BridgeLinkedCheckoutActionResultPayload;
 }
 
+export interface BridgeSessionGitSyncStatus {
+  branch: string | null;
+  headCommitSha: string | null;
+  upstreamBranch: string | null;
+  upstreamCommitSha: string | null;
+  aheadCount: number;
+  behindCount: number;
+  hasUncommittedChanges: boolean;
+}
+
+export interface BridgeSessionGitSyncStatusResult {
+  type: "session_git_sync_status_result";
+  requestId: string;
+  status?: BridgeSessionGitSyncStatus;
+  error?: string;
+}
+
 export interface BridgeBranchesResult {
   type: "branches_result";
   requestId: string;
@@ -441,6 +466,7 @@ export type BridgeMessage =
   | BridgeRepoLinked
   | BridgeLinkedCheckoutStatusResult
   | BridgeLinkedCheckoutActionResult
+  | BridgeSessionGitSyncStatusResult
   | BridgeBranchesResult
   | BridgeFilesResult
   | BridgeFileContentResult
