@@ -13,12 +13,14 @@ const AnimatedGlass = Animated.createAnimatedComponent(Glass);
 
 interface SessionComposerInputCardProps {
   canInteract: boolean;
+  cardMinHeight: number;
   errorDraft: string | null;
   errorMessage: string | null;
   glassAnimatedProps: ComposerGlassAnimatedProps;
   inputAnimatedStyle: ComposerAnimatedViewStyle;
   inputRef: RefObject<TextInput | null>;
   placeholder: string;
+  scrollEnabled: boolean;
   text: string;
   cardBorderAnimatedStyle: ComposerAnimatedViewStyle;
   onBlur: () => void;
@@ -30,12 +32,14 @@ interface SessionComposerInputCardProps {
 
 export function SessionComposerInputCard({
   canInteract,
+  cardMinHeight,
   errorDraft,
   errorMessage,
   glassAnimatedProps,
   inputAnimatedStyle,
   inputRef,
   placeholder,
+  scrollEnabled,
   text,
   cardBorderAnimatedStyle,
   onBlur,
@@ -51,7 +55,7 @@ export function SessionComposerInputCard({
       preset="input"
       animatedProps={glassAnimatedProps}
       interactive
-      style={[styles.inputCard, cardBorderAnimatedStyle]}
+      style={[styles.inputCard, { minHeight: cardMinHeight }, cardBorderAnimatedStyle]}
     >
       {errorDraft ? (
         <Pressable
@@ -76,6 +80,7 @@ export function SessionComposerInputCard({
           onContentSizeChange={(event) => onContentHeightChange(event.nativeEvent.contentSize.height)}
           editable={canInteract}
           multiline
+          scrollEnabled={scrollEnabled}
           placeholder={placeholder}
           placeholderTextColor={theme.colors.dimForeground}
           style={[styles.input, { color: theme.colors.foreground }]}
