@@ -29,7 +29,8 @@ export function SessionComposerSlashCommandMenu({
       style={styles.container}
     >
       <Glass
-        preset="card"
+        preset="pinnedBar"
+        tint={alpha(theme.colors.surfaceElevated, 0.84)}
         style={[
           styles.surface,
           {
@@ -38,6 +39,16 @@ export function SessionComposerSlashCommandMenu({
           },
         ]}
       >
+        <View
+          pointerEvents="none"
+          style={[
+            styles.surfaceScrim,
+            {
+              backgroundColor: alpha(theme.colors.surfaceDeep, 0.44),
+              borderColor: alpha(theme.colors.foreground, 0.06),
+            },
+          ]}
+        />
         <ScrollView
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -52,8 +63,8 @@ export function SessionComposerSlashCommandMenu({
               style={({ pressed }) => [
                 styles.row,
                 pressed
-                  ? { backgroundColor: alpha(theme.colors.accent, 0.16) }
-                  : null,
+                  ? { backgroundColor: alpha(theme.colors.accent, 0.18) }
+                  : { backgroundColor: alpha(theme.colors.surface, 0.32) },
               ]}
             >
               <View
@@ -102,7 +113,11 @@ export function SessionComposerSlashCommandMenu({
                     {getSourceLabel(command.source)}
                   </Text>
                 </View>
-                <Text variant="caption1" color="mutedForeground" numberOfLines={2}>
+                <Text
+                  variant="caption1"
+                  numberOfLines={2}
+                  style={{ color: alpha(theme.colors.foreground, 0.8) }}
+                >
                   {command.description}
                 </Text>
               </View>
@@ -120,14 +135,19 @@ const styles = StyleSheet.create({
   },
   surface: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 18,
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 12,
+    borderRadius: 20,
+    shadowOpacity: 0.48,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 18,
+  },
+  surfaceScrim: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   content: {
-    padding: 6,
+    padding: 8,
   },
   row: {
     flexDirection: "row",

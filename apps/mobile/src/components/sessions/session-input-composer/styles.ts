@@ -33,7 +33,7 @@ export const styles = StyleSheet.create({
     gap: INPUT_ACTION_GAP,
   },
   inputCard: {
-    flex: 1,
+    width: "100%",
     minHeight: 46,
     borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
