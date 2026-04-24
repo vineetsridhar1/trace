@@ -96,7 +96,6 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  bridgeRow: { flexDirection: "row", justifyContent: "center", alignItems: "center" },
   modelChipSlot: {
     minWidth: MODEL_CHIP_SIZE,
     justifyContent: "center",
