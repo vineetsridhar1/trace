@@ -77,6 +77,7 @@ export interface LinkedCheckoutAutoSyncDeps {
   switchDetached: (repoPath: string, sha: string) => Promise<void>;
   getCurrentBranch: (repoPath: string) => Promise<string | null>;
   hasInProgressOperation: (repoPath: string) => Promise<boolean>;
+  reportStatus: (repoId: string) => Promise<void>;
   now: () => string;
 }
 
@@ -97,6 +98,7 @@ const defaultDeps: LinkedCheckoutAutoSyncDeps = {
   },
   getCurrentBranch,
   hasInProgressOperation: hasInProgressGitOperation,
+  reportStatus: async () => undefined,
   now: () => new Date().toISOString(),
 };
 
@@ -201,6 +203,7 @@ export class LinkedCheckoutAutoSyncManager {
         const message = formatGitError(error);
         if (isTransientFetchError(message)) {
           await setLastSyncError(repoId, message);
+          await this.deps.reportStatus(repoId);
           return;
         }
         await this.pause(repoId, message);
@@ -219,6 +222,7 @@ export class LinkedCheckoutAutoSyncManager {
         // Heal stale transient errors when the next tick confirms we're in sync.
         if (currentAttachment.lastSyncError !== null) {
           await setLastSyncError(repoId, null);
+          await this.deps.reportStatus(repoId);
         }
         return;
       }
@@ -257,11 +261,13 @@ export class LinkedCheckoutAutoSyncManager {
         targetBranch,
         targetSha,
       });
+      await this.deps.reportStatus(repoId);
     });
   }
 
   private async pause(repoId: string, reason: string): Promise<void> {
     runtimeDebug("auto-sync paused linked checkout", { repoId, reason });
     await pauseExistingAttachment(repoId, reason);
+    await this.deps.reportStatus(repoId);
   }
 }

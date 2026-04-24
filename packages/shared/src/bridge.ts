@@ -347,6 +347,11 @@ export interface BridgeLinkedCheckoutActionResult {
   result: BridgeLinkedCheckoutActionResultPayload;
 }
 
+export interface BridgeLinkedCheckoutStatusUpdate {
+  type: "linked_checkout_status_update";
+  status: BridgeLinkedCheckoutStatus;
+}
+
 export interface BridgeBranchesResult {
   type: "branches_result";
   requestId: string;
@@ -441,6 +446,7 @@ export type BridgeMessage =
   | BridgeRepoLinked
   | BridgeLinkedCheckoutStatusResult
   | BridgeLinkedCheckoutActionResult
+  | BridgeLinkedCheckoutStatusUpdate
   | BridgeBranchesResult
   | BridgeFilesResult
   | BridgeFileContentResult

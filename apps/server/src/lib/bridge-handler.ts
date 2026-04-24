@@ -244,6 +244,14 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         return;
       }
 
+      if (msg.type === "linked_checkout_status_update") {
+        sessionRouter.updateLinkedCheckoutStatus(
+          runtimeId,
+          msg.status as BridgeLinkedCheckoutStatus,
+        );
+        return;
+      }
+
       if (
         msg.type === "branches_result" &&
         typeof msg.requestId === "string" &&

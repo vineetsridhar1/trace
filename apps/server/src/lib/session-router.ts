@@ -1065,6 +1065,10 @@ export class SessionRouter {
     pending.resolve(status);
   }
 
+  updateLinkedCheckoutStatus(runtimeId: string, status: BridgeLinkedCheckoutStatus): void {
+    this.cacheLinkedCheckoutStatus(runtimeId, status);
+  }
+
   /**
    * Populate the cache for one repo. Called whenever the bridge volunteers a
    * fresh status (status_result or action_result), so foreground sync actions
