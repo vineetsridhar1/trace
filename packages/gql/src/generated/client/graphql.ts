@@ -665,6 +665,7 @@ export type LinkedCheckoutStatus = {
   autoSyncEnabled: Scalars['Boolean']['output'];
   currentBranch?: Maybe<Scalars['String']['output']>;
   currentCommitSha?: Maybe<Scalars['String']['output']>;
+  hasUncommittedChanges: Scalars['Boolean']['output'];
   isAttached: Scalars['Boolean']['output'];
   lastSyncError?: Maybe<Scalars['String']['output']>;
   lastSyncedCommitSha?: Maybe<Scalars['String']['output']>;
@@ -715,6 +716,7 @@ export type Mutation = {
   assignTicket: Ticket;
   clearQueuedMessages: Scalars['Boolean']['output'];
   commentOnTicket: Event;
+  commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
   createAiConversation: AiConversation;
   createChannel: Channel;
   createChannelGroup: ChannelGroup;
@@ -841,6 +843,12 @@ export type MutationClearQueuedMessagesArgs = {
 export type MutationCommentOnTicketArgs = {
   text: Scalars['String']['input'];
   ticketId: Scalars['ID']['input'];
+};
+
+
+export type MutationCommitLinkedCheckoutChangesArgs = {
+  repoId: Scalars['ID']['input'];
+  sessionGroupId: Scalars['ID']['input'];
 };
 
 

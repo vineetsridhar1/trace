@@ -666,6 +666,7 @@ export type LinkedCheckoutStatus = {
   autoSyncEnabled: Scalars['Boolean']['output'];
   currentBranch?: Maybe<Scalars['String']['output']>;
   currentCommitSha?: Maybe<Scalars['String']['output']>;
+  hasUncommittedChanges: Scalars['Boolean']['output'];
   isAttached: Scalars['Boolean']['output'];
   lastSyncError?: Maybe<Scalars['String']['output']>;
   lastSyncedCommitSha?: Maybe<Scalars['String']['output']>;
@@ -716,6 +717,7 @@ export type Mutation = {
   assignTicket: Ticket;
   clearQueuedMessages: Scalars['Boolean']['output'];
   commentOnTicket: Event;
+  commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
   createAiConversation: AiConversation;
   createChannel: Channel;
   createChannelGroup: ChannelGroup;
@@ -842,6 +844,12 @@ export type MutationClearQueuedMessagesArgs = {
 export type MutationCommentOnTicketArgs = {
   text: Scalars['String']['input'];
   ticketId: Scalars['ID']['input'];
+};
+
+
+export type MutationCommitLinkedCheckoutChangesArgs = {
+  repoId: Scalars['ID']['input'];
+  sessionGroupId: Scalars['ID']['input'];
 };
 
 
@@ -2839,6 +2847,7 @@ export type LinkedCheckoutStatusResolvers<ContextType = Context, ParentType exte
   autoSyncEnabled?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   currentBranch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   currentCommitSha?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  hasUncommittedChanges?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   isAttached?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   lastSyncError?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   lastSyncedCommitSha?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
@@ -2879,6 +2888,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   assignTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationAssignTicketArgs, 'ticketId' | 'userId'>>;
   clearQueuedMessages?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationClearQueuedMessagesArgs, 'sessionId'>>;
   commentOnTicket?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationCommentOnTicketArgs, 'text' | 'ticketId'>>;
+  commitLinkedCheckoutChanges?: Resolver<ResolversTypes['LinkedCheckoutActionResult'], ParentType, ContextType, RequireFields<MutationCommitLinkedCheckoutChangesArgs, 'repoId' | 'sessionGroupId'>>;
   createAiConversation?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType, RequireFields<MutationCreateAiConversationArgs, 'input' | 'organizationId'>>;
   createChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationCreateChannelArgs, 'input'>>;
   createChannelGroup?: Resolver<ResolversTypes['ChannelGroup'], ParentType, ContextType, RequireFields<MutationCreateChannelGroupArgs, 'input'>>;
