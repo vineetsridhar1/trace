@@ -1,6 +1,10 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
-import { BottomSheet, Host } from "@expo/ui/swift-ui";
+import { BottomSheet, Group, Host, RNHostView } from "@expo/ui/swift-ui";
+import {
+  presentationDetents,
+  presentationDragIndicator,
+} from "@expo/ui/swift-ui/modifiers";
 import { SessionTabSwitcherContent } from "./SessionTabSwitcherContent";
 
 interface SessionTabSwitcherSheetProps {
@@ -10,57 +14,58 @@ interface SessionTabSwitcherSheetProps {
   onClose: () => void;
 }
 
+const IOS_SHEET_CLOSE_DELAY_MS = 220;
+const SHEET_MODIFIERS = [
+  presentationDetents(["medium", "large"]),
+  presentationDragIndicator("visible"),
+];
+
 export function SessionTabSwitcherSheet({
   open,
   groupId,
   activeSessionId,
   onClose,
 }: SessionTabSwitcherSheetProps) {
-  const { width, height } = useWindowDimensions();
-  const pendingActionRef = useRef<(() => void) | null>(null);
+  const { width } = useWindowDimensions();
+  const [mounted, setMounted] = useState(open);
+
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
 
   const handlePresentedChange = useCallback(
     (isPresented: boolean) => {
-      if (isPresented === open) return;
-      onClose();
       if (isPresented) return;
-      pendingActionRef.current?.();
-      pendingActionRef.current = null;
-    },
-    [onClose, open],
-  );
-
-  const requestClose = useCallback(
-    (afterClose?: () => void) => {
-      pendingActionRef.current = afterClose ?? null;
+      setMounted(false);
       onClose();
     },
     [onClose],
   );
 
-  const anchorStyle = useMemo(() => [styles.anchor, { width, height }], [height, width]);
-  const hostStyle = useMemo(() => [styles.host, { width, height }], [height, width]);
-  const contentHostStyle = useMemo(() => [styles.contentHost, { width }], [width]);
+  const hostStyle = useMemo(() => [styles.host, { width }], [width]);
+
+  if (!mounted) return null;
 
   return (
-    <View pointerEvents="box-none" style={anchorStyle}>
-      <Host style={hostStyle} useViewportSizeMeasurement>
+    <View style={styles.anchor}>
+      <Host style={hostStyle}>
         <BottomSheet
-          isOpened={open}
-          onIsOpenedChange={handlePresentedChange}
-          presentationDetents={["medium", "large"]}
-          presentationDragIndicator="visible"
+          isPresented={open}
+          onIsPresentedChange={handlePresentedChange}
         >
-          <Host matchContents={{ vertical: true }} style={contentHostStyle}>
-            <View style={styles.sheetContent}>
-              <SessionTabSwitcherContent
-                groupId={groupId}
-                activeSessionId={activeSessionId}
-                requestClose={requestClose}
-                contentInset="sheet"
-              />
-            </View>
-          </Host>
+          <Group modifiers={SHEET_MODIFIERS}>
+            <RNHostView>
+              <View style={styles.sheetContent}>
+                <SessionTabSwitcherContent
+                  groupId={groupId}
+                  activeSessionId={activeSessionId}
+                  onClose={onClose}
+                  closeDelayMs={IOS_SHEET_CLOSE_DELAY_MS}
+                  contentInset="sheet"
+                />
+              </View>
+            </RNHostView>
+          </Group>
         </BottomSheet>
       </Host>
     </View>
@@ -72,12 +77,14 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 0,
     left: 0,
+    width: 1,
+    height: 1,
   },
   host: {
-    flex: 1,
-  },
-  contentHost: {
-    minHeight: 0,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    height: 1,
   },
   sheetContent: {
     flex: 1,

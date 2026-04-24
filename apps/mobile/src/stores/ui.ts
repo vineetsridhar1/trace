@@ -29,14 +29,6 @@ export interface MobileUIState {
   setOverlaySessionId: (id: string | null) => void;
 
   /**
-   * One-shot flag for session tab swaps. When true, the next
-   * `/sessions/[groupId]/[sessionId]` replace should suppress the stack card
-   * transition and use the screen's local content fade instead.
-   */
-  pendingSessionTransitionFade: boolean;
-  setPendingSessionTransitionFade: (fade: boolean) => void;
-
-  /**
    * Registered by whichever header menu (title/actions) is currently open.
    * The standalone session page renders a body-area scrim when non-null so
    * taps in the content region can dismiss the menu — the menu's own
@@ -78,7 +70,6 @@ const initial = {
   activeSessionGroupId: null as string | null,
   activeAccessoryIndex: 0,
   overlaySessionId: null as string | null,
-  pendingSessionTransitionFade: false,
   activeMenuClose: null as (() => void) | null,
   channelDoneBadges: {} as Record<string, boolean>,
   sessionDoneBadges: {} as Record<string, boolean>,
@@ -97,7 +88,6 @@ export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUISta
 
   setActiveAccessoryIndex: (i) => set({ activeAccessoryIndex: i }),
   setOverlaySessionId: (id) => set({ overlaySessionId: id }),
-  setPendingSessionTransitionFade: (fade) => set({ pendingSessionTransitionFade: fade }),
   setActiveMenuClose: (close) => set({ activeMenuClose: close }),
 
   markChannelDone: (id) =>

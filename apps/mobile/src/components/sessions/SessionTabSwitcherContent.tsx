@@ -14,7 +14,8 @@ import { SessionTabSwitcherRow } from "./SessionTabSwitcherRow";
 interface SessionTabSwitcherContentProps {
   groupId: string;
   activeSessionId: string;
-  requestClose?: (afterClose?: () => void) => void;
+  onClose?: () => void;
+  closeDelayMs?: number;
   contentInset?: "none" | "sheet";
 }
 
@@ -23,7 +24,8 @@ const ROW_HEIGHT = 68;
 export function SessionTabSwitcherContent({
   groupId,
   activeSessionId,
-  requestClose,
+  onClose,
+  closeDelayMs,
   contentInset = "none",
 }: SessionTabSwitcherContentProps) {
   const router = useRouter();
@@ -37,27 +39,24 @@ export function SessionTabSwitcherContent({
   ) as boolean | undefined;
   const sessionIds = useSessionGroupSessionIds(groupId);
   const [creating, setCreating] = useState(false);
+  const navigationDelayMs = closeDelayMs ?? (onClose ? theme.motion.durations.fast : 0);
 
   const navigateToSession = useCallback(
     (sessionGroupId: string, targetId: string) => {
-      if (targetId === activeSessionId) {
-        requestClose?.();
-        return;
-      }
+      onClose?.();
+      if (targetId === activeSessionId) return;
       const performNavigation = () => {
-        const ui = useMobileUIStore.getState();
-        ui.setOverlaySessionId(targetId);
-        ui.setPendingSessionTransitionFade(true);
+        useMobileUIStore.getState().setOverlaySessionId(targetId);
         const targetHref = `/sessions/${sessionGroupId}/${targetId}` as never;
         router.replace(targetHref);
       };
-      if (requestClose) {
-        requestClose(performNavigation);
+      if (navigationDelayMs > 0) {
+        setTimeout(performNavigation, navigationDelayMs);
         return;
       }
       performNavigation();
     },
-    [activeSessionId, requestClose, router],
+    [activeSessionId, navigationDelayMs, onClose, router],
   );
 
   const handleCreateAgentTab = useCallback(async () => {
