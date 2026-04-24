@@ -4,7 +4,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import { SymbolView } from "expo-symbols";
-import { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, {
+  FadeInLeft,
+  FadeInRight,
+  FadeOutLeft,
+  FadeOutRight,
+  LinearTransition,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { DISMISS_SESSION_MUTATION, generateUUID, useEntityField } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
@@ -49,6 +58,11 @@ interface SessionInputComposerProps {
 
 const EMPTY_IMAGES: ImageAttachment[] = [];
 type ComposerSheet = "model" | "runtime" | null;
+const composerRowTransition = LinearTransition.springify().damping(22).stiffness(240);
+const leadingControlsEnter = FadeInLeft.duration(180);
+const leadingControlsExit = FadeOutLeft.duration(140);
+const trailingActionEnter = FadeInRight.duration(180);
+const trailingActionExit = FadeOutRight.duration(140);
 
 /**
  * Session composer: a single-line-start liquid glass input next to a
@@ -408,34 +422,38 @@ export function SessionInputComposer({
       <ImageAttachmentBar images={images} onRemove={handleRemoveImage} />
 
       <View style={styles.composerStack}>
-        <View style={styles.inputActionRow}>
+        <Animated.View layout={composerRowTransition} style={styles.inputActionRow}>
           {showCollapsedModelSelector ? (
-            <SessionComposerModelTrigger
-              canInteract={canInteract}
-              currentTool={currentTool}
-              modelLabel={modelLabel}
-              minWidth={0}
-              onOpenModelSheet={handleOpenModelSheet}
-              showLabel={false}
-              style={styles.collapsedModelChip}
-            />
+            <Animated.View entering={leadingControlsEnter} exiting={leadingControlsExit}>
+              <SessionComposerModelTrigger
+                canInteract={canInteract}
+                currentTool={currentTool}
+                modelLabel={modelLabel}
+                minWidth={0}
+                onOpenModelSheet={handleOpenModelSheet}
+                showLabel={false}
+                style={styles.collapsedModelChip}
+              />
+            </Animated.View>
           ) : null}
 
           {expanded && !hasSendable && !isActive ? (
-            <SessionComposerLeadingChips
-              canInteract={canInteract}
-              currentTool={currentTool}
-              mode={mode}
-              modeIconTint={modeIconTint}
-              modeLabelVisible={modeLabelVisible}
-              modelLabel={modelLabel}
-              chipAnimatedStyle={chipAnimatedStyle}
-              chipTextAnimatedStyle={chipTextAnimatedStyle}
-              glassAnimatedProps={glassAnimatedProps}
-              modeWidthAnimatedStyle={modeWidthAnimatedStyle}
-              onModePress={handleModePress}
-              onOpenModelSheet={handleOpenModelSheet}
-            />
+            <Animated.View entering={leadingControlsEnter} exiting={leadingControlsExit}>
+              <SessionComposerLeadingChips
+                canInteract={canInteract}
+                currentTool={currentTool}
+                mode={mode}
+                modeIconTint={modeIconTint}
+                modeLabelVisible={modeLabelVisible}
+                modelLabel={modelLabel}
+                chipAnimatedStyle={chipAnimatedStyle}
+                chipTextAnimatedStyle={chipTextAnimatedStyle}
+                glassAnimatedProps={glassAnimatedProps}
+                modeWidthAnimatedStyle={modeWidthAnimatedStyle}
+                onModePress={handleModePress}
+                onOpenModelSheet={handleOpenModelSheet}
+              />
+            </Animated.View>
           ) : null}
 
           <View style={styles.inputCardSlot}>
@@ -478,32 +496,36 @@ export function SessionInputComposer({
           )}
 
           {showSend ? (
-            <SessionComposerActionButton
-              accessibilityLabel={isActive ? "Queue message" : "Send message"}
-              contentOpacity={canSubmit ? 1 : 0.35}
-              disabled={!canSubmit}
-              glassStyle={cardBorderAnimatedStyle}
-              iconName="paperplane.fill"
-              iconSize={16}
-              iconTint={theme.colors.accentForeground}
-              onPress={handleSend}
-              tint={alpha(theme.colors.success, 0.18)}
-            />
+            <Animated.View entering={trailingActionEnter} exiting={trailingActionExit}>
+              <SessionComposerActionButton
+                accessibilityLabel={isActive ? "Queue message" : "Send message"}
+                contentOpacity={canSubmit ? 1 : 0.35}
+                disabled={!canSubmit}
+                glassStyle={cardBorderAnimatedStyle}
+                iconName="paperplane.fill"
+                iconSize={16}
+                iconTint={theme.colors.accentForeground}
+                onPress={handleSend}
+                tint={alpha(theme.colors.success, 0.18)}
+              />
+            </Animated.View>
           ) : null}
 
           {showStop ? (
-            <SessionComposerActionButton
-              accessibilityLabel="Stop session"
-              disabled={!canStop}
-              glassStyle={{ borderColor: alpha(theme.colors.destructive, 0.42) }}
-              iconName="stop.fill"
-              iconSize={14}
-              iconTint={theme.colors.destructive}
-              onPress={() => void handleStop()}
-              tint={alpha(theme.colors.destructive, 0.22)}
-            />
+            <Animated.View entering={trailingActionEnter} exiting={trailingActionExit}>
+              <SessionComposerActionButton
+                accessibilityLabel="Stop session"
+                disabled={!canStop}
+                glassStyle={{ borderColor: alpha(theme.colors.destructive, 0.42) }}
+                iconName="stop.fill"
+                iconSize={14}
+                iconTint={theme.colors.destructive}
+                onPress={() => void handleStop()}
+                tint={alpha(theme.colors.destructive, 0.22)}
+              />
+            </Animated.View>
           ) : null}
-        </View>
+        </Animated.View>
 
         {expanded && canChangeBridge ? (
           <View style={styles.bridgeRow}>
