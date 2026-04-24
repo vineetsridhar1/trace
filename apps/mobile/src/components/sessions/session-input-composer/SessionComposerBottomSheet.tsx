@@ -1,14 +1,8 @@
-import { useEffect, useState, type ReactNode } from "react";
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
-  interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -23,6 +17,9 @@ interface SessionComposerBottomSheetProps {
   children: ReactNode;
 }
 
+const DISMISS_DISTANCE = 110;
+const DISMISS_VELOCITY = 900;
+
 export function SessionComposerBottomSheet({
   visible,
   onClose,
@@ -30,144 +27,194 @@ export function SessionComposerBottomSheet({
 }: SessionComposerBottomSheetProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const window = useWindowDimensions();
+  const { height: windowHeight } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
   const [content, setContent] = useState(children);
-  const progress = useSharedValue(visible ? 1 : 0);
+  const translateY = useSharedValue(windowHeight);
+  const dragY = useSharedValue(0);
+  const backdropOpacity = useSharedValue(0);
 
   useEffect(() => {
     if (visible) setContent(children);
   }, [children, visible]);
 
+  const finishClose = useCallback(
+    (notifyParent: boolean) => {
+      setMounted(false);
+      if (notifyParent) onClose();
+    },
+    [onClose],
+  );
+
+  const animateIn = useCallback(() => {
+    dragY.value = 0;
+    translateY.value = windowHeight;
+    backdropOpacity.value = 0;
+    translateY.value = withSpring(0, theme.motion.springs.gentle);
+    backdropOpacity.value = withTiming(1, { duration: theme.motion.durations.base });
+  }, [
+    backdropOpacity,
+    dragY,
+    theme.motion.durations.base,
+    theme.motion.springs.gentle,
+    translateY,
+    windowHeight,
+  ]);
+
+  const animateOut = useCallback(
+    (notifyParent: boolean) => {
+      translateY.value = translateY.value + dragY.value;
+      dragY.value = 0;
+      translateY.value = withTiming(
+        windowHeight,
+        { duration: theme.motion.durations.fast },
+        (finished) => {
+          if (finished) runOnJS(finishClose)(notifyParent);
+        },
+      );
+      backdropOpacity.value = withTiming(0, { duration: theme.motion.durations.fast });
+    },
+    [
+      backdropOpacity,
+      dragY,
+      finishClose,
+      theme.motion.durations.fast,
+      translateY,
+      windowHeight,
+    ],
+  );
+
   useEffect(() => {
     if (visible) {
       setMounted(true);
-      progress.value = withSpring(1, theme.motion.springs.gentle);
       return;
     }
+    if (mounted) animateOut(false);
+  }, [animateOut, mounted, visible]);
 
-    progress.value = withTiming(
-      0,
-      { duration: theme.motion.durations.fast },
-      (finished) => {
-        if (finished) runOnJS(setMounted)(false);
-      },
-    );
-  }, [progress, theme.motion.durations.fast, theme.motion.springs.gentle, visible]);
+  useEffect(() => {
+    if (!mounted || !visible) return;
+    animateIn();
+  }, [animateIn, mounted, visible]);
 
-  const backdropAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 1], [0, 1]),
-  }));
+  const requestClose = useCallback(() => {
+    if (!mounted) return;
+    animateOut(true);
+  }, [animateOut, mounted]);
 
-  const sheetAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 1], [0.92, 1]),
-    transform: [
-      {
-        translateY: interpolate(progress.value, [0, 1], [36, 0]),
-      },
-    ],
+  const handlePanEnd = useCallback(() => {
+    requestClose();
+  }, [requestClose]);
+
+  const sheetGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .onUpdate((event) => {
+          dragY.value = Math.max(event.translationY, 0);
+        })
+        .onEnd((event) => {
+          const shouldClose =
+            dragY.value > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY;
+          if (shouldClose) {
+            runOnJS(handlePanEnd)();
+            return;
+          }
+          dragY.value = withSpring(0, theme.motion.springs.smooth);
+        }),
+    [dragY, handlePanEnd, theme.motion.springs.smooth],
+  );
+
+  const backdropStyle = useAnimatedStyle(() => {
+    const dragFactor = Math.max(0.65, 1 - dragY.value / 260);
+    return {
+      opacity: backdropOpacity.value * dragFactor,
+    };
+  });
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value + dragY.value }],
   }));
 
   if (!mounted) return null;
 
-  const maxHeight = Math.max(
-    280,
-    window.height - insets.top - theme.spacing.xl * 2,
-  );
-
   return (
     <Modal
-      transparent
-      visible={mounted}
+      visible
       animationType="none"
-      onRequestClose={onClose}
+      transparent
+      presentationStyle="overFullScreen"
+      onRequestClose={requestClose}
       statusBarTranslucent
     >
-      <View style={styles.modalRoot}>
+      <View style={styles.root}>
         <Animated.View
           style={[
-            StyleSheet.absoluteFillObject,
-            {
-              backgroundColor: alpha(theme.colors.background, 0.58),
-            },
-            backdropAnimatedStyle,
-          ]}
-        />
-        <Pressable
-          accessibilityLabel="Dismiss sheet"
-          onPress={onClose}
-          style={StyleSheet.absoluteFill}
-        />
-        <View
-          pointerEvents="box-none"
-          style={[
-            styles.sheetHost,
-            {
-              paddingTop: theme.spacing.xl,
-              paddingHorizontal: theme.spacing.md,
-              paddingBottom: insets.bottom + theme.spacing.sm,
-            },
+            styles.backdrop,
+            { backgroundColor: alpha("#000000", 0.32) },
+            backdropStyle,
           ]}
         >
-          <Animated.View
-            style={[
-              styles.sheet,
-              theme.shadows.lg,
-              {
-                maxHeight,
-                borderRadius: theme.radius.xl,
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.borderMuted,
-              },
-              sheetAnimatedStyle,
-            ]}
-          >
-            <View style={styles.handleSlot}>
+          <Pressable
+            accessibilityLabel="Dismiss composer picker"
+            onPress={requestClose}
+            style={StyleSheet.absoluteFill}
+          />
+        </Animated.View>
+        <Animated.View
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.borderMuted,
+              borderTopLeftRadius: theme.radius.xl,
+              borderTopRightRadius: theme.radius.xl,
+              paddingBottom: Math.max(insets.bottom, theme.spacing.lg),
+              paddingTop: theme.spacing.sm,
+            },
+            sheetStyle,
+          ]}
+        >
+          <GestureDetector gesture={sheetGesture}>
+            <View style={styles.grabberSlot}>
               <View
                 style={[
-                  styles.handle,
-                  {
-                    backgroundColor: alpha(theme.colors.foreground, 0.22),
-                  },
+                  styles.grabber,
+                  { backgroundColor: theme.colors.borderMuted },
                 ]}
               />
             </View>
-            <View
-              style={[
-                styles.content,
-                {
-                  paddingHorizontal: theme.spacing.lg,
-                  paddingBottom: theme.spacing.lg,
-                },
-              ]}
-            >
-              {content}
-            </View>
-          </Animated.View>
-        </View>
+          </GestureDetector>
+          <View
+            style={[
+              styles.content,
+              { paddingHorizontal: theme.spacing.lg },
+            ]}
+          >
+            {content}
+          </View>
+        </Animated.View>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  modalRoot: {
-    flex: 1,
-  },
-  sheetHost: {
+  root: {
     flex: 1,
     justifyContent: "flex-end",
   },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
   sheet: {
-    overflow: "hidden",
-    borderWidth: StyleSheet.hairlineWidth,
+    maxHeight: "78%",
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  handleSlot: {
+  grabberSlot: {
     alignItems: "center",
-    paddingTop: 10,
-    paddingBottom: 6,
+    paddingBottom: 10,
   },
-  handle: {
+  grabber: {
     width: 36,
     height: 5,
     borderRadius: 999,
@@ -175,6 +222,5 @@ const styles = StyleSheet.create({
   content: {
     minHeight: 0,
     flexShrink: 1,
-    paddingTop: 4,
   },
 });
