@@ -16,7 +16,7 @@ export function SessionTabSwitcherSheet({
   activeSessionId,
   onClose,
 }: SessionTabSwitcherSheetProps) {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const pendingActionRef = useRef<(() => void) | null>(null);
 
   const handlePresentedChange = useCallback(
@@ -38,12 +38,13 @@ export function SessionTabSwitcherSheet({
     [onClose],
   );
 
-  const hostStyle = useMemo(() => [styles.host, { width }], [width]);
+  const anchorStyle = useMemo(() => [styles.anchor, { width, height }], [height, width]);
+  const hostStyle = useMemo(() => [styles.host, { width, height }], [height, width]);
   const contentHostStyle = useMemo(() => [styles.contentHost, { width }], [width]);
 
   return (
-    <View pointerEvents="box-none" style={styles.anchor}>
-      <Host style={hostStyle}>
+    <View pointerEvents="box-none" style={anchorStyle}>
+      <Host style={hostStyle} useViewportSizeMeasurement>
         <BottomSheet
           isOpened={open}
           onIsOpenedChange={handlePresentedChange}
@@ -71,14 +72,9 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 0,
     left: 0,
-    width: 1,
-    height: 1,
   },
   host: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    height: 1,
+    flex: 1,
   },
   contentHost: {
     minHeight: 0,
