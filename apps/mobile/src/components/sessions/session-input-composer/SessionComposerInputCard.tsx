@@ -1,12 +1,12 @@
 import type { RefObject } from "react";
-import { Pressable, TextInput } from "react-native";
+import { Pressable, TextInput, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { Glass, Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
 import { styles } from "./styles";
 import type {
-  ComposerAnimatedViewStyle,
   ComposerGlassAnimatedProps,
+  ComposerAnimatedViewStyle,
 } from "./types";
 
 const AnimatedGlass = Animated.createAnimatedComponent(Glass);
@@ -17,7 +17,7 @@ interface SessionComposerInputCardProps {
   errorDraft: string | null;
   errorMessage: string | null;
   glassAnimatedProps: ComposerGlassAnimatedProps;
-  inputAnimatedStyle: ComposerAnimatedViewStyle;
+  inputHeight: number;
   inputRef: RefObject<TextInput | null>;
   placeholder: string;
   scrollEnabled: boolean;
@@ -36,7 +36,7 @@ export function SessionComposerInputCard({
   errorDraft,
   errorMessage,
   glassAnimatedProps,
-  inputAnimatedStyle,
+  inputHeight,
   inputRef,
   placeholder,
   scrollEnabled,
@@ -70,7 +70,7 @@ export function SessionComposerInputCard({
         </Pressable>
       ) : null}
 
-      <Animated.View style={[styles.inputWrapper, inputAnimatedStyle]}>
+      <View style={[styles.inputWrapper, { minHeight: inputHeight }]}>
         <TextInput
           ref={inputRef}
           value={text}
@@ -83,9 +83,16 @@ export function SessionComposerInputCard({
           scrollEnabled={scrollEnabled}
           placeholder={placeholder}
           placeholderTextColor={theme.colors.dimForeground}
-          style={[styles.input, { color: theme.colors.foreground }]}
+          style={[
+            styles.input,
+            {
+              color: theme.colors.foreground,
+              height: inputHeight,
+              minHeight: inputHeight,
+            },
+          ]}
         />
-      </Animated.View>
+      </View>
     </AnimatedGlass>
   );
 }

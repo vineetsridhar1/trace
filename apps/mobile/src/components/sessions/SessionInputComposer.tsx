@@ -6,9 +6,6 @@ import * as ImagePicker from "expo-image-picker";
 import Animated, {
   FadeInDown,
   FadeOutDown,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
 } from "react-native-reanimated";
 import { DISMISS_SESSION_MUTATION, generateUUID, useEntityField } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
@@ -213,13 +210,6 @@ export function SessionInputComposer({
     tool,
   });
 
-  const inputHeight = useSharedValue(MIN_INPUT_HEIGHT);
-  useEffect(() => {
-    inputHeight.value = withTiming(height, {
-      duration: theme.motion.durations.fast,
-    });
-  }, [height, inputHeight, theme.motion.durations.fast]);
-  const inputAnimatedStyle = useAnimatedStyle(() => ({ height: inputHeight.value }));
   const inputCardMinHeight = Math.max(
     INPUT_CARD_MIN_HEIGHT,
     height + INPUT_CARD_VERTICAL_CHROME,
@@ -428,7 +418,7 @@ export function SessionInputComposer({
             errorDraft={errorDraft}
             errorMessage={errorMessage}
             glassAnimatedProps={glassAnimatedProps}
-            inputAnimatedStyle={inputAnimatedStyle}
+            inputHeight={height}
             inputRef={inputRef}
             placeholder={placeholder}
             scrollEnabled={inputScrollEnabled}
