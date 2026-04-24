@@ -21,10 +21,6 @@ export const styles = StyleSheet.create({
   leadingChipsContainer: {
     position: "relative",
   },
-  leadingChipsRaised: {
-    zIndex: 40,
-    elevation: 40,
-  },
   leadingChipsVisible: {
     overflow: "visible",
   },

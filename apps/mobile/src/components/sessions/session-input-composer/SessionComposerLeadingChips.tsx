@@ -36,7 +36,6 @@ interface SessionComposerLeadingChipsProps {
   modelWidthAnimatedStyle: ComposerAnimatedViewStyle;
   onModePress: () => void;
   onModelChipPress: () => void;
-  onModelPressIn: () => void;
   onModelMenuOpenChange: (open: boolean) => void;
   onModelTouchStart: () => void;
 }
@@ -61,7 +60,6 @@ export function SessionComposerLeadingChips({
   modelWidthAnimatedStyle,
   onModePress,
   onModelChipPress,
-  onModelPressIn,
   onModelMenuOpenChange,
   onModelTouchStart,
 }: SessionComposerLeadingChipsProps) {
@@ -72,7 +70,6 @@ export function SessionComposerLeadingChips({
       pointerEvents={chipsVisible ? "auto" : "none"}
       style={[
         styles.leadingChipsContainer,
-        modelLabelVisible ? styles.leadingChipsRaised : null,
         chipsVisible ? styles.leadingChipsVisible : styles.leadingChipsHidden,
         leadingChipsAnimatedStyle,
       ]}
@@ -141,6 +138,7 @@ export function SessionComposerLeadingChips({
               <ComposerMorphPill
                 label={modelLabel}
                 accessibilityLabel="Model"
+                align="right"
                 disabled={!canInteract}
                 headerItems={toolHeaderItems}
                 items={modelItems}
@@ -162,7 +160,6 @@ export function SessionComposerLeadingChips({
               >
                 <Pressable
                   onPress={onModelChipPress}
-                  onPressIn={onModelPressIn}
                   disabled={!canInteract}
                   accessibilityRole="button"
                   accessibilityLabel={`Model: ${modelLabel}. Tap to reveal.`}
