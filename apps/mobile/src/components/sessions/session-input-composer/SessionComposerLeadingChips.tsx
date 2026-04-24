@@ -70,6 +70,7 @@ export function SessionComposerLeadingChips({
       pointerEvents={chipsVisible ? "auto" : "none"}
       style={[
         styles.leadingChipsContainer,
+        modelLabelVisible ? styles.leadingChipsRaised : null,
         chipsVisible ? styles.leadingChipsVisible : styles.leadingChipsHidden,
         leadingChipsAnimatedStyle,
       ]}

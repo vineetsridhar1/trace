@@ -18,7 +18,13 @@ export const styles = StyleSheet.create({
     flex: 1,
     position: "relative",
   },
-  leadingChipsContainer: {},
+  leadingChipsContainer: {
+    position: "relative",
+  },
+  leadingChipsRaised: {
+    zIndex: 40,
+    elevation: 40,
+  },
   leadingChipsVisible: {
     overflow: "visible",
   },
