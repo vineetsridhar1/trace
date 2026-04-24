@@ -50,7 +50,7 @@ export const ANIMAL_NAMES: readonly string[] = [
 
 /**
  * Collect slugs already in use by scanning a directory for existing entries
- * and listing `trace/*` git branches in the repo.
+ * and listing local + origin-backed `trace/*` git branches in the repo.
  */
 export async function getUsedSlugs(sessionsDir: string, repoPath: string): Promise<Set<string>> {
   const used = new Set<string>();
@@ -62,13 +62,24 @@ export async function getUsedSlugs(sessionsDir: string, repoPath: string): Promi
     }
   }
 
-  // 2. Existing trace/* branch names
+  // 2. Existing trace/* branch names (local + origin tracking refs)
   try {
-    const { stdout } = await execFileAsync("git", ["branch", "--list", "trace/*", "--format=%(refname:short)"], { cwd: repoPath });
+    const { stdout } = await execFileAsync(
+      "git",
+      [
+        "for-each-ref",
+        "--format=%(refname:short)",
+        "refs/heads/trace/*",
+        "refs/remotes/origin/trace/*",
+      ],
+      { cwd: repoPath },
+    );
     for (const line of stdout.split("\n")) {
       const trimmed = line.trim();
       if (trimmed.startsWith("trace/")) {
         used.add(trimmed.slice("trace/".length));
+      } else if (trimmed.startsWith("origin/trace/")) {
+        used.add(trimmed.slice("origin/trace/".length));
       }
     }
   } catch {

@@ -8,6 +8,12 @@ import { assertValidCommitSha } from "@trace/shared";
 import { installOrRepairRepoHooks } from "./repo-hooks.js";
 
 const execFileAsync = promisify(execFile);
+const MAX_AUTO_SLUG_ATTEMPTS = 25;
+
+type GitExecError = Error & {
+  stderr?: string;
+  stdout?: string;
+};
 
 async function refExists(repoPath: string, ref: string): Promise<boolean> {
   return execFileAsync(
@@ -32,6 +38,28 @@ async function resolveBaseBranch(
 
   // 3. Safe fallback to repo's main branch on remote
   return `origin/${defaultBranch}`;
+}
+
+function getGitErrorText(error: unknown): string {
+  if (error instanceof Error) {
+    const gitError = error as GitExecError;
+    if (gitError.stderr?.trim()) return gitError.stderr.trim();
+    if (gitError.stdout?.trim()) return gitError.stdout.trim();
+    return gitError.message.trim();
+  }
+  return String(error).trim();
+}
+
+function isWorktreeCollisionError(error: unknown, branch: string, targetPath: string): boolean {
+  const message = getGitErrorText(error).toLowerCase();
+  const normalizedBranch = branch.toLowerCase();
+  const normalizedTargetPath = targetPath.toLowerCase();
+
+  return (
+    (message.includes(normalizedBranch) &&
+      (message.includes("already exists") || message.includes("already checked out"))) ||
+    (message.includes(normalizedTargetPath) && message.includes("already exists"))
+  );
 }
 
 export async function createWorktree({
@@ -61,60 +89,84 @@ export async function createWorktree({
   gitHooksEnabled?: boolean;
 }): Promise<{ workdir: string; branch: string; slug: string }> {
   const sessionsDir = path.join(os.homedir(), "trace", "sessions", repoId);
-  const worktreeSlug = slug ?? generateAnimalSlug(await getUsedSlugs(sessionsDir, repoPath));
-  const branch = `trace/${worktreeSlug}`;
-  const targetPath = path.join(sessionsDir, worktreeSlug);
-
-  // If the worktree directory already exists, reuse it
-  if (fs.existsSync(targetPath)) {
-    return { workdir: targetPath, branch, slug: worktreeSlug };
-  }
+  const shouldRetryCollisions = !slug;
 
   // Ensure parent directory exists
-  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.mkdirSync(sessionsDir, { recursive: true });
 
   if (checkpointSha) assertValidCommitSha(checkpointSha);
 
-  // Fetch latest so origin refs are up to date
+  // Fetch latest before slug selection so origin/trace/* collisions are visible.
   if (!checkpointSha) {
-    await execFileAsync("git", ["fetch", "origin"], { cwd: repoPath });
+    await execFileAsync("git", ["fetch", "origin", "--prune"], { cwd: repoPath });
   } else {
     // Verify the checkpoint SHA is reachable locally; fetch if not
     const reachable = await execFileAsync("git", ["cat-file", "-t", checkpointSha], { cwd: repoPath })
       .then(() => true)
       .catch(() => false);
     if (!reachable) {
-      await execFileAsync("git", ["fetch", "origin"], { cwd: repoPath });
+      await execFileAsync("git", ["fetch", "origin", "--prune"], { cwd: repoPath });
     }
   }
 
   // Resolve base branch with fallback chain (remote → local → default)
   const baseRef = checkpointSha
     ?? await resolveBaseBranch(repoPath, startBranch, defaultBranch);
+  const usedSlugs = shouldRetryCollisions ? await getUsedSlugs(sessionsDir, repoPath) : null;
 
-  // Check if the branch already exists (e.g. worktree was removed but branch remains)
-  const branchExists = await refExists(repoPath, branch);
+  for (let attempt = 0; attempt < MAX_AUTO_SLUG_ATTEMPTS; attempt += 1) {
+    const worktreeSlug = slug ?? generateAnimalSlug(usedSlugs ?? new Set<string>());
+    const branch = `trace/${worktreeSlug}`;
+    const targetPath = path.join(sessionsDir, worktreeSlug);
 
-  if (branchExists) {
-    // Reuse existing branch without -b
-    await execFileAsync(
-      "git",
-      ["worktree", "add", targetPath, branch],
-      { cwd: repoPath },
-    );
-  } else {
-    await execFileAsync(
-      "git",
-      ["worktree", "add", "-b", branch, targetPath, baseRef],
-      { cwd: repoPath },
-    );
+    // If the worktree directory already exists, only reuse it for an explicitly assigned slug.
+    if (fs.existsSync(targetPath)) {
+      if (!shouldRetryCollisions) {
+        return { workdir: targetPath, branch, slug: worktreeSlug };
+      }
+      usedSlugs?.add(worktreeSlug);
+      continue;
+    }
+
+    // Reuse explicit branch names, but retry auto-generated collisions.
+    if (await refExists(repoPath, branch)) {
+      if (!shouldRetryCollisions) {
+        await execFileAsync(
+          "git",
+          ["worktree", "add", targetPath, branch],
+          { cwd: repoPath },
+        );
+        if (gitHooksEnabled) {
+          await installOrRepairRepoHooks(targetPath);
+        }
+        return { workdir: targetPath, branch, slug: worktreeSlug };
+      }
+      usedSlugs?.add(worktreeSlug);
+      continue;
+    }
+
+    try {
+      await execFileAsync(
+        "git",
+        ["worktree", "add", "-b", branch, targetPath, baseRef],
+        { cwd: repoPath },
+      );
+    } catch (error) {
+      if (shouldRetryCollisions && isWorktreeCollisionError(error, branch, targetPath)) {
+        usedSlugs?.add(worktreeSlug);
+        continue;
+      }
+      throw error;
+    }
+
+    if (gitHooksEnabled) {
+      await installOrRepairRepoHooks(targetPath);
+    }
+
+    return { workdir: targetPath, branch, slug: worktreeSlug };
   }
 
-  if (gitHooksEnabled) {
-    await installOrRepairRepoHooks(targetPath);
-  }
-
-  return { workdir: targetPath, branch, slug: worktreeSlug };
+  throw new Error("Failed to allocate a unique worktree slug after repeated collisions");
 }
 
 export async function removeWorktree({

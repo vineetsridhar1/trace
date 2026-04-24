@@ -5,6 +5,12 @@ import { generateAnimalSlug, getUsedSlugs } from "@trace/shared/animal-names";
 import { assertValidCommitSha } from "@trace/shared";
 
 const execFileAsync = promisify(execFile);
+const MAX_AUTO_SLUG_ATTEMPTS = 25;
+
+type GitExecError = Error & {
+  stderr?: string;
+  stdout?: string;
+};
 
 const REPOS_DIR = "/repos";
 const WORKSPACES_DIR = "/workspaces";
@@ -22,6 +28,28 @@ export function listClonedRepoIds(): string[] {
     .readdirSync(REPOS_DIR, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && fs.existsSync(`${REPOS_DIR}/${entry.name}/.git`))
     .map((entry) => entry.name);
+}
+
+function getGitErrorText(error: unknown): string {
+  if (error instanceof Error) {
+    const gitError = error as GitExecError;
+    if (gitError.stderr?.trim()) return gitError.stderr.trim();
+    if (gitError.stdout?.trim()) return gitError.stdout.trim();
+    return gitError.message.trim();
+  }
+  return String(error).trim();
+}
+
+function isWorktreeCollisionError(error: unknown, branch: string, targetPath: string): boolean {
+  const message = getGitErrorText(error).toLowerCase();
+  const normalizedBranch = branch.toLowerCase();
+  const normalizedTargetPath = targetPath.toLowerCase();
+
+  return (
+    (message.includes(normalizedBranch) &&
+      (message.includes("already exists") || message.includes("already checked out"))) ||
+    (message.includes(normalizedTargetPath) && message.includes("already exists"))
+  );
 }
 
 /**
@@ -77,19 +105,11 @@ export async function createWorktree({
   slug?: string;
 }): Promise<{ workdir: string; slug: string }> {
   const repoPath = `${REPOS_DIR}/${repoId}`;
-  const worktreeSlug = slug ?? generateAnimalSlug(await getUsedSlugs(WORKSPACES_DIR, repoPath));
-  const worktreePath = `${WORKSPACES_DIR}/${worktreeSlug}`;
-
-  // If worktree already exists, reuse it
-  if (fs.existsSync(worktreePath)) {
-    return { workdir: worktreePath, slug: worktreeSlug };
-  }
+  const shouldRetryCollisions = !slug;
 
   fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
 
   if (checkpointSha) assertValidCommitSha(checkpointSha);
-
-  const branchName = `trace/${worktreeSlug}`;
   const baseRef = checkpointSha ?? `origin/${branch ?? defaultBranch}`;
 
   // When restoring a checkpoint, verify the SHA is locally reachable; fetch if not
@@ -101,20 +121,50 @@ export async function createWorktree({
       await execFileAsync("git", ["fetch", "--all"], { cwd: repoPath });
     }
   }
+  const usedSlugs = shouldRetryCollisions ? await getUsedSlugs(WORKSPACES_DIR, repoPath) : null;
 
-  // Check if the branch already exists
-  const branchExists = await execFileAsync(
-    "git", ["rev-parse", "--verify", branchName],
-    { cwd: repoPath },
-  ).then(() => true, () => false);
+  for (let attempt = 0; attempt < MAX_AUTO_SLUG_ATTEMPTS; attempt += 1) {
+    const worktreeSlug = slug ?? generateAnimalSlug(usedSlugs ?? new Set<string>());
+    const worktreePath = `${WORKSPACES_DIR}/${worktreeSlug}`;
+    const branchName = `trace/${worktreeSlug}`;
 
-  if (branchExists) {
-    await execFileAsync("git", ["worktree", "add", worktreePath, branchName], { cwd: repoPath });
-  } else {
-    await execFileAsync("git", ["worktree", "add", "-b", branchName, worktreePath, baseRef], { cwd: repoPath });
+    // If worktree already exists, only reuse it for an explicitly assigned slug.
+    if (fs.existsSync(worktreePath)) {
+      if (!shouldRetryCollisions) {
+        return { workdir: worktreePath, slug: worktreeSlug };
+      }
+      usedSlugs?.add(worktreeSlug);
+      continue;
+    }
+
+    // Reuse explicit branch names, but retry auto-generated collisions.
+    const branchExists = await execFileAsync(
+      "git", ["rev-parse", "--verify", branchName],
+      { cwd: repoPath },
+    ).then(() => true, () => false);
+    if (branchExists) {
+      if (!shouldRetryCollisions) {
+        await execFileAsync("git", ["worktree", "add", worktreePath, branchName], { cwd: repoPath });
+        return { workdir: worktreePath, slug: worktreeSlug };
+      }
+      usedSlugs?.add(worktreeSlug);
+      continue;
+    }
+
+    try {
+      await execFileAsync("git", ["worktree", "add", "-b", branchName, worktreePath, baseRef], { cwd: repoPath });
+    } catch (error) {
+      if (shouldRetryCollisions && isWorktreeCollisionError(error, branchName, worktreePath)) {
+        usedSlugs?.add(worktreeSlug);
+        continue;
+      }
+      throw error;
+    }
+
+    return { workdir: worktreePath, slug: worktreeSlug };
   }
 
-  return { workdir: worktreePath, slug: worktreeSlug };
+  throw new Error("Failed to allocate a unique worktree slug after repeated collisions");
 }
 
 /**
