@@ -2344,6 +2344,51 @@ export class SessionService {
     });
   }
 
+  private async retargetAttachedLinkedCheckouts(
+    sessionGroupId: string,
+    branch: string,
+  ): Promise<void> {
+    const targets = sessionRouter.listRuntimes({ hostingMode: "local" }).flatMap((runtime) =>
+      [...runtime.linkedCheckouts.values()]
+        .filter(
+          (checkout) =>
+            checkout.isAttached &&
+            checkout.autoSyncEnabled &&
+            checkout.attachedSessionGroupId === sessionGroupId &&
+            checkout.targetBranch !== branch,
+        )
+        .map((checkout) => ({
+          runtimeId: runtime.id,
+          repoId: checkout.repoId,
+        })),
+    );
+
+    if (targets.length === 0) return;
+
+    const results = await Promise.allSettled(
+      targets.map(({ runtimeId, repoId }) =>
+        sessionRouter.syncLinkedCheckout(runtimeId, {
+          repoId,
+          sessionGroupId,
+          branch,
+          autoSyncEnabled: true,
+        }),
+      ),
+    );
+
+    for (const [index, result] of results.entries()) {
+      if (result.status === "fulfilled") continue;
+      const target = targets[index];
+      runtimeDebug("failed to retarget linked checkout after branch update", {
+        sessionGroupId,
+        branch,
+        runtimeId: target.runtimeId,
+        repoId: target.repoId,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      });
+    }
+  }
+
   async complete(id: string) {
     // Only transition from active — don't overwrite explicit user actions
     const current = await prisma.session.findUnique({
@@ -4822,8 +4867,20 @@ export class SessionService {
         });
       }
     });
+    const snapshot = await this.loadSessionGroupSnapshot(sessionGroupId);
+    const nextBranch =
+      typeof patch.branch === "string" && patch.branch.trim() ? patch.branch : null;
+    if (nextBranch) {
+      void this.retargetAttachedLinkedCheckouts(sessionGroupId, nextBranch).catch((error) => {
+        runtimeDebug("linked checkout retarget task failed", {
+          sessionGroupId,
+          branch: nextBranch,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
 
-    return this.loadSessionGroupSnapshot(sessionGroupId);
+    return snapshot;
   }
 
   private async loadSessionGroupSnapshot(
