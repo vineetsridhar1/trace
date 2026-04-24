@@ -59,11 +59,12 @@ interface SessionInputComposerProps {
 
 const EMPTY_IMAGES: ImageAttachment[] = [];
 type ComposerSheet = "model" | "runtime" | null;
-const composerRowTransition = LinearTransition.duration(220).easing(Easing.inOut(Easing.ease));
-const leadingControlsEnter = SlideInLeft.duration(180);
-const leadingControlsExit = SlideOutLeft.duration(140);
-const trailingActionEnter = SlideInRight.duration(240).easing(Easing.inOut(Easing.ease));
-const trailingActionExit = SlideOutRight.duration(220).easing(Easing.inOut(Easing.ease));
+const composerMotionEasing = Easing.inOut(Easing.ease);
+const composerRowTransition = LinearTransition.duration(320).easing(composerMotionEasing);
+const leadingControlsEnter = SlideInLeft.duration(280).easing(composerMotionEasing);
+const leadingControlsExit = SlideOutLeft.duration(240).easing(composerMotionEasing);
+const trailingActionEnter = SlideInRight.duration(300).easing(composerMotionEasing);
+const trailingActionExit = SlideOutRight.duration(260).easing(composerMotionEasing);
 
 /**
  * Session composer: a single-line-start liquid glass input next to a
