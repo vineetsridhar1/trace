@@ -263,7 +263,6 @@ export class BridgeClient implements IBridgeClient {
       this.startHeartbeat();
       this.startHookQueueDrain();
       this.autoSyncManager.start();
-      void this.autoSyncManager.reconcileAll();
       void this.flushQueuedGitHookCheckpoints();
     });
 

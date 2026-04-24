@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LinkedCheckoutConfig } from "./config.js";
 
 vi.mock("./config.js", () => {
@@ -96,7 +96,6 @@ function seedAttachment(
 
 function makeDeps(overrides: Partial<LinkedCheckoutAutoSyncDeps> = {}): LinkedCheckoutAutoSyncDeps {
   return {
-    fetch: vi.fn(async () => undefined),
     revParseHead: vi.fn(async () => "a".repeat(40)),
     hasTrackedChanges: vi.fn(async () => false),
     switchDetached: vi.fn(async () => undefined),
@@ -105,6 +104,20 @@ function makeDeps(overrides: Partial<LinkedCheckoutAutoSyncDeps> = {}): LinkedCh
     now: () => "2026-04-18T00:00:00.000Z",
     ...overrides,
   };
+}
+
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason?: unknown) => void;
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
 
 beforeEach(() => {
@@ -120,6 +133,10 @@ beforeEach(() => {
   );
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe("LinkedCheckoutAutoSyncManager", () => {
   it("switches to the target branch head when the root checkout drifts", async () => {
     seedAttachment("repo-1", { lastSyncedCommitSha: "a".repeat(40) });
@@ -131,7 +148,6 @@ describe("LinkedCheckoutAutoSyncManager", () => {
 
     await manager.reconcileAll();
 
-    expect(deps.fetch).toHaveBeenCalledWith("/tmp/repo-repo-1", "main");
     expect(deps.switchDetached).toHaveBeenCalledWith("/tmp/repo-repo-1", "b".repeat(40));
     expect(configMock.__state.repos["repo-1"].linkedCheckout).toMatchObject({
       lastSyncedCommitSha: "b".repeat(40),
@@ -161,47 +177,6 @@ describe("LinkedCheckoutAutoSyncManager", () => {
     expect(deps.switchDetached).not.toHaveBeenCalled();
     // setLastSyncError writes to config to clear the error.
     expect(configMock.__state.repos["repo-1"].linkedCheckout?.lastSyncError).toBeNull();
-  });
-
-  it("records lastSyncError on transient fetch failure without flipping auto-sync off", async () => {
-    seedAttachment("repo-1");
-    const transient = Object.assign(new Error("fetch failed"), {
-      stderr: "fatal: unable to access 'x': Could not resolve host: github.com",
-    });
-    const deps = makeDeps({
-      fetch: vi.fn(async () => {
-        throw transient;
-      }),
-    });
-    const manager = new LinkedCheckoutAutoSyncManager(15_000, deps);
-
-    await manager.reconcileAll();
-
-    const stored = configMock.__state.repos["repo-1"].linkedCheckout;
-    expect(stored?.autoSyncEnabled).toBe(true);
-    expect(stored?.lastSyncError).toContain("Could not resolve host");
-    expect(linkedCheckoutMock.pauseExistingAttachment).not.toHaveBeenCalled();
-  });
-
-  it("pauses auto-sync on hard fetch failure", async () => {
-    seedAttachment("repo-1");
-    const hard = Object.assign(new Error("fetch failed"), {
-      stderr: "fatal: refusing to fetch into current branch",
-    });
-    const deps = makeDeps({
-      fetch: vi.fn(async () => {
-        throw hard;
-      }),
-    });
-    const manager = new LinkedCheckoutAutoSyncManager(15_000, deps);
-
-    await manager.reconcileAll();
-
-    expect(linkedCheckoutMock.pauseExistingAttachment).toHaveBeenCalledWith(
-      "repo-1",
-      expect.stringContaining("refusing to fetch"),
-    );
-    expect(configMock.__state.repos["repo-1"].linkedCheckout?.autoSyncEnabled).toBe(false);
   });
 
   it("pauses when the root checkout has tracked changes", async () => {
@@ -235,7 +210,6 @@ describe("LinkedCheckoutAutoSyncManager", () => {
       "repo-1",
       "Branch changed externally",
     );
-    expect(deps.fetch).not.toHaveBeenCalled();
   });
 
   it("bails silently when a rebase/merge is in progress", async () => {
@@ -247,7 +221,6 @@ describe("LinkedCheckoutAutoSyncManager", () => {
 
     await manager.reconcileAll();
 
-    expect(deps.fetch).not.toHaveBeenCalled();
     expect(deps.switchDetached).not.toHaveBeenCalled();
     expect(linkedCheckoutMock.pauseExistingAttachment).not.toHaveBeenCalled();
     expect(configMock.setRepoLinkedCheckout).not.toHaveBeenCalled();
@@ -271,7 +244,6 @@ describe("LinkedCheckoutAutoSyncManager", () => {
 
     await manager.reconcileAll();
 
-    expect(deps.fetch).toHaveBeenCalledWith("/tmp/repo-repo-1", "trace/rhino");
     expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledWith(
       "/tmp/repo-repo-1",
       "trace/rhino",
@@ -291,7 +263,7 @@ describe("LinkedCheckoutAutoSyncManager", () => {
 
     await manager.reconcileAll();
 
-    expect(deps.fetch).not.toHaveBeenCalled();
+    expect(linkedCheckoutMock.resolveTargetCommitSha).not.toHaveBeenCalled();
   });
 
   it("reconcile(repoId) runs a single tick for the given repo", async () => {
@@ -302,8 +274,11 @@ describe("LinkedCheckoutAutoSyncManager", () => {
 
     await manager.reconcile("repo-1");
 
-    expect(deps.fetch).toHaveBeenCalledTimes(1);
-    expect(deps.fetch).toHaveBeenCalledWith("/tmp/repo-repo-1", "main");
+    expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
+    expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledWith(
+      "/tmp/repo-repo-1",
+      "main",
+    );
   });
 
   it("rejects unsafe target branch names without shelling out to git", async () => {
@@ -313,6 +288,62 @@ describe("LinkedCheckoutAutoSyncManager", () => {
 
     await manager.reconcile("repo-1");
 
-    expect(deps.fetch).not.toHaveBeenCalled();
+    expect(linkedCheckoutMock.resolveTargetCommitSha).not.toHaveBeenCalled();
+  });
+
+  it("start runs immediately and only schedules the next tick after the current one finishes", async () => {
+    vi.useFakeTimers();
+    seedAttachment("repo-1");
+    const resolveGate = createDeferred<string>();
+    linkedCheckoutMock.resolveTargetCommitSha.mockImplementation(
+      async (_repoPath: string, branch: string) => {
+        if (branch !== "main") throw new Error(`Branch not found: ${branch}`);
+        return resolveGate.promise;
+      },
+    );
+    const deps = makeDeps({
+      revParseHead: vi.fn(async () => "b".repeat(40)),
+    });
+    const manager = new LinkedCheckoutAutoSyncManager(15_000, deps);
+
+    manager.start();
+    await Promise.resolve();
+
+    expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
+
+    resolveGate.resolve("a".repeat(40));
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(2);
+  });
+
+  it("stop prevents rescheduling after an in-flight tick completes", async () => {
+    vi.useFakeTimers();
+    seedAttachment("repo-1");
+    const resolveGate = createDeferred<string>();
+    linkedCheckoutMock.resolveTargetCommitSha.mockImplementation(
+      async (_repoPath: string, branch: string) => {
+        if (branch !== "main") throw new Error(`Branch not found: ${branch}`);
+        return resolveGate.promise;
+      },
+    );
+    const deps = makeDeps();
+    const manager = new LinkedCheckoutAutoSyncManager(15_000, deps);
+
+    manager.start();
+    await Promise.resolve();
+
+    expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
+
+    manager.stop();
+    resolveGate.resolve("a".repeat(40));
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
   });
 });

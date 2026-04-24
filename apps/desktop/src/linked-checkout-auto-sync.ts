@@ -7,9 +7,7 @@ import {
   type LinkedCheckoutConfig,
 } from "./config.js";
 import {
-  execFileAsync,
   formatGitError,
-  GIT_MAX_BUFFER,
   getCurrentBranch,
   isSafeGitRef,
   runGit,
@@ -21,18 +19,6 @@ import {
 } from "./linked-checkout.js";
 import { runtimeDebug } from "./runtime-debug.js";
 
-// Match stderr fragments from git fetch that indicate transient network
-// conditions — recoverable by retrying the next tick without flipping
-// autoSyncEnabled off.
-const TRANSIENT_FETCH_ERROR_PATTERNS: RegExp[] = [
-  /Could not resolve host/i,
-  /Connection refused/i,
-  /Operation timed out/i,
-  /Connection timed out/i,
-  /Network is unreachable/i,
-  /Temporary failure in name resolution/i,
-];
-
 // Git state directories / files that indicate an in-progress multi-step
 // operation we must not interrupt by switching HEAD.
 const IN_PROGRESS_MARKERS = [
@@ -43,10 +29,6 @@ const IN_PROGRESS_MARKERS = [
   "REVERT_HEAD",
   "BISECT_LOG",
 ];
-
-function isTransientFetchError(message: string): boolean {
-  return TRANSIENT_FETCH_ERROR_PATTERNS.some((pattern) => pattern.test(message));
-}
 
 /**
  * Resolve the real `.git` directory, handling the case where `<repo>/.git` is
@@ -70,8 +52,6 @@ export async function hasInProgressGitOperation(repoPath: string): Promise<boole
 }
 
 export interface LinkedCheckoutAutoSyncDeps {
-  /** Async git runner. Returns stdout trimmed. Overrideable for tests. */
-  fetch: (repoPath: string, branch: string) => Promise<void>;
   revParseHead: (repoPath: string) => Promise<string>;
   hasTrackedChanges: (repoPath: string) => Promise<boolean>;
   switchDetached: (repoPath: string, sha: string) => Promise<void>;
@@ -81,12 +61,6 @@ export interface LinkedCheckoutAutoSyncDeps {
 }
 
 const defaultDeps: LinkedCheckoutAutoSyncDeps = {
-  fetch: async (repoPath, branch) => {
-    await execFileAsync("git", ["fetch", "origin", branch], {
-      cwd: repoPath,
-      maxBuffer: GIT_MAX_BUFFER,
-    });
-  },
   revParseHead: (repoPath) => runGit(repoPath, ["rev-parse", "HEAD"]),
   hasTrackedChanges: async (repoPath) => {
     const status = await runGit(repoPath, ["status", "--porcelain", "--untracked-files=no"]);
@@ -112,8 +86,9 @@ async function setLastSyncError(repoId: string, error: string | null): Promise<v
 }
 
 export class LinkedCheckoutAutoSyncManager {
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private timer: ReturnType<typeof setTimeout> | null = null;
   private tickInFlight: Promise<void> | null = null;
+  private started = false;
   private readonly deps: LinkedCheckoutAutoSyncDeps;
 
   constructor(
@@ -124,25 +99,41 @@ export class LinkedCheckoutAutoSyncManager {
   }
 
   start(): void {
-    if (this.timer) return;
-    this.timer = setInterval(() => {
-      this.reconcileAll().catch((error: unknown) => {
-        runtimeDebug("auto-sync tick failed", {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      });
-    }, this.intervalMs);
+    if (this.started) return;
+    this.started = true;
+    void this.runScheduledTick();
   }
 
   stop(): void {
+    this.started = false;
     if (this.timer) {
-      clearInterval(this.timer);
+      clearTimeout(this.timer);
       this.timer = null;
     }
   }
 
   private logTick(message: string, data?: Record<string, unknown>): void {
     runtimeDebug(`auto-sync tick ${message}`, data);
+  }
+
+  private async runScheduledTick(): Promise<void> {
+    try {
+      await this.reconcileAll();
+    } catch (error: unknown) {
+      runtimeDebug("auto-sync tick failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      this.scheduleNextTick();
+    }
+  }
+
+  private scheduleNextTick(): void {
+    if (!this.started || this.timer) return;
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      void this.runScheduledTick();
+    }, this.intervalMs);
   }
 
   reconcileAll(): Promise<void> {
@@ -240,21 +231,6 @@ export class LinkedCheckoutAutoSyncManager {
 
       if (currentBranch !== null) {
         await this.pause(repoId, "Branch changed externally");
-        return;
-      }
-
-      try {
-        this.logTick("fetching target branch", { repoId, targetBranch });
-        await this.deps.fetch(repoPath, targetBranch);
-      } catch (error) {
-        const message = formatGitError(error);
-        if (isTransientFetchError(message)) {
-          this.logTick("hit transient fetch failure", { repoId, targetBranch, error: message });
-          await setLastSyncError(repoId, message);
-          return;
-        }
-        this.logTick("hit hard fetch failure", { repoId, targetBranch, error: message });
-        await this.pause(repoId, message);
         return;
       }
 
