@@ -18,13 +18,84 @@ import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
 import { resolveMobileSessionHosting } from "@/lib/session-hosting";
 import { closeSessionPlayer, tryOpenSessionPlayer } from "@/lib/sessionPlayer";
-import { fetchSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { useMobileUIStore } from "@/stores/ui";
 
 const DEFAULT_TOOL: CodingTool = "claude_code";
 
 interface CreateAgentTabOptions {
   navigate?: (sessionGroupId: string, sessionId: string) => void;
+}
+
+function insertOptimisticAgentTab(params: {
+  tempSessionId: string;
+  sessionGroupId: string;
+  sourceSession: SessionEntity;
+  channelId?: string;
+  repoId?: string | null;
+  branch?: string | null;
+}): void {
+  const now = new Date().toISOString();
+  useEntityStore.getState().upsert(
+    "sessions",
+    params.tempSessionId,
+    {
+      ...params.sourceSession,
+      id: params.tempSessionId,
+      name: "New session",
+      sessionGroupId: params.sessionGroupId,
+      agentStatus: "not_started",
+      sessionStatus: "in_progress",
+      channel: params.channelId ? { id: params.channelId } : params.sourceSession.channel,
+      repo: params.repoId ? { id: params.repoId } : null,
+      branch: params.branch ?? null,
+      prUrl: null,
+      connection: null,
+      worktreeDeleted: false,
+      lastMessageAt: now,
+      lastUserMessageAt: null,
+      createdAt: now,
+      updatedAt: now,
+      _sortTimestamp: now,
+      _optimistic: true,
+      _lastEventPreview: undefined,
+    } as Partial<SessionEntity> as SessionEntity,
+  );
+}
+
+function reconcileOptimisticAgentTab(params: {
+  tempSessionId: string;
+  realSessionId: string;
+  sessionGroupId: string;
+}): void {
+  useEntityStore.setState((state) => {
+    const sessions = { ...state.sessions };
+    const tempSession = sessions[params.tempSessionId];
+    const realSession = sessions[params.realSessionId];
+    delete sessions[params.tempSessionId];
+
+    const reconciled = {
+      ...(tempSession ?? {}),
+      ...(realSession ?? {}),
+      id: params.realSessionId,
+      sessionGroupId: params.sessionGroupId,
+    } as SessionEntity;
+    delete reconciled._optimistic;
+    sessions[params.realSessionId] = reconciled;
+
+    const idx = { ...state._sessionIdsByGroup };
+    idx[params.sessionGroupId] = [
+      ...(idx[params.sessionGroupId] ?? []).filter(
+        (id: string) => id !== params.tempSessionId && id !== params.realSessionId,
+      ),
+      params.realSessionId,
+    ];
+
+    return { sessions, _sessionIdsByGroup: idx };
+  });
+}
+
+function rollbackOptimisticAgentTab(tempSessionId: string): void {
+  useEntityStore.getState().remove("sessions", tempSessionId);
 }
 
 /**
@@ -135,8 +206,28 @@ export async function createAgentTab(
     getSessionGroupChannelId(group, groupSessions) ?? getSessionChannelId(sourceSession) ?? undefined;
   const groupRepo = group?.repo as { id: string } | null | undefined;
   const sourceRepo = sourceSession.repo as { id: string } | null | undefined;
+  const tempSessionId = generateUUID();
+  const repoId = groupRepo?.id ?? sourceRepo?.id;
+  const branch = group?.branch ?? sourceSession.branch ?? undefined;
 
   void haptic.light();
+  insertOptimisticAgentTab({
+    tempSessionId,
+    sessionGroupId,
+    sourceSession,
+    channelId,
+    repoId,
+    branch,
+  });
+
+  if (options?.navigate) {
+    options.navigate(sessionGroupId, tempSessionId);
+  } else {
+    const ui = useMobileUIStore.getState();
+    ui.setOverlaySessionId(tempSessionId);
+    ui.setPendingSessionTransitionFade(true);
+    router.replace(`/sessions/${sessionGroupId}/${tempSessionId}` as never);
+  }
 
   try {
     const result = await getClient()
@@ -148,8 +239,8 @@ export async function createAgentTab(
             model: sourceSession.model ?? undefined,
             hosting: sourceSession.hosting,
             channelId,
-            repoId: groupRepo?.id ?? sourceRepo?.id,
-            branch: group?.branch ?? sourceSession.branch ?? undefined,
+            repoId,
+            branch,
             sessionGroupId,
             sourceSessionId,
           },
@@ -163,19 +254,26 @@ export async function createAgentTab(
       throw new Error("Server did not return a session id");
     }
 
-    const hydrated = await fetchSessionGroupDetail(session.sessionGroupId);
-    if (!hydrated && !useEntityStore.getState().sessions[session.id]?.sessionGroupId) {
-      throw new Error("Couldn't load the new agent tab");
-    }
-    if (options?.navigate) {
-      options.navigate(session.sessionGroupId, session.id);
-    } else {
-      const ui = useMobileUIStore.getState();
+    reconcileOptimisticAgentTab({
+      tempSessionId,
+      realSessionId: session.id,
+      sessionGroupId: session.sessionGroupId,
+    });
+    const ui = useMobileUIStore.getState();
+    if (ui.overlaySessionId === tempSessionId) {
       ui.setOverlaySessionId(session.id);
+      ui.setPendingSessionTransitionFade(true);
       router.replace(`/sessions/${session.sessionGroupId}/${session.id}` as never);
     }
     void haptic.success();
   } catch (err) {
+    rollbackOptimisticAgentTab(tempSessionId);
+    const ui = useMobileUIStore.getState();
+    if (ui.overlaySessionId === tempSessionId) {
+      ui.setOverlaySessionId(sourceSessionId);
+      ui.setPendingSessionTransitionFade(true);
+      router.replace(`/sessions/${sessionGroupId}/${sourceSessionId}` as never);
+    }
     const message = err instanceof Error ? err.message : "Please try again.";
     void haptic.error();
     Alert.alert("Couldn't create agent tab", message);

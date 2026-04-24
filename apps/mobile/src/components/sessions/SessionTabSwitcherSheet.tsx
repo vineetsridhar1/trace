@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -32,6 +32,7 @@ export function SessionTabSwitcherSheet({
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const [mounted, setMounted] = useState(open);
+  const pendingActionRef = useRef<(() => void) | null>(null);
   const translateY = useSharedValue(windowHeight);
   const dragY = useSharedValue(0);
   const backdropOpacity = useSharedValue(0);
@@ -40,6 +41,8 @@ export function SessionTabSwitcherSheet({
     (notifyParent: boolean) => {
       setMounted(false);
       if (notifyParent) onClose();
+      pendingActionRef.current?.();
+      pendingActionRef.current = null;
     },
     [onClose],
   );
@@ -95,8 +98,9 @@ export function SessionTabSwitcherSheet({
     animateIn();
   }, [animateIn, mounted, open]);
 
-  const requestClose = useCallback(() => {
+  const requestClose = useCallback((afterClose?: () => void) => {
     if (!mounted) return;
+    pendingActionRef.current = afterClose ?? null;
     animateOut(true);
   }, [animateOut, mounted]);
 
@@ -141,7 +145,7 @@ export function SessionTabSwitcherSheet({
       animationType="none"
       transparent
       presentationStyle="overFullScreen"
-      onRequestClose={requestClose}
+      onRequestClose={() => requestClose()}
       statusBarTranslucent
     >
       <View style={styles.root}>
@@ -154,7 +158,7 @@ export function SessionTabSwitcherSheet({
         >
           <Pressable
             accessibilityLabel="Dismiss tab switcher"
-            onPress={requestClose}
+            onPress={() => requestClose()}
             style={StyleSheet.absoluteFill}
           />
         </Animated.View>
@@ -191,7 +195,7 @@ export function SessionTabSwitcherSheet({
             <SessionTabSwitcherContent
               groupId={groupId}
               activeSessionId={activeSessionId}
-              onClose={requestClose}
+              requestClose={requestClose}
             />
           </View>
         </Animated.View>

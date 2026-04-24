@@ -1,10 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
-import { BottomSheet, Group, Host, RNHostView } from "@expo/ui/swift-ui";
-import {
-  presentationDetents,
-  presentationDragIndicator,
-} from "@expo/ui/swift-ui/modifiers";
+import { BottomSheet, Host } from "@expo/ui/swift-ui";
 import { SessionTabSwitcherContent } from "./SessionTabSwitcherContent";
 
 interface SessionTabSwitcherSheetProps {
@@ -14,12 +10,6 @@ interface SessionTabSwitcherSheetProps {
   onClose: () => void;
 }
 
-const IOS_SHEET_CLOSE_DELAY_MS = 220;
-const SHEET_MODIFIERS = [
-  presentationDetents(["medium", "large"]),
-  presentationDragIndicator("visible"),
-];
-
 export function SessionTabSwitcherSheet({
   open,
   groupId,
@@ -28,18 +18,35 @@ export function SessionTabSwitcherSheet({
 }: SessionTabSwitcherSheetProps) {
   const { width } = useWindowDimensions();
   const [mounted, setMounted] = useState(open);
+  const [presented, setPresented] = useState(open);
+  const pendingActionRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    if (open) setMounted(true);
-  }, [open]);
+    if (!open) {
+      if (mounted) setPresented(false);
+      return;
+    }
+    setMounted(true);
+    setPresented(true);
+  }, [mounted, open]);
 
   const handlePresentedChange = useCallback(
     (isPresented: boolean) => {
       if (isPresented) return;
       setMounted(false);
       onClose();
+      pendingActionRef.current?.();
+      pendingActionRef.current = null;
     },
     [onClose],
+  );
+
+  const requestClose = useCallback(
+    (afterClose?: () => void) => {
+      pendingActionRef.current = afterClose ?? null;
+      setPresented(false);
+    },
+    [],
   );
 
   const hostStyle = useMemo(() => [styles.host, { width }], [width]);
@@ -50,22 +57,19 @@ export function SessionTabSwitcherSheet({
     <View style={styles.anchor}>
       <Host style={hostStyle}>
         <BottomSheet
-          isPresented={open}
-          onIsPresentedChange={handlePresentedChange}
+          isOpened={presented}
+          onIsOpenedChange={handlePresentedChange}
+          presentationDetents={["medium", "large"]}
+          presentationDragIndicator="visible"
         >
-          <Group modifiers={SHEET_MODIFIERS}>
-            <RNHostView>
-              <View style={styles.sheetContent}>
-                <SessionTabSwitcherContent
-                  groupId={groupId}
-                  activeSessionId={activeSessionId}
-                  onClose={onClose}
-                  closeDelayMs={IOS_SHEET_CLOSE_DELAY_MS}
-                  contentInset="sheet"
-                />
-              </View>
-            </RNHostView>
-          </Group>
+          <View style={styles.sheetContent}>
+            <SessionTabSwitcherContent
+              groupId={groupId}
+              activeSessionId={activeSessionId}
+              requestClose={requestClose}
+              contentInset="sheet"
+            />
+          </View>
         </BottomSheet>
       </Host>
     </View>

@@ -14,7 +14,6 @@ export default function SessionsLayout() {
         name="[groupId]/[sessionId]"
         options={{
           headerShown: false,
-          animation: "fade",
         }}
       />
     </Stack>

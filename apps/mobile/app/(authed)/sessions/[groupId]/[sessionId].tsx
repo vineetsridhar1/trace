@@ -8,6 +8,11 @@ import { useEntityField } from "@trace/client-core";
 import type { Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import {
   Button,
   EmptyState,
@@ -22,6 +27,7 @@ import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel
 import { resolveBrowserUrl } from "@/lib/browser";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { useMobileUIStore } from "@/stores/ui";
+import { useTheme } from "@/theme";
 import {
   fetchSessionGroupDetail,
   useEnsureSessionGroupDetail,
@@ -59,10 +65,12 @@ export default function SessionStreamScreen() {
     sessionId: string;
   }>();
   const router = useRouter();
+  const theme = useTheme();
   const insets = useSafeAreaInsets();
   const loadingGroup = useEnsureSessionGroupDetail(groupId);
   const sessionIds = useSessionGroupSessionIds(groupId);
   const activeMenuClose = useMobileUIStore((s) => s.activeMenuClose);
+  const pendingSessionTransitionFade = useMobileUIStore((s) => s.pendingSessionTransitionFade);
   const browserUrl = useMobileUIStore((s) => s.browserUrl);
   const browserUrlGroupId = useMobileUIStore((s) => s.browserUrlGroupId);
   const setBrowserUrl = useMobileUIStore((s) => s.setBrowserUrl);
@@ -97,9 +105,30 @@ export default function SessionStreamScreen() {
     router.replace(`/sessions/${groupId}/${sessionIds[0]}`);
   }, [groupId, router, sessionId, sessionIds]);
 
+  const sceneOpacity = useSharedValue(1);
+  useEffect(() => {
+    if (!pendingSessionTransitionFade) {
+      sceneOpacity.value = 1;
+      return;
+    }
+    sceneOpacity.value = 0;
+    sceneOpacity.value = withTiming(1, { duration: theme.motion.durations.base });
+    useMobileUIStore.getState().setPendingSessionTransitionFade(false);
+  }, [
+    pendingSessionTransitionFade,
+    sceneOpacity,
+    sessionId,
+    theme.motion.durations.base,
+  ]);
+  const sceneFadeStyle = useAnimatedStyle(() => ({
+    opacity: sceneOpacity.value,
+  }));
+
   const handleSelectSession = useCallback(
     (nextId: string) => {
-      useMobileUIStore.getState().setOverlaySessionId(nextId);
+      const ui = useMobileUIStore.getState();
+      ui.setOverlaySessionId(nextId);
+      ui.setPendingSessionTransitionFade(true);
       router.replace(`/sessions/${groupId}/${nextId}`);
     },
     [groupId, router],
@@ -130,92 +159,99 @@ export default function SessionStreamScreen() {
       background="background"
       style={styles.root}
     >
-      <Stack.Screen options={{ headerShown: false }} />
+      <Stack.Screen
+        options={{
+          headerShown: false,
+          animation: pendingSessionTransitionFade ? "none" : undefined,
+        }}
+      />
 
-      <View pointerEvents="box-none" style={styles.headerOverlay}>
-        {showLoading ? null : (
-          <View onLayout={handleOverlayLayout} style={{ paddingTop: insets.top }}>
-            <SessionPageHeader
-              groupId={hydratedGroupId}
-              sessionId={sessionId}
-              onBack={closeSessionPlayer}
-            />
-            <ActiveTodoStrip sessionId={sessionId} />
-          </View>
-        )}
-      </View>
-
-      <View style={styles.content}>
-        {showLoading ? (
-          <View style={styles.center}>
-            <Spinner size="small" color="mutedForeground" />
-          </View>
-        ) : missingGroup ? (
-          <View style={styles.center}>
-            <EmptyState
-              icon="exclamationmark.triangle"
-              title="Couldn't load workspace"
-              subtitle="The workspace couldn't be loaded. Try again or go back."
-            />
-            <View style={styles.retryButton}>
-              <Button title="Retry" variant="secondary" onPress={handleRetryGroup} />
+      <Animated.View style={[styles.scene, sceneFadeStyle]}>
+        <View pointerEvents="box-none" style={styles.headerOverlay}>
+          {showLoading ? null : (
+            <View onLayout={handleOverlayLayout} style={{ paddingTop: insets.top }}>
+              <SessionPageHeader
+                groupId={hydratedGroupId}
+                sessionId={sessionId}
+                onBack={closeSessionPlayer}
+              />
+              <ActiveTodoStrip sessionId={sessionId} />
             </View>
-          </View>
-        ) : sessionIds.length === 0 ? (
-          <View style={styles.center}>
-            <EmptyState
-              icon="bolt.horizontal"
-              title="No sessions in this workspace"
-              subtitle="This workspace has not started a session yet."
-            />
-          </View>
-        ) : (
-          <SessionBottomTabs.Navigator
-            key={hydratedGroupId}
-            initialRouteName="session"
-            minimizeBehavior="onScrollDown"
-            translucent={false}
-            scrollEdgeAppearance="opaque"
-          >
-            <SessionBottomTabs.Screen
-              name="session"
-              options={{ title: "Session", tabBarIcon: sessionIcon }}
+          )}
+        </View>
+
+        <View style={styles.content}>
+          {showLoading ? (
+            <View style={styles.center}>
+              <Spinner size="small" color="mutedForeground" />
+            </View>
+          ) : missingGroup ? (
+            <View style={styles.center}>
+              <EmptyState
+                icon="exclamationmark.triangle"
+                title="Couldn't load workspace"
+                subtitle="The workspace couldn't be loaded. Try again or go back."
+              />
+              <View style={styles.retryButton}>
+                <Button title="Retry" variant="secondary" onPress={handleRetryGroup} />
+              </View>
+            </View>
+          ) : sessionIds.length === 0 ? (
+            <View style={styles.center}>
+              <EmptyState
+                icon="bolt.horizontal"
+                title="No sessions in this workspace"
+                subtitle="This workspace has not started a session yet."
+              />
+            </View>
+          ) : (
+            <SessionBottomTabs.Navigator
+              key={hydratedGroupId}
+              initialRouteName="session"
+              minimizeBehavior="onScrollDown"
+              translucent={false}
+              scrollEdgeAppearance="opaque"
             >
-              {() => (
-                <SessionSurface
-                  sessionId={sessionId}
-                  onSelectSession={handleSelectSession}
-                  hideHeader
-                />
-              )}
-            </SessionBottomTabs.Screen>
-            <SessionBottomTabs.Screen
-              name="terminal"
-              options={{ title: "Terminal", tabBarIcon: terminalIcon }}
-            >
-              {() => (
-                <View style={[styles.overlayPaddedScene, { paddingTop: overlayHeight }]}>
-                  <SessionTerminalPanel sessionId={sessionId} />
-                </View>
-              )}
-            </SessionBottomTabs.Screen>
-            <SessionBottomTabs.Screen
-              name="browser"
-              options={{ title: "Browser", tabBarIcon: browserIcon }}
-            >
-              {() => (
-                <View style={styles.overlayPaddedScene}>
-                  <BrowserPanel
-                    url={resolvedBrowserUrl}
-                    onUrlChange={handleBrowserUrlChange}
-                    topInset={overlayHeight}
+              <SessionBottomTabs.Screen
+                name="session"
+                options={{ title: "Session", tabBarIcon: sessionIcon }}
+              >
+                {() => (
+                  <SessionSurface
+                    sessionId={sessionId}
+                    onSelectSession={handleSelectSession}
+                    hideHeader
                   />
-                </View>
-              )}
-            </SessionBottomTabs.Screen>
-          </SessionBottomTabs.Navigator>
-        )}
-      </View>
+                )}
+              </SessionBottomTabs.Screen>
+              <SessionBottomTabs.Screen
+                name="terminal"
+                options={{ title: "Terminal", tabBarIcon: terminalIcon }}
+              >
+                {() => (
+                  <View style={[styles.overlayPaddedScene, { paddingTop: overlayHeight }]}>
+                    <SessionTerminalPanel sessionId={sessionId} />
+                  </View>
+                )}
+              </SessionBottomTabs.Screen>
+              <SessionBottomTabs.Screen
+                name="browser"
+                options={{ title: "Browser", tabBarIcon: browserIcon }}
+              >
+                {() => (
+                  <View style={styles.overlayPaddedScene}>
+                    <BrowserPanel
+                      url={resolvedBrowserUrl}
+                      onUrlChange={handleBrowserUrlChange}
+                      topInset={overlayHeight}
+                    />
+                  </View>
+                )}
+              </SessionBottomTabs.Screen>
+            </SessionBottomTabs.Navigator>
+          )}
+        </View>
+      </Animated.View>
 
       {activeMenuClose ? (
         <Pressable
@@ -231,6 +267,10 @@ export default function SessionStreamScreen() {
 const styles = StyleSheet.create({
   root: {
     position: "relative",
+  },
+  scene: {
+    flex: 1,
+    minHeight: 0,
   },
   headerOverlay: {
     position: "absolute",
