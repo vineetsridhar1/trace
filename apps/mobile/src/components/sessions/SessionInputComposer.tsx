@@ -419,6 +419,7 @@ export function SessionInputComposer({
             errorMessage={errorMessage}
             glassAnimatedProps={glassAnimatedProps}
             inputHeight={height}
+            inputMaxHeight={MAX_INPUT_HEIGHT}
             inputRef={inputRef}
             placeholder={placeholder}
             scrollEnabled={inputScrollEnabled}

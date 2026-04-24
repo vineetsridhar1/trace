@@ -18,6 +18,7 @@ interface SessionComposerInputCardProps {
   errorMessage: string | null;
   glassAnimatedProps: ComposerGlassAnimatedProps;
   inputHeight: number;
+  inputMaxHeight: number;
   inputRef: RefObject<TextInput | null>;
   placeholder: string;
   scrollEnabled: boolean;
@@ -37,6 +38,7 @@ export function SessionComposerInputCard({
   errorMessage,
   glassAnimatedProps,
   inputHeight,
+  inputMaxHeight,
   inputRef,
   placeholder,
   scrollEnabled,
@@ -71,7 +73,7 @@ export function SessionComposerInputCard({
         </Pressable>
       ) : null}
 
-      <View style={[styles.inputWrapper, { minHeight: inputHeight }]}>
+      <View style={[styles.inputWrapper, { minHeight: inputHeight, maxHeight: inputMaxHeight }]}>
         <NativeText
           onTextLayout={(event) => {
             const lines = event.nativeEvent.lines.length;
@@ -100,6 +102,7 @@ export function SessionComposerInputCard({
             {
               color: theme.colors.foreground,
               minHeight: inputHeight,
+              maxHeight: inputMaxHeight,
             },
           ]}
         />
