@@ -112,8 +112,9 @@ async function setLastSyncError(repoId: string, error: string | null): Promise<v
 }
 
 export class LinkedCheckoutAutoSyncManager {
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private timer: ReturnType<typeof setTimeout> | null = null;
   private tickInFlight: Promise<void> | null = null;
+  private started = false;
   private readonly deps: LinkedCheckoutAutoSyncDeps;
 
   constructor(
@@ -124,25 +125,41 @@ export class LinkedCheckoutAutoSyncManager {
   }
 
   start(): void {
-    if (this.timer) return;
-    this.timer = setInterval(() => {
-      this.reconcileAll().catch((error: unknown) => {
-        runtimeDebug("auto-sync tick failed", {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      });
-    }, this.intervalMs);
+    if (this.started) return;
+    this.started = true;
+    void this.runScheduledTick();
   }
 
   stop(): void {
+    this.started = false;
     if (this.timer) {
-      clearInterval(this.timer);
+      clearTimeout(this.timer);
       this.timer = null;
     }
   }
 
   private logTick(message: string, data?: Record<string, unknown>): void {
     runtimeDebug(`auto-sync tick ${message}`, data);
+  }
+
+  private async runScheduledTick(): Promise<void> {
+    try {
+      await this.reconcileAll();
+    } catch (error: unknown) {
+      runtimeDebug("auto-sync tick failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      this.scheduleNextTick();
+    }
+  }
+
+  private scheduleNextTick(): void {
+    if (!this.started || this.timer) return;
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      void this.runScheduledTick();
+    }, this.intervalMs);
   }
 
   reconcileAll(): Promise<void> {

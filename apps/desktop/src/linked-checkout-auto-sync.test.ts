@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LinkedCheckoutConfig } from "./config.js";
 
 vi.mock("./config.js", () => {
@@ -107,6 +107,20 @@ function makeDeps(overrides: Partial<LinkedCheckoutAutoSyncDeps> = {}): LinkedCh
   };
 }
 
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason?: unknown) => void;
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 beforeEach(() => {
   configMock.__reset();
   configMock.setRepoLinkedCheckout.mockClear();
@@ -118,6 +132,10 @@ beforeEach(() => {
       throw new Error(`Branch not found: ${branch}`);
     },
   );
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("LinkedCheckoutAutoSyncManager", () => {
@@ -314,5 +332,51 @@ describe("LinkedCheckoutAutoSyncManager", () => {
     await manager.reconcile("repo-1");
 
     expect(deps.fetch).not.toHaveBeenCalled();
+  });
+
+  it("start runs immediately and only schedules the next tick after the current one finishes", async () => {
+    vi.useFakeTimers();
+    seedAttachment("repo-1");
+    const fetchGate = createDeferred<void>();
+    const deps = makeDeps({
+      fetch: vi.fn(async () => fetchGate.promise),
+    });
+    const manager = new LinkedCheckoutAutoSyncManager(15_000, deps);
+
+    manager.start();
+    await Promise.resolve();
+
+    expect(deps.fetch).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(deps.fetch).toHaveBeenCalledTimes(1);
+
+    fetchGate.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    expect(deps.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("stop prevents rescheduling after an in-flight tick completes", async () => {
+    vi.useFakeTimers();
+    seedAttachment("repo-1");
+    const fetchGate = createDeferred<void>();
+    const deps = makeDeps({
+      fetch: vi.fn(async () => fetchGate.promise),
+    });
+    const manager = new LinkedCheckoutAutoSyncManager(15_000, deps);
+
+    manager.start();
+    await Promise.resolve();
+
+    expect(deps.fetch).toHaveBeenCalledTimes(1);
+
+    manager.stop();
+    fetchGate.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(deps.fetch).toHaveBeenCalledTimes(1);
   });
 });
