@@ -18,11 +18,12 @@ export function useHeaderSearchBarOptions({
     () => ({
       placeholder,
       hideWhenScrolling,
-      barTintColor: theme.colors.surfaceElevated,
+      placement: "stacked" as const,
+      hideNavigationBar: false,
+      obscureBackground: false,
+      barTintColor: theme.colors.surface,
       textColor: theme.colors.foreground,
-      hintTextColor: theme.colors.mutedForeground,
       tintColor: theme.colors.foreground,
-      headerIconColor: theme.colors.foreground,
       onChangeText,
       onCancelButtonPress,
     }),
@@ -32,8 +33,7 @@ export function useHeaderSearchBarOptions({
       onChangeText,
       placeholder,
       theme.colors.foreground,
-      theme.colors.mutedForeground,
-      theme.colors.surfaceElevated,
+      theme.colors.surface,
     ],
   );
 }
