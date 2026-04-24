@@ -31,8 +31,6 @@ type LinkedCheckoutMutationData = Partial<
   Record<LinkedCheckoutMutationField, DesktopLinkedCheckoutActionResult | null>
 >;
 
-const LINKED_CHECKOUT_POLL_INTERVAL_MS = 10_000;
-
 interface LinkedCheckoutState {
   statusByKey: Record<string, DesktopLinkedCheckoutStatus | null | undefined>;
   pendingByKey: Record<string, boolean>;
@@ -336,22 +334,7 @@ export function useLinkedCheckoutStatus(
 
   useEffect(() => {
     if (!enabled || !repoId || !sessionGroupId || !runtimeInstanceId) return;
-
-    const refresh = () => {
-      if (typeof document !== "undefined" && document.hidden) return;
-      void refreshLinkedCheckoutStatus(repoId, sessionGroupId, runtimeInstanceId).catch(() => {});
-    };
-
-    refresh();
-
-    const intervalId = window.setInterval(refresh, LINKED_CHECKOUT_POLL_INTERVAL_MS);
-    const onVisible = () => refresh();
-    document.addEventListener("visibilitychange", onVisible);
-
-    return () => {
-      window.clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
+    void refreshLinkedCheckoutStatus(repoId, sessionGroupId, runtimeInstanceId).catch(() => {});
   }, [enabled, repoId, runtimeInstanceId, sessionGroupId, refreshTick]);
 
   return {

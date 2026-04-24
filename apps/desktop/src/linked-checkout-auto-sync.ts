@@ -77,7 +77,6 @@ export interface LinkedCheckoutAutoSyncDeps {
   switchDetached: (repoPath: string, sha: string) => Promise<void>;
   getCurrentBranch: (repoPath: string) => Promise<string | null>;
   hasInProgressOperation: (repoPath: string) => Promise<boolean>;
-  reportStatus: (repoId: string) => Promise<void>;
   now: () => string;
 }
 
@@ -98,7 +97,6 @@ const defaultDeps: LinkedCheckoutAutoSyncDeps = {
   },
   getCurrentBranch,
   hasInProgressOperation: hasInProgressGitOperation,
-  reportStatus: async () => undefined,
   now: () => new Date().toISOString(),
 };
 
@@ -253,7 +251,6 @@ export class LinkedCheckoutAutoSyncManager {
         if (isTransientFetchError(message)) {
           this.logTick("hit transient fetch failure", { repoId, targetBranch, error: message });
           await setLastSyncError(repoId, message);
-          await this.deps.reportStatus(repoId);
           return;
         }
         this.logTick("hit hard fetch failure", { repoId, targetBranch, error: message });
@@ -290,7 +287,6 @@ export class LinkedCheckoutAutoSyncManager {
             lastSyncError: currentAttachment.lastSyncError,
           });
           await setLastSyncError(repoId, null);
-          await this.deps.reportStatus(repoId);
         } else {
           this.logTick("already in sync", { repoId, targetSha });
         }
@@ -349,13 +345,11 @@ export class LinkedCheckoutAutoSyncManager {
         targetBranch,
         targetSha,
       });
-      await this.deps.reportStatus(repoId);
     });
   }
 
   private async pause(repoId: string, reason: string): Promise<void> {
     runtimeDebug("auto-sync paused linked checkout", { repoId, reason });
     await pauseExistingAttachment(repoId, reason);
-    await this.deps.reportStatus(repoId);
   }
 }

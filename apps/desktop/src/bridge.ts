@@ -183,12 +183,7 @@ export class BridgeClient implements IBridgeClient {
         this.send({ type: "terminal_exit", terminalId, exitCode });
       },
     });
-    this.autoSyncManager = new LinkedCheckoutAutoSyncManager(
-      LINKED_CHECKOUT_AUTO_SYNC_INTERVAL_MS,
-      {
-        reportStatus: (repoId) => this.reportLinkedCheckoutStatus(repoId),
-      },
-    );
+    this.autoSyncManager = new LinkedCheckoutAutoSyncManager(LINKED_CHECKOUT_AUTO_SYNC_INTERVAL_MS);
     setAutoSyncManager(this.autoSyncManager);
   }
 
@@ -305,19 +300,6 @@ export class BridgeClient implements IBridgeClient {
   send(data: BridgeMessage) {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(data));
-    }
-  }
-
-  private async reportLinkedCheckoutStatus(repoId: string): Promise<void> {
-    if (this.ws?.readyState !== WebSocket.OPEN) return;
-    try {
-      const status = await getLinkedCheckoutStatus(repoId);
-      this.send({ type: "linked_checkout_status_update", status });
-    } catch (error) {
-      runtimeDebug("failed to report linked checkout status", {
-        repoId,
-        error: error instanceof Error ? error.message : String(error),
-      });
     }
   }
 

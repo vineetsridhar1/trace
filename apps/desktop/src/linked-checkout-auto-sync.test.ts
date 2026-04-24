@@ -102,7 +102,6 @@ function makeDeps(overrides: Partial<LinkedCheckoutAutoSyncDeps> = {}): LinkedCh
     switchDetached: vi.fn(async () => undefined),
     getCurrentBranch: vi.fn(async () => null),
     hasInProgressOperation: vi.fn(async () => false),
-    reportStatus: vi.fn(async () => undefined),
     now: () => "2026-04-18T00:00:00.000Z",
     ...overrides,
   };
@@ -134,7 +133,6 @@ describe("LinkedCheckoutAutoSyncManager", () => {
 
     expect(deps.fetch).toHaveBeenCalledWith("/tmp/repo-repo-1", "main");
     expect(deps.switchDetached).toHaveBeenCalledWith("/tmp/repo-repo-1", "b".repeat(40));
-    expect(deps.reportStatus).toHaveBeenCalledWith("repo-1");
     expect(configMock.__state.repos["repo-1"].linkedCheckout).toMatchObject({
       lastSyncedCommitSha: "b".repeat(40),
       lastSyncError: null,
