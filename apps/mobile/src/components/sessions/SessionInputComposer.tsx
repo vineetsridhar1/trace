@@ -6,6 +6,9 @@ import * as ImagePicker from "expo-image-picker";
 import Animated, {
   FadeInDown,
   FadeOutDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
 } from "react-native-reanimated";
 import { DISMISS_SESSION_MUTATION, generateUUID, useEntityField } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
@@ -22,8 +25,6 @@ import { ComposerMorphPill } from "./ComposerMorphPill";
 import { ComposerPasteButton } from "./ComposerPasteButton";
 import { ImageAttachmentBar } from "./ImageAttachmentBar";
 import {
-  INPUT_CARD_MIN_HEIGHT,
-  INPUT_CARD_VERTICAL_CHROME,
   MAX_IMAGES,
   MAX_INPUT_HEIGHT,
   MIN_INPUT_HEIGHT,
@@ -85,7 +86,6 @@ export function SessionInputComposer({
   const [text, setText] = useState("");
   const [mode, setMode] = useState<ComposerMode>("code");
   const [height, setHeight] = useState(MIN_INPUT_HEIGHT);
-  const [contentHeight, setContentHeight] = useState(MIN_INPUT_HEIGHT);
   const [errorDraft, setErrorDraft] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
@@ -210,11 +210,13 @@ export function SessionInputComposer({
     tool,
   });
 
-  const inputCardMinHeight = Math.max(
-    INPUT_CARD_MIN_HEIGHT,
-    height + INPUT_CARD_VERTICAL_CHROME,
-  );
-  const inputScrollEnabled = contentHeight > MAX_INPUT_HEIGHT;
+  const inputHeight = useSharedValue(MIN_INPUT_HEIGHT);
+  useEffect(() => {
+    inputHeight.value = withTiming(height, {
+      duration: theme.motion.durations.fast,
+    });
+  }, [height, inputHeight, theme.motion.durations.fast]);
+  const inputAnimatedStyle = useAnimatedStyle(() => ({ height: inputHeight.value }));
 
   const handleFocus = useCallback(() => {
     setFocused(true);
@@ -237,7 +239,6 @@ export function SessionInputComposer({
   }, []);
 
   const handleContentHeightChange = useCallback((contentHeight: number) => {
-    setContentHeight((current) => (current === contentHeight ? current : contentHeight));
     const next = Math.min(MAX_INPUT_HEIGHT, Math.max(MIN_INPUT_HEIGHT, contentHeight));
     setHeight((current) => (current === next ? current : next));
   }, []);
@@ -414,15 +415,12 @@ export function SessionInputComposer({
 
           <SessionComposerInputCard
             canInteract={canInteract}
-            cardMinHeight={inputCardMinHeight}
             errorDraft={errorDraft}
             errorMessage={errorMessage}
             glassAnimatedProps={glassAnimatedProps}
-            inputHeight={height}
-            inputMaxHeight={MAX_INPUT_HEIGHT}
+            inputAnimatedStyle={inputAnimatedStyle}
             inputRef={inputRef}
             placeholder={placeholder}
-            scrollEnabled={inputScrollEnabled}
             text={text}
             cardBorderAnimatedStyle={cardBorderAnimatedStyle}
             onBlur={handleBlur}

@@ -1,7 +1,6 @@
 import { StyleSheet } from "react-native";
 import {
   ACTION_SIZE,
-  INPUT_CARD_MIN_HEIGHT,
   INPUT_ACTION_GAP,
   MODEL_CHIP_SIZE,
   MODE_CONTENT_GAP,
@@ -31,7 +30,7 @@ export const styles = StyleSheet.create({
   },
   inputCard: {
     flex: 1,
-    minHeight: INPUT_CARD_MIN_HEIGHT,
+    minHeight: 46,
     borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 14,
@@ -65,14 +64,6 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingVertical: 2,
     textAlignVertical: "top",
-  },
-  measurementText: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    opacity: 0,
-    zIndex: -1,
   },
   attachButtonSlot: {
     marginLeft: INPUT_ACTION_GAP,

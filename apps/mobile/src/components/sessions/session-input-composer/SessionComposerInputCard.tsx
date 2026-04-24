@@ -1,27 +1,24 @@
 import type { RefObject } from "react";
-import { Pressable, Text as NativeText, TextInput, View } from "react-native";
+import { Pressable, TextInput } from "react-native";
 import Animated from "react-native-reanimated";
 import { Glass, Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
 import { styles } from "./styles";
 import type {
-  ComposerGlassAnimatedProps,
   ComposerAnimatedViewStyle,
+  ComposerGlassAnimatedProps,
 } from "./types";
 
 const AnimatedGlass = Animated.createAnimatedComponent(Glass);
 
 interface SessionComposerInputCardProps {
   canInteract: boolean;
-  cardMinHeight: number;
   errorDraft: string | null;
   errorMessage: string | null;
   glassAnimatedProps: ComposerGlassAnimatedProps;
-  inputHeight: number;
-  inputMaxHeight: number;
+  inputAnimatedStyle: ComposerAnimatedViewStyle;
   inputRef: RefObject<TextInput | null>;
   placeholder: string;
-  scrollEnabled: boolean;
   text: string;
   cardBorderAnimatedStyle: ComposerAnimatedViewStyle;
   onBlur: () => void;
@@ -33,15 +30,12 @@ interface SessionComposerInputCardProps {
 
 export function SessionComposerInputCard({
   canInteract,
-  cardMinHeight,
   errorDraft,
   errorMessage,
   glassAnimatedProps,
-  inputHeight,
-  inputMaxHeight,
+  inputAnimatedStyle,
   inputRef,
   placeholder,
-  scrollEnabled,
   text,
   cardBorderAnimatedStyle,
   onBlur,
@@ -51,31 +45,13 @@ export function SessionComposerInputCard({
   onRetry,
 }: SessionComposerInputCardProps) {
   const theme = useTheme();
-  const measurementText = text.length > 0 ? `${text}\u200b` : " ";
-  const cardSizeStyle = scrollEnabled
-    ? { minHeight: cardMinHeight, height: cardMinHeight, maxHeight: cardMinHeight }
-    : { minHeight: cardMinHeight };
-  const inputWrapperStyle = scrollEnabled
-    ? { minHeight: inputHeight, height: inputMaxHeight, maxHeight: inputMaxHeight }
-    : { minHeight: inputHeight };
-  const inputSizeStyle = scrollEnabled
-    ? {
-        color: theme.colors.foreground,
-        minHeight: inputHeight,
-        height: inputMaxHeight,
-        maxHeight: inputMaxHeight,
-      }
-    : {
-        color: theme.colors.foreground,
-        minHeight: inputHeight,
-      };
 
   return (
     <AnimatedGlass
       preset="input"
       animatedProps={glassAnimatedProps}
       interactive
-      style={[styles.inputCard, cardSizeStyle, cardBorderAnimatedStyle]}
+      style={[styles.inputCard, cardBorderAnimatedStyle]}
     >
       {errorDraft ? (
         <Pressable
@@ -90,18 +66,7 @@ export function SessionComposerInputCard({
         </Pressable>
       ) : null}
 
-      <View style={[styles.inputWrapper, inputWrapperStyle]}>
-        <NativeText
-          onTextLayout={(event) => {
-            const lines = event.nativeEvent.lines.length;
-            if (lines === 0) return;
-            const measuredHeight = lines * 21 + 4;
-            onContentHeightChange(measuredHeight);
-          }}
-          style={[styles.input, styles.measurementText]}
-        >
-          {measurementText}
-        </NativeText>
+      <Animated.View style={[styles.inputWrapper, inputAnimatedStyle]}>
         <TextInput
           ref={inputRef}
           value={text}
@@ -111,12 +76,11 @@ export function SessionComposerInputCard({
           onContentSizeChange={(event) => onContentHeightChange(event.nativeEvent.contentSize.height)}
           editable={canInteract}
           multiline
-          scrollEnabled={scrollEnabled}
           placeholder={placeholder}
           placeholderTextColor={theme.colors.dimForeground}
-          style={[styles.input, inputSizeStyle]}
+          style={[styles.input, { color: theme.colors.foreground }]}
         />
-      </View>
+      </Animated.View>
     </AnimatedGlass>
   );
 }
