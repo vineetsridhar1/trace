@@ -35,10 +35,18 @@ export const SessionGroupRow = memo(function SessionGroupRow({
   const name = useEntityField("sessionGroups", groupId, "name");
   const status = useEntityField("sessionGroups", groupId, "status");
   const branch = useEntityField("sessionGroups", groupId, "branch");
+  const groupRepo = useEntityField("sessionGroups", groupId, "repo") as
+    | { name?: string | null }
+    | null
+    | undefined;
   const archivedAt = useEntityField("sessionGroups", groupId, "archivedAt");
   const attached = useAttachedCheckoutForGroup(groupId);
 
   const latestSessionId = useLatestSessionIdForGroup(groupId);
+  const latestSessionRepo = useEntityField("sessions", latestSessionId ?? "", "repo") as
+    | { name?: string | null }
+    | null
+    | undefined;
   const lastMessageAt = useEntityField("sessions", latestSessionId ?? "", "lastMessageAt");
   const updatedAt = useEntityField("sessions", latestSessionId ?? "", "updatedAt");
   const agentStatus = useEntityField("sessions", latestSessionId ?? "", "agentStatus");
@@ -115,6 +123,7 @@ export const SessionGroupRow = memo(function SessionGroupRow({
 
   const chipVariant = mapStatusToChipVariant(status);
   const timestamp = lastMessageAt ?? updatedAt ?? null;
+  const secondaryLabel = latestSessionRepo?.name ?? groupRepo?.name ?? branch ?? null;
 
   return (
     <ContextMenu actions={actions} onPress={handleMenuPress} preview={null}>
@@ -164,7 +173,7 @@ export const SessionGroupRow = memo(function SessionGroupRow({
                 />
               ) : null}
             </View>
-            {branch ? (
+            {secondaryLabel ? (
               <Text
                 numberOfLines={1}
                 style={[
@@ -173,7 +182,7 @@ export const SessionGroupRow = memo(function SessionGroupRow({
                   { color: theme.colors.dimForeground, fontSize: 12 },
                 ]}
               >
-                {branch}
+                {secondaryLabel}
               </Text>
             ) : null}
             {lastEventPreview ? (
