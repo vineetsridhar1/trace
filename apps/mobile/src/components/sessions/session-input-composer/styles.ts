@@ -69,6 +69,7 @@ export const styles = StyleSheet.create({
   modeChipIcon: { width: 16, height: 16 },
   inputWrapper: { overflow: "hidden" },
   input: {
+    height: "100%",
     fontSize: 16,
     lineHeight: 21,
     paddingHorizontal: 0,
