@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
 import { BottomSheet, Host } from "@expo/ui/swift-ui";
 import { SessionTabSwitcherContent } from "./SessionTabSwitcherContent";
@@ -17,59 +17,49 @@ export function SessionTabSwitcherSheet({
   onClose,
 }: SessionTabSwitcherSheetProps) {
   const { width } = useWindowDimensions();
-  const [mounted, setMounted] = useState(open);
-  const [presented, setPresented] = useState(open);
   const pendingActionRef = useRef<(() => void) | null>(null);
-
-  useEffect(() => {
-    if (!open) {
-      if (mounted) setPresented(false);
-      return;
-    }
-    setMounted(true);
-    setPresented(true);
-  }, [mounted, open]);
 
   const handlePresentedChange = useCallback(
     (isPresented: boolean) => {
-      if (isPresented) return;
-      setMounted(false);
+      if (isPresented === open) return;
       onClose();
+      if (isPresented) return;
       pendingActionRef.current?.();
       pendingActionRef.current = null;
     },
-    [onClose],
+    [onClose, open],
   );
 
   const requestClose = useCallback(
     (afterClose?: () => void) => {
       pendingActionRef.current = afterClose ?? null;
-      setPresented(false);
+      onClose();
     },
-    [],
+    [onClose],
   );
 
   const hostStyle = useMemo(() => [styles.host, { width }], [width]);
-
-  if (!mounted) return null;
+  const contentHostStyle = useMemo(() => [styles.contentHost, { width }], [width]);
 
   return (
-    <View style={styles.anchor}>
+    <View pointerEvents="box-none" style={styles.anchor}>
       <Host style={hostStyle}>
         <BottomSheet
-          isOpened={presented}
+          isOpened={open}
           onIsOpenedChange={handlePresentedChange}
           presentationDetents={["medium", "large"]}
           presentationDragIndicator="visible"
         >
-          <View style={styles.sheetContent}>
-            <SessionTabSwitcherContent
-              groupId={groupId}
-              activeSessionId={activeSessionId}
-              requestClose={requestClose}
-              contentInset="sheet"
-            />
-          </View>
+          <Host matchContents={{ vertical: true }} style={contentHostStyle}>
+            <View style={styles.sheetContent}>
+              <SessionTabSwitcherContent
+                groupId={groupId}
+                activeSessionId={activeSessionId}
+                requestClose={requestClose}
+                contentInset="sheet"
+              />
+            </View>
+          </Host>
         </BottomSheet>
       </Host>
     </View>
@@ -89,6 +79,9 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     height: 1,
+  },
+  contentHost: {
+    minHeight: 0,
   },
   sheetContent: {
     flex: 1,
