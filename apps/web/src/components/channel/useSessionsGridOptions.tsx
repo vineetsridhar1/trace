@@ -12,6 +12,11 @@ import { SessionStatusGroupLabel } from "./SessionStatusGroupLabel";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { collapsedByDefault, sessionStatusGroupOrder } from "./sessions-table-types";
 
+function getRowSortTimestamp(row: SessionGroupRow | undefined): number {
+  const timestamp = row?._groupLastMessageAt ?? row?._sortTimestamp ?? row?.updatedAt ?? row?.createdAt;
+  return timestamp ? new Date(timestamp).getTime() : 0;
+}
+
 export function useSessionsGridOptions({
   channelId,
   filterStorageKey,
@@ -84,9 +89,28 @@ export function useSessionsGridOptions({
       },
     },
     initialGroupOrderComparator: (params: {
-      nodeA: { key?: string | null };
-      nodeB: { key?: string | null };
+      nodeA: {
+        key?: string | null;
+        allLeafChildren?: Array<{ data?: SessionGroupRow }>;
+      };
+      nodeB: {
+        key?: string | null;
+        allLeafChildren?: Array<{ data?: SessionGroupRow }>;
+      };
     }) => {
+      const aLatest = Math.max(
+        ...((params.nodeA.allLeafChildren ?? []).map((child) => getRowSortTimestamp(child.data))),
+        0,
+      );
+      const bLatest = Math.max(
+        ...((params.nodeB.allLeafChildren ?? []).map((child) => getRowSortTimestamp(child.data))),
+        0,
+      );
+      const recencyDiff = bLatest - aLatest;
+      if (recencyDiff !== 0) {
+        return recencyDiff;
+      }
+
       const a = sessionStatusGroupOrder[params.nodeA.key ?? ""] ?? 99;
       const b = sessionStatusGroupOrder[params.nodeB.key ?? ""] ?? 99;
       return a - b;

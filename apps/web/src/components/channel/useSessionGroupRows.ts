@@ -23,8 +23,7 @@ function getSessionMessageTimestamp(session: SessionEntity | undefined): string 
 
 function getSessionSortTimestamp(session: SessionEntity | undefined): string | undefined {
   return (
-    session?._sortTimestamp
-    ?? getSessionMessageTimestamp(session)
+    getSessionMessageTimestamp(session)
     ?? session?.updatedAt
     ?? session?.createdAt
   );
@@ -143,11 +142,12 @@ export function useSessionGroupRows(
           _sessionCount: groupSessions.length,
           _groupLastMessageAt:
             getSessionMessageTimestamp(latestMessageSession)
+            ?? group.updatedAt
             ?? group.createdAt,
           _sortTimestamp:
-            getSessionSortTimestamp(latestSession)
-            ?? group._sortTimestamp
-            ?? group.updatedAt,
+            getSessionMessageTimestamp(latestMessageSession)
+            ?? group.updatedAt
+            ?? group.createdAt,
         } as SessionGroupRow;
 
         if (shouldIncludeArchived) {
