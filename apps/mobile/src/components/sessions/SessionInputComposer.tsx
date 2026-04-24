@@ -14,9 +14,16 @@ import { DISMISS_SESSION_MUTATION, generateUUID, useEntityField } from "@trace/c
 import type { CodingTool, SessionConnection } from "@trace/gql";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
 import { useClipboardImage } from "@/hooks/useClipboardImage";
+import { useSlashCommands } from "@/hooks/useSlashCommands";
 import { haptic } from "@/lib/haptics";
 import { recordPerf } from "@/lib/perf";
+import {
+  filterSlashCommands,
+  getActiveSlashCommandQuery,
+  insertSlashCommand,
+} from "@/lib/slashCommands";
 import { getClient } from "@/lib/urql";
+import { createQuickSession } from "@/lib/createQuickSession";
 import { useDraftsStore, type ImageAttachment } from "@/stores/drafts";
 import { alpha, useTheme } from "@/theme";
 import { ComposerAttachButton } from "./ComposerAttachButton";
@@ -33,6 +40,7 @@ import { SessionComposerActionButton } from "./session-input-composer/SessionCom
 import { SessionComposerInputCard } from "./session-input-composer/SessionComposerInputCard";
 import { SessionComposerLeadingChips } from "./session-input-composer/SessionComposerLeadingChips";
 import { SessionComposerMeasurementLayer } from "./session-input-composer/SessionComposerMeasurementLayer";
+import { SessionComposerSlashCommandMenu } from "./session-input-composer/SessionComposerSlashCommandMenu";
 import { styles } from "./session-input-composer/styles";
 import { useSessionComposerChips } from "./session-input-composer/useSessionComposerChips";
 import { useSessionComposerConfig } from "./session-input-composer/useSessionComposerConfig";
@@ -77,6 +85,10 @@ export function SessionInputComposer({
     | string
     | null
     | undefined;
+  const channel = useEntityField("sessions", sessionId, "channel") as
+    | { id: string }
+    | null
+    | undefined;
   const repo = useEntityField("sessions", sessionId, "repo") as
     | { id: string }
     | null
@@ -84,6 +96,7 @@ export function SessionInputComposer({
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic");
 
   const [text, setText] = useState("");
+  const [selection, setSelection] = useState({ start: 0, end: 0 });
   const [mode, setMode] = useState<ComposerMode>("code");
   const [height, setHeight] = useState(MIN_INPUT_HEIGHT);
   const [errorDraft, setErrorDraft] = useState<string | null>(null);
@@ -114,12 +127,14 @@ export function SessionInputComposer({
 
   const onFailure = useCallback((draft: string, message: string) => {
     setText(draft);
+    setSelection({ start: draft.length, end: draft.length });
     setErrorDraft(draft);
     setErrorMessage(message);
   }, []);
 
   const onSuccess = useCallback(() => {
     setText("");
+    setSelection({ start: 0, end: 0 });
     setErrorDraft(null);
     setErrorMessage(null);
   }, []);
@@ -130,6 +145,7 @@ export function SessionInputComposer({
     onFailure,
     onSuccess,
   });
+  const { commands: slashCommands } = useSlashCommands(sessionId);
 
   const trimmed = text.trim();
   const canInteract =
@@ -158,6 +174,15 @@ export function SessionInputComposer({
   const hasSendable = trimmed.length > 0 || images.length > 0;
   const showSend = (isActive && focused) || (!isActive && hasSendable);
   const showStop = isActive && !focused;
+  const activeSlashQuery = getActiveSlashCommandQuery(text, selection);
+  const matchingSlashCommands = activeSlashQuery
+    ? filterSlashCommands(slashCommands, activeSlashQuery.query)
+    : [];
+  const showSlashCommandMenu =
+    inputFocused &&
+    canInteract &&
+    activeSlashQuery !== null &&
+    matchingSlashCommands.length > 0;
 
   const {
     cardBorderAnimatedStyle,
@@ -244,8 +269,28 @@ export function SessionInputComposer({
   }, []);
 
   const handleSend = useCallback(() => {
+    if (!canInteract) return;
+
+    if (trimmed === "/clear") {
+      const channelId = channel?.id;
+      if (channelId) {
+        onSuccess();
+        void createQuickSession(channelId);
+        return;
+      }
+    }
+
     if (canSubmit) void runSubmit(trimmed, mode);
-  }, [canSubmit, mode, runSubmit, trimmed]);
+  }, [canInteract, canSubmit, channel?.id, mode, onSuccess, runSubmit, trimmed]);
+
+  const handleSlashCommandSelect = useCallback((commandName: string) => {
+    const next = insertSlashCommand(text, selection, commandName);
+    setText(next.text);
+    setSelection(next.selection);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  }, [selection, text]);
 
   const handlePasteImage = useCallback(async () => {
     if (pastingImage || images.length >= MAX_IMAGES) return;
@@ -413,22 +458,35 @@ export function SessionInputComposer({
             onModelTouchStart={scheduleModelCollapse}
           />
 
-          <SessionComposerInputCard
-            canInteract={canInteract}
-            errorDraft={errorDraft}
-            errorMessage={errorMessage}
-            glassAnimatedProps={glassAnimatedProps}
-            inputAnimatedStyle={inputAnimatedStyle}
-            inputRef={inputRef}
-            placeholder={placeholder}
-            text={text}
-            cardBorderAnimatedStyle={cardBorderAnimatedStyle}
-            onBlur={handleBlur}
-            onChangeText={handleChangeText}
-            onContentHeightChange={handleContentHeightChange}
-            onFocus={handleFocus}
-            onRetry={handleRetry}
-          />
+          <View style={styles.inputCardSlot}>
+            {showSlashCommandMenu ? (
+              <View style={styles.slashMenuOverlay}>
+                <SessionComposerSlashCommandMenu
+                  commands={matchingSlashCommands}
+                  onSelect={(command) => handleSlashCommandSelect(command.name)}
+                />
+              </View>
+            ) : null}
+
+            <SessionComposerInputCard
+              canInteract={canInteract}
+              errorDraft={errorDraft}
+              errorMessage={errorMessage}
+              glassAnimatedProps={glassAnimatedProps}
+              inputAnimatedStyle={inputAnimatedStyle}
+              inputRef={inputRef}
+              placeholder={placeholder}
+              selection={selection}
+              text={text}
+              cardBorderAnimatedStyle={cardBorderAnimatedStyle}
+              onBlur={handleBlur}
+              onChangeText={handleChangeText}
+              onContentHeightChange={handleContentHeightChange}
+              onFocus={handleFocus}
+              onRetry={handleRetry}
+              onSelectionChange={setSelection}
+            />
+          </View>
 
           {isActive && !focused ? null : (
             <View style={styles.attachButtonSlot}>

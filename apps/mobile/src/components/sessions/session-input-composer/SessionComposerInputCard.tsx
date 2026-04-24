@@ -1,13 +1,16 @@
 import type { RefObject } from "react";
-import { Pressable, TextInput } from "react-native";
+import {
+  Pressable,
+  TextInput,
+  type NativeSyntheticEvent,
+  type TextInputSelectionChangeEventData,
+} from "react-native";
 import Animated from "react-native-reanimated";
 import { Glass, Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
 import { styles } from "./styles";
-import type {
-  ComposerAnimatedViewStyle,
-  ComposerGlassAnimatedProps,
-} from "./types";
+import type { ComposerAnimatedViewStyle, ComposerGlassAnimatedProps } from "./types";
+import type { ComposerSelection } from "@/lib/slashCommands";
 
 const AnimatedGlass = Animated.createAnimatedComponent(Glass);
 
@@ -19,12 +22,14 @@ interface SessionComposerInputCardProps {
   inputAnimatedStyle: ComposerAnimatedViewStyle;
   inputRef: RefObject<TextInput | null>;
   placeholder: string;
+  selection: ComposerSelection;
   text: string;
   cardBorderAnimatedStyle: ComposerAnimatedViewStyle;
   onBlur: () => void;
   onChangeText: (text: string) => void;
   onContentHeightChange: (height: number) => void;
   onFocus: () => void;
+  onSelectionChange: (selection: ComposerSelection) => void;
   onRetry: () => void;
 }
 
@@ -36,15 +41,23 @@ export function SessionComposerInputCard({
   inputAnimatedStyle,
   inputRef,
   placeholder,
+  selection,
   text,
   cardBorderAnimatedStyle,
   onBlur,
   onChangeText,
   onContentHeightChange,
   onFocus,
+  onSelectionChange,
   onRetry,
 }: SessionComposerInputCardProps) {
   const theme = useTheme();
+
+  const handleSelectionChange = (
+    event: NativeSyntheticEvent<TextInputSelectionChangeEventData>,
+  ) => {
+    onSelectionChange(event.nativeEvent.selection);
+  };
 
   return (
     <AnimatedGlass
@@ -73,11 +86,16 @@ export function SessionComposerInputCard({
           onChangeText={onChangeText}
           onFocus={onFocus}
           onBlur={onBlur}
-          onContentSizeChange={(event) => onContentHeightChange(event.nativeEvent.contentSize.height)}
+          onContentSizeChange={(event) =>
+            onContentHeightChange(event.nativeEvent.contentSize.height)
+          }
+          onSelectionChange={handleSelectionChange}
           editable={canInteract}
           multiline
+          scrollEnabled={false}
           placeholder={placeholder}
           placeholderTextColor={theme.colors.dimForeground}
+          selection={selection}
           style={[styles.input, { color: theme.colors.foreground }]}
         />
       </Animated.View>

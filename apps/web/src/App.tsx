@@ -40,17 +40,16 @@ export function App() {
     fetchMe();
   }, [fetchMe]);
 
-  const token = useAuthStore((s: AuthState) => s.token);
   useEffect(() => {
     if (!window.trace?.setBridgeAuthContext) return;
 
-    if (!user || !token || !activeOrgId) {
-      void window.trace.setBridgeAuthContext(null, null);
+    if (!user || !activeOrgId) {
+      void window.trace.setBridgeAuthContext(null);
       return;
     }
 
-    void window.trace.setBridgeAuthContext(token, activeOrgId);
-  }, [activeOrgId, user, token]);
+    void window.trace.setBridgeAuthContext(activeOrgId);
+  }, [activeOrgId, user]);
 
   if (loading) {
     return (

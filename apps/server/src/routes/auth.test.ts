@@ -1,6 +1,7 @@
 import { createServer, type Server } from "http";
 import type { AddressInfo } from "net";
 import express from "express";
+import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -38,6 +39,10 @@ type PrismaMock = ReturnType<typeof import("../../test/helpers.js").createPrisma
   };
 };
 const prismaMock = prisma as unknown as PrismaMock;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe("oauth state token", () => {
   it("round-trips an origin through a signed state", () => {
@@ -94,19 +99,25 @@ describe("local login", () => {
       id: "org-1",
       name: "Trace",
     });
-    prismaMock.user.upsert
-      .mockResolvedValueOnce({
-        id: TRACE_AI_USER_ID,
-        email: "ai@trace.dev",
-        name: "Trace AI",
-        avatarUrl: null,
-      })
-      .mockResolvedValueOnce({
-        id: "user-1",
-        email: "jane-developer@trace.local",
-        name: "Jane Developer",
-        avatarUrl: null,
-      });
+    prismaMock.user.upsert.mockResolvedValue({
+      id: TRACE_AI_USER_ID,
+      email: "ai@trace.dev",
+      name: "Trace AI",
+      avatarUrl: null,
+    });
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.user.create.mockResolvedValue({
+      id: "user-1",
+      email: "jane-developer-aaaaaaaaaaaaaaaaaaaaaaaa@trace.local",
+      name: "Jane Developer",
+      avatarUrl: null,
+    });
+    prismaMock.user.update.mockResolvedValue({
+      id: "user-1",
+      email: "jane-developer-aaaaaaaaaaaaaaaaaaaaaaaa@trace.local",
+      name: "Jane Developer",
+      avatarUrl: null,
+    });
     prismaMock.orgMember.upsert.mockResolvedValue({});
     prismaMock.channel.findFirst.mockResolvedValue(null);
     prismaMock.channel.create.mockResolvedValue({ id: "channel-1" });
@@ -130,12 +141,28 @@ describe("local login", () => {
     const body = (await res.json()) as { token: string; organizationId: string };
     expect(jwt.verify(body.token, JWT_SECRET)).toMatchObject({ userId: "user-1" });
     expect(body.organizationId).toBe("org-1");
-    expect(prismaMock.user.upsert).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        where: { email: "jane-developer@trace.local" },
-      }),
-    );
+    expect(prismaMock.user.create).toHaveBeenCalledWith({
+      data: {
+        email: expect.stringMatching(/^jane-developer-[a-f0-9]{24}@trace\.local$/),
+        name: "Jane Developer",
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        avatarUrl: true,
+      },
+    });
+    expect(prismaMock.user.findUnique).toHaveBeenNthCalledWith(1, {
+      where: {
+        email: expect.stringMatching(/^jane-developer-[a-f0-9]{24}@trace\.local$/),
+      },
+      select: { id: true },
+    });
+    expect(prismaMock.user.findUnique).toHaveBeenNthCalledWith(2, {
+      where: { email: "jane-developer@trace.local" },
+      select: { id: true },
+    });
     expect(prismaMock.orgMember.upsert).toHaveBeenCalledWith({
       where: {
         userId_organizationId: {
@@ -167,7 +194,8 @@ describe("local login", () => {
     });
 
     expect(res.status).toBe(400);
-    expect(prismaMock.user.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
   });
 
   it("resumes the most recently used local user when no name is provided", async () => {
@@ -205,7 +233,8 @@ describe("local login", () => {
     });
 
     expect(res.status).toBe(403);
-    expect(prismaMock.user.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
   });
 
   it("rejects proxied local logins without forwarded-for when the forwarded host is public", async () => {
@@ -219,7 +248,35 @@ describe("local login", () => {
     });
 
     expect(res.status).toBe(403);
-    expect(prismaMock.user.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it("reuses legacy local users instead of creating a duplicate account", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "user-1" });
+
+    const res = await fetch(`${baseUrl}/auth/local/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Jane Developer" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: {
+        email: expect.stringMatching(/^jane-developer-[a-f0-9]{24}@trace\.local$/),
+        name: "Jane Developer",
+        githubId: null,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        avatarUrl: true,
+      },
+    });
   });
 });
 
@@ -268,6 +325,21 @@ describe("local-mode external auth", () => {
       headers: {
         Authorization: `Bearer ${token}`,
         Origin: "https://trace.example.com",
+      },
+    });
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({
+      error: "External local-mode access requires a paired mobile token",
+    });
+  });
+
+  it("rejects external auth/me requests when the proxy only sends a Forwarded header", async () => {
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Forwarded: 'for=203.0.113.10;host="trace.example.com"',
       },
     });
 
@@ -366,6 +438,82 @@ describe("local-mode external auth", () => {
         ],
       },
     });
+  });
+
+  it("does not echo the session token from auth/me by default", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: "user-1",
+      email: "local@trace.dev",
+      name: "Local User",
+      avatarUrl: null,
+      orgMemberships: [],
+    });
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      user: {
+        id: "user-1",
+        email: "local@trace.dev",
+        name: "Local User",
+        avatarUrl: null,
+        orgMemberships: [],
+      },
+    });
+  });
+});
+
+describe("bridge auth tokens", () => {
+  let server: Server;
+  let baseUrl: string;
+
+  beforeEach(async () => {
+    const app = express();
+    app.use(express.json());
+    app.use(cookieParser());
+    app.use(authRouter);
+
+    server = createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const { port } = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${port}`;
+  });
+
+  afterEach(async () => {
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
+    vi.unstubAllEnvs();
+  });
+
+  it("mints bridge auth from the session cookie without echoing the session token", async () => {
+    prismaMock.orgMember.findUnique
+      .mockResolvedValueOnce({ organizationId: "org-1" })
+      .mockResolvedValueOnce({ userId: "user-1" });
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/auth/bridge-token?instanceId=bridge-1`, {
+      headers: {
+        Cookie: `trace_token=${token}`,
+        "X-Organization-Id": "org-1",
+      },
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { token: string; expiresAt: string };
+    expect(jwt.verify(body.token, JWT_SECRET)).toMatchObject({
+      userId: "user-1",
+      organizationId: "org-1",
+      instanceId: "bridge-1",
+      tokenType: "bridge_auth",
+    });
+    expect(Date.parse(body.expiresAt)).not.toBeNaN();
   });
 });
 
@@ -631,10 +779,7 @@ describe("oauth origin allowlist", () => {
   });
 
   it("includes CORS_ALLOWED_ORIGINS when set", () => {
-    vi.stubEnv(
-      "CORS_ALLOWED_ORIGINS",
-      "https://trace.app, https://staging.trace.app",
-    );
+    vi.stubEnv("CORS_ALLOWED_ORIGINS", "https://trace.app, https://staging.trace.app");
     const origins = getAllowedOAuthOrigins();
     expect(origins.has("https://trace.app")).toBe(true);
     expect(origins.has("https://staging.trace.app")).toBe(true);

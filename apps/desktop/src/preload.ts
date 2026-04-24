@@ -17,8 +17,8 @@ contextBridge.exposeInMainWorld("trace", {
   getRepoGitHookStatus: (repoId: string) => ipcRenderer.invoke("get-repo-git-hook-status", repoId),
   repairRepoGitHooks: (repoId: string) => ipcRenderer.invoke("repair-repo-git-hooks", repoId),
   getBridgeStatus: () => ipcRenderer.invoke("get-bridge-status"),
-  setBridgeAuthContext: (token: string | null, organizationId: string | null) =>
-    ipcRenderer.invoke("set-bridge-auth-context", token, organizationId),
+  setBridgeAuthContext: (organizationId: string | null) =>
+    ipcRenderer.invoke("set-bridge-auth-context", organizationId),
   onBridgeStatus: (callback: (status: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, status: string) => callback(status);
     ipcRenderer.on("bridge-status", listener);

@@ -70,16 +70,8 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
         set({ user: null, activeOrgId: null, orgMemberships: [], loading: false });
         return;
       }
-      const data = (await res.json()) as { user: Record<string, unknown>; token?: string };
+      const data = (await res.json()) as { user: Record<string, unknown> };
       const { orgMemberships: memberships, ...userFields } = data.user;
-
-      // Ensure the session token is persisted — it may be missing when the
-      // user authenticated via httpOnly cookie (OAuth popup with severed
-      // window.opener in Electron).
-      if (data.token && !token) {
-        await platform.secureStorage.setToken(data.token);
-        set({ token: data.token });
-      }
 
       const user = userFields as User;
       const orgMemberships = (memberships ?? []) as OrgMembership[];
@@ -149,11 +141,9 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
 
   setActiveOrg: (orgId: string) => {
     set({ activeOrgId: orgId });
-    Promise.resolve(getPlatform().storage.setItem(ACTIVE_ORG_KEY, orgId)).catch(
-      (err: unknown) => {
-        console.error("[auth] failed to persist active org", err);
-      },
-    );
+    Promise.resolve(getPlatform().storage.setItem(ACTIVE_ORG_KEY, orgId)).catch((err: unknown) => {
+      console.error("[auth] failed to persist active org", err);
+    });
   },
 }));
 

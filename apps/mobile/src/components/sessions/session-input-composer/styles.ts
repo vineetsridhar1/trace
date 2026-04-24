@@ -14,6 +14,10 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
   },
+  inputCardSlot: {
+    flex: 1,
+    position: "relative",
+  },
   leadingChipsContainer: {
     paddingRight: INPUT_ACTION_GAP,
   },
@@ -29,12 +33,20 @@ export const styles = StyleSheet.create({
     gap: INPUT_ACTION_GAP,
   },
   inputCard: {
-    flex: 1,
+    width: "100%",
     minHeight: 46,
     borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 14,
     paddingVertical: 8,
+  },
+  slashMenuOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: "100%",
+    marginBottom: 10,
+    zIndex: 40,
   },
   modeChipSlot: {
     height: ACTION_SIZE,
