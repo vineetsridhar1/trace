@@ -5,6 +5,7 @@ import {
   presentationDetents,
   presentationDragIndicator,
 } from "@expo/ui/swift-ui/modifiers";
+import { useTheme } from "@/theme";
 import { SessionTabSwitcherContent } from "./SessionTabSwitcherContent";
 
 interface SessionTabSwitcherSheetProps {
@@ -26,6 +27,7 @@ export function SessionTabSwitcherSheet({
   activeSessionId,
   onClose,
 }: SessionTabSwitcherSheetProps) {
+  const theme = useTheme();
   const { width } = useWindowDimensions();
   const [mounted, setMounted] = useState(open);
 
@@ -55,7 +57,16 @@ export function SessionTabSwitcherSheet({
         >
           <Group modifiers={SHEET_MODIFIERS}>
             <RNHostView>
-              <View style={styles.sheetContent}>
+              <View
+                style={[
+                  styles.sheetContent,
+                  {
+                    paddingHorizontal: theme.spacing.lg,
+                    paddingTop: theme.spacing.md,
+                    paddingBottom: theme.spacing.lg,
+                  },
+                ]}
+              >
                 <SessionTabSwitcherContent
                   groupId={groupId}
                   activeSessionId={activeSessionId}

@@ -15,7 +15,7 @@ import type { SessionConnection, SessionGroupStatus } from "@trace/gql";
 import { Spinner, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { haptic } from "@/lib/haptics";
-import { useTheme } from "@/theme";
+import { alpha, useTheme } from "@/theme";
 import { LinkedCheckoutPanelSection } from "./LinkedCheckoutPanelSection";
 
 const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
@@ -273,11 +273,21 @@ function TitleRow({
 
   return (
     <View style={[styles.titleRow, { paddingHorizontal: theme.spacing.md }]}>
-      <SessionStatusIndicator
-        status={status as SessionGroupStatus | null | undefined}
-        agentStatus={agentStatus}
-        size={10}
-      />
+      <View
+        style={[
+          styles.statusBadge,
+          {
+            backgroundColor: alpha(theme.colors.surface, 0.7),
+            borderColor: alpha(theme.colors.foreground, 0.08),
+          },
+        ]}
+      >
+        <SessionStatusIndicator
+          status={status as SessionGroupStatus | null | undefined}
+          agentStatus={agentStatus}
+          size={8}
+        />
+      </View>
       <View style={styles.textBlock}>
         {name ? (
           <Text variant="headline" numberOfLines={nameLines}>
@@ -406,6 +416,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+  },
+  statusBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: StyleSheet.hairlineWidth,
   },
   textBlock: {
     flex: 1,
