@@ -1,34 +1,6 @@
 import { useMemo } from "react";
 import { useTheme } from "@/theme";
 
-export function useNativeStackScreenOptions() {
-  const theme = useTheme();
-
-  return useMemo(
-    () => ({
-      headerStyle: {
-        backgroundColor: theme.colors.surface,
-      },
-      headerLargeStyle: {
-        backgroundColor: theme.colors.background,
-      },
-      headerTintColor: theme.colors.foreground,
-      headerTitleStyle: {
-        color: theme.colors.foreground,
-      },
-      headerLargeTitleStyle: {
-        color: theme.colors.foreground,
-      },
-      headerShadowVisible: false,
-      headerLargeTitleShadowVisible: false,
-      contentStyle: {
-        backgroundColor: theme.colors.background,
-      },
-    }),
-    [theme],
-  );
-}
-
 export function useHeaderSearchBarOptions({
   placeholder,
   hideWhenScrolling,
