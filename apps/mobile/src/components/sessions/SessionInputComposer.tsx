@@ -27,16 +27,13 @@ import { ComposerPasteButton } from "./ComposerPasteButton";
 import { ImageAttachmentBar } from "./ImageAttachmentBar";
 import { SessionModelPickerSheetContent } from "./SessionModelPickerSheetContent";
 import { SessionRuntimePickerSheetContent } from "./SessionRuntimePickerSheetContent";
-import {
-  MAX_IMAGES,
-  MAX_INPUT_HEIGHT,
-  MIN_INPUT_HEIGHT,
-} from "./session-input-composer/constants";
+import { MAX_IMAGES, MAX_INPUT_HEIGHT, MIN_INPUT_HEIGHT } from "./session-input-composer/constants";
 import { SessionComposerActionButton } from "./session-input-composer/SessionComposerActionButton";
 import { SessionComposerBottomSheet } from "./session-input-composer/SessionComposerBottomSheet";
 import { SessionComposerInputCard } from "./session-input-composer/SessionComposerInputCard";
 import { SessionComposerLeadingChips } from "./session-input-composer/SessionComposerLeadingChips";
 import { SessionComposerMeasurementLayer } from "./session-input-composer/SessionComposerMeasurementLayer";
+import { SessionComposerModelTrigger } from "./session-input-composer/SessionComposerModelTrigger";
 import { SessionComposerSheetTrigger } from "./session-input-composer/SessionComposerSheetTrigger";
 import { SessionComposerSlashCommandMenu } from "./session-input-composer/SessionComposerSlashCommandMenu";
 import { styles } from "./session-input-composer/styles";
@@ -140,8 +137,7 @@ export function SessionInputComposer({
   const { commands: slashCommands } = useSlashCommands(sessionId);
 
   const trimmed = text.trim();
-  const canInteract =
-    !isTerminal && !sending && !stopping && !isDisconnected && !isOptimistic;
+  const canInteract = !isTerminal && !sending && !stopping && !isDisconnected && !isOptimistic;
   const canSubmit = canInteract && (trimmed.length > 0 || images.length > 0);
   const canStop = isActive && !stopping;
   const canAttach = canInteract && !pickingImage && images.length < MAX_IMAGES;
@@ -166,15 +162,13 @@ export function SessionInputComposer({
   const hasSendable = trimmed.length > 0 || images.length > 0;
   const showSend = (isActive && focused) || (!isActive && hasSendable);
   const showStop = isActive && !focused;
+  const showCollapsedModelSelector = !focused && !hasSendable && !isActive;
   const activeSlashQuery = getActiveSlashCommandQuery(text, selection);
   const matchingSlashCommands = activeSlashQuery
     ? filterSlashCommands(slashCommands, activeSlashQuery.query)
     : [];
   const showSlashCommandMenu =
-    inputFocused &&
-    canInteract &&
-    activeSlashQuery !== null &&
-    matchingSlashCommands.length > 0;
+    inputFocused && canInteract && activeSlashQuery !== null && matchingSlashCommands.length > 0;
 
   const {
     cardBorderAnimatedStyle,
@@ -192,12 +186,7 @@ export function SessionInputComposer({
     setMode,
   });
 
-  const {
-    bridgeIcon,
-    bridgeLabel,
-    canChangeBridge,
-    modelLabel,
-  } = useSessionComposerConfig({
+  const { bridgeIcon, bridgeLabel, canChangeBridge, modelLabel } = useSessionComposerConfig({
     connection,
     currentTool,
     hosting,
@@ -274,14 +263,17 @@ export function SessionInputComposer({
     if (canSubmit) void runSubmit(trimmed, mode);
   }, [canInteract, canSubmit, channel?.id, mode, onSuccess, runSubmit, trimmed]);
 
-  const handleSlashCommandSelect = useCallback((commandName: string) => {
-    const next = insertSlashCommand(text, selection, commandName);
-    setText(next.text);
-    setSelection(next.selection);
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
-  }, [selection, text]);
+  const handleSlashCommandSelect = useCallback(
+    (commandName: string) => {
+      const next = insertSlashCommand(text, selection, commandName);
+      setText(next.text);
+      setSelection(next.selection);
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
+    },
+    [selection, text],
+  );
 
   const handlePasteImage = useCallback(async () => {
     if (pastingImage || images.length >= MAX_IMAGES) return;
@@ -406,15 +398,10 @@ export function SessionInputComposer({
         paddingTop: theme.spacing.xs,
       }}
     >
-      <SessionComposerMeasurementLayer
-        onModeMeasure={handleModeMeasure}
-      />
+      <SessionComposerMeasurementLayer onModeMeasure={handleModeMeasure} />
 
       {isDisconnected ? (
-        <ComposerConnectionNotice
-          sessionId={sessionId}
-          canRetry={canRetryConnection}
-        />
+        <ComposerConnectionNotice sessionId={sessionId} canRetry={canRetryConnection} />
       ) : null}
 
       <ComposerPasteButton visible={showPasteButton} onPress={() => void handlePasteImage()} />
@@ -422,6 +409,17 @@ export function SessionInputComposer({
 
       <View style={styles.composerStack}>
         <View style={styles.inputActionRow}>
+          {showCollapsedModelSelector ? (
+            <SessionComposerModelTrigger
+              canInteract={canInteract}
+              currentTool={currentTool}
+              modelLabel={modelLabel}
+              minWidth={0}
+              onOpenModelSheet={handleOpenModelSheet}
+              style={styles.collapsedModelChip}
+            />
+          ) : null}
+
           {expanded && !hasSendable && !isActive ? (
             <SessionComposerLeadingChips
               canInteract={canInteract}
@@ -527,21 +525,12 @@ export function SessionInputComposer({
         ) : null}
       </View>
 
-      <SessionComposerBottomSheet
-        visible={activeSheet !== null}
-        onClose={handleCloseSheet}
-      >
+      <SessionComposerBottomSheet visible={activeSheet !== null} onClose={handleCloseSheet}>
         {activeSheet === "model" ? (
-          <SessionModelPickerSheetContent
-            sessionId={sessionId}
-            onClose={handleCloseSheet}
-          />
+          <SessionModelPickerSheetContent sessionId={sessionId} onClose={handleCloseSheet} />
         ) : null}
         {activeSheet === "runtime" ? (
-          <SessionRuntimePickerSheetContent
-            sessionId={sessionId}
-            onClose={handleCloseSheet}
-          />
+          <SessionRuntimePickerSheetContent sessionId={sessionId} onClose={handleCloseSheet} />
         ) : null}
       </SessionComposerBottomSheet>
     </View>

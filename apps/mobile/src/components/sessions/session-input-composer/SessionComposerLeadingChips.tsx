@@ -5,8 +5,7 @@ import type { CodingTool } from "@trace/gql";
 import { Glass } from "@/components/design-system";
 import type { ComposerMode } from "@/hooks/useComposerSubmit";
 import { MODE_ICON, MODE_LABEL } from "./constants";
-import { SessionComposerSheetTrigger } from "./SessionComposerSheetTrigger";
-import { SessionComposerToolLogo } from "./SessionComposerToolLogo";
+import { SessionComposerModelTrigger } from "./SessionComposerModelTrigger";
 import { styles } from "./styles";
 import type {
   ComposerAnimatedTextStyle,
@@ -66,10 +65,7 @@ export function SessionComposerLeadingChips({
                 preset="input"
                 animatedProps={glassAnimatedProps}
                 interactive
-                style={[
-                  styles.modeChip,
-                  chipAnimatedStyle,
-                ]}
+                style={[styles.modeChip, chipAnimatedStyle]}
               >
                 <View
                   style={[
@@ -102,12 +98,11 @@ export function SessionComposerLeadingChips({
         </Animated.View>
 
         <View style={styles.modelChipSlot}>
-          <SessionComposerSheetTrigger
-            label=""
-            accessibilityLabel={`Model: ${modelLabel}`}
-            leading={<SessionComposerToolLogo tool={currentTool} size={18} />}
-            disabled={!canInteract}
-            onPress={onOpenModelSheet}
+          <SessionComposerModelTrigger
+            canInteract={canInteract}
+            currentTool={currentTool}
+            modelLabel={modelLabel}
+            onOpenModelSheet={onOpenModelSheet}
             showLabel={false}
           />
         </View>

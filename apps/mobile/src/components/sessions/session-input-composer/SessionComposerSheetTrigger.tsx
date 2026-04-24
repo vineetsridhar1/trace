@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, View, type ViewStyle } from "react-native";
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { Glass } from "@/components/design-system";
 import { Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
@@ -13,7 +13,7 @@ interface SessionComposerSheetTriggerProps {
   onPress: () => void;
   minWidth?: number;
   showLabel?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function SessionComposerSheetTrigger({
@@ -34,7 +34,13 @@ export function SessionComposerSheetTrigger({
       accessibilityLabel={accessibilityLabel}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [styles.pressable, { minWidth }, style, disabled ? styles.disabled : null, pressed ? styles.pressed : null]}
+      style={({ pressed }) => [
+        styles.pressable,
+        { minWidth },
+        style,
+        disabled ? styles.disabled : null,
+        pressed ? styles.pressed : null,
+      ]}
     >
       <Glass
         preset="input"
@@ -49,12 +55,7 @@ export function SessionComposerSheetTrigger({
         <View style={styles.content}>
           <View style={styles.leading}>{leading}</View>
           {showLabel ? (
-            <Text
-              variant="caption1"
-              color="foreground"
-              numberOfLines={1}
-              style={styles.label}
-            >
+            <Text variant="caption1" color="foreground" numberOfLines={1} style={styles.label}>
               {label}
             </Text>
           ) : null}

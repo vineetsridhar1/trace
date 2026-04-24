@@ -27,6 +27,11 @@ export const styles = StyleSheet.create({
     alignItems: "flex-end",
     gap: INPUT_ACTION_GAP,
   },
+  collapsedModelChip: {
+    marginRight: INPUT_ACTION_GAP,
+    maxWidth: 156,
+    flexShrink: 1,
+  },
   inputCard: {
     width: "100%",
     minHeight: 46,
