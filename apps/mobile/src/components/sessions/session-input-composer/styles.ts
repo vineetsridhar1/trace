@@ -20,6 +20,7 @@ export const styles = StyleSheet.create({
   },
   leadingChipsContainer: {
     position: "relative",
+    marginRight: INPUT_ACTION_GAP,
   },
   leadingChipsRow: {
     flexDirection: "row",
