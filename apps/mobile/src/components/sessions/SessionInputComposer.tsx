@@ -264,6 +264,7 @@ export function SessionInputComposer({
     if (preserveInputFocusTimeoutRef.current) {
       clearTimeout(preserveInputFocusTimeoutRef.current);
     }
+    inputRef.current?.focus();
     requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
@@ -289,6 +290,10 @@ export function SessionInputComposer({
     preserveInputFocus();
     handleModelChipPress();
   }, [handleModelChipPress, preserveInputFocus]);
+
+  const handleModelPressInKeepFocus = useCallback(() => {
+    preserveInputFocus();
+  }, [preserveInputFocus]);
 
   const handleModelTouchStartKeepFocus = useCallback(() => {
     preserveInputFocus();
@@ -494,6 +499,7 @@ export function SessionInputComposer({
             modelWidthAnimatedStyle={modelWidthAnimatedStyle}
             onModePress={handleModePress}
             onModelChipPress={handleModelChipPressKeepFocus}
+            onModelPressIn={handleModelPressInKeepFocus}
             onModelMenuOpenChange={setModelMenuOpen}
             onModelTouchStart={handleModelTouchStartKeepFocus}
           />
