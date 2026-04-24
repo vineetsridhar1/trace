@@ -416,6 +416,7 @@ export function SessionInputComposer({
               modelLabel={modelLabel}
               minWidth={0}
               onOpenModelSheet={handleOpenModelSheet}
+              showLabel={false}
               style={styles.collapsedModelChip}
             />
           ) : null}
