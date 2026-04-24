@@ -13,7 +13,7 @@ import type { SessionGroupRow } from "./sessions-table-types";
 import { collapsedByDefault, sessionStatusGroupOrder } from "./sessions-table-types";
 
 function getRowSortTimestamp(row: SessionGroupRow | undefined): number {
-  const timestamp = row?._sortTimestamp ?? row?._groupLastMessageAt ?? row?.updatedAt ?? row?.createdAt;
+  const timestamp = row?._groupLastMessageAt ?? row?._sortTimestamp ?? row?.updatedAt ?? row?.createdAt;
   return timestamp ? new Date(timestamp).getTime() : 0;
 }
 
