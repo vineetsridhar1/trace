@@ -35,16 +35,24 @@ export function SessionTabSwitcherContent({
   ) as boolean | undefined;
   const sessionIds = useSessionGroupSessionIds(groupId);
   const [creating, setCreating] = useState(false);
+  const closeDelayMs = onClose ? theme.motion.durations.fast : 0;
 
   const navigateToSession = useCallback(
     (sessionGroupId: string, targetId: string) => {
       onClose?.();
       if (targetId === activeSessionId) return;
-      useMobileUIStore.getState().setOverlaySessionId(targetId);
-      const targetHref = `/sessions/${sessionGroupId}/${targetId}` as never;
-      router.replace(targetHref);
+      const performNavigation = () => {
+        useMobileUIStore.getState().setOverlaySessionId(targetId);
+        const targetHref = `/sessions/${sessionGroupId}/${targetId}` as never;
+        router.replace(targetHref);
+      };
+      if (closeDelayMs > 0) {
+        setTimeout(performNavigation, closeDelayMs);
+        return;
+      }
+      performNavigation();
     },
-    [activeSessionId, onClose, router],
+    [activeSessionId, closeDelayMs, onClose, router],
   );
 
   const handleCreateAgentTab = useCallback(async () => {

@@ -1,5 +1,14 @@
-import { Modal, Pressable, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { alpha, useTheme } from "@/theme";
 import { SessionTabSwitcherContent } from "./SessionTabSwitcherContent";
 
@@ -10,6 +19,9 @@ interface SessionTabSwitcherSheetProps {
   onClose: () => void;
 }
 
+const DISMISS_DISTANCE = 110;
+const DISMISS_VELOCITY = 900;
+
 export function SessionTabSwitcherSheet({
   open,
   groupId,
@@ -18,23 +30,135 @@ export function SessionTabSwitcherSheet({
 }: SessionTabSwitcherSheetProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const [mounted, setMounted] = useState(open);
+  const translateY = useSharedValue(windowHeight);
+  const dragY = useSharedValue(0);
+  const backdropOpacity = useSharedValue(0);
+
+  const finishClose = useCallback(
+    (notifyParent: boolean) => {
+      setMounted(false);
+      if (notifyParent) onClose();
+    },
+    [onClose],
+  );
+
+  const animateIn = useCallback(() => {
+    dragY.value = 0;
+    translateY.value = windowHeight;
+    backdropOpacity.value = 0;
+    translateY.value = withSpring(0, theme.motion.springs.gentle);
+    backdropOpacity.value = withTiming(1, { duration: theme.motion.durations.base });
+  }, [
+    backdropOpacity,
+    dragY,
+    theme.motion.durations.base,
+    theme.motion.springs.gentle,
+    translateY,
+    windowHeight,
+  ]);
+
+  const animateOut = useCallback(
+    (notifyParent: boolean) => {
+      translateY.value = translateY.value + dragY.value;
+      dragY.value = 0;
+      translateY.value = withTiming(
+        windowHeight,
+        { duration: theme.motion.durations.fast },
+        (finished) => {
+          if (finished) runOnJS(finishClose)(notifyParent);
+        },
+      );
+      backdropOpacity.value = withTiming(0, { duration: theme.motion.durations.fast });
+    },
+    [
+      backdropOpacity,
+      dragY,
+      finishClose,
+      theme.motion.durations.fast,
+      translateY,
+      windowHeight,
+    ],
+  );
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      return;
+    }
+    if (mounted) animateOut(false);
+  }, [animateOut, mounted, open]);
+
+  useEffect(() => {
+    if (!mounted || !open) return;
+    animateIn();
+  }, [animateIn, mounted, open]);
+
+  const requestClose = useCallback(() => {
+    if (!mounted) return;
+    animateOut(true);
+  }, [animateOut, mounted]);
+
+  const handlePanEnd = useCallback(() => {
+    requestClose();
+  }, [requestClose]);
+
+  const sheetGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .onUpdate((event) => {
+          dragY.value = Math.max(event.translationY, 0);
+        })
+        .onEnd((event) => {
+          const shouldClose =
+            dragY.value > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY;
+          if (shouldClose) {
+            runOnJS(handlePanEnd)();
+            return;
+          }
+          dragY.value = withSpring(0, theme.motion.springs.smooth);
+        }),
+    [dragY, handlePanEnd, theme.motion.springs.smooth],
+  );
+
+  const backdropStyle = useAnimatedStyle(() => {
+    const dragFactor = Math.max(0.65, 1 - dragY.value / 260);
+    return {
+      opacity: backdropOpacity.value * dragFactor,
+    };
+  });
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value + dragY.value }],
+  }));
+
+  if (!mounted) return null;
 
   return (
     <Modal
-      visible={open}
-      animationType="slide"
+      visible
+      animationType="none"
       transparent
       presentationStyle="overFullScreen"
-      onRequestClose={onClose}
+      onRequestClose={requestClose}
       statusBarTranslucent
     >
       <View style={styles.root}>
-        <Pressable
-          accessibilityLabel="Dismiss tab switcher"
-          onPress={onClose}
-          style={[styles.backdrop, { backgroundColor: alpha("#000000", 0.4) }]}
-        />
-        <View
+        <Animated.View
+          style={[
+            styles.backdrop,
+            { backgroundColor: alpha("#000000", 0.32) },
+            backdropStyle,
+          ]}
+        >
+          <Pressable
+            accessibilityLabel="Dismiss tab switcher"
+            onPress={requestClose}
+            style={StyleSheet.absoluteFill}
+          />
+        </Animated.View>
+        <Animated.View
           style={[
             styles.sheet,
             {
@@ -45,16 +169,19 @@ export function SessionTabSwitcherSheet({
               paddingBottom: Math.max(insets.bottom, theme.spacing.lg),
               paddingTop: theme.spacing.sm,
             },
+            sheetStyle,
           ]}
         >
-          <View style={styles.grabberSlot}>
-            <View
-              style={[
-                styles.grabber,
-                { backgroundColor: theme.colors.borderMuted },
-              ]}
-            />
-          </View>
+          <GestureDetector gesture={sheetGesture}>
+            <View style={styles.grabberSlot}>
+              <View
+                style={[
+                  styles.grabber,
+                  { backgroundColor: theme.colors.borderMuted },
+                ]}
+              />
+            </View>
+          </GestureDetector>
           <View
             style={[
               styles.content,
@@ -64,10 +191,10 @@ export function SessionTabSwitcherSheet({
             <SessionTabSwitcherContent
               groupId={groupId}
               activeSessionId={activeSessionId}
-              onClose={onClose}
+              onClose={requestClose}
             />
           </View>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
