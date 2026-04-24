@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, Sparkles } from "lucide-react";
+import { isOptimisticEvent } from "@trace/client-core";
 import type { GitCheckpoint } from "@trace/gql";
 import { SessionMessage } from "./SessionMessage";
 import { ReadGlobGroup } from "./messages/ReadGlobGroup";
@@ -244,11 +245,20 @@ export function SessionMessageList({
 
   const virtualItems = virtualizer.getVirtualItems();
   const isEmpty = nodes.length === 0 && !loadingOlder;
-  const [showEmptyState, setShowEmptyState] = useState(isEmpty);
+  const hasCommittedNodes = useMemo(
+    () =>
+      nodes.some((node) =>
+        node.kind === "readglob-group"
+          ? node.items.some((item) => !isOptimisticEvent(item.id))
+          : !isOptimisticEvent(node.id),
+      ),
+    [nodes],
+  );
+  const [showEmptyState, setShowEmptyState] = useState(!hasCommittedNodes);
 
   useEffect(() => {
-    if (isEmpty) setShowEmptyState(true);
-  }, [isEmpty]);
+    if (!hasCommittedNodes) setShowEmptyState(true);
+  }, [hasCommittedNodes]);
 
   const emptyState = (
     <motion.div
@@ -257,7 +267,7 @@ export function SessionMessageList({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
       onAnimationComplete={() => {
-        if (!isEmpty) setShowEmptyState(false);
+        if (hasCommittedNodes) setShowEmptyState(false);
       }}
       className="absolute inset-0 z-10"
     >
