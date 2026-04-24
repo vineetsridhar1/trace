@@ -106,8 +106,8 @@ export function SessionTabSwitcherContent({
         contentInset === "sheet"
           ? {
               paddingHorizontal: theme.spacing.lg,
-              paddingTop: theme.spacing.md,
-              paddingBottom: theme.spacing.lg,
+              paddingTop: theme.spacing.lg,
+              paddingBottom: theme.spacing.xl,
             }
           : null,
       ]}
