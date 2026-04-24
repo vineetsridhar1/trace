@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { SymbolView, type SFSymbol } from "expo-symbols";
 import {
-  createNativeBottomTabNavigator,
-  type NativeBottomTabNavigationOptions,
-} from "@bottom-tabs/react-navigation";
+  createBottomTabNavigator,
+  type BottomTabNavigationOptions,
+} from "@react-navigation/bottom-tabs";
 import { useEntityField } from "@trace/client-core";
 import type { Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
@@ -22,6 +23,7 @@ import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel
 import { resolveBrowserUrl } from "@/lib/browser";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { useMobileUIStore } from "@/stores/ui";
+import { useTheme } from "@/theme";
 import {
   fetchSessionGroupDetail,
   useEnsureSessionGroupDetail,
@@ -34,19 +36,22 @@ type SessionBottomTabsParamList = {
   browser: undefined;
 };
 
-const SessionBottomTabs = createNativeBottomTabNavigator<SessionBottomTabsParamList>();
+const SessionBottomTabs = createBottomTabNavigator<SessionBottomTabsParamList>();
 
-const sessionIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
-  sfSymbol: "text.bubble",
-});
+function renderTabIcon(icon: SFSymbol): NonNullable<BottomTabNavigationOptions["tabBarIcon"]> {
+  return ({ color, size }) => (
+    <SymbolView
+      name={icon}
+      size={size}
+      tintColor={color}
+      resizeMode="scaleAspectFit"
+    />
+  );
+}
 
-const browserIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
-  sfSymbol: "globe",
-});
-
-const terminalIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
-  sfSymbol: "chevron.left.forwardslash.chevron.right",
-});
+const sessionIcon = renderTabIcon("text.bubble");
+const browserIcon = renderTabIcon("globe");
+const terminalIcon = renderTabIcon("chevron.left.forwardslash.chevron.right");
 
 /**
  * Standalone mobile session page. Reuses the session surface building blocks
@@ -54,6 +59,7 @@ const terminalIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> 
  * with its own bottom navigation instead of the old sheet-style overlay.
  */
 export default function SessionStreamScreen() {
+  const theme = useTheme();
   const { groupId, sessionId } = useLocalSearchParams<{
     groupId: string;
     sessionId: string;
@@ -120,6 +126,7 @@ export default function SessionStreamScreen() {
     if (!targetGroupId) return;
     void fetchSessionGroupDetail(targetGroupId);
   }, [groupId, hydratedGroupId]);
+  const tabBarHeight = 52 + insets.bottom;
 
   const showLoading = loadingGroup;
   const missingGroup = !showLoading && !groupName;
@@ -173,9 +180,24 @@ export default function SessionStreamScreen() {
           <SessionBottomTabs.Navigator
             key={hydratedGroupId}
             initialRouteName="session"
-            minimizeBehavior="onScrollDown"
-            translucent={false}
-            scrollEdgeAppearance="opaque"
+            screenOptions={{
+              headerShown: false,
+              sceneStyle: { backgroundColor: theme.colors.background },
+              tabBarActiveTintColor: theme.colors.foreground,
+              tabBarInactiveTintColor: theme.colors.mutedForeground,
+              tabBarHideOnKeyboard: true,
+              tabBarStyle: [
+                styles.tabBar,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderTopColor: theme.colors.borderMuted,
+                  height: tabBarHeight,
+                  paddingBottom: insets.bottom,
+                },
+              ],
+              tabBarItemStyle: styles.tabBarItem,
+              tabBarLabelStyle: styles.tabBarLabel,
+            }}
           >
             <SessionBottomTabs.Screen
               name="session"
@@ -246,6 +268,18 @@ const styles = StyleSheet.create({
   overlayPaddedScene: {
     flex: 1,
     minHeight: 0,
+  },
+  tabBar: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    elevation: 0,
+    shadowOpacity: 0,
+    paddingTop: 8,
+  },
+  tabBarItem: {
+    paddingVertical: 2,
+  },
+  tabBarLabel: {
+    fontSize: 12,
   },
   center: {
     flex: 1,
