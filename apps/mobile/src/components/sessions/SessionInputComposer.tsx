@@ -155,14 +155,14 @@ export function SessionInputComposer({
     images.length === 0 &&
     !pastingImage;
 
-  // `focused` drives the collapsed ↔ expanded split. Focus (not keyboard
-  // height) is the source of truth so external keyboards and focus-before-
-  // show frames both behave correctly.
+  // Expanded controls should only show while the input is focused and the
+  // software keyboard is up. Once the keyboard starts dismissing, fall back
+  // to the collapsed row immediately instead of waiting for a later blur.
   const expanded = focused && keyboardVisible;
   const hasSendable = trimmed.length > 0 || images.length > 0;
   const showSend = (isActive && focused) || (!isActive && hasSendable);
   const showStop = isActive && !focused;
-  const showCollapsedModelSelector = !focused && !hasSendable && !isActive;
+  const showCollapsedModelSelector = !expanded && !hasSendable && !isActive;
   const activeSlashQuery = getActiveSlashCommandQuery(text, selection);
   const matchingSlashCommands = activeSlashQuery
     ? filterSlashCommands(slashCommands, activeSlashQuery.query)
