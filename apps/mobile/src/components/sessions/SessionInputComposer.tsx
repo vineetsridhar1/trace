@@ -3,7 +3,6 @@ import { Keyboard, View, type TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
-import { SymbolView } from "expo-symbols";
 import { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { DISMISS_SESSION_MUTATION, generateUUID, useEntityField } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
@@ -37,7 +36,6 @@ import { SessionComposerBottomSheet } from "./session-input-composer/SessionComp
 import { SessionComposerInputCard } from "./session-input-composer/SessionComposerInputCard";
 import { SessionComposerLeadingChips } from "./session-input-composer/SessionComposerLeadingChips";
 import { SessionComposerMeasurementLayer } from "./session-input-composer/SessionComposerMeasurementLayer";
-import { SessionComposerSheetTrigger } from "./session-input-composer/SessionComposerSheetTrigger";
 import { SessionComposerSlashCommandMenu } from "./session-input-composer/SessionComposerSlashCommandMenu";
 import { styles } from "./session-input-composer/styles";
 import { useSessionComposerChips } from "./session-input-composer/useSessionComposerChips";
@@ -193,9 +191,6 @@ export function SessionInputComposer({
   });
 
   const {
-    bridgeIcon,
-    bridgeLabel,
-    canChangeBridge,
     modelLabel,
   } = useSessionComposerConfig({
     connection,
@@ -207,6 +202,7 @@ export function SessionInputComposer({
     sessionId,
     tool,
   });
+  const canChangeBridge = isNotStarted && !isOptimistic;
 
   const inputHeight = useSharedValue(MIN_INPUT_HEIGHT);
   useEffect(() => {
@@ -226,13 +222,6 @@ export function SessionInputComposer({
     Keyboard.dismiss();
     setActiveSheet("model");
   }, [canInteract]);
-
-  const handleOpenRuntimeSheet = useCallback(() => {
-    if (!canChangeBridge) return;
-    void haptic.selection();
-    Keyboard.dismiss();
-    setActiveSheet("runtime");
-  }, [canChangeBridge]);
 
   const handleFocus = useCallback(() => {
     setFocused(true);
@@ -271,8 +260,20 @@ export function SessionInputComposer({
       }
     }
 
-    if (canSubmit) void runSubmit(trimmed, mode);
-  }, [canInteract, canSubmit, channel?.id, mode, onSuccess, runSubmit, trimmed]);
+    if (!canSubmit) return;
+    if (canChangeBridge) {
+      void haptic.selection();
+      Keyboard.dismiss();
+      setActiveSheet("runtime");
+      return;
+    }
+    void runSubmit(trimmed, mode);
+  }, [canChangeBridge, canInteract, canSubmit, channel?.id, mode, onSuccess, runSubmit, trimmed]);
+
+  const handleSendAfterRuntimeSelect = useCallback(async () => {
+    if (!canSubmit) return;
+    await runSubmit(trimmed, mode);
+  }, [canSubmit, mode, runSubmit, trimmed]);
 
   const handleSlashCommandSelect = useCallback((commandName: string) => {
     const next = insertSlashCommand(text, selection, commandName);
@@ -506,25 +507,6 @@ export function SessionInputComposer({
           ) : null}
         </View>
 
-        {expanded && canChangeBridge ? (
-          <View style={styles.bridgeRow}>
-            <SessionComposerSheetTrigger
-              label={bridgeLabel}
-              accessibilityLabel={`Runtime: ${bridgeLabel}`}
-              leading={
-                <SymbolView
-                  name={bridgeIcon}
-                  size={16}
-                  tintColor={theme.colors.mutedForeground}
-                  resizeMode="scaleAspectFit"
-                />
-              }
-              disabled={!canChangeBridge}
-              onPress={handleOpenRuntimeSheet}
-              showLabel={false}
-            />
-          </View>
-        ) : null}
       </View>
 
       <SessionComposerBottomSheet
@@ -541,6 +523,7 @@ export function SessionInputComposer({
           <SessionRuntimePickerSheetContent
             sessionId={sessionId}
             onClose={handleCloseSheet}
+            onSelectRuntime={handleSendAfterRuntimeSelect}
           />
         ) : null}
       </SessionComposerBottomSheet>

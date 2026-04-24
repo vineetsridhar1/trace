@@ -24,6 +24,7 @@ import { CLOUD_RUNTIME_ID } from "./session-input-composer/constants";
 interface SessionRuntimePickerSheetContentProps {
   sessionId: string;
   onClose?: () => void;
+  onSelectRuntime?: () => void | Promise<void>;
 }
 
 interface RuntimeRow {
@@ -39,6 +40,7 @@ interface RuntimeRow {
 export function SessionRuntimePickerSheetContent({
   sessionId,
   onClose,
+  onSelectRuntime,
 }: SessionRuntimePickerSheetContentProps) {
   const theme = useTheme();
 
@@ -124,11 +126,15 @@ export function SessionRuntimePickerSheetContent({
 
   const handleSelect = useCallback(
     async (value: string) => {
-      if (!canChangeBridge || value === currentRuntimeValue) return;
-
-      onClose?.();
+      if (!canChangeBridge) return;
 
       const newIsCloud = cloudSessionsEnabled && value === CLOUD_RUNTIME_ID;
+      const unchanged = value === currentRuntimeValue;
+      if (unchanged) {
+        onClose?.();
+        await onSelectRuntime?.();
+        return;
+      }
       const runtime = runtimes.find((entry) => entry.id === value);
       const nextHosting: HostingMode = newIsCloud
         ? "cloud"
@@ -161,6 +167,8 @@ export function SessionRuntimePickerSheetContent({
           })
           .toPromise();
         if (result.error) throw result.error;
+        onClose?.();
+        await onSelectRuntime?.();
       } catch (err) {
         rollback();
         void haptic.error();
@@ -172,6 +180,7 @@ export function SessionRuntimePickerSheetContent({
       cloudSessionsEnabled,
       connection,
       currentRuntimeValue,
+      onSelectRuntime,
       onClose,
       runtimes,
       sessionId,
@@ -187,7 +196,7 @@ export function SessionRuntimePickerSheetContent({
       <View style={styles.header}>
         <Text variant="headline">Runtime</Text>
         <Text variant="footnote" color="mutedForeground">
-          Choose where the session should run before it starts.
+          Choose where the session should start.
         </Text>
       </View>
 
@@ -223,11 +232,11 @@ export function SessionRuntimePickerSheetContent({
               ) : undefined
             }
             onPress={
-              !row.disabled && !row.selected
+              !row.disabled
                 ? () => void handleSelect(row.value)
                 : undefined
             }
-            haptic={row.selected ? "none" : "selection"}
+            haptic="selection"
             separator={index < rows.length - 1}
             style={row.disabled && !row.selected ? styles.disabledRow : undefined}
           />
