@@ -138,7 +138,7 @@ export function SessionComposerLeadingChips({
               <ComposerMorphPill
                 label={modelLabel}
                 accessibilityLabel="Model"
-                align="right"
+                align="center"
                 disabled={!canInteract}
                 headerItems={toolHeaderItems}
                 items={modelItems}
