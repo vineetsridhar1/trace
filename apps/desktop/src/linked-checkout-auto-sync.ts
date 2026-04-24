@@ -141,17 +141,32 @@ export class LinkedCheckoutAutoSyncManager {
     }
   }
 
+  private logTick(message: string, data?: Record<string, unknown>): void {
+    runtimeDebug(`auto-sync tick ${message}`, data);
+  }
+
   reconcileAll(): Promise<void> {
-    if (this.tickInFlight) return this.tickInFlight;
+    if (this.tickInFlight) {
+      this.logTick("skipped because another tick is already running");
+      return this.tickInFlight;
+    }
 
     const run = (async () => {
       try {
         const config = readConfig();
+        const activeRepoIds = Object.entries(config.repos)
+          .filter(([, repoConfig]) => repoConfig.linkedCheckout?.autoSyncEnabled)
+          .map(([repoId]) => repoId);
+        this.logTick("starting reconcileAll", {
+          repoCount: Object.keys(config.repos).length,
+          activeRepoIds,
+        });
         for (const [repoId, repoConfig] of Object.entries(config.repos)) {
           const attachment = repoConfig.linkedCheckout;
           if (!attachment || !attachment.autoSyncEnabled) continue;
           await this.runOneTick(repoId, attachment);
         }
+        this.logTick("finished reconcileAll", { activeRepoIds });
       } finally {
         this.tickInFlight = null;
       }
@@ -163,22 +178,45 @@ export class LinkedCheckoutAutoSyncManager {
 
   async reconcile(repoId: string): Promise<void> {
     const attachment = getRepoConfig(repoId)?.linkedCheckout;
-    if (!attachment || !attachment.autoSyncEnabled) return;
+    if (!attachment || !attachment.autoSyncEnabled) {
+      this.logTick("skipped single-repo reconcile because auto-sync is disabled", { repoId });
+      return;
+    }
     await this.runOneTick(repoId, attachment);
   }
 
   private async runOneTick(repoId: string, attachment: LinkedCheckoutConfig): Promise<void> {
     const repoPath = getRepoConfig(repoId)?.path;
-    if (!repoPath) return;
+    if (!repoPath) {
+      this.logTick("skipped because repo path is missing", { repoId });
+      return;
+    }
 
     const targetBranch = attachment.targetBranch;
-    if (!isSafeGitRef(targetBranch)) return;
+    if (!isSafeGitRef(targetBranch)) {
+      this.logTick("skipped because target branch is unsafe", { repoId, targetBranch });
+      return;
+    }
+
+    this.logTick("starting", {
+      repoId,
+      repoPath,
+      targetBranch,
+      lastSyncedCommitSha: attachment.lastSyncedCommitSha,
+      lastSyncError: attachment.lastSyncError,
+    });
 
     await withRepoLock(repoId, async () => {
       const currentAttachment = getRepoConfig(repoId)?.linkedCheckout;
-      if (!currentAttachment || !currentAttachment.autoSyncEnabled) return;
+      if (!currentAttachment || !currentAttachment.autoSyncEnabled) {
+        this.logTick("skipped after lock because auto-sync is disabled", { repoId });
+        return;
+      }
 
-      if (await this.deps.hasInProgressOperation(repoPath)) return;
+      if (await this.deps.hasInProgressOperation(repoPath)) {
+        this.logTick("skipped because a git operation is in progress", { repoId, repoPath });
+        return;
+      }
 
       let currentBranch: string | null;
       let currentCommitSha: string;
@@ -186,9 +224,19 @@ export class LinkedCheckoutAutoSyncManager {
         currentBranch = await this.deps.getCurrentBranch(repoPath);
         currentCommitSha = await this.deps.revParseHead(repoPath);
       } catch (error) {
+        this.logTick("failed reading current git state", {
+          repoId,
+          error: formatGitError(error),
+        });
         await this.pause(repoId, formatGitError(error));
         return;
       }
+
+      this.logTick("read current git state", {
+        repoId,
+        currentBranch,
+        currentCommitSha,
+      });
 
       if (currentBranch !== null) {
         await this.pause(repoId, "Branch changed externally");
@@ -196,13 +244,16 @@ export class LinkedCheckoutAutoSyncManager {
       }
 
       try {
+        this.logTick("fetching target branch", { repoId, targetBranch });
         await this.deps.fetch(repoPath, targetBranch);
       } catch (error) {
         const message = formatGitError(error);
         if (isTransientFetchError(message)) {
+          this.logTick("hit transient fetch failure", { repoId, targetBranch, error: message });
           await setLastSyncError(repoId, message);
           return;
         }
+        this.logTick("hit hard fetch failure", { repoId, targetBranch, error: message });
         await this.pause(repoId, message);
         return;
       }
@@ -211,20 +262,44 @@ export class LinkedCheckoutAutoSyncManager {
       try {
         targetSha = await resolveTargetCommitSha(repoPath, targetBranch);
       } catch (error) {
+        this.logTick("failed resolving target sha", {
+          repoId,
+          targetBranch,
+          error: formatGitError(error),
+        });
         await this.pause(repoId, formatGitError(error));
         return;
       }
 
+      this.logTick("resolved target sha", {
+        repoId,
+        targetBranch,
+        currentCommitSha,
+        targetSha,
+      });
+
       if (currentCommitSha === targetSha) {
         // Heal stale transient errors when the next tick confirms we're in sync.
         if (currentAttachment.lastSyncError !== null) {
+          this.logTick("already in sync and clearing stale sync error", {
+            repoId,
+            targetSha,
+            lastSyncError: currentAttachment.lastSyncError,
+          });
           await setLastSyncError(repoId, null);
+        } else {
+          this.logTick("already in sync", { repoId, targetSha });
         }
         return;
       }
 
       try {
         if (await this.deps.hasTrackedChanges(repoPath)) {
+          this.logTick("pausing because tracked changes are present", {
+            repoId,
+            currentCommitSha,
+            targetSha,
+          });
           await this.pause(
             repoId,
             "Root checkout has tracked changes. Commit, stash, or discard them before syncing.",
@@ -232,19 +307,32 @@ export class LinkedCheckoutAutoSyncManager {
           return;
         }
       } catch (error) {
+        this.logTick("failed checking tracked changes", {
+          repoId,
+          error: formatGitError(error),
+        });
         await this.pause(repoId, formatGitError(error));
         return;
       }
 
       try {
+        this.logTick("switching detached head", { repoId, fromSha: currentCommitSha, targetSha });
         await this.deps.switchDetached(repoPath, targetSha);
       } catch (error) {
+        this.logTick("failed switching detached head", {
+          repoId,
+          targetSha,
+          error: formatGitError(error),
+        });
         await this.pause(repoId, formatGitError(error));
         return;
       }
 
       const latest = getRepoConfig(repoId)?.linkedCheckout;
-      if (!latest) return;
+      if (!latest) {
+        this.logTick("skipped status write because attachment disappeared", { repoId, targetSha });
+        return;
+      }
 
       await setRepoLinkedCheckout(repoId, {
         ...latest,
