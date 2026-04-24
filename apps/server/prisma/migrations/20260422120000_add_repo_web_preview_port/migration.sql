@@ -1,0 +1,2 @@
+ALTER TABLE "Repo"
+ADD COLUMN "webPreviewPort" INTEGER;

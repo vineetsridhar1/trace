@@ -16,6 +16,13 @@ export default function SessionsLayout() {
           headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="[groupId]/preview"
+        options={{
+          title: "Preview",
+          headerBackTitle: "Back",
+        }}
+      />
     </Stack>
   );
 }

@@ -3,6 +3,7 @@ import { StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } f
 import { type FlashListRef } from "@shopify/flash-list";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -59,10 +60,16 @@ interface SessionStreamProps {
    * cached rows hidden during its open animation so text layout can't jank it.
    */
   renderEvents?: boolean;
+  /** Whether a right-swipe should open the session's web preview. */
+  canSwipeToPreview?: boolean;
+  /** Called when the user intentionally swipes right to open the preview. */
+  onPreviewSwipe?: () => void;
 }
 
 const NEAR_BOTTOM_THRESHOLD = 120;
 const CONTENT_FADE_MS = 180;
+const PREVIEW_SWIPE_DISTANCE = 96;
+const PREVIEW_SWIPE_VELOCITY = 700;
 
 export function SessionStream({
   sessionId,
@@ -71,6 +78,8 @@ export function SessionStream({
   loadEvents = true,
   commitEvents = true,
   renderEvents = true,
+  canSwipeToPreview = false,
+  onPreviewSwipe,
 }: SessionStreamProps) {
   const theme = useTheme();
   const { loading, loadingOlder, hasOlder, error, fetchEvents, fetchOlderEvents } =
@@ -172,6 +181,17 @@ export function SessionStream({
       .activeOffsetX([-TIMESTAMP_REVEAL_ACTIVATION, TIMESTAMP_REVEAL_ACTIVATION])
       .onChange((event) => {
         timestampRevealX.value = calculateTimestampRevealX(event.translationX);
+      })
+      .onEnd((event) => {
+        if (
+          canSwipeToPreview &&
+          onPreviewSwipe &&
+          event.translationX > PREVIEW_SWIPE_DISTANCE &&
+          (event.translationX > Math.abs(event.translationY) ||
+            event.velocityX > PREVIEW_SWIPE_VELOCITY)
+        ) {
+          runOnJS(onPreviewSwipe)();
+        }
       })
       .onFinalize(() => {
         timestampRevealX.value = withSpring(0, theme.motion.springs.smooth);

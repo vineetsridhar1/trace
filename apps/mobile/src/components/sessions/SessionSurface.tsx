@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { BottomTabBarHeightContext } from "react-native-bottom-tabs";
 import { KeyboardStickyView } from "react-native-keyboard-controller";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEntityField } from "@trace/client-core";
 import { Spinner, Text } from "@/components/design-system";
@@ -21,8 +22,10 @@ import { SessionInputComposer } from "@/components/sessions/SessionInputComposer
 import { SessionStream } from "@/components/sessions/SessionStream";
 import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
 import { useEnsureSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
+import { useSessionGroupWebPreview } from "@/hooks/useSessionGroupWebPreview";
 import { useSessionDetail } from "@/hooks/useSessionDetail";
 import { useSessionPendingInput } from "@/hooks/useSessionPendingInput";
+import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
 import { useMobileUIStore } from "@/stores/ui";
 
@@ -70,6 +73,7 @@ export function SessionSurface({
   renderStreamEvents = true,
 }: SessionSurfaceProps) {
   const theme = useTheme();
+  const router = useRouter();
   const groupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
     | null
@@ -86,6 +90,7 @@ export function SessionSurface({
   const pendingInput = useSessionPendingInput(sessionId, {
     enabled: renderStreamEvents,
   });
+  const { preview } = useSessionGroupWebPreview(groupId ?? undefined);
   const insets = useSafeAreaInsets();
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [composerHeight, setComposerHeight] = useState(0);
@@ -144,6 +149,19 @@ export function SessionSurface({
     };
   }, [groupId, sessionId]);
 
+  const handlePreviewSwipe = useCallback(() => {
+    if (
+      !groupId ||
+      !preview?.available ||
+      !preview.url ||
+      preview.sessionGroup?.id !== groupId
+    ) {
+      return;
+    }
+    void haptic.light();
+    router.push(`/sessions/${groupId}/preview`);
+  }, [groupId, preview?.available, preview?.sessionGroup?.id, preview?.url, router]);
+
   if (!groupId || (loading && !groupName)) {
     return (
       <View style={[styles.loading, { backgroundColor: theme.colors.background }]}>
@@ -176,6 +194,12 @@ export function SessionSurface({
           loadEvents={loadStreamEvents}
           commitEvents={commitStreamEvents}
           renderEvents={renderStreamEvents}
+          canSwipeToPreview={
+            preview?.available === true &&
+            !!preview.url &&
+            preview.sessionGroup?.id === groupId
+          }
+          onPreviewSwipe={handlePreviewSwipe}
         />
       </View>
       <KeyboardStickyView

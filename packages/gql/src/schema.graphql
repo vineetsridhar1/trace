@@ -102,6 +102,33 @@ enum BridgeAccessCapability {
   terminal
 }
 
+enum BridgeTunnelProvider {
+  custom
+  ngrok
+}
+
+enum BridgeTunnelMode {
+  manual
+  trace_managed
+}
+
+enum BridgeTunnelState {
+  configured
+  running
+  stopped
+  error
+}
+
+enum WebPreviewReason {
+  missing_repo
+  missing_repo_port
+  not_local_runtime
+  runtime_disconnected
+  not_synced_to_main_worktree
+  no_matching_tunnel
+  tunnel_inactive
+}
+
 type SlashCommand {
   name: String!
   description: String!
@@ -287,6 +314,7 @@ type Repo {
   name: String!
   remoteUrl: String!
   defaultBranch: String!
+  webPreviewPort: Int
   webhookActive: Boolean!
   projects: [Project!]!
   sessions: [Session!]!
@@ -764,6 +792,7 @@ type BridgeRuntime {
   in-memory router cache, which is warmed on bridge connect.
   """
   linkedCheckouts: [LinkedCheckoutStatus!]!
+  tunnelSlots: [BridgeTunnelSlot!]!
 }
 
 type BridgeRuntimeAccess {
@@ -790,6 +819,7 @@ type ConnectionsRepoEntry {
   channel: Channel!
   runScripts: JSON
   linkedCheckout: LinkedCheckoutStatus
+  webPreview: WebPreview
 }
 
 type ConnectionsBridge {
@@ -799,6 +829,37 @@ type ConnectionsBridge {
   Whether the calling user has terminal capability on this bridge.
   """
   canTerminal: Boolean!
+}
+
+type BridgeTunnelSlot {
+  id: ID!
+  label: String!
+  provider: BridgeTunnelProvider!
+  mode: BridgeTunnelMode!
+  publicUrl: String!
+  targetPort: Int
+  state: BridgeTunnelState!
+  lastError: String
+  updatedAt: DateTime!
+}
+
+type WebPreview {
+  available: Boolean!
+  reason: WebPreviewReason
+  url: String
+  port: Int
+  runtimeInstanceId: ID
+  slot: BridgeTunnelSlot
+  repo: Repo
+  sessionGroup: SessionGroup
+  isOwner: Boolean!
+  canManageTunnel: Boolean!
+}
+
+type BridgeTunnelActionResult {
+  ok: Boolean!
+  slot: BridgeTunnelSlot
+  error: String
 }
 
 type BranchDiffFile {
@@ -963,11 +1024,13 @@ input CreateRepoInput {
   name: String!
   remoteUrl: String!
   defaultBranch: String
+  webPreviewPort: Int
 }
 
 input UpdateRepoInput {
   name: String
   defaultBranch: String
+  webPreviewPort: Int
 }
 
 input CreateProjectInput {
@@ -1054,6 +1117,7 @@ type Query {
   sessionGroupBranchDiff(sessionGroupId: ID!): [BranchDiffFile!]!
   sessionGroupFileAtRef(sessionGroupId: ID!, filePath: String!, ref: String!): String!
   linkedCheckoutStatus(sessionGroupId: ID!, repoId: ID!): LinkedCheckoutStatus!
+  sessionGroupWebPreview(sessionGroupId: ID!): WebPreview!
   sessionSlashCommands(sessionId: ID!): [SlashCommand!]!
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
   chats: [Chat!]!
@@ -1174,6 +1238,13 @@ type Mutation {
     grantId: ID!
     capabilities: [BridgeAccessCapability!]!
   ): BridgeAccessGrant!
+  startBridgeTunnel(runtimeInstanceId: ID!, slotId: ID!): BridgeTunnelActionResult!
+  stopBridgeTunnel(runtimeInstanceId: ID!, slotId: ID!): BridgeTunnelActionResult!
+  retargetBridgeTunnel(
+    runtimeInstanceId: ID!
+    slotId: ID!
+    targetPort: Int!
+  ): BridgeTunnelActionResult!
   linkLinkedCheckoutRepo(
     sessionGroupId: ID!
     repoId: ID!

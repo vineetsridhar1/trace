@@ -20,6 +20,7 @@ const REPOS_QUERY = gql`
       name
       remoteUrl
       defaultBranch
+      webPreviewPort
       webhookActive
     }
   }

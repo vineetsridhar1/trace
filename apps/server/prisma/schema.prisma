@@ -463,6 +463,7 @@ model Repo {
   name           String
   remoteUrl      String
   defaultBranch  String       @default("main")
+  webPreviewPort Int?
   setupConfig    Json         @default("{}")
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])

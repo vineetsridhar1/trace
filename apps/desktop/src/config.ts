@@ -2,6 +2,7 @@ import path from "path";
 import fs from "fs";
 import { randomUUID } from "crypto";
 import { app } from "electron";
+import type { BridgeTunnelMode, BridgeTunnelProvider } from "@trace/shared";
 
 export interface LocalRepoConfig {
   path: string;
@@ -22,8 +23,36 @@ export interface LinkedCheckoutConfig {
   lastSyncAt: string | null;
 }
 
+export interface BridgeTunnelSlotConfig {
+  id: string;
+  label: string;
+  provider: BridgeTunnelProvider;
+  mode: BridgeTunnelMode;
+  publicUrl: string;
+  targetPort: number | null;
+  updatedAt: string;
+}
+
+export interface LocalBridgeConfig {
+  tunnelSlots: BridgeTunnelSlotConfig[];
+}
+
 export interface RepoPathConfig {
   repos: Record<string, LocalRepoConfig>; // repoId → local repo settings
+  bridge: LocalBridgeConfig;
+}
+
+type RawLocalBridgeConfig = {
+  tunnelSlots?: unknown;
+};
+
+type RawConfig = {
+  repos?: Record<string, RawLocalRepoConfig>;
+  bridge?: RawLocalBridgeConfig;
+};
+
+function emptyBridgeConfig(): LocalBridgeConfig {
+  return { tunnelSlots: [] };
 }
 
 function normalizeRepoConfigEntry(entry: unknown): LocalRepoConfig | null {
@@ -96,6 +125,91 @@ function normalizeLinkedCheckoutEntry(entry: unknown): LinkedCheckoutConfig | nu
   };
 }
 
+function normalizeTunnelSlotEntry(entry: unknown): BridgeTunnelSlotConfig | null {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    return null;
+  }
+
+  const raw = entry as {
+    id?: unknown;
+    label?: unknown;
+    provider?: unknown;
+    mode?: unknown;
+    publicUrl?: unknown;
+    targetPort?: unknown;
+    updatedAt?: unknown;
+  };
+
+  if (
+    typeof raw.id !== "string" ||
+    !raw.id.trim() ||
+    typeof raw.label !== "string" ||
+    !raw.label.trim() ||
+    (raw.provider !== "custom" && raw.provider !== "ngrok") ||
+    (raw.mode !== "manual" && raw.mode !== "trace_managed") ||
+    typeof raw.publicUrl !== "string" ||
+    !raw.publicUrl.trim()
+  ) {
+    return null;
+  }
+
+  const targetPort =
+    typeof raw.targetPort === "number" &&
+    Number.isInteger(raw.targetPort) &&
+    raw.targetPort >= 1 &&
+    raw.targetPort <= 65535
+      ? raw.targetPort
+      : null;
+
+  return {
+    id: raw.id,
+    label: raw.label.trim(),
+    provider: raw.provider,
+    mode: raw.mode,
+    publicUrl: raw.publicUrl.trim(),
+    targetPort,
+    updatedAt:
+      typeof raw.updatedAt === "string" && raw.updatedAt.trim()
+        ? raw.updatedAt
+        : new Date().toISOString(),
+  };
+}
+
+function normalizeBridgeConfigEntry(entry: unknown): LocalBridgeConfig {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    return emptyBridgeConfig();
+  }
+
+  const raw = entry as { tunnelSlots?: unknown };
+  const tunnelSlots = Array.isArray(raw.tunnelSlots)
+    ? raw.tunnelSlots
+        .map((slot) => normalizeTunnelSlotEntry(slot))
+        .filter((slot): slot is BridgeTunnelSlotConfig => slot !== null)
+    : [];
+
+  return { tunnelSlots };
+}
+
+function sanitizeTunnelSlot(slot: BridgeTunnelSlotConfig): BridgeTunnelSlotConfig {
+  const targetPort =
+    typeof slot.targetPort === "number" &&
+    Number.isInteger(slot.targetPort) &&
+    slot.targetPort >= 1 &&
+    slot.targetPort <= 65535
+      ? slot.targetPort
+      : null;
+
+  return {
+    id: slot.id.trim() || randomUUID(),
+    label: slot.label.trim() || "Tunnel",
+    provider: slot.provider === "ngrok" ? "ngrok" : "custom",
+    mode: slot.mode === "trace_managed" ? "trace_managed" : "manual",
+    publicUrl: slot.publicUrl.trim(),
+    targetPort,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 export function getConfigPath(): string {
   const home = app.getPath("home");
   return path.join(home, ".trace", "config.json");
@@ -104,15 +218,18 @@ export function getConfigPath(): string {
 export function readConfig(): RepoPathConfig {
   try {
     const raw = fs.readFileSync(getConfigPath(), "utf-8");
-    const parsed = JSON.parse(raw) as { repos?: Record<string, RawLocalRepoConfig> };
+    const parsed = JSON.parse(raw) as RawConfig;
     const repos = Object.fromEntries(
       Object.entries(parsed.repos ?? {})
         .map(([repoId, entry]) => [repoId, normalizeRepoConfigEntry(entry)])
         .filter((entry): entry is [string, LocalRepoConfig] => entry[1] != null),
     );
-    return { repos };
+    return {
+      repos,
+      bridge: normalizeBridgeConfigEntry(parsed.bridge),
+    };
   } catch {
-    return { repos: {} };
+    return { repos: {}, bridge: emptyBridgeConfig() };
   }
 }
 
@@ -187,6 +304,27 @@ export function setRepoLinkedCheckout(
     const next: LocalRepoConfig = { ...current, linkedCheckout };
     config.repos[repoId] = next;
     return next;
+  });
+}
+
+export function getBridgeConfig(): LocalBridgeConfig {
+  return readConfig().bridge;
+}
+
+export function getBridgeTunnelSlots(): BridgeTunnelSlotConfig[] {
+  return getBridgeConfig().tunnelSlots;
+}
+
+export function saveBridgeTunnelSlots(
+  slots: BridgeTunnelSlotConfig[],
+): Promise<BridgeTunnelSlotConfig[]> {
+  return mutate((config) => {
+    config.bridge = {
+      tunnelSlots: slots
+        .map((slot) => sanitizeTunnelSlot(slot))
+        .filter((slot) => slot.publicUrl.length > 0),
+    };
+    return config.bridge.tunnelSlots;
   });
 }
 

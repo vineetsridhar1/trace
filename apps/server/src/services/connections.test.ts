@@ -8,6 +8,8 @@ vi.mock("../lib/db.js", async () => {
 vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
     listRuntimes: vi.fn(),
+    getRuntime: vi.fn(),
+    getLinkedCheckoutStatus: vi.fn(),
   },
 }));
 
@@ -18,11 +20,27 @@ import { connectionsService } from "./connections.js";
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const sessionRouterMock = sessionRouter as unknown as {
   listRuntimes: ReturnType<typeof vi.fn>;
+  getRuntime: ReturnType<typeof vi.fn>;
+  getLinkedCheckoutStatus: ReturnType<typeof vi.fn>;
 };
+
+function makeRuntime(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "runtime-1",
+    organizationId: "org-1",
+    registeredRepoIds: ["repo-1"],
+    linkedCheckouts: new Map(),
+    tunnelSlots: new Map(),
+    ws: { OPEN: 1, readyState: 1 },
+    ...overrides,
+  };
+}
 
 describe("connectionsService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionRouterMock.getRuntime.mockReset();
+    sessionRouterMock.getLinkedCheckoutStatus.mockReset();
   });
 
   it("returns connected bridge repos visible through user member channels", async () => {
@@ -64,33 +82,33 @@ describe("connectionsService", () => {
       },
     ]);
 
-    sessionRouterMock.listRuntimes.mockReturnValueOnce([
-      {
-        id: "runtime-1",
-        organizationId: "org-1",
-        registeredRepoIds: ["repo-1", "repo-hidden"],
-        linkedCheckouts: new Map([
-          [
-            "repo-1",
-            {
-              repoId: "repo-1",
-              repoPath: "/repos/gorilla",
-              isAttached: true,
-              attachedSessionGroupId: "group-1",
-              targetBranch: "main",
-              autoSyncEnabled: true,
-              currentBranch: "main",
-              currentCommitSha: "abcdef123",
-              lastSyncedCommitSha: "abcdef123",
-              lastSyncError: null,
-              restoreBranch: null,
-              restoreCommitSha: null,
-              hasUncommittedChanges: false,
-            },
-          ],
-        ]),
-      },
-    ]);
+    const runtime = makeRuntime({
+      registeredRepoIds: ["repo-1", "repo-hidden"],
+      linkedCheckouts: new Map([
+        [
+          "repo-1",
+          {
+            repoId: "repo-1",
+            repoPath: "/repos/gorilla",
+            isAttached: true,
+            attachedSessionGroupId: "group-1",
+            targetBranch: "main",
+            autoSyncEnabled: true,
+            currentBranch: "main",
+            currentCommitSha: "abcdef123",
+            lastSyncedCommitSha: "abcdef123",
+            lastSyncError: null,
+            restoreBranch: null,
+            restoreCommitSha: null,
+            hasUncommittedChanges: false,
+          },
+        ],
+      ]),
+    });
+    sessionRouterMock.listRuntimes.mockReturnValueOnce([runtime]);
+    sessionRouterMock.getRuntime.mockImplementation((runtimeId: string) =>
+      runtimeId === "runtime-1" ? runtime : undefined,
+    );
 
     prismaMock.channel.findMany.mockResolvedValueOnce([
       {
@@ -103,6 +121,14 @@ describe("connectionsService", () => {
         createdAt: connectedAt,
         updatedAt: connectedAt,
         repo: { id: "repo-1", name: "gorilla", defaultBranch: "main" },
+      },
+    ]);
+    prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+      {
+        id: "group-1",
+        name: "Gorilla Session",
+        slug: "gorilla-session",
+        branch: "main",
       },
     ]);
 
@@ -141,6 +167,213 @@ describe("connectionsService", () => {
         }),
       }),
     );
+    expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
+  });
+
+  it("falls back to live linked checkout status when the cache is cold", async () => {
+    const connectedAt = new Date("2026-04-22T12:00:00.000Z");
+    prismaMock.bridgeRuntime.findMany.mockResolvedValueOnce([
+      {
+        id: "bridge-1",
+        instanceId: "runtime-1",
+        organizationId: "org-1",
+        ownerUserId: "user-1",
+        label: "Laptop",
+        hostingMode: "local",
+        connectedAt,
+        disconnectedAt: null,
+        lastSeenAt: connectedAt,
+        metadata: null,
+        createdAt: connectedAt,
+        updatedAt: connectedAt,
+        ownerUser: { id: "user-1", name: "User One" },
+        accessRequests: [],
+        accessGrants: [],
+      },
+    ]);
+    const runtime = makeRuntime({
+      tunnelSlots: new Map([
+        [
+          "slot-1",
+          {
+            id: "slot-1",
+            label: "Preview URL",
+            provider: "custom",
+            mode: "manual",
+            publicUrl: "https://gorilla.ngrok.app",
+            targetPort: 3000,
+            state: "running",
+            lastError: null,
+            updatedAt: "2026-04-22T12:00:00.000Z",
+          },
+        ],
+      ]),
+    });
+    sessionRouterMock.listRuntimes.mockReturnValueOnce([runtime]);
+    sessionRouterMock.getRuntime.mockImplementation((runtimeId: string) =>
+      runtimeId === "runtime-1" ? runtime : undefined,
+    );
+    prismaMock.channel.findMany.mockResolvedValueOnce([
+      {
+        id: "channel-1",
+        name: "Gorilla",
+        type: "coding",
+        organizationId: "org-1",
+        repoId: "repo-1",
+        runScripts: null,
+        createdAt: connectedAt,
+        updatedAt: connectedAt,
+        repo: { id: "repo-1", name: "gorilla", defaultBranch: "main", webPreviewPort: 3000 },
+      },
+    ]);
+    sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValueOnce({
+      repoId: "repo-1",
+      repoPath: "/repos/gorilla",
+      isAttached: true,
+      attachedSessionGroupId: "group-1",
+      targetBranch: "main",
+      autoSyncEnabled: true,
+      currentBranch: "main",
+      currentCommitSha: "abcdef123",
+      lastSyncedCommitSha: "abcdef123",
+      lastSyncError: null,
+      restoreBranch: null,
+      restoreCommitSha: null,
+    });
+    prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+      {
+        id: "group-1",
+        name: "Gorilla Session",
+        slug: "gorilla-session",
+        branch: "main",
+      },
+    ]);
+
+    const result = await connectionsService.listMine({
+      userId: "user-1",
+      organizationId: "org-1",
+    });
+
+    expect(sessionRouterMock.getLinkedCheckoutStatus).toHaveBeenCalledWith("runtime-1", "repo-1", 5000);
+    expect(result[0].repos[0].linkedCheckout).toEqual(
+      expect.objectContaining({
+        attachedSessionGroupId: "group-1",
+      }),
+    );
+    expect(result[0].repos[0].webPreview).toEqual(
+      expect.objectContaining({
+        available: true,
+        url: "https://gorilla.ngrok.app",
+        sessionGroup: expect.objectContaining({ id: "group-1" }),
+        slot: expect.objectContaining({ id: "slot-1" }),
+      }),
+    );
+  });
+
+  it("does not expose tunnel details when the attached session group is not visible", async () => {
+    const connectedAt = new Date("2026-04-22T12:00:00.000Z");
+    prismaMock.bridgeRuntime.findMany.mockResolvedValueOnce([
+      {
+        id: "bridge-1",
+        instanceId: "runtime-1",
+        organizationId: "org-1",
+        ownerUserId: "user-1",
+        label: "Laptop",
+        hostingMode: "local",
+        connectedAt,
+        disconnectedAt: null,
+        lastSeenAt: connectedAt,
+        metadata: null,
+        createdAt: connectedAt,
+        updatedAt: connectedAt,
+        ownerUser: { id: "user-1", name: "User One" },
+        accessRequests: [],
+        accessGrants: [],
+      },
+    ]);
+    const runtime = makeRuntime({
+      linkedCheckouts: new Map([
+        [
+          "repo-1",
+          {
+            repoId: "repo-1",
+            repoPath: "/repos/gorilla",
+            isAttached: true,
+            attachedSessionGroupId: "group-hidden",
+            targetBranch: "main",
+            autoSyncEnabled: true,
+            currentBranch: "main",
+            currentCommitSha: "abcdef123",
+            lastSyncedCommitSha: "abcdef123",
+            lastSyncError: null,
+            restoreBranch: null,
+            restoreCommitSha: null,
+          },
+        ],
+      ]),
+      tunnelSlots: new Map([
+        [
+          "slot-1",
+          {
+            id: "slot-1",
+            label: "Preview URL",
+            provider: "custom",
+            mode: "manual",
+            publicUrl: "https://gorilla.ngrok.app",
+            targetPort: 3000,
+            state: "running",
+            lastError: null,
+            updatedAt: "2026-04-22T12:00:00.000Z",
+          },
+        ],
+      ]),
+    });
+    sessionRouterMock.listRuntimes.mockReturnValueOnce([runtime]);
+    sessionRouterMock.getRuntime.mockImplementation((runtimeId: string) =>
+      runtimeId === "runtime-1" ? runtime : undefined,
+    );
+    prismaMock.channel.findMany.mockResolvedValueOnce([
+      {
+        id: "channel-1",
+        name: "Gorilla",
+        type: "coding",
+        organizationId: "org-1",
+        repoId: "repo-1",
+        runScripts: null,
+        createdAt: connectedAt,
+        updatedAt: connectedAt,
+        repo: { id: "repo-1", name: "gorilla", defaultBranch: "main", webPreviewPort: 3000 },
+      },
+    ]);
+    prismaMock.sessionGroup.findMany.mockResolvedValueOnce([]);
+
+    const result = await connectionsService.listMine({
+      userId: "user-2",
+      organizationId: "org-1",
+    });
+
+    expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organizationId: "org-1",
+          id: { in: ["group-hidden"] },
+          OR: [
+            { channelId: null },
+            { channel: { members: { some: { userId: "user-2", leftAt: null } } } },
+          ],
+        }),
+      }),
+    );
+    expect(result[0].repos[0].webPreview).toEqual(
+      expect.objectContaining({
+        available: false,
+        reason: "not_synced_to_main_worktree",
+        sessionGroup: null,
+        url: null,
+        slot: null,
+      }),
+    );
+    expect(result[0].repos[0].linkedCheckout).toBeNull();
   });
 
   it("does not query bridges only granted to the user", async () => {

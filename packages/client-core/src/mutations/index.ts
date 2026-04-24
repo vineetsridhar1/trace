@@ -237,6 +237,17 @@ export const MY_BRIDGE_RUNTIMES_QUERY = gql`
       connectedAt
       disconnectedAt
       connected
+      tunnelSlots {
+        id
+        label
+        provider
+        mode
+        publicUrl
+        targetPort
+        state
+        lastError
+        updatedAt
+      }
       ownerUser {
         id
         name
@@ -339,6 +350,17 @@ export const MY_CONNECTIONS_QUERY = gql`
         connectedAt
         disconnectedAt
         connected
+        tunnelSlots {
+          id
+          label
+          provider
+          mode
+          publicUrl
+          targetPort
+          state
+          lastError
+          updatedAt
+        }
         ownerUser {
           id
           name
@@ -388,6 +410,7 @@ export const MY_CONNECTIONS_QUERY = gql`
           id
           name
           defaultBranch
+          webPreviewPort
         }
         channel {
           id
@@ -418,6 +441,42 @@ export const MY_CONNECTIONS_QUERY = gql`
               id
               name
             }
+          }
+        }
+        webPreview {
+          available
+          reason
+          url
+          port
+          runtimeInstanceId
+          isOwner
+          canManageTunnel
+          repo {
+            id
+            name
+            defaultBranch
+            webPreviewPort
+          }
+          sessionGroup {
+            id
+            name
+            slug
+            branch
+            channel {
+              id
+              name
+            }
+          }
+          slot {
+            id
+            label
+            provider
+            mode
+            publicUrl
+            targetPort
+            state
+            lastError
+            updatedAt
           }
         }
       }
@@ -533,6 +592,111 @@ export const UPDATE_REPO_MUTATION = gql`
   mutation UpdateRepo($id: ID!, $input: UpdateRepoInput!) {
     updateRepo(id: $id, input: $input) {
       id
+    }
+  }
+`;
+
+export const SESSION_GROUP_WEB_PREVIEW_QUERY = gql`
+  query SessionGroupWebPreview($sessionGroupId: ID!) {
+    sessionGroupWebPreview(sessionGroupId: $sessionGroupId) {
+      available
+      reason
+      url
+      port
+      runtimeInstanceId
+      isOwner
+      canManageTunnel
+      repo {
+        id
+        name
+        defaultBranch
+        webPreviewPort
+      }
+      sessionGroup {
+        id
+        name
+        slug
+        branch
+        channel {
+          id
+          name
+        }
+      }
+      slot {
+        id
+        label
+        provider
+        mode
+        publicUrl
+        targetPort
+        state
+        lastError
+        updatedAt
+      }
+    }
+  }
+`;
+
+export const START_BRIDGE_TUNNEL_MUTATION = gql`
+  mutation StartBridgeTunnel($runtimeInstanceId: ID!, $slotId: ID!) {
+    startBridgeTunnel(runtimeInstanceId: $runtimeInstanceId, slotId: $slotId) {
+      ok
+      error
+      slot {
+        id
+        label
+        provider
+        mode
+        publicUrl
+        targetPort
+        state
+        lastError
+        updatedAt
+      }
+    }
+  }
+`;
+
+export const STOP_BRIDGE_TUNNEL_MUTATION = gql`
+  mutation StopBridgeTunnel($runtimeInstanceId: ID!, $slotId: ID!) {
+    stopBridgeTunnel(runtimeInstanceId: $runtimeInstanceId, slotId: $slotId) {
+      ok
+      error
+      slot {
+        id
+        label
+        provider
+        mode
+        publicUrl
+        targetPort
+        state
+        lastError
+        updatedAt
+      }
+    }
+  }
+`;
+
+export const RETARGET_BRIDGE_TUNNEL_MUTATION = gql`
+  mutation RetargetBridgeTunnel($runtimeInstanceId: ID!, $slotId: ID!, $targetPort: Int!) {
+    retargetBridgeTunnel(
+      runtimeInstanceId: $runtimeInstanceId
+      slotId: $slotId
+      targetPort: $targetPort
+    ) {
+      ok
+      error
+      slot {
+        id
+        label
+        provider
+        mode
+        publicUrl
+        targetPort
+        state
+        lastError
+        updatedAt
+      }
     }
   }
 `;

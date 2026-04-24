@@ -22,6 +22,9 @@ declare global {
     | "custom_present"
     | "chained"
     | "error";
+  type DesktopBridgeTunnelProvider = "custom" | "ngrok";
+  type DesktopBridgeTunnelMode = "manual" | "trace_managed";
+  type DesktopBridgeTunnelState = "configured" | "running" | "stopped" | "error";
 
   type DesktopRepoConfig = {
     path: string;
@@ -92,6 +95,27 @@ declare global {
         error: string;
       };
 
+  type DesktopBridgeTunnelSlotInput = {
+    id: string;
+    label: string;
+    provider: DesktopBridgeTunnelProvider;
+    mode: DesktopBridgeTunnelMode;
+    publicUrl: string;
+    targetPort: number | null;
+    updatedAt: string;
+  };
+
+  type DesktopBridgeTunnelSlot = DesktopBridgeTunnelSlotInput & {
+    state: DesktopBridgeTunnelState;
+    lastError: string | null;
+  };
+
+  type DesktopBridgeTunnelActionResult = {
+    ok: boolean;
+    slot: DesktopBridgeTunnelSlot | null;
+    error: string | null;
+  };
+
   interface TraceElectronBridge {
     platform: string;
     send: (channel: string, data: unknown) => void;
@@ -109,7 +133,18 @@ declare global {
     repairRepoGitHooks: (repoId: string) => Promise<DesktopRepoGitHookStatus | null>;
     getBridgeStatus: () => Promise<DesktopBridgeConnectionStatus>;
     setBridgeAuthContext: (organizationId: string | null) => Promise<boolean>;
+    getBridgeTunnelSlots: () => Promise<DesktopBridgeTunnelSlot[]>;
+    saveBridgeTunnelSlots: (
+      slots: DesktopBridgeTunnelSlotInput[],
+    ) => Promise<DesktopBridgeTunnelSlot[]>;
+    startBridgeTunnel: (slotId: string) => Promise<DesktopBridgeTunnelActionResult>;
+    stopBridgeTunnel: (slotId: string) => Promise<DesktopBridgeTunnelActionResult>;
+    retargetBridgeTunnel: (
+      slotId: string,
+      targetPort: number,
+    ) => Promise<DesktopBridgeTunnelActionResult>;
     onBridgeStatus: (callback: (status: DesktopBridgeConnectionStatus) => void) => () => void;
+    onBridgeTunnelSlots: (callback: (slots: DesktopBridgeTunnelSlot[]) => void) => () => void;
   }
 
   interface Window {

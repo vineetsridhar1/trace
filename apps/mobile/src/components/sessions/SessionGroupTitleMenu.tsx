@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Modal, Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { BlurView } from "expo-blur";
 import { SymbolView, type SFSymbol } from "expo-symbols";
@@ -17,11 +17,12 @@ import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndic
 import { haptic } from "@/lib/haptics";
 import { alpha, useTheme } from "@/theme";
 import { LinkedCheckoutPanelSection } from "./LinkedCheckoutPanelSection";
+import { SessionWebPreviewPanelSection } from "./SessionWebPreviewPanelSection";
 
 const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
 
 const PILL_HEIGHT = 48;
-const PANEL_HEIGHT = 320;
+const PANEL_HEIGHT = 420;
 const PILL_RADIUS = 14;
 const PANEL_RADIUS = 20;
 
@@ -334,7 +335,11 @@ function PanelContent({
     | null
     | undefined;
   return (
-    <View style={styles.panelBody}>
+    <ScrollView
+      style={styles.panelBody}
+      contentContainerStyle={styles.panelBodyContent}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={[styles.panelTitleSlot, { paddingVertical: theme.spacing.sm }]}>
         <TitleRow groupId={groupId} sessionId={sessionId} nameLines={2} />
       </View>
@@ -353,7 +358,8 @@ function PanelContent({
         </View>
       ) : null}
       <LinkedCheckoutPanelSection groupId={groupId} />
-    </View>
+      <SessionWebPreviewPanelSection groupId={groupId} />
+    </ScrollView>
   );
 }
 
@@ -454,6 +460,9 @@ const styles = StyleSheet.create({
   },
   panelBody: {
     flex: 1,
+  },
+  panelBodyContent: {
+    paddingBottom: 12,
   },
   panelTitleSlot: {
     minHeight: PILL_HEIGHT,
