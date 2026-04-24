@@ -29,7 +29,8 @@ const router: RouterType = Router();
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID!;
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET!;
 const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
-const WEB_URL = process.env.TRACE_WEB_URL || `http://localhost:${3000 + Number(process.env.TRACE_PORT || 0)}`;
+const WEB_URL =
+  process.env.TRACE_WEB_URL || `http://localhost:${3000 + Number(process.env.TRACE_PORT || 0)}`;
 const SERVER_PUBLIC_URL = process.env.TRACE_SERVER_PUBLIC_URL || WEB_URL;
 const GITHUB_CALLBACK_URL = `${SERVER_PUBLIC_URL.replace(/\/$/, "")}/auth/github/callback`;
 
@@ -64,11 +65,9 @@ function isAllowedOrigin(origin: string): boolean {
 }
 
 export function createOAuthStateToken(origin: string): string {
-  return jwt.sign(
-    { origin, tokenType: "oauth_state" } satisfies OAuthStatePayload,
-    JWT_SECRET,
-    { expiresIn: OAUTH_STATE_TTL_SECONDS },
-  );
+  return jwt.sign({ origin, tokenType: "oauth_state" } satisfies OAuthStatePayload, JWT_SECRET, {
+    expiresIn: OAUTH_STATE_TTL_SECONDS,
+  });
 }
 
 export function verifyOAuthStateToken(state: string): { origin: string } | null {
@@ -113,9 +112,7 @@ function setSessionCookie(res: Response, token: string): void {
 function readOrganizationIdHeader(req: Request): string | null {
   const rawOrgId = req.headers["x-organization-id"];
   const organizationId = Array.isArray(rawOrgId) ? rawOrgId[0] : rawOrgId;
-  return typeof organizationId === "string" && organizationId.trim()
-    ? organizationId.trim()
-    : null;
+  return typeof organizationId === "string" && organizationId.trim() ? organizationId.trim() : null;
 }
 
 async function resolveAuthenticatedUser(req: Request): Promise<{
@@ -327,7 +324,9 @@ router.delete("/auth/local-mobile/devices/:deviceId", async (req: Request, res: 
     return res.status(403).json({ error: "No active organization found" });
   }
   const deviceId =
-    typeof req.params.deviceId === "string" ? req.params.deviceId : req.params.deviceId?.[0] ?? "";
+    typeof req.params.deviceId === "string"
+      ? req.params.deviceId
+      : (req.params.deviceId?.[0] ?? "");
   if (!deviceId) {
     return res.status(400).json({ error: "deviceId is required" });
   }
@@ -455,11 +454,7 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
     }
 
     // Issue JWT (only userId — org is selected via header)
-    const token = jwt.sign(
-      { userId: user.id },
-      JWT_SECRET,
-      { expiresIn: "7d" },
-    );
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });
 
     setSessionCookie(res, token);
 
@@ -553,21 +548,15 @@ router.get("/auth/me", async (req: Request, res: Response) => {
     }
 
     const canonicalOrgId = isLocalMode() ? await getCanonicalLocalOrganizationId() : null;
-    const orgMemberships =
-      canonicalOrgId
-        ? user.orgMemberships.filter((membership) => membership.organizationId === canonicalOrgId)
-        : user.orgMemberships;
+    const orgMemberships = canonicalOrgId
+      ? user.orgMemberships.filter((membership) => membership.organizationId === canonicalOrgId)
+      : user.orgMemberships;
 
-    // Include the session token so the client can store it in localStorage.
-    // This is necessary when the user authenticated via httpOnly cookie
-    // (e.g. after an OAuth popup where window.opener was severed) and the
-    // client-side JS doesn't have the raw JWT for the desktop bridge.
     res.json({
       user: {
         ...user,
         orgMemberships,
       },
-      token: authenticated.auth.kind === "session" ? authenticated.token : undefined,
     });
   } catch {
     return res.status(401).json({ error: "Invalid token" });
@@ -595,7 +584,9 @@ router.get("/auth/bridge-token", async (req: Request, res: Response) => {
     authenticated.auth.kind === "local_mobile" &&
     authenticated.auth.organizationId !== organizationId
   ) {
-    return res.status(403).json({ error: "This mobile device is not paired for that organization" });
+    return res
+      .status(403)
+      .json({ error: "This mobile device is not paired for that organization" });
   }
 
   const instanceId = typeof req.query.instanceId === "string" ? req.query.instanceId.trim() : "";

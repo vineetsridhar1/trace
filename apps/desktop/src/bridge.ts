@@ -123,7 +123,6 @@ function getPendingInputToolUseId(output: ToolOutput): string | null {
 export type BridgeConnectionStatus = "connecting" | "connected" | "disconnected";
 
 type BridgeAuthContext = {
-  sessionToken: string;
   organizationId: string;
 };
 
@@ -162,6 +161,7 @@ export class BridgeClient implements IBridgeClient {
   private activeRuns = new Map<string, number>();
   private terminalManager: TerminalManager;
   private autoSyncManager: LinkedCheckoutAutoSyncManager;
+  private getSessionCookieHeader: (url: string) => Promise<string | null>;
 
   private gitExec: GitExecFn = (args, cwd) =>
     new Promise((resolve, reject) => {
@@ -171,8 +171,9 @@ export class BridgeClient implements IBridgeClient {
       });
     });
 
-  constructor(serverUrl: string) {
+  constructor(serverUrl: string, getSessionCookieHeader: (url: string) => Promise<string | null>) {
     this.serverUrl = serverUrl;
+    this.getSessionCookieHeader = getSessionCookieHeader;
     this.instanceId = getOrCreateInstanceId();
     this.terminalManager = new TerminalManager({
       onOutput: (terminalId, data) => {
@@ -205,11 +206,9 @@ export class BridgeClient implements IBridgeClient {
     void this.openSocket(attempt);
   }
 
-  setAuthContext(sessionToken: string | null, organizationId: string | null) {
-    const nextContext = sessionToken && organizationId ? { sessionToken, organizationId } : null;
-    const changed =
-      this.authContext?.sessionToken !== nextContext?.sessionToken ||
-      this.authContext?.organizationId !== nextContext?.organizationId;
+  setAuthContext(organizationId: string | null) {
+    const nextContext = organizationId ? { organizationId } : null;
+    const changed = this.authContext?.organizationId !== nextContext?.organizationId;
 
     this.authContext = nextContext;
     this.bridgeAuthToken = null;
@@ -366,10 +365,14 @@ export class BridgeClient implements IBridgeClient {
 
     const url = new URL(`${this.serverUrl}/auth/bridge-token`);
     url.searchParams.set("instanceId", this.instanceId);
+    const cookieHeader = await this.getSessionCookieHeader(url.toString());
+    if (!cookieHeader) {
+      throw new Error("Bridge session cookie is not available");
+    }
 
     const response = await fetch(url, {
       headers: {
-        Authorization: `Bearer ${this.authContext.sessionToken}`,
+        Cookie: cookieHeader,
         "X-Organization-Id": this.authContext.organizationId,
       },
     });

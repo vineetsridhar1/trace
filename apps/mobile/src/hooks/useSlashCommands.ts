@@ -12,8 +12,32 @@ const BUILTIN_FALLBACK: SessionSlashCommand[] = BUILTIN_SLASH_COMMANDS.map((comm
 const slashCommandCache = new Map<string, SessionSlashCommand[]>();
 const slashCommandRequests = new Map<string, Promise<SessionSlashCommand[] | null>>();
 
-function fetchSlashCommands(sessionId: string): Promise<SessionSlashCommand[] | null> {
-  const pendingRequest = slashCommandRequests.get(sessionId);
+function getRuntimeInstanceId(connection: unknown): string | null {
+  if (
+    !connection ||
+    typeof connection !== "object" ||
+    Array.isArray(connection) ||
+    typeof (connection as { runtimeInstanceId?: unknown }).runtimeInstanceId !== "string"
+  ) {
+    return null;
+  }
+
+  return (connection as { runtimeInstanceId?: string }).runtimeInstanceId ?? null;
+}
+
+function getSlashCommandCacheKey(
+  sessionId: string,
+  runtimeInstanceId: string | null,
+  workdir: string | null | undefined,
+): string {
+  return `${sessionId}::${runtimeInstanceId ?? ""}::${workdir ?? ""}`;
+}
+
+function fetchSlashCommands(
+  cacheKey: string,
+  sessionId: string,
+): Promise<SessionSlashCommand[] | null> {
+  const pendingRequest = slashCommandRequests.get(cacheKey);
   if (pendingRequest) return pendingRequest;
 
   const request = getClient()
@@ -30,17 +54,17 @@ function fetchSlashCommands(sessionId: string): Promise<SessionSlashCommand[] | 
 
       const nextCommands = result.data.sessionSlashCommands;
       if (nextCommands.length > 0) {
-        slashCommandCache.set(sessionId, nextCommands);
+        slashCommandCache.set(cacheKey, nextCommands);
       }
 
       return nextCommands;
     })
     .catch(() => null)
     .finally(() => {
-      slashCommandRequests.delete(sessionId);
+      slashCommandRequests.delete(cacheKey);
     });
 
-  slashCommandRequests.set(sessionId, request);
+  slashCommandRequests.set(cacheKey, request);
   return request;
 }
 
@@ -49,10 +73,14 @@ export function useSlashCommands(sessionId: string): {
   loading: boolean;
 } {
   const tool = useEntityField("sessions", sessionId, "tool") as string | null | undefined;
+  const connection = useEntityField("sessions", sessionId, "connection");
+  const workdir = useEntityField("sessions", sessionId, "workdir") as string | null | undefined;
   const isClaudeSession = tool === "claude_code";
+  const runtimeInstanceId = getRuntimeInstanceId(connection);
+  const cacheKey = getSlashCommandCacheKey(sessionId, runtimeInstanceId, workdir);
   const [commands, setCommands] = useState<SessionSlashCommand[]>(() => {
     if (!isClaudeSession) return [];
-    return slashCommandCache.get(sessionId) ?? BUILTIN_FALLBACK;
+    return slashCommandCache.get(cacheKey) ?? BUILTIN_FALLBACK;
   });
   const [loading, setLoading] = useState(false);
 
@@ -64,11 +92,11 @@ export function useSlashCommands(sessionId: string): {
     }
 
     let cancelled = false;
-    const cachedCommands = slashCommandCache.get(sessionId);
+    const cachedCommands = slashCommandCache.get(cacheKey);
     setCommands(cachedCommands ?? BUILTIN_FALLBACK);
     setLoading(cachedCommands == null);
 
-    void fetchSlashCommands(sessionId)
+    void fetchSlashCommands(cacheKey, sessionId)
       .then((nextCommands) => {
         if (cancelled || !nextCommands || nextCommands.length === 0) return;
         setCommands(nextCommands);
@@ -82,7 +110,7 @@ export function useSlashCommands(sessionId: string): {
     return () => {
       cancelled = true;
     };
-  }, [isClaudeSession, sessionId]);
+  }, [cacheKey, isClaudeSession, sessionId]);
 
   return { commands, loading };
 }

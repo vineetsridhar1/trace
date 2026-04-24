@@ -3,7 +3,10 @@ import type { Request } from "express";
 import type { IncomingHttpHeaders } from "http";
 import jwt from "jsonwebtoken";
 import type { Context } from "../context.js";
-import { authenticateLocalMobileSecret, type LocalMobileAuthSubject } from "../services/local-mobile-auth.js";
+import {
+  authenticateLocalMobileSecret,
+  type LocalMobileAuthSubject,
+} from "../services/local-mobile-auth.js";
 import { getCanonicalLocalOrganizationId } from "../services/local-bootstrap.js";
 import { AuthenticationError } from "./errors.js";
 import { prisma } from "./db.js";
@@ -78,11 +81,26 @@ function normalizeIpAddress(value: string): string {
   return trimmed.startsWith("::ffff:") ? trimmed.slice(7) : trimmed;
 }
 
+function readForwardedToken(headers: IncomingHttpHeaders, token: "for" | "host"): string | null {
+  const rawValue = headers.forwarded;
+  const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+  if (typeof value !== "string") return null;
+
+  const firstEntry = value.split(",")[0];
+  if (!firstEntry) return null;
+
+  const match = firstEntry.match(new RegExp(`${token}=([^;]+)`, "i"));
+  if (!match) return null;
+
+  return match[1]?.trim().replace(/^"|"$/g, "") || null;
+}
+
 function readForwardedFor(headers: IncomingHttpHeaders): string | null {
   const rawValue = headers["x-forwarded-for"];
   const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
-  if (typeof value !== "string") return null;
-  const [first] = value.split(",");
+  const candidate = typeof value === "string" ? value : readForwardedToken(headers, "for");
+  if (typeof candidate !== "string") return null;
+  const [first] = candidate.split(",");
   const trimmed = first?.trim() ?? "";
   return trimmed || null;
 }
@@ -97,8 +115,9 @@ function readHeaderValue(headers: IncomingHttpHeaders, key: string): string | nu
 
 function readForwardedHost(headers: IncomingHttpHeaders): string | null {
   const value = readHeaderValue(headers, "x-forwarded-host");
-  if (!value) return null;
-  const [first] = value.split(",");
+  const candidate = value ?? readForwardedToken(headers, "host");
+  if (!candidate) return null;
+  const [first] = candidate.split(",");
   const trimmed = first?.trim() ?? "";
   return trimmed || null;
 }
@@ -360,8 +379,7 @@ export async function buildWsContext(
   cookieHeader?: string,
   request?: RequestAuthSource,
 ): Promise<Context> {
-  const token =
-    (connectionParams?.token as string) ?? parseCookieToken(cookieHeader);
+  const token = (connectionParams?.token as string) ?? parseCookieToken(cookieHeader);
 
   if (!token) throw new AuthenticationError("Missing auth token for WebSocket");
 

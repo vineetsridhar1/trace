@@ -12,7 +12,17 @@ const execFileAsync = promisify(execFile);
 let mainWindow: BrowserWindow | null = null;
 const portOffset = Number(process.env.TRACE_PORT || 0);
 const serverUrl = process.env.TRACE_SERVER_URL ?? `http://localhost:${4000 + portOffset}`;
-const bridge = new BridgeClient(serverUrl);
+
+async function getSessionCookieHeader(targetUrl: string): Promise<string | null> {
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
+
+  const cookies = await mainWindow.webContents.session.cookies.get({ url: targetUrl });
+  if (cookies.length === 0) return null;
+
+  return cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
+}
+
+const bridge = new BridgeClient(serverUrl, getSessionCookieHeader);
 
 function publishBridgeStatus(status: BridgeConnectionStatus) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -140,13 +150,10 @@ ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: string) => {
 });
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());
-ipcMain.handle(
-  "set-bridge-auth-context",
-  (_event, token: string | null, organizationId: string | null) => {
-    bridge.setAuthContext(token, organizationId);
-    return true;
-  },
-);
+ipcMain.handle("set-bridge-auth-context", (_event, organizationId: string | null) => {
+  bridge.setAuthContext(organizationId);
+  return true;
+});
 
 app.whenReady().then(() => {
   ensureHookRunnerEntrypoint({

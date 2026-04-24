@@ -216,6 +216,25 @@ describe("auth helpers", () => {
     ).rejects.toThrow("External local-mode access requires a paired mobile token");
   });
 
+  it("rejects local-mode HTTP access when the proxy only sets Forwarded", async () => {
+    vi.stubEnv("TRACE_LOCAL_MODE", "1");
+
+    const token = jwt.sign({ userId: "user-2" }, JWT_SECRET);
+    await expect(
+      buildContext({
+        req: {
+          headers: {
+            authorization: `Bearer ${token}`,
+            host: "localhost:4000",
+            forwarded: 'for=203.0.113.10;host="trace.example.com"',
+          },
+          cookies: {},
+          socket: { remoteAddress: "127.0.0.1" },
+        },
+      } as unknown as Parameters<typeof buildContext>[0]),
+    ).rejects.toThrow("External local-mode access requires a paired mobile token");
+  });
+
   it("forces HTTP auth context onto the canonical local organization", async () => {
     vi.stubEnv("TRACE_LOCAL_MODE", "1");
 
@@ -252,17 +271,13 @@ describe("auth helpers", () => {
 
     const token = jwt.sign({ userId: "user-3" }, JWT_SECRET);
     await expect(
-      buildWsContext(
-        { token },
-        undefined,
-        {
-          headers: {
-            host: "localhost:4000",
-            "x-forwarded-for": "203.0.113.20",
-          },
-          socket: { remoteAddress: "127.0.0.1" },
+      buildWsContext({ token }, undefined, {
+        headers: {
+          host: "localhost:4000",
+          "x-forwarded-for": "203.0.113.20",
         },
-      ),
+        socket: { remoteAddress: "127.0.0.1" },
+      }),
     ).rejects.toThrow("External local-mode access requires a paired mobile token");
   });
 
@@ -271,17 +286,13 @@ describe("auth helpers", () => {
 
     const token = jwt.sign({ userId: "user-3" }, JWT_SECRET);
     await expect(
-      buildWsContext(
-        { token },
-        undefined,
-        {
-          headers: {
-            host: "localhost:4000",
-            origin: "https://trace.example.com",
-          },
-          socket: { remoteAddress: "127.0.0.1" },
+      buildWsContext({ token }, undefined, {
+        headers: {
+          host: "localhost:4000",
+          origin: "https://trace.example.com",
         },
-      ),
+        socket: { remoteAddress: "127.0.0.1" },
+      }),
     ).rejects.toThrow("External local-mode access requires a paired mobile token");
   });
 
