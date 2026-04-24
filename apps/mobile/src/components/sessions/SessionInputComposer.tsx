@@ -111,12 +111,22 @@ export function SessionInputComposer({
   const setImages = useDraftsStore((s) => s.setImages);
 
   const inputRef = useRef<TextInput>(null);
+  const preserveInputFocusRef = useRef(false);
+  const preserveInputFocusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (focusRequest == null) return;
     requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
   }, [focusRequest]);
+  useEffect(
+    () => () => {
+      if (preserveInputFocusTimeoutRef.current) {
+        clearTimeout(preserveInputFocusTimeoutRef.current);
+      }
+    },
+    [],
+  );
 
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
@@ -249,11 +259,41 @@ export function SessionInputComposer({
     refreshClipboard();
   }, [refreshClipboard]);
 
+  const preserveInputFocus = useCallback(() => {
+    preserveInputFocusRef.current = true;
+    if (preserveInputFocusTimeoutRef.current) {
+      clearTimeout(preserveInputFocusTimeoutRef.current);
+    }
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+    preserveInputFocusTimeoutRef.current = setTimeout(() => {
+      preserveInputFocusRef.current = false;
+      preserveInputFocusTimeoutRef.current = null;
+    }, 160);
+  }, []);
+
   const handleBlur = useCallback(() => {
+    if (preserveInputFocusRef.current) {
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
+      return;
+    }
     setFocused(false);
     setInputFocused(false);
     resetChips();
   }, [resetChips]);
+
+  const handleModelChipPressKeepFocus = useCallback(() => {
+    preserveInputFocus();
+    handleModelChipPress();
+  }, [handleModelChipPress, preserveInputFocus]);
+
+  const handleModelTouchStartKeepFocus = useCallback(() => {
+    preserveInputFocus();
+    scheduleModelCollapse();
+  }, [preserveInputFocus, scheduleModelCollapse]);
 
   const handleChangeText = useCallback((next: string) => {
     const start = performance.now();
@@ -453,9 +493,9 @@ export function SessionInputComposer({
             modeWidthAnimatedStyle={modeWidthAnimatedStyle}
             modelWidthAnimatedStyle={modelWidthAnimatedStyle}
             onModePress={handleModePress}
-            onModelChipPress={handleModelChipPress}
+            onModelChipPress={handleModelChipPressKeepFocus}
             onModelMenuOpenChange={setModelMenuOpen}
-            onModelTouchStart={scheduleModelCollapse}
+            onModelTouchStart={handleModelTouchStartKeepFocus}
           />
 
           <View style={styles.inputCardSlot}>
