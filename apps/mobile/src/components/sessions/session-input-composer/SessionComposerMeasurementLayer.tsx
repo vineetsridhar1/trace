@@ -1,25 +1,17 @@
 import { Text as NativeText, View } from "react-native";
 import { SymbolView } from "expo-symbols";
-import type { CodingTool } from "@trace/gql";
 import { MODE_CYCLE } from "@/hooks/useComposerModePalette";
 import type { ComposerMode } from "@/hooks/useComposerSubmit";
 import { useTheme } from "@/theme";
 import { MODE_ICON, MODE_LABEL } from "./constants";
-import { SessionComposerToolLogo } from "./SessionComposerToolLogo";
 import { styles } from "./styles";
 
 interface SessionComposerMeasurementLayerProps {
-  currentTool: CodingTool;
-  modelLabel: string;
   onModeMeasure: (mode: ComposerMode, width: number) => void;
-  onModelMeasure: (width: number) => void;
 }
 
 export function SessionComposerMeasurementLayer({
-  currentTool,
-  modelLabel,
   onModeMeasure,
-  onModelMeasure,
 }: SessionComposerMeasurementLayerProps) {
   const theme = useTheme();
 
@@ -42,14 +34,6 @@ export function SessionComposerMeasurementLayer({
           <NativeText style={styles.modeText}>{MODE_LABEL[measuredMode]}</NativeText>
         </View>
       ))}
-      <View
-        key={`model-measure:${currentTool}:${modelLabel}`}
-        onLayout={(event) => onModelMeasure(event.nativeEvent.layout.width)}
-        style={styles.modelMeasurePill}
-      >
-        <SessionComposerToolLogo tool={currentTool} size={13} />
-        <NativeText style={styles.modelMeasureText}>{modelLabel}</NativeText>
-      </View>
     </View>
   );
 }

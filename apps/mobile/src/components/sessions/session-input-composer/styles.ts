@@ -20,12 +20,7 @@ export const styles = StyleSheet.create({
   },
   leadingChipsContainer: {
     position: "relative",
-  },
-  leadingChipsVisible: {
-    overflow: "visible",
-  },
-  leadingChipsHidden: {
-    overflow: "hidden",
+    marginRight: INPUT_ACTION_GAP,
   },
   leadingChipsRow: {
     flexDirection: "row",
@@ -103,28 +98,7 @@ export const styles = StyleSheet.create({
   },
   bridgeRow: { flexDirection: "row", justifyContent: "center", alignItems: "center" },
   modelChipSlot: {
-    height: MODEL_CHIP_SIZE,
-    justifyContent: "center",
-    overflow: "visible",
-  },
-  modelExpandedWrapper: {
-    zIndex: 20,
-  },
-  modelChipCollapsedWrapper: {
-    width: MODEL_CHIP_SIZE,
-    height: MODEL_CHIP_SIZE,
-  },
-  modelChipCollapsed: {
-    width: MODEL_CHIP_SIZE,
-    height: MODEL_CHIP_SIZE,
-    borderRadius: MODEL_CHIP_SIZE / 2,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
-  },
-  modelChipPressable: {
-    width: MODEL_CHIP_SIZE,
-    height: MODEL_CHIP_SIZE,
-    alignItems: "center",
+    minWidth: MODEL_CHIP_SIZE,
     justifyContent: "center",
   },
   modeMeasureRoot: {
@@ -145,14 +119,5 @@ export const styles = StyleSheet.create({
   },
   modeIcon: { width: 14, height: 14 },
   modeText: { fontSize: 13, fontWeight: "700" },
-  modelMeasurePill: {
-    height: 38,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-  },
-  modelMeasureText: { fontSize: 12, fontWeight: "600" },
   retryRow: { paddingBottom: 4 },
 });

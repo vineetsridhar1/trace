@@ -1,13 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { View, type TextInput } from "react-native";
+import { Keyboard, View, type TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
+import { SymbolView } from "expo-symbols";
+import { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { DISMISS_SESSION_MUTATION, generateUUID, useEntityField } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
@@ -26,18 +23,21 @@ import { useDraftsStore, type ImageAttachment } from "@/stores/drafts";
 import { alpha, useTheme } from "@/theme";
 import { ComposerAttachButton } from "./ComposerAttachButton";
 import { ComposerConnectionNotice } from "./ComposerConnectionNotice";
-import { ComposerMorphPill } from "./ComposerMorphPill";
 import { ComposerPasteButton } from "./ComposerPasteButton";
 import { ImageAttachmentBar } from "./ImageAttachmentBar";
+import { SessionModelPickerSheetContent } from "./SessionModelPickerSheetContent";
+import { SessionRuntimePickerSheetContent } from "./SessionRuntimePickerSheetContent";
 import {
   MAX_IMAGES,
   MAX_INPUT_HEIGHT,
   MIN_INPUT_HEIGHT,
 } from "./session-input-composer/constants";
 import { SessionComposerActionButton } from "./session-input-composer/SessionComposerActionButton";
+import { SessionComposerBottomSheet } from "./session-input-composer/SessionComposerBottomSheet";
 import { SessionComposerInputCard } from "./session-input-composer/SessionComposerInputCard";
 import { SessionComposerLeadingChips } from "./session-input-composer/SessionComposerLeadingChips";
 import { SessionComposerMeasurementLayer } from "./session-input-composer/SessionComposerMeasurementLayer";
+import { SessionComposerSheetTrigger } from "./session-input-composer/SessionComposerSheetTrigger";
 import { SessionComposerSlashCommandMenu } from "./session-input-composer/SessionComposerSlashCommandMenu";
 import { styles } from "./session-input-composer/styles";
 import { useSessionComposerChips } from "./session-input-composer/useSessionComposerChips";
@@ -51,10 +51,11 @@ interface SessionInputComposerProps {
 }
 
 const EMPTY_IMAGES: ImageAttachment[] = [];
+type ComposerSheet = "model" | "runtime" | null;
 
 /**
  * Session composer: a single-line-start liquid glass input next to a
- * separate send circle, with three morphing glass controls below. Mounted by
+ * separate send circle, with lightweight mode/config controls. Mounted by
  * `SessionSurface` only when no pending-input bar is active. Send switches
  * to Queue whenever the agent is running.
  * On failure the draft is restored with an inline retry affordance.
@@ -79,15 +80,7 @@ export function SessionInputComposer({
     | SessionConnection
     | null
     | undefined;
-  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
-    | string
-    | null
-    | undefined;
   const channel = useEntityField("sessions", sessionId, "channel") as
-    | { id: string }
-    | null
-    | undefined;
-  const repo = useEntityField("sessions", sessionId, "repo") as
     | { id: string }
     | null
     | undefined;
@@ -104,6 +97,7 @@ export function SessionInputComposer({
   const [focused, setFocused] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
   const [pickingImage, setPickingImage] = useState(false);
+  const [activeSheet, setActiveSheet] = useState<ComposerSheet>(null);
 
   const images = useDraftsStore((s) => s.images[sessionId] ?? EMPTY_IMAGES);
   const setImages = useDraftsStore((s) => s.setImages);
@@ -186,49 +180,30 @@ export function SessionInputComposer({
     cardBorderAnimatedStyle,
     chipAnimatedStyle,
     chipTextAnimatedStyle,
-    chipsVisible,
     glassAnimatedProps,
     handleModeMeasure,
     handleModePress,
-    handleModelChipPress,
-    handleModelMeasure,
-    leadingChipsAnimatedStyle,
     modeIconTint,
     modeLabelVisible,
     modeWidthAnimatedStyle,
-    modelLabelVisible,
-    modelWidthAnimatedStyle,
     resetChips,
-    scheduleModelCollapse,
-    setModelMenuOpen,
   } = useSessionComposerChips({
-    currentTool,
-    expanded,
-    hasSendable,
-    isActive,
-    model,
     mode,
     setMode,
   });
 
   const {
     bridgeIcon,
-    bridgeItems,
     bridgeLabel,
     canChangeBridge,
-    modelItems,
     modelLabel,
-    toolHeaderItems,
   } = useSessionComposerConfig({
-    canInteract,
-    channelRepoId: repo?.id,
     connection,
     currentTool,
     hosting,
     isNotStarted,
     isOptimistic,
     model,
-    sessionGroupId,
     sessionId,
     tool,
   });
@@ -240,6 +215,24 @@ export function SessionInputComposer({
     });
   }, [height, inputHeight, theme.motion.durations.fast]);
   const inputAnimatedStyle = useAnimatedStyle(() => ({ height: inputHeight.value }));
+
+  const handleCloseSheet = useCallback(() => {
+    setActiveSheet(null);
+  }, []);
+
+  const handleOpenModelSheet = useCallback(() => {
+    if (!canInteract) return;
+    void haptic.selection();
+    Keyboard.dismiss();
+    setActiveSheet("model");
+  }, [canInteract]);
+
+  const handleOpenRuntimeSheet = useCallback(() => {
+    if (!canChangeBridge) return;
+    void haptic.selection();
+    Keyboard.dismiss();
+    setActiveSheet("runtime");
+  }, [canChangeBridge]);
 
   const handleFocus = useCallback(() => {
     setFocused(true);
@@ -414,10 +407,7 @@ export function SessionInputComposer({
       }}
     >
       <SessionComposerMeasurementLayer
-        currentTool={currentTool}
-        modelLabel={modelLabel}
         onModeMeasure={handleModeMeasure}
-        onModelMeasure={handleModelMeasure}
       />
 
       {isDisconnected ? (
@@ -432,29 +422,22 @@ export function SessionInputComposer({
 
       <View style={styles.composerStack}>
         <View style={styles.inputActionRow}>
-          <SessionComposerLeadingChips
-            expanded={expanded}
-            chipsVisible={chipsVisible}
-            canInteract={canInteract}
-            currentTool={currentTool}
-            mode={mode}
-            modeIconTint={modeIconTint}
-            modeLabelVisible={modeLabelVisible}
-            modelItems={modelItems}
-            modelLabel={modelLabel}
-            modelLabelVisible={modelLabelVisible}
-            toolHeaderItems={toolHeaderItems}
-            chipAnimatedStyle={chipAnimatedStyle}
-            chipTextAnimatedStyle={chipTextAnimatedStyle}
-            glassAnimatedProps={glassAnimatedProps}
-            leadingChipsAnimatedStyle={leadingChipsAnimatedStyle}
-            modeWidthAnimatedStyle={modeWidthAnimatedStyle}
-            modelWidthAnimatedStyle={modelWidthAnimatedStyle}
-            onModePress={handleModePress}
-            onModelChipPress={handleModelChipPress}
-            onModelMenuOpenChange={setModelMenuOpen}
-            onModelTouchStart={scheduleModelCollapse}
-          />
+          {expanded && !hasSendable && !isActive ? (
+            <SessionComposerLeadingChips
+              canInteract={canInteract}
+              currentTool={currentTool}
+              mode={mode}
+              modeIconTint={modeIconTint}
+              modeLabelVisible={modeLabelVisible}
+              modelLabel={modelLabel}
+              chipAnimatedStyle={chipAnimatedStyle}
+              chipTextAnimatedStyle={chipTextAnimatedStyle}
+              glassAnimatedProps={glassAnimatedProps}
+              modeWidthAnimatedStyle={modeWidthAnimatedStyle}
+              onModePress={handleModePress}
+              onOpenModelSheet={handleOpenModelSheet}
+            />
+          ) : null}
 
           <View style={styles.inputCardSlot}>
             {showSlashCommandMenu ? (
@@ -525,18 +508,42 @@ export function SessionInputComposer({
 
         {expanded && canChangeBridge ? (
           <View style={styles.bridgeRow}>
-            <ComposerMorphPill
+            <SessionComposerSheetTrigger
               label={bridgeLabel}
-              accessibilityLabel="Bridge"
-              items={bridgeItems}
-              systemIcon={bridgeIcon}
-              align="left"
-              minWidth={88}
-              tintAnimatedProps={glassAnimatedProps}
+              accessibilityLabel={`Runtime: ${bridgeLabel}`}
+              leading={
+                <SymbolView
+                  name={bridgeIcon}
+                  size={16}
+                  tintColor={theme.colors.mutedForeground}
+                  resizeMode="scaleAspectFit"
+                />
+              }
+              disabled={!canChangeBridge}
+              onPress={handleOpenRuntimeSheet}
+              showLabel={false}
             />
           </View>
         ) : null}
       </View>
+
+      <SessionComposerBottomSheet
+        visible={activeSheet !== null}
+        onClose={handleCloseSheet}
+      >
+        {activeSheet === "model" ? (
+          <SessionModelPickerSheetContent
+            sessionId={sessionId}
+            onClose={handleCloseSheet}
+          />
+        ) : null}
+        {activeSheet === "runtime" ? (
+          <SessionRuntimePickerSheetContent
+            sessionId={sessionId}
+            onClose={handleCloseSheet}
+          />
+        ) : null}
+      </SessionComposerBottomSheet>
     </View>
   );
 }
