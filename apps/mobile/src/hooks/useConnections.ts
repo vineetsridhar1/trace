@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import { MY_CONNECTIONS_QUERY, useAuthStore, type AuthState } from "@trace/client-core";
-import type { BridgeAccessCapability, HostingMode } from "@trace/gql";
+import type {
+  BridgeAccessCapability,
+  Channel,
+  HostingMode,
+  LinkedCheckoutStatus,
+  Repo,
+  SessionGroup,
+} from "@trace/gql";
 import { getClient } from "@/lib/urql";
 
 export interface ConnectionUser {
@@ -32,22 +39,27 @@ export interface ConnectionAccessGrant {
   sessionGroup?: { id: string; name?: string | null } | null;
 }
 
-export interface ConnectionLinkedCheckout {
-  repoId: string;
-  isAttached: boolean;
-  attachedSessionGroupId?: string | null;
-  targetBranch?: string | null;
-  autoSyncEnabled: boolean;
-  currentBranch?: string | null;
-  currentCommitSha?: string | null;
-  lastSyncedCommitSha?: string | null;
-  lastSyncError?: string | null;
-  attachedSessionGroup?: { id: string; name: string; branch?: string | null } | null;
-}
+type ConnectionAttachedSessionGroup = Pick<SessionGroup, "id" | "name" | "branch">;
+
+export type ConnectionLinkedCheckout = Pick<
+  LinkedCheckoutStatus,
+  | "repoId"
+  | "isAttached"
+  | "attachedSessionGroupId"
+  | "targetBranch"
+  | "autoSyncEnabled"
+  | "hasUncommittedChanges"
+  | "currentBranch"
+  | "currentCommitSha"
+  | "lastSyncedCommitSha"
+  | "lastSyncError"
+> & {
+  attachedSessionGroup?: ConnectionAttachedSessionGroup | null;
+};
 
 export interface ConnectionRepoEntry {
-  repo: { id: string; name: string; defaultBranch?: string | null };
-  channel: { id: string; name: string; baseBranch?: string | null };
+  repo: Pick<Repo, "id" | "name" | "defaultBranch">;
+  channel: Pick<Channel, "id" | "name" | "baseBranch">;
   linkedCheckout?: ConnectionLinkedCheckout | null;
 }
 

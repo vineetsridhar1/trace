@@ -12,6 +12,7 @@ import {
 
 const ALERT_TITLE: Record<ConnectionSyncAction, string> = {
   sync: "Sync failed",
+  commit: "Commit failed",
   restore: "Restore failed",
   "toggle-auto-sync": "Couldn't update auto-sync",
 };
@@ -24,10 +25,11 @@ export function ConnectionsRepoSyncActions({
   onChanged: () => Promise<void>;
 }) {
   const theme = useTheme();
-  const { status, pendingAction, sync, restore, toggleAutoSync } = useConnectionSyncActions({
-    checkout,
-    onChanged,
-  });
+  const { status, pendingAction, sync, commitChanges, restore, toggleAutoSync } =
+    useConnectionSyncActions({
+      checkout,
+      onChanged,
+    });
   const busy = pendingAction !== null;
 
   const handle = useCallback(
@@ -57,6 +59,16 @@ export function ConnectionsRepoSyncActions({
         disabled={busy}
         onPress={() => void handle("sync", sync)}
       />
+      {status.hasUncommittedChanges ? (
+        <ActionButton
+          theme={theme}
+          label="Commit"
+          symbol="checkmark.circle"
+          loading={pendingAction === "commit"}
+          disabled={busy}
+          onPress={() => void handle("commit", commitChanges)}
+        />
+      ) : null}
       <ActionButton
         theme={theme}
         label={status.autoSyncEnabled ? "Pause" : "Resume"}
@@ -130,10 +142,12 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
     marginTop: 8,
   },
   button: {
-    flex: 1,
+    flexGrow: 1,
+    minWidth: 96,
     height: 38,
     flexDirection: "row",
     alignItems: "center",

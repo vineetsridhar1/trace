@@ -16,6 +16,7 @@ interface LinkedCheckoutPanelSectionProps {
 
 const ACTION_ALERT_TITLE: Record<LinkedCheckoutAction, string> = {
   sync: "Sync failed",
+  commit: "Commit failed",
   restore: "Restore failed",
   "toggle-auto-sync": "Couldn't update auto-sync",
 };
@@ -37,9 +38,11 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
     repoLinked,
     isAttachedToThisGroup,
     isAttachedElsewhere,
+    hasUncommittedChanges,
     pendingAction,
     refresh,
     sync,
+    commitChanges,
     restore,
     toggleAutoSync,
   } = checkout;
@@ -62,6 +65,10 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
   );
 
   const onSync = useCallback(() => void handle("sync", sync), [handle, sync]);
+  const onCommitChanges = useCallback(
+    () => void handle("commit", commitChanges),
+    [commitChanges, handle],
+  );
   const onRestore = useCallback(() => void handle("restore", restore), [handle, restore]);
   const onTogglePause = useCallback(
     () => void handle("toggle-auto-sync", toggleAutoSync),
@@ -129,8 +136,10 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
           theme={theme}
           pendingAction={pendingAction}
           autoSyncEnabled={status?.autoSyncEnabled ?? false}
+          hasUncommittedChanges={false}
           isAttachedToThisGroup={false}
           onSync={onSync}
+          onCommitChanges={onCommitChanges}
           onTogglePause={onTogglePause}
           onRestore={onRestore}
         />
@@ -141,7 +150,9 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
   const subtitle = isAttachedToThisGroup && branch
     ? `Main worktree following ${branch}${
         syncedCommitSha ? ` at ${syncedCommitSha.slice(0, 7)}` : ""
-      }${status?.autoSyncEnabled ? "" : " (auto-sync paused)"}`
+      }${status?.autoSyncEnabled ? "" : " (auto-sync paused)"}${
+        hasUncommittedChanges ? " (has live changes)" : ""
+      }`
     : "Sync this workspace into your main worktree.";
 
   return (
@@ -159,8 +170,10 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
         theme={theme}
         pendingAction={pendingAction}
         autoSyncEnabled={status?.autoSyncEnabled ?? false}
+        hasUncommittedChanges={hasUncommittedChanges}
         isAttachedToThisGroup={isAttachedToThisGroup}
         onSync={onSync}
+        onCommitChanges={onCommitChanges}
         onTogglePause={onTogglePause}
         onRestore={onRestore}
       />
@@ -180,8 +193,10 @@ interface ActionRowProps {
   theme: Theme;
   pendingAction: LinkedCheckoutAction | null;
   autoSyncEnabled: boolean;
+  hasUncommittedChanges: boolean;
   isAttachedToThisGroup: boolean;
   onSync: () => void;
+  onCommitChanges: () => void;
   onTogglePause: () => void;
   onRestore: () => void;
 }
@@ -190,8 +205,10 @@ function ActionRow({
   theme,
   pendingAction,
   autoSyncEnabled,
+  hasUncommittedChanges,
   isAttachedToThisGroup,
   onSync,
+  onCommitChanges,
   onTogglePause,
   onRestore,
 }: ActionRowProps) {
@@ -209,6 +226,16 @@ function ActionRow({
       />
       {isAttachedToThisGroup ? (
         <>
+          {hasUncommittedChanges ? (
+            <ActionButton
+              theme={theme}
+              label="Commit"
+              symbol="checkmark.circle"
+              loading={pendingAction === "commit"}
+              disabled={busy}
+              onPress={onCommitChanges}
+            />
+          ) : null}
           <ActionButton
             theme={theme}
             label={autoSyncEnabled ? "Pause" : "Resume"}
@@ -303,10 +330,12 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
     marginTop: 6,
   },
   actionButton: {
-    flex: 1,
+    flexGrow: 1,
+    minWidth: 96,
     height: 40,
     flexDirection: "row",
     alignItems: "center",
