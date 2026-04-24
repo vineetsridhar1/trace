@@ -2,11 +2,14 @@ import { router } from "expo-router";
 import { Alert } from "react-native";
 import {
   generateUUID,
+  getSessionChannelId,
+  getSessionGroupChannelId,
   insertOptimisticSessionPair,
   reconcileOptimisticSessionPair,
   rollbackOptimisticSessionPair,
   START_SESSION_MUTATION,
   useEntityStore,
+  type SessionEntity,
 } from "@trace/client-core";
 import { getDefaultModel } from "@trace/shared";
 import type { CodingTool } from "@trace/gql";
@@ -15,6 +18,7 @@ import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
 import { resolveMobileSessionHosting } from "@/lib/session-hosting";
 import { closeSessionPlayer, tryOpenSessionPlayer } from "@/lib/sessionPlayer";
+import { fetchSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { useMobileUIStore } from "@/stores/ui";
 
 const DEFAULT_TOOL: CodingTool = "claude_code";
@@ -98,5 +102,71 @@ export async function createQuickSession(channelId: string): Promise<void> {
     const message = err instanceof Error ? err.message : "Please try again.";
     void haptic.error();
     Alert.alert("Couldn't start session", message);
+  }
+}
+
+/**
+ * Create a sibling session inside the current workspace and switch the
+ * session page to it, matching the web app's "new tab" behavior.
+ */
+export async function createAgentTab(sourceSessionId: string): Promise<void> {
+  const state = useEntityStore.getState();
+  const sourceSession = state.sessions[sourceSessionId];
+  const sessionGroupId = sourceSession?.sessionGroupId;
+
+  if (!sourceSession || !sessionGroupId || sourceSession._optimistic) {
+    void haptic.error();
+    Alert.alert("Couldn't create agent tab", "This session isn't ready yet. Try again.");
+    return;
+  }
+
+  const group = state.sessionGroups[sessionGroupId] ?? null;
+  const groupSessions = (state._sessionIdsByGroup[sessionGroupId] ?? [])
+    .map((id) => state.sessions[id])
+    .filter((session): session is SessionEntity => session !== undefined);
+  const channelId =
+    getSessionGroupChannelId(group, groupSessions) ?? getSessionChannelId(sourceSession) ?? undefined;
+  const groupRepo = group?.repo as { id: string } | null | undefined;
+  const sourceRepo = sourceSession.repo as { id: string } | null | undefined;
+
+  void haptic.light();
+
+  try {
+    const result = await getClient()
+      .mutation<{ startSession: { id: string; sessionGroupId: string } }>(
+        START_SESSION_MUTATION,
+        {
+          input: {
+            tool: sourceSession.tool as CodingTool,
+            model: sourceSession.model ?? undefined,
+            hosting: sourceSession.hosting,
+            channelId,
+            repoId: groupRepo?.id ?? sourceRepo?.id,
+            branch: group?.branch ?? sourceSession.branch ?? undefined,
+            sessionGroupId,
+            sourceSessionId,
+          },
+        },
+      )
+      .toPromise();
+
+    if (result.error) throw result.error;
+    const session = result.data?.startSession;
+    if (!session?.id || !session.sessionGroupId) {
+      throw new Error("Server did not return a session id");
+    }
+
+    const hydrated = await fetchSessionGroupDetail(session.sessionGroupId);
+    if (!hydrated && !useEntityStore.getState().sessions[session.id]?.sessionGroupId) {
+      throw new Error("Couldn't load the new agent tab");
+    }
+    const ui = useMobileUIStore.getState();
+    ui.setOverlaySessionId(session.id);
+    router.replace(`/sessions/${session.sessionGroupId}/${session.id}` as never);
+    void haptic.success();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Please try again.";
+    void haptic.error();
+    Alert.alert("Couldn't create agent tab", message);
   }
 }

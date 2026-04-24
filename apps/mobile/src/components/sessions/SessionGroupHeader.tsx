@@ -5,6 +5,7 @@ import {
   ARCHIVE_SESSION_GROUP_MUTATION,
   useEntityField,
 } from "@trace/client-core";
+import { createAgentTab } from "@/lib/createQuickSession";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
@@ -27,6 +28,9 @@ export function SessionGroupHeader({
   const prUrl = useEntityField("sessionGroups", groupId, "prUrl");
   const status = useEntityField("sessionGroups", groupId, "status");
   const archivedAt = useEntityField("sessionGroups", groupId, "archivedAt");
+  const sessionOptimistic = useEntityField("sessions", sessionId ?? "", "_optimistic") as
+    | boolean
+    | undefined;
 
   const [rowWidth, setRowWidth] = useState(0);
   const [leadingWidth, setLeadingWidth] = useState(0);
@@ -80,8 +84,20 @@ export function SessionGroupHeader({
     void haptic.light();
   }, [groupId, sessionId]);
 
+  const handleCreateAgentTab = useCallback(() => {
+    if (!sessionId) return;
+    void createAgentTab(sessionId);
+  }, [sessionId]);
+
   const menuItems = useMemo(() => {
     const items: SessionMenuAction[] = [];
+    if (sessionId && !sessionOptimistic) {
+      items.push({
+        title: "New agent tab",
+        systemIcon: "plus.rectangle.on.rectangle",
+        onPress: handleCreateAgentTab,
+      });
+    }
     if (prUrl) items.push({ title: "Open PR", systemIcon: "arrow.up.forward.square", onPress: handleOpenPr });
     items.push({ title: "Copy link", systemIcon: "link", onPress: handleCopyLink });
     if (!archivedAt && status !== "archived") {
@@ -95,10 +111,13 @@ export function SessionGroupHeader({
     return items;
   }, [
     archivedAt,
+    handleCreateAgentTab,
     handleArchive,
     handleCopyLink,
     handleOpenPr,
     prUrl,
+    sessionId,
+    sessionOptimistic,
     status,
   ]);
 
