@@ -87,7 +87,6 @@ export function SessionComposerInputCard({
             styles.input,
             {
               color: theme.colors.foreground,
-              height: inputHeight,
               minHeight: inputHeight,
             },
           ]}
