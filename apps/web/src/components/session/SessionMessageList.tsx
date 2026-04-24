@@ -71,7 +71,7 @@ export function SessionMessageList({
     count: nodes.length,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: (index: number) => sizeCacheRef.current.get(getItemKey(index)) ?? 80,
-    overscan: 20,
+    overscan: 8,
     getItemKey,
     measureElement: (element: Element) => {
       const height = element.getBoundingClientRect().height;
@@ -107,12 +107,13 @@ export function SessionMessageList({
   // We detect the height delta and compensate by adjusting scrollTop.
   const prevTotalSizeRef = useRef(0);
   const prevNodeCountForCorrectionRef = useRef(nodes.length);
+  const totalSize = virtualizer.getTotalSize();
+
   useLayoutEffect(() => {
     const container = scrollContainerRef.current;
     if (!container || !hasScrolledInitiallyRef.current) return;
     if (scrollSnapshotRef.current) return;
 
-    const totalSize = virtualizer.getTotalSize();
     const prevTotal = prevTotalSizeRef.current;
     prevTotalSizeRef.current = totalSize;
 
@@ -126,7 +127,7 @@ export function SessionMessageList({
         container.scrollTop += delta;
       }
     }
-  });
+  }, [nodes.length, totalSize]);
 
   // Capture scroll position when older messages start loading
   useEffect(() => {
@@ -305,7 +306,7 @@ export function SessionMessageList({
 
         <div
           style={{
-            height: virtualizer.getTotalSize(),
+            height: totalSize,
             width: "100%",
             position: "relative",
           }}
