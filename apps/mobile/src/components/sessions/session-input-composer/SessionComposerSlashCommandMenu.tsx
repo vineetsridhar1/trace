@@ -1,10 +1,7 @@
-import type { ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, View, type ViewStyle } from "react-native";
-import { BlurView } from "expo-blur";
-import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import Animated, { FadeInDown, FadeOutDown } from "react-native-reanimated";
-import { Text } from "@/components/design-system";
+import { Glass, Text } from "@/components/design-system";
 import type { SessionSlashCommand } from "@/lib/slashCommands";
 import { alpha, useTheme } from "@/theme";
 
@@ -33,7 +30,18 @@ export function SessionComposerSlashCommandMenu({
       exiting={FadeOutDown.duration(100)}
       style={styles.container}
     >
-      <MenuSurface>
+      <Glass
+        preset="input"
+        interactive
+        style={[
+          styles.surface,
+          theme.shadows.md,
+          {
+            backgroundColor: theme.glass.input.tint ?? theme.colors.glassTint,
+            borderColor: alpha(theme.colors.foreground, 0.1),
+          },
+        ]}
+      >
         <ScrollView
           keyboardDismissMode="none"
           keyboardShouldPersistTaps="always"
@@ -43,7 +51,7 @@ export function SessionComposerSlashCommandMenu({
           style={styles.scrollView}
           contentContainerStyle={styles.content}
         >
-          {commands.map((command) => (
+          {commands.map((command, index) => (
             <Pressable
               key={`${command.source}:${command.name}`}
               accessibilityRole="button"
@@ -51,17 +59,19 @@ export function SessionComposerSlashCommandMenu({
               onPress={() => onSelect(command)}
               style={({ pressed }) => [
                 styles.row,
-                pressed
-                  ? { backgroundColor: alpha(theme.colors.foreground, 0.14) }
-                  : { backgroundColor: alpha(theme.colors.foreground, 0.08) },
+                index < commands.length - 1 ? styles.rowWithDivider : null,
+                {
+                  borderBottomColor: alpha(theme.colors.foreground, 0.08),
+                  backgroundColor: pressed ? alpha(theme.colors.foreground, 0.08) : "transparent",
+                },
               ]}
             >
               <View
                 style={[
                   styles.iconShell,
                   {
-                    backgroundColor: alpha(theme.colors.surfaceDeep, 0.24),
-                    borderColor: alpha(theme.colors.foreground, 0.08),
+                    backgroundColor: alpha(theme.colors.foreground, 0.06),
+                    borderColor: alpha(theme.colors.foreground, 0.06),
                   },
                 ]}
               >
@@ -95,7 +105,7 @@ export function SessionComposerSlashCommandMenu({
                       styles.sourceLabel,
                       {
                         color: theme.colors.mutedForeground,
-                        backgroundColor: alpha(theme.colors.foreground, 0.08),
+                        backgroundColor: alpha(theme.colors.foreground, 0.06),
                       },
                     ]}
                   >
@@ -105,7 +115,7 @@ export function SessionComposerSlashCommandMenu({
                 <Text
                   variant="caption1"
                   numberOfLines={2}
-                  style={{ color: alpha(theme.colors.foreground, 0.84) }}
+                  style={{ color: alpha(theme.colors.foreground, 0.8) }}
                 >
                   {command.description}
                 </Text>
@@ -113,35 +123,8 @@ export function SessionComposerSlashCommandMenu({
             </Pressable>
           ))}
         </ScrollView>
-      </MenuSurface>
+      </Glass>
     </Animated.View>
-  );
-}
-
-function MenuSurface({ children }: { children: ReactNode }) {
-  const theme = useTheme();
-
-  if (isLiquidGlassAvailable()) {
-    return (
-      <GlassView
-        glassEffectStyle="regular"
-        isInteractive
-        colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-        style={styles.surface}
-      >
-        {children}
-      </GlassView>
-    );
-  }
-
-  return (
-    <BlurView
-      tint={theme.scheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
-      intensity={60}
-      style={styles.surface as ViewStyle}
-    >
-      {children}
-    </BlurView>
   );
 }
 
@@ -151,20 +134,24 @@ const styles = StyleSheet.create({
   },
   surface: {
     borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
     maxHeight: MAX_MENU_HEIGHT,
     overflow: "hidden",
   },
   scrollView: { maxHeight: MAX_MENU_HEIGHT },
   content: {
-    padding: 8,
+    paddingVertical: 6,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    borderRadius: 14,
+    minHeight: 56,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  rowWithDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   iconShell: {
     width: 30,
@@ -180,7 +167,7 @@ const styles = StyleSheet.create({
   },
   copy: {
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
   titleRow: {
     flexDirection: "row",
