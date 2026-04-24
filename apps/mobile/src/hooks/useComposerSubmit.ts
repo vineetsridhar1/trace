@@ -46,7 +46,8 @@ export function useComposerSubmit({
       if ((!draft && images.length === 0) || sending) return;
       void haptic.light();
       setSending(true);
-      const wrapped = draft ? wrapPrompt(mode, draft) : "";
+      const wrapped =
+        !draft ? "" : draft.startsWith("/") ? draft : wrapPrompt(mode, draft);
       const interactionMode = mode === "code" ? undefined : mode;
       // Clear the draft the same frame the message visibly leaves the input —
       // either as it lands in the queue, or as the optimistic bubble appears.
