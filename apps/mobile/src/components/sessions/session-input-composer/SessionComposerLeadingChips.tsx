@@ -155,7 +155,7 @@ export function SessionComposerLeadingChips({
                 preset="input"
                 animatedProps={glassAnimatedProps}
                 interactive
-                style={styles.modelChipCollapsed}
+                style={[styles.modelChipCollapsed, chipAnimatedStyle]}
               >
                 <Pressable
                   onPress={onModelChipPress}
