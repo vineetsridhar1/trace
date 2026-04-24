@@ -15,6 +15,7 @@ interface SessionTabSwitcherContentProps {
   groupId: string;
   activeSessionId: string;
   onClose?: () => void;
+  closeDelayMs?: number;
 }
 
 const ROW_HEIGHT = 68;
@@ -23,6 +24,7 @@ export function SessionTabSwitcherContent({
   groupId,
   activeSessionId,
   onClose,
+  closeDelayMs,
 }: SessionTabSwitcherContentProps) {
   const router = useRouter();
   const theme = useTheme();
@@ -35,7 +37,7 @@ export function SessionTabSwitcherContent({
   ) as boolean | undefined;
   const sessionIds = useSessionGroupSessionIds(groupId);
   const [creating, setCreating] = useState(false);
-  const closeDelayMs = onClose ? theme.motion.durations.fast : 0;
+  const navigationDelayMs = closeDelayMs ?? (onClose ? theme.motion.durations.fast : 0);
 
   const navigateToSession = useCallback(
     (sessionGroupId: string, targetId: string) => {
@@ -46,13 +48,13 @@ export function SessionTabSwitcherContent({
         const targetHref = `/sessions/${sessionGroupId}/${targetId}` as never;
         router.replace(targetHref);
       };
-      if (closeDelayMs > 0) {
-        setTimeout(performNavigation, closeDelayMs);
+      if (navigationDelayMs > 0) {
+        setTimeout(performNavigation, navigationDelayMs);
         return;
       }
       performNavigation();
     },
-    [activeSessionId, closeDelayMs, onClose, router],
+    [activeSessionId, navigationDelayMs, onClose, router],
   );
 
   const handleCreateAgentTab = useCallback(async () => {
@@ -172,7 +174,6 @@ export function SessionTabSwitcherContent({
               />
             )}
             keyExtractor={(item) => item}
-            estimatedItemSize={ROW_HEIGHT}
             showsVerticalScrollIndicator={false}
             style={styles.list}
           />
