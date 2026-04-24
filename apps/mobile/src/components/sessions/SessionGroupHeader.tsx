@@ -5,11 +5,13 @@ import {
   ARCHIVE_SESSION_GROUP_MUTATION,
   useEntityField,
 } from "@trace/client-core";
+import { useSessionGroupSessionIds } from "@/hooks/useSessionGroupDetail";
 import { createAgentTab } from "@/lib/createQuickSession";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
 import { SessionActionsMenu, type SessionMenuAction } from "./SessionActionsMenu";
+import { SessionTabSwitcherSheet } from "./SessionTabSwitcherSheet";
 import { SessionGroupTitleMenu } from "./SessionGroupTitleMenu";
 
 interface SessionGroupHeaderProps {
@@ -17,14 +19,12 @@ interface SessionGroupHeaderProps {
   /** The session currently shown; drives the status dot's agentStatus overlay. */
   sessionId?: string;
   leadingAccessory?: ReactNode;
-  trailingAccessory?: ReactNode;
 }
 
 export function SessionGroupHeader({
   groupId,
   sessionId,
   leadingAccessory,
-  trailingAccessory,
 }: SessionGroupHeaderProps) {
   const theme = useTheme();
   const prUrl = useEntityField("sessionGroups", groupId, "prUrl");
@@ -33,9 +33,11 @@ export function SessionGroupHeader({
   const sessionOptimistic = useEntityField("sessions", sessionId ?? "", "_optimistic") as
     | boolean
     | undefined;
+  const sessionIds = useSessionGroupSessionIds(groupId);
 
   const [rowWidth, setRowWidth] = useState(0);
   const [leadingWidth, setLeadingWidth] = useState(0);
+  const [tabSwitcherOpen, setTabSwitcherOpen] = useState(false);
   const handleRowLayout = useCallback((e: LayoutChangeEvent) => {
     setRowWidth(e.nativeEvent.layout.width);
   }, []);
@@ -91,8 +93,19 @@ export function SessionGroupHeader({
     void createAgentTab(sessionId);
   }, [sessionId]);
 
+  const handleOpenTabSwitcher = useCallback(() => {
+    setTabSwitcherOpen(true);
+  }, []);
+
   const menuItems = useMemo(() => {
     const items: SessionMenuAction[] = [];
+    if (sessionId && !sessionOptimistic && sessionIds.length > 1) {
+      items.push({
+        title: "Switch tab...",
+        systemIcon: "rectangle.on.rectangle",
+        onPress: handleOpenTabSwitcher,
+      });
+    }
     if (sessionId && !sessionOptimistic) {
       items.push({
         title: "New agent tab",
@@ -115,11 +128,13 @@ export function SessionGroupHeader({
     archivedAt,
     handleCreateAgentTab,
     handleArchive,
+    handleOpenTabSwitcher,
     handleCopyLink,
     handleOpenPr,
     prUrl,
     sessionId,
     sessionOptimistic,
+    sessionIds.length,
     status,
   ]);
 
@@ -148,13 +163,16 @@ export function SessionGroupHeader({
           fullWidth={rowWidth}
           expandLeftInset={expandLeftInset}
         />
-        {trailingAccessory ? (
-          <View style={styles.trailingAccessory}>
-            {trailingAccessory}
-          </View>
-        ) : null}
         <SessionActionsMenu actions={menuItems} accessibilityLabel="Session actions" />
       </View>
+      {sessionId ? (
+        <SessionTabSwitcherSheet
+          open={tabSwitcherOpen}
+          groupId={groupId}
+          activeSessionId={sessionId}
+          onClose={() => setTabSwitcherOpen(false)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -167,10 +185,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   leadingAccessory: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  trailingAccessory: {
     alignItems: "center",
     justifyContent: "center",
   },

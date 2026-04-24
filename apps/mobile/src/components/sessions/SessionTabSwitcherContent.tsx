@@ -14,6 +14,7 @@ import { SessionTabSwitcherRow } from "./SessionTabSwitcherRow";
 interface SessionTabSwitcherContentProps {
   groupId: string;
   activeSessionId: string;
+  onClose?: () => void;
 }
 
 const ROW_HEIGHT = 68;
@@ -21,6 +22,7 @@ const ROW_HEIGHT = 68;
 export function SessionTabSwitcherContent({
   groupId,
   activeSessionId,
+  onClose,
 }: SessionTabSwitcherContentProps) {
   const router = useRouter();
   const theme = useTheme();
@@ -34,28 +36,15 @@ export function SessionTabSwitcherContent({
   const sessionIds = useSessionGroupSessionIds(groupId);
   const [creating, setCreating] = useState(false);
 
-  const replaceCurrentSession = useCallback(
-    (sessionGroupId: string, targetId: string) => {
-      useMobileUIStore.getState().setOverlaySessionId(targetId);
-      const currentHref = `/sessions/${groupId}/${activeSessionId}` as never;
-      const targetHref = `/sessions/${sessionGroupId}/${targetId}` as never;
-      router.dismissTo(currentHref);
-      setTimeout(() => {
-        router.replace(targetHref);
-      }, 0);
-    },
-    [activeSessionId, groupId, router],
-  );
-
   const navigateToSession = useCallback(
-    (targetId: string) => {
-      if (targetId === activeSessionId) {
-        router.back();
-        return;
-      }
-      replaceCurrentSession(groupId, targetId);
+    (sessionGroupId: string, targetId: string) => {
+      onClose?.();
+      if (targetId === activeSessionId) return;
+      useMobileUIStore.getState().setOverlaySessionId(targetId);
+      const targetHref = `/sessions/${sessionGroupId}/${targetId}` as never;
+      router.replace(targetHref);
     },
-    [activeSessionId, groupId, replaceCurrentSession, router],
+    [activeSessionId, onClose, router],
   );
 
   const handleCreateAgentTab = useCallback(async () => {
@@ -63,12 +52,12 @@ export function SessionTabSwitcherContent({
     setCreating(true);
     try {
       await createAgentTab(activeSessionId, {
-        navigate: replaceCurrentSession,
+        navigate: navigateToSession,
       });
     } finally {
       setCreating(false);
     }
-  }, [activeSessionId, activeSessionOptimistic, creating, replaceCurrentSession]);
+  }, [activeSessionId, activeSessionOptimistic, creating, navigateToSession]);
 
   const headerSubtitle = useMemo(() => {
     const count = sessionIds.length;
@@ -171,7 +160,7 @@ export function SessionTabSwitcherContent({
                 sessionId={item}
                 active={item === activeSessionId}
                 separator={index < sessionIds.length - 1}
-                onPress={() => navigateToSession(item)}
+                onPress={() => navigateToSession(groupId, item)}
               />
             )}
             keyExtractor={(item) => item}
