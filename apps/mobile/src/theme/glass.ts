@@ -25,7 +25,7 @@ export type GlassUseCase = "input" | "pinnedBar" | "card";
 export type ThemeGlass = Record<GlassUseCase, GlassPreset>;
 
 export const glass: ThemeGlass = {
-  input: { tint: "rgba(23,23,23,0.64)", intensity: 60, shape: "capsule" },
-  pinnedBar: { tint: "rgba(23,23,23,0.70)", intensity: 70, shape: "roundedMd" },
-  card: { tint: "rgba(38,38,38,0.60)", intensity: 50, shape: "roundedLg" },
+  input: { intensity: 60, shape: "capsule" },
+  pinnedBar: { intensity: 70, shape: "roundedMd" },
+  card: { intensity: 50, shape: "roundedLg" },
 };

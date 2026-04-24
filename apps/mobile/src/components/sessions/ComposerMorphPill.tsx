@@ -60,7 +60,7 @@ interface ComposerMorphPillProps {
   headerItems?: ComposerMorphPillItem[];
   disabled?: boolean;
   systemIcon?: SFSymbol;
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
   minWidth?: number;
   style?: StyleProp<ViewStyle>;
   /** Animated glass tint props shared with the composer mode palette. */
@@ -76,6 +76,7 @@ const MENU_WIDTH = 220;
 const MENU_RADIUS = 18;
 const OPEN_SPRING = { damping: 14, stiffness: 120, mass: 1.2 } as const;
 const CLOSE_SPRING = { damping: 22, stiffness: 190, mass: 1.2 } as const;
+const UNTINTED_GLASS = "rgba(255,255,255,0)";
 
 export function ComposerMorphPill({
   accessibilityLabel,
@@ -137,6 +138,7 @@ function MorphingPill({
 }: Required<Pick<ComposerMorphPillProps, "accessibilityLabel" | "align" | "items" | "label" | "minWidth">> &
   Pick<ComposerMorphPillProps, "disabled" | "headerItems" | "style" | "systemIcon" | "tintAnimatedProps" | "onOpenChange">) {
   const theme = useTheme();
+  const glassTint = theme.glass.input.tint ?? UNTINTED_GLASS;
   const [open, setOpen] = useState(false);
   useEffect(() => {
     onOpenChange?.(open);
@@ -149,6 +151,7 @@ function MorphingPill({
   const menuHeight = Math.max(PILL_HEIGHT, headerH + items.length * ITEM_HEIGHT);
   const endWidth = Math.max(MENU_WIDTH, triggerWidth);
   const anchorEdge = align === "right" ? styles.alignRight : styles.alignLeft;
+  const centeredOffset = align === "center" ? -(endWidth - triggerWidth) / 2 : 0;
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     const width = event.nativeEvent.layout.width;
@@ -194,6 +197,7 @@ function MorphingPill({
     height: interpolate(progress.value, [0, 1], [PILL_HEIGHT, menuHeight]),
     borderRadius: interpolate(progress.value, [0, 1], [PILL_HEIGHT / 2, MENU_RADIUS]),
     transform: [
+      { translateX: interpolate(progress.value, [0, 1], [0, centeredOffset]) },
       { translateY: interpolate(progress.value, [0, 0.55, 1], [0, -18, 0]) },
     ],
   }));
@@ -224,12 +228,13 @@ function MorphingPill({
         <AnimatedGlassView
           isInteractive
           glassEffectStyle="regular"
+          tintColor={glassTint}
           colorScheme={theme.scheme === "dark" ? "dark" : "light"}
           animatedProps={tintAnimatedProps}
           style={[
             styles.glass,
             anchorEdge,
-            { backgroundColor: theme.glass.input.tint ?? theme.colors.glassTint },
+            { backgroundColor: glassTint },
             glassStyle,
           ]}
         >

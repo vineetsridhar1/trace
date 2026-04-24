@@ -1,12 +1,12 @@
 import type { ComponentProps } from "react";
-import { Pressable } from "react-native";
+import { Pressable, View } from "react-native";
 import { SymbolView, type SFSymbol } from "expo-symbols";
-import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { Glass } from "@/components/design-system";
 import { styles } from "./styles";
 
 interface SessionComposerActionButtonProps {
   accessibilityLabel: string;
+  contentOpacity?: number;
   disabled: boolean;
   glassStyle?: ComponentProps<typeof Glass>["style"];
   iconName: SFSymbol;
@@ -18,6 +18,7 @@ interface SessionComposerActionButtonProps {
 
 export function SessionComposerActionButton({
   accessibilityLabel,
+  contentOpacity,
   disabled,
   glassStyle,
   iconName,
@@ -26,19 +27,26 @@ export function SessionComposerActionButton({
   onPress,
   tint,
 }: SessionComposerActionButtonProps) {
+  const resolvedContentOpacity = contentOpacity ?? (disabled ? 0.45 : 1);
+
   return (
-    <Animated.View
-      entering={FadeIn.duration(140)}
-      exiting={FadeOut.duration(100)}
-      style={styles.singleActionSlot}
-    >
+    <View style={styles.singleActionSlot}>
       <Glass preset="input" tint={tint} interactive style={[styles.singleActionGlass, glassStyle]}>
         <Pressable
           onPress={onPress}
           disabled={disabled}
           accessibilityRole="button"
           accessibilityLabel={accessibilityLabel}
-          style={styles.actionPressable}
+          style={({ pressed }) => [
+            styles.actionPressable,
+            {
+              opacity: disabled
+                ? resolvedContentOpacity
+                : pressed
+                  ? Math.min(resolvedContentOpacity, 0.78)
+                  : resolvedContentOpacity,
+            },
+          ]}
         >
           <SymbolView
             name={iconName}
@@ -49,6 +57,6 @@ export function SessionComposerActionButton({
           />
         </Pressable>
       </Glass>
-    </Animated.View>
+    </View>
   );
 }

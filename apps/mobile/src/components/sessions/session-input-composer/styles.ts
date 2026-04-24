@@ -19,7 +19,7 @@ export const styles = StyleSheet.create({
     position: "relative",
   },
   leadingChipsContainer: {
-    paddingRight: INPUT_ACTION_GAP,
+    position: "relative",
   },
   leadingChipsVisible: {
     overflow: "visible",
@@ -60,13 +60,16 @@ export const styles = StyleSheet.create({
     width: "100%",
     height: ACTION_SIZE,
     borderRadius: ACTION_SIZE / 2,
+    paddingHorizontal: MODE_PILL_HORIZONTAL_PADDING,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  modeChipContent: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: MODE_PILL_HORIZONTAL_PADDING,
     gap: MODE_CONTENT_GAP,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
   },
   modeChipIcon: { width: 16, height: 16 },
   inputWrapper: { overflow: "hidden" },
