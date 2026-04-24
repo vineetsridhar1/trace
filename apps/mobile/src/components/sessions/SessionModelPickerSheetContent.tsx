@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEntityField } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
@@ -10,6 +9,7 @@ import { useSessionComposerConfig } from "./session-input-composer/useSessionCom
 
 interface SessionModelPickerSheetContentProps {
   sessionId: string;
+  onClose?: () => void;
 }
 
 function Section({
@@ -43,8 +43,8 @@ function Section({
 
 export function SessionModelPickerSheetContent({
   sessionId,
+  onClose,
 }: SessionModelPickerSheetContentProps) {
-  const router = useRouter();
   const theme = useTheme();
 
   const tool = useEntityField("sessions", sessionId, "tool") as string | null | undefined;
@@ -86,6 +86,7 @@ export function SessionModelPickerSheetContent({
 
   return (
     <ScrollView
+      keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.content}
     >
@@ -139,7 +140,7 @@ export function SessionModelPickerSheetContent({
             onPress={
               canInteract && selectedModel !== option.value
                 ? () => {
-                    router.back();
+                    onClose?.();
                     void handleModelChange(option.value);
                   }
                 : undefined

@@ -3,7 +3,6 @@ import { Keyboard, View, type TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { DISMISS_SESSION_MUTATION, generateUUID, useEntityField } from "@trace/client-core";
@@ -26,12 +25,15 @@ import { ComposerAttachButton } from "./ComposerAttachButton";
 import { ComposerConnectionNotice } from "./ComposerConnectionNotice";
 import { ComposerPasteButton } from "./ComposerPasteButton";
 import { ImageAttachmentBar } from "./ImageAttachmentBar";
+import { SessionModelPickerSheetContent } from "./SessionModelPickerSheetContent";
+import { SessionRuntimePickerSheetContent } from "./SessionRuntimePickerSheetContent";
 import {
   MAX_IMAGES,
   MAX_INPUT_HEIGHT,
   MIN_INPUT_HEIGHT,
 } from "./session-input-composer/constants";
 import { SessionComposerActionButton } from "./session-input-composer/SessionComposerActionButton";
+import { SessionComposerBottomSheet } from "./session-input-composer/SessionComposerBottomSheet";
 import { SessionComposerInputCard } from "./session-input-composer/SessionComposerInputCard";
 import { SessionComposerLeadingChips } from "./session-input-composer/SessionComposerLeadingChips";
 import { SessionComposerMeasurementLayer } from "./session-input-composer/SessionComposerMeasurementLayer";
@@ -49,6 +51,7 @@ interface SessionInputComposerProps {
 }
 
 const EMPTY_IMAGES: ImageAttachment[] = [];
+type ComposerSheet = "model" | "runtime" | null;
 
 /**
  * Session composer: a single-line-start liquid glass input next to a
@@ -63,7 +66,6 @@ export function SessionInputComposer({
   bottomSafeAreaInset,
   keyboardVisible = false,
 }: SessionInputComposerProps) {
-  const router = useRouter();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const resolvedBottomSafeAreaInset = bottomSafeAreaInset ?? insets.bottom;
@@ -95,6 +97,7 @@ export function SessionInputComposer({
   const [focused, setFocused] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
   const [pickingImage, setPickingImage] = useState(false);
+  const [activeSheet, setActiveSheet] = useState<ComposerSheet>(null);
 
   const images = useDraftsStore((s) => s.images[sessionId] ?? EMPTY_IMAGES);
   const setImages = useDraftsStore((s) => s.setImages);
@@ -213,25 +216,23 @@ export function SessionInputComposer({
   }, [height, inputHeight, theme.motion.durations.fast]);
   const inputAnimatedStyle = useAnimatedStyle(() => ({ height: inputHeight.value }));
 
+  const handleCloseSheet = useCallback(() => {
+    setActiveSheet(null);
+  }, []);
+
   const handleOpenModelSheet = useCallback(() => {
     if (!canInteract) return;
     void haptic.selection();
     Keyboard.dismiss();
-    router.push({
-      pathname: "/sheets/session-model",
-      params: { sessionId },
-    });
-  }, [canInteract, router, sessionId]);
+    setActiveSheet("model");
+  }, [canInteract]);
 
   const handleOpenRuntimeSheet = useCallback(() => {
     if (!canChangeBridge) return;
     void haptic.selection();
     Keyboard.dismiss();
-    router.push({
-      pathname: "/sheets/session-runtime",
-      params: { sessionId },
-    });
-  }, [canChangeBridge, router, sessionId]);
+    setActiveSheet("runtime");
+  }, [canChangeBridge]);
 
   const handleFocus = useCallback(() => {
     setFocused(true);
@@ -525,6 +526,24 @@ export function SessionInputComposer({
           </View>
         ) : null}
       </View>
+
+      <SessionComposerBottomSheet
+        visible={activeSheet !== null}
+        onClose={handleCloseSheet}
+      >
+        {activeSheet === "model" ? (
+          <SessionModelPickerSheetContent
+            sessionId={sessionId}
+            onClose={handleCloseSheet}
+          />
+        ) : null}
+        {activeSheet === "runtime" ? (
+          <SessionRuntimePickerSheetContent
+            sessionId={sessionId}
+            onClose={handleCloseSheet}
+          />
+        ) : null}
+      </SessionComposerBottomSheet>
     </View>
   );
 }

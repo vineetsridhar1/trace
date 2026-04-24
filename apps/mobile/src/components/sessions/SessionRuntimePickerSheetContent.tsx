@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { useRouter } from "expo-router";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import {
   AVAILABLE_RUNTIMES_QUERY,
@@ -24,6 +23,7 @@ import { CLOUD_RUNTIME_ID } from "./session-input-composer/constants";
 
 interface SessionRuntimePickerSheetContentProps {
   sessionId: string;
+  onClose?: () => void;
 }
 
 interface RuntimeRow {
@@ -38,8 +38,8 @@ interface RuntimeRow {
 
 export function SessionRuntimePickerSheetContent({
   sessionId,
+  onClose,
 }: SessionRuntimePickerSheetContentProps) {
-  const router = useRouter();
   const theme = useTheme();
 
   const tool = useEntityField("sessions", sessionId, "tool") as string | null | undefined;
@@ -126,7 +126,7 @@ export function SessionRuntimePickerSheetContent({
     async (value: string) => {
       if (!canChangeBridge || value === currentRuntimeValue) return;
 
-      router.back();
+      onClose?.();
 
       const newIsCloud = cloudSessionsEnabled && value === CLOUD_RUNTIME_ID;
       const runtime = runtimes.find((entry) => entry.id === value);
@@ -167,11 +167,20 @@ export function SessionRuntimePickerSheetContent({
         console.warn("[updateSessionConfig] bridge change failed", err);
       }
     },
-    [canChangeBridge, cloudSessionsEnabled, connection, currentRuntimeValue, router, runtimes, sessionId],
+    [
+      canChangeBridge,
+      cloudSessionsEnabled,
+      connection,
+      currentRuntimeValue,
+      onClose,
+      runtimes,
+      sessionId,
+    ],
   );
 
   return (
     <ScrollView
+      keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.content}
     >
