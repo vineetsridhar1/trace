@@ -30,8 +30,8 @@ import {
 
 type SessionBottomTabsParamList = {
   session: undefined;
-  browser: undefined;
   terminal: undefined;
+  browser: undefined;
 };
 
 const SessionBottomTabs = createNativeBottomTabNavigator<SessionBottomTabsParamList>();
@@ -189,6 +189,16 @@ export default function SessionStreamScreen() {
               )}
             </SessionBottomTabs.Screen>
             <SessionBottomTabs.Screen
+              name="terminal"
+              options={{ title: "Terminal", tabBarIcon: terminalIcon }}
+            >
+              {() => (
+                <View style={[styles.overlayPaddedScene, { paddingTop: overlayHeight }]}>
+                  <SessionTerminalPanel sessionId={sessionId} />
+                </View>
+              )}
+            </SessionBottomTabs.Screen>
+            <SessionBottomTabs.Screen
               name="browser"
               options={{ title: "Browser", tabBarIcon: browserIcon }}
             >
@@ -199,16 +209,6 @@ export default function SessionStreamScreen() {
                     onUrlChange={handleBrowserUrlChange}
                     topInset={overlayHeight}
                   />
-                </View>
-              )}
-            </SessionBottomTabs.Screen>
-            <SessionBottomTabs.Screen
-              name="terminal"
-              options={{ title: "Terminal", tabBarIcon: terminalIcon }}
-            >
-              {() => (
-                <View style={[styles.overlayPaddedScene, { paddingTop: overlayHeight }]}>
-                  <SessionTerminalPanel sessionId={sessionId} />
                 </View>
               )}
             </SessionBottomTabs.Screen>
