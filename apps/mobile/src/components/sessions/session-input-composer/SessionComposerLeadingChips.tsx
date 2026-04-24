@@ -103,11 +103,12 @@ export function SessionComposerLeadingChips({
 
         <View style={styles.modelChipSlot}>
           <SessionComposerSheetTrigger
-            label={modelLabel}
+            label=""
             accessibilityLabel={`Model: ${modelLabel}`}
             leading={<SessionComposerToolLogo tool={currentTool} size={18} />}
             disabled={!canInteract}
             onPress={onOpenModelSheet}
+            showLabel={false}
           />
         </View>
       </View>

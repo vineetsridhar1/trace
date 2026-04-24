@@ -12,6 +12,7 @@ interface SessionComposerSheetTriggerProps {
   disabled: boolean;
   onPress: () => void;
   minWidth?: number;
+  showLabel?: boolean;
   style?: ViewStyle;
 }
 
@@ -22,6 +23,7 @@ export function SessionComposerSheetTrigger({
   disabled,
   onPress,
   minWidth = ACTION_SIZE,
+  showLabel = true,
   style,
 }: SessionComposerSheetTriggerProps) {
   const theme = useTheme();
@@ -46,14 +48,16 @@ export function SessionComposerSheetTrigger({
       >
         <View style={styles.content}>
           <View style={styles.leading}>{leading}</View>
-          <Text
-            variant="caption1"
-            color="foreground"
-            numberOfLines={1}
-            style={styles.label}
-          >
-            {label}
-          </Text>
+          {showLabel ? (
+            <Text
+              variant="caption1"
+              color="foreground"
+              numberOfLines={1}
+              style={styles.label}
+            >
+              {label}
+            </Text>
+          ) : null}
         </View>
       </Glass>
     </Pressable>

@@ -510,7 +510,7 @@ export function SessionInputComposer({
           <View style={styles.bridgeRow}>
             <SessionComposerSheetTrigger
               label={bridgeLabel}
-              accessibilityLabel="Bridge"
+              accessibilityLabel={`Runtime: ${bridgeLabel}`}
               leading={
                 <SymbolView
                   name={bridgeIcon}
@@ -521,7 +521,7 @@ export function SessionInputComposer({
               }
               disabled={!canChangeBridge}
               onPress={handleOpenRuntimeSheet}
-              minWidth={88}
+              showLabel={false}
             />
           </View>
         ) : null}
