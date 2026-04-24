@@ -145,6 +145,7 @@ export function BrowseChannelsDialog({
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
             placeholder="Search channels..."
             autoFocus
+            className="bg-surface-deep text-foreground"
           />
           <div className="max-h-[50vh] space-y-1 overflow-y-auto">
             {loading && (
