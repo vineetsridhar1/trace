@@ -27,6 +27,7 @@ export function SessionComposerSheetTrigger({
   style,
 }: SessionComposerSheetTriggerProps) {
   const theme = useTheme();
+  const iconOnly = !showLabel;
 
   return (
     <Pressable
@@ -37,6 +38,7 @@ export function SessionComposerSheetTrigger({
       style={({ pressed }) => [
         styles.pressable,
         { minWidth },
+        iconOnly ? styles.iconOnlyPressable : null,
         style,
         disabled ? styles.disabled : null,
         pressed ? styles.pressed : null,
@@ -52,7 +54,7 @@ export function SessionComposerSheetTrigger({
           },
         ]}
       >
-        <View style={styles.content}>
+        <View style={[styles.content, iconOnly ? styles.iconOnlyContent : null]}>
           <View style={styles.leading}>{leading}</View>
           {showLabel ? (
             <Text variant="caption1" color="foreground" numberOfLines={1} style={styles.label}>
@@ -69,6 +71,10 @@ const styles = StyleSheet.create({
   pressable: {
     height: ACTION_SIZE,
   },
+  iconOnlyPressable: {
+    width: ACTION_SIZE,
+    minWidth: ACTION_SIZE,
+  },
   glass: {
     height: ACTION_SIZE,
     borderRadius: ACTION_SIZE / 2,
@@ -83,6 +89,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 6,
     paddingHorizontal: 12,
+  },
+  iconOnlyContent: {
+    gap: 0,
+    paddingHorizontal: 0,
   },
   leading: {
     alignItems: "center",
