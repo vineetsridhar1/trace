@@ -137,6 +137,7 @@ function MorphingPill({
 }: Required<Pick<ComposerMorphPillProps, "accessibilityLabel" | "align" | "items" | "label" | "minWidth">> &
   Pick<ComposerMorphPillProps, "disabled" | "headerItems" | "style" | "systemIcon" | "tintAnimatedProps" | "onOpenChange">) {
   const theme = useTheme();
+  const glassTint = theme.glass.input.tint ?? theme.colors.glassTint;
   const [open, setOpen] = useState(false);
   useEffect(() => {
     onOpenChange?.(open);
@@ -224,12 +225,13 @@ function MorphingPill({
         <AnimatedGlassView
           isInteractive
           glassEffectStyle="regular"
+          tintColor={glassTint}
           colorScheme={theme.scheme === "dark" ? "dark" : "light"}
           animatedProps={tintAnimatedProps}
           style={[
             styles.glass,
             anchorEdge,
-            { backgroundColor: theme.glass.input.tint ?? theme.colors.glassTint },
+            { backgroundColor: glassTint },
             glassStyle,
           ]}
         >
