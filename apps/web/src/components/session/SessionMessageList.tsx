@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import type { GitCheckpoint } from "@trace/gql";
 import { SessionMessage } from "./SessionMessage";
 import { ReadGlobGroup } from "./messages/ReadGlobGroup";
@@ -246,7 +246,22 @@ export function SessionMessageList({
 
   if (isEmpty) {
     return (
-      <div ref={scrollContainerRef} className="h-full overflow-y-auto bg-black" />
+      <div ref={scrollContainerRef} className="h-full overflow-y-auto bg-background">
+        <div className="relative flex min-h-full items-center justify-center overflow-hidden px-6 py-10">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-surface-deep/80 to-transparent" />
+          <div className="pointer-events-none absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent/5 blur-3xl" />
+
+          <div className="relative flex max-w-sm flex-col items-center text-center">
+            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-surface-deep text-muted-foreground shadow-sm">
+              <Sparkles size={20} />
+            </div>
+            <p className="text-base font-medium text-foreground">New session</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Ask the agent to inspect code, make a change, or answer a question to get started.
+            </p>
+          </div>
+        </div>
+      </div>
     );
   }
 
