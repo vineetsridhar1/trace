@@ -7,7 +7,7 @@ import {
   type KeyboardEvent,
   type LayoutChangeEvent,
 } from "react-native";
-import { BottomTabBarHeightContext } from "@react-navigation/bottom-tabs";
+import { BottomTabBarHeightContext } from "react-native-bottom-tabs";
 import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEntityField } from "@trace/client-core";
