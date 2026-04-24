@@ -10,6 +10,7 @@ import {
   isSupportedModel,
   type GitCheckpointBridgePayload,
   type GitCheckpointContext,
+  type BridgeSessionGitSyncStatus,
 } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { AuthorizationError } from "../lib/errors.js";
@@ -505,11 +506,8 @@ async function buildConversationContext(sessionId: string): Promise<string | nul
   return `<conversation-history>\nThe following is the conversation history from a previous coding tool in this session. Use it as context.\n\n${lines.join("\n\n")}\n</conversation-history>`;
 }
 
-function buildMigrationPrompt(context: string | null): string {
-  if (!context) {
-    return "Continue this session on the new runtime.";
-  }
-  return `${context}\n\nContinue this session on the new runtime.`;
+function buildMigrationPrompt(): string {
+  return "Continue this session on the new runtime.";
 }
 
 function buildToolSessionRecoveryPrompt(context: string | null): string {
@@ -3926,13 +3924,13 @@ export class SessionService {
     });
   }
 
-  private async assertSessionCanMove(params: {
+  private async inspectSessionMoveSource(params: {
     sessionId: string;
     repoId?: string | null;
     workdir?: string | null;
     runtimeInstanceId?: string | null;
-  }) {
-    if (!params.repoId || !params.workdir || !params.runtimeInstanceId) return;
+  }): Promise<BridgeSessionGitSyncStatus | null> {
+    if (!params.repoId || !params.workdir || !params.runtimeInstanceId) return null;
 
     const status = await sessionRouter.inspectSessionGitSyncStatus(params.runtimeInstanceId, {
       sessionId: params.sessionId,
@@ -3943,6 +3941,13 @@ export class SessionService {
       throw new Error(
         "Cannot move session: commit, stash, or discard local changes before moving.",
       );
+    }
+
+    if (!status.branch) {
+      if (!status.headCommitSha) {
+        throw new Error("Cannot move session: unable to resolve the current detached commit.");
+      }
+      return status;
     }
 
     if (!status.upstreamBranch || !status.upstreamCommitSha) {
@@ -3956,6 +3961,8 @@ export class SessionService {
         "Cannot move session: local branch must match its upstream before moving.",
       );
     }
+
+    return status;
   }
 
   private async moveSessionInPlace(params: {
@@ -3970,7 +3977,7 @@ export class SessionService {
       params;
     const sourceRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
 
-    await this.assertSessionCanMove({
+    const sourceGitStatus = await this.inspectSessionMoveSource({
       sessionId: session.id,
       repoId: session.repoId,
       workdir: session.workdir,
@@ -3992,8 +3999,8 @@ export class SessionService {
 
     sessionRouter.unbindSession(session.id);
 
-    const context = await buildConversationContext(session.id);
-    const bootstrapPrompt = buildMigrationPrompt(context);
+    const bootstrapPrompt = buildMigrationPrompt();
+    const checkpointSha = sourceGitStatus?.branch ? null : sourceGitStatus?.headCommitSha ?? null;
     const nextConnection = connJson(
       targetHosting === "local"
         ? defaultConnection({
@@ -4039,7 +4046,6 @@ export class SessionService {
       payload: {
         session: serializeSession(movedSession),
         ...(sessionGroup ? { sessionGroup } : {}),
-        prompt: bootstrapPrompt,
       } as Prisma.InputJsonValue,
       actorType,
       actorId,
@@ -4055,6 +4061,7 @@ export class SessionService {
         model: movedSession.model,
         repo: movedSession.repo,
         branch: movedSession.branch,
+        checkpointSha,
         createdById: movedSession.createdById,
         organizationId: movedSession.organizationId,
         readOnly: movedSession.readOnlyWorkspace,

@@ -2231,8 +2231,18 @@ describe("SessionService", () => {
             agentStatus: "not_started",
             sessionStatus: "in_progress",
             hosting: "local",
+            pendingRun: expect.objectContaining({
+              type: "run",
+              prompt: "Continue this session on the new runtime.",
+            }),
             toolSessionId: null,
           }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_started",
+          payload: expect.not.objectContaining({ prompt: expect.anything() }),
         }),
       );
       expect(prismaMock.session.create).not.toHaveBeenCalled();
@@ -2454,6 +2464,68 @@ describe("SessionService", () => {
       ).rejects.toThrow("Cannot move session: local branch must match its upstream before moving.");
       expect(prismaMock.session.update).not.toHaveBeenCalled();
     });
+
+    it("allows moving a detached repo session by restoring from the current commit", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          readOnlyWorkspace: true,
+          workdir: "/tmp/trace/worktrees/session-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-source",
+            runtimeLabel: "Laptop A",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          hosting: "local",
+          readOnlyWorkspace: true,
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            runtimeLabel: "Laptop B",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Laptop B",
+        hostingMode: "local",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: ["repo-1"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValueOnce(
+        makeGitSyncStatus({
+          branch: null,
+          upstreamBranch: null,
+          upstreamCommitSha: null,
+          headCommitSha: "detached123",
+        }),
+      );
+
+      await service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1");
+
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-1",
+          checkpointSha: "detached123",
+          readOnly: true,
+        }),
+      );
+    });
   });
 
   describe("moveToCloud", () => {
@@ -2493,6 +2565,10 @@ describe("SessionService", () => {
             agentStatus: "not_started",
             sessionStatus: "in_progress",
             hosting: "cloud",
+            pendingRun: expect.objectContaining({
+              type: "run",
+              prompt: "Continue this session on the new runtime.",
+            }),
           }),
         }),
       );
