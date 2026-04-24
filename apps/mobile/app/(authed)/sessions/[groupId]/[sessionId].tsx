@@ -99,6 +99,7 @@ export default function SessionStreamScreen() {
 
   const handleSelectSession = useCallback(
     (nextId: string) => {
+      useMobileUIStore.getState().setOverlaySessionId(nextId);
       router.replace(`/sessions/${groupId}/${nextId}`);
     },
     [groupId, router],

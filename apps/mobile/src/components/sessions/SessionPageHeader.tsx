@@ -1,8 +1,10 @@
 import { useCallback } from "react";
 import { Pressable, StyleSheet } from "react-native";
+import { useRouter } from "expo-router";
 import { BlurView } from "expo-blur";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { SymbolView } from "expo-symbols";
+import { useSessionGroupSessionIds } from "@/hooks/useSessionGroupDetail";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
 import { SessionGroupHeader } from "./SessionGroupHeader";
@@ -20,11 +22,20 @@ export function SessionPageHeader({
   sessionId,
   onBack,
 }: SessionPageHeaderProps) {
+  const router = useRouter();
   const theme = useTheme();
+  const sessionIds = useSessionGroupSessionIds(groupId);
   const handleBack = useCallback(() => {
     void haptic.light();
     onBack();
   }, [onBack]);
+  const handleOpenTabSwitcher = useCallback(() => {
+    void haptic.light();
+    router.push(
+      `/sheets/session-tabs?groupId=${encodeURIComponent(groupId)}&sessionId=${encodeURIComponent(sessionId)}` as never,
+    );
+  }, [groupId, router, sessionId]);
+  const showTabSwitcher = sessionIds.length > 1;
 
   return (
     <SessionGroupHeader
@@ -80,6 +91,58 @@ export function SessionPageHeader({
           </BlurView>
         )
       }
+      trailingAccessory={
+        showTabSwitcher ? (
+          isLiquidGlassAvailable() ? (
+            <GlassView
+              glassEffectStyle="regular"
+              isInteractive
+              colorScheme={theme.scheme === "dark" ? "dark" : "light"}
+              style={styles.accessoryGlass}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Switch agent tabs"
+                hitSlop={8}
+                onPress={handleOpenTabSwitcher}
+                style={styles.accessoryButton}
+              >
+                <SymbolView
+                  name="rectangle.on.rectangle"
+                  size={18}
+                  tintColor={theme.colors.foreground}
+                  weight="semibold"
+                  resizeMode="scaleAspectFit"
+                  style={styles.icon}
+                />
+              </Pressable>
+            </GlassView>
+          ) : (
+            <BlurView
+              tint={theme.scheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
+              intensity={60}
+              style={styles.accessoryGlass}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Switch agent tabs"
+                hitSlop={8}
+                onPress={handleOpenTabSwitcher}
+                style={styles.accessoryButton}
+              >
+                <SymbolView
+                  name="rectangle.on.rectangle"
+                  size={18}
+                  tintColor={theme.colors.foreground}
+                  weight="semibold"
+                  resizeMode="scaleAspectFit"
+                  style={styles.icon}
+                />
+              </Pressable>
+            </BlurView>
+          )
+        ) : null
+      }
     />
   );
 }
@@ -91,7 +154,19 @@ const styles = StyleSheet.create({
     borderRadius: TRIGGER_SIZE / 2,
     overflow: "hidden",
   },
+  accessoryGlass: {
+    width: TRIGGER_SIZE,
+    height: TRIGGER_SIZE,
+    borderRadius: TRIGGER_SIZE / 2,
+    overflow: "hidden",
+  },
   backButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+  },
+  accessoryButton: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",

@@ -17,12 +17,14 @@ interface SessionGroupHeaderProps {
   /** The session currently shown; drives the status dot's agentStatus overlay. */
   sessionId?: string;
   leadingAccessory?: ReactNode;
+  trailingAccessory?: ReactNode;
 }
 
 export function SessionGroupHeader({
   groupId,
   sessionId,
   leadingAccessory,
+  trailingAccessory,
 }: SessionGroupHeaderProps) {
   const theme = useTheme();
   const prUrl = useEntityField("sessionGroups", groupId, "prUrl");
@@ -146,6 +148,11 @@ export function SessionGroupHeader({
           fullWidth={rowWidth}
           expandLeftInset={expandLeftInset}
         />
+        {trailingAccessory ? (
+          <View style={styles.trailingAccessory}>
+            {trailingAccessory}
+          </View>
+        ) : null}
         <SessionActionsMenu actions={menuItems} accessibilityLabel="Session actions" />
       </View>
     </View>
@@ -160,6 +167,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   leadingAccessory: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  trailingAccessory: {
     alignItems: "center",
     justifyContent: "center",
   },

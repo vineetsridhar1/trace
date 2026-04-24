@@ -23,6 +23,10 @@ import { useMobileUIStore } from "@/stores/ui";
 
 const DEFAULT_TOOL: CodingTool = "claude_code";
 
+interface CreateAgentTabOptions {
+  navigate?: (sessionGroupId: string, sessionId: string) => void;
+}
+
 /**
  * Mobile twin of web's `createQuickSession`: inserts optimistic session
  * entities, routes to the temp session page, and fires the real mutation
@@ -109,7 +113,10 @@ export async function createQuickSession(channelId: string): Promise<void> {
  * Create a sibling session inside the current workspace and switch the
  * session page to it, matching the web app's "new tab" behavior.
  */
-export async function createAgentTab(sourceSessionId: string): Promise<void> {
+export async function createAgentTab(
+  sourceSessionId: string,
+  options?: CreateAgentTabOptions,
+): Promise<void> {
   const state = useEntityStore.getState();
   const sourceSession = state.sessions[sourceSessionId];
   const sessionGroupId = sourceSession?.sessionGroupId;
@@ -160,9 +167,13 @@ export async function createAgentTab(sourceSessionId: string): Promise<void> {
     if (!hydrated && !useEntityStore.getState().sessions[session.id]?.sessionGroupId) {
       throw new Error("Couldn't load the new agent tab");
     }
-    const ui = useMobileUIStore.getState();
-    ui.setOverlaySessionId(session.id);
-    router.replace(`/sessions/${session.sessionGroupId}/${session.id}` as never);
+    if (options?.navigate) {
+      options.navigate(session.sessionGroupId, session.id);
+    } else {
+      const ui = useMobileUIStore.getState();
+      ui.setOverlaySessionId(session.id);
+      router.replace(`/sessions/${session.sessionGroupId}/${session.id}` as never);
+    }
     void haptic.success();
   } catch (err) {
     const message = err instanceof Error ? err.message : "Please try again.";
