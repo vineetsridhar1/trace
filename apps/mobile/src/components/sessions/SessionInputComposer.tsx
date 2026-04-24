@@ -455,6 +455,7 @@ export function SessionInputComposer({
               errorDraft={errorDraft}
               errorMessage={errorMessage}
               glassAnimatedProps={glassAnimatedProps}
+              inputHeight={height}
               inputAnimatedStyle={inputAnimatedStyle}
               inputRef={inputRef}
               placeholder={placeholder}

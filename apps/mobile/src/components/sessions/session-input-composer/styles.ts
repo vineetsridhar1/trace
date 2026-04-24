@@ -67,13 +67,29 @@ export const styles = StyleSheet.create({
     gap: MODE_CONTENT_GAP,
   },
   modeChipIcon: { width: 16, height: 16 },
-  inputWrapper: { overflow: "hidden" },
+  inputWrapper: {
+    overflow: "hidden",
+    position: "relative",
+  },
   input: {
+    height: "100%",
     fontSize: 16,
     lineHeight: 21,
     paddingHorizontal: 0,
     paddingVertical: 2,
     textAlignVertical: "top",
+  },
+  measureLayer: {
+    position: "absolute",
+    left: -10000,
+    top: 0,
+    opacity: 0,
+  },
+  inputMeasure: {
+    fontSize: 16,
+    lineHeight: 21,
+    paddingHorizontal: 0,
+    paddingVertical: 2,
   },
   attachButtonSlot: {
     marginLeft: INPUT_ACTION_GAP,
