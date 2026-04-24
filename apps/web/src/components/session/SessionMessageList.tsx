@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, Sparkles } from "lucide-react";
 import type { GitCheckpoint } from "@trace/gql";
 import { SessionMessage } from "./SessionMessage";
@@ -243,10 +244,24 @@ export function SessionMessageList({
 
   const virtualItems = virtualizer.getVirtualItems();
   const isEmpty = nodes.length === 0 && !loadingOlder;
+  const [showEmptyState, setShowEmptyState] = useState(isEmpty);
 
-  if (isEmpty) {
-    return (
-      <div ref={scrollContainerRef} className="h-full overflow-y-auto bg-background">
+  useEffect(() => {
+    if (isEmpty) setShowEmptyState(true);
+  }, [isEmpty]);
+
+  const emptyState = (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+      onAnimationComplete={() => {
+        if (!isEmpty) setShowEmptyState(false);
+      }}
+      className="absolute inset-0 z-10"
+    >
+      <div className="h-full overflow-y-auto bg-background">
         <div className="relative flex min-h-full items-center justify-center overflow-hidden px-6 py-10">
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-surface-deep/80 to-transparent" />
           <div className="pointer-events-none absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent/5 blur-3xl" />
@@ -262,84 +277,92 @@ export function SessionMessageList({
           </div>
         </div>
       </div>
-    );
+    </motion.div>
+  );
+
+  if (isEmpty) {
+    return <div className="relative h-full">{emptyState}</div>;
   }
 
   return (
-    <div ref={scrollContainerRef} className="h-full overflow-y-auto px-4 py-4">
-      {/* Sentinel for infinite scroll - triggers loading older messages */}
-      <div ref={sentinelRef} className="h-px" />
+    <div className="relative h-full">
+      <AnimatePresence>{showEmptyState ? emptyState : null}</AnimatePresence>
 
-      {loadingOlder && (
-        <div className="flex items-center justify-center py-3">
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-sm text-muted-foreground">Loading older messages…</span>
-        </div>
-      )}
+      <div ref={scrollContainerRef} className="h-full overflow-y-auto px-4 py-4">
+        {/* Sentinel for infinite scroll - triggers loading older messages */}
+        <div ref={sentinelRef} className="h-px" />
 
-      {!hasOlder && nodes.length > 0 && (
-        <div className="py-2 text-center text-xs text-muted-foreground">Beginning of session</div>
-      )}
+        {loadingOlder && (
+          <div className="flex items-center justify-center py-3">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-sm text-muted-foreground">Loading older messages…</span>
+          </div>
+        )}
 
-      <div
-        style={{
-          height: virtualizer.getTotalSize(),
-          width: "100%",
-          position: "relative",
-        }}
-      >
-        {virtualItems.map((virtualRow: { key: React.Key; index: number; start: number }) => {
-          const node = nodes[virtualRow.index];
-          return (
-            <div
-              key={virtualRow.key}
-              ref={virtualizer.measureElement}
-              data-index={virtualRow.index}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
-              className="pb-3"
-            >
-              {node.kind === "event" ? (
-                <div
-                  data-event-id={node.id}
-                  className={highlightEventId === node.id ? "rounded-lg ring-2 ring-primary/50 transition-all duration-500" : undefined}
-                >
-                  <SessionMessage
-                    id={node.id}
-                    gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
-                    completedAgentTools={completedAgentTools}
-                    toolResultByUseId={toolResultByUseId}
+        {!hasOlder && nodes.length > 0 && (
+          <div className="py-2 text-center text-xs text-muted-foreground">Beginning of session</div>
+        )}
+
+        <div
+          style={{
+            height: virtualizer.getTotalSize(),
+            width: "100%",
+            position: "relative",
+          }}
+        >
+          {virtualItems.map((virtualRow: { key: React.Key; index: number; start: number }) => {
+            const node = nodes[virtualRow.index];
+            return (
+              <div
+                key={virtualRow.key}
+                ref={virtualizer.measureElement}
+                data-index={virtualRow.index}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+                className="pb-3"
+              >
+                {node.kind === "event" ? (
+                  <div
+                    data-event-id={node.id}
+                    className={highlightEventId === node.id ? "rounded-lg ring-2 ring-primary/50 transition-all duration-500" : undefined}
+                  >
+                    <SessionMessage
+                      id={node.id}
+                      gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
+                      completedAgentTools={completedAgentTools}
+                      toolResultByUseId={toolResultByUseId}
+                    />
+                  </div>
+                ) : node.kind === "command-execution" ? (
+                  <CommandExecutionRow
+                    command={node.command}
+                    output={node.output}
+                    timestamp={node.timestamp}
+                    exitCode={node.exitCode}
                   />
-                </div>
-              ) : node.kind === "command-execution" ? (
-                <CommandExecutionRow
-                  command={node.command}
-                  output={node.output}
-                  timestamp={node.timestamp}
-                  exitCode={node.exitCode}
-                />
-              ) : node.kind === "plan-review" ? (
-                <PlanReviewCard
-                  planContent={node.planContent}
-                  planFilePath={node.planFilePath}
-                  timestamp={node.timestamp}
-                />
-              ) : node.kind === "ask-user-question" ? (
-                <AskUserQuestionInline
-                  questions={node.questions}
-                  timestamp={node.timestamp}
-                />
-              ) : (
-                <ReadGlobGroup items={node.items} />
-              )}
-            </div>
-          );
-        })}
+                ) : node.kind === "plan-review" ? (
+                  <PlanReviewCard
+                    planContent={node.planContent}
+                    planFilePath={node.planFilePath}
+                    timestamp={node.timestamp}
+                  />
+                ) : node.kind === "ask-user-question" ? (
+                  <AskUserQuestionInline
+                    questions={node.questions}
+                    timestamp={node.timestamp}
+                  />
+                ) : (
+                  <ReadGlobGroup items={node.items} />
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
