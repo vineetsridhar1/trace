@@ -3,9 +3,9 @@ import { SymbolView } from "expo-symbols";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import type { CodingTool } from "@trace/gql";
 import { Glass } from "@/components/design-system";
-import { ComposerMorphPill, type ComposerMorphPillItem } from "@/components/sessions/ComposerMorphPill";
 import type { ComposerMode } from "@/hooks/useComposerSubmit";
 import { MODE_ICON, MODE_LABEL } from "./constants";
+import { SessionComposerSheetTrigger } from "./SessionComposerSheetTrigger";
 import { SessionComposerToolLogo } from "./SessionComposerToolLogo";
 import { styles } from "./styles";
 import type {
@@ -17,63 +17,36 @@ import type {
 const AnimatedGlass = Animated.createAnimatedComponent(Glass);
 
 interface SessionComposerLeadingChipsProps {
-  expanded: boolean;
-  chipsVisible: boolean;
   canInteract: boolean;
   currentTool: CodingTool;
   mode: ComposerMode;
   modeIconTint: string;
   modeLabelVisible: boolean;
-  modelItems: ComposerMorphPillItem[];
   modelLabel: string;
-  modelLabelVisible: boolean;
-  toolHeaderItems: ComposerMorphPillItem[];
   chipAnimatedStyle: ComposerAnimatedViewStyle;
   chipTextAnimatedStyle: ComposerAnimatedTextStyle;
   glassAnimatedProps: ComposerGlassAnimatedProps;
-  leadingChipsAnimatedStyle: ComposerAnimatedViewStyle;
   modeWidthAnimatedStyle: ComposerAnimatedViewStyle;
-  modelWidthAnimatedStyle: ComposerAnimatedViewStyle;
   onModePress: () => void;
-  onModelChipPress: () => void;
-  onModelMenuOpenChange: (open: boolean) => void;
-  onModelTouchStart: () => void;
+  onOpenModelSheet: () => void;
 }
 
 export function SessionComposerLeadingChips({
-  expanded,
-  chipsVisible,
   canInteract,
   currentTool,
   mode,
   modeIconTint,
   modeLabelVisible,
-  modelItems,
   modelLabel,
-  modelLabelVisible,
-  toolHeaderItems,
   chipAnimatedStyle,
   chipTextAnimatedStyle,
   glassAnimatedProps,
-  leadingChipsAnimatedStyle,
   modeWidthAnimatedStyle,
-  modelWidthAnimatedStyle,
   onModePress,
-  onModelChipPress,
-  onModelMenuOpenChange,
-  onModelTouchStart,
+  onOpenModelSheet,
 }: SessionComposerLeadingChipsProps) {
-  if (!expanded) return null;
-
   return (
-    <Animated.View
-      pointerEvents={chipsVisible ? "auto" : "none"}
-      style={[
-        styles.leadingChipsContainer,
-        chipsVisible ? styles.leadingChipsVisible : styles.leadingChipsHidden,
-        leadingChipsAnimatedStyle,
-      ]}
-    >
+    <View style={styles.leadingChipsContainer}>
       <View style={styles.leadingChipsRow}>
         <Animated.View style={[styles.modeChipSlot, modeWidthAnimatedStyle]}>
           <Pressable
@@ -128,53 +101,16 @@ export function SessionComposerLeadingChips({
           </Pressable>
         </Animated.View>
 
-        <Animated.View style={[styles.modelChipSlot, modelWidthAnimatedStyle]}>
-          {modelLabelVisible ? (
-            <Animated.View
-              key="model-expanded"
-              onTouchStart={onModelTouchStart}
-              style={styles.modelExpandedWrapper}
-            >
-              <ComposerMorphPill
-                label={modelLabel}
-                accessibilityLabel="Model"
-                align="center"
-                disabled={!canInteract}
-                headerItems={toolHeaderItems}
-                items={modelItems}
-                minWidth={0}
-                tintAnimatedProps={glassAnimatedProps}
-                onOpenChange={onModelMenuOpenChange}
-              />
-            </Animated.View>
-          ) : (
-            <Animated.View
-              key="model-collapsed"
-              style={styles.modelChipCollapsedWrapper}
-            >
-              <AnimatedGlass
-                preset="input"
-                animatedProps={glassAnimatedProps}
-                interactive
-                style={[styles.modelChipCollapsed, chipAnimatedStyle]}
-              >
-                <Pressable
-                  onPress={onModelChipPress}
-                  disabled={!canInteract}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Model: ${modelLabel}. Tap to reveal.`}
-                  style={({ pressed }) => [
-                    styles.modelChipPressable,
-                    { opacity: canInteract ? (pressed ? 0.78 : 1) : 0.4 },
-                  ]}
-                >
-                  <SessionComposerToolLogo tool={currentTool} size={22} />
-                </Pressable>
-              </AnimatedGlass>
-            </Animated.View>
-          )}
-        </Animated.View>
+        <View style={styles.modelChipSlot}>
+          <SessionComposerSheetTrigger
+            label={modelLabel}
+            accessibilityLabel={`Model: ${modelLabel}`}
+            leading={<SessionComposerToolLogo tool={currentTool} size={18} />}
+            disabled={!canInteract}
+            onPress={onOpenModelSheet}
+          />
+        </View>
       </View>
-    </Animated.View>
+    </View>
   );
 }
