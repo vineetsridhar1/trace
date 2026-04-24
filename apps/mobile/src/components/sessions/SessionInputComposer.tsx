@@ -4,8 +4,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import Animated, {
-  FadeInDown,
-  FadeOutDown,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -526,11 +524,7 @@ export function SessionInputComposer({
         </View>
 
         {expanded && canChangeBridge ? (
-          <Animated.View
-            entering={FadeInDown.duration(160)}
-            exiting={FadeOutDown.duration(120)}
-            style={styles.bridgeRow}
-          >
+          <View style={styles.bridgeRow}>
             <ComposerMorphPill
               label={bridgeLabel}
               accessibilityLabel="Bridge"
@@ -540,7 +534,7 @@ export function SessionInputComposer({
               minWidth={88}
               tintAnimatedProps={glassAnimatedProps}
             />
-          </Animated.View>
+          </View>
         ) : null}
       </View>
     </View>
