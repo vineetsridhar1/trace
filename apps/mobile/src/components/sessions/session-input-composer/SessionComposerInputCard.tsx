@@ -19,6 +19,7 @@ interface SessionComposerInputCardProps {
   errorDraft: string | null;
   errorMessage: string | null;
   glassAnimatedProps: ComposerGlassAnimatedProps;
+  inputHeight: number;
   inputAnimatedStyle: ComposerAnimatedViewStyle;
   inputRef: RefObject<TextInput | null>;
   placeholder: string;
@@ -38,6 +39,7 @@ export function SessionComposerInputCard({
   errorDraft,
   errorMessage,
   glassAnimatedProps,
+  inputHeight,
   inputAnimatedStyle,
   inputRef,
   placeholder,
@@ -96,7 +98,7 @@ export function SessionComposerInputCard({
           placeholder={placeholder}
           placeholderTextColor={theme.colors.dimForeground}
           selection={selection}
-          style={[styles.input, { color: theme.colors.foreground }]}
+          style={[styles.input, { color: theme.colors.foreground, height: inputHeight }]}
         />
       </Animated.View>
     </AnimatedGlass>
