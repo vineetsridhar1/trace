@@ -67,8 +67,6 @@ export function SessionComposerLeadingChips({
 
   return (
     <Animated.View
-      entering={FadeIn.duration(140)}
-      exiting={FadeOut.duration(100)}
       pointerEvents={chipsVisible ? "auto" : "none"}
       style={[
         styles.leadingChipsContainer,
@@ -128,8 +126,6 @@ export function SessionComposerLeadingChips({
           {modelLabelVisible ? (
             <Animated.View
               key="model-expanded"
-              entering={FadeIn.duration(140)}
-              exiting={FadeOut.duration(100)}
               onTouchStart={onModelTouchStart}
               style={styles.modelExpandedWrapper}
             >
@@ -147,8 +143,6 @@ export function SessionComposerLeadingChips({
           ) : (
             <Animated.View
               key="model-collapsed"
-              entering={FadeIn.duration(140)}
-              exiting={FadeOut.duration(100)}
               style={styles.modelChipCollapsedWrapper}
             >
               <AnimatedGlass
