@@ -58,7 +58,8 @@ Explicitly useful, but intentionally outside the smallest coherent v1.
 
 | # | Ticket | What it does |
 |---|--------|-------------|
-| 16 | [Playbook Expansion and Debug Follow-ups](16-playbook-expansion-and-debug-followups.md) | Additional playbooks, debug panel, and mobile follow-on surfaces |
+| 16 | [Playbook Expansion and Debug Follow-ups](16-playbook-expansion-and-debug-followups.md) | Additional playbooks, full controller-log inspector, and mobile follow-on surfaces |
+| 17 | [Runtime Action Wrapper and Auth Plumbing](17-runtime-action-wrapper-and-auth-plumbing.md) | Bundled wrapper/CLI plus short-lived runtime-token plumbing for direct bounded Trace actions from Codex/Claude |
 
 ## Dependency graph
 
@@ -90,6 +91,7 @@ M4 — Human UX
 
 Post-V1
 16 Playbook Expansion and Debug Follow-ups  (needs 15)
+└─ 17 Runtime Action Wrapper and Auth Plumbing  (needs 15, 16)
 ```
 
 ## Parallelization notes
@@ -111,10 +113,10 @@ Post-V1
 - `## 19. Screen-Level Product Experience` and `## 20. Session Autopilot State Machine` are covered by tickets 04, 05, 10, 12, 13, and 14.
 - `## 21. File-Level Implementation Map`, `## 22. Migration and Compatibility Plan`, and `## 23. Permissions and Security` are covered by tickets 01-15, with tickets 01, 03, 04, and 07 carrying most of the compatibility and security constraints.
 - `## 24. Performance and Token Budgeting` and `## 25. Telemetry and Success Metrics` are covered by tickets 08, 10, 14, and 15.
-- `## 26. Future Extensions` is intentionally deferred into ticket 16.
+- `## 26. Future Extensions` is intentionally deferred into tickets 16 and 17.
 - `## 27. Suggested Build Order` maps directly to the milestone structure in this README.
 - `## 28. Example GraphQL Operations`, `## 29. Example Event Payloads`, `## 30. Controller Prompt Draft`, and `## 31. Example Worker Follow-Up Messages` are executable reference material for tickets 02, 09, 11, and 12.
-- `## 32. Acceptance Criteria By Milestone` is split across the `Completion requirements` and `How to test` sections in tickets 01-16.
+- `## 32. Acceptance Criteria By Milestone` is split across the `Completion requirements` and `How to test` sections in tickets 01-17.
 - `## 33. Final Recommendation` is encoded in the v1 scope guardrails and milestone ordering here: session-group scope, hidden controller session, inbox-first human handoff, and QA-first playbook.
 
 If the plan gains a new actionable requirement, add or update its owning ticket in the same change and keep this coverage map in sync.
@@ -129,5 +131,6 @@ If you are unsure whether something belongs in v1, check [session-autopilot-plan
 - web and desktop only
 - no autonomous merge or deploy
 - no generic workflow engine
+- no direct runtime-issued Trace API mutations from Codex/Claude; the server remains the authority that applies controller decisions
 
 If the plan changes, update the relevant ticket and this index in the same change.

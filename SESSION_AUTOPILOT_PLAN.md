@@ -61,6 +61,7 @@ Autopilot should feel like "I have a staff engineer managing this session," not 
 - Autonomous merge, deploy, or production rollout in v1.
 - A generic no-code playbook engine in v1.
 - Replacing the existing ambient agent pipeline.
+- Direct model-initiated Trace API mutations from Codex or Claude Code in the smallest coherent v1. In v1, the controller emits a bounded decision and the server applies it through the service layer.
 - Mobile parity in v1 if the mobile product still lacks a real inbox surface.
 
 ---
@@ -1038,6 +1039,14 @@ Add:
 - `commit_diff_result` response
 - `sessionRouter.commitDiff(...)`
 
+Post-v1 extension when Codex or Claude Code should be able to invoke bounded Trace actions directly:
+
+- inject `TRACE_API_URL` plus a short-lived `TRACE_RUNTIME_TOKEN` into the coding-tool process env
+- let local and cloud launch paths pass per-run env into Codex / Claude Code
+- bundle a `trace-agent` wrapper/CLI on `PATH` so the model can call Trace without hand-rolling auth headers
+- keep the wrapper pointed at service-backed APIs only; no direct event creation and no raw DB writes
+- scope runtime tokens to org, session or session group, and allowed actions, with short expiry and rotation per run when practical
+
 ### Web UI
 
 - `apps/web/src/components/session/SessionHeader.tsx`
@@ -1116,6 +1125,13 @@ For local runtimes:
 - do not silently bind to an inaccessible bridge
 - fail into `error` or `paused`
 - expose the reason in the UI
+
+If a future runtime action wrapper is added:
+
+- use short-lived runtime tokens, not long-lived user API keys
+- inject those tokens into the tool process env at launch so child wrapper processes inherit them
+- keep claims narrowly scoped to the intended org and action set
+- fail closed on token expiry, org mismatch, or scope mismatch
 
 ### Repo safety
 
@@ -1220,9 +1236,28 @@ These are intentionally not v1, but the design should not block them.
 
 Let an org define default Autopilot playbooks or instructions by channel or project.
 
+### Runtime action wrapper
+
+Allow external coding tools like Codex and Claude Code to trigger a bounded set of Trace actions through a bundled wrapper/CLI.
+
+Recommended shape:
+
+- `trace-agent` binary or script available on `PATH` for desktop and cloud runtimes
+- wrapper reads `TRACE_API_URL` and a short-lived `TRACE_RUNTIME_TOKEN` from env
+- wrapper calls a narrow service-backed API surface for actions like follow-up messaging or inbox creation
+- server verifies scoped runtime-token claims before dispatching to the normal service layer
+- this stays additive to the v1 controller loop rather than replacing the XML decision contract
+
 ### Debug panel
 
 Expose the hidden controller session and raw decisions in an Autopilot debug panel for power users.
+
+Because the controller is implemented as a normal coding-tool session, this panel should prefer explicit service lookups plus reused session transcript/log components over inventing a second "Autopilot log" storage model.
+
+Product guardrail:
+
+- inspect the controller through an Autopilot-specific panel or drill-down
+- do not leak hidden controller sessions into normal session lists, tabs, or default navigation
 
 ### Mobile support
 
