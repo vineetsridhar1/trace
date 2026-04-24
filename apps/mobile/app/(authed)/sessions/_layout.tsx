@@ -1,8 +1,11 @@
 import { Stack } from "expo-router";
+import { useNativeStackScreenOptions } from "@/theme/nativeNavigation";
 
 export default function SessionsLayout() {
+  const screenOptions = useNativeStackScreenOptions();
+
   return (
-    <Stack>
+    <Stack screenOptions={screenOptions}>
       <Stack.Screen
         name="[groupId]"
         options={{

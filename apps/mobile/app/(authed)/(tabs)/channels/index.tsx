@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { Stack } from "expo-router";
 import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
@@ -14,6 +14,7 @@ import {
 import { refreshOrgData } from "@/hooks/useHydrate";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
+import { useHeaderSearchBarOptions } from "@/theme/nativeNavigation";
 
 export default function ChannelsIndex() {
   const theme = useTheme();
@@ -30,15 +31,12 @@ export default function ChannelsIndex() {
   // (UISearchController + hidesSearchBarWhenScrolling=YES) conflicts with
   // the tab bar's iOS 26 minimize-on-scroll binding on the same scroll
   // view, stopping the tab bar and bottom accessory from collapsing.
-  const searchBarOptions = useMemo(
-    () => ({
-      placeholder: "Search channels",
-      hideWhenScrolling: false,
-      onChangeText: (e: { nativeEvent: { text: string } }) => setSearch(e.nativeEvent.text),
-      onCancelButtonPress: () => setSearch(""),
-    }),
-    [],
-  );
+  const searchBarOptions = useHeaderSearchBarOptions({
+    placeholder: "Search channels",
+    hideWhenScrolling: false,
+    onChangeText: (e: { nativeEvent: { text: string } }) => setSearch(e.nativeEvent.text),
+    onCancelButtonPress: () => setSearch(""),
+  });
 
   const handleRefresh = useCallback(async () => {
     if (!activeOrgId) return;
