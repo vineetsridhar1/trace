@@ -37,16 +37,6 @@ export function SessionComposerSlashCommandMenu({
       style={[styles.container, theme.shadows.lg]}
     >
       <MenuSurface>
-        <View
-          pointerEvents="none"
-          style={[
-            styles.surfaceTone,
-            {
-              backgroundColor: surfaceTone,
-              borderColor: alpha(theme.colors.foreground, 0.08),
-            },
-          ]}
-        />
         <ScrollView
           keyboardDismissMode="none"
           keyboardShouldPersistTaps="always"
@@ -66,31 +56,10 @@ export function SessionComposerSlashCommandMenu({
                 styles.row,
                 {
                   marginBottom: index < commands.length - 1 ? 2 : 0,
-                  borderColor: alpha(theme.colors.foreground, 0.08),
-                  backgroundColor: pressed
-                    ? alpha(theme.colors.foreground, 0.1)
-                    : alpha(theme.colors.background, 0.16),
+                  backgroundColor: pressed ? "rgb(255, 255, 255, 0.05)" : undefined,
                 },
               ]}
             >
-              <View
-                style={[
-                  styles.iconShell,
-                  {
-                    backgroundColor: alpha(theme.colors.foreground, 0.1),
-                    borderColor: alpha(theme.colors.foreground, 0.08),
-                  },
-                ]}
-              >
-                <SymbolView
-                  name="chevron.left.forwardslash.chevron.right"
-                  size={14}
-                  tintColor={theme.colors.accent}
-                  resizeMode="scaleAspectFit"
-                  style={styles.icon}
-                />
-              </View>
-
               <View style={styles.copy}>
                 <View style={styles.titleRow}>
                   <Text
@@ -105,18 +74,6 @@ export function SessionComposerSlashCommandMenu({
                     ]}
                   >
                     {`/${command.name}`}
-                  </Text>
-                  <Text
-                    variant="caption2"
-                    style={[
-                      styles.sourceLabel,
-                      {
-                        color: alpha(theme.colors.foreground, 0.74),
-                        backgroundColor: alpha(theme.colors.foreground, 0.08),
-                      },
-                    ]}
-                  >
-                    {getSourceLabel(command.source)}
                   </Text>
                 </View>
                 <Text
@@ -185,8 +142,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     minHeight: 56,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
