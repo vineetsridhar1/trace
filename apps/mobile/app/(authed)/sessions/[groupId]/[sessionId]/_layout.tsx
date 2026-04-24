@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, withLayoutContext, useLocalSearchParams, useRouter } from "expo-router";
 import {
   createNativeBottomTabNavigator,
+  type NativeBottomTabNavigationEventMap,
   type NativeBottomTabNavigationOptions,
 } from "@bottom-tabs/react-navigation";
+import type {
+  ParamListBase,
+  TabNavigationState,
+} from "@react-navigation/native";
 import { useEntityField } from "@trace/client-core";
 import type { Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
@@ -15,10 +20,8 @@ import {
   Spinner,
 } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
-import { BrowserPanel } from "@/components/sessions/BrowserPanel";
 import { SessionPageHeader } from "@/components/sessions/SessionPageHeader";
-import { SessionSurface } from "@/components/sessions/SessionSurface";
-import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel";
+import { SessionPageProvider } from "@/components/sessions/session-page/SessionPageContext";
 import { resolveBrowserUrl } from "@/lib/browser";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { useMobileUIStore } from "@/stores/ui";
@@ -28,13 +31,13 @@ import {
   useSessionGroupSessionIds,
 } from "@/hooks/useSessionGroupDetail";
 
-type SessionBottomTabsParamList = {
-  session: undefined;
-  terminal: undefined;
-  browser: undefined;
-};
-
-const SessionBottomTabs = createNativeBottomTabNavigator<SessionBottomTabsParamList>();
+const BottomTabNavigator = createNativeBottomTabNavigator().Navigator;
+const NativeTabs = withLayoutContext<
+  NativeBottomTabNavigationOptions,
+  typeof BottomTabNavigator,
+  TabNavigationState<ParamListBase>,
+  NativeBottomTabNavigationEventMap
+>(BottomTabNavigator);
 
 const sessionIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
   sfSymbol: "text.bubble",
@@ -48,12 +51,7 @@ const terminalIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> 
   sfSymbol: "chevron.left.forwardslash.chevron.right",
 });
 
-/**
- * Standalone mobile session page. Reuses the session surface building blocks
- * but keeps the session, browser, and terminal views inside a dedicated page
- * with its own bottom navigation instead of the old sheet-style overlay.
- */
-export default function SessionStreamScreen() {
+export default function SessionPageLayout() {
   const { groupId, sessionId } = useLocalSearchParams<{
     groupId: string;
     sessionId: string;
@@ -90,6 +88,7 @@ export default function SessionStreamScreen() {
       ),
     [browserUrl, browserUrlGroupId, hydratedGroupId, prUrl, repo?.remoteUrl],
   );
+  const [overlayHeight, setOverlayHeight] = useState(0);
 
   useEffect(() => {
     if (!groupId || !sessionId || sessionIds.length === 0) return;
@@ -110,7 +109,6 @@ export default function SessionStreamScreen() {
     },
     [hydratedGroupId, setBrowserUrl],
   );
-  const [overlayHeight, setOverlayHeight] = useState(0);
   const handleOverlayLayout = useCallback((e: LayoutChangeEvent) => {
     const nextHeight = e.nativeEvent.layout.height;
     setOverlayHeight((current) => (current === nextHeight ? current : nextHeight));
@@ -170,49 +168,34 @@ export default function SessionStreamScreen() {
             />
           </View>
         ) : (
-          <SessionBottomTabs.Navigator
-            key={hydratedGroupId}
-            initialRouteName="session"
-            minimizeBehavior="onScrollDown"
-            scrollEdgeAppearance="transparent"
+            <SessionPageProvider
+              value={{
+                onBrowserUrlChange: handleBrowserUrlChange,
+                onSelectSession: handleSelectSession,
+                overlayHeight,
+              resolvedBrowserUrl,
+              sessionId,
+            }}
           >
-            <SessionBottomTabs.Screen
-              name="session"
-              options={{ title: "Session", tabBarIcon: sessionIcon }}
+            <NativeTabs
+              initialRouteName="index"
+              minimizeBehavior="onScrollDown"
+              scrollEdgeAppearance="transparent"
             >
-              {() => (
-                <SessionSurface
-                  sessionId={sessionId}
-                  onSelectSession={handleSelectSession}
-                  hideHeader
-                />
-              )}
-            </SessionBottomTabs.Screen>
-            <SessionBottomTabs.Screen
-              name="terminal"
-              options={{ title: "Terminal", tabBarIcon: terminalIcon }}
-            >
-              {() => (
-                <View style={[styles.overlayPaddedScene, { paddingTop: overlayHeight }]}>
-                  <SessionTerminalPanel sessionId={sessionId} />
-                </View>
-              )}
-            </SessionBottomTabs.Screen>
-            <SessionBottomTabs.Screen
-              name="browser"
-              options={{ title: "Browser", tabBarIcon: browserIcon }}
-            >
-              {() => (
-                <View style={styles.overlayPaddedScene}>
-                  <BrowserPanel
-                    url={resolvedBrowserUrl}
-                    onUrlChange={handleBrowserUrlChange}
-                    topInset={overlayHeight}
-                  />
-                </View>
-              )}
-            </SessionBottomTabs.Screen>
-          </SessionBottomTabs.Navigator>
+              <NativeTabs.Screen
+                name="index"
+                options={{ title: "Session", tabBarIcon: sessionIcon }}
+              />
+              <NativeTabs.Screen
+                name="terminal"
+                options={{ title: "Terminal", tabBarIcon: terminalIcon }}
+              />
+              <NativeTabs.Screen
+                name="browser"
+                options={{ title: "Browser", tabBarIcon: browserIcon }}
+              />
+            </NativeTabs>
+          </SessionPageProvider>
         )}
       </View>
 
@@ -239,10 +222,6 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   content: {
-    flex: 1,
-    minHeight: 0,
-  },
-  overlayPaddedScene: {
     flex: 1,
     minHeight: 0,
   },
