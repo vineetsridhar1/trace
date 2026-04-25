@@ -39,6 +39,7 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
   const [canGoForward, setCanGoForward] = useState(false);
   const [loading, setLoading] = useState(false);
   const webViewRef = useRef<WebView>(null);
+  const latestUrlRef = useRef(resolvedUrl);
   const webSource = useMemo(() => ({ uri: url }), [url]);
 
   useEffect(() => {
@@ -50,15 +51,24 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
     setLoading(false);
   }, [resolvedUrl, url]);
 
+  useEffect(() => {
+    latestUrlRef.current = url;
+  }, [url]);
+
+  useEffect(() => {
+    return () => {
+      if (latestUrlRef.current) onUrlChange(latestUrlRef.current);
+    };
+  }, [onUrlChange]);
+
   const handleNavStateChange = useCallback(
     (state: WebViewNavigation) => {
       setCanGoBack(state.canGoBack);
       setCanGoForward(state.canGoForward);
       setInputText(state.url);
       setUrl(state.url);
-      onUrlChange(state.url);
     },
-    [onUrlChange],
+    [],
   );
 
   const handleSubmit = useCallback(
@@ -71,9 +81,8 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
         webViewRef.current?.reload();
         return;
       }
-      onUrlChange(raw);
     },
-    [onUrlChange, url],
+    [url],
   );
 
   const handleBack = useCallback(() => webViewRef.current?.goBack(), []);
