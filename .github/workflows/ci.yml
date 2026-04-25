@@ -32,6 +32,8 @@ jobs:
 
       - name: Validate Prisma schema
         run: pnpm --filter @trace/server exec prisma validate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/trace
 
       - name: ESLint
         run: pnpm lint:eslint
