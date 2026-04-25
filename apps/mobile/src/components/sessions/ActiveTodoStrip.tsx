@@ -12,7 +12,6 @@ import {
   useScopedEventIds,
   useScopedEvents,
 } from "@trace/client-core";
-import type { Event } from "@trace/gql";
 import { Glass, Spinner, Text } from "@/components/design-system";
 import { extractLatestTodos, type TodoItem } from "@/lib/extract-todos";
 import { alpha, useTheme } from "@/theme";
@@ -30,7 +29,7 @@ export function ActiveTodoStrip({ sessionId }: ActiveTodoStripProps) {
   const theme = useTheme();
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
   const scopeKey = eventScopeKey("session", sessionId);
-  const eventIds = useScopedEventIds(scopeKey, byTimestamp);
+  const eventIds = useScopedEventIds(scopeKey);
   const events = useScopedEvents(scopeKey);
   const todos = useMemo(
     () => extractLatestTodos(eventIds, events),
@@ -123,10 +122,6 @@ function pickFocusTodo(todos: TodoItem[] | null): FocusTodo | null {
     return { label: pending.content, status: pending.status };
   }
   return null;
-}
-
-function byTimestamp(a: Event, b: Event): number {
-  return a.timestamp.localeCompare(b.timestamp);
 }
 
 const styles = StyleSheet.create({

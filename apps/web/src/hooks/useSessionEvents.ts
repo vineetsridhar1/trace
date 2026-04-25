@@ -183,7 +183,7 @@ export function useSessionEvents(sessionId: string) {
   }, [activeOrgId, sessionId]);
 
   // Derive eventIds from the scoped bucket — O(session events) not O(all events)
-  const eventIds = useScopedEventIds(scopeKey, (a, b) => a.timestamp.localeCompare(b.timestamp));
+  const eventIds = useScopedEventIds(scopeKey);
 
   return { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents };
 }

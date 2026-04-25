@@ -4,7 +4,6 @@ import {
   useScopedEventIds,
   useScopedEvents,
 } from "@trace/client-core";
-import type { Event } from "@trace/gql";
 import { findMostRecentPendingInput } from "@/lib/pending-input";
 import { PendingInputPlan } from "./PendingInputPlan";
 import { PendingInputQuestion } from "./PendingInputQuestion";
@@ -28,7 +27,7 @@ export function PendingInputBar({
   keyboardVisible = false,
 }: PendingInputBarProps) {
   const scopeKey = eventScopeKey("session", sessionId);
-  const eventIds = useScopedEventIds(scopeKey, byTimestamp);
+  const eventIds = useScopedEventIds(scopeKey);
   const events = useScopedEvents(scopeKey);
   const pending = useMemo(
     () => findMostRecentPendingInput(eventIds, events),
@@ -55,8 +54,4 @@ export function PendingInputBar({
       keyboardVisible={keyboardVisible}
     />
   );
-}
-
-function byTimestamp(a: Event, b: Event): number {
-  return a.timestamp.localeCompare(b.timestamp);
 }

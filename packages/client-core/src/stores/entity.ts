@@ -52,6 +52,7 @@ type Tables = { [K in EntityType]: Record<string, EntityTableMap[K]> };
 
 /** Events are partitioned by scope key (`${scopeType}:${scopeId}`) for O(1) scoped lookups */
 type EventsByScope = Record<string, Record<string, Event>>;
+type EventIdsByScope = Record<string, string[]>;
 type MessageIdsByScope = Record<string, string[]>;
 
 interface EntityActions {
@@ -79,6 +80,8 @@ interface EntityActions {
 
 export type EntityState = Tables & {
   eventsByScope: EventsByScope;
+  /** Ordered event IDs per scope, maintained by timestamp for efficient selectors */
+  _eventIdsByScope: EventIdsByScope;
   /** Reverse index: sessionGroupId → session IDs belonging to that group */
   _sessionIdsByGroup: Record<string, string[]>;
   /** Reverse index: scope key → message IDs belonging to that scope */
@@ -106,6 +109,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   messages: {},
   queuedMessages: {},
   eventsByScope: {},
+  _eventIdsByScope: {},
   _sessionIdsByGroup: {},
   _messageIdsByScope: {},
   _eventIdsByParentId: {},
@@ -273,9 +277,18 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
     set((state: EntityState) => {
       const bucket = state.eventsByScope[scopeKey];
       const updated = bucket ? { ...bucket, [id]: event } : { [id]: event };
+      const eventIdsByScope = upsertEventIdByScope(
+        state._eventIdsByScope,
+        scopeKey,
+        id,
+        event,
+        bucket,
+        bucket?.[id],
+      );
       const parentIdx = updateParentIdIndex(state._eventIdsByParentId, id, event.parentId);
       return {
         eventsByScope: { ...state.eventsByScope, [scopeKey]: updated },
+        ...(eventIdsByScope !== state._eventIdsByScope ? { _eventIdsByScope: eventIdsByScope } : {}),
         ...(parentIdx !== state._eventIdsByParentId ? { _eventIdsByParentId: parentIdx } : {}),
       };
     }),
@@ -283,13 +296,23 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   upsertManyScopedEvents: (scopeKey: string, items: Array<Event & { id: string }>) =>
     set((state: EntityState) => {
       const bucket = { ...(state.eventsByScope[scopeKey] ?? {}) };
+      let eventIdsByScope = state._eventIdsByScope;
       let parentIdx = state._eventIdsByParentId;
       for (const item of items) {
+        eventIdsByScope = upsertEventIdByScope(
+          eventIdsByScope,
+          scopeKey,
+          item.id,
+          item,
+          bucket,
+          bucket[item.id],
+        );
         bucket[item.id] = item;
         parentIdx = updateParentIdIndex(parentIdx, item.id, item.parentId);
       }
       return {
         eventsByScope: { ...state.eventsByScope, [scopeKey]: bucket },
+        ...(eventIdsByScope !== state._eventIdsByScope ? { _eventIdsByScope: eventIdsByScope } : {}),
         ...(parentIdx !== state._eventIdsByParentId ? { _eventIdsByParentId: parentIdx } : {}),
       };
     }),
@@ -297,7 +320,8 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   removeScopedEvents: (scopeKey: string) =>
     set((state: EntityState) => {
       const { [scopeKey]: _, ...rest } = state.eventsByScope;
-      return { eventsByScope: rest };
+      const { [scopeKey]: _eventIds, ...restEventIds } = state._eventIdsByScope;
+      return { eventsByScope: rest, _eventIdsByScope: restEventIds };
     }),
 
   reset: () =>
@@ -316,6 +340,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       messages: {},
       queuedMessages: {},
       eventsByScope: {},
+      _eventIdsByScope: {},
       _sessionIdsByGroup: {},
       _messageIdsByScope: {},
       _eventIdsByParentId: {},
@@ -331,6 +356,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
 export class StoreBatchWriter {
   private tables: { [K in EntityType]: Record<string, EntityTableMap[K]> };
   private eventsByScope: EventsByScope;
+  private _eventIdsByScope: EventIdsByScope;
   private _sessionIdsByGroup: Record<string, string[]>;
   private _messageIdsByScope: MessageIdsByScope;
   private _eventIdsByParentId: Record<string, string[]>;
@@ -346,6 +372,7 @@ export class StoreBatchWriter {
       (this.tables as Record<string, unknown>)[key] = s[key];
     }
     this.eventsByScope = s.eventsByScope;
+    this._eventIdsByScope = s._eventIdsByScope;
     this._sessionIdsByGroup = s._sessionIdsByGroup;
     this._messageIdsByScope = s._messageIdsByScope;
     this._eventIdsByParentId = s._eventIdsByParentId;
@@ -427,8 +454,10 @@ export class StoreBatchWriter {
       this.eventsByScope = { ...this.eventsByScope };
     }
     const bucket = this.eventsByScope[scopeKey];
+    const previous = bucket?.[id];
     this.eventsByScope[scopeKey] = bucket ? { ...bucket, [id]: event } : { [id]: event };
     this.dirty.add("eventsByScope");
+    this.updateEventScopeIndex(scopeKey, id, event, previous);
     this.updateParentIdIndex(id, event.parentId);
   }
 
@@ -442,6 +471,7 @@ export class StoreBatchWriter {
     const { [id]: _, ...rest } = bucket;
     this.eventsByScope[scopeKey] = rest;
     this.dirty.add("eventsByScope");
+    this.removeFromEventScopeIndex(scopeKey, id);
   }
 
   flush(): void {
@@ -452,6 +482,8 @@ export class StoreBatchWriter {
         update.eventsByScope = this.eventsByScope;
       } else if (key === "_sessionIdsByGroup") {
         update._sessionIdsByGroup = this._sessionIdsByGroup;
+      } else if (key === "_eventIdsByScope") {
+        update._eventIdsByScope = this._eventIdsByScope;
       } else if (key === "_messageIdsByScope") {
         update._messageIdsByScope = this._messageIdsByScope;
       } else if (key === "_eventIdsByParentId") {
@@ -520,6 +552,34 @@ export class StoreBatchWriter {
   private ensureGroupBucket(): void {
     if (this._sessionIdsByGroup === useEntityStore.getState()._sessionIdsByGroup) {
       this._sessionIdsByGroup = { ...this._sessionIdsByGroup };
+    }
+  }
+
+  private updateEventScopeIndex(
+    scopeKey: string,
+    eventId: string,
+    event: Event,
+    previous?: Event,
+  ): void {
+    const nextIndex = upsertEventIdByScope(
+      this._eventIdsByScope,
+      scopeKey,
+      eventId,
+      event,
+      this.eventsByScope[scopeKey],
+      previous,
+    );
+    if (nextIndex !== this._eventIdsByScope) {
+      this._eventIdsByScope = nextIndex;
+      this.dirty.add("_eventIdsByScope");
+    }
+  }
+
+  private removeFromEventScopeIndex(scopeKey: string, eventId: string): void {
+    const nextIndex = removeEventIdByScope(this._eventIdsByScope, scopeKey, eventId);
+    if (nextIndex !== this._eventIdsByScope) {
+      this._eventIdsByScope = nextIndex;
+      this.dirty.add("_eventIdsByScope");
     }
   }
 
@@ -636,6 +696,88 @@ function updateParentIdIndex(
   return next;
 }
 
+function compareEventsByTimestampAndId(
+  a: Pick<Event, "id" | "timestamp">,
+  b: Pick<Event, "id" | "timestamp">,
+): number {
+  const timestampDiff = a.timestamp.localeCompare(b.timestamp);
+  if (timestampDiff !== 0) return timestampDiff;
+  return a.id.localeCompare(b.id);
+}
+
+function insertEventIdSorted(
+  ids: string[],
+  getEvent: (id: string) => Event | undefined,
+  event: Event,
+): string[] {
+  let low = 0;
+  let high = ids.length;
+
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    const midEvent = getEvent(ids[mid] as string);
+    if (!midEvent || compareEventsByTimestampAndId(midEvent, event) <= 0) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+
+  return [...ids.slice(0, low), event.id, ...ids.slice(low)];
+}
+
+export function upsertEventIdByScope(
+  index: EventIdsByScope,
+  scopeKey: string,
+  eventId: string,
+  event: Event,
+  events: Record<string, Event> | undefined,
+  previous?: Event,
+): EventIdsByScope {
+  const existingIds = index[scopeKey] ?? EMPTY_IDS;
+  const alreadyPresent = existingIds.includes(eventId);
+
+  if (
+    previous &&
+    alreadyPresent &&
+    compareEventsByTimestampAndId(previous, event) === 0
+  ) {
+    return index;
+  }
+
+  let nextIds = alreadyPresent ? existingIds.filter((id) => id !== eventId) : existingIds;
+  nextIds = insertEventIdSorted(nextIds, (id) => events?.[id], event);
+
+  if (
+    nextIds.length === existingIds.length &&
+    nextIds.every((id, position) => id === existingIds[position])
+  ) {
+    return index;
+  }
+
+  const next = { ...index };
+  next[scopeKey] = nextIds;
+  return next;
+}
+
+export function removeEventIdByScope(
+  index: EventIdsByScope,
+  scopeKey: string,
+  eventId: string,
+): EventIdsByScope {
+  const existingIds = index[scopeKey];
+  if (!existingIds?.includes(eventId)) return index;
+
+  const nextIds = existingIds.filter((id) => id !== eventId);
+  const next = { ...index };
+  if (nextIds.length > 0) {
+    next[scopeKey] = nextIds;
+  } else {
+    delete next[scopeKey];
+  }
+  return next;
+}
+
 function updateMessageIdsByScope(
   index: MessageIdsByScope,
   messageId: string,
@@ -735,16 +877,25 @@ export function messageScopeKey(scopeType: "chat" | "channel", scopeId: string):
 }
 
 /** Subscribe to sorted event IDs within a single scoped bucket.
- *  Only re-evaluates when that bucket changes — O(bucket) not O(all events). */
+ *  Uses the maintained timestamp index when no custom comparator is needed. */
 export function useScopedEventIds(
   scopeKey: string,
   sort?: (a: Event, b: Event) => number,
 ): string[] {
+  if (!sort) {
+    return useEntityStore((state: EntityState) => state._eventIdsByScope[scopeKey] ?? EMPTY_IDS);
+  }
   return useEntityStore(
     useShallow((state: EntityState) => {
       const bucket = state.eventsByScope[scopeKey];
-      if (!bucket) return [];
-      const entries = Object.entries(bucket);
+      if (!bucket) return EMPTY_IDS;
+      const orderedIds = state._eventIdsByScope[scopeKey] ?? Object.keys(bucket);
+      const entries = orderedIds
+        .map((id) => {
+          const event = bucket[id];
+          return event ? ([id, event] as const) : null;
+        })
+        .filter((entry): entry is readonly [string, Event] => entry !== null);
       if (sort) entries.sort(([, a], [, b]) => sort(a, b));
       return entries.map(([id]) => id);
     }),
