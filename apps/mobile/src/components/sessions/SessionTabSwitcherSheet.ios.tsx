@@ -22,6 +22,7 @@ function NativeSessionTabSwitcherSheet({
   open,
   groupId,
   activeSessionId,
+  activePane = "session",
   onClose,
 }: SessionTabSwitcherSheetProps) {
   const { height, width } = useWindowDimensions();
@@ -61,6 +62,7 @@ function NativeSessionTabSwitcherSheet({
             <SessionTabSwitcherContent
               groupId={groupId}
               activeSessionId={activeSessionId}
+              activePane={activePane}
               onClose={onClose}
               closeDelayMs={IOS_SHEET_CLOSE_DELAY_MS}
               contentInset="sheet"

@@ -90,6 +90,13 @@ export function useSessionsGridOptions({
       },
     },
     initialGroupOrderComparator: (params: InitialGroupOrderComparatorParams<SessionGroupRow>) => {
+      const a = sessionStatusGroupOrder[params.nodeA.key ?? ""] ?? 99;
+      const b = sessionStatusGroupOrder[params.nodeB.key ?? ""] ?? 99;
+      const statusDiff = a - b;
+      if (statusDiff !== 0) {
+        return statusDiff;
+      }
+
       const aLatest = Math.max(
         ...((params.nodeA.allLeafChildren ?? []).map((child) => getRowSortTimestamp(child.data))),
         0,
@@ -103,9 +110,7 @@ export function useSessionsGridOptions({
         return recencyDiff;
       }
 
-      const a = sessionStatusGroupOrder[params.nodeA.key ?? ""] ?? 99;
-      const b = sessionStatusGroupOrder[params.nodeB.key ?? ""] ?? 99;
-      return a - b;
+      return 0;
     },
   };
 }

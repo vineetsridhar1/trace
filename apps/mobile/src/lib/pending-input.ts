@@ -18,7 +18,7 @@ export type PendingInputData =
   | {
       kind: "plan";
       eventId: string;
-      planFilePath: string;
+      planContent: string;
       timestamp: string;
     };
 
@@ -45,7 +45,7 @@ export function findMostRecentPendingInput(
     | { eventId: string; questions: Question[]; timestamp: string }
     | null = null;
   let latestPlan:
-    | { eventId: string; planFilePath: string; timestamp: string }
+    | { eventId: string; planContent: string; timestamp: string }
     | null = null;
 
   for (let i = eventIds.length - 1; i >= 0; i--) {
@@ -69,7 +69,7 @@ export function findMostRecentPendingInput(
       if (block.type === "plan" && !latestPlan) {
         latestPlan = {
           eventId: ev.id,
-          planFilePath: String(block.filePath ?? ""),
+          planContent: String(block.content ?? ""),
           timestamp: ev.timestamp,
         };
       } else if (block.type === "question" && !latestQuestion) {

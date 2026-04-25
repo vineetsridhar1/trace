@@ -2180,6 +2180,122 @@ describe("SessionService", () => {
     });
   });
 
+  describe("archiveGroup", () => {
+    it("deletes groups with no sessions instead of archiving them", async () => {
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
+        makeSessionGroup({
+          id: "group-empty",
+          organizationId: "org-1",
+          sessions: [],
+        }),
+      );
+      prismaMock.session.findMany.mockResolvedValueOnce([]);
+
+      const result = await service.archiveGroup("group-empty", "org-1");
+
+      expect(result).toBeNull();
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.delete).toHaveBeenCalledWith({
+        where: { id: "group-empty" },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_deleted",
+          payload: {
+            deletedSessionGroupId: "group-empty",
+            deletionReason: "archived_empty_group",
+            sourceAction: "archive",
+          },
+        }),
+      );
+    });
+
+    it("deletes groups whose sessions never had messages", async () => {
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
+        makeSessionGroup({
+          id: "group-no-messages",
+          organizationId: "org-1",
+          sessions: [{ id: "session-1", lastMessageAt: null }],
+        }),
+      );
+      prismaMock.session.findMany.mockResolvedValueOnce([{ id: "session-1" }]);
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          sessionGroupId: "group-no-messages",
+          organizationId: "org-1",
+        }),
+      );
+      prismaMock.session.count.mockResolvedValueOnce(0);
+
+      const result = await service.archiveGroup("group-no-messages", "org-1");
+
+      expect(result).toBeNull();
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.delete).toHaveBeenCalledWith({
+        where: { id: "group-no-messages" },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_deleted",
+          payload: expect.objectContaining({
+            sessionId: "session-1",
+            deletedSessionGroupId: "group-no-messages",
+            deletionReason: "archived_empty_group",
+            sourceAction: "archive",
+          }),
+        }),
+      );
+    });
+
+    it("archives groups that have message history", async () => {
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
+        makeSessionGroup({
+          id: "group-1",
+          organizationId: "org-1",
+          sessions: [
+            { id: "session-2", lastMessageAt: new Date("2024-01-02T00:00:00.000Z") },
+            { id: "session-1", lastMessageAt: null },
+          ],
+        }),
+      );
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({
+          id: "group-1",
+          archivedAt: new Date("2024-01-02T00:00:00.000Z"),
+        }),
+      );
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
+        makeSessionGroup({
+          id: "group-1",
+          archivedAt: new Date("2024-01-02T00:00:00.000Z"),
+          worktreeDeleted: true,
+          sessions: [makeSession({ id: "session-2", sessionGroupId: "group-1" })],
+        }),
+      );
+
+      const result = await service.archiveGroup("group-1", "org-1");
+
+      expect(result?.id).toBe("group-1");
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: { sessionGroupId: "group-1", agentStatus: "active" },
+        data: { agentStatus: "stopped" },
+      });
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith({
+        where: { id: "group-1" },
+        data: { archivedAt: expect.any(Date) },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_group_archived",
+          payload: expect.objectContaining({ sessionGroupId: "group-1" }),
+        }),
+      );
+    });
+  });
+
   describe("moveToRuntime", () => {
     it("rebinds the same session inside the same group", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(

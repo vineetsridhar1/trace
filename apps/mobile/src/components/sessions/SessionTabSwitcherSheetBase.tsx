@@ -16,6 +16,7 @@ export interface SessionTabSwitcherSheetProps {
   open: boolean;
   groupId: string;
   activeSessionId: string;
+  activePane?: "session" | "terminal" | "browser";
   onClose: () => void;
 }
 
@@ -26,6 +27,7 @@ export function SessionTabSwitcherSheetBase({
   open,
   groupId,
   activeSessionId,
+  activePane = "session",
   onClose,
 }: SessionTabSwitcherSheetProps) {
   const theme = useTheme();
@@ -191,6 +193,7 @@ export function SessionTabSwitcherSheetBase({
             <SessionTabSwitcherContent
               groupId={groupId}
               activeSessionId={activeSessionId}
+              activePane={activePane}
               onClose={requestClose}
             />
           </View>

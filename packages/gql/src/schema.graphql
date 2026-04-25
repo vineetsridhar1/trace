@@ -1131,7 +1131,7 @@ type Mutation {
   terminateSession(id: ID!): Session!
   dismissSession(id: ID!): Session!
   deleteSession(id: ID!): Session!
-  archiveSessionGroup(id: ID!): SessionGroup!
+  archiveSessionGroup(id: ID!): SessionGroup
   deleteSessionGroup(id: ID!): Boolean!
   updateSessionConfig(
     sessionId: ID!

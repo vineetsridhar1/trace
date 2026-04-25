@@ -39,7 +39,10 @@ export function NewActivityPill({
   }, [visible, progress, theme.motion.springs.smooth, theme.motion.durations.fast]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
+    transform: [
+      { translateY: (1 - progress.value) * 8 },
+      { scale: 0.96 + progress.value * 0.04 },
+    ],
   }));
 
   function handlePress() {
@@ -49,9 +52,13 @@ export function NewActivityPill({
 
   const label = `${count} new`;
 
+  if (!visible) {
+    return null;
+  }
+
   return (
     <Animated.View
-      pointerEvents={visible ? "auto" : "none"}
+      pointerEvents="auto"
       style={[styles.wrapper, { bottom: bottomOffset + 8 }, animatedStyle]}
     >
       <Pressable

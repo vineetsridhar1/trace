@@ -149,16 +149,26 @@ export function SessionSurface({
     (keyboardVisible
       ? keyboardInset + COMPOSER_KEYBOARD_GAP + STREAM_COMPOSER_CLEARANCE
       : restingBottomOffset);
+  const floatingBottomOffset =
+    composerHeight + (keyboardVisible ? keyboardInset + COMPOSER_KEYBOARD_GAP : 0);
 
   useEffect(() => {
     if (!groupId) return;
     const store = useMobileUIStore.getState();
-    store.setActiveSessionGroupId(groupId);
-    store.setActiveSessionId(sessionId);
+    if (store.activeSessionGroupId !== groupId) {
+      store.setActiveSessionGroupId(groupId);
+    }
+    if (store.activeSessionId !== sessionId) {
+      store.setActiveSessionId(sessionId);
+    }
     return () => {
       const current = useMobileUIStore.getState();
-      if (current.activeSessionGroupId === groupId) current.setActiveSessionGroupId(null);
-      if (current.activeSessionId === sessionId) current.setActiveSessionId(null);
+      if (current.activeSessionGroupId === groupId && current.activeSessionGroupId !== null) {
+        current.setActiveSessionGroupId(null);
+      }
+      if (current.activeSessionId === sessionId && current.activeSessionId !== null) {
+        current.setActiveSessionId(null);
+      }
     };
   }, [groupId, sessionId]);
 
@@ -187,6 +197,7 @@ export function SessionSurface({
           sessionId={sessionId}
           topInset={topInset}
           bottomInset={streamBottomInset}
+          floatingBottomOffset={floatingBottomOffset}
           loadEvents={loadStreamEvents}
           commitEvents={commitStreamEvents}
           renderEvents={renderStreamEvents}
@@ -225,7 +236,7 @@ export function SessionSurface({
             </>
           ) : pendingInput ? (
             <>
-              <PendingInputBar sessionId={sessionId} />
+              <PendingInputBar sessionId={sessionId} keyboardVisible={keyboardVisible} />
               <SessionErrorCard sessionId={sessionId} />
             </>
           ) : (
