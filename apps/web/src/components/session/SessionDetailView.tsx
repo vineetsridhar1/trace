@@ -272,6 +272,7 @@ export function SessionDetailView({
     () => buildSessionNodes(eventIds, events),
     [eventIds, events],
   );
+  const initialEventsLoading = loading && eventIds.length === 0;
 
   // Find plan content when server says session needs input
   const activePlan = useMemo(() => {
@@ -346,6 +347,7 @@ export function SessionDetailView({
                 key={sessionId}
                 nodes={nodes}
                 gitCheckpoints={gitCheckpoints ?? []}
+                initialLoading={initialEventsLoading}
                 hasOlder={hasOlder}
                 loadingOlder={loadingOlder}
                 onLoadOlder={fetchOlderEvents}
@@ -356,7 +358,7 @@ export function SessionDetailView({
               />
             )}
             <AnimatePresence>
-              {loading && (
+              {initialEventsLoading && (
                 <motion.div
                   initial={{ opacity: 1 }}
                   exit={{ opacity: 0 }}

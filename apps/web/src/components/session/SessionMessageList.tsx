@@ -14,6 +14,7 @@ export interface SessionMessageListProps {
   key?: React.Key;
   nodes: SessionNode[];
   gitCheckpoints: GitCheckpoint[];
+  initialLoading?: boolean;
   hasOlder?: boolean;
   loadingOlder?: boolean;
   onLoadOlder?: () => void;
@@ -26,6 +27,7 @@ export interface SessionMessageListProps {
 export function SessionMessageList({
   nodes,
   gitCheckpoints,
+  initialLoading = false,
   hasOlder,
   loadingOlder,
   onLoadOlder,
@@ -244,7 +246,7 @@ export function SessionMessageList({
   }, [onLoadOlder]);
 
   const virtualItems = virtualizer.getVirtualItems();
-  const isEmpty = nodes.length === 0 && !loadingOlder;
+  const isEmpty = !initialLoading && nodes.length === 0 && !loadingOlder;
   const [showEmptyState, setShowEmptyState] = useState(isEmpty);
 
   useEffect(() => {
