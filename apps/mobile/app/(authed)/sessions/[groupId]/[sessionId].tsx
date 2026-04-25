@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import {
-  createNativeBottomTabNavigator,
-  type NativeBottomTabNavigationOptions,
-} from "@bottom-tabs/react-navigation";
 import { useEntityField } from "@trace/client-core";
 import type { Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
@@ -16,6 +12,7 @@ import {
 } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { BrowserPanel } from "@/components/sessions/BrowserPanel";
+import { SessionPaneSwitcher, type SessionPane } from "@/components/sessions/SessionPaneSwitcher";
 import { SessionPageHeader } from "@/components/sessions/SessionPageHeader";
 import { SessionSurface } from "@/components/sessions/SessionSurface";
 import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel";
@@ -28,30 +25,10 @@ import {
   useSessionGroupSessionIds,
 } from "@/hooks/useSessionGroupDetail";
 
-type SessionBottomTabsParamList = {
-  session: undefined;
-  terminal: undefined;
-  browser: undefined;
-};
-
-const SessionBottomTabs = createNativeBottomTabNavigator<SessionBottomTabsParamList>();
-
-const sessionIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
-  sfSymbol: "text.bubble",
-});
-
-const browserIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
-  sfSymbol: "globe",
-});
-
-const terminalIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
-  sfSymbol: "chevron.left.forwardslash.chevron.right",
-});
-
 /**
  * Standalone mobile session page. Reuses the session surface building blocks
  * but keeps the session, browser, and terminal views inside a dedicated page
- * with its own bottom navigation instead of the old sheet-style overlay.
+ * without introducing a second bottom navigation bar under the app tabs.
  */
 export default function SessionStreamScreen() {
   const { groupId, sessionId } = useLocalSearchParams<{
@@ -121,6 +98,7 @@ export default function SessionStreamScreen() {
     if (!targetGroupId) return;
     void fetchSessionGroupDetail(targetGroupId);
   }, [groupId, hydratedGroupId]);
+  const [activePane, setActivePane] = useState<SessionPane>("session");
 
   const handoffPending =
     overlaySessionId !== null &&
@@ -147,6 +125,7 @@ export default function SessionStreamScreen() {
               onBack={closeSessionPlayer}
             />
             <ActiveTodoStrip sessionId={sessionId} />
+            <SessionPaneSwitcher value={activePane} onChange={setActivePane} />
           </View>
         )}
       </View>
@@ -176,50 +155,30 @@ export default function SessionStreamScreen() {
             />
           </View>
         ) : (
-          <SessionBottomTabs.Navigator
-            key={hydratedGroupId}
-            initialRouteName="session"
-            minimizeBehavior="onScrollDown"
-            translucent={false}
-            scrollEdgeAppearance="opaque"
-          >
-            <SessionBottomTabs.Screen
-              name="session"
-              options={{ title: "Session", tabBarIcon: sessionIcon }}
-            >
-              {() => (
-                <SessionSurface
-                  sessionId={sessionId}
-                  onSelectSession={handleSelectSession}
-                  hideHeader
+          <View key={hydratedGroupId} style={styles.overlayPaddedScene}>
+            {activePane === "session" ? (
+              <SessionSurface
+                sessionId={sessionId}
+                onSelectSession={handleSelectSession}
+                hideHeader
+                topInset={overlayHeight}
+              />
+            ) : null}
+            {activePane === "terminal" ? (
+              <View style={[styles.overlayPaddedScene, { paddingTop: overlayHeight }]}>
+                <SessionTerminalPanel sessionId={sessionId} />
+              </View>
+            ) : null}
+            {activePane === "browser" ? (
+              <View style={styles.overlayPaddedScene}>
+                <BrowserPanel
+                  url={resolvedBrowserUrl}
+                  onUrlChange={handleBrowserUrlChange}
+                  topInset={overlayHeight}
                 />
-              )}
-            </SessionBottomTabs.Screen>
-            <SessionBottomTabs.Screen
-              name="terminal"
-              options={{ title: "Terminal", tabBarIcon: terminalIcon }}
-            >
-              {() => (
-                <View style={[styles.overlayPaddedScene, { paddingTop: overlayHeight }]}>
-                  <SessionTerminalPanel sessionId={sessionId} />
-                </View>
-              )}
-            </SessionBottomTabs.Screen>
-            <SessionBottomTabs.Screen
-              name="browser"
-              options={{ title: "Browser", tabBarIcon: browserIcon }}
-            >
-              {() => (
-                <View style={styles.overlayPaddedScene}>
-                  <BrowserPanel
-                    url={resolvedBrowserUrl}
-                    onUrlChange={handleBrowserUrlChange}
-                    topInset={overlayHeight}
-                  />
-                </View>
-              )}
-            </SessionBottomTabs.Screen>
-          </SessionBottomTabs.Navigator>
+              </View>
+            ) : null}
+          </View>
         )}
       </View>
 
