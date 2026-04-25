@@ -24,7 +24,7 @@ import {
   useSessionGroupSessionIds,
 } from "@/hooks/useSessionGroupDetail";
 
-type SessionPaneMode = "session" | "terminal" | "browser";
+type SessionPaneMode = "session" | "terminal";
 
 /**
  * Standalone mobile session page. Reuses the session surface building blocks
@@ -49,8 +49,7 @@ export default function SessionStreamScreen() {
   const sessionOptimistic = useEntityField("sessions", sessionId, "_optimistic") as
     | boolean
     | undefined;
-  const activePane: SessionPaneMode =
-    pane === "terminal" || pane === "browser" ? pane : "session";
+  const activePane: SessionPaneMode = pane === "terminal" ? "terminal" : "session";
   const hydratedGroupId =
     (useEntityField("sessions", sessionId, "sessionGroupId") as string | null | undefined)
     ?? groupId;
@@ -75,6 +74,11 @@ export default function SessionStreamScreen() {
       ),
     [browserUrl, browserUrlGroupId, hydratedGroupId, prUrl, repo?.remoteUrl],
   );
+  const [browserOpen, setBrowserOpen] = useState(false);
+
+  useEffect(() => {
+    setBrowserOpen(false);
+  }, [groupId, sessionId]);
 
   useEffect(() => {
     if (!groupId || !sessionId || sessionIds.length === 0) return;
@@ -124,6 +128,7 @@ export default function SessionStreamScreen() {
   const showLoading = loadingGroup || handoffPending;
   const missingGroup = !showLoading && !groupName;
   const browserEnabled = !sessionOptimistic && !handoffPending && !showLoading;
+  const showBrowser = activePane === "session" && browserOpen;
 
   return (
     <Screen
@@ -131,7 +136,7 @@ export default function SessionStreamScreen() {
       background="background"
       style={styles.root}
     >
-      <Stack.Screen options={{ headerShown: false, gestureEnabled: activePane === "session" }} />
+      <Stack.Screen options={{ headerShown: false, gestureEnabled: activePane === "session" && !showBrowser }} />
 
       <View pointerEvents="box-none" style={styles.headerOverlay}>
         {showLoading ? null : (
@@ -141,8 +146,14 @@ export default function SessionStreamScreen() {
               sessionId={sessionId}
               activePane={activePane}
               browserEnabled={browserEnabled}
-              onOpenBrowser={() => navigateToPane("browser")}
-              onBack={activePane === "session" ? closeSessionPlayer : () => navigateToPane("session")}
+              onOpenBrowser={() => setBrowserOpen(true)}
+              onBack={
+                activePane === "terminal"
+                  ? () => navigateToPane("session")
+                  : showBrowser
+                    ? () => setBrowserOpen(false)
+                    : closeSessionPlayer
+              }
             />
             <ActiveTodoStrip sessionId={sessionId} />
           </View>
@@ -175,7 +186,7 @@ export default function SessionStreamScreen() {
           </View>
         ) : (
           <View key={hydratedGroupId} style={styles.overlayPaddedScene}>
-            {activePane === "session" ? (
+            {activePane === "session" && !showBrowser ? (
               <SessionSurface
                 sessionId={sessionId}
                 onSelectSession={handleSelectSession}
@@ -183,7 +194,7 @@ export default function SessionStreamScreen() {
                 topInset={overlayHeight}
               />
             ) : null}
-            {activePane === "browser" ? (
+            {showBrowser ? (
               <View style={styles.overlayPaddedScene}>
                 <BrowserPanel
                   url={resolvedBrowserUrl}
