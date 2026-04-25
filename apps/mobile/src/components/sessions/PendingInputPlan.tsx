@@ -11,6 +11,7 @@ import {
   PendingInputShell,
   pendingInputStyles,
 } from "./PendingInputShell";
+import { styles as composerStyles } from "./session-input-composer/styles";
 
 interface PendingInputPlanProps {
   sessionId: string;
@@ -144,7 +145,11 @@ export function PendingInputPlan({
   ) : null;
 
   return (
-    <PendingInputShell header="Plan Review" headerTrailing={headerTrailing}>
+    <PendingInputShell
+      header="Plan Review"
+      headerTrailing={headerTrailing}
+      background="transparent"
+    >
       <View style={[styles.menuContainer, theme.shadows.lg]}>
         <Glass preset="card" interactive style={styles.menuSurface}>
           <View style={styles.menuContent}>
@@ -196,33 +201,39 @@ export function PendingInputPlan({
       </View>
 
       <View style={pendingInputStyles.bottomRow}>
-        <TextInput
-          ref={inputRef}
-          value={feedback}
-          onChangeText={(text) => {
-            setFeedback(text);
-            setSelectedAction(text.trim().length > 0 ? null : "new-session");
-          }}
-          onFocus={() => {
-            if (!feedback.trim()) setSelectedAction(null);
-          }}
-          onSubmitEditing={() => {
-            if (hasAnswer) handleSend();
-          }}
-          placeholder="Type more…"
-          placeholderTextColor={theme.colors.dimForeground}
-          editable={!sending}
-          returnKeyType="send"
+        <Glass
+          preset="input"
+          interactive
           style={[
-            pendingInputStyles.input,
-            styles.feedbackInput,
-            {
-              backgroundColor: theme.colors.surfaceDeep,
-              borderColor: theme.colors.border,
-              color: theme.colors.foreground,
-            },
+            composerStyles.inputCard,
+            styles.feedbackInputCard,
+            { borderColor: theme.colors.border },
           ]}
-        />
+        >
+          <TextInput
+            ref={inputRef}
+            value={feedback}
+            onChangeText={(text) => {
+              setFeedback(text);
+              setSelectedAction(text.trim().length > 0 ? null : "new-session");
+            }}
+            onFocus={() => {
+              if (!feedback.trim()) setSelectedAction(null);
+            }}
+            onSubmitEditing={() => {
+              if (hasAnswer) handleSend();
+            }}
+            placeholder="Type more…"
+            placeholderTextColor={theme.colors.dimForeground}
+            editable={!sending}
+            returnKeyType="send"
+            style={[
+              composerStyles.input,
+              styles.feedbackInput,
+              { color: theme.colors.foreground },
+            ]}
+          />
+        </Glass>
         <PendingInputSendButton
           enabled={hasAnswer}
           loading={sending}
@@ -266,6 +277,11 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   feedbackInput: {
-    minHeight: 36,
+    minHeight: 30,
+  },
+  feedbackInputCard: {
+    flex: 1,
+    minHeight: 46,
+    justifyContent: "center",
   },
 });

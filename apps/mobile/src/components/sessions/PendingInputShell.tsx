@@ -8,6 +8,7 @@ import { alpha, useTheme } from "@/theme";
 interface PendingInputShellProps {
   header: string;
   headerTrailing?: ReactNode;
+  background?: "surface" | "transparent";
   children: ReactNode;
 }
 
@@ -20,6 +21,7 @@ interface PendingInputShellProps {
 export function PendingInputShell({
   header,
   headerTrailing,
+  background = "surface",
   children,
 }: PendingInputShellProps) {
   const theme = useTheme();
@@ -29,7 +31,8 @@ export function PendingInputShell({
       style={[
         styles.container,
         {
-          backgroundColor: theme.colors.surface,
+          backgroundColor:
+            background === "transparent" ? "transparent" : theme.colors.surface,
           borderTopColor: alpha(theme.colors.accent, 0.3),
           paddingHorizontal: theme.spacing.md,
           paddingTop: theme.spacing.md,
