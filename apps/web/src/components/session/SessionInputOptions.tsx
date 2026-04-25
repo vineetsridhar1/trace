@@ -10,9 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
 import { getModelsForTool, getDefaultModel, getModelLabel } from "./modelOptions";
 import { CLOUD_RUNTIME_ID } from "./RuntimeSelector";
+import { MobileModelSelector } from "./MobileModelSelector";
 import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
 import { cn } from "../../lib/utils";
 import { isLocalMode } from "../../lib/runtime-mode";
+import { useIsMobile } from "../../hooks/use-mobile";
 
 const UNBOUND_LOCAL_RUNTIME_ID = "__unbound_local__";
 
@@ -58,6 +60,7 @@ export function SessionInputOptions({
   const modelOptions = getModelsForTool(currentTool);
   const currentModel = model ?? getDefaultModel(currentTool);
   const isNotStarted = agentStatus === "not_started";
+  const isMobile = useIsMobile();
 
   const runtimeLabel = connection?.runtimeLabel ?? null;
   const runtimeInstanceId = connection?.runtimeInstanceId ?? null;
@@ -224,7 +227,16 @@ export function SessionInputOptions({
           </SelectItem>
         </SelectContent>
       </Select>
-      {modelOptions.length > 0 && (
+      {modelOptions.length > 0 && isMobile && (
+        <MobileModelSelector
+          value={currentModel}
+          label={currentModel ? getModelLabel(currentModel) : ""}
+          options={modelOptions}
+          disabled={isActive || isOptimistic}
+          onChange={handleModelChange}
+        />
+      )}
+      {modelOptions.length > 0 && !isMobile && (
         <Select
           value={currentModel ?? ""}
           onValueChange={handleModelChange}
