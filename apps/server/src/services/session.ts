@@ -1803,7 +1803,12 @@ export class SessionService {
     );
   }
 
-  async delete(id: string, actorType: ActorType = "system", actorId: string = "system") {
+  async delete(
+    id: string,
+    actorType: ActorType = "system",
+    actorId: string = "system",
+    eventPayloadExtras?: Record<string, unknown>,
+  ) {
     const session = await prisma.session.findUnique({
       where: { id },
       include: SESSION_INCLUDE,
@@ -1870,6 +1875,7 @@ export class SessionService {
         name: session.name,
         sessionGroupId: session.sessionGroupId ?? null,
         deletedSessionGroupId,
+        ...(eventPayloadExtras ?? {}),
       },
       actorType,
       actorId,
@@ -1883,6 +1889,7 @@ export class SessionService {
     organizationId: string,
     actorType: ActorType = "system",
     actorId: string = "system",
+    eventPayloadExtras?: Record<string, unknown>,
   ) {
     const group = await prisma.sessionGroup.findUnique({ where: { id: groupId } });
     if (!group) throw new Error("Session group not found");
@@ -1894,7 +1901,7 @@ export class SessionService {
     });
 
     for (const session of sessions) {
-      await this.delete(session.id, actorType, actorId);
+      await this.delete(session.id, actorType, actorId, eventPayloadExtras);
     }
 
     // If no sessions existed, the group won't have been cascade-deleted, so delete it directly
@@ -1905,7 +1912,10 @@ export class SessionService {
         scopeType: "session",
         scopeId: groupId,
         eventType: "session_deleted",
-        payload: { deletedSessionGroupId: groupId },
+        payload: {
+          deletedSessionGroupId: groupId,
+          ...(eventPayloadExtras ?? {}),
+        },
         actorType,
         actorId,
       });
@@ -5284,7 +5294,10 @@ export class SessionService {
 
     const hasConversation = group.sessions.some((session) => session.lastMessageAt !== null);
     if (!hasConversation) {
-      await this.deleteGroup(groupId, organizationId, actorType, actorId);
+      await this.deleteGroup(groupId, organizationId, actorType, actorId, {
+        deletionReason: "archived_empty_group",
+        sourceAction: "archive",
+      });
       return null;
     }
 

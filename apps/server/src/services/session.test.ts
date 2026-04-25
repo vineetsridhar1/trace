@@ -2202,7 +2202,11 @@ describe("SessionService", () => {
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: "session_deleted",
-          payload: { deletedSessionGroupId: "group-empty" },
+          payload: {
+            deletedSessionGroupId: "group-empty",
+            deletionReason: "archived_empty_group",
+            sourceAction: "archive",
+          },
         }),
       );
     });
@@ -2239,6 +2243,8 @@ describe("SessionService", () => {
           payload: expect.objectContaining({
             sessionId: "session-1",
             deletedSessionGroupId: "group-no-messages",
+            deletionReason: "archived_empty_group",
+            sourceAction: "archive",
           }),
         }),
       );
