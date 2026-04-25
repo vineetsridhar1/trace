@@ -40,6 +40,7 @@ interface DetailPanelProps {
   storageKey?: string;
   defaultRatio?: number;
   minRatio?: number;
+  maxRatio?: number;
   fullscreenSnapRatio?: number;
   containerRef: React.RefObject<HTMLDivElement | null>;
   /** Called after the close animation finishes and children are unmounted */
@@ -53,6 +54,7 @@ export function DetailPanel({
   storageKey = DEFAULT_STORAGE_KEY,
   defaultRatio = DEFAULT_RATIO,
   minRatio = DEFAULT_MIN_RATIO,
+  maxRatio,
   fullscreenSnapRatio = DEFAULT_FULLSCREEN_SNAP_RATIO,
   containerRef,
   onClosed,
@@ -62,7 +64,7 @@ export function DetailPanel({
   const setFullscreen = useDetailPanelStore((s: { setFullscreen: (v: boolean) => void }) => s.setFullscreen);
   const toggleFullscreen = useDetailPanelStore((s: { toggleFullscreen: () => void }) => s.toggleFullscreen);
 
-  const maxRatio = fullscreenSnapRatio;
+  const resolvedMaxRatio = maxRatio ?? fullscreenSnapRatio;
 
   // Keep children mounted during the close animation, unmount after transition ends
   const [showContent, setShowContent] = useState(isOpen);
@@ -99,7 +101,7 @@ export function DetailPanel({
 
   // Panel ratio — initialized from localStorage
   const [panelRatio, setPanelRatio] = useState(() =>
-    loadPersistedRatio(storageKey, minRatio, maxRatio, defaultRatio),
+    loadPersistedRatio(storageKey, minRatio, resolvedMaxRatio, defaultRatio),
   );
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef({ startX: 0, startRatio: 0 });
@@ -111,6 +113,11 @@ export function DetailPanel({
   // Keep a ref to panelRatio so the drag handler always reads the latest value
   const panelRatioRef = useRef(panelRatio);
   panelRatioRef.current = panelRatio;
+
+  useEffect(() => {
+    if (panelRatio <= resolvedMaxRatio) return;
+    setPanelRatio(resolvedMaxRatio);
+  }, [panelRatio, resolvedMaxRatio]);
 
   // Escape key: exit fullscreen first, then close panel
   useEffect(() => {
@@ -152,7 +159,7 @@ export function DetailPanel({
       function onMouseMove(ev: MouseEvent) {
         const dx = dragRef.current.startX - ev.clientX;
         const newRatio = dragRef.current.startRatio + dx / totalWidth;
-        const clamped = Math.max(minRatio, Math.min(maxRatio, newRatio));
+        const clamped = Math.max(minRatio, Math.min(resolvedMaxRatio, newRatio));
         setPanelRatio(clamped);
       }
 
@@ -172,7 +179,7 @@ export function DetailPanel({
         if (finalRatio > fullscreenSnapRatio) {
           setFullscreen(true);
         } else {
-          const clamped = Math.max(minRatio, Math.min(maxRatio, finalRatio));
+          const clamped = Math.max(minRatio, Math.min(resolvedMaxRatio, finalRatio));
           persistOnDragEnd(clamped);
         }
       }
@@ -181,7 +188,7 @@ export function DetailPanel({
       document.addEventListener("mouseup", onMouseUp);
       dragCleanupRef.current = cleanup;
     },
-    [containerRef, minRatio, maxRatio, fullscreenSnapRatio, setFullscreen, persistOnDragEnd],
+    [containerRef, minRatio, resolvedMaxRatio, fullscreenSnapRatio, setFullscreen, persistOnDragEnd],
   );
 
   // On mobile, render as a fixed overlay
