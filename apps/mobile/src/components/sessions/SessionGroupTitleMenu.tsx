@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Modal, Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+  type LayoutChangeEvent,
+} from "react-native";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { BlurView } from "expo-blur";
 import { SymbolView, type SFSymbol } from "expo-symbols";
@@ -21,7 +29,8 @@ import { LinkedCheckoutPanelSection } from "./LinkedCheckoutPanelSection";
 const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
 
 const PILL_HEIGHT = 48;
-const PANEL_HEIGHT = 320;
+const PANEL_MAX_HEIGHT = 420;
+const PANEL_VIEWPORT_MARGIN = 24;
 const PILL_RADIUS = 14;
 const PANEL_RADIUS = 20;
 
@@ -95,6 +104,7 @@ function MorphingTitle({
   const [triggerPos, setTriggerPos] = useState<{ x: number; y: number; width: number } | null>(null);
   const anchorRef = useRef<View>(null);
   const progress = useSharedValue(0);
+  const window = useWindowDimensions();
 
   const handleAnchorLayout = useCallback((e: LayoutChangeEvent) => {
     setTriggerWidth(e.nativeEvent.layout.width);
@@ -129,6 +139,11 @@ function MorphingTitle({
 
   const startWidth = triggerPos?.width ?? triggerWidth ?? PILL_HEIGHT;
   const endWidth = Math.max(fullWidth, startWidth);
+  const availablePanelHeight = Math.max(
+    PILL_HEIGHT,
+    window.height - (triggerPos?.y ?? 0) - PANEL_VIEWPORT_MARGIN,
+  );
+  const panelHeight = Math.min(PANEL_MAX_HEIGHT, availablePanelHeight);
 
   // Shape morph: rounded pill -> wider rounded card, anchored at the trigger's
   // top-left corner. The expanded state also pulls left into the full header
@@ -140,7 +155,7 @@ function MorphingTitle({
       [triggerPos?.x ?? 0, (triggerPos?.x ?? 0) - expandLeftInset],
     ),
     width: interpolate(progress.value, [0, 1], [startWidth, endWidth]),
-    height: interpolate(progress.value, [0, 1], [PILL_HEIGHT, PANEL_HEIGHT]),
+    height: interpolate(progress.value, [0, 1], [PILL_HEIGHT, panelHeight]),
     borderRadius: interpolate(
       progress.value,
       [0, 1],
@@ -219,19 +234,25 @@ function MorphingTitle({
               pointerEvents={open ? "auto" : "none"}
               style={[
                 styles.panelLayer,
-                { width: endWidth, height: PANEL_HEIGHT },
+                { width: endWidth, height: panelHeight },
                 panelStyle,
               ]}
             >
-              <PanelContent
-                groupId={groupId}
-                sessionId={sessionId}
-                browserEnabled={browserEnabled}
-                onOpenBrowser={() => {
-                  close();
-                  onOpenBrowser?.();
-                }}
-              />
+              <ScrollView
+                bounces={false}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.panelScrollContent}
+              >
+                <PanelContent
+                  groupId={groupId}
+                  sessionId={sessionId}
+                  browserEnabled={browserEnabled}
+                  onOpenBrowser={() => {
+                    close();
+                    onOpenBrowser?.();
+                  }}
+                />
+              </ScrollView>
             </Animated.View>
 
             <Animated.View
@@ -539,6 +560,9 @@ const styles = StyleSheet.create({
   },
   panelBody: {
     flex: 1,
+  },
+  panelScrollContent: {
+    flexGrow: 1,
   },
   panelTitleSlot: {
     minHeight: PILL_HEIGHT,
