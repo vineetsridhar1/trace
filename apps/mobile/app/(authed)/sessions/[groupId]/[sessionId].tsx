@@ -18,6 +18,7 @@ import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel
 import { resolveBrowserUrl } from "@/lib/browser";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { useMobileUIStore } from "@/stores/ui";
+import { alpha, useTheme } from "@/theme";
 import {
   fetchSessionGroupDetail,
   useEnsureSessionGroupDetail,
@@ -25,6 +26,9 @@ import {
 } from "@/hooks/useSessionGroupDetail";
 
 type SessionPaneMode = "session" | "terminal" | "browser";
+
+const HEADER_FADE_EXTRA_HEIGHT = 40;
+const HEADER_FADE_STOPS = [0.42, 0.3, 0.2, 0.12, 0.06, 0.02, 0];
 
 /**
  * Standalone mobile session page. Reuses the session surface building blocks
@@ -37,6 +41,7 @@ export default function SessionStreamScreen() {
     sessionId: string;
     pane?: string;
   }>();
+  const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const loadingGroup = useEnsureSessionGroupDetail(groupId);
@@ -210,6 +215,26 @@ export default function SessionStreamScreen() {
         )}
       </View>
 
+      {!showLoading && !missingGroup && activePane === "session" && overlayHeight > 0 ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.headerFade,
+            { height: overlayHeight + HEADER_FADE_EXTRA_HEIGHT },
+          ]}
+        >
+          {HEADER_FADE_STOPS.map((opacity, index) => (
+            <View
+              key={`${index}:${opacity}`}
+              style={[
+                styles.headerFadeStop,
+                { backgroundColor: alpha(theme.colors.background, opacity) },
+              ]}
+            />
+          ))}
+        </View>
+      ) : null}
+
       {activeMenuClose ? (
         <Pressable
           accessibilityLabel="Dismiss menu"
@@ -231,6 +256,16 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
+  },
+  headerFade: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 9,
+  },
+  headerFadeStop: {
+    flex: 1,
   },
   content: {
     flex: 1,
