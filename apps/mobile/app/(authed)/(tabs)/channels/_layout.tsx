@@ -7,13 +7,18 @@ export default function ChannelsLayout() {
   const router = useRouter();
 
   return (
-    <Stack>
+    <Stack
+      screenOptions={{
+        headerTintColor: "white",
+        headerTitleStyle: { color: "white" },
+        headerLargeTitleStyle: { color: "white" },
+      }}
+    >
       <Stack.Screen
         name="index"
         options={{
           title: "Channels",
           headerLargeTitle: true,
-          headerTitleStyle: { color: "white" },
           headerRight: () => (
             <TopBarPill
               avatar={

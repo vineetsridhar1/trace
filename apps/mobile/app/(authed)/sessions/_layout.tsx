@@ -2,7 +2,13 @@ import { Stack } from "expo-router";
 
 export default function SessionsLayout() {
   return (
-    <Stack>
+    <Stack
+      screenOptions={{
+        headerTintColor: "white",
+        headerTitleStyle: { color: "white" },
+        headerLargeTitleStyle: { color: "white" },
+      }}
+    >
       <Stack.Screen
         name="[groupId]"
         options={{

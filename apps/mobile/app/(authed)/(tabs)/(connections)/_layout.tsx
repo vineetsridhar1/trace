@@ -7,7 +7,13 @@ export default function ConnectionsLayout() {
   const router = useRouter();
 
   return (
-    <Stack>
+    <Stack
+      screenOptions={{
+        headerTintColor: "white",
+        headerTitleStyle: { color: "white" },
+        headerLargeTitleStyle: { color: "white" },
+      }}
+    >
       <Stack.Screen
         name="index"
         options={{
