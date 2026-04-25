@@ -149,6 +149,8 @@ export function SessionSurface({
     (keyboardVisible
       ? keyboardInset + COMPOSER_KEYBOARD_GAP + STREAM_COMPOSER_CLEARANCE
       : restingBottomOffset);
+  const floatingBottomOffset =
+    composerHeight + (keyboardVisible ? keyboardInset + COMPOSER_KEYBOARD_GAP : 0);
 
   useEffect(() => {
     if (!groupId) return;
@@ -195,6 +197,7 @@ export function SessionSurface({
           sessionId={sessionId}
           topInset={topInset}
           bottomInset={streamBottomInset}
+          floatingBottomOffset={floatingBottomOffset}
           loadEvents={loadStreamEvents}
           commitEvents={commitStreamEvents}
           renderEvents={renderStreamEvents}
