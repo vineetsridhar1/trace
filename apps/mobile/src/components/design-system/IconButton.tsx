@@ -34,7 +34,7 @@ export interface IconButtonProps {
 }
 
 const GLYPH_SIZE: Record<IconButtonSize, number> = { sm: 18, md: 22, lg: 28 };
-const HIT_SIZE: Record<IconButtonSize, number> = { sm: 32, md: 40, lg: 48 };
+const HIT_SIZE: Record<IconButtonSize, number> = { sm: 44, md: 44, lg: 48 };
 
 const HAPTIC_MAP: Record<HapticStrength, Haptics.ImpactFeedbackStyle> = {
   light: Haptics.ImpactFeedbackStyle.Light,
