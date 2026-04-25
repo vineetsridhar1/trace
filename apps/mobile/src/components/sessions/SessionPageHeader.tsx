@@ -10,6 +10,7 @@ import { SessionGroupHeader } from "./SessionGroupHeader";
 interface SessionPageHeaderProps {
   groupId: string;
   sessionId: string;
+  activePane?: "session" | "terminal" | "browser";
   onBack: () => void;
 }
 
@@ -18,6 +19,7 @@ const TRIGGER_SIZE = 48;
 export function SessionPageHeader({
   groupId,
   sessionId,
+  activePane = "session",
   onBack,
 }: SessionPageHeaderProps) {
   const theme = useTheme();
@@ -30,6 +32,7 @@ export function SessionPageHeader({
     <SessionGroupHeader
       groupId={groupId}
       sessionId={sessionId}
+      activePane={activePane}
       leadingAccessory={
         isLiquidGlassAvailable() ? (
           <GlassView
