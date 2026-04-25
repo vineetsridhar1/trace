@@ -1,23 +1,31 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
 import { BottomSheet, Host } from "@expo/ui/swift-ui";
+import { shouldUseNativeExpoSheet } from "@/lib/native-sheet";
 import { SessionTabSwitcherContent } from "./SessionTabSwitcherContent";
-
-interface SessionTabSwitcherSheetProps {
-  open: boolean;
-  groupId: string;
-  activeSessionId: string;
-  onClose: () => void;
-}
+import {
+  SessionTabSwitcherSheetBase,
+  type SessionTabSwitcherSheetProps,
+} from "./SessionTabSwitcherSheetBase";
 
 const IOS_SHEET_CLOSE_DELAY_MS = 220;
-export function SessionTabSwitcherSheet({
+
+export function SessionTabSwitcherSheet(props: SessionTabSwitcherSheetProps) {
+  if (!shouldUseNativeExpoSheet()) {
+    return <SessionTabSwitcherSheetBase {...props} />;
+  }
+
+  return <NativeSessionTabSwitcherSheet {...props} />;
+}
+
+function NativeSessionTabSwitcherSheet({
   open,
   groupId,
   activeSessionId,
+  activePane = "session",
   onClose,
 }: SessionTabSwitcherSheetProps) {
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const [mounted, setMounted] = useState(open);
 
   useEffect(() => {
@@ -34,6 +42,10 @@ export function SessionTabSwitcherSheet({
   );
 
   const hostStyle = useMemo(() => [styles.host, { width }], [width]);
+  const sheetContentStyle = useMemo(
+    () => [styles.sheetContent, { height: Math.round(height * 0.56) }],
+    [height],
+  );
 
   if (!mounted) return null;
 
@@ -46,10 +58,11 @@ export function SessionTabSwitcherSheet({
           presentationDetents={["medium", "large"]}
           presentationDragIndicator="visible"
         >
-          <View style={styles.sheetContent}>
+          <View style={sheetContentStyle}>
             <SessionTabSwitcherContent
               groupId={groupId}
               activeSessionId={activeSessionId}
+              activePane={activePane}
               onClose={onClose}
               closeDelayMs={IOS_SHEET_CLOSE_DELAY_MS}
               contentInset="sheet"
@@ -76,7 +89,6 @@ const styles = StyleSheet.create({
     height: 1,
   },
   sheetContent: {
-    flex: 1,
     minHeight: 0,
   },
 });

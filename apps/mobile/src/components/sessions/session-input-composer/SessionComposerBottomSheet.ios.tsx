@@ -1,31 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
 import { BottomSheet, Host } from "@expo/ui/swift-ui";
-import { isLiquidGlassAvailable } from "expo-glass-effect";
+import { shouldUseNativeExpoSheet } from "@/lib/native-sheet";
 import {
   SessionComposerBottomSheetBase,
   type SessionComposerBottomSheetProps,
 } from "./SessionComposerBottomSheetBase";
 
-export function SessionComposerBottomSheet({
+export function SessionComposerBottomSheet(props: SessionComposerBottomSheetProps) {
+  if (!shouldUseNativeExpoSheet()) {
+    return <SessionComposerBottomSheetBase {...props} />;
+  }
+
+  return <NativeSessionComposerBottomSheet {...props} />;
+}
+
+function NativeSessionComposerBottomSheet({
   visible,
   onClose,
   onDismissed,
   children,
 }: SessionComposerBottomSheetProps) {
-  if (!isLiquidGlassAvailable()) {
-    return (
-      <SessionComposerBottomSheetBase
-        visible={visible}
-        onClose={onClose}
-        onDismissed={onDismissed}
-      >
-        {children}
-      </SessionComposerBottomSheetBase>
-    );
-  }
-
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
   const [content, setContent] = useState(children);
 
@@ -51,6 +47,10 @@ export function SessionComposerBottomSheet({
   );
 
   const hostStyle = useMemo(() => [styles.host, { width }], [width]);
+  const sheetContentStyle = useMemo(
+    () => [styles.sheetContent, { height: Math.round(height * 0.56) }],
+    [height],
+  );
 
   if (!mounted) return null;
 
@@ -63,7 +63,7 @@ export function SessionComposerBottomSheet({
           presentationDetents={["medium", "large"]}
           presentationDragIndicator="visible"
         >
-          <View style={styles.sheetContent}>{content}</View>
+          <View style={sheetContentStyle}>{content}</View>
         </BottomSheet>
       </Host>
     </View>
@@ -85,7 +85,6 @@ const styles = StyleSheet.create({
     height: 1,
   },
   sheetContent: {
-    flex: 1,
     minHeight: 0,
     paddingHorizontal: 20,
     paddingTop: 12,
