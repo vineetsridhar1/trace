@@ -21,6 +21,7 @@ export function MobileModelSelector({
 }: MobileModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const handledTouchRef = useRef(false);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const commit = useCallback(
     (nextValue: string) => {
@@ -55,8 +56,28 @@ export function MobileModelSelector({
               <button
                 key={option.value}
                 type="button"
+                onTouchStartCapture={(event) => {
+                  const touch = event.changedTouches[0];
+                  touchStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
+                }}
+                onTouchEndCapture={(event) => {
+                  const start = touchStartRef.current;
+                  touchStartRef.current = null;
+                  const touch = event.changedTouches[0];
+                  if (!start || !touch) return;
+
+                  const movedX = Math.abs(touch.clientX - start.x);
+                  const movedY = Math.abs(touch.clientY - start.y);
+                  if (movedX > 10 || movedY > 10) return;
+
+                  event.preventDefault();
+                  event.stopPropagation();
+                  handledTouchRef.current = true;
+                  commit(option.value);
+                }}
                 onPointerUp={(event) => {
                   if (event.pointerType !== "touch") return;
+                  if (handledTouchRef.current) return;
                   event.preventDefault();
                   handledTouchRef.current = true;
                   commit(option.value);
