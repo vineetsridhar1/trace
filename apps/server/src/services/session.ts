@@ -5277,6 +5277,11 @@ export class SessionService {
     if (!group) throw new Error("Session group not found");
     if (group.organizationId !== organizationId) throw new Error("Session group not found");
 
+    if (group.sessions.length === 0) {
+      await this.deleteGroup(groupId, organizationId, actorType, actorId);
+      return null;
+    }
+
     // Stop all active agents
     await prisma.session.updateMany({
       where: { sessionGroupId: groupId, agentStatus: "active" },
