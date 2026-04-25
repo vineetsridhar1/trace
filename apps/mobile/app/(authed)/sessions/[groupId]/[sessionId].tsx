@@ -12,6 +12,7 @@ import {
 } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { BrowserPanel } from "@/components/sessions/BrowserPanel";
+import { SessionBrowserBackGesture } from "@/components/sessions/SessionBrowserBackGesture";
 import { SessionPageHeader } from "@/components/sessions/SessionPageHeader";
 import { SessionSurface } from "@/components/sessions/SessionSurface";
 import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel";
@@ -144,7 +145,7 @@ export default function SessionStreamScreen() {
             <SessionPageHeader
               groupId={hydratedGroupId}
               sessionId={sessionId}
-              activePane={activePane}
+              activePane={showBrowser ? "browser" : activePane}
               browserEnabled={browserEnabled}
               onOpenBrowser={() => setBrowserOpen(true)}
               onBack={
@@ -196,10 +197,12 @@ export default function SessionStreamScreen() {
             ) : null}
             {showBrowser ? (
               <View style={styles.overlayPaddedScene}>
+                <SessionBrowserBackGesture onBack={() => setBrowserOpen(false)} />
                 <BrowserPanel
                   url={resolvedBrowserUrl}
                   onUrlChange={handleBrowserUrlChange}
                   topInset={overlayHeight}
+                  extendToBottom
                 />
               </View>
             ) : null}

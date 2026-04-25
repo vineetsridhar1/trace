@@ -7,7 +7,6 @@ import {
   type NativeSyntheticEvent,
   type TextInputSubmitEditingEventData,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView } from "expo-symbols";
 import WebView, { type WebViewNavigation } from "react-native-webview";
 import { Text } from "@/components/design-system";
@@ -21,6 +20,8 @@ interface BrowserPanelProps {
   onUrlChange: (url: string) => void;
   /** Top inset matching the Session Player's glass header height. */
   topInset?: number;
+  /** When true, the panel fills to the screen bottom without a safe-area spacer. */
+  extendToBottom?: boolean;
 }
 
 /**
@@ -28,9 +29,13 @@ interface BrowserPanelProps {
  * in the Session Player. Renders a simple URL bar + back/forward/reload
  * controls on top of a full-screen WebView.
  */
-export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: BrowserPanelProps) {
+export function BrowserPanel({
+  url: nextUrl,
+  onUrlChange,
+  topInset = 0,
+  extendToBottom = false,
+}: BrowserPanelProps) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const resolvedUrl = nextUrl;
 
   const [url, setUrl] = useState(resolvedUrl);
@@ -208,7 +213,6 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
           onLoadEnd={() => setLoading(false)}
           allowsInlineMediaPlayback
           sharedCookiesEnabled
-          allowsBackForwardNavigationGestures
         />
       ) : (
         <View
@@ -222,8 +226,7 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
           </Text>
         </View>
       )}
-
-      <View style={{ height: insets.bottom }} />
+      {extendToBottom ? null : <View style={styles.bottomSpacer} />}
     </View>
   );
 }
@@ -263,5 +266,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  bottomSpacer: {
+    height: 0,
   },
 });
