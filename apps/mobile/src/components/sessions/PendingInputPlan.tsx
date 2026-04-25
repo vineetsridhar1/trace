@@ -151,9 +151,9 @@ export function PendingInputPlan({
           return (
             <Pressable
               key={option.value}
-              accessibilityRole="radio"
+              accessibilityRole="button"
               accessibilityLabel={option.title}
-              accessibilityState={{ checked: selected, disabled: sending }}
+              accessibilityState={{ selected, disabled: sending }}
               disabled={sending}
               onPress={() => {
                 void haptic.selection();
@@ -173,23 +173,12 @@ export function PendingInputPlan({
                   },
                 ]}
               >
-                <View
-                  style={[
-                    styles.radioOuter,
-                    { borderColor: selected ? theme.colors.accent : theme.colors.border },
-                  ]}
-                >
-                  {selected ? (
-                    <View
-                      style={[
-                        styles.radioInner,
-                        { backgroundColor: theme.colors.accent },
-                      ]}
-                    />
-                  ) : null}
-                </View>
                 <View style={styles.optionCopy}>
-                  <Text variant="footnote" style={styles.optionTitle}>
+                  <Text
+                    variant="footnote"
+                    color={selected ? "accent" : "foreground"}
+                    style={styles.optionTitle}
+                  >
                     {option.title}
                   </Text>
                   <Text variant="caption1" color="mutedForeground" style={styles.optionDescription}>
@@ -224,7 +213,7 @@ export function PendingInputPlan({
             pendingInputStyles.input,
             styles.feedbackInput,
             {
-              backgroundColor: "transparent",
+              backgroundColor: theme.colors.surfaceDeep,
               borderColor: theme.colors.border,
               color: theme.colors.foreground,
             },
@@ -261,28 +250,11 @@ const styles = StyleSheet.create({
   },
   optionButton: {
     width: "100%",
-    minHeight: 58,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
+    minHeight: 52,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  radioOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  radioInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    paddingVertical: 9,
   },
   optionCopy: {
     flex: 1,
