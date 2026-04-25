@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { gql } from "@urql/core";
 import type { GitCheckpoint, QueuedMessage } from "@trace/gql";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
@@ -272,6 +271,7 @@ export function SessionDetailView({
     () => buildSessionNodes(eventIds, events),
     [eventIds, events],
   );
+  const initialEventsLoading = loading && eventIds.length === 0;
 
   // Find plan content when server says session needs input
   const activePlan = useMemo(() => {
@@ -346,6 +346,7 @@ export function SessionDetailView({
                 key={sessionId}
                 nodes={nodes}
                 gitCheckpoints={gitCheckpoints ?? []}
+                initialLoading={initialEventsLoading}
                 hasOlder={hasOlder}
                 loadingOlder={loadingOlder}
                 onLoadOlder={fetchOlderEvents}
@@ -355,29 +356,22 @@ export function SessionDetailView({
                 onScrollComplete={onScrollComplete}
               />
             )}
-            <AnimatePresence>
-              {loading && (
-                <motion.div
-                  initial={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3, ease: "easeOut" }}
-                  className="absolute inset-0 bg-background pointer-events-none"
-                >
-                  <div className="flex flex-col gap-4 p-4">
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <div key={i} className="flex gap-3">
-                        <Skeleton className="h-8 w-8 rounded-full shrink-0" />
-                        <div className="flex-1 space-y-2">
-                          <Skeleton className="h-3.5 w-24" />
-                          <Skeleton className="h-3.5 w-[80%]" />
-                          <Skeleton className="h-3.5 w-[60%]" />
-                        </div>
+            {initialEventsLoading && (
+              <div className="absolute inset-0 bg-background pointer-events-none">
+                <div className="flex flex-col gap-4 p-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex gap-3">
+                      <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-3.5 w-24" />
+                        <Skeleton className="h-3.5 w-[80%]" />
+                        <Skeleton className="h-3.5 w-[60%]" />
                       </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {!hideHeader && setupBlocking && (

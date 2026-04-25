@@ -206,13 +206,16 @@ export function LocalMobilePairingSection() {
         </Button>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="mt-4 grid gap-4">
         <div className="space-y-4">
           <div className="space-y-2">
-            <label htmlFor="local-mobile-public-url" className="text-sm font-medium text-foreground">
+            <label
+              htmlFor="local-mobile-public-url"
+              className="text-sm font-medium text-foreground"
+            >
               Public server URL
             </label>
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex flex-col gap-3 md:flex-row">
               <Input
                 id="local-mobile-public-url"
                 value={publicUrl}
@@ -222,7 +225,11 @@ export function LocalMobilePairingSection() {
                 autoCorrect="off"
                 spellCheck={false}
               />
-              <Button onClick={handleGenerateQr} disabled={generating || !publicUrl.trim()}>
+              <Button
+                className="w-full md:w-auto"
+                onClick={handleGenerateQr}
+                disabled={generating || !publicUrl.trim()}
+              >
                 {generating ? "Generating..." : "Generate QR"}
               </Button>
             </div>
@@ -268,7 +275,9 @@ export function LocalMobilePairingSection() {
                     className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-surface-deep p-3"
                   >
                     <div className="min-w-0">
-                      <div className="text-sm font-medium text-foreground">{deviceLabel(device)}</div>
+                      <div className="text-sm font-medium text-foreground">
+                        {deviceLabel(device)}
+                      </div>
                       <div className="mt-1 text-xs text-muted-foreground">
                         Paired {formatDate(device.createdAt)}
                       </div>
@@ -276,7 +285,8 @@ export function LocalMobilePairingSection() {
                         Last seen {formatDate(device.lastSeenAt)}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {device.platform ?? "mobile"} {device.appVersion ? `· ${device.appVersion}` : ""}
+                        {device.platform ?? "mobile"}{" "}
+                        {device.appVersion ? `· ${device.appVersion}` : ""}
                       </div>
                     </div>
                     <Button
@@ -295,7 +305,7 @@ export function LocalMobilePairingSection() {
           </div>
         </div>
 
-        <div className="flex items-center justify-center rounded-xl border border-dashed border-border bg-background p-4">
+        <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-border bg-background p-4">
           {qrDataUrl ? (
             <img
               src={qrDataUrl}

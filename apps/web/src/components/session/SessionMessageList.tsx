@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Loader2, Sparkles } from "lucide-react";
 import type { GitCheckpoint } from "@trace/gql";
 import { SessionMessage } from "./SessionMessage";
@@ -14,6 +14,7 @@ export interface SessionMessageListProps {
   key?: React.Key;
   nodes: SessionNode[];
   gitCheckpoints: GitCheckpoint[];
+  initialLoading?: boolean;
   hasOlder?: boolean;
   loadingOlder?: boolean;
   onLoadOlder?: () => void;
@@ -26,6 +27,7 @@ export interface SessionMessageListProps {
 export function SessionMessageList({
   nodes,
   gitCheckpoints,
+  initialLoading = false,
   hasOlder,
   loadingOlder,
   onLoadOlder,
@@ -244,22 +246,13 @@ export function SessionMessageList({
   }, [onLoadOlder]);
 
   const virtualItems = virtualizer.getVirtualItems();
-  const isEmpty = nodes.length === 0 && !loadingOlder;
-  const [showEmptyState, setShowEmptyState] = useState(isEmpty);
-
-  useEffect(() => {
-    if (isEmpty) setShowEmptyState(true);
-  }, [isEmpty]);
+  const showEmptyState = !initialLoading && nodes.length === 0 && !loadingOlder;
 
   const emptyState = (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      onAnimationComplete={() => {
-        if (!isEmpty) setShowEmptyState(false);
-      }}
       className="absolute inset-0 z-10"
     >
       <div className="h-full overflow-y-auto bg-background">
@@ -281,13 +274,9 @@ export function SessionMessageList({
     </motion.div>
   );
 
-  if (isEmpty) {
-    return <div className="relative h-full">{emptyState}</div>;
-  }
-
   return (
     <div className="relative h-full">
-      <AnimatePresence>{showEmptyState ? emptyState : null}</AnimatePresence>
+      {showEmptyState ? emptyState : null}
 
       <div ref={scrollContainerRef} className="h-full overflow-y-auto px-4 py-4">
         {/* Sentinel for infinite scroll - triggers loading older messages */}
