@@ -277,11 +277,11 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   feedbackInput: {
-    minHeight: 30,
+    height: 30,
   },
   feedbackInputCard: {
     flex: 1,
-    minHeight: 46,
+    height: 46,
     justifyContent: "center",
   },
 });
