@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -39,6 +39,7 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
   const [canGoForward, setCanGoForward] = useState(false);
   const [loading, setLoading] = useState(false);
   const webViewRef = useRef<WebView>(null);
+  const webSource = useMemo(() => ({ uri: url }), [url]);
 
   useEffect(() => {
     if (resolvedUrl === url) return;
@@ -184,7 +185,7 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
       {url ? (
         <WebView
           ref={webViewRef}
-          source={{ uri: url }}
+          source={webSource}
           style={styles.webView}
           automaticallyAdjustContentInsets={false}
           contentInsetAdjustmentBehavior="never"

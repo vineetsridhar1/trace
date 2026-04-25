@@ -99,9 +99,10 @@ export default function SessionStreamScreen() {
   );
   const handleBrowserUrlChange = useCallback(
     (nextUrl: string) => {
+      if (browserUrlGroupId === hydratedGroupId && browserUrl === nextUrl) return;
       setBrowserUrl(nextUrl, hydratedGroupId);
     },
-    [hydratedGroupId, setBrowserUrl],
+    [browserUrl, browserUrlGroupId, hydratedGroupId, setBrowserUrl],
   );
   const [overlayHeight, setOverlayHeight] = useState(0);
   const handleOverlayLayout = useCallback((e: LayoutChangeEvent) => {
