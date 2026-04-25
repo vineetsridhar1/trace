@@ -219,11 +219,11 @@ export default function SessionStreamScreen() {
         <LinearGradient
           pointerEvents="none"
           colors={[
-            alpha(theme.colors.background, 0.42),
-            alpha(theme.colors.background, 0.22),
+            alpha(theme.colors.background, 0.58),
+            alpha(theme.colors.background, 0.32),
             alpha(theme.colors.background, 0),
           ]}
-          locations={[0, 0.58, 1]}
+          locations={[0, 0.64, 1]}
           style={[
             styles.headerFade,
             { height: overlayHeight + HEADER_FADE_EXTRA_HEIGHT },
