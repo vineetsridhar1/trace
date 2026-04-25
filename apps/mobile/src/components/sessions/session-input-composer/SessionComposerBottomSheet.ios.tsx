@@ -5,12 +5,14 @@ import { BottomSheet, Host } from "@expo/ui/swift-ui";
 interface SessionComposerBottomSheetProps {
   visible: boolean;
   onClose: () => void;
+  onDismissed?: () => void;
   children: ReactNode;
 }
 
 export function SessionComposerBottomSheet({
   visible,
   onClose,
+  onDismissed,
   children,
 }: SessionComposerBottomSheetProps) {
   const { width } = useWindowDimensions();
@@ -24,10 +26,15 @@ export function SessionComposerBottomSheet({
     }
   }, [children, visible]);
 
+  useEffect(() => {
+    if (visible || !mounted) return;
+    setMounted(false);
+    onDismissed?.();
+  }, [mounted, onDismissed, visible]);
+
   const handlePresentedChange = useCallback(
     (isOpened: boolean) => {
       if (isOpened) return;
-      setMounted(false);
       onClose();
     },
     [onClose],

@@ -10,6 +10,7 @@ import { useSessionComposerConfig } from "./session-input-composer/useSessionCom
 interface SessionModelPickerSheetContentProps {
   sessionId: string;
   onClose?: () => void;
+  onSelectModel?: () => void;
 }
 
 function Section({
@@ -44,6 +45,7 @@ function Section({
 export function SessionModelPickerSheetContent({
   sessionId,
   onClose,
+  onSelectModel,
 }: SessionModelPickerSheetContentProps) {
   const theme = useTheme();
 
@@ -140,6 +142,7 @@ export function SessionModelPickerSheetContent({
             onPress={
               canInteract && selectedModel !== option.value
                 ? () => {
+                    onSelectModel?.();
                     onClose?.();
                     void handleModelChange(option.value);
                   }
