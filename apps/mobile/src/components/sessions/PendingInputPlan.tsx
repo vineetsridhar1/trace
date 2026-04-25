@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { SEND_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
-import { Text } from "@/components/design-system";
+import { Glass, Text } from "@/components/design-system";
 import { startPlanImplementationSession } from "@/lib/createQuickSession";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
-import { useTheme } from "@/theme";
+import { alpha, useTheme } from "@/theme";
 import {
   PendingInputSendButton,
   PendingInputShell,
@@ -145,45 +145,54 @@ export function PendingInputPlan({
 
   return (
     <PendingInputShell header="Plan Review" headerTrailing={headerTrailing}>
-      <View style={styles.optionsColumn}>
-        {PLAN_OPTIONS.map((option) => {
-          const selected = selectedAction === option.value;
-          return (
-            <Pressable
-              key={option.value}
-              accessibilityRole="button"
-              accessibilityLabel={option.title}
-              accessibilityState={{ selected, disabled: sending }}
-              disabled={sending}
-              onPress={() => {
-                void haptic.selection();
-                setSelectedAction(option.value);
-                setFeedback("");
-              }}
-              style={({ pressed }) => [
-                styles.optionButton,
-                {
-                  borderColor: selected ? theme.colors.accent : theme.colors.border,
-                  backgroundColor: "transparent",
-                  opacity: sending ? 0.5 : pressed ? 0.7 : 1,
-                },
-              ]}
-            >
-              <View style={styles.optionCopy}>
-                <Text
-                  variant="footnote"
-                  color={selected ? "accent" : "foreground"}
-                  style={styles.optionTitle}
+      <View style={[styles.menuContainer, theme.shadows.lg]}>
+        <Glass preset="card" interactive style={styles.menuSurface}>
+          <View style={styles.menuContent}>
+            {PLAN_OPTIONS.map((option, index) => {
+              const selected = selectedAction === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  accessibilityRole="button"
+                  accessibilityLabel={option.title}
+                  accessibilityState={{ selected, disabled: sending }}
+                  disabled={sending}
+                  onPress={() => {
+                    void haptic.selection();
+                    setSelectedAction(option.value);
+                    setFeedback("");
+                  }}
+                  style={({ pressed }) => [
+                    styles.menuRow,
+                    {
+                      marginBottom: index < PLAN_OPTIONS.length - 1 ? 2 : 0,
+                      backgroundColor: pressed ? "rgb(255, 255, 255, 0.05)" : undefined,
+                      opacity: sending ? 0.5 : 1,
+                    },
+                  ]}
                 >
-                  {option.title}
-                </Text>
-                <Text variant="caption1" color="mutedForeground" style={styles.optionDescription}>
-                  {option.description}
-                </Text>
-              </View>
-            </Pressable>
-          );
-        })}
+                  <View style={styles.menuCopy}>
+                    <Text
+                      variant="subheadline"
+                      numberOfLines={1}
+                      color={selected ? "accent" : "foreground"}
+                      style={styles.optionTitle}
+                    >
+                      {option.title}
+                    </Text>
+                    <Text
+                      variant="caption1"
+                      numberOfLines={2}
+                      style={{ color: alpha(theme.colors.foreground, 0.88) }}
+                    >
+                      {option.description}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Glass>
       </View>
 
       <View style={pendingInputStyles.bottomRow}>
@@ -233,27 +242,28 @@ export function PendingInputPlan({
 
 const styles = StyleSheet.create({
   filename: { marginLeft: "auto", maxWidth: "55%", fontFamily: "Menlo" },
-  optionsColumn: {
-    gap: 8,
+  menuContainer: {
     marginTop: 10,
   },
-  optionButton: {
-    width: "100%",
-    minHeight: 52,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+  menuSurface: {
+    borderRadius: 20,
+    overflow: "hidden",
   },
-  optionCopy: {
+  menuContent: {
+    padding: 6,
+  },
+  menuRow: {
+    minHeight: 56,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  menuCopy: {
     flex: 1,
-    gap: 1,
+    gap: 3,
   },
   optionTitle: {
-    fontWeight: "700",
-  },
-  optionDescription: {
-    lineHeight: 16,
+    flexShrink: 1,
   },
   feedbackInput: {
     minHeight: 36,
