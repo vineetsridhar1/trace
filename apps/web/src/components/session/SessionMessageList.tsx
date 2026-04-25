@@ -283,13 +283,9 @@ export function SessionMessageList({
     </motion.div>
   );
 
-  if (isEmpty) {
-    return <div className="relative h-full">{emptyState}</div>;
-  }
-
   return (
     <div className="relative h-full">
-      <AnimatePresence>{showEmptyState ? emptyState : null}</AnimatePresence>
+      <AnimatePresence initial={false}>{showEmptyState ? emptyState : null}</AnimatePresence>
 
       <div ref={scrollContainerRef} className="h-full overflow-y-auto px-4 py-4">
         {/* Sentinel for infinite scroll - triggers loading older messages */}
