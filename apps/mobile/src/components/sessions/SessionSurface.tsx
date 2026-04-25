@@ -109,6 +109,7 @@ export function SessionSurface({
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardInset, setKeyboardInset] = useState(0);
   const restingBottomOffset = Math.max(0, tabBarHeight - insets.bottom);
+  const bridgeLockedBottomOffset = Math.max(tabBarHeight, insets.bottom + theme.spacing.md);
   const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
     setComposerHeight(e.nativeEvent.layout.height);
   }, []);
@@ -200,7 +201,13 @@ export function SessionSurface({
           onLayout={handleComposerLayout}
           style={[
             styles.composerStack,
-            { paddingBottom: keyboardVisible ? 0 : restingBottomOffset },
+            {
+              paddingBottom: keyboardVisible
+                ? 0
+                : bridgeLocked
+                  ? bridgeLockedBottomOffset
+                  : restingBottomOffset,
+            },
           ]}
         >
           {bridgeLocked ? (
