@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import { useEntityField } from "@trace/client-core";
 import type { Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
@@ -28,7 +29,6 @@ import {
 type SessionPaneMode = "session" | "terminal" | "browser";
 
 const HEADER_FADE_EXTRA_HEIGHT = 40;
-const HEADER_FADE_STOPS = [0.42, 0.3, 0.2, 0.12, 0.06, 0.02, 0];
 
 /**
  * Standalone mobile session page. Reuses the session surface building blocks
@@ -216,23 +216,19 @@ export default function SessionStreamScreen() {
       </View>
 
       {!showLoading && !missingGroup && activePane === "session" && overlayHeight > 0 ? (
-        <View
+        <LinearGradient
           pointerEvents="none"
+          colors={[
+            alpha(theme.colors.background, 0.42),
+            alpha(theme.colors.background, 0.22),
+            alpha(theme.colors.background, 0),
+          ]}
+          locations={[0, 0.58, 1]}
           style={[
             styles.headerFade,
             { height: overlayHeight + HEADER_FADE_EXTRA_HEIGHT },
           ]}
-        >
-          {HEADER_FADE_STOPS.map((opacity, index) => (
-            <View
-              key={`${index}:${opacity}`}
-              style={[
-                styles.headerFadeStop,
-                { backgroundColor: alpha(theme.colors.background, opacity) },
-              ]}
-            />
-          ))}
-        </View>
+        />
       ) : null}
 
       {activeMenuClose ? (
@@ -263,9 +259,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 9,
-  },
-  headerFadeStop: {
-    flex: 1,
   },
   content: {
     flex: 1,
