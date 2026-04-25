@@ -3,8 +3,7 @@ import { useRouter } from "expo-router";
 import { Alert, ScrollView, StyleSheet, View } from "react-native";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Avatar, ListRow, Text } from "@/components/design-system";
-import { recreateClient } from "@/lib/urql";
-import { useMobileUIStore } from "@/stores/ui";
+import { handleMobileSignOut } from "@/lib/auth";
 import { useTheme } from "@/theme";
 
 const APP_VERSION = Constants.expoConfig?.version ?? "0.0.1";
@@ -20,7 +19,6 @@ export function AccountSheetContent() {
   const user = useAuthStore((s: AuthState) => s.user);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const memberships = useAuthStore((s: AuthState) => s.orgMemberships);
-  const logout = useAuthStore((s: AuthState) => s.logout);
 
   const activeOrg = memberships.find((m) => m.organizationId === activeOrgId);
   const userName = user?.name ?? user?.email ?? "Trace user";
@@ -48,9 +46,7 @@ export function AccountSheetContent() {
   // Mobile-only cleanup runs first while this component is still mounted —
   // `await logout()` sets user=null and triggers the auth redirect immediately.
   async function handleSignOut() {
-    useMobileUIStore.getState().reset();
-    recreateClient();
-    await logout();
+    await handleMobileSignOut();
   }
 
   return (

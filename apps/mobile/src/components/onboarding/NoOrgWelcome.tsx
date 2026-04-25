@@ -3,13 +3,13 @@ import * as Clipboard from "expo-clipboard";
 import { StyleSheet, View } from "react-native";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Button, Text } from "@/components/design-system";
+import { handleMobileSignOut } from "@/lib/auth";
 import { useTheme } from "@/theme";
 
 export function NoOrgWelcome() {
   const theme = useTheme();
   const user = useAuthStore((s: AuthState) => s.user);
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
-  const logout = useAuthStore((s: AuthState) => s.logout);
   const [checking, setChecking] = useState(false);
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -32,10 +32,14 @@ export function NoOrgWelcome() {
 
   async function handleCopy() {
     if (!email) return;
-    await Clipboard.setStringAsync(email);
-    setCopied(true);
-    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-    copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
+    try {
+      await Clipboard.setStringAsync(email);
+      setCopied(true);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Ignore clipboard failures so the screen stays usable.
+    }
   }
 
   return (
@@ -108,7 +112,7 @@ export function NoOrgWelcome() {
           <Button
             title="Sign out"
             onPress={() => {
-              void logout();
+              void handleMobileSignOut();
             }}
             variant="ghost"
             size="md"
