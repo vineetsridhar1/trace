@@ -12,7 +12,6 @@ import {
 } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { BrowserPanel } from "@/components/sessions/BrowserPanel";
-import { SessionWorkspaceModeToggle, type SessionWorkspaceMode } from "@/components/sessions/SessionWorkspaceModeToggle";
 import { SessionPageHeader } from "@/components/sessions/SessionPageHeader";
 import { SessionSurface } from "@/components/sessions/SessionSurface";
 import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel";
@@ -25,7 +24,7 @@ import {
   useSessionGroupSessionIds,
 } from "@/hooks/useSessionGroupDetail";
 
-type SessionPaneMode = "session" | "terminal";
+type SessionPaneMode = "session" | "terminal" | "browser";
 
 /**
  * Standalone mobile session page. Reuses the session surface building blocks
@@ -51,7 +50,7 @@ export default function SessionStreamScreen() {
     | boolean
     | undefined;
   const activePane: SessionPaneMode =
-    pane === "terminal" ? "terminal" : "session";
+    pane === "terminal" || pane === "browser" ? pane : "session";
   const hydratedGroupId =
     (useEntityField("sessions", sessionId, "sessionGroupId") as string | null | undefined)
     ?? groupId;
@@ -76,11 +75,6 @@ export default function SessionStreamScreen() {
       ),
     [browserUrl, browserUrlGroupId, hydratedGroupId, prUrl, repo?.remoteUrl],
   );
-  const [workspaceMode, setWorkspaceMode] = useState<SessionWorkspaceMode>("agent");
-
-  useEffect(() => {
-    setWorkspaceMode("agent");
-  }, [groupId, sessionId]);
 
   useEffect(() => {
     if (!groupId || !sessionId || sessionIds.length === 0) return;
@@ -129,12 +123,7 @@ export default function SessionStreamScreen() {
     !groupName;
   const showLoading = loadingGroup || handoffPending;
   const missingGroup = !showLoading && !groupName;
-  const previewEnabled = !sessionOptimistic && !handoffPending && !showLoading;
-
-  useEffect(() => {
-    if (previewEnabled || workspaceMode !== "preview") return;
-    setWorkspaceMode("agent");
-  }, [previewEnabled, workspaceMode]);
+  const browserEnabled = !sessionOptimistic && !handoffPending && !showLoading;
 
   return (
     <Screen
@@ -142,7 +131,7 @@ export default function SessionStreamScreen() {
       background="background"
       style={styles.root}
     >
-      <Stack.Screen options={{ headerShown: false, gestureEnabled: activePane !== "terminal" }} />
+      <Stack.Screen options={{ headerShown: false, gestureEnabled: activePane === "session" }} />
 
       <View pointerEvents="box-none" style={styles.headerOverlay}>
         {showLoading ? null : (
@@ -151,16 +140,11 @@ export default function SessionStreamScreen() {
               groupId={hydratedGroupId}
               sessionId={sessionId}
               activePane={activePane}
-              onBack={activePane === "terminal" ? () => navigateToPane("session") : closeSessionPlayer}
+              browserEnabled={browserEnabled}
+              onOpenBrowser={() => navigateToPane("browser")}
+              onBack={activePane === "session" ? closeSessionPlayer : () => navigateToPane("session")}
             />
             <ActiveTodoStrip sessionId={sessionId} />
-            {activePane === "session" ? (
-              <SessionWorkspaceModeToggle
-                value={workspaceMode}
-                enabled={previewEnabled}
-                onChange={setWorkspaceMode}
-              />
-            ) : null}
           </View>
         )}
       </View>
@@ -191,7 +175,7 @@ export default function SessionStreamScreen() {
           </View>
         ) : (
           <View key={hydratedGroupId} style={styles.overlayPaddedScene}>
-            {activePane === "session" && workspaceMode === "agent" ? (
+            {activePane === "session" ? (
               <SessionSurface
                 sessionId={sessionId}
                 onSelectSession={handleSelectSession}
@@ -199,7 +183,7 @@ export default function SessionStreamScreen() {
                 topInset={overlayHeight}
               />
             ) : null}
-            {activePane === "session" && workspaceMode === "preview" ? (
+            {activePane === "browser" ? (
               <View style={styles.overlayPaddedScene}>
                 <BrowserPanel
                   url={resolvedBrowserUrl}

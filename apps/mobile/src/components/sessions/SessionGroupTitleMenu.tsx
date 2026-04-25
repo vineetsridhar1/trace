@@ -12,7 +12,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useEntityField } from "@trace/client-core";
 import type { SessionConnection, SessionGroupStatus } from "@trace/gql";
-import { Spinner, Text } from "@/components/design-system";
+import { ListRow, Spinner, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { haptic } from "@/lib/haptics";
 import { alpha, useTheme } from "@/theme";
@@ -29,6 +29,8 @@ interface SessionGroupTitleMenuProps {
   groupId: string;
   /** The session currently shown; drives the status dot's agentStatus overlay. */
   sessionId?: string;
+  browserEnabled?: boolean;
+  onOpenBrowser?: () => void;
   /** Width the morph should expand to when open — usually the full header row. */
   fullWidth: number;
   /** How far left the expanded surface should pull from the title pill origin. */
@@ -48,6 +50,8 @@ interface SessionGroupTitleMenuProps {
 export function SessionGroupTitleMenu({
   groupId,
   sessionId,
+  browserEnabled = true,
+  onOpenBrowser,
   fullWidth,
   expandLeftInset = 0,
 }: SessionGroupTitleMenuProps) {
@@ -58,6 +62,8 @@ export function SessionGroupTitleMenu({
     <MorphingTitle
       groupId={groupId}
       sessionId={sessionId}
+      browserEnabled={browserEnabled}
+      onOpenBrowser={onOpenBrowser}
       fullWidth={fullWidth}
       expandLeftInset={expandLeftInset}
     />
@@ -67,6 +73,8 @@ export function SessionGroupTitleMenu({
 function MorphingTitle({
   groupId,
   sessionId,
+  browserEnabled = true,
+  onOpenBrowser,
   fullWidth,
   expandLeftInset = 0,
 }: SessionGroupTitleMenuProps) {
@@ -208,7 +216,15 @@ function MorphingTitle({
                 panelStyle,
               ]}
             >
-              <PanelContent groupId={groupId} sessionId={sessionId} />
+              <PanelContent
+                groupId={groupId}
+                sessionId={sessionId}
+                browserEnabled={browserEnabled}
+                onOpenBrowser={() => {
+                  close();
+                  onOpenBrowser?.();
+                }}
+              />
             </Animated.View>
 
             <Animated.View
@@ -324,9 +340,13 @@ function TitleRow({
 function PanelContent({
   groupId,
   sessionId,
+  browserEnabled = true,
+  onOpenBrowser,
 }: {
   groupId: string;
   sessionId?: string;
+  browserEnabled?: boolean;
+  onOpenBrowser?: () => void;
 }) {
   const theme = useTheme();
   const branch = useEntityField("sessionGroups", groupId, "branch") as
@@ -350,6 +370,33 @@ function PanelContent({
           >
             {branch}
           </Text>
+        </View>
+      ) : null}
+      {sessionId ? (
+        <View
+          style={[
+            styles.actionsCard,
+            {
+              backgroundColor: alpha(theme.colors.surface, 0.5),
+              borderColor: alpha(theme.colors.foreground, 0.08),
+            },
+          ]}
+        >
+          <ListRow
+            title="Open Browser"
+            subtitle={browserEnabled ? "Preview this workspace" : "Available after the session loads"}
+            leading={
+              <SymbolView
+                name="globe"
+                size={16}
+                tintColor={browserEnabled ? theme.colors.foreground : theme.colors.mutedForeground}
+                resizeMode="scaleAspectFit"
+              />
+            }
+            onPress={browserEnabled ? onOpenBrowser : undefined}
+            haptic="selection"
+            separator={false}
+          />
         </View>
       ) : null}
       <LinkedCheckoutPanelSection groupId={groupId} />
@@ -446,6 +493,13 @@ const styles = StyleSheet.create({
   branchValue: {
     fontFamily: "Menlo",
     flex: 1,
+  },
+  actionsCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
   },
   panelLayer: {
     position: "absolute",

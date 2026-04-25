@@ -11,6 +11,8 @@ interface SessionPageHeaderProps {
   groupId: string;
   sessionId: string;
   activePane?: "session" | "terminal" | "browser";
+  browserEnabled?: boolean;
+  onOpenBrowser?: () => void;
   onBack: () => void;
 }
 
@@ -20,6 +22,8 @@ export function SessionPageHeader({
   groupId,
   sessionId,
   activePane = "session",
+  browserEnabled = true,
+  onOpenBrowser,
   onBack,
 }: SessionPageHeaderProps) {
   const theme = useTheme();
@@ -33,6 +37,8 @@ export function SessionPageHeader({
       groupId={groupId}
       sessionId={sessionId}
       activePane={activePane}
+      browserEnabled={browserEnabled}
+      onOpenBrowser={onOpenBrowser}
       leadingAccessory={
         isLiquidGlassAvailable() ? (
           <GlassView

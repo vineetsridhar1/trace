@@ -22,6 +22,8 @@ interface SessionGroupHeaderProps {
   /** The session currently shown; drives the status dot's agentStatus overlay. */
   sessionId?: string;
   activePane?: "session" | "terminal" | "browser";
+  browserEnabled?: boolean;
+  onOpenBrowser?: () => void;
   leadingAccessory?: ReactNode;
 }
 
@@ -29,6 +31,8 @@ export function SessionGroupHeader({
   groupId,
   sessionId,
   activePane = "session",
+  browserEnabled = true,
+  onOpenBrowser,
   leadingAccessory,
 }: SessionGroupHeaderProps) {
   const theme = useTheme();
@@ -191,6 +195,8 @@ export function SessionGroupHeader({
         <SessionGroupTitleMenu
           groupId={groupId}
           sessionId={sessionId}
+          browserEnabled={browserEnabled}
+          onOpenBrowser={onOpenBrowser}
           fullWidth={rowWidth}
           expandLeftInset={expandLeftInset}
         />
