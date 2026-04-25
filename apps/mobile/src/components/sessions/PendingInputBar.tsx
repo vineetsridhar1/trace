@@ -42,7 +42,6 @@ export function PendingInputBar({
       <PendingInputPlan
         sessionId={sessionId}
         planContent={pending.planContent}
-        planFilePath={pending.planFilePath}
         keyboardVisible={keyboardVisible}
       />
     );

@@ -29,14 +29,7 @@ interface PendingInputQuestionProps {
   hasActivePlan: boolean;
 }
 
-/**
- * Question variant of the pending-input bar. Mirrors web's
- * `AskUserQuestionBar`: option pills toggle a per-question selection
- * without sending, an inline "Other…" input collects free-form text,
- * pagination chevrons navigate multi-question payloads, and Send fires
- * only after every question has an answer (built into a single combined
- * `{header}: {answer}` message via `useQuestionState.buildResponse`).
- */
+/** Question variant of the pending-input bar with the same visual system as plan review. */
 export function PendingInputQuestion({
   sessionId,
   questions,
@@ -86,17 +79,12 @@ export function PendingInputQuestion({
     else if (!isLastPage) goNext();
   };
 
-  const headerTrailing =
-    total > 1 ? (
-      <Text variant="caption2" color="mutedForeground">
-        {page + 1}/{total}
-      </Text>
-    ) : null;
+  const questionTitle = question.header || "Question";
+  const pageLabel = total > 1 ? `${page + 1}/${total}` : null;
 
   return (
     <PendingInputShell
-      header={question.header || "Question"}
-      headerTrailing={headerTrailing}
+      header={questionTitle}
       background="transparent"
       showHeader={false}
       showTopBorder={false}
@@ -105,6 +93,16 @@ export function PendingInputQuestion({
       <View style={[styles.menuContainer, theme.shadows.lg]}>
         <Glass preset="card" interactive style={styles.menuSurface}>
           <View style={styles.menuContent}>
+            <View style={styles.questionMetaRow}>
+              <Text variant="caption2" color="accent" style={styles.questionMetaLabel}>
+                {questionTitle}
+              </Text>
+              {pageLabel ? (
+                <Text variant="caption2" color="mutedForeground">
+                  {pageLabel}
+                </Text>
+              ) : null}
+            </View>
             <Text
               variant="body"
               color="foreground"
@@ -179,7 +177,7 @@ export function PendingInputQuestion({
             value={currentCustom}
             onChangeText={setCustomText}
             onSubmitEditing={handleSubmit}
-            placeholder="Suggest a change"
+            placeholder="Other…"
             placeholderTextColor={theme.colors.dimForeground}
             editable={!sending}
             returnKeyType={hasAllAnswers ? "send" : "next"}
@@ -223,9 +221,22 @@ export function PendingInputQuestion({
 }
 
 const styles = StyleSheet.create({
-  questionText: {
+  questionMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
     paddingHorizontal: 12,
     paddingTop: 10,
+  },
+  questionMetaLabel: {
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  questionText: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
     paddingBottom: 12,
     fontWeight: "600",
   },

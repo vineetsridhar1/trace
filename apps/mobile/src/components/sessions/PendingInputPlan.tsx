@@ -16,7 +16,6 @@ import { styles as composerStyles } from "./session-input-composer/styles";
 interface PendingInputPlanProps {
   sessionId: string;
   planContent: string;
-  planFilePath: string;
   keyboardVisible?: boolean;
 }
 
@@ -41,15 +40,10 @@ const PLAN_OPTIONS: Array<{
   },
 ];
 
-/**
- * Mobile plan-review surface matching web's option set while using large,
- * full-width radio rows that are easy to tap: start a fresh session,
- * continue in the current one, or type more feedback in plan mode.
- */
+/** Mobile plan-review surface matching the composer/slash-menu styling. */
 export function PendingInputPlan({
   sessionId,
   planContent,
-  planFilePath,
   keyboardVisible = false,
 }: PendingInputPlanProps) {
   const theme = useTheme();
@@ -58,7 +52,6 @@ export function PendingInputPlan({
   const [feedback, setFeedback] = useState("");
   const [sending, setSending] = useState(false);
 
-  const filename = planFilePath ? planFilePath.split("/").pop() : null;
   const trimmed = feedback.trim();
   const isTypingMore = trimmed.length > 0;
   const hasAnswer = isTypingMore || selectedAction !== null;
@@ -135,21 +128,9 @@ export function PendingInputPlan({
     }
   }, [handleKeepContext, handleRevise, handleStartNewSession, selectedAction, trimmed]);
 
-  const headerTrailing = filename ? (
-    <Text
-      variant="caption2"
-      color="mutedForeground"
-      numberOfLines={1}
-      style={styles.filename}
-    >
-      {filename}
-    </Text>
-  ) : null;
-
   return (
     <PendingInputShell
       header="Plan Review"
-      headerTrailing={headerTrailing}
       background="transparent"
       showHeader={false}
       showTopBorder={false}
@@ -266,7 +247,6 @@ export function PendingInputPlan({
 }
 
 const styles = StyleSheet.create({
-  filename: { marginLeft: "auto", maxWidth: "55%", fontFamily: "Menlo" },
   menuContainer: {
     marginTop: 10,
   },
