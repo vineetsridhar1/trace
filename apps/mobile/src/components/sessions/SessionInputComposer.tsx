@@ -113,6 +113,8 @@ export function SessionInputComposer({
   const setImages = useDraftsStore((s) => s.setImages);
 
   const inputRef = useRef<TextInput>(null);
+  const restoreKeyboardAfterSheetCloseRef = useRef(false);
+  const modelSheetOpenedWithKeyboardRef = useRef(false);
   useEffect(() => {
     if (focusRequest == null) return;
     requestAnimationFrame(() => {
@@ -227,9 +229,22 @@ export function SessionInputComposer({
   const handleOpenModelSheet = useCallback(() => {
     if (!canInteract) return;
     void haptic.selection();
+    modelSheetOpenedWithKeyboardRef.current = keyboardVisible;
     Keyboard.dismiss();
     setActiveSheet("model");
-  }, [canInteract]);
+  }, [canInteract, keyboardVisible]);
+
+  const handleModelSelected = useCallback(() => {
+    restoreKeyboardAfterSheetCloseRef.current = modelSheetOpenedWithKeyboardRef.current;
+  }, []);
+
+  const handleSheetDismissed = useCallback(() => {
+    if (!restoreKeyboardAfterSheetCloseRef.current) return;
+    restoreKeyboardAfterSheetCloseRef.current = false;
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  }, []);
 
   const handleFocus = useCallback(() => {
     setFocused(true);
@@ -531,9 +546,17 @@ export function SessionInputComposer({
         </Animated.View>
       </View>
 
-      <SessionComposerBottomSheet visible={activeSheet !== null} onClose={handleCloseSheet}>
+      <SessionComposerBottomSheet
+        visible={activeSheet !== null}
+        onClose={handleCloseSheet}
+        onDismissed={handleSheetDismissed}
+      >
         {activeSheet === "model" ? (
-          <SessionModelPickerSheetContent sessionId={sessionId} onClose={handleCloseSheet} />
+          <SessionModelPickerSheetContent
+            sessionId={sessionId}
+            onClose={handleCloseSheet}
+            onSelectModel={handleModelSelected}
+          />
         ) : null}
         {activeSheet === "runtime" ? (
           <SessionRuntimePickerSheetContent

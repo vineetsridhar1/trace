@@ -9,6 +9,7 @@ import {
 interface SessionComposerBottomSheetProps {
   visible: boolean;
   onClose: () => void;
+  onDismissed?: () => void;
   children: ReactNode;
 }
 
@@ -20,6 +21,7 @@ const SHEET_MODIFIERS = [
 export function SessionComposerBottomSheet({
   visible,
   onClose,
+  onDismissed,
   children,
 }: SessionComposerBottomSheetProps) {
   const { width } = useWindowDimensions();
@@ -37,9 +39,10 @@ export function SessionComposerBottomSheet({
     (isPresented: boolean) => {
       if (isPresented) return;
       setMounted(false);
+      onDismissed?.();
       onClose();
     },
-    [onClose],
+    [onClose, onDismissed],
   );
 
   const hostStyle = useMemo(() => [styles.host, { width }], [width]);
