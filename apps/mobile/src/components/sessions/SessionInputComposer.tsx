@@ -432,7 +432,11 @@ export function SessionInputComposer({
       <View style={styles.composerStack}>
         <Animated.View layout={composerRowTransition} style={styles.inputActionRow}>
           {showCollapsedModelSelector ? (
-            <Animated.View entering={leadingControlsEnter} exiting={leadingControlsExit}>
+            <Animated.View
+              layout={composerRowTransition}
+              entering={leadingControlsEnter}
+              exiting={leadingControlsExit}
+            >
               <SessionComposerModelTrigger
                 canInteract={canInteract}
                 currentTool={currentTool}
@@ -446,7 +450,11 @@ export function SessionInputComposer({
           ) : null}
 
           {expanded && !hasSendable && !isActive ? (
-            <Animated.View entering={leadingControlsEnter} exiting={leadingControlsExit}>
+            <Animated.View
+              layout={composerRowTransition}
+              entering={leadingControlsEnter}
+              exiting={leadingControlsExit}
+            >
               <SessionComposerLeadingChips
                 canInteract={canInteract}
                 currentTool={currentTool}
@@ -464,7 +472,7 @@ export function SessionInputComposer({
             </Animated.View>
           ) : null}
 
-          <View style={styles.inputCardSlot}>
+          <Animated.View layout={composerRowTransition} style={styles.inputCardSlot}>
             {showSlashCommandMenu ? (
               <View style={styles.slashMenuOverlay}>
                 <SessionComposerSlashCommandMenu
@@ -492,19 +500,23 @@ export function SessionInputComposer({
               onRetry={handleRetry}
               onSelectionChange={setSelection}
             />
-          </View>
+          </Animated.View>
 
           {isActive && !focused ? null : (
-            <View style={styles.attachButtonSlot}>
+            <Animated.View layout={composerRowTransition} style={styles.attachButtonSlot}>
               <ComposerAttachButton
                 enabled={canAttach}
                 onPress={() => void handlePickFromLibrary()}
               />
-            </View>
+            </Animated.View>
           )}
 
           {showSend ? (
-            <Animated.View entering={trailingActionEnter} exiting={trailingActionExit}>
+            <Animated.View
+              layout={composerRowTransition}
+              entering={trailingActionEnter}
+              exiting={trailingActionExit}
+            >
               <SessionComposerActionButton
                 accessibilityLabel={isActive ? "Queue message" : "Send message"}
                 contentOpacity={canSubmit ? 1 : 0.35}
@@ -520,7 +532,11 @@ export function SessionInputComposer({
           ) : null}
 
           {showStop ? (
-            <Animated.View entering={trailingActionEnter} exiting={trailingActionExit}>
+            <Animated.View
+              layout={composerRowTransition}
+              entering={trailingActionEnter}
+              exiting={trailingActionExit}
+            >
               <SessionComposerActionButton
                 accessibilityLabel="Stop session"
                 disabled={!canStop}
