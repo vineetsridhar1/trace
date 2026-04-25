@@ -2767,6 +2767,64 @@ describe("SessionService", () => {
       expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
       expect(eventServiceMock.create).not.toHaveBeenCalled();
     });
+
+    it("preserves the workdir through merged-session unload so the worktree can be removed", async () => {
+      const prUrl = "https://github.com/trace/trace/pull/100";
+
+      prismaMock.sessionGroup.findUnique
+        .mockResolvedValueOnce({ prUrl })
+        .mockResolvedValueOnce({
+          ...makeSessionGroup({ prUrl, workdir: "/tmp/trace/cobra", worktreeDeleted: true }),
+          sessions: [{ agentStatus: "done", sessionStatus: "merged" }],
+        })
+        .mockResolvedValueOnce({
+          ...makeSessionGroup({ prUrl, workdir: null, worktreeDeleted: true }),
+          sessions: [{ agentStatus: "done", sessionStatus: "merged" }],
+        });
+      prismaMock.session.updateMany.mockResolvedValue({ count: 1 });
+      prismaMock.sessionGroup.update.mockResolvedValue(makeSessionGroup());
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        hosting: "local",
+        workdir: "/tmp/trace/cobra",
+        repoId: "repo-1",
+        connection: { state: "connected", retryCount: 0, canRetry: true, canMove: true },
+        sessionGroupId: "group-1",
+      });
+
+      await service.markPrMerged({
+        sessionGroupId: "group-1",
+        eventSessionId: "session-1",
+        prUrl,
+        organizationId: "org-1",
+      });
+
+      expect(sessionRouterMock.destroyRuntime).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          hosting: "local",
+          workdir: "/tmp/trace/cobra",
+          repoId: "repo-1",
+        }),
+      );
+      expect(prismaMock.sessionGroup.update).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            prUrl,
+            worktreeDeleted: true,
+          }),
+        }),
+      );
+      expect(prismaMock.sessionGroup.update).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            workdir: null,
+            worktreeDeleted: true,
+          }),
+        }),
+      );
+    });
   });
 
   describe("listBranches", () => {

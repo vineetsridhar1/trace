@@ -5423,9 +5423,10 @@ export class SessionService {
 
     if (count === 0) return;
 
+    // Preserve the worktree path through runtime teardown so the bridge can
+    // remove the on-disk worktree before we clear it from persisted state.
     const sessionGroup = await this.syncGroupWorkspaceState(sessionGroupId, {
       prUrl,
-      workdir: null,
       worktreeDeleted: true,
     });
 
