@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { type FlashListRef } from "@shopify/flash-list";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -63,6 +63,7 @@ interface SessionStreamProps {
 
 const NEAR_BOTTOM_THRESHOLD = 120;
 const CONTENT_FADE_MS = 180;
+const SCROLL_SETTLE_MS = 180;
 
 export function SessionStream({
   sessionId,
@@ -78,20 +79,22 @@ export function SessionStream({
       fetchEnabled: loadEvents,
       commitEnabled: commitEvents,
     });
+  const listRef = useRef<FlashListRef<SessionStreamListItem>>(null);
+  const isNearBottomRef = useRef(true);
+  const currentScrollOffsetRef = useRef(0);
+  const previousBottomInsetRef = useRef(bottomInset ?? 0);
+  const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isScrollActive, setIsScrollActive] = useState(false);
   const {
     nodes,
     completedAgentTools,
     toolResultByUseId,
     gitCheckpointsByPromptEventId,
     events: scopedEvents,
-  } = useSessionNodes(sessionId, { enabled: renderEvents });
+  } = useSessionNodes(sessionId, { enabled: renderEvents, frozen: isScrollActive });
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
   const connection = useEntityField("sessions", sessionId, "connection");
 
-  const listRef = useRef<FlashListRef<SessionStreamListItem>>(null);
-  const isNearBottomRef = useRef(true);
-  const currentScrollOffsetRef = useRef(0);
-  const previousBottomInsetRef = useRef(bottomInset ?? 0);
   const timestampRevealX = useSharedValue(0);
   const contentOpacity = useSharedValue(nodes.length > 0 ? 1 : 0);
   const hasRenderedNodesRef = useRef(nodes.length > 0);
@@ -149,6 +152,28 @@ export function SessionStream({
     },
     [clearNewActivity],
   );
+
+  const clearScrollSettleTimer = useCallback(() => {
+    if (scrollSettleTimerRef.current) {
+      clearTimeout(scrollSettleTimerRef.current);
+      scrollSettleTimerRef.current = null;
+    }
+  }, []);
+
+  const handleScrollActive = useCallback(() => {
+    clearScrollSettleTimer();
+    setIsScrollActive(true);
+  }, [clearScrollSettleTimer]);
+
+  const handleScrollSettling = useCallback(() => {
+    clearScrollSettleTimer();
+    scrollSettleTimerRef.current = setTimeout(() => {
+      scrollSettleTimerRef.current = null;
+      setIsScrollActive(false);
+    }, SCROLL_SETTLE_MS);
+  }, [clearScrollSettleTimer]);
+
+  useEffect(() => clearScrollSettleTimer, [clearScrollSettleTimer]);
 
   useEffect(() => {
     const nextBottomInset = bottomInset ?? 0;
@@ -211,6 +236,10 @@ export function SessionStream({
             bottomInset={bottomInset}
             isNearBottomRef={isNearBottomRef}
             onScroll={handleScroll}
+            onScrollBeginDrag={handleScrollActive}
+            onScrollEndDrag={handleScrollSettling}
+            onMomentumScrollBegin={handleScrollActive}
+            onMomentumScrollEnd={handleScrollSettling}
             fetchOlderEvents={fetchOlderEvents}
           />
         </Animated.View>
