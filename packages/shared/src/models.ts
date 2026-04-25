@@ -26,7 +26,7 @@ const MODEL_OPTIONS_BY_TOOL: Readonly<Record<string, readonly ModelOption[]>> = 
 };
 
 const DEFAULT_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
-  claude_code: "claude-sonnet-4-6",
+  claude_code: "claude-opus-4-7[1m]",
   codex: "gpt-5.5",
 };
 
