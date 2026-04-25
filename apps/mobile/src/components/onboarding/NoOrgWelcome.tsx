@@ -54,7 +54,7 @@ export function NoOrgWelcome() {
           Welcome to Trace
         </Text>
         <Text
-          variant="body"
+          variant="footnote"
           color="mutedForeground"
           style={styles.message}
         >
