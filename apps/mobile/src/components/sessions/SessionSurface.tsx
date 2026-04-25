@@ -21,6 +21,7 @@ import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
 import { SessionInputComposer } from "@/components/sessions/SessionInputComposer";
 import { SessionStream } from "@/components/sessions/SessionStream";
 import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
+import { getSessionSurfaceComposerBottomPadding } from "@/components/sessions/session-surface-layout";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "@/hooks/useBridgeRuntimeAccess";
 import { useEnsureSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { useSessionDetail } from "@/hooks/useSessionDetail";
@@ -109,7 +110,6 @@ export function SessionSurface({
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardInset, setKeyboardInset] = useState(0);
   const restingBottomOffset = Math.max(0, tabBarHeight - insets.bottom);
-  const bridgeLockedBottomOffset = Math.max(tabBarHeight, insets.bottom + theme.spacing.md);
   const handleComposerLayout = useCallback((e: LayoutChangeEvent) => {
     setComposerHeight(e.nativeEvent.layout.height);
   }, []);
@@ -202,11 +202,13 @@ export function SessionSurface({
           style={[
             styles.composerStack,
             {
-              paddingBottom: keyboardVisible
-                ? 0
-                : bridgeLocked
-                  ? bridgeLockedBottomOffset
-                  : restingBottomOffset,
+              paddingBottom: getSessionSurfaceComposerBottomPadding({
+                keyboardVisible,
+                tabBarHeight,
+                bottomInset: insets.bottom,
+                spacingMd: theme.spacing.md,
+                bridgeLocked,
+              }),
             },
           ]}
         >

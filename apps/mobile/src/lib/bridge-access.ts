@@ -35,12 +35,6 @@ export function getBridgeAccessApprovalExpiresAt(
   return new Date(now + ms).toISOString();
 }
 
-export function ensureSessionCapability(caps: BridgeAccessCapability[]): BridgeAccessCapability[] {
-  const set = new Set<BridgeAccessCapability>(caps);
-  set.add("session");
-  return Array.from(set);
-}
-
 export function formatCapabilities(caps?: BridgeAccessCapability[] | null): string {
   const values = caps ?? [];
   if (values.length === 0) return "No access";
@@ -60,4 +54,24 @@ export function describeBridgeAccessScope(
     return sessionGroup?.name ? `Workspace: ${sessionGroup.name}` : "Single workspace";
   }
   return "All sessions";
+}
+
+export function normalizeBridgeAccessApprovalScope(
+  scopeType: "all_sessions" | "session_group",
+  sessionGroup?: { id?: string | null } | null,
+): {
+  scopeType: "all_sessions" | "session_group";
+  sessionGroupId: string | null;
+} {
+  if (scopeType === "session_group" && sessionGroup?.id) {
+    return {
+      scopeType: "session_group",
+      sessionGroupId: sessionGroup.id,
+    };
+  }
+
+  return {
+    scopeType: "all_sessions",
+    sessionGroupId: null,
+  };
 }

@@ -1,42 +1,24 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import { BRIDGE_RUNTIME_ACCESS_QUERY } from "@trace/client-core";
-import type { BridgeAccessCapability } from "@trace/gql";
-import { isCloudMachineRuntimeId } from "@trace/shared";
+import { useConnectionStore } from "@/stores/connection";
+import {
+  buildFallbackBridgeAccess,
+  bridgeAccessStoreKey,
+  type BridgeRuntimeAccessInfo,
+  useBridgeAccessStore,
+} from "@/stores/bridge-access";
 import { getClient } from "@/lib/urql";
 
-type BridgeUser = {
-  id: string;
-  name?: string | null;
-  avatarUrl?: string | null;
-};
-
-type BridgePendingRequest = {
-  id: string;
-  scopeType: "all_sessions" | "session_group";
-  requestedExpiresAt?: string | null;
-  requestedCapabilities?: BridgeAccessCapability[];
-  status: "pending" | "approved" | "denied";
-  sessionGroup?: { id: string; name?: string | null } | null;
-};
-
-export type BridgeRuntimeAccessInfo = {
-  runtimeInstanceId: string;
-  bridgeRuntimeId?: string | null;
-  label?: string | null;
-  hostingMode?: "cloud" | "local" | null;
-  connected: boolean;
-  ownerUser?: BridgeUser | null;
-  allowed: boolean;
-  isOwner: boolean;
-  scopeType?: "all_sessions" | "session_group" | null;
-  sessionGroupId?: string | null;
-  capabilities?: BridgeAccessCapability[];
-  expiresAt?: string | null;
-  pendingRequest?: BridgePendingRequest | null;
-};
-
 const POLL_INTERVAL_MS = 10_000;
+const inflightRefreshes = new Map<string, Promise<void>>();
+const pollSubscriptions = new Map<
+  string,
+  {
+    refCount: number;
+    stop: () => void;
+  }
+>();
 
 export function isBridgeInteractionAllowed(access: BridgeRuntimeAccessInfo | null): boolean {
   if (!access) return true;
@@ -45,107 +27,147 @@ export function isBridgeInteractionAllowed(access: BridgeRuntimeAccessInfo | nul
   return false;
 }
 
-function buildFallbackAccess(runtimeInstanceId: string): BridgeRuntimeAccessInfo {
-  const hostingMode = isCloudMachineRuntimeId(runtimeInstanceId) ? "cloud" : "local";
-  const allowed = hostingMode !== "local";
+async function fetchBridgeRuntimeAccess(
+  key: string,
+  runtimeInstanceId: string,
+  sessionGroupId?: string | null,
+): Promise<void> {
+  const existing = inflightRefreshes.get(key);
+  if (existing) return existing;
 
-  return {
-    runtimeInstanceId,
-    bridgeRuntimeId: null,
-    label: null,
-    hostingMode,
-    connected: false,
-    ownerUser: null,
-    allowed,
-    isOwner: allowed,
-    scopeType: null,
-    sessionGroupId: null,
-    capabilities: allowed ? ["session", "terminal"] : [],
-    expiresAt: null,
-    pendingRequest: null,
+  useBridgeAccessStore.getState().setEntry(key, {
+    access: useBridgeAccessStore.getState().entries[key]?.access ?? null,
+    loadState: "loading",
+  });
+
+  const promise = getClient()
+    .query(BRIDGE_RUNTIME_ACCESS_QUERY, {
+      runtimeInstanceId,
+      sessionGroupId: sessionGroupId ?? undefined,
+    })
+    .toPromise()
+    .then((result) => {
+      if (result.error) {
+        useBridgeAccessStore.getState().setEntry(key, {
+          access: useBridgeAccessStore.getState().entries[key]?.access ?? null,
+          loadState: "failed",
+        });
+        return;
+      }
+
+      useBridgeAccessStore.getState().setEntry(key, {
+        access: (result.data?.bridgeRuntimeAccess as BridgeRuntimeAccessInfo | undefined) ?? null,
+        loadState: "loaded",
+      });
+    })
+    .catch(() => {
+      useBridgeAccessStore.getState().setEntry(key, {
+        access: useBridgeAccessStore.getState().entries[key]?.access ?? null,
+        loadState: "failed",
+      });
+    })
+    .finally(() => {
+      inflightRefreshes.delete(key);
+    });
+
+  inflightRefreshes.set(key, promise);
+  return promise;
+}
+
+function retainBridgeAccessPolling(
+  key: string,
+  runtimeInstanceId: string,
+  sessionGroupId?: string | null,
+) {
+  const existing = pollSubscriptions.get(key);
+  if (existing) {
+    existing.refCount += 1;
+    return () => releaseBridgeAccessPolling(key);
+  }
+
+  const refresh = () => {
+    if (AppState.currentState === "active") {
+      void fetchBridgeRuntimeAccess(key, runtimeInstanceId, sessionGroupId);
+    }
   };
+  const intervalId = setInterval(refresh, POLL_INTERVAL_MS);
+  const appStateSub = AppState.addEventListener("change", (state: AppStateStatus) => {
+    if (state === "active") {
+      void fetchBridgeRuntimeAccess(key, runtimeInstanceId, sessionGroupId);
+    }
+  });
+
+  pollSubscriptions.set(key, {
+    refCount: 1,
+    stop: () => {
+      clearInterval(intervalId);
+      appStateSub.remove();
+    },
+  });
+
+  return () => releaseBridgeAccessPolling(key);
+}
+
+function releaseBridgeAccessPolling(key: string) {
+  const existing = pollSubscriptions.get(key);
+  if (!existing) return;
+  if (existing.refCount > 1) {
+    existing.refCount -= 1;
+    return;
+  }
+  existing.stop();
+  pollSubscriptions.delete(key);
 }
 
 export function useBridgeRuntimeAccess(
   runtimeInstanceId?: string | null,
   sessionGroupId?: string | null,
 ) {
-  const [access, setAccess] = useState<BridgeRuntimeAccessInfo | null>(null);
-  const [loadState, setLoadState] = useState<"idle" | "loading" | "loaded" | "failed">("idle");
-  const requestIdRef = useRef(0);
-  const fallbackAccess = useMemo(
-    () => (runtimeInstanceId ? buildFallbackAccess(runtimeInstanceId) : null),
-    [runtimeInstanceId],
+  const key = bridgeAccessStoreKey(runtimeInstanceId, sessionGroupId);
+  const entry = useBridgeAccessStore((state) =>
+    key
+      ? (state.entries[key] ?? {
+          access: null,
+          loadState: "idle",
+        })
+      : { access: null, loadState: "idle" },
   );
+  const reconnectCounter = useConnectionStore((s) => s.reconnectCounter);
 
   const refresh = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    if (!runtimeInstanceId) {
-      setAccess(null);
-      setLoadState("idle");
-      return;
-    }
-
-    setLoadState("loading");
-    try {
-      const result = await getClient()
-        .query(BRIDGE_RUNTIME_ACCESS_QUERY, {
-          runtimeInstanceId,
-          sessionGroupId: sessionGroupId ?? undefined,
-        })
-        .toPromise();
-      if (requestId !== requestIdRef.current) return;
-      if (result.error) {
-        setLoadState("failed");
-        return;
-      }
-      setAccess((result.data?.bridgeRuntimeAccess as BridgeRuntimeAccessInfo | undefined) ?? null);
-      setLoadState("loaded");
-    } catch {
-      if (requestId !== requestIdRef.current) return;
-      setLoadState("failed");
-    }
-  }, [runtimeInstanceId, sessionGroupId]);
-
-  const lastRuntimeInstanceIdRef = useRef<string | null | undefined>(runtimeInstanceId);
+    if (!runtimeInstanceId || !key) return;
+    await fetchBridgeRuntimeAccess(key, runtimeInstanceId, sessionGroupId);
+  }, [key, runtimeInstanceId, sessionGroupId]);
 
   useEffect(() => {
-    if (lastRuntimeInstanceIdRef.current !== runtimeInstanceId) {
-      setAccess(null);
-      lastRuntimeInstanceIdRef.current = runtimeInstanceId;
+    if (!runtimeInstanceId || !key) return;
+    if (entry.loadState === "idle") {
+      void refresh();
     }
-    if (!runtimeInstanceId) {
-      setLoadState("idle");
-      return;
-    }
+  }, [entry.loadState, key, refresh, runtimeInstanceId]);
+
+  useEffect(() => {
+    if (!runtimeInstanceId || !key) return;
+    return retainBridgeAccessPolling(key, runtimeInstanceId, sessionGroupId);
+  }, [key, runtimeInstanceId, sessionGroupId]);
+
+  useEffect(() => {
+    if (!runtimeInstanceId || reconnectCounter === 0) return;
     void refresh();
-  }, [refresh, runtimeInstanceId]);
+  }, [reconnectCounter, refresh, runtimeInstanceId]);
 
-  useEffect(() => {
-    if (!runtimeInstanceId) return;
-    const intervalId = setInterval(() => {
-      if (AppState.currentState === "active") void refresh();
-    }, POLL_INTERVAL_MS);
-    const appStateSub = AppState.addEventListener("change", (state: AppStateStatus) => {
-      if (state === "active") void refresh();
-    });
-    return () => {
-      clearInterval(intervalId);
-      appStateSub.remove();
-    };
-  }, [refresh, runtimeInstanceId]);
-
+  const fallbackAccess = runtimeInstanceId ? buildFallbackBridgeAccess(runtimeInstanceId) : null;
   const effectiveAccess =
-    access && access.hostingMode !== null
-      ? access
-      : loadState === "failed" || loadState === "loaded"
+    entry.access && entry.access.hostingMode !== null
+      ? entry.access
+      : entry.loadState === "failed" || entry.loadState === "loaded"
         ? fallbackAccess
         : null;
 
   return {
     access: effectiveAccess,
-    loading: loadState === "loading",
-    unreachable: loadState === "failed" && access === null,
+    loading: entry.loadState === "loading",
+    unreachable: entry.loadState === "failed" && entry.access === null,
     refresh,
   };
 }
