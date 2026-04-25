@@ -3,7 +3,6 @@ import { prisma } from "../lib/db.js";
 import { TRACE_AI_EMAIL, TRACE_AI_NAME, TRACE_AI_USER_ID } from "../lib/ai-user.js";
 
 const LOCAL_ORG_NAME = "Trace";
-const LOCAL_CHANNEL_NAME = "General";
 const LOCAL_EMAIL_DOMAIN = "trace.local";
 
 function slugifyLocalName(name: string): string {
@@ -168,21 +167,6 @@ export async function ensureLocalUserWorkspace(name: string): Promise<{
       role: "member",
     },
   });
-
-  const existingChannel = await prisma.channel.findFirst({
-    where: { organizationId: organization.id },
-    select: { id: true },
-  });
-
-  if (!existingChannel) {
-    await prisma.channel.create({
-      data: {
-        name: LOCAL_CHANNEL_NAME,
-        organizationId: organization.id,
-        type: "coding",
-      },
-    });
-  }
 
   return {
     organizationId: organization.id,

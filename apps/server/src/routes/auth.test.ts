@@ -119,8 +119,6 @@ describe("local login", () => {
       avatarUrl: null,
     });
     prismaMock.orgMember.upsert.mockResolvedValue({});
-    prismaMock.channel.findFirst.mockResolvedValue(null);
-    prismaMock.channel.create.mockResolvedValue({ id: "channel-1" });
   });
 
   afterEach(async () => {
@@ -130,7 +128,7 @@ describe("local login", () => {
     vi.unstubAllEnvs();
   });
 
-  it("creates a local session token and bootstrap records", async () => {
+  it("creates a local session token and bootstrap records without creating a default channel", async () => {
     const res = await fetch(`${baseUrl}/auth/local/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -177,13 +175,7 @@ describe("local login", () => {
         role: "admin",
       },
     });
-    expect(prismaMock.channel.create).toHaveBeenCalledWith({
-      data: {
-        name: "General",
-        organizationId: "org-1",
-        type: "coding",
-      },
-    });
+    expect(prismaMock.channel.create).not.toHaveBeenCalled();
   });
 
   it("rejects short names", async () => {
