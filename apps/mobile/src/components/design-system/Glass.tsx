@@ -12,6 +12,7 @@ import Animated, { AnimatedStyle, type AnimatedProps } from "react-native-reanim
 import { useTheme, type GlassShape, type GlassUseCase, type Theme } from "@/theme";
 
 const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
+const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
 
 export interface GlassProps {
   preset?: GlassUseCase;
@@ -85,8 +86,8 @@ export function Glass({
   // Pre-iOS 26 / Android: native BlurView with its own tint enum. Per-preset
   // intensity still differentiates tabBar vs card vs input.
   return (
-    <BlurView tint={FALLBACK_TINT} intensity={config.intensity} style={[baseStyle, style]}>
+    <AnimatedBlurView tint={FALLBACK_TINT} intensity={config.intensity} style={[baseStyle, style]}>
       {children}
-    </BlurView>
+    </AnimatedBlurView>
   );
 }
