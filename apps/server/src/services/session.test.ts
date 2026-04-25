@@ -2181,7 +2181,7 @@ describe("SessionService", () => {
   });
 
   describe("archiveGroup", () => {
-    it("deletes empty groups instead of archiving them", async () => {
+    it("deletes groups with no sessions instead of archiving them", async () => {
       prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
         makeSessionGroup({
           id: "group-empty",
@@ -2207,12 +2207,52 @@ describe("SessionService", () => {
       );
     });
 
-    it("archives non-empty groups", async () => {
+    it("deletes groups whose sessions never had messages", async () => {
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
+        makeSessionGroup({
+          id: "group-no-messages",
+          organizationId: "org-1",
+          sessions: [{ id: "session-1", lastMessageAt: null }],
+        }),
+      );
+      prismaMock.session.findMany.mockResolvedValueOnce([{ id: "session-1" }]);
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          sessionGroupId: "group-no-messages",
+          organizationId: "org-1",
+        }),
+      );
+      prismaMock.session.count.mockResolvedValueOnce(0);
+
+      const result = await service.archiveGroup("group-no-messages", "org-1");
+
+      expect(result).toBeNull();
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.delete).toHaveBeenCalledWith({
+        where: { id: "group-no-messages" },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_deleted",
+          payload: expect.objectContaining({
+            sessionId: "session-1",
+            deletedSessionGroupId: "group-no-messages",
+          }),
+        }),
+      );
+    });
+
+    it("archives groups that have message history", async () => {
       prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
         makeSessionGroup({
           id: "group-1",
           organizationId: "org-1",
-          sessions: [{ id: "session-2" }, { id: "session-1" }],
+          sessions: [
+            { id: "session-2", lastMessageAt: new Date("2024-01-02T00:00:00.000Z") },
+            { id: "session-1", lastMessageAt: null },
+          ],
         }),
       );
       prismaMock.sessionGroup.update.mockResolvedValueOnce(

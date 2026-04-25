@@ -5272,12 +5272,18 @@ export class SessionService {
   ) {
     const group = await prisma.sessionGroup.findUnique({
       where: { id: groupId },
-      include: { sessions: { select: { id: true }, orderBy: { updatedAt: "desc" } } },
+      include: {
+        sessions: {
+          select: { id: true, lastMessageAt: true },
+          orderBy: { updatedAt: "desc" },
+        },
+      },
     });
     if (!group) throw new Error("Session group not found");
     if (group.organizationId !== organizationId) throw new Error("Session group not found");
 
-    if (group.sessions.length === 0) {
+    const hasConversation = group.sessions.some((session) => session.lastMessageAt !== null);
+    if (!hasConversation) {
       await this.deleteGroup(groupId, organizationId, actorType, actorId);
       return null;
     }
