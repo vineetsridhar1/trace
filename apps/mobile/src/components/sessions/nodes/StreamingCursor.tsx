@@ -8,6 +8,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useTheme } from "@/theme";
 
 /**
@@ -16,16 +17,24 @@ import { useTheme } from "@/theme";
  */
 export function StreamingCursor() {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const opacity = useSharedValue(1);
 
   useEffect(() => {
+    if (reducedMotion) {
+      cancelAnimation(opacity);
+      opacity.value = 1;
+      return;
+    }
     opacity.value = withRepeat(
       withTiming(0, { duration: 800, easing: Easing.inOut(Easing.ease) }),
       -1,
       true,
     );
     return () => cancelAnimation(opacity);
-  }, [opacity]);
+  }, [opacity, reducedMotion]);
+
+  if (reducedMotion) return null;
 
   const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
 

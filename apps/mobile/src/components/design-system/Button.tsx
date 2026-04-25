@@ -6,6 +6,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useTheme, type Theme, type TypographyVariant } from "@/theme";
 import { Text } from "./Text";
 import { Spinner } from "./Spinner";
@@ -43,7 +44,7 @@ interface SizeSpec {
 }
 
 const SIZE_SPEC: Record<ButtonSize, SizeSpec> = {
-  sm: { paddingX: 12, paddingY: 8, textVariant: "subheadline", minHeight: 32 },
+  sm: { paddingX: 12, paddingY: 8, textVariant: "subheadline", minHeight: 44 },
   md: { paddingX: 16, paddingY: 12, textVariant: "callout", minHeight: 44 },
   lg: { paddingX: 20, paddingY: 14, textVariant: "body", minHeight: 52 },
 };
@@ -84,6 +85,7 @@ export function Button({
   accessibilityLabel,
 }: ButtonProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const scale = useSharedValue(1);
 
   const palette = variantColors(theme, variant);
@@ -97,10 +99,12 @@ export function Button({
 
   function handlePressIn() {
     if (inactive) return;
+    if (reducedMotion) return;
     scale.value = withSpring(PRESSED_SCALE, theme.motion.springs.snap);
   }
 
   function handlePressOut() {
+    if (reducedMotion) return;
     scale.value = withSpring(1, theme.motion.springs.snap);
   }
 

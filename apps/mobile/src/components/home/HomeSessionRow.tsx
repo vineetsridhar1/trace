@@ -5,6 +5,7 @@ import ContextMenu from "react-native-context-menu-view";
 import { useEntityField } from "@trace/client-core";
 import { Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
+import { buildSessionRowAccessibilityLabel } from "@/lib/accessibility";
 import { haptic } from "@/lib/haptics";
 import { usePressScale } from "@/lib/motion";
 import { prefetchSessionPlayer, tryOpenSessionPlayer } from "@/lib/sessionPlayer";
@@ -62,13 +63,19 @@ export const HomeSessionRow = memo(function HomeSessionRow({ sessionId }: HomeSe
 
   const timestamp = lastMessageAt ?? updatedAt ?? null;
   const repoName = (repo as { name?: string } | null | undefined)?.name ?? null;
+  const accessibilityLabel = buildSessionRowAccessibilityLabel({
+    name,
+    status: sessionStatus,
+    secondaryLabel: branch ?? repoName,
+    preview: lastEventPreview,
+  });
 
   return (
     <ContextMenu actions={actions} onPress={onMenuPress} preview={null}>
       <Animated.View style={pressScaleStyle}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={name}
+          accessibilityLabel={accessibilityLabel}
           onPress={handlePress}
           onLongPress={noop}
           delayLongPress={250}
