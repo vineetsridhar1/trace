@@ -176,7 +176,11 @@ export function PendingInputPlan({
                     styles.menuRow,
                     {
                       marginBottom: index < PLAN_OPTIONS.length - 1 ? 2 : 0,
-                      backgroundColor: pressed ? "rgb(255, 255, 255, 0.05)" : undefined,
+                      backgroundColor: selected
+                        ? "rgba(255, 255, 255, 0.08)"
+                        : pressed
+                          ? "rgba(255, 255, 255, 0.05)"
+                          : undefined,
                       opacity: sending ? 0.5 : 1,
                     },
                   ]}

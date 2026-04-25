@@ -131,7 +131,11 @@ export function PendingInputQuestion({
                       styles.menuRow,
                       {
                         marginBottom: index < question.options.length - 1 ? 2 : 0,
-                        backgroundColor: pressed ? "rgb(255, 255, 255, 0.05)" : undefined,
+                        backgroundColor: selected
+                          ? "rgba(255, 255, 255, 0.08)"
+                          : pressed
+                            ? "rgba(255, 255, 255, 0.05)"
+                            : undefined,
                       },
                     ]}
                   >
