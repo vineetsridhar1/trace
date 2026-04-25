@@ -14,6 +14,7 @@ import { alpha, useTheme } from "@/theme";
 interface SessionComposerBottomSheetProps {
   visible: boolean;
   onClose: () => void;
+  onDismissed?: () => void;
   children: ReactNode;
 }
 
@@ -23,6 +24,7 @@ const DISMISS_VELOCITY = 900;
 export function SessionComposerBottomSheet({
   visible,
   onClose,
+  onDismissed,
   children,
 }: SessionComposerBottomSheetProps) {
   const theme = useTheme();
@@ -41,9 +43,10 @@ export function SessionComposerBottomSheet({
   const finishClose = useCallback(
     (notifyParent: boolean) => {
       setMounted(false);
+      onDismissed?.();
       if (notifyParent) onClose();
     },
-    [onClose],
+    [onClose, onDismissed],
   );
 
   const animateIn = useCallback(() => {

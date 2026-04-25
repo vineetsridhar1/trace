@@ -9,6 +9,7 @@ import {
 interface SessionComposerBottomSheetProps {
   visible: boolean;
   onClose: () => void;
+  onDismissed?: () => void;
   children: ReactNode;
 }
 
@@ -20,6 +21,7 @@ const SHEET_MODIFIERS = [
 export function SessionComposerBottomSheet({
   visible,
   onClose,
+  onDismissed,
   children,
 }: SessionComposerBottomSheetProps) {
   const { width } = useWindowDimensions();
@@ -33,10 +35,15 @@ export function SessionComposerBottomSheet({
     }
   }, [children, visible]);
 
+  useEffect(() => {
+    if (visible || !mounted) return;
+    setMounted(false);
+    onDismissed?.();
+  }, [mounted, onDismissed, visible]);
+
   const handlePresentedChange = useCallback(
     (isPresented: boolean) => {
       if (isPresented) return;
-      setMounted(false);
       onClose();
     },
     [onClose],
