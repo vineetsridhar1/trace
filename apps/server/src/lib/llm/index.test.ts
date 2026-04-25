@@ -5,7 +5,7 @@ import { OpenAIAdapter } from "./openai.js";
 
 describe("llm adapter selection", () => {
   it("routes gpt and o-series models to openai", () => {
-    expect(providerForModel("gpt-5.4")).toBe("openai");
+    expect(providerForModel("gpt-5.5")).toBe("openai");
     expect(providerForModel("o3-mini")).toBe("openai");
     expect(providerForModel("o4")).toBe("openai");
   });

@@ -1,7 +1,10 @@
-import type { ComponentProps, RefObject } from "react";
+import { useCallback, useState, type ComponentProps, type RefObject } from "react";
 import {
+  Text as NativeText,
   Pressable,
   TextInput,
+  View,
+  type LayoutChangeEvent,
   type NativeSyntheticEvent,
   type TextInputSelectionChangeEventData,
 } from "react-native";
@@ -19,6 +22,7 @@ interface SessionComposerInputCardProps {
   errorDraft: string | null;
   errorMessage: string | null;
   glassAnimatedProps: ComposerGlassAnimatedProps;
+  inputHeight: number;
   inputAnimatedStyle: ComposerAnimatedViewStyle;
   inputRef: RefObject<TextInput | null>;
   layoutTransition?: ComponentProps<typeof Animated.View>["layout"];
@@ -39,6 +43,7 @@ export function SessionComposerInputCard({
   errorDraft,
   errorMessage,
   glassAnimatedProps,
+  inputHeight,
   inputAnimatedStyle,
   inputRef,
   layoutTransition,
@@ -54,12 +59,25 @@ export function SessionComposerInputCard({
   onRetry,
 }: SessionComposerInputCardProps) {
   const theme = useTheme();
+  const [inputWidth, setInputWidth] = useState(0);
 
   const handleSelectionChange = (
     event: NativeSyntheticEvent<TextInputSelectionChangeEventData>,
   ) => {
     onSelectionChange(event.nativeEvent.selection);
   };
+
+  const handleInputLayout = useCallback((event: LayoutChangeEvent) => {
+    const nextWidth = Math.round(event.nativeEvent.layout.width);
+    setInputWidth((current) => (current === nextWidth ? current : nextWidth));
+  }, []);
+
+  const handleMeasureLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      onContentHeightChange(event.nativeEvent.layout.height);
+    },
+    [onContentHeightChange],
+  );
 
   return (
     <AnimatedGlass
@@ -82,7 +100,7 @@ export function SessionComposerInputCard({
         </Pressable>
       ) : null}
 
-      <Animated.View style={[styles.inputWrapper, inputAnimatedStyle]}>
+      <Animated.View onLayout={handleInputLayout} style={[styles.inputWrapper, inputAnimatedStyle]}>
         <TextInput
           ref={inputRef}
           value={text}
@@ -99,8 +117,18 @@ export function SessionComposerInputCard({
           placeholder={placeholder}
           placeholderTextColor={theme.colors.dimForeground}
           selection={selection}
-          style={[styles.input, { color: theme.colors.foreground }]}
+          style={[styles.input, { color: theme.colors.foreground, height: inputHeight }]}
         />
+        {inputWidth > 0 ? (
+          <View pointerEvents="none" style={styles.measureLayer}>
+            <NativeText
+              onLayout={handleMeasureLayout}
+              style={[styles.inputMeasure, { color: theme.colors.foreground, width: inputWidth }]}
+            >
+              {text.length > 0 ? `${text} ` : " "}
+            </NativeText>
+          </View>
+        ) : null}
       </Animated.View>
     </AnimatedGlass>
   );

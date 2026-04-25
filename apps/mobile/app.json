@@ -14,12 +14,12 @@
       "backgroundColor": "#000000"
     },
     "ios": {
-      "bundleIdentifier": "com.trace.mobile",
+      "bundleIdentifier": "org.gettrace.mobile",
       "supportsTablet": false,
       "associatedDomains": ["applinks:trace.app"]
     },
     "android": {
-      "package": "com.trace.mobile",
+      "package": "org.gettrace.mobile",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
