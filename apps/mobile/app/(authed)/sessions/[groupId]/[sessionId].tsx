@@ -79,6 +79,10 @@ export default function SessionStreamScreen() {
   const [workspaceMode, setWorkspaceMode] = useState<SessionWorkspaceMode>("agent");
 
   useEffect(() => {
+    setWorkspaceMode("agent");
+  }, [groupId, sessionId]);
+
+  useEffect(() => {
     if (!groupId || !sessionId || sessionIds.length === 0) return;
     if (sessionIds.includes(sessionId)) return;
     router.replace(`/sessions/${groupId}/${sessionIds[0]}`);
