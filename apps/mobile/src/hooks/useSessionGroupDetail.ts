@@ -195,8 +195,12 @@ export function useEnsureSessionGroupDetail(groupId: string | undefined): boolea
     // alone isn't enough — a partial list-level record would pass and
     // leave downstream reads (tab strip, checkpoint markers) empty.
     const group = useEntityStore.getState().sessionGroups[groupId];
-    const alreadyHydrated = group?.gitCheckpoints !== undefined;
+    const alreadyHydrated = group?._optimistic === true || group?.gitCheckpoints !== undefined;
     let cancelled = false;
+    if (group?._optimistic === true) {
+      setLoading(false);
+      return;
+    }
     if (!alreadyHydrated) setLoading(true);
     fetchSessionGroupDetail(groupId).finally(() => {
       if (!cancelled) setLoading(false);
