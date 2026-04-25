@@ -13,6 +13,7 @@ export default function ChannelsLayout() {
         options={{
           title: "Channels",
           headerLargeTitle: true,
+          headerTitleStyle: { color: "white" },
           headerRight: () => (
             <TopBarPill
               avatar={
