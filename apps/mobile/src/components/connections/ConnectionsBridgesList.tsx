@@ -4,9 +4,11 @@ import {
   APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION,
   DENY_BRIDGE_ACCESS_REQUEST_MUTATION,
   REVOKE_BRIDGE_ACCESS_GRANT_MUTATION,
+  UPDATE_BRIDGE_ACCESS_GRANT_MUTATION,
 } from "@trace/client-core";
 import type { BridgeAccessCapability } from "@trace/gql";
 import { EmptyState, Text } from "@/components/design-system";
+import { ConnectionsBridgeAccessSheet } from "@/components/connections/ConnectionsBridgeAccessSheet";
 import { ConnectionsBridgeSection } from "@/components/connections/ConnectionsBridgeSection";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
@@ -21,6 +23,8 @@ export function ConnectionsBridgesList() {
   const { connections, loading, refresh } = useConnections();
   const [refreshing, setRefreshing] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<ConnectionAccessRequest | null>(null);
+  const [selectedGrant, setSelectedGrant] = useState<ConnectionAccessGrant | null>(null);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -46,18 +50,25 @@ export function ConnectionsBridgesList() {
     [refresh],
   );
 
-  const approveAllSessions = (request: ConnectionAccessRequest) => {
-    void runAction(request.id, async () => {
+  const approveRequest = (input: {
+    requestId: string;
+    scopeType: "all_sessions" | "session_group";
+    sessionGroupId?: string | null;
+    expiresAt?: string;
+    capabilities: BridgeAccessCapability[];
+  }) => {
+    void runAction(input.requestId, async () => {
       const result = await getClient()
         .mutation(APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION, {
-          requestId: request.id,
-          scopeType: "all_sessions",
-          sessionGroupId: null,
-          expiresAt: null,
-          capabilities: ["session"] as BridgeAccessCapability[],
+          requestId: input.requestId,
+          scopeType: input.scopeType,
+          sessionGroupId: input.sessionGroupId ?? null,
+          expiresAt: input.expiresAt,
+          capabilities: input.capabilities,
         })
         .toPromise();
       if (result.error) throw result.error;
+      setSelectedRequest(null);
     });
   };
 
@@ -67,6 +78,7 @@ export function ConnectionsBridgesList() {
         .mutation(DENY_BRIDGE_ACCESS_REQUEST_MUTATION, { requestId: request.id })
         .toPromise();
       if (result.error) throw result.error;
+      setSelectedRequest(null);
     });
   };
 
@@ -83,10 +95,24 @@ export function ConnectionsBridgesList() {
               .mutation(REVOKE_BRIDGE_ACCESS_GRANT_MUTATION, { grantId: grant.id })
               .toPromise();
             if (result.error) throw result.error;
+            setSelectedGrant(null);
           });
         },
       },
     ]);
+  };
+
+  const updateGrant = (grant: ConnectionAccessGrant, capabilities: BridgeAccessCapability[]) => {
+    void runAction(grant.id, async () => {
+      const result = await getClient()
+        .mutation(UPDATE_BRIDGE_ACCESS_GRANT_MUTATION, {
+          grantId: grant.id,
+          capabilities,
+        })
+        .toPromise();
+      if (result.error) throw result.error;
+      setSelectedGrant(null);
+    });
   };
 
   if (loading && connections.length === 0) {
@@ -115,12 +141,26 @@ export function ConnectionsBridgesList() {
           key={connection.bridge.id}
           connection={connection}
           pendingActionId={pendingActionId}
-          onApprove={approveAllSessions}
+          onReviewRequest={setSelectedRequest}
           onDeny={denyRequest}
-          onRevoke={revokeGrant}
+          onManageGrant={setSelectedGrant}
           onRefresh={refresh}
         />
       ))}
+      <ConnectionsBridgeAccessSheet
+        request={selectedRequest}
+        grant={selectedGrant}
+        visible={selectedRequest !== null || selectedGrant !== null}
+        pending={pendingActionId !== null}
+        onClose={() => {
+          setSelectedRequest(null);
+          setSelectedGrant(null);
+        }}
+        onApprove={approveRequest}
+        onDeny={denyRequest}
+        onRevoke={revokeGrant}
+        onUpdate={updateGrant}
+      />
     </ScrollView>
   );
 }

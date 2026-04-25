@@ -1,5 +1,6 @@
 import { StyleSheet, View } from "react-native";
 import { Button, ListRow, Text } from "@/components/design-system";
+import { describeBridgeAccessScope, formatCapabilities } from "@/lib/bridge-access";
 import { useTheme } from "@/theme";
 import type {
   ConnectionAccessGrant,
@@ -11,30 +12,20 @@ function userLabel(u: ConnectionUser): string {
   return u.name ?? u.email ?? "Unknown user";
 }
 
-function describeScope(
-  scopeType: "all_sessions" | "session_group",
-  sessionGroup?: { name?: string | null } | null,
-): string {
-  if (scopeType === "session_group") {
-    return sessionGroup?.name ? `Workspace: ${sessionGroup.name}` : "Single workspace";
-  }
-  return "All sessions";
-}
-
 export function ConnectionsBridgeAccessSections({
   requests,
   grants,
   pendingActionId,
-  onApprove,
+  onReviewRequest,
   onDeny,
-  onRevoke,
+  onManageGrant,
 }: {
   requests: ConnectionAccessRequest[];
   grants: ConnectionAccessGrant[];
   pendingActionId: string | null;
-  onApprove: (request: ConnectionAccessRequest) => void;
+  onReviewRequest: (request: ConnectionAccessRequest) => void;
   onDeny: (request: ConnectionAccessRequest) => void;
-  onRevoke: (grant: ConnectionAccessGrant) => void;
+  onManageGrant: (grant: ConnectionAccessGrant) => void;
 }) {
   const theme = useTheme();
   return (
@@ -59,14 +50,17 @@ export function ConnectionsBridgeAccessSections({
                 {userLabel(request.requesterUser)}
               </Text>
               <Text variant="caption1" color="mutedForeground" numberOfLines={1}>
-                {describeScope(request.scopeType, request.sessionGroup)}
+                {describeBridgeAccessScope(request.scopeType, request.sessionGroup)}
+              </Text>
+              <Text variant="caption1" color="dimForeground" numberOfLines={1}>
+                {formatCapabilities(request.requestedCapabilities)}
               </Text>
               <View style={styles.actionRow}>
                 <Button
-                  title="Approve"
+                  title="Review"
                   size="sm"
                   disabled={pendingActionId === request.id}
-                  onPress={() => onApprove(request)}
+                  onPress={() => onReviewRequest(request)}
                 />
                 <Button
                   title="Deny"
@@ -88,14 +82,17 @@ export function ConnectionsBridgeAccessSections({
             <ListRow
               key={grant.id}
               title={userLabel(grant.granteeUser)}
-              subtitle={describeScope(grant.scopeType, grant.sessionGroup)}
+              subtitle={`${describeBridgeAccessScope(
+                grant.scopeType,
+                grant.sessionGroup,
+              )} - ${formatCapabilities(grant.capabilities)}`}
               trailing={
                 <Button
-                  title="Revoke"
+                  title="Manage"
                   size="sm"
-                  variant="destructive"
+                  variant="secondary"
                   disabled={pendingActionId === grant.id}
-                  onPress={() => onRevoke(grant)}
+                  onPress={() => onManageGrant(grant)}
                 />
               }
             />

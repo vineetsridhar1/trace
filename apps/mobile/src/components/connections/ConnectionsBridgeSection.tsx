@@ -13,16 +13,16 @@ import type {
 export function ConnectionsBridgeSection({
   connection,
   pendingActionId,
-  onApprove,
+  onReviewRequest,
   onDeny,
-  onRevoke,
+  onManageGrant,
   onRefresh,
 }: {
   connection: ConnectionBridge;
   pendingActionId: string | null;
-  onApprove: (request: ConnectionAccessRequest) => void;
+  onReviewRequest: (request: ConnectionAccessRequest) => void;
   onDeny: (request: ConnectionAccessRequest) => void;
-  onRevoke: (grant: ConnectionAccessGrant) => void;
+  onManageGrant: (grant: ConnectionAccessGrant) => void;
   onRefresh: () => Promise<void>;
 }) {
   const theme = useTheme();
@@ -75,9 +75,9 @@ export function ConnectionsBridgeSection({
         requests={bridge.accessRequests}
         grants={bridge.accessGrants}
         pendingActionId={pendingActionId}
-        onApprove={onApprove}
+        onReviewRequest={onReviewRequest}
         onDeny={onDeny}
-        onRevoke={onRevoke}
+        onManageGrant={onManageGrant}
       />
     </View>
   );

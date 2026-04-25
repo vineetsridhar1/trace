@@ -5,10 +5,13 @@ import { File } from "expo-file-system";
 import {
   CREATE_TERMINAL_MUTATION,
   SESSION_TERMINALS_QUERY,
+  useEntityField,
 } from "@trace/client-core";
 import type { Terminal } from "@trace/gql";
 import WebView, { type WebViewMessageEvent } from "react-native-webview";
 import { Button, Spinner, Text } from "@/components/design-system";
+import { BridgeAccessNotice } from "@/components/sessions/BridgeAccessNotice";
+import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "@/hooks/useBridgeRuntimeAccess";
 import { TerminalSocket } from "@/lib/terminal-ws";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
@@ -17,13 +20,7 @@ interface SessionTerminalPanelProps {
   sessionId: string;
 }
 
-type TerminalViewStatus =
-  | "loading"
-  | "connecting"
-  | "active"
-  | "reconnecting"
-  | "exited"
-  | "error";
+type TerminalViewStatus = "loading" | "connecting" | "active" | "reconnecting" | "exited" | "error";
 
 const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 32;
@@ -55,6 +52,24 @@ function pickLatestSessionTerminal(
 
 export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
   const theme = useTheme();
+  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
+    | string
+    | null
+    | undefined;
+  const sessionConnection = useEntityField("sessions", sessionId, "connection") as
+    | { runtimeInstanceId?: string | null }
+    | null
+    | undefined;
+  const groupConnection = useEntityField("sessionGroups", sessionGroupId ?? "", "connection") as
+    | { runtimeInstanceId?: string | null }
+    | null
+    | undefined;
+  const runtimeInstanceId =
+    sessionConnection?.runtimeInstanceId ?? groupConnection?.runtimeInstanceId ?? null;
+  const { access: bridgeAccess, refresh: refreshBridgeAccess } = useBridgeRuntimeAccess(
+    runtimeInstanceId,
+    sessionGroupId ?? null,
+  );
   const webViewRef = useRef<WebView>(null);
   const socketRef = useRef<TerminalSocket | null>(null);
   const webReadyRef = useRef(false);
@@ -76,6 +91,7 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
         : null,
     [runtimeTemplate, theme.colors.foreground, theme.colors.surfaceDeep],
   );
+  const bridgeLocked = !isBridgeInteractionAllowed(bridgeAccess);
 
   const isRequestCurrent = useCallback((token: number) => {
     return mountedRef.current && requestTokenRef.current === token;
@@ -230,6 +246,7 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
   }, [webReady]);
 
   useEffect(() => {
+    if (bridgeLocked) return;
     mountedRef.current = true;
     setWebReady(false);
     webReadyRef.current = false;
@@ -244,7 +261,7 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
       socketRef.current?.close();
       socketRef.current = null;
     };
-  }, [ensureTerminal, runtimeTemplate]);
+  }, [bridgeLocked, ensureTerminal, runtimeTemplate]);
 
   useEffect(() => {
     if (!webReady) return;
@@ -271,38 +288,35 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
     [inject],
   );
 
-  const handleWebMessage = useCallback(
-    (event: WebViewMessageEvent) => {
-      try {
-        const message = JSON.parse(event.nativeEvent.data) as
-          | { type: "ready" }
-          | { type: "bootstrap_error" }
-          | { type: "input"; data: string }
-          | { type: "resize"; cols: number; rows: number };
+  const handleWebMessage = useCallback((event: WebViewMessageEvent) => {
+    try {
+      const message = JSON.parse(event.nativeEvent.data) as
+        | { type: "ready" }
+        | { type: "bootstrap_error" }
+        | { type: "input"; data: string }
+        | { type: "resize"; cols: number; rows: number };
 
-        if (message.type === "ready") {
-          webReadyRef.current = true;
-          setWebReady(true);
-          return;
-        }
-        if (message.type === "bootstrap_error") {
-          setStatus("error");
-          setMessage(TERMINAL_RUNTIME_ERROR);
-          return;
-        }
-        if (message.type === "input") {
-          socketRef.current?.write(message.data);
-          return;
-        }
-        if (message.type === "resize") {
-          socketRef.current?.resize(message.cols, message.rows);
-        }
-      } catch {
-        // Ignore malformed bridge messages from the embedded terminal.
+      if (message.type === "ready") {
+        webReadyRef.current = true;
+        setWebReady(true);
+        return;
       }
-    },
-    [],
-  );
+      if (message.type === "bootstrap_error") {
+        setStatus("error");
+        setMessage(TERMINAL_RUNTIME_ERROR);
+        return;
+      }
+      if (message.type === "input") {
+        socketRef.current?.write(message.data);
+        return;
+      }
+      if (message.type === "resize") {
+        socketRef.current?.resize(message.cols, message.rows);
+      }
+    } catch {
+      // Ignore malformed bridge messages from the embedded terminal.
+    }
+  }, []);
 
   const statusLabel =
     status === "loading"
@@ -316,6 +330,26 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
             : status === "exited"
               ? "Exited"
               : "Error";
+
+  if (bridgeLocked) {
+    return (
+      <View
+        style={[
+          styles.center,
+          {
+            backgroundColor: theme.colors.background,
+            paddingHorizontal: theme.spacing.lg,
+          },
+        ]}
+      >
+        <BridgeAccessNotice
+          access={bridgeAccess}
+          sessionGroupId={sessionGroupId ?? null}
+          onRequested={refreshBridgeAccess}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
