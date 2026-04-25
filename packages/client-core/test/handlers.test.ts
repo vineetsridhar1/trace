@@ -24,6 +24,7 @@ function resetStores() {
     messages: {},
     queuedMessages: {},
     eventsByScope: {},
+    _eventIdsByScope: {},
     _sessionIdsByGroup: {},
     _messageIdsByScope: {},
     _eventIdsByParentId: {},
@@ -145,6 +146,30 @@ describe("handleOrgEvent", () => {
     const bucket = useEntityStore.getState().eventsByScope["session:session-1"];
     expect(bucket).toBeDefined();
     expect(bucket?.[event.id]).toEqual(event);
+    expect(useEntityStore.getState()._eventIdsByScope["session:session-1"]).toEqual([event.id]);
+  });
+
+  it("keeps scoped event ids ordered by timestamp", () => {
+    const newer = makeEvent({
+      eventType: "session_output",
+      scopeId: "session-1",
+      timestamp: "2026-01-01T00:00:02.000Z",
+      payload: { type: "assistant", message: { content: [{ type: "text", text: "newer" }] } },
+    });
+    const older = makeEvent({
+      eventType: "session_output",
+      scopeId: "session-1",
+      timestamp: "2026-01-01T00:00:01.000Z",
+      payload: { type: "assistant", message: { content: [{ type: "text", text: "older" }] } },
+    });
+
+    handleOrgEvent(newer);
+    handleOrgEvent(older);
+
+    expect(useEntityStore.getState()._eventIdsByScope["session:session-1"]).toEqual([
+      older.id,
+      newer.id,
+    ]);
   });
 
   it("upserts a new session and its session group on session_started", () => {

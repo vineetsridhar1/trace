@@ -26,10 +26,6 @@ interface UseSessionNodesOptions {
   frozen?: boolean;
 }
 
-function sortEventsByTimestamp(a: Event, b: Event): number {
-  return a.timestamp.localeCompare(b.timestamp);
-}
-
 const DISABLED_SCOPE_KEY = "__session_nodes_disabled__";
 const EMPTY_NODES: SessionNode[] = [];
 const EMPTY_COMPLETED_AGENT_TOOLS = new Map<string, AgentToolResult>();
@@ -138,6 +134,7 @@ function useScopedEventSnapshot(scopeKey: string, frozen: boolean): ScopedEventS
     eventIds: EMPTY_EVENT_IDS,
   });
   const bucketRef = useRef<Record<string, Event> | null>(null);
+  const eventIdsRef = useRef<string[]>(EMPTY_EVENT_IDS);
 
   return useEntityStore((state: EntityState) => {
     const previousSnapshot = snapshotRef.current;
@@ -146,18 +143,17 @@ function useScopedEventSnapshot(scopeKey: string, frozen: boolean): ScopedEventS
     }
 
     const events = state.eventsByScope[scopeKey] ?? EMPTY_EVENTS;
-    if (previousSnapshot.scopeKey === scopeKey && bucketRef.current === events) {
+    const eventIds = state._eventIdsByScope[scopeKey] ?? EMPTY_EVENT_IDS;
+    if (
+      previousSnapshot.scopeKey === scopeKey &&
+      bucketRef.current === events &&
+      eventIdsRef.current === eventIds
+    ) {
       return previousSnapshot;
     }
-
-    const eventIds =
-      events === EMPTY_EVENTS
-        ? EMPTY_EVENT_IDS
-        : Object.entries(events)
-            .sort(([, a], [, b]) => sortEventsByTimestamp(a, b))
-            .map(([id]) => id);
     const nextSnapshot = { scopeKey, events, eventIds };
     bucketRef.current = events;
+    eventIdsRef.current = eventIds;
     snapshotRef.current = nextSnapshot;
     return nextSnapshot;
   });
