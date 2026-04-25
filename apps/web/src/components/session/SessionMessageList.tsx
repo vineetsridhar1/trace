@@ -246,12 +246,7 @@ export function SessionMessageList({
   }, [onLoadOlder]);
 
   const virtualItems = virtualizer.getVirtualItems();
-  const isEmpty = !initialLoading && nodes.length === 0 && !loadingOlder;
-  const [showEmptyState, setShowEmptyState] = useState(isEmpty);
-
-  useEffect(() => {
-    if (isEmpty) setShowEmptyState(true);
-  }, [isEmpty]);
+  const showEmptyState = !initialLoading && nodes.length === 0 && !loadingOlder;
 
   const emptyState = (
     <motion.div
@@ -259,9 +254,6 @@ export function SessionMessageList({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      onAnimationComplete={() => {
-        if (!isEmpty) setShowEmptyState(false);
-      }}
       className="absolute inset-0 z-10"
     >
       <div className="h-full overflow-y-auto bg-background">
