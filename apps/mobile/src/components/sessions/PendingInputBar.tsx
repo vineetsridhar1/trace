@@ -37,6 +37,7 @@ export function PendingInputBar({ sessionId }: PendingInputBarProps) {
     return (
       <PendingInputPlan
         sessionId={sessionId}
+        planContent={pending.planContent}
         planFilePath={pending.planFilePath}
       />
     );

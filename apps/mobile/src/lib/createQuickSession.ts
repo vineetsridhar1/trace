@@ -7,7 +7,9 @@ import {
   insertOptimisticSessionPair,
   reconcileOptimisticSessionPair,
   rollbackOptimisticSessionPair,
+  RUN_SESSION_MUTATION,
   START_SESSION_MUTATION,
+  TERMINATE_SESSION_MUTATION,
   useEntityStore,
   type SessionEntity,
 } from "@trace/client-core";
@@ -179,5 +181,92 @@ export async function createAgentTab(
     const message = err instanceof Error ? err.message : "Please try again.";
     void haptic.error();
     Alert.alert("Couldn't create agent tab", message);
+  }
+}
+
+/**
+ * Start a fresh session from an approved plan, switch the mobile UI to it,
+ * and retire the prior session so implementation continues in a clean context.
+ */
+export async function startPlanImplementationSession(
+  sourceSessionId: string,
+  planContent: string,
+): Promise<boolean> {
+  const state = useEntityStore.getState();
+  const sourceSession = state.sessions[sourceSessionId];
+  const sessionGroupId = sourceSession?.sessionGroupId;
+
+  if (!sourceSession || !sessionGroupId || sourceSession._optimistic) {
+    void haptic.error();
+    Alert.alert("Couldn't start implementation", "This session isn't ready yet. Try again.");
+    return false;
+  }
+
+  const group = state.sessionGroups[sessionGroupId] ?? null;
+  const groupSessions = (state._sessionIdsByGroup[sessionGroupId] ?? [])
+    .map((id) => state.sessions[id])
+    .filter((session): session is SessionEntity => session !== undefined);
+  const channelId =
+    getSessionGroupChannelId(group, groupSessions) ?? getSessionChannelId(sourceSession) ?? undefined;
+  const groupRepo = group?.repo as { id: string } | null | undefined;
+  const sourceRepo = sourceSession.repo as { id: string } | null | undefined;
+  const prompt = `Implement the following plan:\n\n${planContent}`;
+
+  void haptic.light();
+
+  try {
+    const result = await getClient()
+      .mutation<{ startSession: { id: string; sessionGroupId: string } }>(
+        START_SESSION_MUTATION,
+        {
+          input: {
+            tool: sourceSession.tool as CodingTool,
+            model: sourceSession.model ?? undefined,
+            hosting: sourceSession.hosting,
+            channelId,
+            repoId: groupRepo?.id ?? sourceRepo?.id,
+            branch: group?.branch ?? sourceSession.branch ?? undefined,
+            sessionGroupId,
+            sourceSessionId,
+            prompt,
+          },
+        },
+      )
+      .toPromise();
+
+    if (result.error) throw result.error;
+    const session = result.data?.startSession;
+    if (!session?.id || !session.sessionGroupId) {
+      throw new Error("Server did not return a session id");
+    }
+
+    const runResult = await getClient()
+      .mutation(RUN_SESSION_MUTATION, { id: session.id, prompt })
+      .toPromise();
+    if (runResult.error) throw runResult.error;
+
+    const hydrated = await fetchSessionGroupDetail(session.sessionGroupId);
+    if (!hydrated && !useEntityStore.getState().sessions[session.id]?.sessionGroupId) {
+      throw new Error("Couldn't load the new session");
+    }
+
+    const ui = useMobileUIStore.getState();
+    ui.setOverlaySessionId(session.id);
+    router.replace(`/sessions/${session.sessionGroupId}/${session.id}` as never);
+
+    void haptic.success();
+
+    void getClient()
+      .mutation(TERMINATE_SESSION_MUTATION, { id: sourceSessionId })
+      .toPromise()
+      .catch((error: unknown) => {
+        console.error("Failed to terminate plan session:", error);
+      });
+    return true;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Please try again.";
+    void haptic.error();
+    Alert.alert("Couldn't start implementation", message);
+    return false;
   }
 }
