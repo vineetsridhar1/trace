@@ -106,7 +106,7 @@ export function PendingInputQuestion({
         <Glass preset="card" interactive style={styles.menuSurface}>
           <View style={styles.menuContent}>
             <Text
-              variant="footnote"
+              variant="body"
               color="foreground"
               style={styles.questionText}
               numberOfLines={4}
@@ -223,7 +223,12 @@ export function PendingInputQuestion({
 }
 
 const styles = StyleSheet.create({
-  questionText: { marginTop: 4, marginBottom: 10 },
+  questionText: {
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 12,
+    fontWeight: "600",
+  },
   menuContainer: {
     marginTop: 10,
   },
