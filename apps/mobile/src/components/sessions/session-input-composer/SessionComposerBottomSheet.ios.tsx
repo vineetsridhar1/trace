@@ -1,21 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
-import { BottomSheet, Group, Host, RNHostView } from "@expo/ui/swift-ui";
-import {
-  presentationDetents,
-  presentationDragIndicator,
-} from "@expo/ui/swift-ui/modifiers";
+import { BottomSheet, Host } from "@expo/ui/swift-ui";
 
 interface SessionComposerBottomSheetProps {
   visible: boolean;
   onClose: () => void;
   children: ReactNode;
 }
-
-const SHEET_MODIFIERS = [
-  presentationDetents(["medium", "large"]),
-  presentationDragIndicator("visible"),
-];
 
 export function SessionComposerBottomSheet({
   visible,
@@ -34,8 +25,8 @@ export function SessionComposerBottomSheet({
   }, [children, visible]);
 
   const handlePresentedChange = useCallback(
-    (isPresented: boolean) => {
-      if (isPresented) return;
+    (isOpened: boolean) => {
+      if (isOpened) return;
       setMounted(false);
       onClose();
     },
@@ -50,14 +41,12 @@ export function SessionComposerBottomSheet({
     <View style={styles.anchor}>
       <Host style={hostStyle}>
         <BottomSheet
-          isPresented={visible}
-          onIsPresentedChange={handlePresentedChange}
+          isOpened={visible}
+          onIsOpenedChange={handlePresentedChange}
+          presentationDetents={["medium", "large"]}
+          presentationDragIndicator="visible"
         >
-          <Group modifiers={SHEET_MODIFIERS}>
-            <RNHostView>
-              <View style={styles.sheetContent}>{content}</View>
-            </RNHostView>
-          </Group>
+          <View style={styles.sheetContent}>{content}</View>
         </BottomSheet>
       </Host>
     </View>

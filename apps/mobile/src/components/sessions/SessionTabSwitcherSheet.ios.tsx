@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
-import { BottomSheet, Group, Host, RNHostView } from "@expo/ui/swift-ui";
-import {
-  presentationDetents,
-  presentationDragIndicator,
-} from "@expo/ui/swift-ui/modifiers";
+import { BottomSheet, Host } from "@expo/ui/swift-ui";
 import { SessionTabSwitcherContent } from "./SessionTabSwitcherContent";
 
 interface SessionTabSwitcherSheetProps {
@@ -15,11 +11,6 @@ interface SessionTabSwitcherSheetProps {
 }
 
 const IOS_SHEET_CLOSE_DELAY_MS = 220;
-const SHEET_MODIFIERS = [
-  presentationDetents(["medium", "large"]),
-  presentationDragIndicator("visible"),
-];
-
 export function SessionTabSwitcherSheet({
   open,
   groupId,
@@ -34,8 +25,8 @@ export function SessionTabSwitcherSheet({
   }, [open]);
 
   const handlePresentedChange = useCallback(
-    (isPresented: boolean) => {
-      if (isPresented) return;
+    (isOpened: boolean) => {
+      if (isOpened) return;
       setMounted(false);
       onClose();
     },
@@ -50,22 +41,20 @@ export function SessionTabSwitcherSheet({
     <View style={styles.anchor}>
       <Host style={hostStyle}>
         <BottomSheet
-          isPresented={open}
-          onIsPresentedChange={handlePresentedChange}
+          isOpened={open}
+          onIsOpenedChange={handlePresentedChange}
+          presentationDetents={["medium", "large"]}
+          presentationDragIndicator="visible"
         >
-          <Group modifiers={SHEET_MODIFIERS}>
-            <RNHostView>
-              <View style={styles.sheetContent}>
-                <SessionTabSwitcherContent
-                  groupId={groupId}
-                  activeSessionId={activeSessionId}
-                  onClose={onClose}
-                  closeDelayMs={IOS_SHEET_CLOSE_DELAY_MS}
-                  contentInset="sheet"
-                />
-              </View>
-            </RNHostView>
-          </Group>
+          <View style={styles.sheetContent}>
+            <SessionTabSwitcherContent
+              groupId={groupId}
+              activeSessionId={activeSessionId}
+              onClose={onClose}
+              closeDelayMs={IOS_SHEET_CLOSE_DELAY_MS}
+              contentInset="sheet"
+            />
+          </View>
         </BottomSheet>
       </Host>
     </View>
