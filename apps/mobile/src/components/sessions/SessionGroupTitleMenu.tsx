@@ -12,7 +12,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useEntityField } from "@trace/client-core";
 import type { SessionConnection, SessionGroupStatus } from "@trace/gql";
-import { Spinner, Text } from "@/components/design-system";
+import { ListRow, Spinner, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
 import { haptic } from "@/lib/haptics";
 import { alpha, useTheme } from "@/theme";
@@ -29,6 +29,8 @@ interface SessionGroupTitleMenuProps {
   groupId: string;
   /** The session currently shown; drives the status dot's agentStatus overlay. */
   sessionId?: string;
+  browserEnabled?: boolean;
+  onOpenBrowser?: () => void;
   /** Width the morph should expand to when open — usually the full header row. */
   fullWidth: number;
   /** How far left the expanded surface should pull from the title pill origin. */
@@ -48,16 +50,27 @@ interface SessionGroupTitleMenuProps {
 export function SessionGroupTitleMenu({
   groupId,
   sessionId,
+  browserEnabled = true,
+  onOpenBrowser,
   fullWidth,
   expandLeftInset = 0,
 }: SessionGroupTitleMenuProps) {
   if (!isLiquidGlassAvailable()) {
-    return <FallbackTitlePill groupId={groupId} sessionId={sessionId} />;
+    return (
+      <FallbackTitlePill
+        groupId={groupId}
+        sessionId={sessionId}
+        browserEnabled={browserEnabled}
+        onOpenBrowser={onOpenBrowser}
+      />
+    );
   }
   return (
     <MorphingTitle
       groupId={groupId}
       sessionId={sessionId}
+      browserEnabled={browserEnabled}
+      onOpenBrowser={onOpenBrowser}
       fullWidth={fullWidth}
       expandLeftInset={expandLeftInset}
     />
@@ -67,6 +80,8 @@ export function SessionGroupTitleMenu({
 function MorphingTitle({
   groupId,
   sessionId,
+  browserEnabled = true,
+  onOpenBrowser,
   fullWidth,
   expandLeftInset = 0,
 }: SessionGroupTitleMenuProps) {
@@ -208,7 +223,15 @@ function MorphingTitle({
                 panelStyle,
               ]}
             >
-              <PanelContent groupId={groupId} sessionId={sessionId} />
+              <PanelContent
+                groupId={groupId}
+                sessionId={sessionId}
+                browserEnabled={browserEnabled}
+                onOpenBrowser={() => {
+                  close();
+                  onOpenBrowser?.();
+                }}
+              />
             </Animated.View>
 
             <Animated.View
@@ -324,9 +347,13 @@ function TitleRow({
 function PanelContent({
   groupId,
   sessionId,
+  browserEnabled = true,
+  onOpenBrowser,
 }: {
   groupId: string;
   sessionId?: string;
+  browserEnabled?: boolean;
+  onOpenBrowser?: () => void;
 }) {
   const theme = useTheme();
   const branch = useEntityField("sessionGroups", groupId, "branch") as
@@ -352,6 +379,33 @@ function PanelContent({
           </Text>
         </View>
       ) : null}
+      {sessionId ? (
+        <View
+          style={[
+            styles.actionsCard,
+            {
+              backgroundColor: alpha(theme.colors.surface, 0.5),
+              borderColor: alpha(theme.colors.foreground, 0.08),
+            },
+          ]}
+        >
+          <ListRow
+            title="Open Browser"
+            subtitle={browserEnabled ? "Preview this workspace" : "Available after the session loads"}
+            leading={
+              <SymbolView
+                name="globe"
+                size={16}
+                tintColor={browserEnabled ? theme.colors.foreground : theme.colors.mutedForeground}
+                resizeMode="scaleAspectFit"
+              />
+            }
+            onPress={browserEnabled ? onOpenBrowser : undefined}
+            haptic="selection"
+            separator={false}
+          />
+        </View>
+      ) : null}
       <LinkedCheckoutPanelSection groupId={groupId} />
     </View>
   );
@@ -360,11 +414,23 @@ function PanelContent({
 function FallbackTitlePill({
   groupId,
   sessionId,
+  browserEnabled = true,
+  onOpenBrowser,
 }: {
   groupId: string;
   sessionId?: string;
+  browserEnabled?: boolean;
+  onOpenBrowser?: () => void;
 }) {
   const theme = useTheme();
+  const handlePress = useCallback(() => {
+    if (!browserEnabled) return;
+    void haptic.selection();
+    onOpenBrowser?.();
+  }, [browserEnabled, onOpenBrowser]);
+
+  const content = <TitleRow groupId={groupId} sessionId={sessionId} />;
+
   return (
     <View style={styles.anchor}>
       <BlurView
@@ -375,7 +441,19 @@ function FallbackTitlePill({
           { borderRadius: PILL_RADIUS },
         ]}
       >
-        <TitleRow groupId={groupId} sessionId={sessionId} />
+        {onOpenBrowser ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open browser"
+            disabled={!browserEnabled}
+            onPress={handlePress}
+            style={styles.triggerInner}
+          >
+            {content}
+          </Pressable>
+        ) : (
+          content
+        )}
       </BlurView>
     </View>
   );
@@ -446,6 +524,13 @@ const styles = StyleSheet.create({
   branchValue: {
     fontFamily: "Menlo",
     flex: 1,
+  },
+  actionsCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
   },
   panelLayer: {
     position: "absolute",

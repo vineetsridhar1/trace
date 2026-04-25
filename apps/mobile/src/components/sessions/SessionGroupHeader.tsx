@@ -21,12 +21,18 @@ interface SessionGroupHeaderProps {
   groupId: string;
   /** The session currently shown; drives the status dot's agentStatus overlay. */
   sessionId?: string;
+  activePane?: "session" | "terminal" | "browser";
+  browserEnabled?: boolean;
+  onOpenBrowser?: () => void;
   leadingAccessory?: ReactNode;
 }
 
 export function SessionGroupHeader({
   groupId,
   sessionId,
+  activePane = "session",
+  browserEnabled = true,
+  onOpenBrowser,
   leadingAccessory,
 }: SessionGroupHeaderProps) {
   const theme = useTheme();
@@ -119,9 +125,9 @@ export function SessionGroupHeader({
 
   const menuItems = useMemo(() => {
     const items: SessionMenuAction[] = [];
-    if (sessionId && !sessionOptimistic && sessionIds.length > 1) {
+    if (sessionId && !sessionOptimistic) {
       items.push({
-        title: "Switch tab...",
+        title: "Tabs & terminals",
         systemIcon: "rectangle.on.rectangle",
         onPress: handleOpenTabSwitcher,
       });
@@ -163,7 +169,6 @@ export function SessionGroupHeader({
     prUrl,
     sessionId,
     sessionOptimistic,
-    sessionIds.length,
     status,
   ]);
 
@@ -189,6 +194,8 @@ export function SessionGroupHeader({
         <SessionGroupTitleMenu
           groupId={groupId}
           sessionId={sessionId}
+          browserEnabled={browserEnabled}
+          onOpenBrowser={onOpenBrowser}
           fullWidth={rowWidth}
           expandLeftInset={expandLeftInset}
         />
@@ -199,6 +206,7 @@ export function SessionGroupHeader({
           open={tabSwitcherOpen}
           groupId={groupId}
           activeSessionId={sessionId}
+          activePane={activePane}
           onClose={() => setTabSwitcherOpen(false)}
         />
       ) : null}

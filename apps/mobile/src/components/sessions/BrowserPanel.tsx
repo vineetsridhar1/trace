@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -7,7 +7,6 @@ import {
   type NativeSyntheticEvent,
   type TextInputSubmitEditingEventData,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView } from "expo-symbols";
 import WebView, { type WebViewNavigation } from "react-native-webview";
 import { Text } from "@/components/design-system";
@@ -28,9 +27,12 @@ interface BrowserPanelProps {
  * in the Session Player. Renders a simple URL bar + back/forward/reload
  * controls on top of a full-screen WebView.
  */
-export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: BrowserPanelProps) {
+export function BrowserPanel({
+  url: nextUrl,
+  onUrlChange,
+  topInset = 0,
+}: BrowserPanelProps) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const resolvedUrl = nextUrl;
 
   const [url, setUrl] = useState(resolvedUrl);
@@ -39,6 +41,9 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
   const [canGoForward, setCanGoForward] = useState(false);
   const [loading, setLoading] = useState(false);
   const webViewRef = useRef<WebView>(null);
+  const latestUrlRef = useRef(resolvedUrl);
+  const onUrlChangeRef = useRef(onUrlChange);
+  const webSource = useMemo(() => ({ uri: url }), [url]);
 
   useEffect(() => {
     if (resolvedUrl === url) return;
@@ -49,15 +54,28 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
     setLoading(false);
   }, [resolvedUrl, url]);
 
+  useEffect(() => {
+    latestUrlRef.current = url;
+  }, [url]);
+
+  useEffect(() => {
+    onUrlChangeRef.current = onUrlChange;
+  }, [onUrlChange]);
+
+  useEffect(() => {
+    return () => {
+      if (latestUrlRef.current) onUrlChangeRef.current(latestUrlRef.current);
+    };
+  }, []);
+
   const handleNavStateChange = useCallback(
     (state: WebViewNavigation) => {
       setCanGoBack(state.canGoBack);
       setCanGoForward(state.canGoForward);
       setInputText(state.url);
       setUrl(state.url);
-      onUrlChange(state.url);
     },
-    [onUrlChange],
+    [],
   );
 
   const handleSubmit = useCallback(
@@ -70,9 +88,8 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
         webViewRef.current?.reload();
         return;
       }
-      onUrlChange(raw);
     },
-    [onUrlChange, url],
+    [url],
   );
 
   const handleBack = useCallback(() => webViewRef.current?.goBack(), []);
@@ -184,7 +201,7 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
       {url ? (
         <WebView
           ref={webViewRef}
-          source={{ uri: url }}
+          source={webSource}
           style={styles.webView}
           automaticallyAdjustContentInsets={false}
           contentInsetAdjustmentBehavior="never"
@@ -193,7 +210,6 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
           onLoadEnd={() => setLoading(false)}
           allowsInlineMediaPlayback
           sharedCookiesEnabled
-          allowsBackForwardNavigationGestures
         />
       ) : (
         <View
@@ -207,8 +223,6 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
           </Text>
         </View>
       )}
-
-      <View style={{ height: insets.bottom }} />
     </View>
   );
 }

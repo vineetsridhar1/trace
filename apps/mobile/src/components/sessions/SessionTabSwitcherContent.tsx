@@ -10,10 +10,12 @@ import { createAgentTab } from "@/lib/createQuickSession";
 import { useMobileUIStore } from "@/stores/ui";
 import { useTheme } from "@/theme";
 import { SessionTabSwitcherRow } from "./SessionTabSwitcherRow";
+import { SessionTerminalSwitcherRow } from "./SessionTerminalSwitcherRow";
 
 interface SessionTabSwitcherContentProps {
   groupId: string;
   activeSessionId: string;
+  activePane?: "session" | "terminal" | "browser";
   onClose?: () => void;
   closeDelayMs?: number;
   contentInset?: "none" | "sheet";
@@ -24,6 +26,7 @@ const ROW_HEIGHT = 68;
 export function SessionTabSwitcherContent({
   groupId,
   activeSessionId,
+  activePane = "session",
   onClose,
   closeDelayMs,
   contentInset = "none",
@@ -42,12 +45,15 @@ export function SessionTabSwitcherContent({
   const navigationDelayMs = closeDelayMs ?? (onClose ? theme.motion.durations.fast : 0);
 
   const navigateToSession = useCallback(
-    (sessionGroupId: string, targetId: string) => {
+    (sessionGroupId: string, targetId: string, pane: "session" | "terminal" = "session") => {
       onClose?.();
-      if (targetId === activeSessionId) return;
+      if (targetId === activeSessionId && pane === activePane) return;
       const performNavigation = () => {
         useMobileUIStore.getState().setOverlaySessionId(targetId);
-        const targetHref = `/sessions/${sessionGroupId}/${targetId}` as never;
+        const targetHref =
+          pane === "session"
+            ? (`/sessions/${sessionGroupId}/${targetId}` as never)
+            : (`/sessions/${sessionGroupId}/${targetId}?pane=${pane}` as never);
         router.replace(targetHref);
       };
       if (navigationDelayMs > 0) {
@@ -56,7 +62,7 @@ export function SessionTabSwitcherContent({
       }
       performNavigation();
     },
-    [activeSessionId, navigationDelayMs, onClose, router],
+    [activePane, activeSessionId, navigationDelayMs, onClose, router],
   );
 
   const handleCreateAgentTab = useCallback(async () => {
@@ -113,7 +119,7 @@ export function SessionTabSwitcherContent({
       ]}
     >
       <View style={styles.header}>
-        <Text variant="headline">Agent tabs</Text>
+        <Text variant="headline">Tabs & terminals</Text>
         <Text variant="footnote" color="mutedForeground">
           {groupName ?? "Current workspace"}
         </Text>
@@ -156,6 +162,34 @@ export function SessionTabSwitcherContent({
         />
       </View>
 
+      {sessionIds.length > 0 ? (
+        <View
+          style={[
+            styles.section,
+            {
+              backgroundColor: theme.colors.surfaceElevated,
+              borderColor: theme.colors.borderMuted,
+              borderRadius: theme.radius.lg,
+            },
+          ]}
+        >
+          <View style={[styles.sectionHeader, { borderBottomColor: theme.colors.borderMuted }]}>
+            <Text variant="footnote" color="mutedForeground">
+              Terminals
+            </Text>
+          </View>
+          {sessionIds.map((sessionId, index) => (
+            <SessionTerminalSwitcherRow
+              key={`terminal-${sessionId}`}
+              sessionId={sessionId}
+              active={sessionId === activeSessionId && activePane === "terminal"}
+              separator={index < sessionIds.length - 1}
+              onPress={() => navigateToSession(groupId, sessionId, "terminal")}
+            />
+          ))}
+        </View>
+      ) : null}
+
       {sessionIds.length === 0 ? (
         <View style={styles.center}>
           <EmptyState
@@ -176,12 +210,17 @@ export function SessionTabSwitcherContent({
             },
           ]}
         >
+          <View style={[styles.sectionHeader, { borderBottomColor: theme.colors.borderMuted }]}>
+            <Text variant="footnote" color="mutedForeground">
+              Agent tabs
+            </Text>
+          </View>
           <FlashList
             data={sessionIds}
             renderItem={({ item, index }) => (
               <SessionTabSwitcherRow
                 sessionId={item}
-                active={item === activeSessionId}
+                active={item === activeSessionId && activePane === "session"}
                 separator={index < sessionIds.length - 1}
                 onPress={() => navigateToSession(groupId, item)}
               />
@@ -207,6 +246,11 @@ const styles = StyleSheet.create({
   section: {
     overflow: "hidden",
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  sectionHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   listSection: {
     flex: 1,
