@@ -28,7 +28,7 @@ import {
 
 type SessionPaneMode = "session" | "terminal" | "browser";
 
-const HEADER_FADE_EXTRA_HEIGHT = 40;
+const HEADER_FADE_EXTRA_HEIGHT = 56;
 
 /**
  * Standalone mobile session page. Reuses the session surface building blocks
@@ -219,11 +219,11 @@ export default function SessionStreamScreen() {
         <LinearGradient
           pointerEvents="none"
           colors={[
-            alpha(theme.colors.background, 0.58),
-            alpha(theme.colors.background, 0.32),
+            alpha(theme.colors.background, 0.76),
+            alpha(theme.colors.background, 0.48),
             alpha(theme.colors.background, 0),
           ]}
-          locations={[0, 0.64, 1]}
+          locations={[0, 0.68, 1]}
           style={[
             styles.headerFade,
             { height: overlayHeight + HEADER_FADE_EXTRA_HEIGHT },
