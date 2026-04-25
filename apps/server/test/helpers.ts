@@ -228,6 +228,15 @@ export function createPrismaMock() {
       findMany: vi.fn(),
       deleteMany: vi.fn(),
     },
+    queuedMessage: {
+      aggregate: vi.fn(),
+      create: vi.fn(),
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
     channel: {
       create: vi.fn(),
       count: vi.fn(),

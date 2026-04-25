@@ -5113,7 +5113,7 @@ export class SessionService {
    * When false (single session), only destroys that session's terminals and checks
    * whether siblings are still active before touching group resources.
    */
-  private async fullyUnloadSession(sessionId: string, isGroupUnload = false) {
+  private async fullyUnloadSession(sessionId: string, isGroupUnload = false): Promise<boolean> {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       select: {
@@ -5124,7 +5124,7 @@ export class SessionService {
         sessionGroupId: true,
       },
     });
-    if (!session) return;
+    if (!session) return false;
 
     if (isGroupUnload && session.sessionGroupId) {
       // Group-level unload: destroy all terminals and the shared runtime
@@ -5136,12 +5136,13 @@ export class SessionService {
         console.warn(
           `[session-service] failed to unload group via session ${sessionId}: ${message}`,
         );
+        return false;
       }
       await this.syncGroupWorkspaceState(session.sessionGroupId, {
         workdir: null,
         worktreeDeleted: true,
       });
-      return;
+      return true;
     }
 
     // Single-session unload: only destroy this session's terminals
@@ -5165,12 +5166,15 @@ export class SessionService {
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           console.warn(`[session-service] failed to unload session ${sessionId}: ${message}`);
+          return false;
         }
         await this.syncGroupWorkspaceState(session.sessionGroupId, {
           workdir: null,
           worktreeDeleted: true,
         });
+        return true;
       }
+      return false;
     } else {
       // No group — just destroy the runtime
       try {
@@ -5178,7 +5182,9 @@ export class SessionService {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn(`[session-service] failed to unload session ${sessionId}: ${message}`);
+        return false;
       }
+      return true;
     }
   }
 
@@ -5324,11 +5330,12 @@ export class SessionService {
 
     if (count === 0) return;
 
-    const sessionGroup = await this.syncGroupWorkspaceState(sessionGroupId, {
-      prUrl,
-      workdir: null,
-      worktreeDeleted: true,
-    });
+    // Preserve the worktree path through runtime teardown so the bridge can
+    // remove the on-disk worktree before we clear it from persisted state.
+    await this.syncGroupWorkspaceState(sessionGroupId, { prUrl });
+
+    const worktreeDeleted = await this.fullyUnloadSession(eventSessionId, true);
+    const sessionGroup = await this.loadSessionGroupSnapshot(sessionGroupId);
 
     await eventService.create({
       organizationId,
@@ -5340,14 +5347,12 @@ export class SessionService {
         prUrl,
         agentStatus: "done",
         sessionStatus: "merged",
-        worktreeDeleted: true,
+        worktreeDeleted,
         ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "system",
       actorId: "github-webhook",
     });
-
-    await this.fullyUnloadSession(eventSessionId, true);
   }
 }
 

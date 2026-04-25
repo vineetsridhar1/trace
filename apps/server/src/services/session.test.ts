@@ -2942,6 +2942,142 @@ describe("SessionService", () => {
       expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
       expect(eventServiceMock.create).not.toHaveBeenCalled();
     });
+
+    it("preserves the workdir through merged-session unload so the worktree can be removed", async () => {
+      const prUrl = "https://github.com/trace/trace/pull/100";
+      let currentWorkdir: string | null = "/tmp/trace/cobra";
+
+      prismaMock.sessionGroup.findUnique
+        .mockResolvedValueOnce({ prUrl })
+        .mockResolvedValueOnce({
+          ...makeSessionGroup({ prUrl, workdir: "/tmp/trace/cobra", worktreeDeleted: true }),
+          sessions: [{ agentStatus: "done", sessionStatus: "merged" }],
+        })
+        .mockResolvedValueOnce({
+          ...makeSessionGroup({ prUrl, workdir: null, worktreeDeleted: true }),
+          sessions: [{ agentStatus: "done", sessionStatus: "merged" }],
+        });
+      prismaMock.session.updateMany.mockImplementation(async (args?: { data?: { workdir?: string | null } }) => {
+        if (args?.data && Object.prototype.hasOwnProperty.call(args.data, "workdir")) {
+          currentWorkdir = args.data.workdir ?? null;
+        }
+        return { count: 1 };
+      });
+      prismaMock.sessionGroup.update.mockResolvedValue(makeSessionGroup());
+      prismaMock.session.findUnique.mockImplementation(async () => ({
+        hosting: "local",
+        workdir: currentWorkdir,
+        repoId: "repo-1",
+        connection: { state: "connected", retryCount: 0, canRetry: true, canMove: true },
+        sessionGroupId: "group-1",
+      }));
+
+      await service.markPrMerged({
+        sessionGroupId: "group-1",
+        eventSessionId: "session-1",
+        prUrl,
+        organizationId: "org-1",
+      });
+
+      expect(sessionRouterMock.destroyRuntime).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          hosting: "local",
+          workdir: "/tmp/trace/cobra",
+          repoId: "repo-1",
+        }),
+      );
+      expect(prismaMock.session.updateMany).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            workdir: null,
+            worktreeDeleted: true,
+          }),
+        }),
+      );
+      expect(prismaMock.sessionGroup.update).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            prUrl,
+          }),
+        }),
+      );
+      expect(prismaMock.sessionGroup.update).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          data: expect.not.objectContaining({
+            workdir: null,
+            worktreeDeleted: true,
+          }),
+        }),
+      );
+      expect(prismaMock.sessionGroup.update).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            workdir: null,
+            worktreeDeleted: true,
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            worktreeDeleted: true,
+          }),
+        }),
+      );
+      expect(sessionRouterMock.destroyRuntime.mock.invocationCallOrder[0]).toBeLessThan(
+        eventServiceMock.create.mock.invocationCallOrder[0],
+      );
+    });
+
+    it("keeps worktreeDeleted false when merged-session teardown fails", async () => {
+      const prUrl = "https://github.com/trace/trace/pull/100";
+      let currentWorkdir: string | null = "/tmp/trace/cobra";
+
+      prismaMock.sessionGroup.findUnique
+        .mockResolvedValueOnce({ prUrl })
+        .mockResolvedValueOnce({
+          ...makeSessionGroup({ prUrl, workdir: currentWorkdir, worktreeDeleted: false }),
+          sessions: [{ agentStatus: "done", sessionStatus: "merged" }],
+        });
+      prismaMock.session.updateMany.mockImplementation(async (args?: { data?: { workdir?: string | null } }) => {
+        if (args?.data && Object.prototype.hasOwnProperty.call(args.data, "workdir")) {
+          currentWorkdir = args.data.workdir ?? null;
+        }
+        return { count: 1 };
+      });
+      prismaMock.sessionGroup.update.mockResolvedValue(makeSessionGroup());
+      prismaMock.session.findUnique.mockImplementation(async () => ({
+        hosting: "local",
+        workdir: currentWorkdir,
+        repoId: "repo-1",
+        connection: { state: "connected", retryCount: 0, canRetry: true, canMove: true },
+        sessionGroupId: "group-1",
+      }));
+      sessionRouterMock.destroyRuntime.mockRejectedValueOnce(new Error("bridge offline"));
+
+      await service.markPrMerged({
+        sessionGroupId: "group-1",
+        eventSessionId: "session-1",
+        prUrl,
+        organizationId: "org-1",
+      });
+
+      expect(currentWorkdir).toBe("/tmp/trace/cobra");
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledTimes(1);
+      expect(prismaMock.session.updateMany).toHaveBeenCalledTimes(1);
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            worktreeDeleted: false,
+          }),
+        }),
+      );
+    });
   });
 
   describe("listBranches", () => {
