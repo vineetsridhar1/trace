@@ -17,7 +17,7 @@ export function SessionTabSwitcherSheet({
   activeSessionId,
   onClose,
 }: SessionTabSwitcherSheetProps) {
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const [mounted, setMounted] = useState(open);
 
   useEffect(() => {
@@ -33,7 +33,7 @@ export function SessionTabSwitcherSheet({
     [onClose],
   );
 
-  const hostStyle = useMemo(() => [styles.host, { width }], [width]);
+  const hostStyle = useMemo(() => [styles.host, { height, width }], [height, width]);
 
   if (!mounted) return null;
 
@@ -66,14 +66,13 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 0,
     left: 0,
-    width: 1,
-    height: 1,
+    right: 0,
+    bottom: 0,
   },
   host: {
     position: "absolute",
     top: 0,
     left: 0,
-    height: 1,
   },
   sheetContent: {
     flex: 1,
