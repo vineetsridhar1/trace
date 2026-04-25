@@ -168,9 +168,10 @@ export function MembersSection() {
         setAddError(error instanceof Error ? error.message : "Failed to search users");
         setSearchResults([]);
       } finally {
-        if (cancelled) return;
-        setSearching(false);
-        setSearchDone(true);
+        if (!cancelled) {
+          setSearching(false);
+          setSearchDone(true);
+        }
       }
     }, 300);
 

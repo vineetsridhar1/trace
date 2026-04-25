@@ -13,7 +13,7 @@ interface MarkdownProps {
 // dropped rather than handed to `Linking.openURL`.
 const ALLOWED_LINK_SCHEMES = /^(https?|mailto):/i;
 const MARKDOWN_HINTS =
-  /(^|\n)\s{0,3}(#{1,6}\s|[-*+]\s|\d+[.)]\s|>\s|```|~~~)|[*_`\[\]]|!\[|https?:\/\/|mailto:/i;
+  /(^|\n)\s{0,3}(#{1,6}\s|[-*+]\s|\d+[.)]\s|>\s|```|~~~)|[*_`[\]]|!\[|https?:\/\/|mailto:/i;
 
 /**
  * Theme-aware markdown renderer. Mirrors the subset used by web's `Markdown`

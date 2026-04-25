@@ -59,11 +59,11 @@ export async function ensureRepo(repoId: string, remoteUrl: string): Promise<str
  */
 export async function createWorktree({
   repoId,
-  sessionId,
+  sessionId: _sessionId,
   defaultBranch,
   branch,
   checkpointSha,
-  sessionGroupId,
+  sessionGroupId: _sessionGroupId,
   slug,
 }: {
   repoId: string;

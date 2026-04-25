@@ -117,7 +117,7 @@ async function getProjectOverride(
   scopeId: string,
   organizationId: string,
 ): Promise<AutonomyMode | null> {
-  let projectIds: string[] = [];
+  let projectIds: string[];
 
   switch (scopeType) {
     case "ticket": {

@@ -37,8 +37,8 @@ async function resolveBaseBranch(
 export async function createWorktree({
   repoPath,
   repoId,
-  sessionId,
-  sessionGroupId,
+  sessionId: _sessionId,
+  sessionGroupId: _sessionGroupId,
   slug,
   defaultBranch,
   startBranch,

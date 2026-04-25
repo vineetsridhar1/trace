@@ -47,7 +47,7 @@ type TraceGitHookMetadata = {
 };
 
 export function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\"'\"'`)}'`;
+  return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
 
 export function isNotFoundError(error: unknown): boolean {

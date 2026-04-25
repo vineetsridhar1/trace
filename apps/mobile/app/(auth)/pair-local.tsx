@@ -49,6 +49,7 @@ type CameraModule = {
 
 function loadCameraModule(): CameraModule | null {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("expo-camera") as CameraModule;
   } catch (error) {
     console.warn("[pair-local] expo-camera unavailable", error);
