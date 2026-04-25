@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { SEND_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
-import { Glass, Text } from "@/components/design-system";
+import { Text } from "@/components/design-system";
 import { startPlanImplementationSession } from "@/lib/createQuickSession";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
@@ -160,32 +160,27 @@ export function PendingInputPlan({
                 setSelectedAction(option.value);
                 setFeedback("");
               }}
-              style={({ pressed }) => [styles.optionPressable, pressed && styles.optionPressed]}
+              style={({ pressed }) => [
+                styles.optionButton,
+                {
+                  borderColor: selected ? theme.colors.accent : theme.colors.border,
+                  backgroundColor: "transparent",
+                  opacity: sending ? 0.5 : pressed ? 0.7 : 1,
+                },
+              ]}
             >
-              <Glass
-                preset="card"
-                glassStyleEffect="clear"
-                style={[
-                  styles.optionButton,
-                  {
-                    borderColor: selected ? theme.colors.accent : theme.colors.border,
-                    opacity: sending ? 0.5 : 1,
-                  },
-                ]}
-              >
-                <View style={styles.optionCopy}>
-                  <Text
-                    variant="footnote"
-                    color={selected ? "accent" : "foreground"}
-                    style={styles.optionTitle}
-                  >
-                    {option.title}
-                  </Text>
-                  <Text variant="caption1" color="mutedForeground" style={styles.optionDescription}>
-                    {option.description}
-                  </Text>
-                </View>
-              </Glass>
+              <View style={styles.optionCopy}>
+                <Text
+                  variant="footnote"
+                  color={selected ? "accent" : "foreground"}
+                  style={styles.optionTitle}
+                >
+                  {option.title}
+                </Text>
+                <Text variant="caption1" color="mutedForeground" style={styles.optionDescription}>
+                  {option.description}
+                </Text>
+              </View>
             </Pressable>
           );
         })}
@@ -241,12 +236,6 @@ const styles = StyleSheet.create({
   optionsColumn: {
     gap: 8,
     marginTop: 10,
-  },
-  optionPressable: {
-    borderRadius: 12,
-  },
-  optionPressed: {
-    opacity: 0.85,
   },
   optionButton: {
     width: "100%",
