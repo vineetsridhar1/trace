@@ -9,6 +9,8 @@ interface PendingInputShellProps {
   header: string;
   headerTrailing?: ReactNode;
   background?: "surface" | "transparent";
+  showHeader?: boolean;
+  showTopBorder?: boolean;
   children: ReactNode;
 }
 
@@ -22,6 +24,8 @@ export function PendingInputShell({
   header,
   headerTrailing,
   background = "surface",
+  showHeader = true,
+  showTopBorder = true,
   children,
 }: PendingInputShellProps) {
   const theme = useTheme();
@@ -34,22 +38,25 @@ export function PendingInputShell({
           backgroundColor:
             background === "transparent" ? "transparent" : theme.colors.surface,
           borderTopColor: alpha(theme.colors.accent, 0.3),
+          borderTopWidth: showTopBorder ? StyleSheet.hairlineWidth : 0,
           paddingHorizontal: theme.spacing.md,
           paddingTop: theme.spacing.md,
           paddingBottom: theme.spacing.md + insets.bottom,
         },
       ]}
     >
-      <View style={styles.headerRow}>
-        <Text
-          variant="caption2"
-          style={[styles.headerLabel, { color: theme.colors.accent }]}
-          numberOfLines={1}
-        >
-          {header}
-        </Text>
-        {headerTrailing}
-      </View>
+      {showHeader ? (
+        <View style={styles.headerRow}>
+          <Text
+            variant="caption2"
+            style={[styles.headerLabel, { color: theme.colors.accent }]}
+            numberOfLines={1}
+          >
+            {header}
+          </Text>
+          {headerTrailing}
+        </View>
+      ) : null}
       {children}
     </View>
   );
@@ -163,7 +170,7 @@ export const pendingInputStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  container: { borderTopWidth: StyleSheet.hairlineWidth },
+  container: {},
   headerRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   headerLabel: {
     fontWeight: "700",

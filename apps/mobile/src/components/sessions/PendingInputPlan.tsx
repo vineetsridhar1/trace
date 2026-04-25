@@ -149,6 +149,8 @@ export function PendingInputPlan({
       header="Plan Review"
       headerTrailing={headerTrailing}
       background="transparent"
+      showHeader={false}
+      showTopBorder={false}
     >
       <View style={[styles.menuContainer, theme.shadows.lg]}>
         <Glass preset="card" interactive style={styles.menuSurface}>
@@ -223,7 +225,7 @@ export function PendingInputPlan({
             onSubmitEditing={() => {
               if (hasAnswer) handleSend();
             }}
-            placeholder="Type more…"
+            placeholder="Suggest a change"
             placeholderTextColor={theme.colors.dimForeground}
             editable={!sending}
             returnKeyType="send"
