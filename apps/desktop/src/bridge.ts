@@ -97,6 +97,7 @@ async function buildLinkedCheckoutFailureResult(repoId: string, error: unknown) 
     ok: false,
     status,
     error: message,
+    errorCode: null,
   };
 }
 

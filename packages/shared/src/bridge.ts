@@ -341,10 +341,13 @@ export interface BridgeLinkedCheckoutStatus {
   hasUncommittedChanges: boolean;
 }
 
+export type BridgeLinkedCheckoutErrorCode = "DIRTY_ROOT_CHECKOUT";
+
 export interface BridgeLinkedCheckoutActionResultPayload {
   ok: boolean;
   status: BridgeLinkedCheckoutStatus;
   error: string | null;
+  errorCode?: BridgeLinkedCheckoutErrorCode | null;
 }
 
 export interface BridgeLinkedCheckoutStatusResult {

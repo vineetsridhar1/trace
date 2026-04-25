@@ -137,7 +137,7 @@ export function useLinkedCheckoutHeaderState({
       if (!result) return;
 
       if (!result.ok) {
-        if (result.status.hasUncommittedChanges && result.error?.includes("before syncing")) {
+        if (result.errorCode === "DIRTY_ROOT_CHECKOUT") {
           setSyncConflictError(result.error);
           return;
         }

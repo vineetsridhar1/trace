@@ -564,9 +564,12 @@ export type InboxItemType =
 export type LinkedCheckoutActionResult = {
   __typename?: "LinkedCheckoutActionResult";
   error?: Maybe<Scalars["String"]["output"]>;
+  errorCode?: Maybe<LinkedCheckoutErrorCode>;
   ok: Scalars["Boolean"]["output"];
   status: LinkedCheckoutStatus;
 };
+
+export type LinkedCheckoutErrorCode = "DIRTY_ROOT_CHECKOUT";
 
 export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE";
 

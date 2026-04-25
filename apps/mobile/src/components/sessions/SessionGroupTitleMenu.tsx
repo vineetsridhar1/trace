@@ -18,6 +18,7 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEntityField } from "@trace/client-core";
 import type { SessionConnection, SessionGroupStatus } from "@trace/gql";
 import { ListRow, Spinner, Text } from "@/components/design-system";
@@ -105,6 +106,7 @@ function MorphingTitle({
   const anchorRef = useRef<View>(null);
   const progress = useSharedValue(0);
   const window = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   const handleAnchorLayout = useCallback((e: LayoutChangeEvent) => {
     setTriggerWidth(e.nativeEvent.layout.width);
@@ -141,7 +143,7 @@ function MorphingTitle({
   const endWidth = Math.max(fullWidth, startWidth);
   const availablePanelHeight = Math.max(
     PILL_HEIGHT,
-    window.height - (triggerPos?.y ?? 0) - PANEL_VIEWPORT_MARGIN,
+    window.height - (triggerPos?.y ?? 0) - insets.bottom - PANEL_VIEWPORT_MARGIN,
   );
   const panelHeight = Math.min(PANEL_MAX_HEIGHT, availablePanelHeight);
 

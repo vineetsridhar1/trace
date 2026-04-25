@@ -3040,6 +3040,76 @@ describe("SessionService", () => {
         message: undefined,
       });
     });
+
+    it("passes sync conflict resolution options through to the runtime", async () => {
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        repoId: "repo-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-home",
+        },
+        sessions: [
+          {
+            id: "session-home",
+            repoId: "repo-1",
+            hosting: "local",
+            createdById: "user-1",
+            connection: { state: "connected", runtimeInstanceId: "runtime-home" },
+          },
+        ],
+      });
+      runtimeAccessServiceMock.getAccessState.mockResolvedValueOnce({
+        hostingMode: "local",
+        allowed: true,
+        isOwner: true,
+      });
+      sessionRouterMock.getRuntime.mockImplementation((runtimeId: string) =>
+        runtimeId === "runtime-home"
+          ? {
+              id: "runtime-home",
+              hostingMode: "local",
+              ws: { readyState: 1, OPEN: 1 },
+            }
+          : null,
+      );
+      sessionRouterMock.syncLinkedCheckout.mockResolvedValueOnce({
+        ok: true,
+        error: null,
+        errorCode: null,
+        status: {
+          repoId: "repo-1",
+          repoPath: "/tmp/trace",
+          isAttached: true,
+          attachedSessionGroupId: "group-1",
+          targetBranch: "trace/raccoon",
+          autoSyncEnabled: true,
+          currentBranch: null,
+          currentCommitSha: "def456",
+          lastSyncedCommitSha: "def456",
+          lastSyncError: null,
+          restoreBranch: "main",
+          restoreCommitSha: "abc123",
+          hasUncommittedChanges: false,
+        },
+      });
+
+      await service.syncLinkedCheckout("group-1", "repo-1", "trace/raccoon", "org-1", "user-1", {
+        conflictStrategy: "commit",
+        commitMessage: "Carry local changes",
+      });
+
+      expect(sessionRouterMock.syncLinkedCheckout).toHaveBeenCalledWith("runtime-home", {
+        repoId: "repo-1",
+        sessionGroupId: "group-1",
+        branch: "trace/raccoon",
+        commitSha: undefined,
+        autoSyncEnabled: undefined,
+        conflictStrategy: "commit",
+        commitMessage: "Carry local changes",
+      });
+    });
   });
 
   describe("pr lifecycle", () => {

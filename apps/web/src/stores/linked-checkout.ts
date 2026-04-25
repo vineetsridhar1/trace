@@ -202,6 +202,8 @@ export async function syncLinkedCheckout(
         branch: request.branch,
         commitSha: request.commitSha,
         autoSyncEnabled: request.autoSyncEnabled,
+        conflictStrategy: request.conflictStrategy,
+        commitMessage: request.commitMessage,
       },
     );
     useLinkedCheckoutStore.getState().setStatus(key, result.status);

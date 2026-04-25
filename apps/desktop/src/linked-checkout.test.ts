@@ -241,6 +241,22 @@ describe("linked checkout commit-back", () => {
     expect(result.status.currentCommitSha).toBe(await git(worktreePath, ["rev-parse", "HEAD"]));
   }, 15_000);
 
+  it("returns a structured error code for dirty-root sync failures", async () => {
+    const { repoPath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "dirty\n");
+
+    const result = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errorCode).toBe("DIRTY_ROOT_CHECKOUT");
+  }, 15_000);
+
   it("commits main-worktree changes onto the Trace worktree during sync", async () => {
     const { repoPath, worktreePath } = await createRepoFixture();
     seedRepo("repo-1", repoPath);
@@ -286,6 +302,29 @@ describe("linked checkout commit-back", () => {
     expect(result.status.hasUncommittedChanges).toBe(true);
     expect(fs.readFileSync(path.join(repoPath, "app.txt"), "utf8")).toBe("keep this local\n");
     expect(fs.readFileSync(path.join(repoPath, "notes.txt"), "utf8")).toBe("branch advanced\n");
+  }, 15_000);
+
+  it("pauses the attachment when rebasing local changes onto the synced commit conflicts", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    fs.writeFileSync(path.join(worktreePath, "app.txt"), "branch version\n");
+    await git(worktreePath, ["add", "app.txt"]);
+    await git(worktreePath, ["commit", "-m", "advance conflicting branch"]);
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "local version\n");
+
+    const result = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+      conflictStrategy: "rebase",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.status.isAttached).toBe(true);
+    expect(result.status.autoSyncEnabled).toBe(false);
+    expect(result.status.lastSyncError).toBeTruthy();
+    expect(result.status.hasUncommittedChanges).toBe(true);
   }, 15_000);
 
   it("uses a custom commit message when committing attached main-worktree changes", async () => {

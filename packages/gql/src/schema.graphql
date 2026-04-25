@@ -1109,6 +1109,11 @@ type LinkedCheckoutActionResult {
   ok: Boolean!
   status: LinkedCheckoutStatus!
   error: String
+  errorCode: LinkedCheckoutErrorCode
+}
+
+enum LinkedCheckoutErrorCode {
+  DIRTY_ROOT_CHECKOUT
 }
 
 # --- Mutations ---

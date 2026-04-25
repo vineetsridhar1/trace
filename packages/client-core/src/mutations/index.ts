@@ -596,6 +596,7 @@ export const LINK_LINKED_CHECKOUT_REPO_MUTATION = gql`
     ) {
       ok
       error
+      errorCode
       status {
         ${LINKED_CHECKOUT_STATUS_FIELDS}
       }
@@ -624,6 +625,7 @@ export const SYNC_LINKED_CHECKOUT_MUTATION = gql`
     ) {
       ok
       error
+      errorCode
       status {
         ${LINKED_CHECKOUT_STATUS_FIELDS}
       }
@@ -636,6 +638,7 @@ export const RESTORE_LINKED_CHECKOUT_MUTATION = gql`
     restoreLinkedCheckout(sessionGroupId: $sessionGroupId, repoId: $repoId) {
       ok
       error
+      errorCode
       status {
         ${LINKED_CHECKOUT_STATUS_FIELDS}
       }
@@ -652,6 +655,7 @@ export const COMMIT_LINKED_CHECKOUT_CHANGES_MUTATION = gql`
     ) {
       ok
       error
+      errorCode
       status {
         ${LINKED_CHECKOUT_STATUS_FIELDS}
       }
@@ -668,6 +672,7 @@ export const SET_LINKED_CHECKOUT_AUTO_SYNC_MUTATION = gql`
     ) {
       ok
       error
+      errorCode
       status {
         ${LINKED_CHECKOUT_STATUS_FIELDS}
       }

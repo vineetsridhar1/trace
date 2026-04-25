@@ -3,6 +3,7 @@ import path from "path";
 import {
   assertValidCommitSha,
   type BridgeLinkedCheckoutActionResultPayload,
+  type BridgeLinkedCheckoutErrorCode,
   type BridgeLinkedCheckoutStatus,
 } from "@trace/shared";
 import {
@@ -75,6 +76,16 @@ export interface CommitLinkedCheckoutChangesInput {
   repoId: string;
   sessionGroupId: string;
   message?: string | null;
+}
+
+class LinkedCheckoutError extends Error {
+  readonly errorCode: BridgeLinkedCheckoutErrorCode;
+
+  constructor(message: string, errorCode: BridgeLinkedCheckoutErrorCode) {
+    super(message);
+    this.name = "LinkedCheckoutError";
+    this.errorCode = errorCode;
+  }
 }
 
 type CheckoutEntry =
@@ -607,12 +618,18 @@ async function actionResult(
   repoId: string,
   ok: boolean,
   error: string | null = null,
+  errorCode: BridgeLinkedCheckoutErrorCode | null = null,
 ): Promise<LinkedCheckoutActionResult> {
   return {
     ok,
     error,
+    errorCode,
     status: await readStatus(repoId),
   };
+}
+
+function getLinkedCheckoutErrorCode(error: unknown): BridgeLinkedCheckoutErrorCode | null {
+  return error instanceof LinkedCheckoutError ? error.errorCode : null;
 }
 
 export async function pauseExistingAttachment(repoId: string, error: string): Promise<void> {
@@ -711,8 +728,9 @@ export function syncLinkedCheckout(
             await popStashedChanges(repoPath);
           }
         } else {
-          throw new Error(
+          throw new LinkedCheckoutError(
             "Root checkout has tracked changes. Commit, stash, or discard them before syncing.",
+            "DIRTY_ROOT_CHECKOUT",
           );
         }
       } else {
@@ -752,7 +770,7 @@ export function syncLinkedCheckout(
     } catch (error) {
       const message = formatGitError(error);
       await pauseExistingAttachment(input.repoId, message);
-      return actionResult(input.repoId, false, message);
+      return actionResult(input.repoId, false, message, getLinkedCheckoutErrorCode(error));
     }
   });
 }
