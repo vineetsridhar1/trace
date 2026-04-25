@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
-import { Stack } from "expo-router";
 import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import { EmptyState } from "@/components/design-system";
+import { ChannelSearchField } from "@/components/channels/ChannelSearchField";
 import { ChannelListRow } from "@/components/channels/ChannelListRow";
 import { ChannelGroupHeader } from "@/components/channels/ChannelGroupHeader";
 import {
@@ -14,7 +14,6 @@ import {
 import { refreshOrgData } from "@/hooks/useHydrate";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
-import { useHeaderSearchBarOptions } from "@/theme/nativeNavigation";
 
 export default function ChannelsIndex() {
   const theme = useTheme();
@@ -26,17 +25,6 @@ export default function ChannelsIndex() {
 
   const keys = useCodingChannelKeys({ search });
   const activeCounts = useChannelActiveSessionCounts();
-
-  // hideWhenScrolling is disabled because the pull-to-reveal observation
-  // (UISearchController + hidesSearchBarWhenScrolling=YES) conflicts with
-  // the tab bar's iOS 26 minimize-on-scroll binding on the same scroll
-  // view, stopping the tab bar and bottom accessory from collapsing.
-  const searchBarOptions = useHeaderSearchBarOptions({
-    placeholder: "Search channels",
-    hideWhenScrolling: false,
-    onChangeText: (e: { nativeEvent: { text: string } }) => setSearch(e.nativeEvent.text),
-    onCancelButtonPress: () => setSearch(""),
-  });
 
   const handleRefresh = useCallback(async () => {
     if (!activeOrgId) return;
@@ -63,21 +51,23 @@ export default function ChannelsIndex() {
   );
 
   return (
-    <>
-      <Stack.Screen options={{ headerSearchBarOptions: searchBarOptions }} />
-      <FlashList
-        data={keys}
-        renderItem={renderListItem}
-        keyExtractor={keyExtractor}
-        getItemType={getItemType}
-        extraData={activeCounts}
-        contentInsetAdjustmentBehavior="automatic"
-        onRefresh={handleRefresh}
-        refreshing={refreshing}
-        ListEmptyComponent={<ChannelsEmpty search={search} />}
-        style={{ flex: 1, backgroundColor: theme.colors.background }}
-      />
-    </>
+    <FlashList
+      data={keys}
+      renderItem={renderListItem}
+      keyExtractor={keyExtractor}
+      getItemType={getItemType}
+      extraData={activeCounts}
+      contentInsetAdjustmentBehavior="automatic"
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="handled"
+      onRefresh={handleRefresh}
+      refreshing={refreshing}
+      ListHeaderComponent={
+        <ChannelSearchField value={search} onChangeText={setSearch} />
+      }
+      ListEmptyComponent={<ChannelsEmpty search={search} />}
+      style={{ flex: 1, backgroundColor: theme.colors.background }}
+    />
   );
 }
 
