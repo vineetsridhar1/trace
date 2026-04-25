@@ -153,12 +153,20 @@ export function SessionSurface({
   useEffect(() => {
     if (!groupId) return;
     const store = useMobileUIStore.getState();
-    store.setActiveSessionGroupId(groupId);
-    store.setActiveSessionId(sessionId);
+    if (store.activeSessionGroupId !== groupId) {
+      store.setActiveSessionGroupId(groupId);
+    }
+    if (store.activeSessionId !== sessionId) {
+      store.setActiveSessionId(sessionId);
+    }
     return () => {
       const current = useMobileUIStore.getState();
-      if (current.activeSessionGroupId === groupId) current.setActiveSessionGroupId(null);
-      if (current.activeSessionId === sessionId) current.setActiveSessionId(null);
+      if (current.activeSessionGroupId === groupId && current.activeSessionGroupId !== null) {
+        current.setActiveSessionGroupId(null);
+      }
+      if (current.activeSessionId === sessionId && current.activeSessionId !== null) {
+        current.setActiveSessionId(null);
+      }
     };
   }, [groupId, sessionId]);
 
