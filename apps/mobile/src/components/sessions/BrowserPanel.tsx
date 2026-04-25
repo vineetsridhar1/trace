@@ -40,6 +40,7 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
   const [loading, setLoading] = useState(false);
   const webViewRef = useRef<WebView>(null);
   const latestUrlRef = useRef(resolvedUrl);
+  const onUrlChangeRef = useRef(onUrlChange);
   const webSource = useMemo(() => ({ uri: url }), [url]);
 
   useEffect(() => {
@@ -56,10 +57,14 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
   }, [url]);
 
   useEffect(() => {
-    return () => {
-      if (latestUrlRef.current) onUrlChange(latestUrlRef.current);
-    };
+    onUrlChangeRef.current = onUrlChange;
   }, [onUrlChange]);
+
+  useEffect(() => {
+    return () => {
+      if (latestUrlRef.current) onUrlChangeRef.current(latestUrlRef.current);
+    };
+  }, []);
 
   const handleNavStateChange = useCallback(
     (state: WebViewNavigation) => {
