@@ -151,6 +151,7 @@ export function SessionInputComposer({
 
   const onSuccess = useCallback(() => {
     setText("");
+    setHeight(MIN_INPUT_HEIGHT);
     const clearedSelection = { start: 0, end: 0 };
     applySelectionOverride(clearedSelection);
     setErrorDraft(null);
