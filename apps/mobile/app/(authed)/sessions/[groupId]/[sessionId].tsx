@@ -90,8 +90,9 @@ export default function SessionStreamScreen() {
     [groupId, router, sessionId],
   );
   const openBrowser = useCallback(() => {
+    if (activePane === "browser") return;
     router.push(`/sessions/${groupId}/${sessionId}?pane=browser`);
-  }, [groupId, router, sessionId]);
+  }, [activePane, groupId, router, sessionId]);
 
   const handleSelectSession = useCallback(
     (nextId: string) => {
@@ -197,7 +198,6 @@ export default function SessionStreamScreen() {
                   url={resolvedBrowserUrl}
                   onUrlChange={handleBrowserUrlChange}
                   topInset={overlayHeight}
-                  extendToBottom
                 />
               </View>
             ) : null}

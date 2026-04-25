@@ -169,7 +169,6 @@ export function SessionGroupHeader({
     prUrl,
     sessionId,
     sessionOptimistic,
-    sessionIds.length,
     status,
   ]);
 

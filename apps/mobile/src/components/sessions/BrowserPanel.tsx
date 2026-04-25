@@ -20,8 +20,6 @@ interface BrowserPanelProps {
   onUrlChange: (url: string) => void;
   /** Top inset matching the Session Player's glass header height. */
   topInset?: number;
-  /** When true, the panel fills to the screen bottom without a safe-area spacer. */
-  extendToBottom?: boolean;
 }
 
 /**
@@ -33,7 +31,6 @@ export function BrowserPanel({
   url: nextUrl,
   onUrlChange,
   topInset = 0,
-  extendToBottom = false,
 }: BrowserPanelProps) {
   const theme = useTheme();
   const resolvedUrl = nextUrl;
@@ -226,7 +223,6 @@ export function BrowserPanel({
           </Text>
         </View>
       )}
-      {extendToBottom ? null : <View style={styles.bottomSpacer} />}
     </View>
   );
 }
@@ -266,8 +262,5 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-  },
-  bottomSpacer: {
-    height: 0,
   },
 });

@@ -56,7 +56,14 @@ export function SessionGroupTitleMenu({
   expandLeftInset = 0,
 }: SessionGroupTitleMenuProps) {
   if (!isLiquidGlassAvailable()) {
-    return <FallbackTitlePill groupId={groupId} sessionId={sessionId} />;
+    return (
+      <FallbackTitlePill
+        groupId={groupId}
+        sessionId={sessionId}
+        browserEnabled={browserEnabled}
+        onOpenBrowser={onOpenBrowser}
+      />
+    );
   }
   return (
     <MorphingTitle
@@ -407,11 +414,23 @@ function PanelContent({
 function FallbackTitlePill({
   groupId,
   sessionId,
+  browserEnabled = true,
+  onOpenBrowser,
 }: {
   groupId: string;
   sessionId?: string;
+  browserEnabled?: boolean;
+  onOpenBrowser?: () => void;
 }) {
   const theme = useTheme();
+  const handlePress = useCallback(() => {
+    if (!browserEnabled) return;
+    void haptic.selection();
+    onOpenBrowser?.();
+  }, [browserEnabled, onOpenBrowser]);
+
+  const content = <TitleRow groupId={groupId} sessionId={sessionId} />;
+
   return (
     <View style={styles.anchor}>
       <BlurView
@@ -422,7 +441,19 @@ function FallbackTitlePill({
           { borderRadius: PILL_RADIUS },
         ]}
       >
-        <TitleRow groupId={groupId} sessionId={sessionId} />
+        {onOpenBrowser ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open browser"
+            disabled={!browserEnabled}
+            onPress={handlePress}
+            style={styles.triggerInner}
+          >
+            {content}
+          </Pressable>
+        ) : (
+          content
+        )}
       </BlurView>
     </View>
   );
