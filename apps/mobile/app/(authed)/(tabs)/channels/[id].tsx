@@ -75,8 +75,8 @@ export default function ChannelDetail() {
       ];
       if (activeOrgId) {
         tasks.push(
-          refreshOrgData(activeOrgId).then((ok) => {
-            if (!ok) {
+          refreshOrgData(activeOrgId).then((result) => {
+            if (!result.authorized) {
               useEntityStore.getState().reset();
               return logout();
             }

@@ -1,28 +1,44 @@
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { AccessibilityInfo } from "react-native";
 
-export function useReducedMotion(): boolean {
-  const [reducedMotion, setReducedMotion] = useState(false);
+type Listener = () => void;
 
-  useEffect(() => {
-    let active = true;
+let reducedMotion = false;
+let activeSubscribers = 0;
+let subscription: { remove: () => void } | null = null;
+const listeners = new Set<Listener>();
 
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((enabled) => {
-        if (active) setReducedMotion(enabled);
-      })
-      .catch(() => {});
+function emit(nextValue: boolean) {
+  reducedMotion = nextValue;
+  listeners.forEach((listener) => listener());
+}
 
-    const subscription = AccessibilityInfo.addEventListener(
-      "reduceMotionChanged",
-      setReducedMotion,
-    );
+function ensureSubscription() {
+  if (subscription) return;
+  AccessibilityInfo.isReduceMotionEnabled()
+    .then(emit)
+    .catch(() => {});
+  subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", emit);
+}
 
-    return () => {
-      active = false;
+function subscribe(listener: Listener) {
+  activeSubscribers += 1;
+  listeners.add(listener);
+  ensureSubscription();
+  return () => {
+    activeSubscribers -= 1;
+    listeners.delete(listener);
+    if (activeSubscribers === 0 && subscription) {
       subscription.remove();
-    };
-  }, []);
+      subscription = null;
+    }
+  };
+}
 
+function getSnapshot() {
   return reducedMotion;
+}
+
+export function useReducedMotion(): boolean {
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

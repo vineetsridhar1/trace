@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import { EmptyState } from "@/components/design-system";
@@ -13,29 +13,41 @@ import {
 import { refreshOrgData } from "@/hooks/useHydrate";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
-import { useMobileUIStore } from "@/stores/ui";
 
 export default function ChannelsIndex() {
   const theme = useTheme();
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const logout = useAuthStore((s: AuthState) => s.logout);
-  const orgDataError = useMobileUIStore((s) => s.orgDataError);
 
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const keys = useCodingChannelKeys({ search: "" });
   const activeCounts = useChannelActiveSessionCounts();
+
+  useEffect(() => {
+    if (!activeOrgId) {
+      setLoadError(null);
+      return;
+    }
+    void refreshOrgData(activeOrgId).then((result) => {
+      if (!result.authorized) return;
+      setLoadError(result.channelsError);
+    });
+  }, [activeOrgId]);
 
   const handleRefresh = useCallback(async () => {
     if (!activeOrgId) return;
     void haptic.medium();
     setRefreshing(true);
     try {
-      const ok = await refreshOrgData(activeOrgId);
-      if (!ok) {
+      const result = await refreshOrgData(activeOrgId);
+      if (!result.authorized) {
         useEntityStore.getState().reset();
         await logout();
+        return;
       }
+      setLoadError(result.channelsError);
     } finally {
       setRefreshing(false);
     }
@@ -60,7 +72,7 @@ export default function ChannelsIndex() {
       contentInsetAdjustmentBehavior="automatic"
       onRefresh={handleRefresh}
       refreshing={refreshing}
-      ListEmptyComponent={<ChannelsEmpty error={orgDataError} onRetry={() => void handleRefresh()} />}
+      ListEmptyComponent={<ChannelsEmpty error={loadError} onRetry={() => void handleRefresh()} />}
       style={{ flex: 1, backgroundColor: theme.colors.background }}
     />
   );

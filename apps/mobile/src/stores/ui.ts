@@ -37,9 +37,6 @@ export interface MobileUIState {
   activeMenuClose: (() => void) | null;
   setActiveMenuClose: (close: (() => void) | null) => void;
 
-  orgDataError: string | null;
-  setOrgDataError: (message: string | null) => void;
-
   channelDoneBadges: Record<string, boolean>;
   sessionDoneBadges: Record<string, boolean>;
   sessionGroupDoneBadges: Record<string, boolean>;
@@ -74,7 +71,6 @@ const initial = {
   activeAccessoryIndex: 0,
   overlaySessionId: null as string | null,
   activeMenuClose: null as (() => void) | null,
-  orgDataError: null as string | null,
   channelDoneBadges: {} as Record<string, boolean>,
   sessionDoneBadges: {} as Record<string, boolean>,
   sessionGroupDoneBadges: {} as Record<string, boolean>,
@@ -93,8 +89,6 @@ export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUISta
   setActiveAccessoryIndex: (i) => set({ activeAccessoryIndex: i }),
   setOverlaySessionId: (id) => set({ overlaySessionId: id }),
   setActiveMenuClose: (close) => set({ activeMenuClose: close }),
-  setOrgDataError: (message) => set({ orgDataError: message }),
-
   markChannelDone: (id) =>
     set((s) => ({ channelDoneBadges: { ...s.channelDoneBadges, [id]: true } })),
   markSessionDone: (id) =>

@@ -16,7 +16,6 @@ import { userFacingError } from "@/lib/requestError";
 import { timedEventIngest } from "@/lib/perf";
 import { getClient } from "@/lib/urql";
 import { useConnectionStore, type ConnectionState } from "@/stores/connection";
-import { useMobileUIStore } from "@/stores/ui";
 
 const ORGANIZATION_QUERY = gql`
   query MobileOrganization($id: ID!) {
@@ -117,16 +116,13 @@ const ORG_EVENTS_SUBSCRIPTION = gql`
 const ME_REFRESH_KEY = "trace_me_last_fetched_at";
 const ME_REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 
-/**
- * Fetch org data (channels, groups, sessions) and upsert into the entity store.
- * Returns true on success, false if the server returned a 401-equivalent.
- * Shared between initial hydration and manual pull-to-refresh.
- *
- * Guards against stale writes: if the active org changes (or the user signs
- * out) while queries are in flight, the upserts are skipped so the store
- * doesn't get repopulated with the previous org's data after a reset.
- */
-export async function refreshOrgData(activeOrgId: string): Promise<boolean> {
+export interface RefreshOrgDataResult {
+  authorized: boolean;
+  channelsError: string | null;
+  homeError: string | null;
+}
+
+async function doRefreshOrgData(activeOrgId: string): Promise<RefreshOrgDataResult> {
   const client = getClient();
 
   const [orgResult, groupsResult, sessionsResult] = await Promise.all([
@@ -145,16 +141,21 @@ export async function refreshOrgData(activeOrgId: string): Promise<boolean> {
     isUnauthorized(groupsResult.error) ||
     isUnauthorized(sessionsResult.error)
   ) {
-    return false;
+    return {
+      authorized: false,
+      channelsError: null,
+      homeError: null,
+    };
   }
 
   // Bail if the user switched orgs or signed out while we were fetching.
-  if (useAuthStore.getState().activeOrgId !== activeOrgId) return true;
-
-  const firstError = orgResult.error ?? groupsResult.error ?? sessionsResult.error;
-  useMobileUIStore
-    .getState()
-    .setOrgDataError(firstError ? userFacingError(firstError, "Couldn't refresh your workspace.") : null);
+  if (useAuthStore.getState().activeOrgId !== activeOrgId) {
+    return {
+      authorized: true,
+      channelsError: null,
+      homeError: null,
+    };
+  }
 
   const upsertMany = useEntityStore.getState().upsertMany;
 
@@ -174,7 +175,37 @@ export async function refreshOrgData(activeOrgId: string): Promise<boolean> {
   if (sessions.length > 0) upsertMany("sessions", sessions);
 
   void getPlatform().storage.setItem(ME_REFRESH_KEY, String(Date.now()));
-  return true;
+
+  return {
+    authorized: true,
+    channelsError:
+      orgResult.error || groupsResult.error
+        ? userFacingError(
+            orgResult.error ?? groupsResult.error,
+            "Couldn't refresh channels.",
+          )
+        : null,
+    homeError: sessionsResult.error
+      ? userFacingError(sessionsResult.error, "Couldn't refresh your home feed.")
+      : null,
+  };
+}
+
+const inflightRefreshes = new Map<string, Promise<RefreshOrgDataResult>>();
+
+/**
+ * Fetch org data (channels, groups, sessions) and upsert successful slices
+ * into the entity store. Query failures are reported per-screen so empty-state
+ * rendering stays scoped to the fetch that actually powers that screen.
+ */
+export function refreshOrgData(activeOrgId: string): Promise<RefreshOrgDataResult> {
+  const existing = inflightRefreshes.get(activeOrgId);
+  if (existing) return existing;
+  const promise = doRefreshOrgData(activeOrgId).finally(() => {
+    inflightRefreshes.delete(activeOrgId);
+  });
+  inflightRefreshes.set(activeOrgId, promise);
+  return promise;
 }
 
 function sessionGroupsFromSessions(
@@ -218,9 +249,9 @@ export function useHydrate(activeOrgId: string | null): void {
     }
 
     void (async () => {
-      const ok = await refreshOrgData(activeOrgId);
+      const result = await refreshOrgData(activeOrgId);
       if (cancelled) return;
-      if (!ok) await handle401();
+      if (!result.authorized) await handle401();
     })();
 
     const subscription = client
@@ -257,10 +288,16 @@ export function useHydrate(activeOrgId: string | null): void {
     if (!activeOrgId) return;
     if (reconnectCounter <= baselineReconnectCounter.current) return;
     baselineReconnectCounter.current = reconnectCounter;
-    refreshOrgData(activeOrgId).catch((err: unknown) => {
+    void (async () => {
+      const result = await refreshOrgData(activeOrgId);
+      if (!result.authorized) {
+        useEntityStore.getState().reset();
+        await logout();
+      }
+    })().catch((err: unknown) => {
       console.warn("[hydrate] reconnect refresh failed", err);
     });
-  }, [reconnectCounter, activeOrgId]);
+  }, [activeOrgId, logout, reconnectCounter]);
 
   // Re-fetch /auth/me on app foreground if it's been more than 24h since any
   // successful request. Unrelated to WS state — this is a periodic auth-staleness

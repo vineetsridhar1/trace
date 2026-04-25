@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
@@ -22,9 +22,9 @@ export default function AuthedHome() {
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
   const logout = useAuthStore((s: AuthState) => s.logout);
   const repoFilter = useMobileUIStore((s: MobileUIState) => s.homeRepoFilter);
-  const orgDataError = useMobileUIStore((s: MobileUIState) => s.orgDataError);
   const sections = useHomeSections(userId, repoFilter);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const items = useMemo<HomeListItem[]>(() => {
     const out: HomeListItem[] = [];
@@ -37,16 +37,29 @@ export default function AuthedHome() {
     return out;
   }, [sections]);
 
+  useEffect(() => {
+    if (!activeOrgId) {
+      setLoadError(null);
+      return;
+    }
+    void refreshOrgData(activeOrgId).then((result) => {
+      if (!result.authorized) return;
+      setLoadError(result.homeError);
+    });
+  }, [activeOrgId]);
+
   const handleRefresh = useCallback(async () => {
     if (!activeOrgId) return;
     void haptic.medium();
     setRefreshing(true);
     try {
-      const ok = await refreshOrgData(activeOrgId);
-      if (!ok) {
+      const result = await refreshOrgData(activeOrgId);
+      if (!result.authorized) {
         useEntityStore.getState().reset();
         await logout();
+        return;
       }
+      setLoadError(result.homeError);
     } finally {
       setRefreshing(false);
     }
@@ -70,7 +83,7 @@ export default function AuthedHome() {
       ListEmptyComponent={
         <HomeEmpty
           hasRepoFilter={repoFilter !== null}
-          error={orgDataError}
+          error={loadError}
           onRetry={() => void handleRefresh()}
         />
       }
