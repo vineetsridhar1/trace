@@ -1,6 +1,6 @@
 import { Pressable, View } from "react-native";
 import { SymbolView } from "expo-symbols";
-import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import Animated, { FadeIn, FadeOut, SlideInLeft, SlideOutLeft } from "react-native-reanimated";
 import type { CodingTool } from "@trace/gql";
 import { Glass } from "@/components/design-system";
 import type { ComposerMode } from "@/hooks/useComposerSubmit";
@@ -22,6 +22,7 @@ interface SessionComposerLeadingChipsProps {
   modeIconTint: string;
   modeLabelVisible: boolean;
   modelLabel: string;
+  showModeChip: boolean;
   chipAnimatedStyle: ComposerAnimatedViewStyle;
   chipTextAnimatedStyle: ComposerAnimatedTextStyle;
   glassAnimatedProps: ComposerGlassAnimatedProps;
@@ -37,6 +38,7 @@ export function SessionComposerLeadingChips({
   modeIconTint,
   modeLabelVisible,
   modelLabel,
+  showModeChip,
   chipAnimatedStyle,
   chipTextAnimatedStyle,
   glassAnimatedProps,
@@ -47,55 +49,61 @@ export function SessionComposerLeadingChips({
   return (
     <View style={styles.leadingChipsContainer}>
       <View style={styles.leadingChipsRow}>
-        <Animated.View style={[styles.modeChipSlot, modeWidthAnimatedStyle]}>
-          <Pressable
-            onPress={onModePress}
-            disabled={!canInteract}
-            accessibilityRole="button"
-            accessibilityLabel={
-              modeLabelVisible
-                ? `Interaction mode: ${MODE_LABEL[mode]}. Tap to cycle.`
-                : `Interaction mode: ${MODE_LABEL[mode]}. Tap to reveal.`
-            }
-            hitSlop={8}
-            style={styles.modeChipPressable}
+        {showModeChip ? (
+          <Animated.View
+            entering={SlideInLeft.duration(300)}
+            exiting={SlideOutLeft.duration(300)}
+            style={[styles.modeChipSlot, modeWidthAnimatedStyle]}
           >
-            {({ pressed }) => (
-              <AnimatedGlass
-                preset="input"
-                animatedProps={glassAnimatedProps}
-                interactive
-                style={[styles.modeChip, chipAnimatedStyle]}
-              >
-                <View
-                  style={[
-                    styles.modeChipContent,
-                    { opacity: canInteract ? (pressed ? 0.78 : 1) : 0.45 },
-                  ]}
+            <Pressable
+              onPress={onModePress}
+              disabled={!canInteract}
+              accessibilityRole="button"
+              accessibilityLabel={
+                modeLabelVisible
+                  ? `Interaction mode: ${MODE_LABEL[mode]}. Tap to cycle.`
+                  : `Interaction mode: ${MODE_LABEL[mode]}. Tap to reveal.`
+              }
+              hitSlop={8}
+              style={styles.modeChipPressable}
+            >
+              {({ pressed }) => (
+                <AnimatedGlass
+                  preset="input"
+                  animatedProps={glassAnimatedProps}
+                  interactive
+                  style={[styles.modeChip, chipAnimatedStyle]}
                 >
-                  <SymbolView
-                    name={MODE_ICON[mode]}
-                    size={16}
-                    tintColor={modeIconTint}
-                    weight="medium"
-                    resizeMode="scaleAspectFit"
-                    style={styles.modeChipIcon}
-                  />
-                  {modeLabelVisible ? (
-                    <Animated.Text
-                      entering={FadeIn.duration(140)}
-                      exiting={FadeOut.duration(100)}
-                      numberOfLines={1}
-                      style={[styles.modeText, chipTextAnimatedStyle]}
-                    >
-                      {MODE_LABEL[mode]}
-                    </Animated.Text>
-                  ) : null}
-                </View>
-              </AnimatedGlass>
-            )}
-          </Pressable>
-        </Animated.View>
+                  <View
+                    style={[
+                      styles.modeChipContent,
+                      { opacity: canInteract ? (pressed ? 0.78 : 1) : 0.45 },
+                    ]}
+                  >
+                    <SymbolView
+                      name={MODE_ICON[mode]}
+                      size={16}
+                      tintColor={modeIconTint}
+                      weight="medium"
+                      resizeMode="scaleAspectFit"
+                      style={styles.modeChipIcon}
+                    />
+                    {modeLabelVisible ? (
+                      <Animated.Text
+                        entering={FadeIn.duration(140)}
+                        exiting={FadeOut.duration(100)}
+                        numberOfLines={1}
+                        style={[styles.modeText, chipTextAnimatedStyle]}
+                      >
+                        {MODE_LABEL[mode]}
+                      </Animated.Text>
+                    ) : null}
+                  </View>
+                </AnimatedGlass>
+              )}
+            </Pressable>
+          </Animated.View>
+        ) : null}
 
         <View style={styles.modelChipSlot}>
           <SessionComposerModelTrigger

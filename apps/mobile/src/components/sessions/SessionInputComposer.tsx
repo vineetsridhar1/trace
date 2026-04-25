@@ -7,9 +7,7 @@ import { SymbolView } from "expo-symbols";
 import Animated, {
   Easing,
   LinearTransition,
-  SlideInLeft,
   SlideInRight,
-  SlideOutLeft,
   SlideOutRight,
   useAnimatedStyle,
   useSharedValue,
@@ -43,7 +41,6 @@ import { SessionComposerBottomSheet } from "./session-input-composer/SessionComp
 import { SessionComposerInputCard } from "./session-input-composer/SessionComposerInputCard";
 import { SessionComposerLeadingChips } from "./session-input-composer/SessionComposerLeadingChips";
 import { SessionComposerMeasurementLayer } from "./session-input-composer/SessionComposerMeasurementLayer";
-import { SessionComposerModelTrigger } from "./session-input-composer/SessionComposerModelTrigger";
 import { SessionComposerSheetTrigger } from "./session-input-composer/SessionComposerSheetTrigger";
 import { SessionComposerSlashCommandMenu } from "./session-input-composer/SessionComposerSlashCommandMenu";
 import { styles } from "./session-input-composer/styles";
@@ -63,10 +60,6 @@ const composerMotionEasing = Easing.inOut(Easing.ease);
 const composerMotionDuration = 300;
 const composerRowTransition =
   LinearTransition.duration(composerMotionDuration).easing(composerMotionEasing);
-const leadingControlsEnter =
-  SlideInLeft.duration(composerMotionDuration).easing(composerMotionEasing);
-const leadingControlsExit =
-  SlideOutLeft.duration(composerMotionDuration).easing(composerMotionEasing);
 const trailingActionEnter =
   SlideInRight.duration(composerMotionDuration).easing(composerMotionEasing);
 const trailingActionExit =
@@ -184,7 +177,7 @@ export function SessionInputComposer({
   const hasSendable = trimmed.length > 0 || images.length > 0;
   const showSend = (isActive && focused) || (!isActive && hasSendable);
   const showStop = isActive && !focused;
-  const showCollapsedModelSelector = !expanded && !hasSendable && !isActive;
+  const showLeadingControls = !hasSendable && !isActive;
   const activeSlashQuery = getActiveSlashCommandQuery(text, selection);
   const matchingSlashCommands = activeSlashQuery
     ? filterSlashCommands(slashCommands, activeSlashQuery.query)
@@ -431,30 +424,8 @@ export function SessionInputComposer({
 
       <View style={styles.composerStack}>
         <Animated.View layout={composerRowTransition} style={styles.inputActionRow}>
-          {showCollapsedModelSelector ? (
-            <Animated.View
-              layout={composerRowTransition}
-              entering={leadingControlsEnter}
-              exiting={leadingControlsExit}
-            >
-              <SessionComposerModelTrigger
-                canInteract={canInteract}
-                currentTool={currentTool}
-                modelLabel={modelLabel}
-                minWidth={0}
-                onOpenModelSheet={handleOpenModelSheet}
-                showLabel={false}
-                style={styles.collapsedModelChip}
-              />
-            </Animated.View>
-          ) : null}
-
-          {expanded && !hasSendable && !isActive ? (
-            <Animated.View
-              layout={composerRowTransition}
-              entering={leadingControlsEnter}
-              exiting={leadingControlsExit}
-            >
+          {showLeadingControls ? (
+            <Animated.View layout={composerRowTransition}>
               <SessionComposerLeadingChips
                 canInteract={canInteract}
                 currentTool={currentTool}
@@ -462,6 +433,7 @@ export function SessionInputComposer({
                 modeIconTint={modeIconTint}
                 modeLabelVisible={modeLabelVisible}
                 modelLabel={modelLabel}
+                showModeChip={expanded}
                 chipAnimatedStyle={chipAnimatedStyle}
                 chipTextAnimatedStyle={chipTextAnimatedStyle}
                 glassAnimatedProps={glassAnimatedProps}
