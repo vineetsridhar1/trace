@@ -23,7 +23,14 @@ export function formatGitError(error: unknown): string {
 }
 
 export function isSafeGitRef(ref: string): boolean {
-  return !!ref && !ref.startsWith("-") && !ref.includes("..") && !/[\x00-\x1f\x7f\s]/.test(ref);
+  if (!ref || ref.startsWith("-") || ref.includes("..")) return false;
+  for (const char of ref) {
+    const code = char.charCodeAt(0);
+    if (code <= 0x1f || code === 0x7f || /\s/.test(char)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function assertSafeGitRef(ref: string): void {

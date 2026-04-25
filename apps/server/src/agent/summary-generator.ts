@@ -5,7 +5,7 @@
  * Part of ticket #09 (Entity Summaries).
  */
 
-import type { LLMAdapter, LLMAssistantContentBlock, LLMResponse } from "@trace/shared";
+import type { LLMAssistantContentBlock, LLMResponse } from "@trace/shared";
 import { getAgentLLMAdapter, withRetry } from "./llm-adapter.js";
 
 // ---------------------------------------------------------------------------

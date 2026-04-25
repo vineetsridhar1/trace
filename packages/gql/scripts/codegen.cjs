@@ -1,3 +1,6 @@
+/* eslint-env node */
+/* eslint-disable @typescript-eslint/no-require-imports */
+/* global __dirname, process, require */
 /**
  * Generates types.ts and resolvers.ts from schema.graphql.
  *

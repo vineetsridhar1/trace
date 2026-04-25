@@ -68,7 +68,7 @@ export function CheckpointPanel({
       Object.values(useEntityStore.getState().sessions).filter(
         (s: SessionEntity) => s.sessionGroupId === sessionGroupId,
       ),
-    [sessionGroupId, sessionNameById], // eslint-disable-line react-hooks/exhaustive-deps -- sessionNameById changes when sessions change
+    [sessionGroupId, sessionNameById],
   );
 
   const channelId = getSessionGroupChannelId(sessionGroup ?? null, groupSessions);

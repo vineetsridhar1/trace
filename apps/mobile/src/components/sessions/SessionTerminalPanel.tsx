@@ -27,6 +27,7 @@ type TerminalViewStatus =
 
 const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 32;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const TERMINAL_RUNTIME_HTML = require("../../assets/terminal-runtime.html");
 const TERMINAL_RUNTIME_ERROR = "Couldn't load the terminal runtime";
 

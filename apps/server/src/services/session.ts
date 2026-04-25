@@ -635,7 +635,7 @@ export class SessionService {
       });
     } catch (error) {
       if (params.failureMessage && error instanceof Error) {
-        throw new Error(params.failureMessage);
+        throw new Error(params.failureMessage, { cause: error });
       }
       throw error;
     }
@@ -4509,7 +4509,7 @@ export class SessionService {
     userId: string,
   ): Promise<string> {
     // Validate ref to prevent git argument injection
-    if (!ref || ref.startsWith("-") || ref.includes("..") || /[\x00-\x1f\x7f]/.test(ref)) {
+    if (!this.isSafeGitRef(ref)) {
       throw new Error("Invalid git ref");
     }
     const runtime = await this.resolveAccessibleSessionGroupRuntime(
@@ -4525,6 +4525,17 @@ export class SessionService {
       ref,
       runtime.workdirHint,
     );
+  }
+
+  private isSafeGitRef(ref: string): boolean {
+    if (!ref || ref.startsWith("-") || ref.includes("..")) return false;
+    for (const char of ref) {
+      const code = char.charCodeAt(0);
+      if (code <= 0x1f || code === 0x7f) {
+        return false;
+      }
+    }
+    return true;
   }
 
   // ─── Helpers ───

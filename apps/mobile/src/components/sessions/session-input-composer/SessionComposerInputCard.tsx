@@ -27,7 +27,7 @@ interface SessionComposerInputCardProps {
   inputRef: RefObject<TextInput | null>;
   layoutTransition?: ComponentProps<typeof Animated.View>["layout"];
   placeholder: string;
-  selection: ComposerSelection;
+  selection: ComposerSelection | null;
   text: string;
   cardBorderAnimatedStyle: ComposerAnimatedViewStyle;
   onBlur: () => void;
@@ -116,7 +116,7 @@ export function SessionComposerInputCard({
           scrollEnabled={false}
           placeholder={placeholder}
           placeholderTextColor={theme.colors.dimForeground}
-          selection={selection}
+          selection={selection ?? undefined}
           style={[styles.input, { color: theme.colors.foreground, height: inputHeight }]}
         />
         {inputWidth > 0 ? (

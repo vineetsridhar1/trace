@@ -4,6 +4,7 @@ import type {
   GetContextMenuItemsParams,
   GridReadyEvent,
   ICellRendererParams,
+  InitialGroupOrderComparatorParams,
   IsGroupOpenByDefaultParams,
   MenuItemDef,
 } from "ag-grid-community";
@@ -88,16 +89,7 @@ export function useSessionsGridOptions({
         );
       },
     },
-    initialGroupOrderComparator: (params: {
-      nodeA: {
-        key?: string | null;
-        allLeafChildren?: Array<{ data?: SessionGroupRow }>;
-      };
-      nodeB: {
-        key?: string | null;
-        allLeafChildren?: Array<{ data?: SessionGroupRow }>;
-      };
-    }) => {
+    initialGroupOrderComparator: (params: InitialGroupOrderComparatorParams<SessionGroupRow>) => {
       const aLatest = Math.max(
         ...((params.nodeA.allLeafChildren ?? []).map((child) => getRowSortTimestamp(child.data))),
         0,

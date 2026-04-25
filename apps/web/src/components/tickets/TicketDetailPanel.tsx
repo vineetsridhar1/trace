@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect } from "react";
 import { X } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useEntityField } from "@trace/client-core";
