@@ -1,153 +1,245 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { SEND_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
-import { Text } from "@/components/design-system";
+import { Glass, Text } from "@/components/design-system";
+import { startPlanImplementationSession } from "@/lib/createQuickSession";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { alpha, useTheme } from "@/theme";
 import {
-  PendingInputSendButton,
   PendingInputShell,
   pendingInputStyles,
 } from "./PendingInputShell";
+import { SessionComposerActionButton } from "./session-input-composer/SessionComposerActionButton";
+import { styles as composerStyles } from "./session-input-composer/styles";
 
 interface PendingInputPlanProps {
   sessionId: string;
-  planFilePath: string;
+  planContent: string;
+  keyboardVisible?: boolean;
 }
 
 const APPROVE_TEXT = "Approved. Implement this plan.";
-const APPROVE_PRESET = "Approve";
 
-/**
- * Plan variant of the pending-input bar. Mirrors web's `PlanResponseBar`:
- * an Approve preset toggle + an inline revise input share one Send button
- * that fires either the approval text or `Please revise the plan: …`
- * (with `interactionMode: "plan"`) depending on which input has content.
- *
- * V1 does not expose web's "Approve (new session)" clear-context path, so
- * we don't need the raw plan content — only the file path for the header.
- */
+type PlanAction = "new-session" | "same-session";
+
+const PLAN_OPTIONS: Array<{
+  value: PlanAction;
+  title: string;
+  description: string;
+}> = [
+  {
+    value: "new-session",
+    title: "Start a new session",
+    description: "Primary. Implement this plan in a fresh session.",
+  },
+  {
+    value: "same-session",
+    title: "Continue on this session",
+    description: "Approve the plan and keep the current context.",
+  },
+];
+
+/** Mobile plan-review surface matching the composer/slash-menu styling. */
 export function PendingInputPlan({
   sessionId,
-  planFilePath,
+  planContent,
+  keyboardVisible = false,
 }: PendingInputPlanProps) {
   const theme = useTheme();
-  const [selected, setSelected] = useState(false);
+  const inputRef = useRef<TextInput>(null);
+  const [selectedAction, setSelectedAction] = useState<PlanAction | null>("new-session");
   const [feedback, setFeedback] = useState("");
   const [sending, setSending] = useState(false);
 
-  const filename = planFilePath ? planFilePath.split("/").pop() : null;
   const trimmed = feedback.trim();
-  const hasAnswer = selected || trimmed.length > 0;
+  const isTypingMore = trimmed.length > 0;
+  const hasAnswer = isTypingMore || selectedAction !== null;
 
-  const dispatch = useCallback(
-    async (text: string, interactionMode?: string, kind: "approve" | "revise" = "revise") => {
-      if (sending) return;
-      setSending(true);
-      // §11.6: approve plan → success; revise (and any other follow-up) → light.
-      if (kind === "approve") void haptic.success();
-      else void haptic.light();
-      try {
-        await getClient()
-          .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-            sessionId,
-            text,
-            interactionMode,
-          })
-          .toPromise();
+  useEffect(() => {
+    if (!isTypingMore) return;
+    const timeout = setTimeout(() => inputRef.current?.focus(), 60);
+    return () => clearTimeout(timeout);
+  }, [isTypingMore]);
+
+  const handleStartNewSession = useCallback(async () => {
+    if (sending) return;
+    setSending(true);
+    try {
+      const started = await startPlanImplementationSession(sessionId, planContent);
+      if (started) {
         setFeedback("");
-        setSelected(false);
-      } finally {
-        setSending(false);
+        setSelectedAction("new-session");
       }
-    },
-    [sending, sessionId],
-  );
+    } finally {
+      setSending(false);
+    }
+  }, [planContent, sending, sessionId]);
+
+  const handleKeepContext = useCallback(async () => {
+    if (sending) return;
+    setSending(true);
+    void haptic.success();
+    try {
+      await getClient()
+        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+          sessionId,
+          text: APPROVE_TEXT,
+        })
+        .toPromise();
+      setFeedback("");
+      setSelectedAction("new-session");
+    } finally {
+      setSending(false);
+    }
+  }, [sending, sessionId]);
+
+  const handleRevise = useCallback(async () => {
+    if (sending || !trimmed) return;
+    setSending(true);
+    void haptic.light();
+    try {
+      await getClient()
+        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+          sessionId,
+          text: `Please revise the plan: ${trimmed}`,
+          interactionMode: "plan",
+        })
+        .toPromise();
+      setFeedback("");
+      setSelectedAction("new-session");
+    } finally {
+      setSending(false);
+    }
+  }, [sending, sessionId, trimmed]);
 
   const handleSend = useCallback(() => {
-    if (selected && !trimmed) {
-      void dispatch(APPROVE_TEXT, undefined, "approve");
-    } else if (trimmed) {
-      void dispatch(`Please revise the plan: ${trimmed}`, "plan", "revise");
+    if (trimmed) {
+      void handleRevise();
+      return;
     }
-  }, [dispatch, selected, trimmed]);
-
-  const headerTrailing = filename ? (
-    <Text
-      variant="caption2"
-      color="mutedForeground"
-      numberOfLines={1}
-      style={styles.filename}
-    >
-      {filename}
-    </Text>
-  ) : null;
+    if (selectedAction === "new-session") {
+      void handleStartNewSession();
+      return;
+    }
+    if (selectedAction === "same-session") {
+      void handleKeepContext();
+      return;
+    }
+  }, [handleKeepContext, handleRevise, handleStartNewSession, selectedAction, trimmed]);
 
   return (
-    <PendingInputShell header="Plan Review" headerTrailing={headerTrailing}>
-      <View style={styles.presetsRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={APPROVE_PRESET}
-          accessibilityState={{ selected }}
-          disabled={sending}
-          onPress={() => {
-            void haptic.selection();
-            setSelected((s) => !s);
-            if (!selected) setFeedback("");
-          }}
-          style={({ pressed }) => [
-            styles.presetButton,
-            {
-              borderColor: selected ? theme.colors.accent : theme.colors.border,
-              backgroundColor: selected
-                ? alpha(theme.colors.accent, 0.18)
-                : pressed
-                  ? theme.colors.surfaceElevated
-                  : "transparent",
-              opacity: sending ? 0.5 : 1,
-            },
-          ]}
-        >
-          <Text
-            variant="footnote"
-            style={{
-              color: selected ? theme.colors.accent : theme.colors.mutedForeground,
-              fontWeight: "500",
-            }}
-          >
-            {APPROVE_PRESET}
-          </Text>
-        </Pressable>
+    <PendingInputShell
+      header="Plan Review"
+      background="transparent"
+      showHeader={false}
+      showTopBorder={false}
+      keyboardVisible={keyboardVisible}
+    >
+      <View style={[styles.menuContainer, theme.shadows.lg]}>
+        <Glass preset="card" interactive style={styles.menuSurface}>
+          <View style={styles.menuContent}>
+            {PLAN_OPTIONS.map((option, index) => {
+              const selected = selectedAction === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  accessibilityRole="button"
+                  accessibilityLabel={option.title}
+                  accessibilityState={{ selected, disabled: sending }}
+                  disabled={sending}
+                  onPress={() => {
+                    void haptic.selection();
+                    setSelectedAction(option.value);
+                    setFeedback("");
+                  }}
+                  style={({ pressed }) => [
+                    styles.menuRow,
+                    {
+                      marginBottom: index < PLAN_OPTIONS.length - 1 ? 2 : 0,
+                      backgroundColor: selected
+                        ? "rgba(255, 255, 255, 0.08)"
+                        : pressed
+                          ? "rgba(255, 255, 255, 0.05)"
+                          : undefined,
+                      opacity: sending ? 0.5 : 1,
+                    },
+                  ]}
+                >
+                  <View style={styles.menuCopy}>
+                    <Text
+                      variant="subheadline"
+                      numberOfLines={1}
+                      color={selected ? "accent" : "foreground"}
+                      style={styles.optionTitle}
+                    >
+                      {option.title}
+                    </Text>
+                    <Text
+                      variant="caption1"
+                      numberOfLines={2}
+                      style={{ color: alpha(theme.colors.foreground, 0.88) }}
+                    >
+                      {option.description}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Glass>
       </View>
 
       <View style={pendingInputStyles.bottomRow}>
-        <TextInput
-          value={feedback}
-          onChangeText={(text) => {
-            setFeedback(text);
-            if (text) setSelected(false);
-          }}
-          onSubmitEditing={handleSend}
-          placeholder="Suggest changes to revise the plan…"
-          placeholderTextColor={theme.colors.dimForeground}
-          editable={!sending}
-          returnKeyType="send"
+        <Glass
+          preset="input"
+          interactive
           style={[
-            pendingInputStyles.input,
-            {
-              backgroundColor: theme.colors.surfaceDeep,
-              borderColor: theme.colors.border,
-              color: theme.colors.foreground,
-            },
+            composerStyles.inputCard,
+            styles.feedbackInputCard,
+            { borderColor: theme.colors.border },
           ]}
-        />
-        <PendingInputSendButton
-          enabled={hasAnswer}
-          loading={sending}
-          accessibilityLabel={selected && !trimmed ? "Approve plan" : "Send feedback"}
+        >
+          <TextInput
+            ref={inputRef}
+            value={feedback}
+            onChangeText={(text) => {
+              setFeedback(text);
+              setSelectedAction(text.trim().length > 0 ? null : "new-session");
+            }}
+            onFocus={() => {
+              if (!feedback.trim()) setSelectedAction(null);
+            }}
+            onSubmitEditing={() => {
+              if (hasAnswer) handleSend();
+            }}
+            placeholder="Suggest a change"
+            placeholderTextColor={theme.colors.dimForeground}
+            editable={!sending}
+            returnKeyType="send"
+            style={[
+              composerStyles.input,
+              styles.feedbackInput,
+              { color: theme.colors.foreground },
+            ]}
+          />
+        </Glass>
+        <SessionComposerActionButton
+          accessibilityLabel={
+            trimmed
+              ? "Send plan feedback"
+              : selectedAction === "same-session"
+                ? "Continue on this session"
+                : "Start a new session"
+          }
+          contentOpacity={hasAnswer && !sending ? 1 : 0.35}
+          disabled={!hasAnswer || sending}
+          glassStyle={{ borderColor: alpha(theme.colors.success, 0.28) }}
+          iconName="paperplane.fill"
+          iconSize={16}
+          iconTint={theme.colors.accentForeground}
           onPress={handleSend}
+          tint={alpha(theme.colors.success, 0.18)}
         />
       </View>
     </PendingInputShell>
@@ -155,17 +247,35 @@ export function PendingInputPlan({
 }
 
 const styles = StyleSheet.create({
-  filename: { marginLeft: "auto", maxWidth: "55%", fontFamily: "Menlo" },
-  presetsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
+  menuContainer: {
     marginTop: 10,
   },
-  presetButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  menuSurface: {
+    borderRadius: 20,
+    overflow: "hidden",
+  },
+  menuContent: {
+    padding: 6,
+  },
+  menuRow: {
+    minHeight: 56,
     borderRadius: 8,
-    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  menuCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  optionTitle: {
+    flexShrink: 1,
+  },
+  feedbackInput: {
+    height: 30,
+  },
+  feedbackInputCard: {
+    flex: 1,
+    height: 46,
+    justifyContent: "center",
   },
 });
