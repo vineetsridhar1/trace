@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEntityField } from "@trace/client-core";
 import type { Repo } from "@trace/gql";
@@ -23,6 +24,7 @@ import {
 
 type SessionPaneMode = "session" | "terminal" | "browser";
 
+const HEADER_BLUR_INTENSITY = 32;
 const HEADER_FADE_EXTRA_HEIGHT = 56;
 
 /**
@@ -202,16 +204,24 @@ export default function SessionStreamScreen() {
       </View>
 
       {!showLoading && !missingGroup && activePane === "session" && overlayHeight > 0 ? (
-        <LinearGradient
-          pointerEvents="none"
-          colors={[
-            alpha(theme.colors.background, 1),
-            alpha(theme.colors.background, 0.48),
-            alpha(theme.colors.background, 0),
-          ]}
-          locations={[0, 0.68, 1]}
-          style={[styles.headerFade, { height: overlayHeight + HEADER_FADE_EXTRA_HEIGHT }]}
-        />
+        <>
+          <BlurView
+            pointerEvents="none"
+            tint={theme.scheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
+            intensity={HEADER_BLUR_INTENSITY}
+            style={[styles.headerBlur, { height: overlayHeight }]}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={[
+              alpha(theme.colors.background, 1),
+              alpha(theme.colors.background, 0.48),
+              alpha(theme.colors.background, 0),
+            ]}
+            locations={[0, 0.68, 1]}
+            style={[styles.headerFade, { height: overlayHeight + HEADER_FADE_EXTRA_HEIGHT }]}
+          />
+        </>
       ) : null}
 
       {activeMenuClose ? (
@@ -242,6 +252,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 9,
+  },
+  headerBlur: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 8,
   },
   content: {
     flex: 1,
