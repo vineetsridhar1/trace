@@ -4015,6 +4015,7 @@ export class SessionService {
       data: {
         agentStatus: "not_started",
         sessionStatus: "in_progress",
+        createdById: actorId,
         hosting: targetHosting,
         workdir: null,
         pendingRun: {
@@ -4044,8 +4045,12 @@ export class SessionService {
       scopeId: movedSession.id,
       eventType: "session_started",
       payload: {
+        type: "runtime_move",
         session: serializeSession(movedSession),
         ...(sessionGroup ? { sessionGroup } : {}),
+        sourceHosting: session.hosting,
+        targetHosting,
+        targetRuntimeLabel: targetRuntimeLabel ?? null,
       } as Prisma.InputJsonValue,
       actorType,
       actorId,
@@ -4062,7 +4067,7 @@ export class SessionService {
         repo: movedSession.repo,
         branch: movedSession.branch,
         checkpointSha,
-        createdById: movedSession.createdById,
+        createdById: actorId,
         organizationId: movedSession.organizationId,
         readOnly: movedSession.readOnlyWorkspace,
       });

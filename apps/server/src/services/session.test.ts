@@ -2230,6 +2230,7 @@ describe("SessionService", () => {
           data: expect.objectContaining({
             agentStatus: "not_started",
             sessionStatus: "in_progress",
+            createdById: "user-1",
             hosting: "local",
             pendingRun: expect.objectContaining({
               type: "run",
@@ -2242,11 +2243,22 @@ describe("SessionService", () => {
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: "session_started",
-          payload: expect.not.objectContaining({ prompt: expect.anything() }),
+          payload: expect.objectContaining({
+            type: "runtime_move",
+            sourceHosting: "cloud",
+            targetHosting: "local",
+            targetRuntimeLabel: "Local Dev",
+          }),
         }),
       );
       expect(prismaMock.session.create).not.toHaveBeenCalled();
       expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "runtime-1");
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-1",
+          createdById: "user-1",
+        }),
+      );
       expect(sessionRouterMock.transitionRuntime).toHaveBeenCalledWith(
         "session-1",
         "cloud",
@@ -2564,6 +2576,7 @@ describe("SessionService", () => {
           data: expect.objectContaining({
             agentStatus: "not_started",
             sessionStatus: "in_progress",
+            createdById: "user-1",
             hosting: "cloud",
             pendingRun: expect.objectContaining({
               type: "run",
@@ -2572,10 +2585,22 @@ describe("SessionService", () => {
           }),
         }),
       );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_started",
+          payload: expect.objectContaining({
+            type: "runtime_move",
+            sourceHosting: "cloud",
+            targetHosting: "cloud",
+            targetRuntimeLabel: null,
+          }),
+        }),
+      );
       expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionId: "session-1",
           hosting: "cloud",
+          createdById: "user-1",
         }),
       );
       expect(sessionRouterMock.transitionRuntime).toHaveBeenCalledWith(
@@ -2622,6 +2647,44 @@ describe("SessionService", () => {
           sessionId: "session-1",
           hosting: "cloud",
           readOnly: true,
+        }),
+      );
+    });
+
+    it("reassigns move ownership to the actor before cloud provisioning", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          createdById: "user-1",
+          createdBy: { id: "user-1", name: "Original Owner", avatarUrl: null },
+          projects: [{ projectId: "project-1" }],
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          createdById: "user-2",
+          createdBy: { id: "user-2", name: "Mover", avatarUrl: null },
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          hosting: "cloud",
+          sessionGroupId: "group-1",
+        }),
+      );
+
+      await service.moveToCloud("session-1", "org-1", "user", "user-2");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            createdById: "user-2",
+          }),
+        }),
+      );
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-1",
+          createdById: "user-2",
         }),
       );
     });
