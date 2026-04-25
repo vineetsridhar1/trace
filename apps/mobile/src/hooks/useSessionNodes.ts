@@ -2,10 +2,10 @@ import { useMemo, useRef } from "react";
 import {
   buildSessionNodes,
   eventScopeKey,
+  useEntityStore,
   useEntityField,
-  useScopedEventIds,
-  useScopedEvents,
   type AgentToolResult,
+  type EntityState,
   type SessionNode,
 } from "@trace/client-core";
 import type { Event, GitCheckpoint } from "@trace/gql";
@@ -36,6 +36,13 @@ const EMPTY_COMPLETED_AGENT_TOOLS = new Map<string, AgentToolResult>();
 const EMPTY_TOOL_RESULTS = new Map<string, unknown>();
 const EMPTY_GIT_CHECKPOINTS = new Map<string, GitCheckpoint[]>();
 const EMPTY_EVENTS: Record<string, Event> = {};
+const EMPTY_EVENT_IDS: string[] = [];
+
+interface ScopedEventSnapshot {
+  scopeKey: string;
+  events: Record<string, Event>;
+  eventIds: string[];
+}
 
 /**
  * Derive the renderable SessionNode[] for a session from its scoped events,
@@ -57,8 +64,7 @@ export function useSessionNodes(
   const enabled = options.enabled ?? true;
   const frozen = options.frozen ?? false;
   const scopeKey = enabled ? eventScopeKey("session", sessionId) : DISABLED_SCOPE_KEY;
-  const eventIds = useScopedEventIds(scopeKey, sortEventsByTimestamp);
-  const events = useScopedEvents(scopeKey);
+  const snapshot = useScopedEventSnapshot(scopeKey, frozen);
   const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
     | GitCheckpoint[]
     | undefined;
@@ -85,18 +91,18 @@ export function useSessionNodes(
     if (frozen && previousResultRef.current?.scopeKey === scopeKey) {
       return previousResultRef.current;
     }
-    const built = buildSessionNodes(eventIds, events);
+    const built = buildSessionNodes(snapshot.eventIds, snapshot.events);
     const nextResult = {
       ...built,
       nodes: built.nodes.filter((node) =>
-        node.kind !== "event" ? true : willEventRender(events[node.id]),
+        node.kind !== "event" ? true : willEventRender(snapshot.events[node.id]),
       ),
-      events,
+      events: snapshot.events,
       scopeKey,
     };
     previousResultRef.current = nextResult;
     return nextResult;
-  }, [enabled, frozen, eventIds, events, scopeKey]);
+  }, [enabled, frozen, snapshot, scopeKey]);
 
   const completedAgentTools = useStableMap(built.completedAgentTools, (a, b) =>
     Object.is(a.content, b.content),
@@ -123,6 +129,38 @@ export function useSessionNodes(
     gitCheckpointsByPromptEventId,
     events: built.events,
   };
+}
+
+function useScopedEventSnapshot(scopeKey: string, frozen: boolean): ScopedEventSnapshot {
+  const snapshotRef = useRef<ScopedEventSnapshot>({
+    scopeKey,
+    events: EMPTY_EVENTS,
+    eventIds: EMPTY_EVENT_IDS,
+  });
+  const bucketRef = useRef<Record<string, Event> | null>(null);
+
+  return useEntityStore((state: EntityState) => {
+    const previousSnapshot = snapshotRef.current;
+    if (frozen && previousSnapshot.scopeKey === scopeKey) {
+      return previousSnapshot;
+    }
+
+    const events = state.eventsByScope[scopeKey] ?? EMPTY_EVENTS;
+    if (previousSnapshot.scopeKey === scopeKey && bucketRef.current === events) {
+      return previousSnapshot;
+    }
+
+    const eventIds =
+      events === EMPTY_EVENTS
+        ? EMPTY_EVENT_IDS
+        : Object.entries(events)
+            .sort(([, a], [, b]) => sortEventsByTimestamp(a, b))
+            .map(([id]) => id);
+    const nextSnapshot = { scopeKey, events, eventIds };
+    bucketRef.current = events;
+    snapshotRef.current = nextSnapshot;
+    return nextSnapshot;
+  });
 }
 
 function useStableMap<K, V>(
