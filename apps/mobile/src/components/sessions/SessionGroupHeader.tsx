@@ -5,14 +5,17 @@ import {
   ARCHIVE_SESSION_GROUP_MUTATION,
   useEntityField,
 } from "@trace/client-core";
+import type { SessionConnection } from "@trace/gql";
 import { useSessionGroupSessionIds } from "@/hooks/useSessionGroupDetail";
 import { createAgentTab } from "@/lib/createQuickSession";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
 import { SessionActionsMenu, type SessionMenuAction } from "./SessionActionsMenu";
+import { SessionMovePickerSheetContent } from "./SessionMovePickerSheetContent";
 import { SessionTabSwitcherSheet } from "./SessionTabSwitcherSheet";
 import { SessionGroupTitleMenu } from "./SessionGroupTitleMenu";
+import { SessionComposerBottomSheet } from "./session-input-composer/SessionComposerBottomSheet";
 
 interface SessionGroupHeaderProps {
   groupId: string;
@@ -33,11 +36,25 @@ export function SessionGroupHeader({
   const sessionOptimistic = useEntityField("sessions", sessionId ?? "", "_optimistic") as
     | boolean
     | undefined;
+  const sessionStatus = useEntityField("sessions", sessionId ?? "", "sessionStatus") as
+    | string
+    | null
+    | undefined;
+  const sessionConnection = useEntityField("sessions", sessionId ?? "", "connection") as
+    | SessionConnection
+    | null
+    | undefined;
   const sessionIds = useSessionGroupSessionIds(groupId);
+  const canMoveSession =
+    !!sessionId &&
+    !sessionOptimistic &&
+    sessionStatus !== "merged" &&
+    (sessionConnection?.canMove ?? true);
 
   const [rowWidth, setRowWidth] = useState(0);
   const [leadingWidth, setLeadingWidth] = useState(0);
   const [tabSwitcherOpen, setTabSwitcherOpen] = useState(false);
+  const [moveSheetOpen, setMoveSheetOpen] = useState(false);
   const handleRowLayout = useCallback((e: LayoutChangeEvent) => {
     setRowWidth(e.nativeEvent.layout.width);
   }, []);
@@ -96,6 +113,9 @@ export function SessionGroupHeader({
   const handleOpenTabSwitcher = useCallback(() => {
     setTabSwitcherOpen(true);
   }, []);
+  const handleOpenMoveSheet = useCallback(() => {
+    setMoveSheetOpen(true);
+  }, []);
 
   const menuItems = useMemo(() => {
     const items: SessionMenuAction[] = [];
@@ -113,6 +133,13 @@ export function SessionGroupHeader({
         onPress: handleCreateAgentTab,
       });
     }
+    if (canMoveSession) {
+      items.push({
+        title: "Move session",
+        systemIcon: "arrow.left.arrow.right",
+        onPress: handleOpenMoveSheet,
+      });
+    }
     if (prUrl) items.push({ title: "Open PR", systemIcon: "arrow.up.forward.square", onPress: handleOpenPr });
     items.push({ title: "Copy link", systemIcon: "link", onPress: handleCopyLink });
     if (!archivedAt && status !== "archived") {
@@ -126,8 +153,10 @@ export function SessionGroupHeader({
     return items;
   }, [
     archivedAt,
+    canMoveSession,
     handleCreateAgentTab,
     handleArchive,
+    handleOpenMoveSheet,
     handleOpenTabSwitcher,
     handleCopyLink,
     handleOpenPr,
@@ -172,6 +201,17 @@ export function SessionGroupHeader({
           activeSessionId={sessionId}
           onClose={() => setTabSwitcherOpen(false)}
         />
+      ) : null}
+      {sessionId ? (
+        <SessionComposerBottomSheet
+          visible={moveSheetOpen}
+          onClose={() => setMoveSheetOpen(false)}
+        >
+          <SessionMovePickerSheetContent
+            sessionId={sessionId}
+            onClose={() => setMoveSheetOpen(false)}
+          />
+        </SessionComposerBottomSheet>
       ) : null}
     </View>
   );

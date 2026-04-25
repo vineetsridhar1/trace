@@ -50,6 +50,15 @@ vi.mock("../lib/session-router.js", () => ({
     commitLinkedCheckoutChanges: vi.fn().mockResolvedValue(null),
     restoreLinkedCheckout: vi.fn().mockResolvedValue(null),
     setLinkedCheckoutAutoSync: vi.fn().mockResolvedValue(null),
+    inspectSessionGitSyncStatus: vi.fn().mockResolvedValue({
+      branch: "trace/test",
+      headCommitSha: "abc123",
+      upstreamBranch: "origin/trace/test",
+      upstreamCommitSha: "abc123",
+      aheadCount: 0,
+      behindCount: 0,
+      hasUncommittedChanges: false,
+    }),
   },
 }));
 
@@ -195,6 +204,19 @@ function makeGitCheckpoint(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function makeGitSyncStatus(overrides: Record<string, unknown> = {}) {
+  return {
+    branch: "trace/test",
+    headCommitSha: "abc123",
+    upstreamBranch: "origin/trace/test",
+    upstreamCommitSha: "abc123",
+    aheadCount: 0,
+    behindCount: 0,
+    hasUncommittedChanges: false,
+    ...overrides,
+  };
+}
+
 describe("SessionService", () => {
   let service: SessionService;
 
@@ -217,6 +239,7 @@ describe("SessionService", () => {
     sessionRouterMock.getRuntime.mockReturnValue(null);
     sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
     sessionRouterMock.destroyRuntime.mockResolvedValue(undefined);
+    sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValue(makeGitSyncStatus());
     prismaMock.sessionGroup.findUnique.mockResolvedValue({
       ...makeSessionGroup(),
       sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
@@ -2158,18 +2181,17 @@ describe("SessionService", () => {
   });
 
   describe("moveToRuntime", () => {
-    it("creates the replacement session inside the same group", async () => {
+    it("rebinds the same session inside the same group", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({
           status: "active",
           projects: [{ projectId: "project-1" }],
         }),
       );
-      prismaMock.ticketLink.findMany.mockResolvedValueOnce([{ ticketId: "ticket-1" }]);
       prismaMock.event.findMany.mockResolvedValueOnce([]);
-      prismaMock.session.create.mockResolvedValueOnce(
+      prismaMock.session.update.mockResolvedValueOnce(
         makeSession({
-          id: "session-2",
+          id: "session-1",
           agentStatus: "not_started",
           sessionStatus: "in_progress",
           hosting: "local",
@@ -2184,7 +2206,6 @@ describe("SessionService", () => {
           },
         }),
       );
-      prismaMock.session.update.mockResolvedValueOnce(makeSession());
       sessionRouterMock.getRuntime.mockReturnValueOnce({
         id: "runtime-1",
         label: "Local Dev",
@@ -2203,17 +2224,41 @@ describe("SessionService", () => {
         "user-1",
       );
 
-      expect(result.id).toBe("session-2");
-      expect(prismaMock.session.create).toHaveBeenCalledWith(
+      expect(result.id).toBe("session-1");
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             agentStatus: "not_started",
             sessionStatus: "in_progress",
-            sessionGroupId: "group-1",
+            createdById: "user-1",
+            hosting: "local",
+            pendingRun: expect.objectContaining({
+              type: "run",
+              prompt: "Continue this session on the new runtime.",
+            }),
+            toolSessionId: null,
           }),
         }),
       );
-      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-2", "runtime-1");
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_started",
+          payload: expect.objectContaining({
+            type: "runtime_move",
+            sourceHosting: "cloud",
+            targetHosting: "local",
+            targetRuntimeLabel: "Local Dev",
+          }),
+        }),
+      );
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "runtime-1");
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-1",
+          createdById: "user-1",
+        }),
+      );
       expect(sessionRouterMock.transitionRuntime).toHaveBeenCalledWith(
         "session-1",
         "cloud",
@@ -2226,7 +2271,6 @@ describe("SessionService", () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({ sessionStatus: "merged" }),
       );
-      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
 
       await expect(
         service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1"),
@@ -2235,7 +2279,6 @@ describe("SessionService", () => {
 
     it("rejects moving a repo session to a bridge without the repo linked", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(makeSession({ projects: [] }));
-      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
       sessionRouterMock.getRuntime.mockReturnValueOnce({
         id: "runtime-2",
         label: "Laptop B",
@@ -2249,7 +2292,7 @@ describe("SessionService", () => {
       await expect(
         service.moveToRuntime("session-1", "runtime-2", "org-1", "user", "user-1"),
       ).rejects.toThrow("Selected runtime does not have this repo linked");
-      expect(prismaMock.session.create).not.toHaveBeenCalled();
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
     });
 
     it("clears stale scratch workdirs when moving to another bridge", async () => {
@@ -2262,11 +2305,9 @@ describe("SessionService", () => {
           projects: [],
         }),
       );
-      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
       prismaMock.event.findMany.mockResolvedValueOnce([]);
-      prismaMock.session.create.mockResolvedValueOnce(
+      prismaMock.session.update.mockResolvedValueOnce(
         makeSession({
-          id: "session-2",
           hosting: "local",
           repoId: null,
           repo: null,
@@ -2282,7 +2323,6 @@ describe("SessionService", () => {
           },
         }),
       );
-      prismaMock.session.update.mockResolvedValueOnce(makeSession());
       sessionRouterMock.getRuntime.mockReturnValueOnce({
         id: "runtime-1",
         label: "Local Dev",
@@ -2295,10 +2335,10 @@ describe("SessionService", () => {
 
       await service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1");
 
-      const createArgs = prismaMock.session.create.mock.calls[0]?.[0] as
+      const updateArgs = prismaMock.session.update.mock.calls[0]?.[0] as
         | { data?: { workdir?: string | null } }
         | undefined;
-      expect(createArgs?.data?.workdir).toBeUndefined();
+      expect(updateArgs?.data?.workdir).toBeNull();
       expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ workdir: null }),
@@ -2318,11 +2358,10 @@ describe("SessionService", () => {
           projects: [{ projectId: "project-1" }],
         }),
       );
-      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
       prismaMock.event.findMany.mockResolvedValueOnce([]);
-      prismaMock.session.create.mockResolvedValueOnce(
+      prismaMock.session.update.mockResolvedValueOnce(
         makeSession({
-          id: "session-2",
+          id: "session-1",
           agentStatus: "not_started",
           sessionStatus: "in_progress",
           hosting: "local",
@@ -2337,7 +2376,6 @@ describe("SessionService", () => {
           },
         }),
       );
-      prismaMock.session.update.mockResolvedValueOnce(makeSession());
       sessionRouterMock.getRuntime.mockReturnValueOnce({
         id: "runtime-1",
         label: "Local Dev",
@@ -2356,7 +2394,7 @@ describe("SessionService", () => {
         "user-1",
       );
 
-      expect(result.id).toBe("session-2");
+      expect(result.id).toBe("session-1");
     });
 
     it("allows moving a failed session", async () => {
@@ -2366,11 +2404,10 @@ describe("SessionService", () => {
           projects: [{ projectId: "project-1" }],
         }),
       );
-      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
       prismaMock.event.findMany.mockResolvedValueOnce([]);
-      prismaMock.session.create.mockResolvedValueOnce(
+      prismaMock.session.update.mockResolvedValueOnce(
         makeSession({
-          id: "session-2",
+          id: "session-1",
           agentStatus: "not_started",
           sessionStatus: "in_progress",
           hosting: "local",
@@ -2385,7 +2422,6 @@ describe("SessionService", () => {
           },
         }),
       );
-      prismaMock.session.update.mockResolvedValueOnce(makeSession());
       sessionRouterMock.getRuntime.mockReturnValueOnce({
         id: "runtime-1",
         label: "Local Dev",
@@ -2404,7 +2440,103 @@ describe("SessionService", () => {
         "user-1",
       );
 
-      expect(result.id).toBe("session-2");
+      expect(result.id).toBe("session-1");
+    });
+
+    it("rejects moving when the source worktree has not been fully synced to origin", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          workdir: "/tmp/trace/worktrees/session-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-source",
+            runtimeLabel: "Laptop A",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Laptop B",
+        hostingMode: "local",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: ["repo-1"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValueOnce(
+        makeGitSyncStatus({ aheadCount: 1 }),
+      );
+
+      await expect(
+        service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1"),
+      ).rejects.toThrow("Cannot move session: local branch must match its upstream before moving.");
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+    });
+
+    it("allows moving a detached repo session by restoring from the current commit", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          readOnlyWorkspace: true,
+          workdir: "/tmp/trace/worktrees/session-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-source",
+            runtimeLabel: "Laptop A",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          hosting: "local",
+          readOnlyWorkspace: true,
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            runtimeLabel: "Laptop B",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Laptop B",
+        hostingMode: "local",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: ["repo-1"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValueOnce(
+        makeGitSyncStatus({
+          branch: null,
+          upstreamBranch: null,
+          upstreamCommitSha: null,
+          headCommitSha: "detached123",
+        }),
+      );
+
+      await service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1");
+
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-1",
+          checkpointSha: "detached123",
+          readOnly: true,
+        }),
+      );
     });
   });
 
@@ -2418,42 +2550,57 @@ describe("SessionService", () => {
       expect(prismaMock.session.findFirstOrThrow).not.toHaveBeenCalled();
     });
 
-    it("creates the cloud session inside the same group", async () => {
+    it("rebinds the same session to cloud inside the same group", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({
           status: "active",
           projects: [{ projectId: "project-1" }],
         }),
       );
-      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
       prismaMock.event.findMany.mockResolvedValueOnce([]);
-      prismaMock.session.create.mockResolvedValueOnce(
+      prismaMock.session.update.mockResolvedValueOnce(
         makeSession({
-          id: "session-3",
+          id: "session-1",
           agentStatus: "not_started",
           sessionStatus: "in_progress",
           hosting: "cloud",
           sessionGroupId: "group-1",
         }),
       );
-      prismaMock.session.update.mockResolvedValueOnce(makeSession());
 
       const result = await service.moveToCloud("session-1", "org-1", "user", "user-1");
 
-      expect(result.id).toBe("session-3");
-      expect(prismaMock.session.create).toHaveBeenCalledWith(
+      expect(result.id).toBe("session-1");
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             agentStatus: "not_started",
             sessionStatus: "in_progress",
-            sessionGroupId: "group-1",
+            createdById: "user-1",
+            hosting: "cloud",
+            pendingRun: expect.objectContaining({
+              type: "run",
+              prompt: "Continue this session on the new runtime.",
+            }),
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_started",
+          payload: expect.objectContaining({
+            type: "runtime_move",
+            sourceHosting: "cloud",
+            targetHosting: "cloud",
+            targetRuntimeLabel: null,
           }),
         }),
       );
       expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
         expect.objectContaining({
-          sessionId: "session-3",
+          sessionId: "session-1",
           hosting: "cloud",
+          createdById: "user-1",
         }),
       );
       expect(sessionRouterMock.transitionRuntime).toHaveBeenCalledWith(
@@ -2468,7 +2615,6 @@ describe("SessionService", () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({ sessionStatus: "merged" }),
       );
-      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
 
       await expect(service.moveToCloud("session-1", "org-1", "user", "user-1")).rejects.toThrow(
         "Cannot move a merged session",
@@ -2482,11 +2628,10 @@ describe("SessionService", () => {
           projects: [{ projectId: "project-1" }],
         }),
       );
-      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
       prismaMock.event.findMany.mockResolvedValueOnce([]);
-      prismaMock.session.create.mockResolvedValueOnce(
+      prismaMock.session.update.mockResolvedValueOnce(
         makeSession({
-          id: "session-3",
+          id: "session-1",
           agentStatus: "not_started",
           sessionStatus: "in_progress",
           hosting: "cloud",
@@ -2494,20 +2639,52 @@ describe("SessionService", () => {
           readOnlyWorkspace: true,
         }),
       );
-      prismaMock.session.update.mockResolvedValueOnce(makeSession());
 
       await service.moveToCloud("session-1", "org-1", "user", "user-1");
 
-      expect(prismaMock.session.create).toHaveBeenCalledWith(
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ readOnlyWorkspace: true }),
+          sessionId: "session-1",
+          hosting: "cloud",
+          readOnly: true,
+        }),
+      );
+    });
+
+    it("reassigns move ownership to the actor before cloud provisioning", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          createdById: "user-1",
+          createdBy: { id: "user-1", name: "Original Owner", avatarUrl: null },
+          projects: [{ projectId: "project-1" }],
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          createdById: "user-2",
+          createdBy: { id: "user-2", name: "Mover", avatarUrl: null },
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          hosting: "cloud",
+          sessionGroupId: "group-1",
+        }),
+      );
+
+      await service.moveToCloud("session-1", "org-1", "user", "user-2");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            createdById: "user-2",
+          }),
         }),
       );
       expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
         expect.objectContaining({
-          sessionId: "session-3",
-          hosting: "cloud",
-          readOnly: true,
+          sessionId: "session-1",
+          createdById: "user-2",
         }),
       );
     });
@@ -2519,22 +2696,20 @@ describe("SessionService", () => {
           projects: [{ projectId: "project-1" }],
         }),
       );
-      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
       prismaMock.event.findMany.mockResolvedValueOnce([]);
-      prismaMock.session.create.mockResolvedValueOnce(
+      prismaMock.session.update.mockResolvedValueOnce(
         makeSession({
-          id: "session-3",
+          id: "session-1",
           agentStatus: "not_started",
           sessionStatus: "in_progress",
           hosting: "cloud",
           sessionGroupId: "group-1",
         }),
       );
-      prismaMock.session.update.mockResolvedValueOnce(makeSession());
 
       const result = await service.moveToCloud("session-1", "org-1", "user", "user-1");
 
-      expect(result.id).toBe("session-3");
+      expect(result.id).toBe("session-1");
     });
   });
 

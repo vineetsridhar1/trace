@@ -179,6 +179,16 @@ export const SessionMessage = memo(function SessionMessage({
           imageKeys={asStringArray(payload?.imageKeys)}
           footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
+      ) : payload?.type === "runtime_move" ? (
+        <SystemBadge
+          text={
+            typeof payload?.targetRuntimeLabel === "string" && payload.targetRuntimeLabel
+              ? `Moved session to ${payload.targetRuntimeLabel}`
+              : payload?.targetHosting === "cloud"
+                ? "Moved session to cloud"
+                : "Moved session to another runtime"
+          }
+        />
       ) : (
         <SystemBadge text="Session started" />
       );

@@ -100,6 +100,59 @@ async function buildLinkedCheckoutFailureResult(repoId: string, error: unknown) 
   };
 }
 
+async function maybeReadGitRef(repoPath: string, args: string[]): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("git", args, {
+      cwd: repoPath,
+      maxBuffer: 1024 * 1024,
+    });
+    const value = stdout.trim();
+    return value.length > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+async function inspectSessionGitSyncStatus(repoPath: string) {
+  const [{ stdout: headStdout }, { stdout: statusStdout }, branch, upstreamBranch] =
+    await Promise.all([
+      execFileAsync("git", ["rev-parse", "HEAD"], { cwd: repoPath, maxBuffer: 1024 * 1024 }),
+      execFileAsync("git", ["status", "--porcelain", "--untracked-files=all"], {
+        cwd: repoPath,
+        maxBuffer: 1024 * 1024,
+      }),
+      maybeReadGitRef(repoPath, ["symbolic-ref", "--short", "-q", "HEAD"]),
+      maybeReadGitRef(repoPath, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]),
+    ]);
+
+  const upstreamCommitSha = upstreamBranch
+    ? await maybeReadGitRef(repoPath, ["rev-parse", `${upstreamBranch}^{commit}`])
+    : null;
+
+  let aheadCount = 0;
+  let behindCount = 0;
+  if (upstreamBranch) {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["rev-list", "--left-right", "--count", `HEAD...${upstreamBranch}`],
+      { cwd: repoPath, maxBuffer: 1024 * 1024 },
+    );
+    const [aheadRaw = "0", behindRaw = "0"] = stdout.trim().split(/\s+/);
+    aheadCount = Number.parseInt(aheadRaw, 10) || 0;
+    behindCount = Number.parseInt(behindRaw, 10) || 0;
+  }
+
+  return {
+    branch,
+    headCommitSha: headStdout.trim() || null,
+    upstreamBranch,
+    upstreamCommitSha,
+    aheadCount,
+    behindCount,
+    hasUncommittedChanges: statusStdout.trim().length > 0,
+  };
+}
+
 function isPendingInputOutput(output: ToolOutput): boolean {
   return (
     output.type === "assistant" &&
@@ -1106,6 +1159,34 @@ export class BridgeClient implements IBridgeClient {
                 action: "set_auto_sync",
                 result,
               });
+            });
+          });
+        break;
+      }
+      case "session_git_sync_status": {
+        const workdir = this.sessionWorkdirs.get(cmd.sessionId) ?? cmd.workdirHint;
+        if (!workdir) {
+          this.send({
+            type: "session_git_sync_status_result",
+            requestId: cmd.requestId,
+            error: "Session workdir is unavailable",
+          });
+          break;
+        }
+        void inspectSessionGitSyncStatus(workdir)
+          .then((status) => {
+            this.send({
+              type: "session_git_sync_status_result",
+              requestId: cmd.requestId,
+              status,
+            });
+          })
+          .catch((error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error);
+            this.send({
+              type: "session_git_sync_status_result",
+              requestId: cmd.requestId,
+              error: message,
             });
           });
         break;

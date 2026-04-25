@@ -253,7 +253,11 @@ export function buildSessionNodes(
     if (HIDDEN_SESSION_PAYLOAD_TYPE_SET.has(event.eventType)) {
       continue;
     }
-    if (event.eventType === "session_started" && !asJsonObject(event.payload)?.prompt) {
+    if (
+      event.eventType === "session_started" &&
+      !asJsonObject(event.payload)?.prompt &&
+      asJsonObject(event.payload)?.type !== "runtime_move"
+    ) {
       continue;
     }
 
