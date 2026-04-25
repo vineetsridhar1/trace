@@ -102,67 +102,66 @@ export function PendingInputQuestion({
       showTopBorder={false}
       keyboardVisible={keyboardVisible}
     >
-      <Text
-        variant="footnote"
-        color="foreground"
-        style={styles.questionText}
-        numberOfLines={4}
-      >
-        {question.question}
-      </Text>
-
-      {question.options.length > 0 ? (
-        <View style={[styles.menuContainer, theme.shadows.lg]}>
-          <Glass preset="card" interactive style={styles.menuSurface}>
-            <View style={styles.menuContent}>
-              {question.options.map((opt, index) => {
-                const selected = currentSelected.has(opt.label);
-                return (
-                  <Pressable
-                    key={opt.label}
-                    accessibilityRole="button"
-                    accessibilityLabel={opt.label}
-                    accessibilityState={{ selected }}
-                    onPress={() => {
-                      void haptic.selection();
-                      toggleOption(opt.label);
-                    }}
-                    style={({ pressed }) => [
-                      styles.menuRow,
-                      {
-                        marginBottom: index < question.options.length - 1 ? 2 : 0,
-                        backgroundColor: selected
-                          ? "rgba(255, 255, 255, 0.08)"
-                          : pressed
-                            ? "rgba(255, 255, 255, 0.05)"
-                            : undefined,
-                      },
-                    ]}
-                  >
-                    <View style={styles.menuCopy}>
-                      <Text
-                        variant="subheadline"
-                        numberOfLines={1}
-                        color={selected ? "accent" : "foreground"}
-                        style={styles.optionTitle}
-                      >
-                        {opt.label}
-                      </Text>
-                      <Text
-                        variant="caption1"
-                        numberOfLines={2}
-                        style={{ color: alpha(theme.colors.foreground, 0.88) }}
-                      >
-                        {opt.description}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Glass>
-        </View>
-      ) : null}
+      <View style={[styles.menuContainer, theme.shadows.lg]}>
+        <Glass preset="card" interactive style={styles.menuSurface}>
+          <View style={styles.menuContent}>
+            <Text
+              variant="footnote"
+              color="foreground"
+              style={styles.questionText}
+              numberOfLines={4}
+            >
+              {question.question}
+            </Text>
+            {question.options.length > 0
+              ? question.options.map((opt, index) => {
+                  const selected = currentSelected.has(opt.label);
+                  return (
+                    <Pressable
+                      key={opt.label}
+                      accessibilityRole="button"
+                      accessibilityLabel={opt.label}
+                      accessibilityState={{ selected }}
+                      onPress={() => {
+                        void haptic.selection();
+                        toggleOption(opt.label);
+                      }}
+                      style={({ pressed }) => [
+                        styles.menuRow,
+                        {
+                          marginBottom: index < question.options.length - 1 ? 2 : 0,
+                          backgroundColor: selected
+                            ? "rgba(255, 255, 255, 0.08)"
+                            : pressed
+                              ? "rgba(255, 255, 255, 0.05)"
+                              : undefined,
+                        },
+                      ]}
+                    >
+                      <View style={styles.menuCopy}>
+                        <Text
+                          variant="subheadline"
+                          numberOfLines={1}
+                          color={selected ? "accent" : "foreground"}
+                          style={styles.optionTitle}
+                        >
+                          {opt.label}
+                        </Text>
+                        <Text
+                          variant="caption1"
+                          numberOfLines={2}
+                          style={{ color: alpha(theme.colors.foreground, 0.88) }}
+                        >
+                          {opt.description}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })
+              : null}
+          </View>
+        </Glass>
+      </View>
 
       <View style={pendingInputStyles.bottomRow}>
         <Glass
