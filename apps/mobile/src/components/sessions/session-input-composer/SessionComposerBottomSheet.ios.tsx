@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
 import { BottomSheet, Host } from "@expo/ui/swift-ui";
-import { shouldUseNativeExpoSheet } from "@/lib/native-sheet";
+import { logNativeSheetDecision, shouldUseNativeExpoSheet } from "@/lib/native-sheet";
 import {
   SessionComposerBottomSheetBase,
   type SessionComposerBottomSheetProps,
 } from "./SessionComposerBottomSheetBase";
 
 export function SessionComposerBottomSheet(props: SessionComposerBottomSheetProps) {
+  logNativeSheetDecision("composer");
+
   if (!shouldUseNativeExpoSheet()) {
     return <SessionComposerBottomSheetBase {...props} />;
   }

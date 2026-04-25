@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
 import { BottomSheet, Host } from "@expo/ui/swift-ui";
-import { shouldUseNativeExpoSheet } from "@/lib/native-sheet";
+import { logNativeSheetDecision, shouldUseNativeExpoSheet } from "@/lib/native-sheet";
 import { SessionTabSwitcherContent } from "./SessionTabSwitcherContent";
 import {
   SessionTabSwitcherSheetBase,
@@ -11,6 +11,8 @@ import {
 const IOS_SHEET_CLOSE_DELAY_MS = 220;
 
 export function SessionTabSwitcherSheet(props: SessionTabSwitcherSheetProps) {
+  logNativeSheetDecision("tab-switcher");
+
   if (!shouldUseNativeExpoSheet()) {
     return <SessionTabSwitcherSheetBase {...props} />;
   }
