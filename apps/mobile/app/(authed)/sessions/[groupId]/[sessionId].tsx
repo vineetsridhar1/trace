@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEntityField } from "@trace/client-core";
 import type { Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
@@ -39,6 +39,7 @@ export default function SessionStreamScreen() {
     pane?: string;
   }>();
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const loadingGroup = useEnsureSessionGroupDetail(groupId);
   const sessionIds = useSessionGroupSessionIds(groupId);
@@ -131,13 +132,20 @@ export default function SessionStreamScreen() {
   const browserEnabled = !sessionOptimistic && !handoffPending && !showLoading;
   const showBrowser = activePane === "session" && browserOpen;
 
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      gestureEnabled: !showBrowser,
+      fullScreenGestureEnabled: !showBrowser,
+    });
+  }, [navigation, showBrowser]);
+
   return (
     <Screen
       edges={["left", "right"]}
       background="background"
       style={styles.root}
     >
-      <Stack.Screen options={{ headerShown: false, gestureEnabled: activePane === "session" && !showBrowser }} />
+      <Stack.Screen options={{ headerShown: false }} />
 
       <View pointerEvents="box-none" style={styles.headerOverlay}>
         {showLoading ? null : (
