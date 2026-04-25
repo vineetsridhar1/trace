@@ -35,14 +35,18 @@ export function SessionComposerBottomSheet({
     }
   }, [children, visible]);
 
+  useEffect(() => {
+    if (visible || !mounted) return;
+    setMounted(false);
+    onDismissed?.();
+  }, [mounted, onDismissed, visible]);
+
   const handlePresentedChange = useCallback(
     (isPresented: boolean) => {
       if (isPresented) return;
-      setMounted(false);
-      onDismissed?.();
       onClose();
     },
-    [onClose, onDismissed],
+    [onClose],
   );
 
   const hostStyle = useMemo(() => [styles.host, { width }], [width]);
