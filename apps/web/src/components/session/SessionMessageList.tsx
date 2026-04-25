@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Loader2, Sparkles } from "lucide-react";
 import type { GitCheckpoint } from "@trace/gql";
 import { SessionMessage } from "./SessionMessage";
@@ -252,7 +252,6 @@ export function SessionMessageList({
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
       className="absolute inset-0 z-10"
     >
@@ -277,7 +276,7 @@ export function SessionMessageList({
 
   return (
     <div className="relative h-full">
-      <AnimatePresence initial={false}>{showEmptyState ? emptyState : null}</AnimatePresence>
+      {showEmptyState ? emptyState : null}
 
       <div ref={scrollContainerRef} className="h-full overflow-y-auto px-4 py-4">
         {/* Sentinel for infinite scroll - triggers loading older messages */}
