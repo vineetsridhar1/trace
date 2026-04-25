@@ -7,6 +7,7 @@ export type SessionWorkspaceMode = "agent" | "preview";
 
 interface SessionWorkspaceModeToggleProps {
   value: SessionWorkspaceMode;
+  enabled?: boolean;
   onChange: (value: SessionWorkspaceMode) => void;
 }
 
@@ -17,6 +18,7 @@ const SEGMENTS: Array<{ label: string; value: SessionWorkspaceMode }> = [
 
 export const SessionWorkspaceModeToggle = memo(function SessionWorkspaceModeToggle({
   value,
+  enabled = true,
   onChange,
 }: SessionWorkspaceModeToggleProps) {
   const theme = useTheme();
@@ -35,6 +37,7 @@ export const SessionWorkspaceModeToggle = memo(function SessionWorkspaceModeTogg
       <SegmentedControl
         segments={SEGMENTS.map((segment) => segment.label)}
         selectedIndex={Math.max(selectedIndex, 0)}
+        enabled={enabled}
         onChange={(index) => onChange(SEGMENTS[index]?.value ?? "agent")}
       />
     </View>

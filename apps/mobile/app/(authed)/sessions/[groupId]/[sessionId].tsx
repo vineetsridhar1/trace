@@ -47,6 +47,9 @@ export default function SessionStreamScreen() {
   const browserUrl = useMobileUIStore((s) => s.browserUrl);
   const browserUrlGroupId = useMobileUIStore((s) => s.browserUrlGroupId);
   const setBrowserUrl = useMobileUIStore((s) => s.setBrowserUrl);
+  const sessionOptimistic = useEntityField("sessions", sessionId, "_optimistic") as
+    | boolean
+    | undefined;
   const activePane: SessionPaneMode =
     pane === "terminal" ? "terminal" : "session";
   const hydratedGroupId =
@@ -122,6 +125,12 @@ export default function SessionStreamScreen() {
     !groupName;
   const showLoading = loadingGroup || handoffPending;
   const missingGroup = !showLoading && !groupName;
+  const previewEnabled = !sessionOptimistic && !handoffPending && !showLoading;
+
+  useEffect(() => {
+    if (previewEnabled || workspaceMode !== "preview") return;
+    setWorkspaceMode("agent");
+  }, [previewEnabled, workspaceMode]);
 
   return (
     <Screen
@@ -142,7 +151,11 @@ export default function SessionStreamScreen() {
             />
             <ActiveTodoStrip sessionId={sessionId} />
             {activePane === "session" ? (
-              <SessionWorkspaceModeToggle value={workspaceMode} onChange={setWorkspaceMode} />
+              <SessionWorkspaceModeToggle
+                value={workspaceMode}
+                enabled={previewEnabled}
+                onChange={setWorkspaceMode}
+              />
             ) : null}
           </View>
         )}
