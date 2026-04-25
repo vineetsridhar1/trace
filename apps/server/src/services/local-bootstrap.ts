@@ -3,7 +3,26 @@ import { prisma } from "../lib/db.js";
 import { TRACE_AI_EMAIL, TRACE_AI_NAME, TRACE_AI_USER_ID } from "../lib/ai-user.js";
 
 const LOCAL_ORG_NAME = "Trace";
+const LOCAL_CHANNEL_NAME = "General";
 const LOCAL_EMAIL_DOMAIN = "trace.local";
+
+async function deleteLegacyBootstrapChannels(organizationId: string): Promise<void> {
+  await prisma.channel.deleteMany({
+    where: {
+      organizationId,
+      name: LOCAL_CHANNEL_NAME,
+      type: "coding",
+      groupId: null,
+      repoId: null,
+      members: { none: {} },
+      messages: { none: {} },
+      projects: { none: {} },
+      sessionGroups: { none: {} },
+      sessions: { none: {} },
+      tickets: { none: {} },
+    },
+  });
+}
 
 function slugifyLocalName(name: string): string {
   const slug = name
@@ -167,6 +186,8 @@ export async function ensureLocalUserWorkspace(name: string): Promise<{
       role: "member",
     },
   });
+
+  await deleteLegacyBootstrapChannels(organization.id);
 
   return {
     organizationId: organization.id,

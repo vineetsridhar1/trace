@@ -16,6 +16,10 @@ vi.mock("../lib/db.js", async () => {
         create: vi.fn(),
         update: vi.fn(),
       },
+      channel: {
+        ...base.channel,
+        deleteMany: vi.fn(),
+      },
     },
   };
 });
@@ -36,6 +40,9 @@ type PrismaMock = ReturnType<typeof import("../../test/helpers.js").createPrisma
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     upsert: ReturnType<typeof vi.fn>;
+  };
+  channel: ReturnType<typeof import("../../test/helpers.js").createPrismaMock>["channel"] & {
+    deleteMany: ReturnType<typeof vi.fn>;
   };
 };
 const prismaMock = prisma as unknown as PrismaMock;
@@ -118,6 +125,7 @@ describe("local login", () => {
       name: "Jane Developer",
       avatarUrl: null,
     });
+    prismaMock.channel.deleteMany.mockResolvedValue({ count: 0 });
     prismaMock.orgMember.upsert.mockResolvedValue({});
   });
 
@@ -175,7 +183,49 @@ describe("local login", () => {
         role: "admin",
       },
     });
+    expect(prismaMock.channel.deleteMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org-1",
+        name: "General",
+        type: "coding",
+        groupId: null,
+        repoId: null,
+        members: { none: {} },
+        messages: { none: {} },
+        projects: { none: {} },
+        sessionGroups: { none: {} },
+        sessions: { none: {} },
+        tickets: { none: {} },
+      },
+    });
     expect(prismaMock.channel.create).not.toHaveBeenCalled();
+  });
+
+  it("cleans up the legacy bootstrap channel shape for existing local workspaces", async () => {
+    prismaMock.channel.deleteMany.mockResolvedValueOnce({ count: 1 });
+
+    const res = await fetch(`${baseUrl}/auth/local/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Jane Developer" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.channel.deleteMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org-1",
+        name: "General",
+        type: "coding",
+        groupId: null,
+        repoId: null,
+        members: { none: {} },
+        messages: { none: {} },
+        projects: { none: {} },
+        sessionGroups: { none: {} },
+        sessions: { none: {} },
+        tickets: { none: {} },
+      },
+    });
   });
 
   it("rejects short names", async () => {
