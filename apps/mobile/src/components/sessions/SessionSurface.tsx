@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import {
   Keyboard,
   Platform,
@@ -33,6 +33,8 @@ interface SessionSurfaceProps {
   sessionId: string;
   /** Called when the user taps a sibling session in the tab strip. */
   onSelectSession: (sessionId: string) => void;
+  /** Optional accessory rendered above the composer stack. */
+  bottomAccessory?: ReactNode;
   /**
    * When true, the SessionGroupHeader and SessionTabStrip are not rendered.
    * The Session Player pulls those into its drag handle so the whole top
@@ -66,6 +68,7 @@ const STREAM_COMPOSER_CLEARANCE = 12;
 export function SessionSurface({
   sessionId,
   onSelectSession,
+  bottomAccessory,
   hideHeader = false,
   topInset,
   loadStreamEvents = true,
@@ -220,6 +223,7 @@ export function SessionSurface({
             },
           ]}
         >
+          {bottomAccessory ? <View style={styles.bottomAccessory}>{bottomAccessory}</View> : null}
           {bridgeLocked ? (
             <>
               <SessionErrorCard sessionId={sessionId} />
@@ -294,6 +298,10 @@ const styles = StyleSheet.create({
   },
   composerStack: {
     backgroundColor: "transparent",
+  },
+  bottomAccessory: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
   },
   accessNoticeWrap: {
     paddingTop: 8,

@@ -12,10 +12,11 @@ import {
 } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { BrowserPanel } from "@/components/sessions/BrowserPanel";
-import { SessionWorkspaceModeToggle, type SessionWorkspaceMode } from "@/components/sessions/SessionWorkspaceModeToggle";
+import { SessionPreviewTray } from "@/components/sessions/SessionPreviewTray";
 import { SessionPageHeader } from "@/components/sessions/SessionPageHeader";
 import { SessionSurface } from "@/components/sessions/SessionSurface";
 import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel";
+import { SessionComposerBottomSheet } from "@/components/sessions/session-input-composer/SessionComposerBottomSheet";
 import { resolveBrowserUrl } from "@/lib/browser";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { useMobileUIStore } from "@/stores/ui";
@@ -76,17 +77,17 @@ export default function SessionStreamScreen() {
       ),
     [browserUrl, browserUrlGroupId, hydratedGroupId, prUrl, repo?.remoteUrl],
   );
-  const [workspaceMode, setWorkspaceMode] = useState<SessionWorkspaceMode>("agent");
-
-  useEffect(() => {
-    setWorkspaceMode("agent");
-  }, [groupId, sessionId]);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     if (!groupId || !sessionId || sessionIds.length === 0) return;
     if (sessionIds.includes(sessionId)) return;
     router.replace(`/sessions/${groupId}/${sessionIds[0]}`);
   }, [groupId, router, sessionId, sessionIds]);
+
+  useEffect(() => {
+    setPreviewOpen(false);
+  }, [groupId, sessionId]);
 
   const navigateToPane = useCallback(
     (nextPane: SessionPaneMode) => {
@@ -130,11 +131,7 @@ export default function SessionStreamScreen() {
   const showLoading = loadingGroup || handoffPending;
   const missingGroup = !showLoading && !groupName;
   const previewEnabled = !sessionOptimistic && !handoffPending && !showLoading;
-
-  useEffect(() => {
-    if (previewEnabled || workspaceMode !== "preview") return;
-    setWorkspaceMode("agent");
-  }, [previewEnabled, workspaceMode]);
+  const previewVisible = previewOpen && previewEnabled && activePane === "session";
 
   return (
     <Screen
@@ -154,13 +151,6 @@ export default function SessionStreamScreen() {
               onBack={activePane === "terminal" ? () => navigateToPane("session") : closeSessionPlayer}
             />
             <ActiveTodoStrip sessionId={sessionId} />
-            {activePane === "session" ? (
-              <SessionWorkspaceModeToggle
-                value={workspaceMode}
-                enabled={previewEnabled}
-                onChange={setWorkspaceMode}
-              />
-            ) : null}
           </View>
         )}
       </View>
@@ -191,22 +181,20 @@ export default function SessionStreamScreen() {
           </View>
         ) : (
           <View key={hydratedGroupId} style={styles.overlayPaddedScene}>
-            {activePane === "session" && workspaceMode === "agent" ? (
+            {activePane === "session" ? (
               <SessionSurface
                 sessionId={sessionId}
                 onSelectSession={handleSelectSession}
+                bottomAccessory={
+                  <SessionPreviewTray
+                    url={resolvedBrowserUrl}
+                    enabled={previewEnabled}
+                    onOpen={() => setPreviewOpen(true)}
+                  />
+                }
                 hideHeader
                 topInset={overlayHeight}
               />
-            ) : null}
-            {activePane === "session" && workspaceMode === "preview" ? (
-              <View style={styles.overlayPaddedScene}>
-                <BrowserPanel
-                  url={resolvedBrowserUrl}
-                  onUrlChange={handleBrowserUrlChange}
-                  topInset={overlayHeight}
-                />
-              </View>
             ) : null}
             {activePane === "terminal" ? (
               <View style={[styles.overlayPaddedScene, { paddingTop: overlayHeight }]}>
@@ -216,6 +204,12 @@ export default function SessionStreamScreen() {
           </View>
         )}
       </View>
+
+      <SessionComposerBottomSheet visible={previewVisible} onClose={() => setPreviewOpen(false)}>
+        <View style={styles.previewSheet}>
+          <BrowserPanel url={resolvedBrowserUrl} onUrlChange={handleBrowserUrlChange} />
+        </View>
+      </SessionComposerBottomSheet>
 
       {activeMenuClose ? (
         <Pressable
@@ -246,6 +240,10 @@ const styles = StyleSheet.create({
   overlayPaddedScene: {
     flex: 1,
     minHeight: 0,
+  },
+  previewSheet: {
+    minHeight: 420,
+    maxHeight: "100%",
   },
   center: {
     flex: 1,
