@@ -6,7 +6,10 @@ import type { BridgeAccessCapability } from "@trace/gql";
 import { Button, Text } from "@/components/design-system";
 import { SessionComposerBottomSheet } from "@/components/sessions/session-input-composer/SessionComposerBottomSheet";
 import type { BridgeRuntimeAccessInfo } from "@/hooks/useBridgeRuntimeAccess";
-import { isBridgeInteractionAllowed } from "@/hooks/useBridgeRuntimeAccess";
+import {
+  isBridgeInteractionAllowed,
+  isBridgeTerminalAllowed,
+} from "@/hooks/useBridgeRuntimeAccess";
 import {
   describeBridgeAccessScope,
   formatCapabilities,
@@ -86,11 +89,13 @@ export function BridgeAccessNotice({
   sessionGroupId,
   compact = false,
   onRequested,
+  requiredCapability = "session",
 }: {
   access: BridgeRuntimeAccessInfo | null;
   sessionGroupId?: string | null;
   compact?: boolean;
   onRequested?: () => void | Promise<void>;
+  requiredCapability?: BridgeAccessCapability;
 }) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
@@ -99,11 +104,17 @@ export function BridgeAccessNotice({
     sessionGroupId ? "session_group" : "all_sessions",
   );
   const [duration, setDuration] = useState<BridgeAccessRequestDuration>("1d");
-  const [wantsTerminal, setWantsTerminal] = useState(false);
+  const [wantsTerminal, setWantsTerminal] = useState(requiredCapability === "terminal");
 
   const pendingRequest = access?.pendingRequest ?? null;
   const ownerName = access?.ownerUser?.name?.trim() || "the bridge owner";
   const runtimeLabel = access?.label?.trim() || "this bridge";
+  const requiresTerminal = requiredCapability === "terminal";
+  const pendingCoversRequiredCapability = pendingRequest
+    ? requiresTerminal
+      ? (pendingRequest.requestedCapabilities?.includes("terminal") ?? false)
+      : true
+    : false;
   const scopeOptions = useMemo(
     () =>
       sessionGroupId
@@ -123,7 +134,11 @@ export function BridgeAccessNotice({
     [pendingRequest?.sessionGroup?.name, sessionGroupId],
   );
 
-  if (!access || isBridgeInteractionAllowed(access)) {
+  const allowed = requiresTerminal
+    ? isBridgeTerminalAllowed(access)
+    : isBridgeInteractionAllowed(access);
+
+  if (!access || allowed) {
     return null;
   }
 
@@ -176,10 +191,12 @@ export function BridgeAccessNotice({
           </View>
           <View style={styles.noticeCopy}>
             <Text variant="subheadline" color="foreground">
-              Bridge access required
+              {requiresTerminal ? "Terminal access required" : "Bridge access required"}
             </Text>
             <Text variant="footnote" color="mutedForeground" style={styles.noticeBody}>
-              {ownerName} needs to approve access before you can use {runtimeLabel}.
+              {requiresTerminal
+                ? `${ownerName} needs to approve terminal access before you can use ${runtimeLabel}.`
+                : `${ownerName} needs to approve access before you can use ${runtimeLabel}.`}
             </Text>
             {pendingRequest ? (
               <Text variant="caption1" color="mutedForeground">
@@ -198,10 +215,16 @@ export function BridgeAccessNotice({
         </View>
         <View style={styles.noticeAction}>
           <Button
-            title={pendingRequest ? "Request pending" : "Request access"}
+            title={
+              pendingCoversRequiredCapability
+                ? "Request pending"
+                : requiresTerminal
+                  ? "Request terminal"
+                  : "Request access"
+            }
             variant="secondary"
             size="sm"
-            disabled={submitting || !!pendingRequest}
+            disabled={submitting || pendingCoversRequiredCapability}
             loading={submitting}
             onPress={() => setOpen(true)}
           />
@@ -214,10 +237,12 @@ export function BridgeAccessNotice({
         >
           <View style={styles.sheetHeader}>
             <Text variant="headline" color="foreground">
-              Request bridge access
+              {requiresTerminal ? "Request terminal access" : "Request bridge access"}
             </Text>
             <Text variant="footnote" color="mutedForeground">
-              Ask {ownerName} for permission to use {runtimeLabel}.
+              {requiresTerminal
+                ? `Ask ${ownerName} for permission to use the terminal on ${runtimeLabel}.`
+                : `Ask ${ownerName} for permission to use ${runtimeLabel}.`}
             </Text>
           </View>
 
@@ -280,6 +305,7 @@ export function BridgeAccessNotice({
                   true: alpha(theme.colors.accent, 0.5),
                 }}
                 thumbColor={wantsTerminal ? theme.colors.accent : theme.colors.mutedForeground}
+                disabled={requiresTerminal}
               />
             </View>
           </View>

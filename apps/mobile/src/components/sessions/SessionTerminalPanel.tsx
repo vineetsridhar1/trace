@@ -11,7 +11,7 @@ import type { Terminal } from "@trace/gql";
 import WebView, { type WebViewMessageEvent } from "react-native-webview";
 import { Button, Spinner, Text } from "@/components/design-system";
 import { BridgeAccessNotice } from "@/components/sessions/BridgeAccessNotice";
-import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "@/hooks/useBridgeRuntimeAccess";
+import { isBridgeTerminalAllowed, useBridgeRuntimeAccess } from "@/hooks/useBridgeRuntimeAccess";
 import { TerminalSocket } from "@/lib/terminal-ws";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
@@ -91,7 +91,7 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
         : null,
     [runtimeTemplate, theme.colors.foreground, theme.colors.surfaceDeep],
   );
-  const bridgeLocked = !isBridgeInteractionAllowed(bridgeAccess);
+  const bridgeLocked = !isBridgeTerminalAllowed(bridgeAccess);
 
   const isRequestCurrent = useCallback((token: number) => {
     return mountedRef.current && requestTokenRef.current === token;
@@ -346,6 +346,7 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
           access={bridgeAccess}
           sessionGroupId={sessionGroupId ?? null}
           onRequested={refreshBridgeAccess}
+          requiredCapability="terminal"
         />
       </View>
     );

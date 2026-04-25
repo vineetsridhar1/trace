@@ -1,4 +1,5 @@
 import type { BridgeAccessCapability } from "@trace/gql";
+import type { BridgeRuntimeAccessInfo } from "@/stores/bridge-access";
 
 export type BridgeAccessRequestDuration = "1h" | "1d" | "7d" | "never";
 export type BridgeAccessApprovalDuration = "1h" | "3h" | "1d" | "7d" | "never";
@@ -54,6 +55,21 @@ export function describeBridgeAccessScope(
     return sessionGroup?.name ? `Workspace: ${sessionGroup.name}` : "Single workspace";
   }
   return "All sessions";
+}
+
+export function hasBridgeAccessCapability(
+  access: Pick<
+    BridgeRuntimeAccessInfo,
+    "hostingMode" | "allowed" | "isOwner" | "capabilities"
+  > | null,
+  capability: BridgeAccessCapability,
+): boolean {
+  if (!access) return true;
+  if (access.hostingMode !== "local") return true;
+  if (access.isOwner) return true;
+  if (!access.allowed) return false;
+  if (capability === "session") return true;
+  return access.capabilities?.includes(capability) ?? false;
 }
 
 export function normalizeBridgeAccessApprovalScope(

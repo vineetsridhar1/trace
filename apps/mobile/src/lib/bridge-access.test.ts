@@ -4,6 +4,7 @@ import {
   formatCapabilities,
   getBridgeAccessApprovalExpiresAt,
   getBridgeAccessRequestExpiresAt,
+  hasBridgeAccessCapability,
   normalizeBridgeAccessApprovalScope,
 } from "./bridge-access";
 
@@ -62,5 +63,46 @@ describe("normalizeBridgeAccessApprovalScope", () => {
       scopeType: "all_sessions",
       sessionGroupId: null,
     });
+  });
+});
+
+describe("hasBridgeAccessCapability", () => {
+  it("requires an explicit terminal capability for local bridge access", () => {
+    expect(
+      hasBridgeAccessCapability(
+        {
+          hostingMode: "local",
+          allowed: true,
+          isOwner: false,
+          capabilities: ["session"],
+        },
+        "terminal",
+      ),
+    ).toBe(false);
+  });
+
+  it("allows terminal access for owners and cloud runtimes", () => {
+    expect(
+      hasBridgeAccessCapability(
+        {
+          hostingMode: "local",
+          allowed: false,
+          isOwner: true,
+          capabilities: [],
+        },
+        "terminal",
+      ),
+    ).toBe(true);
+    expect(
+      hasBridgeAccessCapability(
+        {
+          hostingMode: "cloud",
+          allowed: false,
+          isOwner: false,
+          capabilities: [],
+        },
+        "terminal",
+      ),
+    ).toBe(true);
   });
 });

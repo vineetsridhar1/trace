@@ -2,6 +2,7 @@ import { useCallback, useEffect } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import { BRIDGE_RUNTIME_ACCESS_QUERY } from "@trace/client-core";
 import { useConnectionStore } from "@/stores/connection";
+import { hasBridgeAccessCapability } from "@/lib/bridge-access";
 import {
   buildFallbackBridgeAccess,
   bridgeAccessStoreKey,
@@ -21,10 +22,11 @@ const pollSubscriptions = new Map<
 >();
 
 export function isBridgeInteractionAllowed(access: BridgeRuntimeAccessInfo | null): boolean {
-  if (!access) return true;
-  if (access.hostingMode !== "local") return true;
-  if (access.allowed || access.isOwner) return true;
-  return false;
+  return hasBridgeAccessCapability(access, "session");
+}
+
+export function isBridgeTerminalAllowed(access: BridgeRuntimeAccessInfo | null): boolean {
+  return hasBridgeAccessCapability(access, "terminal");
 }
 
 async function fetchBridgeRuntimeAccess(
