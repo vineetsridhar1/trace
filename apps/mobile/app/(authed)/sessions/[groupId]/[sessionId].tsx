@@ -5,12 +5,7 @@ import { useEntityField } from "@trace/client-core";
 import type { Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  Button,
-  EmptyState,
-  Screen,
-  Spinner,
-} from "@/components/design-system";
+import { Button, EmptyState, Screen, Spinner } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { BrowserPanel } from "@/components/sessions/BrowserPanel";
 import { SessionPageHeader } from "@/components/sessions/SessionPageHeader";
@@ -57,16 +52,13 @@ export default function SessionStreamScreen() {
   const activePane: SessionPaneMode =
     pane === "terminal" ? "terminal" : pane === "browser" ? "browser" : "session";
   const hydratedGroupId =
-    (useEntityField("sessions", sessionId, "sessionGroupId") as string | null | undefined)
-    ?? groupId;
+    (useEntityField("sessions", sessionId, "sessionGroupId") as string | null | undefined) ??
+    groupId;
   const prUrl = useEntityField("sessionGroups", hydratedGroupId, "prUrl") as
     | string
     | null
     | undefined;
-  const repo = useEntityField("sessionGroups", hydratedGroupId, "repo") as
-    | Repo
-    | null
-    | undefined;
+  const repo = useEntityField("sessionGroups", hydratedGroupId, "repo") as Repo | null | undefined;
   const groupName = useEntityField("sessionGroups", hydratedGroupId, "name") as
     | string
     | null
@@ -134,13 +126,8 @@ export default function SessionStreamScreen() {
   const browserEnabled = !sessionOptimistic && !handoffPending && !showLoading;
 
   return (
-    <Screen
-      edges={["left", "right"]}
-      background="background"
-      style={styles.root}
-    >
+    <Screen edges={["left", "right"]} background="background" style={styles.root}>
       <Stack.Screen options={{ headerShown: false }} />
-
       <View pointerEvents="box-none" style={styles.headerOverlay}>
         {showLoading ? null : (
           <View onLayout={handleOverlayLayout} style={{ paddingTop: insets.top }}>
@@ -162,7 +149,6 @@ export default function SessionStreamScreen() {
           </View>
         )}
       </View>
-
       <View style={styles.content}>
         {showLoading ? (
           <View style={styles.center}>
@@ -219,15 +205,12 @@ export default function SessionStreamScreen() {
         <LinearGradient
           pointerEvents="none"
           colors={[
-            alpha(theme.colors.background, 0.76),
+            alpha(theme.colors.background, 1),
             alpha(theme.colors.background, 0.48),
             alpha(theme.colors.background, 0),
           ]}
           locations={[0, 0.68, 1]}
-          style={[
-            styles.headerFade,
-            { height: overlayHeight + HEADER_FADE_EXTRA_HEIGHT },
-          ]}
+          style={[styles.headerFade, { height: overlayHeight + HEADER_FADE_EXTRA_HEIGHT }]}
         />
       ) : null}
 
