@@ -24,7 +24,7 @@ import {
 
 type SessionPaneMode = "session" | "terminal" | "browser";
 
-const HEADER_BLUR_INTENSITY = 32;
+const HEADER_BLUR_INTENSITY = 3;
 const HEADER_FADE_EXTRA_HEIGHT = 56;
 
 /**
@@ -209,7 +209,7 @@ export default function SessionStreamScreen() {
             pointerEvents="none"
             tint={theme.scheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
             intensity={HEADER_BLUR_INTENSITY}
-            style={[styles.headerBlur, { height: overlayHeight }]}
+            style={[styles.headerBlur, { height: overlayHeight - 8 }]}
           />
           <LinearGradient
             pointerEvents="none"
