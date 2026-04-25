@@ -6,6 +6,24 @@ const LOCAL_ORG_NAME = "Trace";
 const LOCAL_CHANNEL_NAME = "General";
 const LOCAL_EMAIL_DOMAIN = "trace.local";
 
+async function deleteLegacyBootstrapChannels(organizationId: string): Promise<void> {
+  await prisma.channel.deleteMany({
+    where: {
+      organizationId,
+      name: LOCAL_CHANNEL_NAME,
+      type: "coding",
+      groupId: null,
+      repoId: null,
+      members: { none: {} },
+      messages: { none: {} },
+      projects: { none: {} },
+      sessionGroups: { none: {} },
+      sessions: { none: {} },
+      tickets: { none: {} },
+    },
+  });
+}
+
 function slugifyLocalName(name: string): string {
   const slug = name
     .toLowerCase()
@@ -169,20 +187,7 @@ export async function ensureLocalUserWorkspace(name: string): Promise<{
     },
   });
 
-  const existingChannel = await prisma.channel.findFirst({
-    where: { organizationId: organization.id },
-    select: { id: true },
-  });
-
-  if (!existingChannel) {
-    await prisma.channel.create({
-      data: {
-        name: LOCAL_CHANNEL_NAME,
-        organizationId: organization.id,
-        type: "coding",
-      },
-    });
-  }
+  await deleteLegacyBootstrapChannels(organization.id);
 
   return {
     organizationId: organization.id,
