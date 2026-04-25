@@ -178,7 +178,8 @@ export function SessionInputComposer({
   const expanded = focused && keyboardVisible;
   const hasSendable = trimmed.length > 0 || images.length > 0;
   const showSend = (isActive && focused) || (!isActive && hasSendable);
-  const showStop = isActive && !focused;
+  const showStop = isActive;
+  const showFocusedStop = isActive && focused;
   const showLeadingControls = !hasSendable && !isActive;
   const activeSlashQuery = getActiveSlashCommandQuery(text, selection);
   const matchingSlashCommands = activeSlashQuery
@@ -477,14 +478,14 @@ export function SessionInputComposer({
             />
           </Animated.View>
 
-          {isActive && !focused ? null : (
+          {!showFocusedStop ? (
             <Animated.View layout={composerRowTransition} style={styles.attachButtonSlot}>
               <ComposerAttachButton
                 enabled={canAttach}
                 onPress={() => void handlePickFromLibrary()}
               />
             </Animated.View>
-          )}
+          ) : null}
 
           {showSend ? (
             <Animated.View
