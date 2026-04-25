@@ -29,6 +29,8 @@ import { cn } from "./lib/utils";
 import { features } from "./lib/features";
 import { createQuickSession } from "./lib/create-quick-session";
 
+const SETTINGS_DETAIL_PANEL_MAX_RATIO = 0.45;
+
 export function App() {
   const user = useAuthStore((s: AuthState) => s.user);
   const loading = useAuthStore((s: AuthState) => s.loading);
@@ -135,6 +137,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
 
   const hasSession = !!activeSessionGroupId;
   const isMainContentCollapsed = hasSession && isFullscreen && !isMobile;
+  const detailPanelMaxRatio = activePage === "settings" ? SETTINGS_DETAIL_PANEL_MAX_RATIO : undefined;
   const shouldRenderChatView = features.messaging && !!activeChatId;
   const shouldRenderChannelView =
     !!activeChannelId &&
@@ -194,6 +197,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
               isOpen={hasSession}
               onClose={closePanel}
               containerRef={containerRef}
+              maxRatio={detailPanelMaxRatio}
               onClosed={() => setDisplayedSessionGroupId(null)}
             >
               {displayedSessionGroupId && (
