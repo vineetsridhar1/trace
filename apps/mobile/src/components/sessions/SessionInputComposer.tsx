@@ -3,7 +3,15 @@ import { Keyboard, View, type TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
-import { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  LinearTransition,
+  SlideInRight,
+  SlideOutRight,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { DISMISS_SESSION_MUTATION, generateUUID, useEntityField } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
@@ -26,11 +34,7 @@ import { ComposerPasteButton } from "./ComposerPasteButton";
 import { ImageAttachmentBar } from "./ImageAttachmentBar";
 import { SessionModelPickerSheetContent } from "./SessionModelPickerSheetContent";
 import { SessionRuntimePickerSheetContent } from "./SessionRuntimePickerSheetContent";
-import {
-  MAX_IMAGES,
-  MAX_INPUT_HEIGHT,
-  MIN_INPUT_HEIGHT,
-} from "./session-input-composer/constants";
+import { MAX_IMAGES, MAX_INPUT_HEIGHT, MIN_INPUT_HEIGHT } from "./session-input-composer/constants";
 import { SessionComposerActionButton } from "./session-input-composer/SessionComposerActionButton";
 import { SessionComposerBottomSheet } from "./session-input-composer/SessionComposerBottomSheet";
 import { SessionComposerInputCard } from "./session-input-composer/SessionComposerInputCard";
@@ -50,6 +54,14 @@ interface SessionInputComposerProps {
 
 const EMPTY_IMAGES: ImageAttachment[] = [];
 type ComposerSheet = "model" | "runtime" | null;
+const composerMotionEasing = Easing.inOut(Easing.ease);
+const composerMotionDuration = 150;
+const composerRowTransition =
+  LinearTransition.duration(composerMotionDuration).easing(composerMotionEasing);
+const trailingActionEnter =
+  SlideInRight.duration(composerMotionDuration).easing(composerMotionEasing);
+const trailingActionExit =
+  SlideOutRight.duration(composerMotionDuration).easing(composerMotionEasing);
 
 /**
  * Session composer: a single-line-start liquid glass input next to a
@@ -138,8 +150,7 @@ export function SessionInputComposer({
   const { commands: slashCommands } = useSlashCommands(sessionId);
 
   const trimmed = text.trim();
-  const canInteract =
-    !isTerminal && !sending && !stopping && !isDisconnected && !isOptimistic;
+  const canInteract = !isTerminal && !sending && !stopping && !isDisconnected && !isOptimistic;
   const canSubmit = canInteract && (trimmed.length > 0 || images.length > 0);
   const canStop = isActive && !stopping;
   const canAttach = canInteract && !pickingImage && images.length < MAX_IMAGES;
@@ -157,22 +168,21 @@ export function SessionInputComposer({
     images.length === 0 &&
     !pastingImage;
 
-  // `focused` drives the collapsed ↔ expanded split. Focus (not keyboard
-  // height) is the source of truth so external keyboards and focus-before-
-  // show frames both behave correctly.
+  // Expanded controls should only show while the input is focused and the
+  // software keyboard is up. Once the keyboard starts dismissing, fall back
+  // to the collapsed row immediately instead of waiting for a later blur.
   const expanded = focused && keyboardVisible;
   const hasSendable = trimmed.length > 0 || images.length > 0;
   const showSend = (isActive && focused) || (!isActive && hasSendable);
-  const showStop = isActive && !focused;
+  const showStop = isActive;
+  const showFocusedStop = isActive && focused;
+  const showLeadingControls = !hasSendable && !isActive;
   const activeSlashQuery = getActiveSlashCommandQuery(text, selection);
   const matchingSlashCommands = activeSlashQuery
     ? filterSlashCommands(slashCommands, activeSlashQuery.query)
     : [];
   const showSlashCommandMenu =
-    inputFocused &&
-    canInteract &&
-    activeSlashQuery !== null &&
-    matchingSlashCommands.length > 0;
+    inputFocused && canInteract && activeSlashQuery !== null && matchingSlashCommands.length > 0;
 
   const {
     cardBorderAnimatedStyle,
@@ -190,9 +200,7 @@ export function SessionInputComposer({
     setMode,
   });
 
-  const {
-    modelLabel,
-  } = useSessionComposerConfig({
+  const { modelLabel } = useSessionComposerConfig({
     connection,
     currentTool,
     hosting,
@@ -275,14 +283,17 @@ export function SessionInputComposer({
     await runSubmit(trimmed, mode);
   }, [canSubmit, mode, runSubmit, trimmed]);
 
-  const handleSlashCommandSelect = useCallback((commandName: string) => {
-    const next = insertSlashCommand(text, selection, commandName);
-    setText(next.text);
-    setSelection(next.selection);
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
-  }, [selection, text]);
+  const handleSlashCommandSelect = useCallback(
+    (commandName: string) => {
+      const next = insertSlashCommand(text, selection, commandName);
+      setText(next.text);
+      setSelection(next.selection);
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
+    },
+    [selection, text],
+  );
 
   const handlePasteImage = useCallback(async () => {
     if (pastingImage || images.length >= MAX_IMAGES) return;
@@ -407,40 +418,38 @@ export function SessionInputComposer({
         paddingTop: theme.spacing.xs,
       }}
     >
-      <SessionComposerMeasurementLayer
-        onModeMeasure={handleModeMeasure}
-      />
+      <SessionComposerMeasurementLayer onModeMeasure={handleModeMeasure} />
 
       {isDisconnected ? (
-        <ComposerConnectionNotice
-          sessionId={sessionId}
-          canRetry={canRetryConnection}
-        />
+        <ComposerConnectionNotice sessionId={sessionId} canRetry={canRetryConnection} />
       ) : null}
 
       <ComposerPasteButton visible={showPasteButton} onPress={() => void handlePasteImage()} />
       <ImageAttachmentBar images={images} onRemove={handleRemoveImage} />
 
       <View style={styles.composerStack}>
-        <View style={styles.inputActionRow}>
-          {expanded && !hasSendable && !isActive ? (
-            <SessionComposerLeadingChips
-              canInteract={canInteract}
-              currentTool={currentTool}
-              mode={mode}
-              modeIconTint={modeIconTint}
-              modeLabelVisible={modeLabelVisible}
-              modelLabel={modelLabel}
-              chipAnimatedStyle={chipAnimatedStyle}
-              chipTextAnimatedStyle={chipTextAnimatedStyle}
-              glassAnimatedProps={glassAnimatedProps}
-              modeWidthAnimatedStyle={modeWidthAnimatedStyle}
-              onModePress={handleModePress}
-              onOpenModelSheet={handleOpenModelSheet}
-            />
+        <Animated.View layout={composerRowTransition} style={styles.inputActionRow}>
+          {showLeadingControls ? (
+            <Animated.View layout={composerRowTransition}>
+              <SessionComposerLeadingChips
+                canInteract={canInteract}
+                currentTool={currentTool}
+                mode={mode}
+                modeIconTint={modeIconTint}
+                modeLabelVisible={modeLabelVisible}
+                modelLabel={modelLabel}
+                showModeChip={expanded}
+                chipAnimatedStyle={chipAnimatedStyle}
+                chipTextAnimatedStyle={chipTextAnimatedStyle}
+                glassAnimatedProps={glassAnimatedProps}
+                modeWidthAnimatedStyle={modeWidthAnimatedStyle}
+                onModePress={handleModePress}
+                onOpenModelSheet={handleOpenModelSheet}
+              />
+            </Animated.View>
           ) : null}
 
-          <View style={styles.inputCardSlot}>
+          <Animated.View layout={composerRowTransition} style={styles.inputCardSlot}>
             {showSlashCommandMenu ? (
               <View style={styles.slashMenuOverlay}>
                 <SessionComposerSlashCommandMenu
@@ -458,6 +467,7 @@ export function SessionInputComposer({
               inputHeight={height}
               inputAnimatedStyle={inputAnimatedStyle}
               inputRef={inputRef}
+              layoutTransition={composerRowTransition}
               placeholder={placeholder}
               selection={selection}
               text={text}
@@ -469,56 +479,61 @@ export function SessionInputComposer({
               onRetry={handleRetry}
               onSelectionChange={setSelection}
             />
-          </View>
+          </Animated.View>
 
-          {isActive && !focused ? null : (
-            <View style={styles.attachButtonSlot}>
+          {!showFocusedStop ? (
+            <Animated.View layout={composerRowTransition} style={styles.attachButtonSlot}>
               <ComposerAttachButton
                 enabled={canAttach}
                 onPress={() => void handlePickFromLibrary()}
               />
-            </View>
-          )}
+            </Animated.View>
+          ) : null}
 
           {showSend ? (
-            <SessionComposerActionButton
-              accessibilityLabel={isActive ? "Queue message" : "Send message"}
-              contentOpacity={canSubmit ? 1 : 0.35}
-              disabled={!canSubmit}
-              glassStyle={cardBorderAnimatedStyle}
-              iconName="paperplane.fill"
-              iconSize={16}
-              iconTint={theme.colors.accentForeground}
-              onPress={handleSend}
-              tint={alpha(theme.colors.success, 0.18)}
-            />
+            <Animated.View
+              layout={composerRowTransition}
+              entering={trailingActionEnter}
+              exiting={trailingActionExit}
+            >
+              <SessionComposerActionButton
+                accessibilityLabel={isActive ? "Queue message" : "Send message"}
+                contentOpacity={canSubmit ? 1 : 0.35}
+                disabled={!canSubmit}
+                glassStyle={cardBorderAnimatedStyle}
+                iconName="paperplane.fill"
+                iconSize={16}
+                iconTint={theme.colors.accentForeground}
+                onPress={handleSend}
+                tint={alpha(theme.colors.success, 0.18)}
+              />
+            </Animated.View>
           ) : null}
 
           {showStop ? (
-            <SessionComposerActionButton
-              accessibilityLabel="Stop session"
-              disabled={!canStop}
-              glassStyle={{ borderColor: alpha(theme.colors.destructive, 0.42) }}
-              iconName="stop.fill"
-              iconSize={14}
-              iconTint={theme.colors.destructive}
-              onPress={() => void handleStop()}
-              tint={alpha(theme.colors.destructive, 0.22)}
-            />
+            <Animated.View
+              layout={composerRowTransition}
+              entering={trailingActionEnter}
+              exiting={trailingActionExit}
+            >
+              <SessionComposerActionButton
+                accessibilityLabel="Stop session"
+                disabled={!canStop}
+                glassStyle={{ borderColor: alpha(theme.colors.destructive, 0.42) }}
+                iconName="stop.fill"
+                iconSize={14}
+                iconTint={theme.colors.destructive}
+                onPress={() => void handleStop()}
+                tint={alpha(theme.colors.destructive, 0.22)}
+              />
+            </Animated.View>
           ) : null}
-        </View>
-
+        </Animated.View>
       </View>
 
-      <SessionComposerBottomSheet
-        visible={activeSheet !== null}
-        onClose={handleCloseSheet}
-      >
+      <SessionComposerBottomSheet visible={activeSheet !== null} onClose={handleCloseSheet}>
         {activeSheet === "model" ? (
-          <SessionModelPickerSheetContent
-            sessionId={sessionId}
-            onClose={handleCloseSheet}
-          />
+          <SessionModelPickerSheetContent sessionId={sessionId} onClose={handleCloseSheet} />
         ) : null}
         {activeSheet === "runtime" ? (
           <SessionRuntimePickerSheetContent

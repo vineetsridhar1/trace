@@ -1,4 +1,4 @@
-import { useCallback, useState, type RefObject } from "react";
+import { useCallback, useState, type ComponentProps, type RefObject } from "react";
 import {
   Text as NativeText,
   Pressable,
@@ -25,6 +25,7 @@ interface SessionComposerInputCardProps {
   inputHeight: number;
   inputAnimatedStyle: ComposerAnimatedViewStyle;
   inputRef: RefObject<TextInput | null>;
+  layoutTransition?: ComponentProps<typeof Animated.View>["layout"];
   placeholder: string;
   selection: ComposerSelection;
   text: string;
@@ -45,6 +46,7 @@ export function SessionComposerInputCard({
   inputHeight,
   inputAnimatedStyle,
   inputRef,
+  layoutTransition,
   placeholder,
   selection,
   text,
@@ -70,15 +72,19 @@ export function SessionComposerInputCard({
     setInputWidth((current) => (current === nextWidth ? current : nextWidth));
   }, []);
 
-  const handleMeasureLayout = useCallback((event: LayoutChangeEvent) => {
-    onContentHeightChange(event.nativeEvent.layout.height);
-  }, [onContentHeightChange]);
+  const handleMeasureLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      onContentHeightChange(event.nativeEvent.layout.height);
+    },
+    [onContentHeightChange],
+  );
 
   return (
     <AnimatedGlass
       preset="input"
       animatedProps={glassAnimatedProps}
       interactive
+      layout={layoutTransition}
       style={[styles.inputCard, cardBorderAnimatedStyle]}
     >
       {errorDraft ? (
@@ -94,10 +100,7 @@ export function SessionComposerInputCard({
         </Pressable>
       ) : null}
 
-      <Animated.View
-        onLayout={handleInputLayout}
-        style={[styles.inputWrapper, inputAnimatedStyle]}
-      >
+      <Animated.View onLayout={handleInputLayout} style={[styles.inputWrapper, inputAnimatedStyle]}>
         <TextInput
           ref={inputRef}
           value={text}
@@ -120,10 +123,7 @@ export function SessionComposerInputCard({
           <View pointerEvents="none" style={styles.measureLayer}>
             <NativeText
               onLayout={handleMeasureLayout}
-              style={[
-                styles.inputMeasure,
-                { color: theme.colors.foreground, width: inputWidth },
-              ]}
+              style={[styles.inputMeasure, { color: theme.colors.foreground, width: inputWidth }]}
             >
               {text.length > 0 ? `${text} ` : " "}
             </NativeText>
