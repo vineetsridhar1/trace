@@ -1,13 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
 import { BottomSheet, Host } from "@expo/ui/swift-ui";
-
-interface SessionComposerBottomSheetProps {
-  visible: boolean;
-  onClose: () => void;
-  onDismissed?: () => void;
-  children: ReactNode;
-}
+import { isLiquidGlassAvailable } from "expo-glass-effect";
+import {
+  SessionComposerBottomSheetBase,
+  type SessionComposerBottomSheetProps,
+} from "./SessionComposerBottomSheetBase";
 
 export function SessionComposerBottomSheet({
   visible,
@@ -15,6 +13,18 @@ export function SessionComposerBottomSheet({
   onDismissed,
   children,
 }: SessionComposerBottomSheetProps) {
+  if (!isLiquidGlassAvailable()) {
+    return (
+      <SessionComposerBottomSheetBase
+        visible={visible}
+        onClose={onClose}
+        onDismissed={onDismissed}
+      >
+        {children}
+      </SessionComposerBottomSheetBase>
+    );
+  }
+
   const { width } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
   const [content, setContent] = useState(children);
