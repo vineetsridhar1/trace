@@ -1,4 +1,6 @@
 import { useAuthStore, useEntityStore } from "@trace/client-core";
+import { recreateClient } from "@/lib/urql";
+import { useMobileUIStore } from "@/stores/ui";
 
 /**
  * Detect a 401-equivalent from urql's `CombinedError`. Covers:
@@ -41,5 +43,15 @@ export function isUnauthorized(error: unknown): boolean {
  */
 export async function handleUnauthorized(): Promise<void> {
   useEntityStore.getState().reset();
+  await useAuthStore.getState().logout();
+}
+
+/**
+ * Runs the full mobile sign-out cleanup before clearing auth state. This keeps
+ * UI state and the current GraphQL client in sync across every sign-out entry point.
+ */
+export async function handleMobileSignOut(): Promise<void> {
+  useMobileUIStore.getState().reset();
+  recreateClient();
   await useAuthStore.getState().logout();
 }
