@@ -219,4 +219,97 @@ describe("linked checkout commit-back", () => {
       "M  app.txt",
     );
   }, 15_000);
+
+  it("syncs after discarding main-worktree changes when requested", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "throw this away\n");
+    fs.writeFileSync(path.join(repoPath, "scratch.txt"), "temp\n");
+
+    const result = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+      conflictStrategy: "discard",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(fs.readFileSync(path.join(repoPath, "app.txt"), "utf8")).toBe("base\n");
+    expect(fs.existsSync(path.join(repoPath, "scratch.txt"))).toBe(false);
+    expect(await git(repoPath, ["status", "--porcelain", "--untracked-files=all"])).toBe("");
+    expect(result.status.currentCommitSha).toBe(await git(worktreePath, ["rev-parse", "HEAD"]));
+  }, 15_000);
+
+  it("commits main-worktree changes onto the Trace worktree during sync", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "carry me over\n");
+
+    const result = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+      conflictStrategy: "commit",
+      commitMessage: "Carry local changes into Trace",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(await git(worktreePath, ["log", "-1", "--pretty=%s"])).toBe(
+      "Carry local changes into Trace",
+    );
+    expect(fs.readFileSync(path.join(worktreePath, "app.txt"), "utf8")).toBe("carry me over\n");
+    expect(fs.readFileSync(path.join(repoPath, "app.txt"), "utf8")).toBe("carry me over\n");
+    expect(await git(repoPath, ["status", "--porcelain", "--untracked-files=all"])).toBe("");
+  }, 15_000);
+
+  it("replays main-worktree changes on top of the synced commit", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    fs.writeFileSync(path.join(worktreePath, "notes.txt"), "branch advanced\n");
+    await git(worktreePath, ["add", "notes.txt"]);
+    await git(worktreePath, ["commit", "-m", "advance trace branch"]);
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "keep this local\n");
+
+    const result = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+      conflictStrategy: "rebase",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.status.currentBranch).toBe(null);
+    expect(result.status.currentCommitSha).toBe(await git(worktreePath, ["rev-parse", "HEAD"]));
+    expect(result.status.hasUncommittedChanges).toBe(true);
+    expect(fs.readFileSync(path.join(repoPath, "app.txt"), "utf8")).toBe("keep this local\n");
+    expect(fs.readFileSync(path.join(repoPath, "notes.txt"), "utf8")).toBe("branch advanced\n");
+  }, 15_000);
+
+  it("uses a custom commit message when committing attached main-worktree changes", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    const syncResult = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+    expect(syncResult.ok).toBe(true);
+
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "custom message\n");
+
+    const result = await commitLinkedCheckoutChanges({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      message: "Commit with custom message",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(await git(worktreePath, ["log", "-1", "--pretty=%s"])).toBe(
+      "Commit with custom message",
+    );
+  }, 15_000);
 });

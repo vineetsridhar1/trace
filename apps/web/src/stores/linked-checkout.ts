@@ -256,6 +256,7 @@ export async function commitLinkedCheckoutChanges(
   repoId: string,
   sessionGroupId: string,
   runtimeInstanceId: string,
+  message?: string | null,
 ): Promise<DesktopLinkedCheckoutActionResult> {
   const key = getStoreKey(repoId, runtimeInstanceId);
   if (!key) {
@@ -274,6 +275,7 @@ export async function commitLinkedCheckoutChanges(
       {
         sessionGroupId,
         repoId,
+        message,
       },
     );
     useLinkedCheckoutStore.getState().setStatus(key, result.status);

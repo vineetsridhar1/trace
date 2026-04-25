@@ -159,6 +159,8 @@ export interface BridgeSyncLinkedCheckoutCommand {
   branch: string;
   commitSha?: string | null;
   autoSyncEnabled?: boolean;
+  conflictStrategy?: "discard" | "commit" | "rebase" | null;
+  commitMessage?: string | null;
 }
 
 export interface BridgeCommitLinkedCheckoutCommand {
@@ -166,6 +168,7 @@ export interface BridgeCommitLinkedCheckoutCommand {
   requestId: string;
   repoId: string;
   sessionGroupId: string;
+  message?: string | null;
 }
 
 export interface BridgeRestoreLinkedCheckoutCommand {

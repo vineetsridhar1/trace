@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { GitCommitHorizontal, Loader2, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
 import { Button } from "../ui/button";
+import { LinkedCheckoutSyncConflictDialog } from "./LinkedCheckoutSyncConflictDialog";
 import type { LinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
 
 interface Props {
@@ -24,6 +25,8 @@ export function LinkedCheckoutActions({ state }: Props) {
     onLinkRepo,
     onSync,
     onCommitChanges,
+    onResolveSyncConflict,
+    onCloseSyncConflict,
     onRestore,
     onToggleAutoSync,
   } = state;
@@ -59,6 +62,14 @@ export function LinkedCheckoutActions({ state }: Props) {
 
   return (
     <>
+      <LinkedCheckoutSyncConflictDialog
+        open={state.syncConflictOpen}
+        error={state.syncConflictError}
+        pending={pending}
+        onClose={onCloseSyncConflict}
+        onResolve={onResolveSyncConflict}
+      />
+
       {isAttachedToThisGroup && hasUncommittedChanges && (
         <Button
           variant={iconButtonVariant}

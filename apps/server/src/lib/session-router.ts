@@ -1199,6 +1199,8 @@ export class SessionRouter {
       branch: string;
       commitSha?: string | null;
       autoSyncEnabled?: boolean;
+      conflictStrategy?: "discard" | "commit" | "rebase";
+      commitMessage?: string | null;
     },
     timeoutMs = 60_000,
   ): Promise<BridgeLinkedCheckoutActionResultPayload> {
@@ -1211,6 +1213,8 @@ export class SessionRouter {
         branch: input.branch,
         commitSha: input.commitSha,
         autoSyncEnabled: input.autoSyncEnabled,
+        conflictStrategy: input.conflictStrategy,
+        commitMessage: input.commitMessage,
       },
       timeoutMs,
     );
@@ -1221,6 +1225,7 @@ export class SessionRouter {
     input: {
       repoId: string;
       sessionGroupId: string;
+      message?: string | null;
     },
     timeoutMs = 60_000,
   ): Promise<BridgeLinkedCheckoutActionResultPayload> {
@@ -1230,6 +1235,7 @@ export class SessionRouter {
         type: "linked_checkout_commit",
         repoId: input.repoId,
         sessionGroupId: input.sessionGroupId,
+        message: input.message,
       },
       timeoutMs,
     );

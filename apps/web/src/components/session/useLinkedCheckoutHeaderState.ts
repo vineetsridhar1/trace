@@ -31,9 +31,16 @@ export interface LinkedCheckoutHeaderState {
   syncedCommitSha: string | null;
   lastSyncError: string | null | undefined;
   canShowControls: boolean;
+  syncConflictOpen: boolean;
+  syncConflictError: string | null;
   onLinkRepo: () => Promise<void>;
   onSync: () => Promise<void>;
   onCommitChanges: () => Promise<void>;
+  onResolveSyncConflict: (input: {
+    strategy: "DISCARD" | "COMMIT" | "REBASE";
+    commitMessage?: string;
+  }) => Promise<void>;
+  onCloseSyncConflict: () => void;
   onRestore: () => Promise<void>;
   onToggleAutoSync: () => Promise<void>;
 }
@@ -53,6 +60,7 @@ export function useLinkedCheckoutHeaderState({
     canPickFolder,
   } = useLinkedCheckoutStatus(repoId ?? null, sessionGroupId, runtimeInstanceId ?? null, enabled);
   const [linking, setLinking] = useState(false);
+  const [syncConflictError, setSyncConflictError] = useState<string | null>(null);
 
   const isAttachedToThisGroup = status?.attachedSessionGroupId === sessionGroupId;
   const isAttachedElsewhere = !!status?.isAttached && !isAttachedToThisGroup;
@@ -65,6 +73,23 @@ export function useLinkedCheckoutHeaderState({
   const syncedCommitSha = status?.lastSyncedCommitSha ?? status?.currentCommitSha ?? null;
   const summaryBranch = isAttachedToThisGroup && groupBranch ? groupBranch : status?.targetBranch;
   const runtimeDisplayLabel = runtimeLabel?.trim() || "this bridge";
+
+  const runSync = async (options?: {
+    conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE";
+    commitMessage?: string;
+  }) => {
+    if (!repoId || !groupBranch || !runtimeInstanceId || pending) return null;
+
+    return syncLinkedCheckout({
+      repoId,
+      sessionGroupId,
+      runtimeInstanceId,
+      branch: groupBranch,
+      autoSyncEnabled: true,
+      conflictStrategy: options?.conflictStrategy,
+      commitMessage: options?.commitMessage,
+    });
+  };
 
   const onLinkRepo = async () => {
     if (!repoId || !runtimeInstanceId || pending) return;
@@ -108,13 +133,43 @@ export function useLinkedCheckoutHeaderState({
     if (!repoId || !groupBranch || !runtimeInstanceId || pending) return;
 
     try {
-      const result = await syncLinkedCheckout({
-        repoId,
-        sessionGroupId,
-        runtimeInstanceId,
-        branch: groupBranch,
-        autoSyncEnabled: true,
+      const result = await runSync();
+      if (!result) return;
+
+      if (!result.ok) {
+        if (result.status.hasUncommittedChanges && result.error?.includes("before syncing")) {
+          setSyncConflictError(result.error);
+          return;
+        }
+        toast.error("Failed to sync main worktree", {
+          description: result.error ?? "Unknown error",
+        });
+        return;
+      }
+
+      setSyncConflictError(null);
+      toast.success("Main worktree synced", {
+        description: `Now following ${groupBranch} on ${runtimeDisplayLabel}.`,
       });
+    } catch (error) {
+      toast.error("Failed to sync main worktree", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const onResolveSyncConflict = async ({
+    strategy,
+    commitMessage,
+  }: {
+    strategy: "DISCARD" | "COMMIT" | "REBASE";
+    commitMessage?: string;
+  }) => {
+    if (!repoId || !groupBranch || !runtimeInstanceId || pending) return;
+
+    try {
+      const result = await runSync({ conflictStrategy: strategy, commitMessage });
+      if (!result) return;
 
       if (!result.ok) {
         toast.error("Failed to sync main worktree", {
@@ -123,9 +178,20 @@ export function useLinkedCheckoutHeaderState({
         return;
       }
 
-      toast.success("Main worktree synced", {
-        description: `Now following ${groupBranch} on ${runtimeDisplayLabel}.`,
-      });
+      setSyncConflictError(null);
+      if (strategy === "DISCARD") {
+        toast.success("Main worktree synced", {
+          description: `Discarded local changes and now following ${groupBranch} on ${runtimeDisplayLabel}.`,
+        });
+      } else if (strategy === "COMMIT") {
+        toast.success("Main worktree synced", {
+          description: `Committed local changes and now following ${groupBranch} on ${runtimeDisplayLabel}.`,
+        });
+      } else {
+        toast.success("Main worktree synced", {
+          description: `Rebased local changes on top of ${groupBranch} on ${runtimeDisplayLabel}.`,
+        });
+      }
     } catch (error) {
       toast.error("Failed to sync main worktree", {
         description: error instanceof Error ? error.message : String(error),
@@ -215,9 +281,13 @@ export function useLinkedCheckoutHeaderState({
     syncedCommitSha,
     lastSyncError: status?.lastSyncError,
     canShowControls,
+    syncConflictOpen: syncConflictError !== null,
+    syncConflictError,
     onLinkRepo,
     onSync,
     onCommitChanges,
+    onResolveSyncConflict,
+    onCloseSyncConflict: () => setSyncConflictError(null),
     onRestore,
     onToggleAutoSync,
   };

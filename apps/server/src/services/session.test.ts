@@ -3037,6 +3037,7 @@ describe("SessionService", () => {
       expect(sessionRouterMock.commitLinkedCheckoutChanges).toHaveBeenCalledWith("runtime-home", {
         repoId: "repo-1",
         sessionGroupId: "group-1",
+        message: undefined,
       });
     });
   });

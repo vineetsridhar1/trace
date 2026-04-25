@@ -66,6 +66,8 @@ declare global {
     branch: string;
     commitSha?: string | null;
     autoSyncEnabled?: boolean;
+    conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE" | null;
+    commitMessage?: string | null;
   };
 
   type DesktopRepoGitHookStatus = {
