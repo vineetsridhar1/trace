@@ -1,6 +1,6 @@
 import { StyleSheet, View } from "react-native";
 import type { AgentStatus } from "@trace/gql";
-import { Button, Spinner, Text } from "@/components/design-system";
+import { Button, EmptyState, Spinner, Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
 
 /** Solid stream surface shown while initial events are loading. */
@@ -36,11 +36,24 @@ export function SessionStreamError({
 
 /** Solid stream surface shown once hydration completes but no events exist. */
 export function SessionStreamEmpty(_props: { agentStatus?: AgentStatus | null }) {
-  return <View style={styles.blackState} />;
+  return (
+    <View style={styles.emptyState}>
+      <EmptyState
+        icon="ellipsis.bubble"
+        title="Waiting for agent to start…"
+        subtitle="Events will appear here as soon as the session begins."
+      />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-  blackState: { flex: 1, backgroundColor: "#000" },
+  emptyState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#000",
+  },
   loadingState: {
     flex: 1,
     alignItems: "center",

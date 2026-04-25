@@ -22,6 +22,7 @@ export default function AuthedHome() {
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
   const logout = useAuthStore((s: AuthState) => s.logout);
   const repoFilter = useMobileUIStore((s: MobileUIState) => s.homeRepoFilter);
+  const orgDataError = useMobileUIStore((s: MobileUIState) => s.orgDataError);
   const sections = useHomeSections(userId, repoFilter);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -66,7 +67,13 @@ export default function AuthedHome() {
       onRefresh={handleRefresh}
       refreshing={refreshing}
       ListHeaderComponent={ListHeader}
-      ListEmptyComponent={<HomeEmpty hasRepoFilter={repoFilter !== null} />}
+      ListEmptyComponent={
+        <HomeEmpty
+          hasRepoFilter={repoFilter !== null}
+          error={orgDataError}
+          onRetry={() => void handleRefresh()}
+        />
+      }
       style={{ flex: 1, backgroundColor: theme.colors.background }}
     />
   );
@@ -87,17 +94,34 @@ function getItemType(item: HomeListItem): string {
   return item.kind;
 }
 
-function HomeEmpty({ hasRepoFilter }: { hasRepoFilter: boolean }) {
+function HomeEmpty({
+  hasRepoFilter,
+  error,
+  onRetry,
+}: {
+  hasRepoFilter: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
   return (
     <View style={styles.empty}>
       <EmptyState
-        icon={hasRepoFilter ? "line.3.horizontal.decrease.circle" : "checkmark.seal"}
-        title={hasRepoFilter ? "Nothing in this repo" : "All clear"}
+        icon={
+          error
+            ? "exclamationmark.triangle"
+            : hasRepoFilter
+              ? "line.3.horizontal.decrease.circle"
+              : "checkmark.seal"
+        }
+        title={error ? "Couldn't load home" : hasRepoFilter ? "Nothing in this repo" : "All clear"}
         subtitle={
-          hasRepoFilter
+          error
+            ? error
+            : hasRepoFilter
             ? "No sessions for the selected repo right now."
             : "Sessions that need you will show up here."
         }
+        action={error ? { label: "Retry", onPress: onRetry } : undefined}
       />
     </View>
   );

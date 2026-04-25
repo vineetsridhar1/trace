@@ -133,8 +133,8 @@ export async function createAgentTab(
     }
 
     const hydrated = await fetchSessionGroupDetail(session.sessionGroupId);
-    if (!hydrated && !useEntityStore.getState().sessions[session.id]?.sessionGroupId) {
-      throw new Error("Couldn't load the new agent tab");
+    if (!hydrated.ok && !useEntityStore.getState().sessions[session.id]?.sessionGroupId) {
+      throw new Error(hydrated.error ?? "Couldn't load the new agent tab");
     }
     if (options?.navigate) {
       options.navigate(session.sessionGroupId, session.id);

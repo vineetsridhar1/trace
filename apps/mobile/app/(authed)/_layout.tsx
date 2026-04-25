@@ -2,6 +2,7 @@ import { View } from "react-native";
 import { Redirect, Stack } from "expo-router";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { NoOrgWelcome } from "@/components/onboarding/NoOrgWelcome";
+import { AppConnectivityBanner } from "@/components/navigation/AppConnectivityBanner";
 import { useHydrate } from "@/hooks/useHydrate";
 import { useMyBridges } from "@/hooks/useMyBridges";
 
@@ -17,6 +18,7 @@ export default function AuthedLayout() {
 
   return (
     <View style={{ flex: 1 }}>
+      <AppConnectivityBanner />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="sessions" options={{ headerShown: false }} />

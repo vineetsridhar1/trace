@@ -33,7 +33,7 @@ export function SessionTabSwitcherContent({
 }: SessionTabSwitcherContentProps) {
   const router = useRouter();
   const theme = useTheme();
-  const loading = useEnsureSessionGroupDetail(groupId);
+  const { loading, error } = useEnsureSessionGroupDetail(groupId);
   const groupName = useEntityField("sessionGroups", groupId, "name") as string | null | undefined;
   const activeSessionOptimistic = useEntityField(
     "sessions",
@@ -99,7 +99,7 @@ export function SessionTabSwitcherContent({
         <EmptyState
           icon="rectangle.on.rectangle"
           title="Couldn't load tabs"
-          subtitle="This workspace's tab list isn't available right now."
+          subtitle={error ?? "This workspace's tab list isn't available right now."}
         />
       </View>
     );

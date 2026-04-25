@@ -17,11 +17,12 @@ export default function MergedArchived() {
   const theme = useTheme();
   const [segment, setSegment] = useState<MergedArchivedSegment>("merged");
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const ids = useMergedArchivedSessionGroupIds(channelId, segment);
 
   useEffect(() => {
     if (!channelId) return;
-    void fetchChannelSessionGroups(channelId, segment);
+    void fetchChannelSessionGroups(channelId, segment).then(setLoadError);
   }, [channelId, segment]);
 
   const handleRefresh = useCallback(async () => {
@@ -29,7 +30,7 @@ export default function MergedArchived() {
     void haptic.medium();
     setRefreshing(true);
     try {
-      await fetchChannelSessionGroups(channelId, segment);
+      setLoadError(await fetchChannelSessionGroups(channelId, segment));
     } finally {
       setRefreshing(false);
     }
@@ -52,7 +53,13 @@ export default function MergedArchived() {
         ListHeaderComponent={
           <MergedArchivedHeader segment={segment} onSegmentChange={setSegment} />
         }
-        ListEmptyComponent={<MergedArchivedEmpty segment={segment} />}
+        ListEmptyComponent={
+          <MergedArchivedEmpty
+            segment={segment}
+            error={loadError}
+            onRetry={() => void handleRefresh()}
+          />
+        }
       />
     </>
   );
@@ -66,7 +73,25 @@ function keyExtractor(id: string): string {
   return id;
 }
 
-function MergedArchivedEmpty({ segment }: { segment: MergedArchivedSegment }) {
+function MergedArchivedEmpty({
+  segment,
+  error,
+  onRetry,
+}: {
+  segment: MergedArchivedSegment;
+  error: string | null;
+  onRetry: () => void;
+}) {
+  if (error) {
+    return (
+      <EmptyState
+        icon="exclamationmark.triangle"
+        title="Couldn't load this list"
+        subtitle={error}
+        action={{ label: "Retry", onPress: onRetry }}
+      />
+    );
+  }
   if (segment === "archived") {
     return <EmptyState icon="archivebox" title="Nothing archived" />;
   }

@@ -12,9 +12,11 @@ import {
 import type { Channel, ChannelGroup, Event, Session, SessionGroup } from "@trace/gql";
 import { isUnauthorized } from "@/lib/auth";
 import { latestTimestamp, mergeSessionGroupEntity } from "@/lib/session-group";
+import { userFacingError } from "@/lib/requestError";
 import { timedEventIngest } from "@/lib/perf";
 import { getClient } from "@/lib/urql";
 import { useConnectionStore, type ConnectionState } from "@/stores/connection";
+import { useMobileUIStore } from "@/stores/ui";
 
 const ORGANIZATION_QUERY = gql`
   query MobileOrganization($id: ID!) {
@@ -148,6 +150,11 @@ export async function refreshOrgData(activeOrgId: string): Promise<boolean> {
 
   // Bail if the user switched orgs or signed out while we were fetching.
   if (useAuthStore.getState().activeOrgId !== activeOrgId) return true;
+
+  const firstError = orgResult.error ?? groupsResult.error ?? sessionsResult.error;
+  useMobileUIStore
+    .getState()
+    .setOrgDataError(firstError ? userFacingError(firstError, "Couldn't refresh your workspace.") : null);
 
   const upsertMany = useEntityStore.getState().upsertMany;
 

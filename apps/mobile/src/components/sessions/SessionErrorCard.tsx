@@ -7,6 +7,7 @@ import {
 } from "@trace/client-core";
 import { Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
+import { userFacingError } from "@/lib/requestError";
 import { getClient } from "@/lib/urql";
 import { alpha, useTheme } from "@/theme";
 
@@ -33,11 +34,14 @@ export function SessionErrorCard({ sessionId }: SessionErrorCardProps) {
 
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const retryErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      if (retryErrorTimeoutRef.current) clearTimeout(retryErrorTimeoutRef.current);
     };
   }, []);
 
@@ -59,6 +63,11 @@ export function SessionErrorCard({ sessionId }: SessionErrorCardProps) {
       .toPromise();
     if (result.error) {
       void haptic.error();
+      setRetryError(userFacingError(result.error, "Retry failed. Try again shortly."));
+      if (retryErrorTimeoutRef.current) clearTimeout(retryErrorTimeoutRef.current);
+      retryErrorTimeoutRef.current = setTimeout(() => {
+        if (mountedRef.current) setRetryError(null);
+      }, 3000);
       console.warn("[retrySessionConnection] failed", result.error);
     }
     if (mountedRef.current) setPending(false);
@@ -102,7 +111,7 @@ export function SessionErrorCard({ sessionId }: SessionErrorCardProps) {
             Something went wrong
           </Text>
           <Text variant="caption1" color="mutedForeground" numberOfLines={2}>
-            {lastError}
+            {retryError ?? lastError}
           </Text>
         </View>
       </Pressable>

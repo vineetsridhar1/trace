@@ -10,6 +10,7 @@ import {
   type InteractionMode,
 } from "@trace/client-core";
 import { haptic } from "@/lib/haptics";
+import { userFacingError } from "@/lib/requestError";
 import { getClient } from "@/lib/urql";
 import { uploadImage } from "@/lib/upload";
 import { useDraftsStore, type ImageAttachment } from "@/stores/drafts";
@@ -24,12 +25,6 @@ interface UseComposerSubmitOptions {
   onFailure: (draft: string, message: string) => void;
   /** Called on success so the UI can clear the draft + error state. */
   onSuccess: () => void;
-}
-
-function messageFromError(err: unknown, fallback: string): string {
-  if (err instanceof Error && err.message) return err.message;
-  if (typeof err === "string" && err.length > 0) return err;
-  return fallback;
 }
 
 export function useComposerSubmit({
@@ -143,7 +138,7 @@ export function useComposerSubmit({
           throw err;
         }
       } catch (err) {
-        onFailure(draft, messageFromError(err, "Failed to send. Tap to retry."));
+        onFailure(draft, userFacingError(err, "Failed to send. Tap to retry."));
       } finally {
         setSending(false);
       }

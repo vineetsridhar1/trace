@@ -10,7 +10,7 @@ export default function SessionGroupRedirectScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const router = useRouter();
   const theme = useTheme();
-  const loading = useEnsureSessionGroupDetail(groupId);
+  const { loading, error } = useEnsureSessionGroupDetail(groupId);
   const latestSessionId = useLatestSessionIdForGroup(groupId);
 
   useEffect(() => {
@@ -24,6 +24,12 @@ export default function SessionGroupRedirectScreen() {
       <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
         {loading || latestSessionId ? (
           <Spinner size="small" color="mutedForeground" />
+        ) : error ? (
+          <EmptyState
+            icon="exclamationmark.triangle"
+            title="Couldn't load workspace"
+            subtitle={error}
+          />
         ) : (
           <EmptyState
             icon="bolt.horizontal"
