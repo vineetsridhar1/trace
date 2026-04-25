@@ -20,6 +20,7 @@ import { useSlashCommands } from "@/hooks/useSlashCommands";
 import { haptic } from "@/lib/haptics";
 import { recordPerf } from "@/lib/perf";
 import {
+  type ComposerSelection,
   filterSlashCommands,
   getActiveSlashCommandQuery,
   insertSlashCommand,
@@ -97,7 +98,8 @@ export function SessionInputComposer({
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic");
 
   const [text, setText] = useState("");
-  const [selection, setSelection] = useState({ start: 0, end: 0 });
+  const [selection, setSelection] = useState<ComposerSelection>({ start: 0, end: 0 });
+  const [selectionOverride, setSelectionOverride] = useState<ComposerSelection | null>(null);
   const [mode, setMode] = useState<ComposerMode>("code");
   const [height, setHeight] = useState(MIN_INPUT_HEIGHT);
   const [errorDraft, setErrorDraft] = useState<string | null>(null);
@@ -129,14 +131,18 @@ export function SessionInputComposer({
 
   const onFailure = useCallback((draft: string, message: string) => {
     setText(draft);
-    setSelection({ start: draft.length, end: draft.length });
+    const restoredSelection = { start: draft.length, end: draft.length };
+    setSelection(restoredSelection);
+    setSelectionOverride(restoredSelection);
     setErrorDraft(draft);
     setErrorMessage(message);
   }, []);
 
   const onSuccess = useCallback(() => {
     setText("");
-    setSelection({ start: 0, end: 0 });
+    const clearedSelection = { start: 0, end: 0 };
+    setSelection(clearedSelection);
+    setSelectionOverride(clearedSelection);
     setErrorDraft(null);
     setErrorMessage(null);
   }, []);
@@ -245,6 +251,7 @@ export function SessionInputComposer({
 
   const handleChangeText = useCallback((next: string) => {
     const start = performance.now();
+    setSelectionOverride(null);
     setText(next);
     requestAnimationFrame(() => {
       recordPerf("input-latency", performance.now() - start);
@@ -288,6 +295,7 @@ export function SessionInputComposer({
       const next = insertSlashCommand(text, selection, commandName);
       setText(next.text);
       setSelection(next.selection);
+      setSelectionOverride(next.selection);
       requestAnimationFrame(() => {
         inputRef.current?.focus();
       });
@@ -383,6 +391,11 @@ export function SessionInputComposer({
     if (errorDraft && !isTerminal) void runSubmit(errorDraft, mode);
   }, [errorDraft, isTerminal, mode, runSubmit]);
 
+  const handleSelectionChange = useCallback((next: ComposerSelection) => {
+    setSelection(next);
+    setSelectionOverride(null);
+  }, []);
+
   const handleStop = useCallback(async () => {
     if (!canStop) return;
     setStopping(true);
@@ -469,7 +482,7 @@ export function SessionInputComposer({
               inputRef={inputRef}
               layoutTransition={composerRowTransition}
               placeholder={placeholder}
-              selection={selection}
+              selection={selectionOverride}
               text={text}
               cardBorderAnimatedStyle={cardBorderAnimatedStyle}
               onBlur={handleBlur}
@@ -477,7 +490,7 @@ export function SessionInputComposer({
               onContentHeightChange={handleContentHeightChange}
               onFocus={handleFocus}
               onRetry={handleRetry}
-              onSelectionChange={setSelection}
+              onSelectionChange={handleSelectionChange}
             />
           </Animated.View>
 
