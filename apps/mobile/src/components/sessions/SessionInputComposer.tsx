@@ -60,7 +60,7 @@ interface SessionInputComposerProps {
 const EMPTY_IMAGES: ImageAttachment[] = [];
 type ComposerSheet = "model" | "runtime" | null;
 const composerMotionEasing = Easing.inOut(Easing.ease);
-const composerMotionDuration = 420;
+const composerMotionDuration = 300;
 const composerRowTransition =
   LinearTransition.duration(composerMotionDuration).easing(composerMotionEasing);
 const leadingControlsEnter =
@@ -489,6 +489,7 @@ export function SessionInputComposer({
               glassAnimatedProps={glassAnimatedProps}
               inputAnimatedStyle={inputAnimatedStyle}
               inputRef={inputRef}
+              layoutTransition={composerRowTransition}
               placeholder={placeholder}
               selection={selection}
               text={text}

@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import type { ComponentProps, RefObject } from "react";
 import {
   Pressable,
   TextInput,
@@ -21,6 +21,7 @@ interface SessionComposerInputCardProps {
   glassAnimatedProps: ComposerGlassAnimatedProps;
   inputAnimatedStyle: ComposerAnimatedViewStyle;
   inputRef: RefObject<TextInput | null>;
+  layoutTransition?: ComponentProps<typeof Animated.View>["layout"];
   placeholder: string;
   selection: ComposerSelection;
   text: string;
@@ -40,6 +41,7 @@ export function SessionComposerInputCard({
   glassAnimatedProps,
   inputAnimatedStyle,
   inputRef,
+  layoutTransition,
   placeholder,
   selection,
   text,
@@ -64,6 +66,7 @@ export function SessionComposerInputCard({
       preset="input"
       animatedProps={glassAnimatedProps}
       interactive
+      layout={layoutTransition}
       style={[styles.inputCard, cardBorderAnimatedStyle]}
     >
       {errorDraft ? (
