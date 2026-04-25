@@ -1,4 +1,5 @@
 import { useAuthStore, useEntityStore } from "@trace/client-core";
+import { unregister } from "@/lib/notifications";
 import { recreateClient } from "@/lib/urql";
 import { useMobileUIStore } from "@/stores/ui";
 
@@ -51,6 +52,7 @@ export async function handleUnauthorized(): Promise<void> {
  * UI state and the current GraphQL client in sync across every sign-out entry point.
  */
 export async function handleMobileSignOut(): Promise<void> {
+  await unregister();
   useMobileUIStore.getState().reset();
   recreateClient();
   await useAuthStore.getState().logout();
