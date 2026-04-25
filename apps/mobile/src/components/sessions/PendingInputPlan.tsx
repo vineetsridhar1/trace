@@ -7,10 +7,10 @@ import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { alpha, useTheme } from "@/theme";
 import {
-  PendingInputSendButton,
   PendingInputShell,
   pendingInputStyles,
 } from "./PendingInputShell";
+import { SessionComposerActionButton } from "./session-input-composer/SessionComposerActionButton";
 import { styles as composerStyles } from "./session-input-composer/styles";
 
 interface PendingInputPlanProps {
@@ -236,9 +236,7 @@ export function PendingInputPlan({
             ]}
           />
         </Glass>
-        <PendingInputSendButton
-          enabled={hasAnswer}
-          loading={sending}
+        <SessionComposerActionButton
           accessibilityLabel={
             trimmed
               ? "Send plan feedback"
@@ -246,7 +244,14 @@ export function PendingInputPlan({
                 ? "Continue on this session"
                 : "Start a new session"
           }
+          contentOpacity={hasAnswer && !sending ? 1 : 0.35}
+          disabled={!hasAnswer || sending}
+          glassStyle={{ borderColor: alpha(theme.colors.success, 0.28) }}
+          iconName="paperplane.fill"
+          iconSize={16}
+          iconTint={theme.colors.accentForeground}
           onPress={handleSend}
+          tint={alpha(theme.colors.success, 0.18)}
         />
       </View>
     </PendingInputShell>
