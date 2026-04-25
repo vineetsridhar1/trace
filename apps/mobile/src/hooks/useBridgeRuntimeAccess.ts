@@ -6,12 +6,17 @@ import { hasBridgeAccessCapability } from "@/lib/bridge-access";
 import {
   buildFallbackBridgeAccess,
   bridgeAccessStoreKey,
+  type BridgeAccessEntry,
   type BridgeRuntimeAccessInfo,
   useBridgeAccessStore,
 } from "@/stores/bridge-access";
 import { getClient } from "@/lib/urql";
 
 const POLL_INTERVAL_MS = 10_000;
+const IDLE_BRIDGE_ACCESS_ENTRY: BridgeAccessEntry = {
+  access: null,
+  loadState: "idle",
+};
 const inflightRefreshes = new Map<string, Promise<void>>();
 const pollSubscriptions = new Map<
   string,
@@ -127,12 +132,7 @@ export function useBridgeRuntimeAccess(
 ) {
   const key = bridgeAccessStoreKey(runtimeInstanceId, sessionGroupId);
   const entry = useBridgeAccessStore((state) =>
-    key
-      ? (state.entries[key] ?? {
-          access: null,
-          loadState: "idle",
-        })
-      : { access: null, loadState: "idle" },
+    key ? (state.entries[key] ?? IDLE_BRIDGE_ACCESS_ENTRY) : IDLE_BRIDGE_ACCESS_ENTRY,
   );
   const reconnectCounter = useConnectionStore((s) => s.reconnectCounter);
 
