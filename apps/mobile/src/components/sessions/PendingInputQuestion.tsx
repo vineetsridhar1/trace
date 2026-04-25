@@ -20,6 +20,7 @@ import { QuestionOptionPill } from "./QuestionOptionPill";
 interface PendingInputQuestionProps {
   sessionId: string;
   questions: Question[];
+  keyboardVisible?: boolean;
   /**
    * True when an earlier assistant event in the session is a plan block.
    * When set, the response is sent with `interactionMode: "plan"` so the
@@ -40,6 +41,7 @@ export function PendingInputQuestion({
   sessionId,
   questions,
   hasActivePlan,
+  keyboardVisible = false,
 }: PendingInputQuestionProps) {
   const theme = useTheme();
   const {
@@ -95,6 +97,7 @@ export function PendingInputQuestion({
     <PendingInputShell
       header={question.header || "Question"}
       headerTrailing={headerTrailing}
+      keyboardVisible={keyboardVisible}
     >
       <Text
         variant="footnote"

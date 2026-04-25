@@ -11,6 +11,7 @@ interface PendingInputShellProps {
   background?: "surface" | "transparent";
   showHeader?: boolean;
   showTopBorder?: boolean;
+  keyboardVisible?: boolean;
   children: ReactNode;
 }
 
@@ -26,6 +27,7 @@ export function PendingInputShell({
   background = "surface",
   showHeader = true,
   showTopBorder = true,
+  keyboardVisible = false,
   children,
 }: PendingInputShellProps) {
   const theme = useTheme();
@@ -41,7 +43,7 @@ export function PendingInputShell({
           borderTopWidth: showTopBorder ? StyleSheet.hairlineWidth : 0,
           paddingHorizontal: theme.spacing.md,
           paddingTop: theme.spacing.md,
-          paddingBottom: theme.spacing.md + insets.bottom,
+          paddingBottom: theme.spacing.md + (keyboardVisible ? 0 : insets.bottom),
         },
       ]}
     >

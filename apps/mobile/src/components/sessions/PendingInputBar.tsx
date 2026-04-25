@@ -11,6 +11,7 @@ import { PendingInputQuestion } from "./PendingInputQuestion";
 
 interface PendingInputBarProps {
   sessionId: string;
+  keyboardVisible?: boolean;
 }
 
 /**
@@ -22,7 +23,10 @@ interface PendingInputBarProps {
  * flip arrives a tick later. Disappears once the user (or any teammate)
  * sends a follow-up `message_sent` event.
  */
-export function PendingInputBar({ sessionId }: PendingInputBarProps) {
+export function PendingInputBar({
+  sessionId,
+  keyboardVisible = false,
+}: PendingInputBarProps) {
   const scopeKey = eventScopeKey("session", sessionId);
   const eventIds = useScopedEventIds(scopeKey, byTimestamp);
   const events = useScopedEvents(scopeKey);
@@ -39,6 +43,7 @@ export function PendingInputBar({ sessionId }: PendingInputBarProps) {
         sessionId={sessionId}
         planContent={pending.planContent}
         planFilePath={pending.planFilePath}
+        keyboardVisible={keyboardVisible}
       />
     );
   }
@@ -48,6 +53,7 @@ export function PendingInputBar({ sessionId }: PendingInputBarProps) {
       sessionId={sessionId}
       questions={pending.questions}
       hasActivePlan={pending.hasActivePlan}
+      keyboardVisible={keyboardVisible}
     />
   );
 }

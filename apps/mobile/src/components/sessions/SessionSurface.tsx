@@ -192,7 +192,7 @@ export function SessionSurface({
         >
           {pendingInput ? (
             <>
-              <PendingInputBar sessionId={sessionId} />
+              <PendingInputBar sessionId={sessionId} keyboardVisible={keyboardVisible} />
               <SessionErrorCard sessionId={sessionId} />
             </>
           ) : (

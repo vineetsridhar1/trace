@@ -17,6 +17,7 @@ interface PendingInputPlanProps {
   sessionId: string;
   planContent: string;
   planFilePath: string;
+  keyboardVisible?: boolean;
 }
 
 const APPROVE_TEXT = "Approved. Implement this plan.";
@@ -49,6 +50,7 @@ export function PendingInputPlan({
   sessionId,
   planContent,
   planFilePath,
+  keyboardVisible = false,
 }: PendingInputPlanProps) {
   const theme = useTheme();
   const inputRef = useRef<TextInput>(null);
@@ -151,6 +153,7 @@ export function PendingInputPlan({
       background="transparent"
       showHeader={false}
       showTopBorder={false}
+      keyboardVisible={keyboardVisible}
     >
       <View style={[styles.menuContainer, theme.shadows.lg]}>
         <Glass preset="card" interactive style={styles.menuSurface}>
