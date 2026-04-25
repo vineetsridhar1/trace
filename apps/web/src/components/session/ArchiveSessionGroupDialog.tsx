@@ -55,7 +55,8 @@ export function ArchiveSessionGroupDialog({
           <DialogTitle>Archive workspace</DialogTitle>
           <DialogDescription>
             Archive <strong>{groupName}</strong>? This will stop all agents and
-            unload the worktree. You can find it later under Merged & Archived.
+            unload the worktree. Empty workspaces are deleted instead of moved
+            to Merged & Archived.
           </DialogDescription>
         </DialogHeader>
         {error && (

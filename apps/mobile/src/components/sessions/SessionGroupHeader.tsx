@@ -95,7 +95,7 @@ export function SessionGroupHeader({
   const handleArchive = useCallback(() => {
     Alert.alert(
       "Archive workspace?",
-      "This removes it from the active list. You can still find it under Archived.",
+      "This removes it from the active list. Empty workspaces are deleted instead of moving to Archived.",
       [
         { text: "Cancel", style: "cancel" },
         { text: "Archive", style: "destructive", onPress: () => void archiveGroup() },
