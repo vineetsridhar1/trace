@@ -93,6 +93,7 @@ export default function SignInScreen() {
         <View style={styles.actions}>
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Continue with GitHub"
             onPress={handleSignIn}
             disabled={loading}
             style={({ pressed }) => [
@@ -109,6 +110,7 @@ export default function SignInScreen() {
 
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Pair with local session"
             onPress={() => router.push("/pair-local")}
             disabled={loading}
             style={({ pressed }) => [
@@ -126,11 +128,21 @@ export default function SignInScreen() {
       </View>
 
       <View style={styles.footer}>
-        <Pressable onPress={() => Linking.openURL(TERMS_URL)} hitSlop={12}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open Terms"
+          onPress={() => Linking.openURL(TERMS_URL)}
+          hitSlop={12}
+        >
           <Text style={styles.footerLink}>Terms</Text>
         </Pressable>
         <Text style={styles.footerSep}>·</Text>
-        <Pressable onPress={() => Linking.openURL(PRIVACY_URL)} hitSlop={12}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open Privacy"
+          onPress={() => Linking.openURL(PRIVACY_URL)}
+          hitSlop={12}
+        >
           <Text style={styles.footerLink}>Privacy</Text>
         </Pressable>
       </View>
