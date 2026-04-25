@@ -12,7 +12,7 @@ import {
 } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { BrowserPanel } from "@/components/sessions/BrowserPanel";
-import { SessionBrowserRevealEdge } from "@/components/sessions/SessionBrowserRevealEdge";
+import { SessionWorkspaceModeToggle, type SessionWorkspaceMode } from "@/components/sessions/SessionWorkspaceModeToggle";
 import { SessionPageHeader } from "@/components/sessions/SessionPageHeader";
 import { SessionSurface } from "@/components/sessions/SessionSurface";
 import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel";
@@ -25,7 +25,7 @@ import {
   useSessionGroupSessionIds,
 } from "@/hooks/useSessionGroupDetail";
 
-type SessionPaneMode = "session" | "terminal" | "browser";
+type SessionPaneMode = "session" | "terminal";
 
 /**
  * Standalone mobile session page. Reuses the session surface building blocks
@@ -48,7 +48,7 @@ export default function SessionStreamScreen() {
   const browserUrlGroupId = useMobileUIStore((s) => s.browserUrlGroupId);
   const setBrowserUrl = useMobileUIStore((s) => s.setBrowserUrl);
   const activePane: SessionPaneMode =
-    pane === "terminal" || pane === "browser" ? pane : "session";
+    pane === "terminal" ? "terminal" : "session";
   const hydratedGroupId =
     (useEntityField("sessions", sessionId, "sessionGroupId") as string | null | undefined)
     ?? groupId;
@@ -73,6 +73,7 @@ export default function SessionStreamScreen() {
       ),
     [browserUrl, browserUrlGroupId, hydratedGroupId, prUrl, repo?.remoteUrl],
   );
+  const [workspaceMode, setWorkspaceMode] = useState<SessionWorkspaceMode>("agent");
 
   useEffect(() => {
     if (!groupId || !sessionId || sessionIds.length === 0) return;
@@ -83,8 +84,7 @@ export default function SessionStreamScreen() {
   const navigateToPane = useCallback(
     (nextPane: SessionPaneMode) => {
       const basePath = `/sessions/${groupId}/${sessionId}`;
-      const href =
-        nextPane === "session" ? basePath : `${basePath}?pane=${nextPane}`;
+      const href = nextPane === "session" ? basePath : `${basePath}?pane=${nextPane}`;
       router.replace(href);
     },
     [groupId, router, sessionId],
@@ -128,7 +128,7 @@ export default function SessionStreamScreen() {
       background="background"
       style={styles.root}
     >
-      <Stack.Screen options={{ headerShown: false, gestureEnabled: activePane === "session" }} />
+      <Stack.Screen options={{ headerShown: false, gestureEnabled: activePane !== "terminal" }} />
 
       <View pointerEvents="box-none" style={styles.headerOverlay}>
         {showLoading ? null : (
@@ -137,9 +137,12 @@ export default function SessionStreamScreen() {
               groupId={hydratedGroupId}
               sessionId={sessionId}
               activePane={activePane}
-              onBack={activePane === "session" ? closeSessionPlayer : () => navigateToPane("session")}
+              onBack={activePane === "terminal" ? () => navigateToPane("session") : closeSessionPlayer}
             />
             <ActiveTodoStrip sessionId={sessionId} />
+            {activePane === "session" ? (
+              <SessionWorkspaceModeToggle value={workspaceMode} onChange={setWorkspaceMode} />
+            ) : null}
           </View>
         )}
       </View>
@@ -170,32 +173,26 @@ export default function SessionStreamScreen() {
           </View>
         ) : (
           <View key={hydratedGroupId} style={styles.overlayPaddedScene}>
-            {activePane === "session" ? (
-              <>
-                <SessionSurface
-                  sessionId={sessionId}
-                  onSelectSession={handleSelectSession}
-                  hideHeader
-                  topInset={overlayHeight}
-                />
-                <SessionBrowserRevealEdge
-                  topInset={overlayHeight}
-                  onOpen={() => navigateToPane("browser")}
-                />
-              </>
+            {activePane === "session" && workspaceMode === "agent" ? (
+              <SessionSurface
+                sessionId={sessionId}
+                onSelectSession={handleSelectSession}
+                hideHeader
+                topInset={overlayHeight}
+              />
             ) : null}
-            {activePane === "terminal" ? (
-              <View style={[styles.overlayPaddedScene, { paddingTop: overlayHeight }]}>
-                <SessionTerminalPanel sessionId={sessionId} />
-              </View>
-            ) : null}
-            {activePane === "browser" ? (
+            {activePane === "session" && workspaceMode === "preview" ? (
               <View style={styles.overlayPaddedScene}>
                 <BrowserPanel
                   url={resolvedBrowserUrl}
                   onUrlChange={handleBrowserUrlChange}
                   topInset={overlayHeight}
                 />
+              </View>
+            ) : null}
+            {activePane === "terminal" ? (
+              <View style={[styles.overlayPaddedScene, { paddingTop: overlayHeight }]}>
+                <SessionTerminalPanel sessionId={sessionId} />
               </View>
             ) : null}
           </View>
