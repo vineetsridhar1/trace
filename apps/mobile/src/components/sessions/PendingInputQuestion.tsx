@@ -1,21 +1,21 @@
 import { useCallback, useState } from "react";
-import { StyleSheet, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import {
   SEND_SESSION_MESSAGE_MUTATION,
   useQuestionState,
 } from "@trace/client-core";
 import type { Question } from "@trace/shared";
-import { Text } from "@/components/design-system";
+import { Glass, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
-import { useTheme } from "@/theme";
+import { alpha, useTheme } from "@/theme";
 import {
   PendingInputPagerButton,
-  PendingInputSendButton,
   PendingInputShell,
   pendingInputStyles,
 } from "./PendingInputShell";
-import { QuestionOptionPill } from "./QuestionOptionPill";
+import { SessionComposerActionButton } from "./session-input-composer/SessionComposerActionButton";
+import { styles as composerStyles } from "./session-input-composer/styles";
 
 interface PendingInputQuestionProps {
   sessionId: string;
@@ -97,6 +97,9 @@ export function PendingInputQuestion({
     <PendingInputShell
       header={question.header || "Question"}
       headerTrailing={headerTrailing}
+      background="transparent"
+      showHeader={false}
+      showTopBorder={false}
       keyboardVisible={keyboardVisible}
     >
       <Text
@@ -109,40 +112,81 @@ export function PendingInputQuestion({
       </Text>
 
       {question.options.length > 0 ? (
-        <View style={styles.optionsRow}>
-          {question.options.map((opt) => (
-            <QuestionOptionPill
-              key={opt.label}
-              label={opt.label}
-              selected={currentSelected.has(opt.label)}
-              multiSelect={question.multiSelect}
-              onPress={() => {
-                void haptic.selection();
-                toggleOption(opt.label);
-              }}
-            />
-          ))}
+        <View style={[styles.menuContainer, theme.shadows.lg]}>
+          <Glass preset="card" interactive style={styles.menuSurface}>
+            <View style={styles.menuContent}>
+              {question.options.map((opt, index) => {
+                const selected = currentSelected.has(opt.label);
+                return (
+                  <Pressable
+                    key={opt.label}
+                    accessibilityRole="button"
+                    accessibilityLabel={opt.label}
+                    accessibilityState={{ selected }}
+                    onPress={() => {
+                      void haptic.selection();
+                      toggleOption(opt.label);
+                    }}
+                    style={({ pressed }) => [
+                      styles.menuRow,
+                      {
+                        marginBottom: index < question.options.length - 1 ? 2 : 0,
+                        backgroundColor: pressed ? "rgb(255, 255, 255, 0.05)" : undefined,
+                      },
+                    ]}
+                  >
+                    <View style={styles.menuCopy}>
+                      <Text
+                        variant="subheadline"
+                        numberOfLines={1}
+                        color={selected ? "accent" : "foreground"}
+                        style={styles.optionTitle}
+                      >
+                        {opt.label}
+                      </Text>
+                      <Text
+                        variant="caption1"
+                        numberOfLines={2}
+                        style={{ color: alpha(theme.colors.foreground, 0.88) }}
+                      >
+                        {opt.description}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Glass>
         </View>
       ) : null}
 
       <View style={pendingInputStyles.bottomRow}>
-        <TextInput
-          value={currentCustom}
-          onChangeText={setCustomText}
-          onSubmitEditing={handleSubmit}
-          placeholder="Other…"
-          placeholderTextColor={theme.colors.dimForeground}
-          editable={!sending}
-          returnKeyType={hasAllAnswers ? "send" : "next"}
+        <Glass
+          preset="input"
+          interactive
           style={[
-            pendingInputStyles.input,
+            composerStyles.inputCard,
+            styles.customInputCard,
             {
-              backgroundColor: theme.colors.surfaceDeep,
               borderColor: theme.colors.border,
-              color: theme.colors.foreground,
             },
           ]}
-        />
+        >
+          <TextInput
+            value={currentCustom}
+            onChangeText={setCustomText}
+            onSubmitEditing={handleSubmit}
+            placeholder="Suggest a change"
+            placeholderTextColor={theme.colors.dimForeground}
+            editable={!sending}
+            returnKeyType={hasAllAnswers ? "send" : "next"}
+            style={[
+              composerStyles.input,
+              styles.customInput,
+              { color: theme.colors.foreground },
+            ]}
+          />
+        </Glass>
         {total > 1 ? (
           <View style={styles.pager}>
             <PendingInputPagerButton
@@ -159,11 +203,16 @@ export function PendingInputQuestion({
             />
           </View>
         ) : null}
-        <PendingInputSendButton
-          enabled={hasAllAnswers}
-          loading={sending}
+        <SessionComposerActionButton
           accessibilityLabel="Send answer"
+          contentOpacity={hasAllAnswers && !sending ? 1 : 0.35}
+          disabled={!hasAllAnswers || sending}
+          glassStyle={{ borderColor: alpha(theme.colors.success, 0.28) }}
+          iconName="paperplane.fill"
+          iconSize={16}
+          iconTint={theme.colors.accentForeground}
           onPress={() => void handleSend()}
+          tint={alpha(theme.colors.success, 0.18)}
         />
       </View>
     </PendingInputShell>
@@ -171,12 +220,37 @@ export function PendingInputQuestion({
 }
 
 const styles = StyleSheet.create({
-  questionText: { marginTop: 4 },
-  optionsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
+  questionText: { marginTop: 4, marginBottom: 10 },
+  menuContainer: {
     marginTop: 10,
+  },
+  menuSurface: {
+    borderRadius: 20,
+    overflow: "hidden",
+  },
+  menuContent: {
+    padding: 6,
+  },
+  menuRow: {
+    minHeight: 56,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  menuCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  optionTitle: {
+    flexShrink: 1,
+  },
+  customInputCard: {
+    flex: 1,
+    height: 46,
+    justifyContent: "center",
+  },
+  customInput: {
+    height: 30,
   },
   pager: { flexDirection: "row", gap: 4 },
 });
