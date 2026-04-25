@@ -41,6 +41,10 @@ interface SessionStreamListProps {
    */
   isNearBottomRef: MutableRefObject<boolean>;
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  onScrollBeginDrag: () => void;
+  onScrollEndDrag: () => void;
+  onMomentumScrollBegin: () => void;
+  onMomentumScrollEnd: () => void;
   fetchOlderEvents: () => Promise<void>;
 }
 
@@ -59,6 +63,10 @@ export function SessionStreamList({
   bottomInset = 0,
   isNearBottomRef,
   onScroll,
+  onScrollBeginDrag,
+  onScrollEndDrag,
+  onMomentumScrollBegin,
+  onMomentumScrollEnd,
   fetchOlderEvents,
 }: SessionStreamListProps) {
   const theme = useTheme();
@@ -122,6 +130,10 @@ export function SessionStreamList({
       maxItemsInRecyclePool={24}
       inverted={false}
       onScroll={onScroll}
+      onScrollBeginDrag={onScrollBeginDrag}
+      onScrollEndDrag={onScrollEndDrag}
+      onMomentumScrollBegin={onMomentumScrollBegin}
+      onMomentumScrollEnd={onMomentumScrollEnd}
       scrollEventThrottle={16}
       keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
       keyboardShouldPersistTaps="handled"
