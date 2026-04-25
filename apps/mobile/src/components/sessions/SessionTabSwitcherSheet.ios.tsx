@@ -26,7 +26,7 @@ function NativeSessionTabSwitcherSheet({
   activeSessionId,
   onClose,
 }: SessionTabSwitcherSheetProps) {
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const [mounted, setMounted] = useState(open);
 
   useEffect(() => {
@@ -43,6 +43,10 @@ function NativeSessionTabSwitcherSheet({
   );
 
   const hostStyle = useMemo(() => [styles.host, { width }], [width]);
+  const sheetContentStyle = useMemo(
+    () => [styles.sheetContent, { height: Math.round(height * 0.56) }],
+    [height],
+  );
 
   if (!mounted) return null;
 
@@ -55,7 +59,7 @@ function NativeSessionTabSwitcherSheet({
           presentationDetents={["medium", "large"]}
           presentationDragIndicator="visible"
         >
-          <View style={styles.sheetContent}>
+          <View style={sheetContentStyle}>
             <SessionTabSwitcherContent
               groupId={groupId}
               activeSessionId={activeSessionId}
@@ -85,7 +89,6 @@ const styles = StyleSheet.create({
     height: 1,
   },
   sheetContent: {
-    flex: 1,
     minHeight: 0,
   },
 });

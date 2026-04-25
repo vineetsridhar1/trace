@@ -23,7 +23,7 @@ function NativeSessionComposerBottomSheet({
   onDismissed,
   children,
 }: SessionComposerBottomSheetProps) {
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
   const [content, setContent] = useState(children);
 
@@ -49,6 +49,10 @@ function NativeSessionComposerBottomSheet({
   );
 
   const hostStyle = useMemo(() => [styles.host, { width }], [width]);
+  const sheetContentStyle = useMemo(
+    () => [styles.sheetContent, { height: Math.round(height * 0.56) }],
+    [height],
+  );
 
   if (!mounted) return null;
 
@@ -61,7 +65,7 @@ function NativeSessionComposerBottomSheet({
           presentationDetents={["medium", "large"]}
           presentationDragIndicator="visible"
         >
-          <View style={styles.sheetContent}>{content}</View>
+          <View style={sheetContentStyle}>{content}</View>
         </BottomSheet>
       </Host>
     </View>
@@ -83,7 +87,6 @@ const styles = StyleSheet.create({
     height: 1,
   },
   sheetContent: {
-    flex: 1,
     minHeight: 0,
     paddingHorizontal: 20,
     paddingTop: 12,
