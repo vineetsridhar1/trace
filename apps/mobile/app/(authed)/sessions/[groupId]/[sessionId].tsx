@@ -62,6 +62,7 @@ export default function SessionStreamScreen() {
   const insets = useSafeAreaInsets();
   const loadingGroup = useEnsureSessionGroupDetail(groupId);
   const sessionIds = useSessionGroupSessionIds(groupId);
+  const overlaySessionId = useMobileUIStore((s) => s.overlaySessionId);
   const activeMenuClose = useMobileUIStore((s) => s.activeMenuClose);
   const browserUrl = useMobileUIStore((s) => s.browserUrl);
   const browserUrlGroupId = useMobileUIStore((s) => s.browserUrlGroupId);
@@ -121,7 +122,12 @@ export default function SessionStreamScreen() {
     void fetchSessionGroupDetail(targetGroupId);
   }, [groupId, hydratedGroupId]);
 
-  const showLoading = loadingGroup;
+  const handoffPending =
+    overlaySessionId !== null &&
+    overlaySessionId !== sessionId &&
+    hydratedGroupId === groupId &&
+    !groupName;
+  const showLoading = loadingGroup || handoffPending;
   const missingGroup = !showLoading && !groupName;
 
   return (
