@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { SEND_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
-import { Text } from "@/components/design-system";
+import { Glass, Text } from "@/components/design-system";
 import { startPlanImplementationSession } from "@/lib/createQuickSession";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
-import { alpha, useTheme } from "@/theme";
+import { useTheme } from "@/theme";
 import {
   PendingInputSendButton,
   PendingInputShell,
@@ -20,7 +20,7 @@ interface PendingInputPlanProps {
 
 const APPROVE_TEXT = "Approved. Implement this plan.";
 
-type PlanAction = "new-session" | "same-session" | "type-more";
+type PlanAction = "new-session" | "same-session";
 
 const PLAN_OPTIONS: Array<{
   value: PlanAction;
@@ -37,11 +37,6 @@ const PLAN_OPTIONS: Array<{
     title: "Continue on this session",
     description: "Approve the plan and keep the current context.",
   },
-  {
-    value: "type-more",
-    title: "Type more",
-    description: "Ask for changes or add more direction before implementation.",
-  },
 ];
 
 /**
@@ -56,14 +51,14 @@ export function PendingInputPlan({
 }: PendingInputPlanProps) {
   const theme = useTheme();
   const inputRef = useRef<TextInput>(null);
-  const [selectedAction, setSelectedAction] = useState<PlanAction>("new-session");
+  const [selectedAction, setSelectedAction] = useState<PlanAction | null>("new-session");
   const [feedback, setFeedback] = useState("");
   const [sending, setSending] = useState(false);
 
   const filename = planFilePath ? planFilePath.split("/").pop() : null;
   const trimmed = feedback.trim();
-  const isTypingMore = selectedAction === "type-more";
-  const hasAnswer = selectedAction !== "type-more" || trimmed.length > 0;
+  const isTypingMore = trimmed.length > 0;
+  const hasAnswer = isTypingMore || selectedAction !== null;
 
   useEffect(() => {
     if (!isTypingMore) return;
@@ -123,6 +118,10 @@ export function PendingInputPlan({
   }, [sending, sessionId, trimmed]);
 
   const handleSend = useCallback(() => {
+    if (trimmed) {
+      void handleRevise();
+      return;
+    }
     if (selectedAction === "new-session") {
       void handleStartNewSession();
       return;
@@ -131,8 +130,7 @@ export function PendingInputPlan({
       void handleKeepContext();
       return;
     }
-    void handleRevise();
-  }, [handleKeepContext, handleRevise, handleStartNewSession, selectedAction]);
+  }, [handleKeepContext, handleRevise, handleStartNewSession, selectedAction, trimmed]);
 
   const headerTrailing = filename ? (
     <Text
@@ -160,105 +158,91 @@ export function PendingInputPlan({
               onPress={() => {
                 void haptic.selection();
                 setSelectedAction(option.value);
+                setFeedback("");
               }}
-              style={({ pressed }) => [
-                styles.optionButton,
-                {
-                  borderColor: selected ? theme.colors.accent : theme.colors.border,
-                  backgroundColor: selected
-                    ? alpha(theme.colors.accent, 0.16)
-                    : pressed
-                      ? theme.colors.surfaceElevated
-                      : theme.colors.surfaceDeep,
-                  opacity: sending ? 0.5 : 1,
-                },
-              ]}
+              style={({ pressed }) => [styles.optionPressable, pressed && styles.optionPressed]}
             >
-              <View
+              <Glass
+                preset="card"
+                glassStyleEffect="clear"
                 style={[
-                  styles.radioOuter,
+                  styles.optionButton,
                   {
                     borderColor: selected ? theme.colors.accent : theme.colors.border,
-                    backgroundColor: selected
-                      ? alpha(theme.colors.accent, 0.12)
-                      : "transparent",
+                    opacity: sending ? 0.5 : 1,
                   },
                 ]}
               >
-                {selected ? (
-                  <View
-                    style={[
-                      styles.radioInner,
-                      { backgroundColor: theme.colors.accent },
-                    ]}
-                  />
-                ) : null}
-              </View>
-              <View style={styles.optionCopy}>
-                <Text
-                  variant="body"
+                <View
                   style={[
-                    styles.optionTitle,
-                    { color: selected ? theme.colors.foreground : theme.colors.foreground },
+                    styles.radioOuter,
+                    { borderColor: selected ? theme.colors.accent : theme.colors.border },
                   ]}
                 >
-                  {option.title}
-                </Text>
-                <Text variant="footnote" color="mutedForeground" style={styles.optionDescription}>
-                  {option.description}
-                </Text>
-              </View>
+                  {selected ? (
+                    <View
+                      style={[
+                        styles.radioInner,
+                        { backgroundColor: theme.colors.accent },
+                      ]}
+                    />
+                  ) : null}
+                </View>
+                <View style={styles.optionCopy}>
+                  <Text variant="footnote" style={styles.optionTitle}>
+                    {option.title}
+                  </Text>
+                  <Text variant="caption1" color="mutedForeground" style={styles.optionDescription}>
+                    {option.description}
+                  </Text>
+                </View>
+              </Glass>
             </Pressable>
           );
         })}
       </View>
 
-      {isTypingMore ? (
-        <View style={pendingInputStyles.bottomRow}>
-          <TextInput
-            ref={inputRef}
-            value={feedback}
-            onChangeText={setFeedback}
-            onSubmitEditing={() => {
-              if (trimmed) handleSend();
-            }}
-            placeholder="Describe what should change in the plan…"
-            placeholderTextColor={theme.colors.dimForeground}
-            editable={!sending}
-            returnKeyType="send"
-            multiline
-            textAlignVertical="top"
-            style={[
-              pendingInputStyles.input,
-              styles.feedbackInput,
-              {
-                backgroundColor: theme.colors.surfaceDeep,
-                borderColor: theme.colors.border,
-                color: theme.colors.foreground,
-              },
-            ]}
-          />
-          <PendingInputSendButton
-            enabled={hasAnswer}
-            loading={sending}
-            accessibilityLabel="Send plan feedback"
-            onPress={handleSend}
-          />
-        </View>
-      ) : (
-        <View style={styles.actionRow}>
-          <PendingInputSendButton
-            enabled={hasAnswer}
-            loading={sending}
-            accessibilityLabel={
-              selectedAction === "new-session"
-                ? "Start a new session"
-                : "Continue on this session"
-            }
-            onPress={handleSend}
-          />
-        </View>
-      )}
+      <View style={pendingInputStyles.bottomRow}>
+        <TextInput
+          ref={inputRef}
+          value={feedback}
+          onChangeText={(text) => {
+            setFeedback(text);
+            setSelectedAction(text.trim().length > 0 ? null : "new-session");
+          }}
+          onFocus={() => {
+            if (!feedback.trim()) setSelectedAction(null);
+          }}
+          onSubmitEditing={() => {
+            if (hasAnswer) handleSend();
+          }}
+          placeholder="Type more…"
+          placeholderTextColor={theme.colors.dimForeground}
+          editable={!sending}
+          returnKeyType="send"
+          style={[
+            pendingInputStyles.input,
+            styles.feedbackInput,
+            {
+              backgroundColor: "transparent",
+              borderColor: theme.colors.border,
+              color: theme.colors.foreground,
+            },
+          ]}
+        />
+        <PendingInputSendButton
+          enabled={hasAnswer}
+          loading={sending}
+          accessibilityLabel={
+            trimmed
+              ? "Send plan feedback"
+              : selectedAction === "same-session"
+                ? "Continue on this session"
+                : "Start a new session"
+          }
+          onPress={handleSend}
+        />
+      </View>
     </PendingInputShell>
   );
 }
@@ -269,47 +253,48 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 10,
   },
+  optionPressable: {
+    borderRadius: 12,
+  },
+  optionPressed: {
+    opacity: 0.85,
+  },
   optionButton: {
     width: "100%",
-    minHeight: 72,
+    minHeight: 58,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    gap: 10,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   radioOuter: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
   },
   radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   optionCopy: {
     flex: 1,
-    gap: 2,
+    gap: 1,
   },
   optionTitle: {
     fontWeight: "700",
   },
   optionDescription: {
-    lineHeight: 18,
+    lineHeight: 16,
   },
   feedbackInput: {
-    minHeight: 92,
-    paddingTop: 10,
-  },
-  actionRow: {
-    marginTop: 12,
-    alignItems: "flex-end",
+    minHeight: 36,
   },
 });
