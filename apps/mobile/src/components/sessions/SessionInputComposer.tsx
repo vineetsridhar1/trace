@@ -122,6 +122,16 @@ export function SessionInputComposer({
     });
   }, [focusRequest]);
 
+  const applySelectionOverride = useCallback((next: ComposerSelection) => {
+    setSelection(next);
+    setSelectionOverride(next);
+    requestAnimationFrame(() => {
+      setSelectionOverride((current) =>
+        current && current.start === next.start && current.end === next.end ? null : current,
+      );
+    });
+  }, []);
+
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
   const currentTool: CodingTool = tool === "codex" ? "codex" : "claude_code";
@@ -132,20 +142,18 @@ export function SessionInputComposer({
   const onFailure = useCallback((draft: string, message: string) => {
     setText(draft);
     const restoredSelection = { start: draft.length, end: draft.length };
-    setSelection(restoredSelection);
-    setSelectionOverride(restoredSelection);
+    applySelectionOverride(restoredSelection);
     setErrorDraft(draft);
     setErrorMessage(message);
-  }, []);
+  }, [applySelectionOverride]);
 
   const onSuccess = useCallback(() => {
     setText("");
     const clearedSelection = { start: 0, end: 0 };
-    setSelection(clearedSelection);
-    setSelectionOverride(clearedSelection);
+    applySelectionOverride(clearedSelection);
     setErrorDraft(null);
     setErrorMessage(null);
-  }, []);
+  }, [applySelectionOverride]);
 
   const { submit: runSubmit, sending } = useComposerSubmit({
     sessionId,
@@ -294,13 +302,12 @@ export function SessionInputComposer({
     (commandName: string) => {
       const next = insertSlashCommand(text, selection, commandName);
       setText(next.text);
-      setSelection(next.selection);
-      setSelectionOverride(next.selection);
+      applySelectionOverride(next.selection);
       requestAnimationFrame(() => {
         inputRef.current?.focus();
       });
     },
-    [selection, text],
+    [applySelectionOverride, selection, text],
   );
 
   const handlePasteImage = useCallback(async () => {
