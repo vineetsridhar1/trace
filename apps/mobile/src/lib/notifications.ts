@@ -6,15 +6,18 @@ import { type Href, useRouter } from "expo-router";
 import {
   REGISTER_PUSH_TOKEN_MUTATION,
   UNREGISTER_PUSH_TOKEN_MUTATION,
-  getPlatform,
   useAuthStore,
   useEntityStore,
   type AuthState,
   type EntityState,
 } from "@trace/client-core";
+import { deepLinkFromNotificationData, routePathFromNotificationLink } from "@/lib/notification-deeplink";
+import {
+  clearPushRegistration,
+  readPushRegistration,
+  writePushRegistration,
+} from "@/lib/notification-registration";
 import { getClient } from "@/lib/urql";
-
-const LAST_PUSH_TOKEN_KEY = "trace_push_token";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -38,7 +41,10 @@ function projectId(): string | null {
   const extra = Constants.expoConfig?.extra as
     | { eas?: { projectId?: unknown } }
     | undefined;
-  const configured = extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+  const configured =
+    extra?.eas?.projectId ??
+    Constants.easConfig?.projectId ??
+    process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
   return typeof configured === "string" && configured.length > 0 ? configured : null;
 }
 
@@ -46,20 +52,9 @@ function pushPlatform(): "ios" | "android" {
   return Platform.OS === "android" ? "android" : "ios";
 }
 
-async function lastToken(): Promise<string | null> {
-  return getPlatform().storage.getItem(LAST_PUSH_TOKEN_KEY);
-}
-
-async function setLastToken(token: string): Promise<void> {
-  await getPlatform().storage.setItem(LAST_PUSH_TOKEN_KEY, token);
-}
-
-async function clearLastToken(): Promise<void> {
-  await getPlatform().storage.removeItem(LAST_PUSH_TOKEN_KEY);
-}
-
 export async function ensureRegistered(): Promise<void> {
   if (Platform.OS !== "ios" && Platform.OS !== "android") return;
+  const { activeOrgId, user } = useAuthStore.getState();
   let permissions = await Notifications.getPermissionsAsync();
   if (permissions.status === "undetermined") {
     permissions = await Notifications.requestPermissionsAsync();
@@ -73,31 +68,30 @@ export async function ensureRegistered(): Promise<void> {
   }
 
   const token = (await Notifications.getExpoPushTokenAsync({ projectId: id })).data;
-  const previous = await lastToken();
-  if (previous === token) return;
+  const previous = await readPushRegistration();
+  if (previous?.token === token && previous.userId === user?.id && previous.organizationId === activeOrgId) {
+    return;
+  }
 
   const result = await getClient()
     .mutation(REGISTER_PUSH_TOKEN_MUTATION, { token, platform: pushPlatform() })
     .toPromise();
   if (result.error) throw result.error;
-  await setLastToken(token);
+  await writePushRegistration({ token, userId: user?.id ?? null, organizationId: activeOrgId });
 }
 
 export async function unregister(): Promise<void> {
-  const token = await lastToken();
-  if (!token) return;
+  const registration = await readPushRegistration();
+  if (!registration) {
+    await Notifications.setBadgeCountAsync(0);
+    return;
+  }
   const result = await getClient()
-    .mutation(UNREGISTER_PUSH_TOKEN_MUTATION, { token })
+    .mutation(UNREGISTER_PUSH_TOKEN_MUTATION, { token: registration.token })
     .toPromise();
-  if (result.error) console.warn("[notifications] push unregister failed", result.error);
-  await clearLastToken();
-}
-
-function deepLinkFromResponse(response: Notifications.NotificationResponse): string | null {
-  const data = response.notification.request.content.data;
-  if (!data || typeof data !== "object") return null;
-  const deepLink = (data as Record<string, unknown>).deepLink;
-  return typeof deepLink === "string" && deepLink.length > 0 ? deepLink : null;
+  if (result.error) throw result.error;
+  await clearPushRegistration();
+  await Notifications.setBadgeCountAsync(0);
 }
 
 export function useRegisterPushToken(): void {
@@ -110,8 +104,9 @@ export function useRegisterPushToken(): void {
 
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const deepLink = deepLinkFromResponse(response);
-      if (deepLink) router.push(deepLink as Href);
+      const deepLink = deepLinkFromNotificationData(response.notification.request.content.data);
+      const path = deepLink ? routePathFromNotificationLink(deepLink) : null;
+      if (path) router.push(path as Href);
     });
     return () => sub.remove();
   }, [router]);
@@ -123,11 +118,18 @@ export function useRegisterPushToken(): void {
         console.warn("[notifications] push registration failed", err);
       });
     } else if (!authed && previousAuthed.current) {
-      void unregister();
-    } else if (authed && previousOrgId.current && previousOrgId.current !== activeOrgId) {
-      void unregister().then(ensureRegistered).catch((err: unknown) => {
-        console.warn("[notifications] push org switch failed", err);
+      void unregister().catch((err: unknown) => {
+        console.warn("[notifications] push unregister failed", err);
       });
+    } else if (authed && previousOrgId.current && previousOrgId.current !== activeOrgId) {
+      void unregister()
+        .catch((err: unknown) => {
+          console.warn("[notifications] push unregister during org switch failed", err);
+        })
+        .then(ensureRegistered)
+        .catch((err: unknown) => {
+          console.warn("[notifications] push org switch registration failed", err);
+        });
     }
     previousAuthed.current = authed;
     previousOrgId.current = activeOrgId;

@@ -46,7 +46,11 @@ export function AccountSheetContent() {
   // Mobile-only cleanup runs first while this component is still mounted —
   // `await logout()` sets user=null and triggers the auth redirect immediately.
   async function handleSignOut() {
-    await handleMobileSignOut();
+    try {
+      await handleMobileSignOut();
+    } catch {
+      Alert.alert("Could not sign out", "Push notification cleanup failed. Please try again.");
+    }
   }
 
   return (

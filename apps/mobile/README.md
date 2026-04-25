@@ -16,13 +16,13 @@ The adapter is imported by the custom entry point `index.js` (set as `package.js
 
 ## Environment variables
 
-Set `EXPO_PUBLIC_API_URL` to the Trace server URL the dev client should hit (e.g. `http://192.168.1.10:4000` for LAN access from a physical device). Any `EXPO_PUBLIC_*` variable is inlined into the JS bundle at build time.
+Set `EXPO_PUBLIC_API_URL` to the Trace server URL the dev client should hit (e.g. `http://192.168.1.10:4000` for LAN access from a physical device). Set `EXPO_PUBLIC_EAS_PROJECT_ID` for local/dev-client push token registration when the EAS project id is not present in native build metadata. Any `EXPO_PUBLIC_*` variable is inlined into the JS bundle at build time.
 
 ## Running the dev client
 
 ```bash
 pnpm dev:server                         # in repo root
-EXPO_PUBLIC_API_URL=http://<lan-ip>:4000 pnpm --filter @trace/mobile start
+EXPO_PUBLIC_API_URL=http://<lan-ip>:4000 EXPO_PUBLIC_EAS_PROJECT_ID=<eas-project-id> pnpm --filter @trace/mobile start
 ```
 
 ## Typecheck
