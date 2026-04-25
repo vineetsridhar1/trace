@@ -57,13 +57,11 @@ interface SessionInputComposerProps {
 const EMPTY_IMAGES: ImageAttachment[] = [];
 type ComposerSheet = "model" | "runtime" | null;
 const composerMotionEasing = Easing.inOut(Easing.ease);
-const composerMotionDuration = 300;
-const trailingActionEnterDuration = 240;
+const composerMotionDuration = 150;
 const composerRowTransition =
   LinearTransition.duration(composerMotionDuration).easing(composerMotionEasing);
-const trailingActionEnter = SlideInRight.duration(trailingActionEnterDuration).easing(
-  composerMotionEasing,
-);
+const trailingActionEnter =
+  SlideInRight.duration(composerMotionDuration).easing(composerMotionEasing);
 const trailingActionExit =
   SlideOutRight.duration(composerMotionDuration).easing(composerMotionEasing);
 

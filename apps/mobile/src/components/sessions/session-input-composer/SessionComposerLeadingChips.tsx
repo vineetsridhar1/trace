@@ -14,6 +14,7 @@ import type {
 } from "./types";
 
 const AnimatedGlass = Animated.createAnimatedComponent(Glass);
+const leadingChipMotionDuration = 150;
 
 interface SessionComposerLeadingChipsProps {
   canInteract: boolean;
@@ -51,8 +52,8 @@ export function SessionComposerLeadingChips({
       <View style={styles.leadingChipsRow}>
         {showModeChip ? (
           <Animated.View
-            entering={SlideInLeft.duration(300)}
-            exiting={SlideOutLeft.duration(300)}
+            entering={SlideInLeft.duration(leadingChipMotionDuration)}
+            exiting={SlideOutLeft.duration(leadingChipMotionDuration)}
             style={[styles.modeChipSlot, modeWidthAnimatedStyle]}
           >
             <Pressable
@@ -90,8 +91,8 @@ export function SessionComposerLeadingChips({
                     />
                     {modeLabelVisible ? (
                       <Animated.Text
-                        entering={FadeIn.duration(140)}
-                        exiting={FadeOut.duration(100)}
+                        entering={FadeIn.duration(leadingChipMotionDuration)}
+                        exiting={FadeOut.duration(leadingChipMotionDuration)}
                         numberOfLines={1}
                         style={[styles.modeText, chipTextAnimatedStyle]}
                       >
