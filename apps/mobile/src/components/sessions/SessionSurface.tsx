@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEntityField } from "@trace/client-core";
 import { Spinner, Text } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
+import { BridgeAccessNotice } from "@/components/sessions/BridgeAccessNotice";
 import { PendingInputBar } from "@/components/sessions/PendingInputBar";
 import { QueuedMessagesStrip } from "@/components/sessions/QueuedMessagesStrip";
 import { SessionErrorCard } from "@/components/sessions/SessionErrorCard";
@@ -20,6 +21,8 @@ import { SessionGroupHeader } from "@/components/sessions/SessionGroupHeader";
 import { SessionInputComposer } from "@/components/sessions/SessionInputComposer";
 import { SessionStream } from "@/components/sessions/SessionStream";
 import { SessionTabStrip } from "@/components/sessions/SessionTabStrip";
+import { getSessionSurfaceComposerBottomPadding } from "@/components/sessions/session-surface-layout";
+import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "@/hooks/useBridgeRuntimeAccess";
 import { useEnsureSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { useSessionDetail } from "@/hooks/useSessionDetail";
 import { useSessionPendingInput } from "@/hooks/useSessionPendingInput";
@@ -83,9 +86,24 @@ export function SessionSurface({
     | string
     | null
     | undefined;
+  const sessionConnection = useEntityField("sessions", sessionId, "connection") as
+    | { runtimeInstanceId?: string | null }
+    | null
+    | undefined;
+  const groupConnection = useEntityField("sessionGroups", groupId ?? "", "connection") as
+    | { runtimeInstanceId?: string | null }
+    | null
+    | undefined;
   const pendingInput = useSessionPendingInput(sessionId, {
     enabled: renderStreamEvents,
   });
+  const runtimeInstanceId =
+    sessionConnection?.runtimeInstanceId ?? groupConnection?.runtimeInstanceId ?? null;
+  const { access: bridgeAccess, refresh: refreshBridgeAccess } = useBridgeRuntimeAccess(
+    runtimeInstanceId,
+    groupId ?? null,
+  );
+  const bridgeLocked = !isBridgeInteractionAllowed(bridgeAccess);
   const insets = useSafeAreaInsets();
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [composerHeight, setComposerHeight] = useState(0);
@@ -160,11 +178,7 @@ export function SessionSurface({
         </View>
       )}
       {hideHeader ? null : (
-        <SessionTabStrip
-          groupId={groupId}
-          activeSessionId={sessionId}
-          onSelect={onSelectSession}
-        />
+        <SessionTabStrip groupId={groupId} activeSessionId={sessionId} onSelect={onSelectSession} />
       )}
       {hideHeader ? null : <ActiveTodoStrip sessionId={sessionId} />}
       <View style={styles.streamWrapper}>
@@ -187,10 +201,29 @@ export function SessionSurface({
           onLayout={handleComposerLayout}
           style={[
             styles.composerStack,
-            { paddingBottom: keyboardVisible ? 0 : restingBottomOffset },
+            {
+              paddingBottom: getSessionSurfaceComposerBottomPadding({
+                keyboardVisible,
+                tabBarHeight,
+                bottomInset: insets.bottom,
+                spacingMd: theme.spacing.md,
+                bridgeLocked,
+              }),
+            },
           ]}
         >
-          {pendingInput ? (
+          {bridgeLocked ? (
+            <>
+              <SessionErrorCard sessionId={sessionId} />
+              <View style={[styles.accessNoticeWrap, { paddingHorizontal: theme.spacing.md }]}>
+                <BridgeAccessNotice
+                  access={bridgeAccess}
+                  sessionGroupId={groupId}
+                  onRequested={refreshBridgeAccess}
+                />
+              </View>
+            </>
+          ) : pendingInput ? (
             <>
               <PendingInputBar sessionId={sessionId} />
               <SessionErrorCard sessionId={sessionId} />
@@ -253,5 +286,8 @@ const styles = StyleSheet.create({
   },
   composerStack: {
     backgroundColor: "transparent",
+  },
+  accessNoticeWrap: {
+    paddingTop: 8,
   },
 });
