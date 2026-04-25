@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEntityField } from "@trace/client-core";
 import type { Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
@@ -12,7 +12,6 @@ import {
 } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { BrowserPanel } from "@/components/sessions/BrowserPanel";
-import { SessionBrowserBackGesture } from "@/components/sessions/SessionBrowserBackGesture";
 import { SessionPageHeader } from "@/components/sessions/SessionPageHeader";
 import { SessionSurface } from "@/components/sessions/SessionSurface";
 import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel";
@@ -25,7 +24,7 @@ import {
   useSessionGroupSessionIds,
 } from "@/hooks/useSessionGroupDetail";
 
-type SessionPaneMode = "session" | "terminal";
+type SessionPaneMode = "session" | "terminal" | "browser";
 
 /**
  * Standalone mobile session page. Reuses the session surface building blocks
@@ -39,7 +38,6 @@ export default function SessionStreamScreen() {
     pane?: string;
   }>();
   const router = useRouter();
-  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const loadingGroup = useEnsureSessionGroupDetail(groupId);
   const sessionIds = useSessionGroupSessionIds(groupId);
@@ -51,7 +49,8 @@ export default function SessionStreamScreen() {
   const sessionOptimistic = useEntityField("sessions", sessionId, "_optimistic") as
     | boolean
     | undefined;
-  const activePane: SessionPaneMode = pane === "terminal" ? "terminal" : "session";
+  const activePane: SessionPaneMode =
+    pane === "terminal" ? "terminal" : pane === "browser" ? "browser" : "session";
   const hydratedGroupId =
     (useEntityField("sessions", sessionId, "sessionGroupId") as string | null | undefined)
     ?? groupId;
@@ -76,12 +75,6 @@ export default function SessionStreamScreen() {
       ),
     [browserUrl, browserUrlGroupId, hydratedGroupId, prUrl, repo?.remoteUrl],
   );
-  const [browserOpen, setBrowserOpen] = useState(false);
-
-  useEffect(() => {
-    setBrowserOpen(false);
-  }, [groupId, sessionId]);
-
   useEffect(() => {
     if (!groupId || !sessionId || sessionIds.length === 0) return;
     if (sessionIds.includes(sessionId)) return;
@@ -96,6 +89,9 @@ export default function SessionStreamScreen() {
     },
     [groupId, router, sessionId],
   );
+  const openBrowser = useCallback(() => {
+    router.push(`/sessions/${groupId}/${sessionId}?pane=browser`);
+  }, [groupId, router, sessionId]);
 
   const handleSelectSession = useCallback(
     (nextId: string) => {
@@ -130,14 +126,6 @@ export default function SessionStreamScreen() {
   const showLoading = loadingGroup || handoffPending;
   const missingGroup = !showLoading && !groupName;
   const browserEnabled = !sessionOptimistic && !handoffPending && !showLoading;
-  const showBrowser = activePane === "session" && browserOpen;
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      gestureEnabled: !showBrowser,
-      fullScreenGestureEnabled: !showBrowser,
-    });
-  }, [navigation, showBrowser]);
 
   return (
     <Screen
@@ -153,14 +141,14 @@ export default function SessionStreamScreen() {
             <SessionPageHeader
               groupId={hydratedGroupId}
               sessionId={sessionId}
-              activePane={showBrowser ? "browser" : activePane}
+              activePane={activePane}
               browserEnabled={browserEnabled}
-              onOpenBrowser={() => setBrowserOpen(true)}
+              onOpenBrowser={openBrowser}
               onBack={
                 activePane === "terminal"
                   ? () => navigateToPane("session")
-                  : showBrowser
-                    ? () => setBrowserOpen(false)
+                  : activePane === "browser"
+                    ? () => router.back()
                     : closeSessionPlayer
               }
             />
@@ -195,7 +183,7 @@ export default function SessionStreamScreen() {
           </View>
         ) : (
           <View key={hydratedGroupId} style={styles.overlayPaddedScene}>
-            {activePane === "session" && !showBrowser ? (
+            {activePane === "session" ? (
               <SessionSurface
                 sessionId={sessionId}
                 onSelectSession={handleSelectSession}
@@ -203,9 +191,8 @@ export default function SessionStreamScreen() {
                 topInset={overlayHeight}
               />
             ) : null}
-            {showBrowser ? (
+            {activePane === "browser" ? (
               <View style={styles.overlayPaddedScene}>
-                <SessionBrowserBackGesture onBack={() => setBrowserOpen(false)} />
                 <BrowserPanel
                   url={resolvedBrowserUrl}
                   onUrlChange={handleBrowserUrlChange}
