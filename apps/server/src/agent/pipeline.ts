@@ -1061,7 +1061,7 @@ function formatActionConfirmation(actionType: string): string {
 // Small helpers
 // ---------------------------------------------------------------------------
 
-function accumulateCost(state: LoopState, response: LLMResponse, latencyMs: number): void {
+function accumulateCost(state: LoopState, response: LLMResponse, _latencyMs: number): void {
   const cost = estimateTurnCost(response);
   state.totalCostCents += cost;
   state.totalInputTokens += response.usage.inputTokens;

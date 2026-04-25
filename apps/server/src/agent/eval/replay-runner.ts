@@ -16,7 +16,6 @@ import type { ScopeType } from "../actions/types.js";
 import { resolveSoulFile } from "../soul-file-resolver.js";
 import { buildSystemPrompt } from "../planner.js";
 import { runPlannerTurn } from "../planner.js";
-import { PLANNER_TOOL } from "../planner.js";
 import { scoreEval } from "./eval-scorer.js";
 import type { EvalCase, EvalResult, EvalRunSummary } from "./eval-types.js";
 import { getBlockVersions } from "../prompt-blocks.js";
