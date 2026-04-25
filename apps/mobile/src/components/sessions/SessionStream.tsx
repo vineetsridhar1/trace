@@ -44,6 +44,8 @@ interface SessionStreamProps {
    * messages overlay at the bottom of the surface.
    */
   bottomInset?: number;
+  /** Bottom anchor for floating affordances that should sit near the composer. */
+  floatingBottomOffset?: number;
   /**
    * Starts network work for the stream. The Session Player keeps this false
    * while closed so a hidden sheet does no event work.
@@ -68,6 +70,7 @@ export function SessionStream({
   sessionId,
   topInset,
   bottomInset,
+  floatingBottomOffset,
   loadEvents = true,
   commitEvents = true,
   renderEvents = true,
@@ -219,7 +222,7 @@ export function SessionStream({
         count={newActivityCount}
         visible={newActivityCount > 0}
         onPress={handlePillPress}
-        bottomOffset={bottomInset}
+        bottomOffset={floatingBottomOffset ?? bottomInset}
       />
     </View>
   );
