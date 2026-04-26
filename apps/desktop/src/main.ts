@@ -1,4 +1,13 @@
-import { app, BrowserWindow, dialog, ipcMain, powerMonitor, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  powerMonitor,
+  shell,
+  type MenuItemConstructorOptions,
+} from "electron";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -12,7 +21,10 @@ const execFileAsync = promisify(execFile);
 let mainWindow: BrowserWindow | null = null;
 const portOffset = Number(process.env.TRACE_PORT || 0);
 const serverUrl = process.env.TRACE_SERVER_URL ?? `http://localhost:${4000 + portOffset}`;
+const appName = "Trace";
 const appIconPath = path.join(__dirname, "../assets/icon.png");
+
+app.setName(appName);
 
 async function getSessionCookieHeader(targetUrl: string): Promise<string | null> {
   if (!mainWindow || mainWindow.isDestroyed()) return null;
@@ -28,6 +40,36 @@ const bridge = new BridgeClient(serverUrl, getSessionCookieHeader);
 function publishBridgeStatus(status: BridgeConnectionStatus) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send("bridge-status", status);
+}
+
+function configureApplicationIdentity() {
+  app.setName(appName);
+
+  if (process.platform !== "darwin") return;
+
+  app.dock.setIcon(appIconPath);
+  const menuTemplate: MenuItemConstructorOptions[] = [
+    {
+      label: appName,
+      submenu: [
+        { role: "about", label: `About ${appName}` },
+        { type: "separator" },
+        { role: "services" },
+        { type: "separator" },
+        { role: "hide", label: `Hide ${appName}` },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit", label: `Quit ${appName}` },
+      ],
+    },
+    { role: "fileMenu" },
+    { role: "editMenu" },
+    { role: "viewMenu" },
+    { role: "windowMenu" },
+    { role: "help" },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate));
 }
 
 function createWindow() {
@@ -158,10 +200,7 @@ ipcMain.handle("set-bridge-auth-context", (_event, organizationId: string | null
 });
 
 app.whenReady().then(() => {
-  app.setName("Trace");
-  if (process.platform === "darwin") {
-    app.dock.setIcon(appIconPath);
-  }
+  configureApplicationIdentity();
 
   ensureHookRunnerEntrypoint({
     electronBinaryPath: process.execPath,
