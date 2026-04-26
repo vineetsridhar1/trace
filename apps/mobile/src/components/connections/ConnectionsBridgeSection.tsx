@@ -59,7 +59,7 @@ export function ConnectionsBridgeSection({
           </Text>
           <Text variant="caption1" color="dimForeground" numberOfLines={1}>
             {bridge.connected ? "Connected" : "Offline"} -{" "}
-            {bridge.hostingMode === "local" ? "Local" : "Cloud"}
+            {bridge.hostingMode === "local" ? "Local" : "Remote"}
           </Text>
         </View>
         <StatusDot status={bridge.connected ? "active" : "stopped"} size="sm" />

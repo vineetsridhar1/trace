@@ -11,7 +11,6 @@ import { useEntityField } from "@trace/client-core";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { cn } from "../../lib/utils";
-import { isLocalMode } from "../../lib/runtime-mode";
 
 interface PlanResponseBarProps {
   sessionId: string;
@@ -33,7 +32,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
   const branch = useEntityField("sessions", sessionId, "branch") as string | undefined;
-  const defaultHosting = hosting ?? (isLocalMode ? "local" : "cloud");
+  const defaultHosting = hosting ?? "local";
 
   const handleClearContext = useCallback(async () => {
     if (sending || !sessionGroupId) return;

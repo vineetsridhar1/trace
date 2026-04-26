@@ -7,7 +7,7 @@ export type DefaultHosting = "bridge" | "cloud";
 interface Preferences {
   defaultTool: string | null;
   defaultModel: string | null;
-  /** Preferred runtime: "bridge" prefers a connected local device, "cloud" uses on-demand cloud */
+  /** Preferred runtime. "cloud" is kept only for backward-compatible stored preferences. */
   defaultHosting: DefaultHosting;
 }
 

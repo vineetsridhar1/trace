@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Cloud, Monitor, Loader2 } from "lucide-react";
+import { AlertTriangle, Monitor, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import {
   AVAILABLE_SESSION_RUNTIMES_QUERY,
   MOVE_SESSION_TO_RUNTIME_MUTATION,
-  MOVE_SESSION_TO_CLOUD_MUTATION,
 } from "@trace/client-core";
 import { useEntityField } from "@trace/client-core";
 import { cn } from "../../lib/utils";
-import { isLocalMode } from "../../lib/runtime-mode";
 
 interface RuntimeInstance {
   id: string;
@@ -36,7 +34,6 @@ export function SessionRuntimePicker({
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
     | undefined;
-  const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
   const repoId = repo?.id ?? null;
   const connection = useEntityField("sessions", sessionId, "connection") as
@@ -89,33 +86,9 @@ export function SessionRuntimePicker({
     [onClose, sessionId],
   );
 
-  const handleMoveToCloud = useCallback(async () => {
-    if (isLocalMode) return;
-    setMoving("cloud");
-    try {
-      const result = await client
-        .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, { sessionId })
-        .toPromise();
-      if (result.error) {
-        toast.error("Failed to move session to cloud", { description: result.error.message });
-        return;
-      }
-      if (!result.data?.moveSessionToCloud?.id) {
-        toast.error("Failed to move session to cloud", { description: "No session returned" });
-        return;
-      }
-      onClose();
-    } catch (err) {
-      toast.error("Failed to move session to cloud", {
-        description: err instanceof Error ? err.message : "Unknown error",
-      });
-    } finally {
-      setMoving(null);
-    }
-  }, [onClose, sessionId]);
-
-  const localRuntimes = runtimes.filter((rt: RuntimeInstance) => rt.id !== currentRuntimeInstanceId);
-  const canMoveToCloud = !isLocalMode && hosting !== "cloud";
+  const localRuntimes = runtimes.filter(
+    (rt: RuntimeInstance) => rt.hostingMode === "local" && rt.id !== currentRuntimeInstanceId,
+  );
 
   return (
     <div className={cn("mt-2 rounded-lg border border-border bg-surface p-3", className)}>
@@ -135,23 +108,6 @@ export function SessionRuntimePicker({
         </div>
       ) : (
         <div className="space-y-1">
-          {canMoveToCloud && (
-            <button
-              onClick={handleMoveToCloud}
-              disabled={moving !== null}
-              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm hover:bg-surface-elevated transition-colors disabled:opacity-50"
-            >
-              <Cloud size={14} className="shrink-0 text-blue-400" />
-              <div className="min-w-0 flex-1">
-                <span className="text-foreground">Cloud</span>
-              </div>
-              {moving === "cloud" && (
-                <Loader2 size={12} className="animate-spin text-muted-foreground" />
-              )}
-            </button>
-          )}
-
-          {/* Local bridges */}
           {localRuntimes.map((rt: RuntimeInstance) => {
             const lacksRepo =
               !!repoId &&
@@ -188,14 +144,9 @@ export function SessionRuntimePicker({
             );
           })}
 
-          {localRuntimes.length === 0 && !canMoveToCloud && (
+          {localRuntimes.length === 0 && (
             <p className="py-1 text-xs text-muted-foreground">
-              No other runtimes available.
-            </p>
-          )}
-          {localRuntimes.length === 0 && canMoveToCloud && (
-            <p className="py-1 text-xs text-muted-foreground">
-              No other local bridges connected.
+              No other local runtimes available.
             </p>
           )}
         </div>

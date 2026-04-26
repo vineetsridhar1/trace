@@ -54,12 +54,12 @@ const PROVIDER_META: Record<string, { label: string; placeholder: string; descri
   github: {
     label: "GitHub",
     placeholder: "ghp_...",
-    description: "Used for repository access in cloud sessions",
+    description: "Used for repository access when Trace needs GitHub credentials",
   },
   ssh_key: {
     label: "SSH Key",
     placeholder: "-----BEGIN OPENSSH PRIVATE KEY-----",
-    description: "Used for SSH-based repository access in cloud sessions",
+    description: "Used for SSH-based repository access",
   },
 };
 
@@ -110,7 +110,7 @@ export function ApiTokensSection() {
       <div className="mb-4">
         <h2 className="text-base font-semibold text-foreground">API Keys</h2>
         <p className="text-sm text-muted-foreground">
-          Tokens are encrypted and injected into cloud sessions at startup.
+          Tokens are encrypted and used only when the server needs provider credentials.
         </p>
       </div>
 

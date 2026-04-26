@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Send, Square, Cloud, Monitor } from "lucide-react";
+import { Send, Square, Monitor } from "lucide-react";
 import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { SEND_SESSION_MESSAGE_MUTATION, QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
@@ -52,7 +52,6 @@ export function SessionInput({
     | Record<string, unknown>
     | null
     | undefined;
-  const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as
     | boolean
     | undefined;
@@ -267,21 +266,15 @@ export function SessionInput({
         {!isNotStarted && (
           <Tooltip>
             <TooltipTrigger className="flex items-center text-muted-foreground">
-              {hosting === "cloud" ? (
-                <Cloud size={14} className={cn("transition-colors", MODE_CONFIG[mode as InteractionMode].iconColor)} />
-              ) : (
-                <Monitor
-                  size={14}
-                  className={cn("transition-colors", MODE_CONFIG[mode as InteractionMode].iconColor)}
-                />
-              )}
+              <Monitor
+                size={14}
+                className={cn("transition-colors", MODE_CONFIG[mode as InteractionMode].iconColor)}
+              />
             </TooltipTrigger>
             <TooltipContent>
-              {hosting === "cloud"
-                ? "Cloud"
-                : connection && typeof connection === "object" && "runtimeLabel" in connection
-                  ? ((connection.runtimeLabel as string) ?? "Local")
-                  : "Local"}
+              {connection && typeof connection === "object" && "runtimeLabel" in connection
+                ? ((connection.runtimeLabel as string) ?? "Local")
+                : "Local"}
             </TooltipContent>
           </Tooltip>
         )}

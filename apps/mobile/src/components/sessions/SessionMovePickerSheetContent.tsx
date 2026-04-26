@@ -3,15 +3,12 @@ import { Alert, ScrollView, StyleSheet, View } from "react-native";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import {
   AVAILABLE_SESSION_RUNTIMES_QUERY,
-  MOVE_SESSION_TO_CLOUD_MUTATION,
   MOVE_SESSION_TO_RUNTIME_MUTATION,
   useEntityField,
 } from "@trace/client-core";
 import type { SessionConnection, SessionRuntimeInstance } from "@trace/gql";
 import { ListRow, Spinner, Text } from "@/components/design-system";
-import { getConnectionMode } from "@/lib/connection-target";
 import { haptic } from "@/lib/haptics";
-import { resolveMobileSessionHosting } from "@/lib/session-hosting";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
 
@@ -29,15 +26,12 @@ interface RuntimeRow {
   disabled?: boolean;
 }
 
-const CLOUD_ROW_VALUE = "__cloud__";
-
 export function SessionMovePickerSheetContent({
   sessionId,
   onClose,
 }: SessionMovePickerSheetContentProps) {
   const theme = useTheme();
 
-  const hosting = useEntityField("sessions", sessionId, "hosting") as string | null | undefined;
   const repo = useEntityField("sessions", sessionId, "repo") as
     | { id: string }
     | null
@@ -64,7 +58,6 @@ export function SessionMovePickerSheetContent({
     connection?.runtimeInstanceId ?? groupConnection?.runtimeInstanceId ?? null;
   const canMoveSession =
     sessionStatus !== "merged" && !isOptimistic && (connection?.canMove ?? true);
-  const cloudSessionsEnabled = resolveMobileSessionHosting(getConnectionMode()) === "cloud";
 
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,16 +93,8 @@ export function SessionMovePickerSheetContent({
   const rows = useMemo<RuntimeRow[]>(() => {
     const nextRows: RuntimeRow[] = [];
 
-    if (cloudSessionsEnabled && hosting !== "cloud") {
-      nextRows.push({
-        key: "runtime:cloud",
-        title: "Cloud",
-        icon: "cloud",
-        value: CLOUD_ROW_VALUE,
-      });
-    }
-
     for (const runtime of runtimes) {
+      if (runtime.hostingMode !== "local") continue;
       if (runtime.id === currentRuntimeInstanceId) continue;
       const lacksRepo =
         !!repo?.id &&
@@ -124,14 +109,14 @@ export function SessionMovePickerSheetContent({
           : !runtime.connected
             ? "This runtime is offline."
             : undefined,
-        icon: runtime.hostingMode === "cloud" ? "cloud" : "laptopcomputer",
+        icon: "laptopcomputer",
         value: runtime.id,
         disabled: !runtime.connected || lacksRepo,
       });
     }
 
     return nextRows;
-  }, [cloudSessionsEnabled, currentRuntimeInstanceId, hosting, repo?.id, runtimes]);
+  }, [currentRuntimeInstanceId, repo?.id, runtimes]);
 
   const handleMoveToRuntime = useCallback(
     async (runtimeInstanceId: string) => {
@@ -157,28 +142,6 @@ export function SessionMovePickerSheetContent({
     },
     [canMoveSession, onClose, sessionId],
   );
-
-  const handleMoveToCloud = useCallback(async () => {
-    if (!canMoveSession) return;
-    setMoving(CLOUD_ROW_VALUE);
-    void haptic.light();
-    try {
-      const result = await getClient()
-        .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, { sessionId })
-        .toPromise();
-      if (result.error || !result.data?.moveSessionToCloud?.id) {
-        throw result.error ?? new Error("No session returned");
-      }
-      void haptic.success();
-      onClose?.();
-    } catch (error) {
-      void haptic.error();
-      const message = error instanceof Error ? error.message : "Unknown error";
-      Alert.alert("Couldn't move session", message);
-    } finally {
-      setMoving(null);
-    }
-  }, [canMoveSession, onClose, sessionId]);
 
   return (
     <ScrollView
@@ -226,9 +189,7 @@ export function SessionMovePickerSheetContent({
             }
             onPress={
               !row.disabled && moving === null
-                ? row.value === CLOUD_ROW_VALUE
-                  ? () => void handleMoveToCloud()
-                  : () => void handleMoveToRuntime(row.value)
+                ? () => void handleMoveToRuntime(row.value)
                 : undefined
             }
             haptic="selection"

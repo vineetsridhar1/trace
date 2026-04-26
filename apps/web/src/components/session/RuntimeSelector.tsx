@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, Cloud, Monitor, Loader2 } from "lucide-react";
+import { AlertTriangle, Monitor, Loader2 } from "lucide-react";
 import type { SessionRuntimeInstance } from "@trace/gql";
 import {
   Select,
@@ -10,9 +10,8 @@ import {
 } from "../ui/select";
 import { client } from "../../lib/urql";
 import { AVAILABLE_RUNTIMES_QUERY } from "@trace/client-core";
-import { isLocalMode } from "../../lib/runtime-mode";
 
-/** Sentinel value for the on-demand cloud option */
+/** Legacy sentinel retained for compatibility with existing callers. */
 export const CLOUD_RUNTIME_ID = "__cloud__";
 
 /** Subset of runtime info exposed to consumers for bridge-aware decisions */
@@ -42,24 +41,21 @@ export function RuntimeSelector({ tool, open, value, onChange, channelRepoId }: 
       .then((result: { data?: Record<string, unknown> }) => {
         const fetched = (result.data?.availableRuntimes ?? []) as SessionRuntimeInstance[];
         setRuntimes(fetched);
-        const connected = fetched.filter((r: SessionRuntimeInstance) => r.connected);
-        // Filter to runtimes that have the channel's repo (if set)
+        const connected = fetched.filter(
+          (r: SessionRuntimeInstance) => r.connected && r.hostingMode === "local",
+        );
         const eligible = channelRepoId
           ? connected.filter(
-              (r: SessionRuntimeInstance) =>
-                (!isLocalMode && r.hostingMode === "cloud") ||
-                r.registeredRepoIds.includes(channelRepoId),
+              (r: SessionRuntimeInstance) => r.registeredRepoIds.includes(channelRepoId),
             )
           : connected;
         if (eligible.length === 1 && !value) {
           const rt = eligible[0];
           onChange(rt.id, { hostingMode: rt.hostingMode, registeredRepoIds: rt.registeredRepoIds });
         } else if (eligible.length === 0 && !value) {
-          if (isLocalMode) {
-            onChange(undefined, null);
-          } else {
-            onChange(CLOUD_RUNTIME_ID, { hostingMode: "cloud", registeredRepoIds: [] });
-          }
+          onChange(undefined, null);
+        } else if (value === CLOUD_RUNTIME_ID) {
+          onChange(undefined, null);
         } else if (value && value !== CLOUD_RUNTIME_ID && !fetched.find((r) => r.id === value)) {
           onChange(undefined, null);
         }
@@ -67,7 +63,9 @@ export function RuntimeSelector({ tool, open, value, onChange, channelRepoId }: 
       .finally(() => setLoading(false));
   }, [open, tool, channelRepoId]);
 
-  const connectedRuntimes = runtimes.filter((r: SessionRuntimeInstance) => r.connected);
+  const connectedRuntimes = runtimes.filter(
+    (r: SessionRuntimeInstance) => r.connected && r.hostingMode === "local",
+  );
   const selectedRuntime = value === CLOUD_RUNTIME_ID ? null : runtimes.find((r: SessionRuntimeInstance) => r.id === value);
 
   if (loading) {
@@ -84,36 +82,18 @@ export function RuntimeSelector({ tool, open, value, onChange, channelRepoId }: 
       value={value ?? ""}
       onValueChange={(v: string | null) => {
         if (!v) return;
-        if (!isLocalMode && v === CLOUD_RUNTIME_ID) {
-          onChange(v, { hostingMode: "cloud", registeredRepoIds: [] });
-        } else {
-          const rt = runtimes.find((r: SessionRuntimeInstance) => r.id === v);
-          onChange(v, rt ? { hostingMode: rt.hostingMode, registeredRepoIds: rt.registeredRepoIds } : null);
-        }
+        const rt = runtimes.find((r: SessionRuntimeInstance) => r.id === v);
+        onChange(v, rt ? { hostingMode: rt.hostingMode, registeredRepoIds: rt.registeredRepoIds } : null);
       }}
     >
       <SelectTrigger className="w-full">
         <SelectValue placeholder="Select runtime...">
-          {!isLocalMode && value === CLOUD_RUNTIME_ID ? (
-            <span className="flex items-center gap-1.5">
-              <Cloud size={12} className="shrink-0 text-blue-400" />
-              Cloud
-            </span>
-          ) : selectedRuntime ? (
+          {selectedRuntime ? (
             <RuntimeLabel runtime={selectedRuntime} />
           ) : null}
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {!isLocalMode && (
-          <SelectItem value={CLOUD_RUNTIME_ID}>
-            <span className="flex items-center gap-1.5">
-              <Cloud size={12} className="shrink-0 text-blue-400" />
-              Cloud
-              <span className="text-xs text-muted-foreground">(on-demand)</span>
-            </span>
-          </SelectItem>
-        )}
         {connectedRuntimes.map((rt: SessionRuntimeInstance) => {
           const lacksRepo = !!channelRepoId && rt.hostingMode === "local" && !rt.registeredRepoIds.includes(channelRepoId);
           return (
@@ -134,7 +114,7 @@ export function RuntimeSelector({ tool, open, value, onChange, channelRepoId }: 
             </SelectItem>
           );
         })}
-        {isLocalMode && connectedRuntimes.length === 0 && (
+        {connectedRuntimes.length === 0 && (
           <SelectItem value="__no_local_runtime__" disabled>
             <span className="flex items-center gap-1.5 text-muted-foreground">
               <Monitor size={12} className="shrink-0 text-amber-500" />
@@ -148,11 +128,7 @@ export function RuntimeSelector({ tool, open, value, onChange, channelRepoId }: 
 }
 
 function RuntimeIcon({ hostingMode }: { hostingMode: string }) {
-  return hostingMode === "cloud" ? (
-    <Cloud size={12} className="shrink-0 text-blue-400" />
-  ) : (
-    <Monitor size={12} className="shrink-0 text-green-400" />
-  );
+  return <Monitor size={12} className="shrink-0 text-green-400" />;
 }
 
 function RuntimeLabel({ runtime }: { runtime: SessionRuntimeInstance }) {

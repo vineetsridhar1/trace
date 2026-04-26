@@ -281,18 +281,13 @@ function TitleRow({
     sessionId ?? "",
     "agentStatus",
   ) as string | null | undefined;
-  const hosting = useEntityField("sessions", sessionId ?? "", "hosting") as
-    | string
-    | null
-    | undefined;
   const connection = useEntityField("sessions", sessionId ?? "", "connection") as
     | SessionConnection
     | null
     | undefined;
-  const bridgeIcon: SFSymbol = hosting === "cloud" ? "cloud" : "laptopcomputer";
-  const bridgeLabel =
-    hosting === "cloud" ? "Cloud" : (connection?.runtimeLabel ?? "Local");
-  const showBridge = !!sessionId && !!hosting;
+  const bridgeIcon: SFSymbol = "laptopcomputer";
+  const bridgeLabel = connection?.runtimeLabel ?? "Local";
+  const showBridge = !!sessionId;
 
   return (
     <View style={[styles.titleRow, { paddingHorizontal: theme.spacing.md }]}>
