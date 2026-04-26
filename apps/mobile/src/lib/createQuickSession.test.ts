@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const replaceMock = vi.fn();
+const pushMock = vi.fn();
 const alertMock = vi.fn();
 const mutationMock = vi.fn();
 const fetchSessionGroupDetailMock = vi.fn();
@@ -49,7 +50,7 @@ const entityState = {
 };
 
 vi.mock("expo-router", () => ({
-  router: { replace: replaceMock },
+  router: { push: pushMock, replace: replaceMock },
 }));
 
 vi.mock("react-native", () => ({
@@ -114,6 +115,7 @@ vi.mock("@/lib/sessionPlayer", () => ({
 describe("createQuickSession", () => {
   beforeEach(() => {
     replaceMock.mockReset();
+    pushMock.mockReset();
     alertMock.mockReset();
     mutationMock.mockReset();
     fetchSessionGroupDetailMock.mockReset();
@@ -149,13 +151,15 @@ describe("createQuickSession", () => {
     expect(tryOpenSessionPlayerMock).not.toHaveBeenCalled();
     expect(fetchSessionGroupDetailMock).toHaveBeenCalledWith("group_new");
     expect(setOverlaySessionIdMock).toHaveBeenCalledWith("session_new");
-    expect(replaceMock).toHaveBeenCalledWith("/sessions/group_new/session_new");
+    expect(pushMock).toHaveBeenCalledWith("/sessions/group_new/session_new");
+    expect(replaceMock).not.toHaveBeenCalled();
   });
 });
 
 describe("startPlanImplementationSession", () => {
   beforeEach(() => {
     replaceMock.mockReset();
+    pushMock.mockReset();
     alertMock.mockReset();
     mutationMock.mockReset();
     fetchSessionGroupDetailMock.mockReset();

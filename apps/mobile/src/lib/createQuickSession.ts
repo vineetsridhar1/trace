@@ -65,7 +65,7 @@ export async function createQuickSession(channelId: string): Promise<void> {
 
     const ui = useMobileUIStore.getState();
     ui.setOverlaySessionId(session.id);
-    router.replace(`/sessions/${session.sessionGroupId}/${session.id}` as never);
+    router.push(`/sessions/${session.sessionGroupId}/${session.id}` as never);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Please try again.";
     void haptic.error();
