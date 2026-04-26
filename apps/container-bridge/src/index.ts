@@ -58,12 +58,6 @@ async function main(): Promise<void> {
   const machineId = requireEnv("CLOUD_MACHINE_ID");
   const tool = process.env.CODING_TOOL ?? "claude_code";
 
-  // Log which credentials are present (not values) to aid debugging.
-  console.log("[container-bridge] env check: ANTHROPIC_API_KEY=" + (process.env.ANTHROPIC_API_KEY ? "set" : "not set"));
-  console.log("[container-bridge] env check: OPENAI_API_KEY=" + (process.env.OPENAI_API_KEY ? "set" : "not set"));
-  console.log("[container-bridge] env check: GITHUB_TOKEN=" + (process.env.GITHUB_TOKEN ? "set" : "not set"));
-  console.log("[container-bridge] env check: SSH_PRIVATE_KEY=" + (process.env.SSH_PRIVATE_KEY ? "set" : "not set"));
-
   // Set up SSH key before any git operations
   setupSshKey();
 

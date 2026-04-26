@@ -1,12 +1,5 @@
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  Linking,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import * as ExpoLinking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
@@ -21,8 +14,8 @@ import { haptic } from "@/lib/haptics";
 import { recreateClient } from "@/lib/urql";
 
 const REDIRECT_URL = "trace://auth/callback";
-const TERMS_URL = "https://trace.app/terms";
-const PRIVACY_URL = "https://trace.app/privacy";
+const TERMS_URL = "https://gettrace.org/terms";
+const PRIVACY_URL = "https://gettrace.org/privacy";
 
 function tokenFromCallback(rawUrl: string): string | null {
   try {
@@ -96,10 +89,7 @@ export default function SignInScreen() {
             accessibilityLabel="Continue with GitHub"
             onPress={handleSignIn}
             disabled={loading}
-            style={({ pressed }) => [
-              styles.button,
-              (pressed || loading) && styles.buttonPressed,
-            ]}
+            style={({ pressed }) => [styles.button, (pressed || loading) && styles.buttonPressed]}
           >
             {loading ? (
               <ActivityIndicator color="#000" />
@@ -120,7 +110,9 @@ export default function SignInScreen() {
           >
             <Text style={styles.secondaryButtonText}>Pair with local session</Text>
             <Text style={styles.secondaryHint}>
-              {pairedLocalUrl ? `Saved host: ${pairedLocalUrl}` : "Scan a QR code from your local Trace app"}
+              {pairedLocalUrl
+                ? `Saved host: ${pairedLocalUrl}`
+                : "Scan a QR code from your local Trace app"}
             </Text>
           </Pressable>
         </View>
