@@ -13,7 +13,7 @@ permissions:
 
 env:
   ECR_REPOSITORY: trace
-  ECR_REGISTRY: 459063349068.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
@@ -22,6 +22,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate deploy secrets
+        run: |
+          test -n "${{ secrets.ECR_REGISTRY }}" || (echo "Missing ECR_REGISTRY secret" && exit 1)
+          test -n "${{ secrets.EC2_HOST }}" || (echo "Missing EC2_HOST secret" && exit 1)
+          test -n "${{ secrets.EC2_USER }}" || (echo "Missing EC2_USER secret" && exit 1)
+          test -n "${{ secrets.EC2_SSH_KEY }}" || (echo "Missing EC2_SSH_KEY secret" && exit 1)
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

@@ -3,6 +3,7 @@ import { SymbolView } from "expo-symbols";
 import Animated, { FadeIn, FadeOut, SlideInLeft, SlideOutLeft } from "react-native-reanimated";
 import type { CodingTool } from "@trace/gql";
 import { Glass } from "@/components/design-system";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import type { ComposerMode } from "@/hooks/useComposerSubmit";
 import { MODE_ICON, MODE_LABEL } from "./constants";
 import { SessionComposerModelTrigger } from "./SessionComposerModelTrigger";
@@ -47,13 +48,19 @@ export function SessionComposerLeadingChips({
   onModePress,
   onOpenModelSheet,
 }: SessionComposerLeadingChipsProps) {
+  const reducedMotion = useReducedMotion();
+  const chipEnter = reducedMotion ? undefined : SlideInLeft.duration(leadingChipMotionDuration);
+  const chipExit = reducedMotion ? undefined : SlideOutLeft.duration(leadingChipMotionDuration);
+  const labelEnter = reducedMotion ? undefined : FadeIn.duration(leadingChipMotionDuration);
+  const labelExit = reducedMotion ? undefined : FadeOut.duration(leadingChipMotionDuration);
+
   return (
     <View style={styles.leadingChipsContainer}>
       <View style={styles.leadingChipsRow}>
         {showModeChip ? (
           <Animated.View
-            entering={SlideInLeft.duration(leadingChipMotionDuration)}
-            exiting={SlideOutLeft.duration(leadingChipMotionDuration)}
+            entering={chipEnter}
+            exiting={chipExit}
             style={[styles.modeChipSlot, modeWidthAnimatedStyle]}
           >
             <Pressable
@@ -91,8 +98,8 @@ export function SessionComposerLeadingChips({
                     />
                     {modeLabelVisible ? (
                       <Animated.Text
-                        entering={FadeIn.duration(leadingChipMotionDuration)}
-                        exiting={FadeOut.duration(leadingChipMotionDuration)}
+                        entering={labelEnter}
+                        exiting={labelExit}
                         numberOfLines={1}
                         style={[styles.modeText, chipTextAnimatedStyle]}
                       >

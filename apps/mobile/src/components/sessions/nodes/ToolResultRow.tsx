@@ -38,10 +38,14 @@ export const ToolResultRow = memo(function ToolResultRow({
   const tint = isError ? theme.colors.destructive : theme.colors.success;
   const iconName = isError ? "xmark.circle.fill" : "checkmark.circle.fill";
   const toggleExpanded = useCallback(() => setExpanded((v) => !v), []);
+  const accessibilityLabel = multiline
+    ? `${isError ? "Error" : "Success"} tool result. ${expanded ? "Expanded" : "Collapsed"}. Double-tap to ${expanded ? "collapse" : "expand"}.`
+    : `${isError ? "Error" : "Success"} tool result. ${preview}`;
 
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={multiline ? "button" : undefined}
+      accessibilityLabel={accessibilityLabel}
       onPress={multiline ? toggleExpanded : undefined}
       style={[
         styles.row,

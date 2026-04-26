@@ -588,6 +588,7 @@ export class SessionService {
     sessionId: string;
     sessionGroupId?: string | null;
     slug?: string | null;
+    preserveBranchName?: boolean;
     hosting: string;
     tool: string;
     model?: string | null;
@@ -602,6 +603,7 @@ export class SessionService {
       sessionId: params.sessionId,
       sessionGroupId: params.sessionGroupId ?? undefined,
       slug: params.slug ?? undefined,
+      preserveBranchName: params.preserveBranchName,
       hosting: params.hosting as "cloud" | "local",
       tool: params.tool,
       model: params.model ?? undefined,
@@ -1531,6 +1533,7 @@ export class SessionService {
         sessionId: session.id,
         sessionGroupId: session.sessionGroupId,
         slug: session.sessionGroup?.slug,
+        preserveBranchName: false,
         hosting: session.hosting,
         tool: session.tool,
         model: session.model,
@@ -1640,6 +1643,7 @@ export class SessionService {
           sessionId: id,
           sessionGroupId: session.sessionGroupId,
           slug: session.sessionGroup?.slug,
+          preserveBranchName: false,
           hosting: session.hosting,
           tool: session.tool,
           model: session.model,
@@ -2095,6 +2099,7 @@ export class SessionService {
           sessionId,
           sessionGroupId: prev.sessionGroupId,
           slug: prev.sessionGroup?.slug,
+          preserveBranchName: true,
           hosting: newHosting,
           tool: nextTool,
           model: nextModel !== undefined ? nextModel : prev.model,
@@ -2577,6 +2582,7 @@ export class SessionService {
           sessionId,
           sessionGroupId: session.sessionGroupId,
           slug: session.sessionGroup?.slug,
+          preserveBranchName: true,
           hosting: session.hosting,
           tool: session.tool,
           model: session.model,
@@ -3757,6 +3763,7 @@ export class SessionService {
           sessionId,
           sessionGroupId: session.sessionGroupId ?? undefined,
           slug: session.sessionGroup?.slug ?? undefined,
+          preserveBranchName: true,
           repoId: session.repo.id,
           repoName: session.repo.name,
           repoRemoteUrl: session.repo.remoteUrl,
@@ -4082,6 +4089,7 @@ export class SessionService {
         sessionId: movedSession.id,
         sessionGroupId: movedSession.sessionGroupId,
         slug: movedSession.sessionGroup?.slug,
+        preserveBranchName: true,
         hosting: targetHosting,
         tool: movedSession.tool,
         model: movedSession.model,
@@ -4930,6 +4938,7 @@ export class SessionService {
         sessionId,
         sessionGroupId: session.sessionGroupId ?? undefined,
         slug: session.sessionGroup?.slug ?? undefined,
+        preserveBranchName: true,
         repoId: repo.id,
         repoName: repo.name,
         repoRemoteUrl: repo.remoteUrl,

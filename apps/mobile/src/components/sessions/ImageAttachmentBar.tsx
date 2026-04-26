@@ -70,6 +70,7 @@ export function ImageAttachmentBar({ images, onRemove }: Props) {
 }
 
 const THUMB_SIZE = 56;
+const REMOVE_BUTTON_SIZE = 28;
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", gap: 8, paddingHorizontal: 2, paddingBottom: 6 },
@@ -94,9 +95,9 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: -6,
     right: -6,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: REMOVE_BUTTON_SIZE,
+    height: REMOVE_BUTTON_SIZE,
+    borderRadius: REMOVE_BUTTON_SIZE / 2,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
     justifyContent: "center",

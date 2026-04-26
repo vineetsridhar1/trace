@@ -22,7 +22,7 @@ services:
       - backend
 
   web:
-    image: ${ECR_REGISTRY:-459063349068.dkr.ecr.us-east-1.amazonaws.com}/trace:${IMAGE_TAG:-latest}
+    image: ${ECR_REGISTRY:-registry.example.com}/trace:${IMAGE_TAG:-latest}
     environment:
       ROLE: web
     logging: *default-logging
@@ -41,7 +41,7 @@ services:
       start_period: 5s
 
   backend:
-    image: ${ECR_REGISTRY:-459063349068.dkr.ecr.us-east-1.amazonaws.com}/trace:${IMAGE_TAG:-latest}
+    image: ${ECR_REGISTRY:-registry.example.com}/trace:${IMAGE_TAG:-latest}
     environment:
       ROLE: backend
       NODE_ENV: production
@@ -80,7 +80,7 @@ services:
       start_period: 30s
 
   worker:
-    image: ${ECR_REGISTRY:-459063349068.dkr.ecr.us-east-1.amazonaws.com}/trace:${IMAGE_TAG:-latest}
+    image: ${ECR_REGISTRY:-registry.example.com}/trace:${IMAGE_TAG:-latest}
     environment:
       ROLE: worker
       NODE_ENV: production

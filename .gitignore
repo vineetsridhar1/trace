@@ -9,6 +9,8 @@ apps/web/.env
 !**/.env.example
 *.tsbuildinfo
 .turbo/
+.vite/
+**/.vite/
 coverage/
 .DS_Store
 tmp/

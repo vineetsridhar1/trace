@@ -6,6 +6,7 @@ type SetState<T> = (
 
 export interface ConnectionState {
   connected: boolean;
+  disconnectedAt: number | null;
   /**
    * Increments on every disconnect→reconnect transition (not on initial connect).
    * Hooks depend on this to trigger a catch-up fetch after the WS recovers,
@@ -20,21 +21,33 @@ export interface ConnectionState {
 export const useConnectionStore = create<ConnectionState>(
   (set: SetState<ConnectionState>) => ({
     connected: false,
+    disconnectedAt: null,
     reconnectCounter: 0,
     hasConnectedBefore: false,
     setConnected: (connected: boolean) =>
       set((state: ConnectionState) => {
-        if (!connected) return { connected: false };
+        if (!connected) {
+          return {
+            connected: false,
+            disconnectedAt:
+              state.disconnectedAt ?? (state.hasConnectedBefore ? Date.now() : null),
+          };
+        }
         if (!state.hasConnectedBefore) {
-          return { connected: true, hasConnectedBefore: true };
+          return {
+            connected: true,
+            disconnectedAt: null,
+            hasConnectedBefore: true,
+          };
         }
         if (!state.connected) {
           return {
             connected: true,
+            disconnectedAt: null,
             reconnectCounter: state.reconnectCounter + 1,
           };
         }
-        return { connected: true };
+        return { connected: true, disconnectedAt: null };
       }),
   }),
 );

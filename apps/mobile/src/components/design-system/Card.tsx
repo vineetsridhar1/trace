@@ -6,6 +6,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   useTheme,
   type ShadowLevel,
@@ -83,6 +84,7 @@ export function Card({
   style,
 }: CardProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const scale = useSharedValue(1);
 
   const shadow = theme.shadows[ELEVATION_SHADOW[elevation]];
@@ -105,10 +107,12 @@ export function Card({
   }
 
   function handlePressIn() {
+    if (reducedMotion) return;
     scale.value = withSpring(PRESSED_SCALE, theme.motion.springs.snap);
   }
 
   function handlePressOut() {
+    if (reducedMotion) return;
     scale.value = withSpring(1, theme.motion.springs.snap);
   }
 

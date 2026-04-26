@@ -68,7 +68,7 @@ The single most important feature surface. Built in composable pieces, all files
 | 25 | [Home Screen](25-home-screen.md) | Three-section feed: needs you / working now / recently done |
 | 26 | [Push Registration (Client)](26-push-notification-registration-client.md) | Request permissions, register token, handle foreground + tap |
 | 27 | [Push Dispatch (Server)](27-server-push-dispatch.md) | Server-side dispatch via Expo Push API with debounce + receipt handling |
-| 28 | [Deep Links + Universal Links](28-deep-linking-and-universal-links.md) | `trace://` scheme + `https://trace.app/m/...` universal links + AASA config |
+| 28 | [Deep Links + Universal Links](28-deep-linking-and-universal-links.md) | `trace://` scheme + `https://gettrace.org/m/...` universal links + AASA config |
 | 29 | [App Badge Counts](29-app-badge-counts.md) | iOS badge reflects needs-input count; clears on resolution |
 
 ## M6 — Polish Pass

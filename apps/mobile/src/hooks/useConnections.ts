@@ -9,6 +9,7 @@ import type {
   Repo,
   SessionGroup,
 } from "@trace/gql";
+import { userFacingError } from "@/lib/requestError";
 import { getClient } from "@/lib/urql";
 
 export interface ConnectionUser {
@@ -84,12 +85,14 @@ const POLL_INTERVAL_MS = 10_000;
 export function useConnections(): {
   connections: ConnectionBridge[];
   loading: boolean;
+  error: string | null;
   refresh: () => Promise<void>;
 } {
   const userId = useAuthStore((s: AuthState) => s.user?.id);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const [connections, setConnections] = useState<ConnectionBridge[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const cancelledRef = useRef(false);
 
   const fetchOnce = useCallback(
@@ -107,8 +110,10 @@ export function useConnections(): {
         if (cancelledRef.current) return;
         if (result.error) {
           console.warn("[useConnections] query failed", result.error);
+          setError(userFacingError(result.error, "Couldn't load bridges."));
           return;
         }
+        setError(null);
         setConnections(result.data?.myConnections ?? []);
       } finally {
         if (!cancelledRef.current && showLoading) setLoading(false);
@@ -121,6 +126,7 @@ export function useConnections(): {
     cancelledRef.current = false;
     if (!userId || !activeOrgId) {
       setConnections([]);
+      setError(null);
       return () => {
         cancelledRef.current = true;
       };
@@ -139,5 +145,10 @@ export function useConnections(): {
     };
   }, [activeOrgId, fetchOnce, userId]);
 
-  return { connections, loading, refresh: useCallback(() => fetchOnce(false), [fetchOnce]) };
+  return {
+    connections,
+    loading,
+    error,
+    refresh: useCallback(() => fetchOnce(false), [fetchOnce]),
+  };
 }

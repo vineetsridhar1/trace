@@ -10,6 +10,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { alpha, useTheme, type Theme } from "@/theme";
 import { Text } from "./Text";
 
@@ -52,6 +53,7 @@ function variantPalette(theme: Theme, variant: ChipVariant): VariantPalette {
 
 export function Chip({ label, variant, icon, style }: ChipProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const palette = variantPalette(theme, variant);
   const opacity = useSharedValue(1);
   // Brief scale flash when the variant changes (per ticket 30 §11.4 "status
@@ -61,6 +63,11 @@ export function Chip({ label, variant, icon, style }: ChipProps) {
   const previousVariant = useRef(variant);
 
   useEffect(() => {
+    if (reducedMotion) {
+      cancelAnimation(opacity);
+      opacity.value = 1;
+      return;
+    }
     if (variant !== "inProgress") {
       cancelAnimation(opacity);
       opacity.value = withTiming(1, { duration: theme.motion.durations.fast });
@@ -74,16 +81,20 @@ export function Chip({ label, variant, icon, style }: ChipProps) {
       -1,
       true,
     );
-  }, [variant, opacity, theme.motion.durations.fast]);
+  }, [opacity, reducedMotion, theme.motion.durations.fast, variant]);
 
   useEffect(() => {
     if (previousVariant.current === variant) return;
     previousVariant.current = variant;
+    if (reducedMotion) {
+      scale.value = 1;
+      return;
+    }
     scale.value = withSequence(
       withTiming(1.08, { duration: theme.motion.durations.instant }),
       withSpring(1, theme.motion.springs.snap),
     );
-  }, [variant, scale, theme.motion.durations.instant, theme.motion.springs.snap]);
+  }, [reducedMotion, scale, theme.motion.durations.instant, theme.motion.springs.snap, variant]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,

@@ -41,7 +41,7 @@ export default function SessionStreamScreen() {
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const loadingGroup = useEnsureSessionGroupDetail(groupId);
+  const { loading: loadingGroup, error: groupError } = useEnsureSessionGroupDetail(groupId);
   const sessionIds = useSessionGroupSessionIds(groupId);
   const overlaySessionId = useMobileUIStore((s) => s.overlaySessionId);
   const activeMenuClose = useMobileUIStore((s) => s.activeMenuClose);
@@ -161,7 +161,7 @@ export default function SessionStreamScreen() {
             <EmptyState
               icon="exclamationmark.triangle"
               title="Couldn't load workspace"
-              subtitle="The workspace couldn't be loaded. Try again or go back."
+              subtitle={groupError ?? "The workspace couldn't be loaded. Try again or go back."}
             />
             <View style={styles.retryButton}>
               <Button title="Retry" variant="secondary" onPress={handleRetryGroup} />
