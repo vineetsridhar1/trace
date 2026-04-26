@@ -1,4 +1,13 @@
-import { app, BrowserWindow, dialog, ipcMain, powerMonitor, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  powerMonitor,
+  shell,
+  type MenuItemConstructorOptions,
+} from "electron";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -12,6 +21,10 @@ const execFileAsync = promisify(execFile);
 let mainWindow: BrowserWindow | null = null;
 const portOffset = Number(process.env.TRACE_PORT || 0);
 const serverUrl = process.env.TRACE_SERVER_URL ?? `http://localhost:${4000 + portOffset}`;
+const appName = "Trace";
+const appIconPath = path.join(__dirname, "../assets/icon.png");
+
+app.setName(appName);
 
 async function getSessionCookieHeader(targetUrl: string): Promise<string | null> {
   if (!mainWindow || mainWindow.isDestroyed()) return null;
@@ -29,10 +42,41 @@ function publishBridgeStatus(status: BridgeConnectionStatus) {
   mainWindow.webContents.send("bridge-status", status);
 }
 
+function configureApplicationIdentity() {
+  app.setName(appName);
+
+  if (process.platform !== "darwin") return;
+
+  app.dock.setIcon(appIconPath);
+  const menuTemplate: MenuItemConstructorOptions[] = [
+    {
+      label: appName,
+      submenu: [
+        { role: "about", label: `About ${appName}` },
+        { type: "separator" },
+        { role: "services" },
+        { type: "separator" },
+        { role: "hide", label: `Hide ${appName}` },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit", label: `Quit ${appName}` },
+      ],
+    },
+    { role: "fileMenu" },
+    { role: "editMenu" },
+    { role: "viewMenu" },
+    { role: "windowMenu" },
+    { role: "help" },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate));
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    icon: appIconPath,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -156,6 +200,8 @@ ipcMain.handle("set-bridge-auth-context", (_event, organizationId: string | null
 });
 
 app.whenReady().then(() => {
+  configureApplicationIdentity();
+
   ensureHookRunnerEntrypoint({
     electronBinaryPath: process.execPath,
     runnerScriptPath: path.join(__dirname, "hook-runner.js"),
