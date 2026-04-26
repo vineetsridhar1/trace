@@ -34,6 +34,18 @@ async function resolveBaseBranch(
   return `origin/${defaultBranch}`;
 }
 
+async function getCurrentBranch(worktreePath: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("git", ["symbolic-ref", "--short", "-q", "HEAD"], {
+      cwd: worktreePath,
+    });
+    const branch = stdout.trim();
+    return branch.length > 0 ? branch : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function createWorktree({
   repoPath,
   repoId,
@@ -67,7 +79,8 @@ export async function createWorktree({
 
   // If the worktree directory already exists, reuse it
   if (fs.existsSync(targetPath)) {
-    return { workdir: targetPath, branch, slug: worktreeSlug };
+    const currentBranch = await getCurrentBranch(targetPath);
+    return { workdir: targetPath, branch: currentBranch ?? branch, slug: worktreeSlug };
   }
 
   // Ensure parent directory exists
