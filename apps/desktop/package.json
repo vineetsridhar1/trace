@@ -2,6 +2,7 @@
   "name": "@trace/desktop",
   "private": true,
   "version": "0.0.1",
+  "productName": "Trace",
   "main": "dist/main.js",
   "scripts": {
     "dev": "pnpm --filter @trace/shared build && tsc -b && electron-forge start",

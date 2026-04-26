@@ -12,6 +12,7 @@ const execFileAsync = promisify(execFile);
 let mainWindow: BrowserWindow | null = null;
 const portOffset = Number(process.env.TRACE_PORT || 0);
 const serverUrl = process.env.TRACE_SERVER_URL ?? `http://localhost:${4000 + portOffset}`;
+const appIconPath = path.join(__dirname, "../assets/icon.png");
 
 async function getSessionCookieHeader(targetUrl: string): Promise<string | null> {
   if (!mainWindow || mainWindow.isDestroyed()) return null;
@@ -33,7 +34,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    icon: path.join(__dirname, "../assets/icon.png"),
+    icon: appIconPath,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -157,6 +158,11 @@ ipcMain.handle("set-bridge-auth-context", (_event, organizationId: string | null
 });
 
 app.whenReady().then(() => {
+  app.setName("Trace");
+  if (process.platform === "darwin") {
+    app.dock.setIcon(appIconPath);
+  }
+
   ensureHookRunnerEntrypoint({
     electronBinaryPath: process.execPath,
     runnerScriptPath: path.join(__dirname, "hook-runner.js"),
