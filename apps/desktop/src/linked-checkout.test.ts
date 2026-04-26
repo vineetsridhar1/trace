@@ -257,6 +257,50 @@ describe("linked checkout commit-back", () => {
     expect(result.errorCode).toBe("DIRTY_ROOT_CHECKOUT");
   }, 15_000);
 
+  it("returns a structured error code for untracked files that would be overwritten by sync", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    fs.writeFileSync(path.join(worktreePath, "notes.txt"), "tracked in trace branch\n");
+    await git(worktreePath, ["add", "notes.txt"]);
+    await git(worktreePath, ["commit", "-m", "add tracked notes"]);
+    fs.writeFileSync(path.join(repoPath, "notes.txt"), "local untracked file\n");
+
+    const result = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errorCode).toBe("DIRTY_ROOT_CHECKOUT");
+  }, 15_000);
+
+  it("does not pause the attachment when sync stops for conflict resolution", async () => {
+    const { repoPath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    const syncResult = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+    expect(syncResult.ok).toBe(true);
+
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "dirty\n");
+
+    const result = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errorCode).toBe("DIRTY_ROOT_CHECKOUT");
+    expect(result.status.autoSyncEnabled).toBe(true);
+    expect(result.status.lastSyncError).toBeNull();
+  }, 15_000);
+
   it("commits main-worktree changes onto the Trace worktree during sync", async () => {
     const { repoPath, worktreePath } = await createRepoFixture();
     seedRepo("repo-1", repoPath);

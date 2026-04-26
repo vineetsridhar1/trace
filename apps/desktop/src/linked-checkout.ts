@@ -118,6 +118,14 @@ async function hasTrackedChanges(repoPath: string): Promise<boolean> {
   return status.length > 0;
 }
 
+async function listUntrackedPaths(repoPath: string): Promise<string[]> {
+  const { stdout } = await execFileAsync("git", ["ls-files", "--others", "--exclude-standard", "-z"], {
+    cwd: repoPath,
+    maxBuffer: GIT_MAX_BUFFER,
+  });
+  return parseNullSeparated(stdout);
+}
+
 async function hasUncommittedChanges(repoPath: string): Promise<boolean> {
   const status = await runGit(repoPath, ["status", "--porcelain", "--untracked-files=all"]);
   return status.length > 0;
@@ -221,6 +229,39 @@ async function resolveRefCommitSha(repoPath: string, ref: string): Promise<strin
   if (!isSafeGitRef(ref)) return null;
   if (!(await refExists(repoPath, ref))) return null;
   return runGit(repoPath, ["rev-parse", `${ref}^{commit}`]);
+}
+
+async function listTreePaths(repoPath: string, ref: string): Promise<string[]> {
+  const { stdout } = await execFileAsync("git", ["ls-tree", "-r", "-z", "--name-only", ref], {
+    cwd: repoPath,
+    maxBuffer: GIT_MAX_BUFFER,
+  });
+  return parseNullSeparated(stdout);
+}
+
+async function hasConflictingUntrackedPaths(repoPath: string, targetCommitSha: string): Promise<boolean> {
+  const untrackedPaths = await listUntrackedPaths(repoPath);
+  if (untrackedPaths.length === 0) return false;
+
+  const targetPaths = await listTreePaths(repoPath, targetCommitSha);
+  if (targetPaths.length === 0) return false;
+
+  return untrackedPaths.some((untrackedPath) =>
+    targetPaths.some(
+      (targetPath) =>
+        targetPath === untrackedPath ||
+        targetPath.startsWith(`${untrackedPath}/`) ||
+        untrackedPath.startsWith(`${targetPath}/`),
+    ),
+  );
+}
+
+async function requiresSyncConflictResolution(
+  repoPath: string,
+  targetCommitSha: string,
+): Promise<boolean> {
+  if (await hasTrackedChanges(repoPath)) return true;
+  return hasConflictingUntrackedPaths(repoPath, targetCommitSha);
 }
 
 async function isAncestorCommit(
@@ -685,13 +726,12 @@ export function syncLinkedCheckout(
     try {
       const existingAttachment = getRepoConfig(input.repoId)?.linkedCheckout ?? null;
       const restorePoint = existingAttachment ?? (await captureRestorePoint(repoPath));
-      let targetCommitSha: string;
+      let targetCommitSha = await resolveTargetCommitSha(repoPath, input.branch, input.commitSha);
       let rebaseAttachmentPrimed = false;
 
-      if (await hasTrackedChanges(repoPath)) {
+      if (await requiresSyncConflictResolution(repoPath, targetCommitSha)) {
         if (input.conflictStrategy === "discard") {
           await discardAllChanges(repoPath);
-          targetCommitSha = await resolveTargetCommitSha(repoPath, input.branch, input.commitSha);
         } else if (input.conflictStrategy === "commit") {
           const changedPaths = await listChangedPaths(repoPath);
           if (changedPaths.length === 0) {
@@ -710,7 +750,6 @@ export function syncLinkedCheckout(
             resolveCommitMessage(input.commitMessage),
           );
         } else if (input.conflictStrategy === "rebase") {
-          targetCommitSha = await resolveTargetCommitSha(repoPath, input.branch, input.commitSha);
           const hadStash = await stashAllChanges(repoPath);
           await switchToDetachedCommit(repoPath, targetCommitSha);
           await setRepoLinkedCheckout(input.repoId, {
@@ -729,12 +768,10 @@ export function syncLinkedCheckout(
           }
         } else {
           throw new LinkedCheckoutError(
-            "Root checkout has tracked changes. Commit, stash, or discard them before syncing.",
+            "Root checkout has local changes that must be resolved before syncing.",
             "DIRTY_ROOT_CHECKOUT",
           );
         }
-      } else {
-        targetCommitSha = await resolveTargetCommitSha(repoPath, input.branch, input.commitSha);
       }
 
       if (input.conflictStrategy !== "rebase") {
@@ -769,8 +806,11 @@ export function syncLinkedCheckout(
       return actionResult(input.repoId, true);
     } catch (error) {
       const message = formatGitError(error);
-      await pauseExistingAttachment(input.repoId, message);
-      return actionResult(input.repoId, false, message, getLinkedCheckoutErrorCode(error));
+      const errorCode = getLinkedCheckoutErrorCode(error);
+      if (errorCode !== "DIRTY_ROOT_CHECKOUT") {
+        await pauseExistingAttachment(input.repoId, message);
+      }
+      return actionResult(input.repoId, false, message, errorCode);
     }
   });
 }

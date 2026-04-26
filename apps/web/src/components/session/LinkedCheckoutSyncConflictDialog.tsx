@@ -49,8 +49,8 @@ export function LinkedCheckoutSyncConflictDialog({
             Resolve Main Worktree Changes
           </DialogTitle>
           <DialogDescription>
-            Sync stopped because the main worktree has local tracked changes. Choose how Trace
-            should resolve them before syncing this session.
+            Sync stopped because the main worktree has local changes. Choose how Trace should
+            resolve them before syncing this session.
           </DialogDescription>
         </DialogHeader>
 
@@ -112,7 +112,7 @@ export function LinkedCheckoutSyncConflictDialog({
             <div className="rounded-lg border border-border p-3">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <GitBranch size={14} className="text-muted-foreground" />
-                Rebase On Top
+                Replay Local Changes
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 Replay the current main-worktree changes onto the synced session commit and keep
@@ -124,7 +124,7 @@ export function LinkedCheckoutSyncConflictDialog({
                   onClick={() => void onResolve({ strategy: "REBASE" })}
                   disabled={pending}
                 >
-                  Rebase And Sync
+                  Replay And Sync
                 </Button>
               </div>
             </div>
