@@ -30,7 +30,7 @@ describe("buildHomeSections", () => {
     vi.useRealTimers();
   });
 
-  it("sorts recently done groups by displayed activity timestamp", () => {
+  it("sorts recently done groups by the timestamp shown in the row", () => {
     vi.setSystemTime(new Date("2026-04-26T12:00:00.000Z"));
 
     const result = buildHomeSections(
@@ -46,6 +46,13 @@ describe("buildHomeSections", () => {
           sessionGroupId: "group_recent_update",
           updatedAt: "2026-04-26T10:00:00.000Z",
         }),
+        session({
+          id: "session_sort_only_recent",
+          sessionGroupId: "group_sort_only_recent",
+          lastMessageAt: "2026-04-26T09:00:00.000Z",
+          updatedAt: "2026-04-26T09:00:00.000Z",
+          _sortTimestamp: "2026-04-26T11:59:00.000Z",
+        }),
       ]),
       "user_1",
       null,
@@ -54,7 +61,7 @@ describe("buildHomeSections", () => {
     expect(result.sections).toEqual([
       {
         kind: "recently_done",
-        ids: ["group_recent_message", "group_recent_update"],
+        ids: ["group_recent_message", "group_recent_update", "group_sort_only_recent"],
       },
     ]);
   });

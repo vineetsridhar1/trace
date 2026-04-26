@@ -30,6 +30,10 @@ function sortTimestamp(session: SessionEntity): number {
   );
 }
 
+function rowTimestamp(session: SessionEntity): number {
+  return timestampMs(session.lastMessageAt ?? session.updatedAt);
+}
+
 function ownedBy(session: SessionEntity, userId: string): boolean {
   const createdBy = session.createdBy as { id?: string } | undefined | null;
   return typeof createdBy?.id === "string" && createdBy.id === userId;
@@ -183,10 +187,11 @@ export function buildHomeSections(
 
     const isDone = session.agentStatus === "done" || session.sessionStatus === "in_review";
     if (isDone) {
-      if (sortTs >= cutoff) {
+      const doneTs = rowTimestamp(session);
+      if (doneTs >= cutoff) {
         const existing = groupDone.get(groupId);
-        if (!existing || sortTs > existing.ts) {
-          groupDone.set(groupId, { ts: sortTs });
+        if (!existing || doneTs > existing.ts) {
+          groupDone.set(groupId, { ts: doneTs });
         }
       }
     }
