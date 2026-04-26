@@ -10,39 +10,63 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Glass, Text } from "@/components/design-system";
+import { useAppForegroundStatus } from "@/hooks/useAppForegroundStatus";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
+import { useNowTicker } from "@/hooks/useNowTicker";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import {
+  getAppConnectivityBannerKind,
+  shouldTickConnectivityClock,
+} from "@/lib/connectivityVisibility";
 import { alpha, useTheme } from "@/theme";
 import { useConnectionStore } from "@/stores/connection";
-
-const RECONNECTING_DELAY_MS = 10_000;
 
 export function AppConnectivityBanner() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { isConnected, isResolved } = useNetworkStatus();
+  const { appActive, foregroundedAt } = useAppForegroundStatus();
   const reducedMotion = useReducedMotion();
   const wsConnected = useConnectionStore((s) => s.connected);
   const disconnectedAt = useConnectionStore((s) => s.disconnectedAt);
   const hasConnectedBefore = useConnectionStore((s) => s.hasConnectedBefore);
-  const [now, setNow] = useState(Date.now());
+  const [networkDisconnectedAt, setNetworkDisconnectedAt] = useState<number | null>(null);
   const pulse = useSharedValue(1);
 
   useEffect(() => {
-    if (!disconnectedAt || wsConnected || !hasConnectedBefore || !isConnected) return;
-    const interval = setInterval(() => {
-      setNow(Date.now());
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [disconnectedAt, hasConnectedBefore, isConnected, wsConnected]);
+    if (!appActive || !isResolved || isConnected) {
+      setNetworkDisconnectedAt(null);
+      return;
+    }
+    setNetworkDisconnectedAt((current) => current ?? Date.now());
+  }, [appActive, isConnected, isResolved]);
 
-  const reconnecting =
-    isConnected &&
-    hasConnectedBefore &&
-    !wsConnected &&
-    disconnectedAt !== null &&
-    now - disconnectedAt >= RECONNECTING_DELAY_MS;
-  const offline = isResolved && !isConnected;
+  const initialNow = Date.now();
+  const tickEnabled = shouldTickConnectivityClock({
+    appActive,
+    disconnectedAt,
+    foregroundedAt,
+    hasConnectedBefore,
+    isConnected,
+    isResolved,
+    networkDisconnectedAt,
+    now: initialNow,
+    wsConnected,
+  });
+  const now = useNowTicker(tickEnabled);
+
+  const bannerKind = getAppConnectivityBannerKind({
+    appActive,
+    disconnectedAt,
+    foregroundedAt,
+    hasConnectedBefore,
+    isConnected,
+    isResolved,
+    networkDisconnectedAt,
+    now,
+    wsConnected,
+  });
+  const reconnecting = bannerKind === "reconnecting";
 
   useEffect(() => {
     if (!reconnecting || reducedMotion) {
@@ -59,7 +83,7 @@ export function AppConnectivityBanner() {
   const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
 
   const banner = useMemo(() => {
-    if (offline) {
+    if (bannerKind === "offline") {
       return {
         icon: "wifi.slash" as const,
         title: "No internet",
@@ -68,7 +92,7 @@ export function AppConnectivityBanner() {
         tint: alpha(theme.colors.warning, 0.14),
       };
     }
-    if (reconnecting) {
+    if (bannerKind === "reconnecting") {
       return {
         icon: "arrow.triangle.2.circlepath" as const,
         title: "Reconnecting…",
@@ -78,7 +102,7 @@ export function AppConnectivityBanner() {
       };
     }
     return null;
-  }, [offline, reconnecting, theme.colors.accent, theme.colors.warning]);
+  }, [bannerKind, theme.colors.accent, theme.colors.warning]);
 
   if (!banner) return null;
 
