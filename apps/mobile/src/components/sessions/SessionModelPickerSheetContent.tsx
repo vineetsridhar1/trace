@@ -4,13 +4,12 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import { Pressable } from "react-native-gesture-handler";
 import { SymbolView } from "expo-symbols";
 import { useEntityField } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
 import { ListRow, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
-import { alpha, useTheme } from "@/theme";
+import { useTheme } from "@/theme";
 import { useSessionComposerConfig } from "./session-input-composer/useSessionComposerConfig";
 
 interface SessionModelPickerSheetContentProps {
@@ -45,59 +44,6 @@ function Section({
         {children}
       </View>
     </View>
-  );
-}
-
-function ModelRow({
-  title,
-  selected,
-  separator,
-  disabled,
-  onSelect,
-}: {
-  title: string;
-  selected: boolean;
-  separator: boolean;
-  disabled: boolean;
-  onSelect: () => void;
-}) {
-  const theme = useTheme();
-
-  const commit = useCallback(() => {
-    if (disabled) return;
-    void haptic.selection();
-    onSelect();
-  }, [disabled, onSelect]);
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={title}
-      accessibilityState={{ disabled, selected }}
-      disabled={disabled}
-      onPress={commit}
-      style={({ pressed }) => [
-        styles.modelRow,
-        {
-          borderBottomColor: theme.colors.border,
-          borderBottomWidth: separator ? StyleSheet.hairlineWidth : 0,
-        },
-        selected && { backgroundColor: alpha(theme.colors.accent, 0.1) },
-        pressed && { backgroundColor: alpha(theme.colors.accent, 0.18) },
-        disabled && styles.disabledRow,
-      ]}
-    >
-      <Text variant="body" numberOfLines={1} style={styles.modelRowTitle}>
-        {title}
-      </Text>
-      {selected ? (
-        <SymbolView
-          name="checkmark"
-          size={16}
-          tintColor={theme.colors.accent}
-        />
-      ) : null}
-    </Pressable>
   );
 }
 
@@ -171,7 +117,7 @@ export function SessionModelPickerSheetContent({
 
   return (
     <ScrollView
-      keyboardShouldPersistTaps="always"
+      keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.content}
     >
@@ -210,13 +156,22 @@ export function SessionModelPickerSheetContent({
 
       <Section title="Model">
         {modelOptions.map((option, index) => (
-          <ModelRow
+          <ListRow
             key={option.value}
             title={option.label}
-            selected={displayedModel === option.value}
-            disabled={!canSelectModel}
+            trailing={
+              displayedModel === option.value ? (
+                <SymbolView
+                  name="checkmark"
+                  size={16}
+                  tintColor={theme.colors.accent}
+                />
+              ) : undefined
+            }
             separator={index < modelOptions.length - 1}
-            onSelect={() => void handleSelectModel(option.value)}
+            onPress={!canSelectModel ? undefined : () => void handleSelectModel(option.value)}
+            haptic={displayedModel === option.value ? "none" : "selection"}
+            style={!canSelectModel ? styles.disabledRow : undefined}
           />
         ))}
       </Section>
@@ -244,15 +199,5 @@ const styles = StyleSheet.create({
   },
   disabledRow: {
     opacity: 0.5,
-  },
-  modelRow: {
-    minHeight: 44,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  modelRowTitle: {
-    flex: 1,
   },
 });
