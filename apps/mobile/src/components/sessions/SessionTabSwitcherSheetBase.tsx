@@ -1,14 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from "react-native-reanimated";
+import {
+  BottomSheetBackdrop,
+  BottomSheetModal,
+  BottomSheetView,
+  type BottomSheetBackdropProps,
+} from "@gorhom/bottom-sheet";
 import { alpha, useTheme } from "@/theme";
 import { SessionTabSwitcherContent } from "./SessionTabSwitcherContent";
 
@@ -20,9 +18,6 @@ export interface SessionTabSwitcherSheetProps {
   onClose: () => void;
 }
 
-const DISMISS_DISTANCE = 110;
-const DISMISS_VELOCITY = 900;
-
 export function SessionTabSwitcherSheetBase({
   open,
   groupId,
@@ -32,199 +27,90 @@ export function SessionTabSwitcherSheetBase({
 }: SessionTabSwitcherSheetProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
-  const [mounted, setMounted] = useState(open);
-  const translateY = useSharedValue(windowHeight);
-  const dragY = useSharedValue(0);
-  const backdropOpacity = useSharedValue(0);
+  const sheetRef = useRef<BottomSheetModal>(null);
+  const openRef = useRef(open);
+  const snapPoints = useMemo(() => ["42%", "78%"], []);
 
-  const finishClose = useCallback(
-    (notifyParent: boolean) => {
-      setMounted(false);
-      if (notifyParent) onClose();
-    },
-    [onClose],
+  const backdropComponent = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        accessibilityLabel="Dismiss tab switcher"
+        appearsOnIndex={0}
+        disappearsOnIndex={-1}
+        opacity={0.32}
+        pressBehavior="close"
+        style={[
+          props.style,
+          { backgroundColor: alpha("#000000", 1) },
+        ]}
+      />
+    ),
+    [],
   );
 
-  const animateIn = useCallback(() => {
-    dragY.value = 0;
-    translateY.value = windowHeight;
-    backdropOpacity.value = 0;
-    translateY.value = withSpring(0, theme.motion.springs.gentle);
-    backdropOpacity.value = withTiming(1, { duration: theme.motion.durations.base });
-  }, [
-    backdropOpacity,
-    dragY,
-    theme.motion.durations.base,
-    theme.motion.springs.gentle,
-    translateY,
-    windowHeight,
-  ]);
-
-  const animateOut = useCallback(
-    (notifyParent: boolean) => {
-      translateY.value = translateY.value + dragY.value;
-      dragY.value = 0;
-      translateY.value = withTiming(
-        windowHeight,
-        { duration: theme.motion.durations.fast },
-        (finished) => {
-          if (finished) runOnJS(finishClose)(notifyParent);
-        },
-      );
-      backdropOpacity.value = withTiming(0, { duration: theme.motion.durations.fast });
-    },
-    [
-      backdropOpacity,
-      dragY,
-      finishClose,
-      theme.motion.durations.fast,
-      translateY,
-      windowHeight,
-    ],
-  );
-
-  useEffect(() => {
-    if (open) {
-      setMounted(true);
-      return;
-    }
-    if (mounted) animateOut(false);
-  }, [animateOut, mounted, open]);
-
-  useEffect(() => {
-    if (!mounted || !open) return;
-    animateIn();
-  }, [animateIn, mounted, open]);
+  const handleDismiss = useCallback(() => {
+    const shouldNotifyParent = openRef.current;
+    openRef.current = false;
+    if (shouldNotifyParent) onClose();
+  }, [onClose]);
 
   const requestClose = useCallback(() => {
-    if (!mounted) return;
-    animateOut(true);
-  }, [animateOut, mounted]);
+    sheetRef.current?.dismiss();
+  }, []);
 
-  const handlePanEnd = useCallback(() => {
-    requestClose();
-  }, [requestClose]);
-
-  const sheetGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .onUpdate((event) => {
-          dragY.value = Math.max(event.translationY, 0);
-        })
-        .onEnd((event) => {
-          const shouldClose =
-            dragY.value > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY;
-          if (shouldClose) {
-            runOnJS(handlePanEnd)();
-            return;
-          }
-          dragY.value = withSpring(0, theme.motion.springs.smooth);
-        }),
-    [dragY, handlePanEnd, theme.motion.springs.smooth],
+  const backgroundStyle = useMemo(
+    () => ({
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.borderMuted,
+      borderTopWidth: StyleSheet.hairlineWidth,
+    }),
+    [theme.colors.borderMuted, theme.colors.surface],
   );
 
-  const backdropStyle = useAnimatedStyle(() => {
-    const dragFactor = Math.max(0.65, 1 - dragY.value / 260);
-    return {
-      opacity: backdropOpacity.value * dragFactor,
-    };
-  });
-
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value + dragY.value }],
-  }));
-
-  if (!mounted) return null;
+  useEffect(() => {
+    openRef.current = open;
+    if (open) {
+      sheetRef.current?.present();
+      return;
+    }
+    sheetRef.current?.dismiss();
+  }, [open]);
 
   return (
-    <Modal
-      visible
-      animationType="none"
-      transparent
-      presentationStyle="overFullScreen"
-      onRequestClose={requestClose}
-      statusBarTranslucent
+    <BottomSheetModal
+      ref={sheetRef}
+      backdropComponent={backdropComponent}
+      backgroundStyle={backgroundStyle}
+      bottomInset={insets.bottom}
+      enablePanDownToClose
+      handleIndicatorStyle={{ backgroundColor: theme.colors.borderMuted }}
+      index={0}
+      onDismiss={handleDismiss}
+      snapPoints={snapPoints}
+      stackBehavior="replace"
     >
-      <View style={styles.root}>
-        <Animated.View
-          style={[
-            styles.backdrop,
-            { backgroundColor: alpha("#000000", 0.32) },
-            backdropStyle,
-          ]}
-        >
-          <Pressable
-            accessibilityLabel="Dismiss tab switcher"
-            onPress={requestClose}
-            style={StyleSheet.absoluteFill}
-          />
-        </Animated.View>
-        <Animated.View
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.borderMuted,
-              borderTopLeftRadius: theme.radius.xl,
-              borderTopRightRadius: theme.radius.xl,
-              paddingBottom: Math.max(insets.bottom, theme.spacing.lg),
-              paddingTop: theme.spacing.sm,
-            },
-            sheetStyle,
-          ]}
-        >
-          <GestureDetector gesture={sheetGesture}>
-            <View style={styles.grabberSlot}>
-              <View
-                style={[
-                  styles.grabber,
-                  { backgroundColor: theme.colors.borderMuted },
-                ]}
-              />
-            </View>
-          </GestureDetector>
-          <View
-            style={[
-              styles.content,
-              { paddingHorizontal: theme.spacing.lg },
-            ]}
-          >
-            <SessionTabSwitcherContent
-              groupId={groupId}
-              activeSessionId={activeSessionId}
-              activePane={activePane}
-              onClose={requestClose}
-            />
-          </View>
-        </Animated.View>
-      </View>
-    </Modal>
+      <BottomSheetView
+        style={[
+          styles.content,
+          {
+            paddingBottom: theme.spacing.lg,
+            paddingHorizontal: theme.spacing.lg,
+          },
+        ]}
+      >
+        <SessionTabSwitcherContent
+          groupId={groupId}
+          activeSessionId={activeSessionId}
+          activePane={activePane}
+          onClose={requestClose}
+        />
+      </BottomSheetView>
+    </BottomSheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  sheet: {
-    maxHeight: "78%",
-    minHeight: "42%",
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  grabberSlot: {
-    alignItems: "center",
-    paddingBottom: 10,
-  },
-  grabber: {
-    width: 36,
-    height: 5,
-    borderRadius: 999,
-  },
   content: {
     flex: 1,
     minHeight: 0,

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { FlashList } from "@shopify/flash-list";
+import { BottomSheetFlashList } from "@gorhom/bottom-sheet";
 import { useRouter } from "expo-router";
 import { StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
@@ -215,7 +215,7 @@ export function SessionTabSwitcherContent({
               Agent tabs
             </Text>
           </View>
-          <FlashList
+          <BottomSheetFlashList
             data={sessionIds}
             renderItem={({ item, index }) => (
               <SessionTabSwitcherRow

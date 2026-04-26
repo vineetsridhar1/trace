@@ -1,9 +1,9 @@
 import { useCallback, useState, type ReactNode } from "react";
 import {
-  ScrollView,
   StyleSheet,
   View,
 } from "react-native";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { SymbolView } from "expo-symbols";
 import { useEntityField } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
@@ -115,7 +115,7 @@ export function SessionModelPickerSheetContent({
   const displayedModel = pendingModel ?? selectedModel;
 
   return (
-    <ScrollView
+    <BottomSheetScrollView
       keyboardShouldPersistTaps="always"
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.content}
@@ -174,7 +174,7 @@ export function SessionModelPickerSheetContent({
           />
         ))}
       </Section>
-    </ScrollView>
+    </BottomSheetScrollView>
   );
 }
 

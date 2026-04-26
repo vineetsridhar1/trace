@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import {
   AVAILABLE_RUNTIMES_QUERY,
@@ -166,7 +167,7 @@ export function SessionRuntimePickerSheetContent({
   );
 
   return (
-    <ScrollView
+    <BottomSheetScrollView
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.content}
@@ -226,7 +227,7 @@ export function SessionRuntimePickerSheetContent({
           No compatible runtimes are available for this session.
         </Text>
       ) : null}
-    </ScrollView>
+    </BottomSheetScrollView>
   );
 }
 

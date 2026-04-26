@@ -4,6 +4,7 @@ import "@/lib/event-bindings";
 import { useEffect } from "react";
 import { ActivityIndicator, AppState, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useAuthStore, type AuthState } from "@trace/client-core";
@@ -53,7 +54,9 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.root}>
       <StatusBar style="light" />
       <KeyboardProvider>
-        <Stack screenOptions={{ headerShown: false }} />
+        <BottomSheetModalProvider>
+          <Stack screenOptions={{ headerShown: false }} />
+        </BottomSheetModalProvider>
       </KeyboardProvider>
     </GestureHandlerRootView>
   );
