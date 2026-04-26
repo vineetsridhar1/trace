@@ -117,7 +117,7 @@ export function SessionModelPickerSheetContent({
 
   return (
     <ScrollView
-      keyboardShouldPersistTaps="handled"
+      keyboardShouldPersistTaps="always"
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.content}
     >
