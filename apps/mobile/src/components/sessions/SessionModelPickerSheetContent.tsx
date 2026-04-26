@@ -1,11 +1,10 @@
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import {
-  Pressable,
   ScrollView,
   StyleSheet,
   View,
-  type GestureResponderEvent,
 } from "react-native";
+import { Pressable } from "react-native-gesture-handler";
 import { SymbolView } from "expo-symbols";
 import { useEntityField } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
@@ -63,8 +62,6 @@ function ModelRow({
   onSelect: () => void;
 }) {
   const theme = useTheme();
-  const handledTouchRef = useRef(false);
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const commit = useCallback(() => {
     if (disabled) return;
@@ -72,52 +69,14 @@ function ModelRow({
     onSelect();
   }, [disabled, onSelect]);
 
-  const handleTouchStart = useCallback((event: GestureResponderEvent) => {
-    const { pageX, pageY } = event.nativeEvent;
-    touchStartRef.current = { x: pageX, y: pageY };
-  }, []);
-
-  const handlePressIn = useCallback(() => {
-    handledTouchRef.current = true;
-    commit();
-  }, [commit]);
-
-  const handleTouchEnd = useCallback(
-    (event: GestureResponderEvent) => {
-      if (handledTouchRef.current) return;
-      const start = touchStartRef.current;
-      touchStartRef.current = null;
-      if (!start) return;
-
-      const { pageX, pageY } = event.nativeEvent;
-      const movedX = Math.abs(pageX - start.x);
-      const movedY = Math.abs(pageY - start.y);
-      if (movedX > 10 || movedY > 10) return;
-
-      handledTouchRef.current = true;
-      commit();
-    },
-    [commit],
-  );
-
-  const handlePress = useCallback(() => {
-    if (handledTouchRef.current) {
-      handledTouchRef.current = false;
-      return;
-    }
-    commit();
-  }, [commit]);
-
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={title}
       accessibilityState={{ disabled, selected }}
+      cancelable={false}
       disabled={disabled}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onPressIn={handlePressIn}
-      onPress={handlePress}
+      onPress={commit}
       style={({ pressed }) => [
         styles.modelRow,
         {

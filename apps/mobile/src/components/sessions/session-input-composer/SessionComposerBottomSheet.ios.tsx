@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
 import { BottomSheet, Host } from "@expo/ui/swift-ui";
 import { shouldUseNativeExpoSheet } from "@/lib/native-sheet";
+import { useTheme } from "@/theme";
 import {
   SessionComposerBottomSheetBase,
   type SessionComposerBottomSheetProps,
@@ -21,6 +22,7 @@ function NativeSessionComposerBottomSheet({
   onDismissed,
   children,
 }: SessionComposerBottomSheetProps) {
+  const theme = useTheme();
   const { height, width } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
   const [content, setContent] = useState(children);
@@ -32,24 +34,27 @@ function NativeSessionComposerBottomSheet({
     }
   }, [children, visible]);
 
-  useEffect(() => {
-    if (visible || !mounted) return;
-    setMounted(false);
-    onDismissed?.();
-  }, [mounted, onDismissed, visible]);
-
   const handlePresentedChange = useCallback(
     (isOpened: boolean) => {
       if (isOpened) return;
-      onClose();
+      setMounted(false);
+      onDismissed?.();
+      if (visible) onClose();
     },
-    [onClose],
+    [onClose, onDismissed, visible],
   );
 
   const hostStyle = useMemo(() => [styles.host, { width }], [width]);
   const sheetContentStyle = useMemo(
-    () => [styles.sheetContent, { height: Math.round(height * 0.56) }],
-    [height],
+    () => [
+      styles.sheetContent,
+      {
+        height: Math.round(height * 0.72),
+        paddingHorizontal: theme.spacing.lg,
+        paddingTop: theme.spacing.sm,
+      },
+    ],
+    [height, theme.spacing.lg, theme.spacing.sm],
   );
 
   if (!mounted) return null;
@@ -86,8 +91,5 @@ const styles = StyleSheet.create({
   },
   sheetContent: {
     minHeight: 0,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 20,
   },
 });
