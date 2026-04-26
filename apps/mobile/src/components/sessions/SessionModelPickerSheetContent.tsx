@@ -28,7 +28,6 @@ function Section({
   children: ReactNode;
 }) {
   const theme = useTheme();
-  const [pendingModel, setPendingModel] = useState<string | null>(null);
   return (
     <View style={styles.section}>
       <Text variant="footnote" color="mutedForeground" style={styles.sectionTitle}>
@@ -142,6 +141,7 @@ export function SessionModelPickerSheetContent({
   onSelectModel,
 }: SessionModelPickerSheetContentProps) {
   const theme = useTheme();
+  const [pendingModel, setPendingModel] = useState<string | null>(null);
 
   const tool = useEntityField("sessions", sessionId, "tool") as string | null | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | null | undefined;
