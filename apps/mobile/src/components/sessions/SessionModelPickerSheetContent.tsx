@@ -1,9 +1,16 @@
-import type { ReactNode } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { useCallback, useRef, type ReactNode } from "react";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  type GestureResponderEvent,
+} from "react-native";
 import { SymbolView } from "expo-symbols";
 import { useEntityField } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
 import { ListRow, Text } from "@/components/design-system";
+import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
 import { useSessionComposerConfig } from "./session-input-composer/useSessionComposerConfig";
 
@@ -39,6 +46,92 @@ function Section({
         {children}
       </View>
     </View>
+  );
+}
+
+function ModelRow({
+  title,
+  selected,
+  separator,
+  disabled,
+  onSelect,
+}: {
+  title: string;
+  selected: boolean;
+  separator: boolean;
+  disabled: boolean;
+  onSelect: () => void;
+}) {
+  const theme = useTheme();
+  const handledTouchRef = useRef(false);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const commit = useCallback(() => {
+    if (disabled) return;
+    void haptic.selection();
+    onSelect();
+  }, [disabled, onSelect]);
+
+  const handleTouchStart = useCallback((event: GestureResponderEvent) => {
+    const { pageX, pageY } = event.nativeEvent;
+    touchStartRef.current = { x: pageX, y: pageY };
+  }, []);
+
+  const handleTouchEnd = useCallback(
+    (event: GestureResponderEvent) => {
+      const start = touchStartRef.current;
+      touchStartRef.current = null;
+      if (!start) return;
+
+      const { pageX, pageY } = event.nativeEvent;
+      const movedX = Math.abs(pageX - start.x);
+      const movedY = Math.abs(pageY - start.y);
+      if (movedX > 10 || movedY > 10) return;
+
+      handledTouchRef.current = true;
+      commit();
+    },
+    [commit],
+  );
+
+  const handlePress = useCallback(() => {
+    if (handledTouchRef.current) {
+      handledTouchRef.current = false;
+      return;
+    }
+    commit();
+  }, [commit]);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled, selected }}
+      disabled={disabled}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onPress={handlePress}
+      style={({ pressed }) => [
+        styles.modelRow,
+        {
+          borderBottomColor: theme.colors.border,
+          borderBottomWidth: separator ? StyleSheet.hairlineWidth : 0,
+        },
+        pressed && { backgroundColor: theme.colors.surfaceElevated },
+        disabled && styles.disabledRow,
+      ]}
+    >
+      <Text variant="body" numberOfLines={1} style={styles.modelRowTitle}>
+        {title}
+      </Text>
+      {selected ? (
+        <SymbolView
+          name="checkmark"
+          size={16}
+          tintColor={theme.colors.accent}
+        />
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -86,9 +179,25 @@ export function SessionModelPickerSheetContent({
     tool,
   });
 
+  const handleSelectModel = useCallback(
+    async (nextModel: string) => {
+      if (!canInteract) return;
+      if (selectedModel === nextModel) {
+        onSelectModel?.();
+        onClose?.();
+        return;
+      }
+
+      onSelectModel?.();
+      const changed = await handleModelChange(nextModel);
+      if (changed) onClose?.();
+    },
+    [canInteract, handleModelChange, onClose, onSelectModel, selectedModel],
+  );
+
   return (
     <ScrollView
-      keyboardShouldPersistTaps="handled"
+      keyboardShouldPersistTaps="always"
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.content}
     >
@@ -127,30 +236,13 @@ export function SessionModelPickerSheetContent({
 
       <Section title="Model">
         {modelOptions.map((option, index) => (
-          <ListRow
+          <ModelRow
             key={option.value}
             title={option.label}
-            trailing={
-              selectedModel === option.value ? (
-                <SymbolView
-                  name="checkmark"
-                  size={16}
-                  tintColor={theme.colors.accent}
-                />
-              ) : undefined
-            }
-            onPress={
-              canInteract && selectedModel !== option.value
-                ? () => {
-                    onSelectModel?.();
-                    onClose?.();
-                    void handleModelChange(option.value);
-                  }
-                : undefined
-            }
-            haptic={selectedModel === option.value ? "none" : "selection"}
+            selected={selectedModel === option.value}
+            disabled={!canInteract}
             separator={index < modelOptions.length - 1}
-            style={!canInteract ? styles.disabledRow : undefined}
+            onSelect={() => void handleSelectModel(option.value)}
           />
         ))}
       </Section>
@@ -178,5 +270,15 @@ const styles = StyleSheet.create({
   },
   disabledRow: {
     opacity: 0.5,
+  },
+  modelRow: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  modelRowTitle: {
+    flex: 1,
   },
 });
