@@ -186,6 +186,7 @@ class TerminalService {
       sessionId,
       session.sessionGroupId ?? null,
       runtimeInstanceId,
+      userId,
       cols,
       rows,
       session.sessionGroup?.workdir ?? undefined,
@@ -249,6 +250,8 @@ class TerminalService {
 
     const results: Array<{ id: string; sessionId: string }> = [];
     for (const id of terminalIds) {
+      const authContext = terminalRelay.getTerminalAuthContext(id);
+      if (!authContext || authContext.ownerUserId !== userId) continue;
       const ownerSessionId = terminalRelay.getSessionId(id) ?? sessionId;
       const ownerSession = owningSessionMap.get(ownerSessionId);
       if (!ownerSession) continue;
@@ -293,6 +296,7 @@ class TerminalService {
       organizationId,
       target.repoId,
       target.runtimeInstanceId,
+      userId,
       cols,
       rows,
       target.repoPath,
@@ -321,6 +325,7 @@ class TerminalService {
 
     return terminalRelay
       .getTerminalsForChannel(target.channelId, target.runtimeInstanceId)
+      .filter((id: string) => terminalRelay.getTerminalAuthContext(id)?.ownerUserId === userId)
       .map((id: string) => ({ id, sessionId: target.channelId }));
   }
 
@@ -335,6 +340,7 @@ class TerminalService {
   }): Promise<boolean> {
     const authContext = terminalRelay.getTerminalAuthContext(terminalId);
     if (!authContext) return true; // Already gone — no-op
+    if (authContext.ownerUserId !== userId) throw new Error("Terminal not found");
 
     if (authContext.kind === "channel") {
       const channel = await prisma.channel.findFirst({

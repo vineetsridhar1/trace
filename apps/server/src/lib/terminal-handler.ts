@@ -129,6 +129,10 @@ export function handleTerminalConnection(
               ws.send(JSON.stringify({ type: "error", message: "Unauthorized" }));
               return;
             }
+            if (authContext.ownerUserId !== userId) {
+              ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
+              return;
+            }
             const user = await prisma.user.findUnique({
               where: { id: userId },
               select: { id: true },

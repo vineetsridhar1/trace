@@ -33,10 +33,11 @@ vi.mock("./runtime-access.js", () => ({
   },
 }));
 
-// Use the real isFullyUnloadedSession — it's a pure function with no side effects
-vi.mock("./session.js", async () => {
-  const actual = await vi.importActual<typeof import("./session.js")>("./session.js");
-  return { isFullyUnloadedSession: actual.isFullyUnloadedSession };
+vi.mock("./session.js", () => {
+  return {
+    isFullyUnloadedSession: (agentStatus: string, sessionStatus: string) =>
+      agentStatus === "failed" || agentStatus === "stopped" || sessionStatus === "merged",
+  };
 });
 
 import { prisma } from "../lib/db.js";
@@ -55,7 +56,13 @@ describe("TerminalService", () => {
     vi.clearAllMocks();
     runtimeAccessServiceMock.assertAccess.mockResolvedValue(undefined);
     sessionRouterMock.getRuntimeForSession.mockReturnValue(undefined);
-    terminalRelayMock.getTerminalAuthContext.mockReturnValue(null);
+    terminalRelayMock.getTerminalAuthContext.mockImplementation((terminalId: string) => ({
+      kind: "session",
+      sessionId: terminalRelayMock.getSessionId(terminalId) ?? "session-1",
+      sessionGroupId: "group-1",
+      runtimeInstanceId: "runtime-1",
+      ownerUserId: "user-1",
+    }));
   });
 
   describe("create", () => {
@@ -84,6 +91,7 @@ describe("TerminalService", () => {
         "session-1",
         "group-1",
         "runtime-1",
+        "user-1",
         80,
         24,
         "/workspace",
@@ -241,6 +249,7 @@ describe("TerminalService", () => {
         "session-1",
         "group-1",
         "runtime-1",
+        "user-1",
         120,
         40,
         undefined,
@@ -523,6 +532,46 @@ describe("TerminalService", () => {
 
       expect(result).toEqual([{ id: "term-1", sessionId: "session-1" }]);
     });
+
+    it("does not list terminals created by another user", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        connection: { runtimeInstanceId: "runtime-1" },
+        sessionGroup: { connection: null },
+      });
+      terminalRelayMock.getTerminalsForSessionGroup.mockReturnValueOnce(["term-1", "term-2"]);
+      terminalRelayMock.getSessionId.mockImplementation((terminalId: string) => {
+        if (terminalId === "term-1") return "session-1";
+        if (terminalId === "term-2") return "session-2";
+        return undefined;
+      });
+      terminalRelayMock.getTerminalAuthContext.mockImplementation((terminalId: string) => ({
+        kind: "session",
+        sessionId: terminalRelayMock.getSessionId(terminalId) ?? "session-1",
+        sessionGroupId: "group-1",
+        runtimeInstanceId: "runtime-1",
+        ownerUserId: terminalId === "term-1" ? "user-1" : "user-2",
+      }));
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          organizationId: "org-1",
+          sessionGroupId: "group-1",
+          connection: { runtimeInstanceId: "runtime-1" },
+          sessionGroup: { connection: null },
+        },
+      ]);
+
+      const result = await terminalService.listForSession({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+
+      expect(result).toEqual([{ id: "term-1", sessionId: "session-1" }]);
+    });
   });
 
   describe("destroy", () => {
@@ -532,6 +581,7 @@ describe("TerminalService", () => {
         sessionId: "session-1",
         sessionGroupId: "group-1",
         runtimeInstanceId: "runtime-1",
+        ownerUserId: "user-1",
       });
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
@@ -570,6 +620,7 @@ describe("TerminalService", () => {
         sessionId: "session-1",
         sessionGroupId: "group-1",
         runtimeInstanceId: "runtime-1",
+        ownerUserId: "user-1",
       });
       prismaMock.session.findFirst.mockResolvedValueOnce(null);
 
@@ -588,6 +639,7 @@ describe("TerminalService", () => {
         sessionId: "session-1",
         sessionGroupId: "group-1",
         runtimeInstanceId: "runtime-1",
+        ownerUserId: "user-1",
       });
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
@@ -607,14 +659,12 @@ describe("TerminalService", () => {
     });
 
     it("throws when local session accessed by wrong user", async () => {
-      runtimeAccessServiceMock.assertAccess.mockRejectedValueOnce(
-        new Error("Access denied: you do not have permission to use this local bridge"),
-      );
       terminalRelayMock.getTerminalAuthContext.mockReturnValueOnce({
         kind: "session",
         sessionId: "session-1",
         sessionGroupId: "group-1",
         runtimeInstanceId: "runtime-1",
+        ownerUserId: "user-1",
       });
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
@@ -630,7 +680,26 @@ describe("TerminalService", () => {
           organizationId: "org-1",
           userId: "user-2",
         }),
-      ).rejects.toThrow("Access denied");
+      ).rejects.toThrow("Terminal not found");
+    });
+
+    it("does not destroy a terminal created by another user", async () => {
+      terminalRelayMock.getTerminalAuthContext.mockReturnValueOnce({
+        kind: "session",
+        sessionId: "session-1",
+        sessionGroupId: "group-1",
+        runtimeInstanceId: "runtime-1",
+        ownerUserId: "user-2",
+      });
+
+      await expect(
+        terminalService.destroy({
+          terminalId: "term-1",
+          organizationId: "org-1",
+          userId: "user-1",
+        }),
+      ).rejects.toThrow("Terminal not found");
+      expect(terminalRelayMock.destroyTerminal).not.toHaveBeenCalled();
     });
   });
 
@@ -673,6 +742,7 @@ describe("TerminalService", () => {
         "org-1",
         "repo-1",
         "runtime-1",
+        "user-1",
         80,
         24,
         "/home/user/projects/my-repo",
