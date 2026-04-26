@@ -2830,6 +2830,21 @@ describe("SessionService", () => {
   });
 
   describe("linked checkout", () => {
+    beforeEach(() => {
+      prismaMock.repo.findFirst.mockReset();
+      prismaMock.sessionGroup.findFirst.mockReset();
+      runtimeAccessServiceMock.getAccessState.mockReset();
+      runtimeAccessServiceMock.getAccessState.mockResolvedValue({
+        hostingMode: "cloud",
+        allowed: true,
+        isOwner: true,
+      });
+      sessionRouterMock.getRuntime.mockReset();
+      sessionRouterMock.getRuntime.mockReturnValue(null);
+      sessionRouterMock.getLinkedCheckoutStatus.mockReset();
+      sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValue(null);
+    });
+
     it("uses the session group's canonical runtime instead of the first local session runtime", async () => {
       prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({

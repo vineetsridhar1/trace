@@ -56,7 +56,9 @@ type RequestAuthSource = {
 
 function parseSessionToken(token: string): SessionTokenPayload | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as SessionTokenPayload | BridgeAuthTokenPayload;
+    const payload = jwt.verify(token, JWT_SECRET) as unknown as
+      | SessionTokenPayload
+      | BridgeAuthTokenPayload;
     if (
       !payload ||
       typeof payload !== "object" ||
@@ -223,7 +225,7 @@ export function createBridgeAuthToken(input: {
 
 export function verifyBridgeAuthToken(token: string): BridgeAuthTokenPayload | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as BridgeAuthTokenPayload;
+    const payload = jwt.verify(token, JWT_SECRET) as unknown as BridgeAuthTokenPayload;
     if (
       !payload ||
       typeof payload !== "object" ||
@@ -378,7 +380,9 @@ export async function buildWsContext(
   cookieHeader?: string,
   request?: RequestAuthSource,
 ): Promise<Context> {
-  const token = (connectionParams?.token as string) ?? parseCookieToken(cookieHeader);
+  const token =
+    (typeof connectionParams?.token === "string" ? connectionParams.token : undefined) ??
+    parseCookieToken(cookieHeader);
 
   if (!token) throw new AuthenticationError("Missing auth token for WebSocket");
 

@@ -8,11 +8,12 @@ import { BUILTIN_SLASH_COMMANDS, type BridgeSkillInfo } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { AuthenticationError } from "../lib/errors.js";
 import { pubsub, topics } from "../lib/pubsub.js";
-import { requireOrgContext } from "../lib/require-org.js";
+import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
 import {
   deriveSessionGroupStatus,
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
+import { assertScopeAccess } from "../services/access.js";
 
 export const sessionQueries = {
   sessionGroups: (
@@ -28,12 +29,13 @@ export const sessionQueries = {
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.getGroup(args.id, requireOrgContext(ctx));
   },
-  sessions: (_: unknown, args: { organizationId: string; filters?: SessionFilters }) => {
+  sessions: (_: unknown, args: { organizationId: string; filters?: SessionFilters }, ctx: Context) => {
+    assertOrgAccess(ctx, args.organizationId);
     const filters = args.filters ? { ...args.filters } : undefined;
     return sessionService.list(args.organizationId, filters);
   },
-  session: (_: unknown, args: { id: string }) => {
-    return sessionService.get(args.id);
+  session: (_: unknown, args: { id: string }, ctx: Context) => {
+    return sessionService.get(args.id, requireOrgContext(ctx));
   },
   mySessions: (
     _: unknown,
@@ -45,6 +47,7 @@ export const sessionQueries = {
     },
     ctx: Context,
   ) => {
+    assertOrgAccess(ctx, args.organizationId);
     return sessionService.listByUser(args.organizationId, ctx.userId, {
       agentStatus: args.agentStatus ?? undefined,
       includeMerged: args.includeMerged ?? true,
@@ -235,13 +238,16 @@ export const sessionMutations = {
       organizationId: requireOrgContext(ctx),
     });
   },
-  terminateSession: (_: unknown, args: { id: string }, ctx: Context) => {
+  terminateSession: async (_: unknown, args: { id: string }, ctx: Context) => {
+    await assertScopeAccess("session", args.id, ctx.userId, requireOrgContext(ctx));
     return sessionService.terminate(args.id, ctx.actorType, ctx.userId);
   },
-  dismissSession: (_: unknown, args: { id: string }, ctx: Context) => {
+  dismissSession: async (_: unknown, args: { id: string }, ctx: Context) => {
+    await assertScopeAccess("session", args.id, ctx.userId, requireOrgContext(ctx));
     return sessionService.dismiss(args.id, ctx.actorType, ctx.userId);
   },
-  deleteSession: (_: unknown, args: { id: string }, ctx: Context) => {
+  deleteSession: async (_: unknown, args: { id: string }, ctx: Context) => {
+    await assertScopeAccess("session", args.id, ctx.userId, requireOrgContext(ctx));
     return sessionService.delete(args.id, ctx.actorType, ctx.userId);
   },
   archiveSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
@@ -274,7 +280,7 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
-  sendSessionMessage: (
+  sendSessionMessage: async (
     _: unknown,
     args: {
       sessionId: string;
@@ -285,6 +291,7 @@ export const sessionMutations = {
     },
     ctx: Context,
   ) => {
+    await assertScopeAccess("session", args.sessionId, ctx.userId, requireOrgContext(ctx));
     return sessionService.sendMessage({
       sessionId: args.sessionId,
       text: args.text,
@@ -499,12 +506,24 @@ export const sessionTypeResolvers = {
 
 export const sessionSubscriptions = {
   sessionPortsChanged: {
-    subscribe: (_: unknown, args: { sessionId: string; organizationId: string }) => {
+    subscribe: async (
+      _: unknown,
+      args: { sessionId: string; organizationId: string },
+      ctx: Context,
+    ) => {
+      assertOrgAccess(ctx, args.organizationId);
+      await assertScopeAccess("session", args.sessionId, ctx.userId, ctx.organizationId);
       return pubsub.asyncIterator(topics.sessionPorts(args.sessionId));
     },
   },
   sessionStatusChanged: {
-    subscribe: (_: unknown, args: { sessionId: string; organizationId: string }) => {
+    subscribe: async (
+      _: unknown,
+      args: { sessionId: string; organizationId: string },
+      ctx: Context,
+    ) => {
+      assertOrgAccess(ctx, args.organizationId);
+      await assertScopeAccess("session", args.sessionId, ctx.userId, ctx.organizationId);
       return pubsub.asyncIterator(topics.sessionStatus(args.sessionId));
     },
   },

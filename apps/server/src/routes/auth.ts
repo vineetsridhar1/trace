@@ -1,5 +1,6 @@
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import jwt from "jsonwebtoken";
+import type { CookieOptions } from "express";
 import type { PushPlatform } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import {
@@ -100,14 +101,21 @@ function escapeJsString(value: string): string {
     .replace(/\u2029/g, "\\u2029");
 }
 
-function setSessionCookie(res: Response, token: string): void {
-  res.cookie("trace_token", token, {
+function getSessionCookieOptions(): CookieOptions {
+  const sameSite = process.env.TRACE_AUTH_COOKIE_SAME_SITE?.trim().toLowerCase();
+  const normalizedSameSite =
+    sameSite === "strict" || sameSite === "lax" || sameSite === "none" ? sameSite : "lax";
+  return {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    sameSite: normalizedSameSite,
     maxAge: 7 * 24 * 60 * 60 * 1000,
     path: "/",
-  });
+  };
+}
+
+function setSessionCookie(res: Response, token: string): void {
+  res.cookie("trace_token", token, getSessionCookieOptions());
 }
 
 function readOrganizationIdHeader(req: Request): string | null {
@@ -205,7 +213,6 @@ router.post("/auth/local/login", async (req: Request, res: Response) => {
   const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "30d" });
   setSessionCookie(res, token);
   res.json({
-    token,
     organizationId,
     user,
   });
@@ -468,25 +475,18 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
     }
 
     const redirectOrigin = origin ?? WEB_URL;
-    const tokenLiteral = escapeJsString(token);
     const originLiteral = escapeJsString(redirectOrigin);
 
-    // Signal the opener window and close the popup.
-    // Always store the token in localStorage first — window.opener can be
-    // null after cross-origin navigation (GitHub OAuth redirect) in
-    // Chromium/Electron, so postMessage alone is unreliable.  localStorage
-    // is shared across same-origin windows, and the storage event plus
-    // BroadcastChannel give the main window two independent fallback
-    // signals that work even when the opener reference is severed.
+    // Signal the opener window and same-origin listeners without ever
+    // exposing the session token to browser JavaScript.
     res.send(`<!DOCTYPE html><html><body><script>
-      try { localStorage.setItem("trace_token", ${tokenLiteral}); } catch(e) {}
       try {
         var bc = new BroadcastChannel("trace_auth");
-        bc.postMessage({ type: "auth:success", token: ${tokenLiteral} });
+        bc.postMessage({ type: "auth:success" });
         bc.close();
       } catch(e) {}
       if (window.opener) {
-        window.opener.postMessage({ type: "auth:success", token: ${tokenLiteral} }, ${originLiteral});
+        window.opener.postMessage({ type: "auth:success" }, ${originLiteral});
       }
       window.close();
     </script></body></html>`);
@@ -628,11 +628,8 @@ router.post("/auth/logout", async (req: Request, res: Response) => {
   if (authenticated?.auth.kind === "local_mobile") {
     await revokeLocalMobileDeviceByToken(authenticated.token);
   }
-  res.clearCookie("trace_token", {
-    path: "/",
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  });
+  const { maxAge: _maxAge, ...cookieOptions } = getSessionCookieOptions();
+  res.clearCookie("trace_token", cookieOptions);
   res.json({ ok: true });
 });
 

@@ -2,6 +2,7 @@ import type { CreateTicketInput, UpdateTicketInput, ActorType, EntityType } from
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
+import { assertActorOrgAccess } from "./actor-auth.js";
 
 export type CreateTicketServiceInput = CreateTicketInput & {
   actorType: ActorType;
@@ -33,8 +34,11 @@ export class TicketService {
     return prisma.ticket.findMany({ where, include: TICKET_INCLUDE });
   }
 
-  async get(id: string) {
-    return prisma.ticket.findUnique({ where: { id }, include: TICKET_INCLUDE });
+  async get(id: string, organizationId: string) {
+    return prisma.ticket.findFirst({
+      where: { id, organizationId },
+      include: TICKET_INCLUDE,
+    });
   }
 
   async listForSession(sessionId: string) {
@@ -46,6 +50,8 @@ export class TicketService {
 
   async create(input: CreateTicketServiceInput) {
     const [ticket] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await assertActorOrgAccess(tx, input.organizationId, input.actorType, input.actorId);
+
       const ticket = await tx.ticket.create({
         data: {
           title: input.title,
@@ -92,6 +98,9 @@ export class TicketService {
       where: { id },
       select: { organizationId: true, status: true },
     });
+    await prisma.$transaction((tx: Prisma.TransactionClient) =>
+      assertActorOrgAccess(tx, existing.organizationId, actorType, actorId),
+    );
 
     const ticket = await prisma.ticket.update({
       where: { id },
@@ -127,6 +136,9 @@ export class TicketService {
       where: { id: ticketId },
       select: { organizationId: true },
     });
+    await prisma.$transaction((tx: Prisma.TransactionClient) =>
+      assertActorOrgAccess(tx, ticket.organizationId, actorType, actorId),
+    );
 
     return eventService.create({
       organizationId: ticket.organizationId,
@@ -146,6 +158,11 @@ export class TicketService {
     actorId: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.ticket.findUniqueOrThrow({
+        where: { id: ticketId },
+        select: { organizationId: true },
+      });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
       await tx.ticketAssignee.create({
         data: { ticketId, userId },
       });
@@ -178,6 +195,11 @@ export class TicketService {
     actorId: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.ticket.findUniqueOrThrow({
+        where: { id: ticketId },
+        select: { organizationId: true },
+      });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
       await tx.ticketAssignee.delete({
         where: { ticketId_userId: { ticketId, userId } },
       });
@@ -211,6 +233,11 @@ export class TicketService {
     actorId: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.ticket.findUniqueOrThrow({
+        where: { id: ticketId },
+        select: { organizationId: true },
+      });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
       await tx.ticketLink.create({
         data: { ticketId, entityType, entityId },
       });
@@ -244,6 +271,11 @@ export class TicketService {
     actorId: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.ticket.findUniqueOrThrow({
+        where: { id: ticketId },
+        select: { organizationId: true },
+      });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
       await tx.ticketLink.delete({
         where: {
           ticketId_entityType_entityId: { ticketId, entityType, entityId },

@@ -21,6 +21,7 @@ const eventServiceMock = eventService as any;
 describe("OrganizationService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "user-1" });
   });
 
   it("deduplicates repos by remote url within an org", async () => {
@@ -104,7 +105,9 @@ describe("OrganizationService", () => {
     });
     prismaMock.project.findUniqueOrThrow
       .mockResolvedValueOnce({ organizationId: "org-1" })
-      .mockResolvedValueOnce({ id: "project-1", name: "Roadmap" });
+      .mockResolvedValueOnce({ id: "project-1", name: "Roadmap" })
+      .mockResolvedValueOnce({ organizationId: "org-1" });
+    prismaMock.session.findFirstOrThrow.mockResolvedValueOnce({ id: "session-1" });
 
     const service = new OrganizationService();
     await service.updateRepo(
@@ -127,6 +130,26 @@ describe("OrganizationService", () => {
     await expect(
       service.linkEntityToProject("chat", "chat-1", "project-1", "user", "user-1"),
     ).rejects.toThrow("Chats cannot be linked to projects");
+  });
+
+  it("fails closed for cross-org writes when the actor is not a member", async () => {
+    prismaMock.orgMember.findUniqueOrThrow.mockRejectedValueOnce(new Error("Not found"));
+
+    const service = new OrganizationService();
+    await expect(
+      service.createRepo(
+        {
+          organizationId: "org-2",
+          name: "trace",
+          remoteUrl: "https://github.com/acme/trace.git",
+        } as any,
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("Not found");
+
+    expect(prismaMock.repo.create).not.toHaveBeenCalled();
+    expect(prismaMock.repo.findUnique).not.toHaveBeenCalled();
   });
 
   it("searches users outside the active organization only", async () => {

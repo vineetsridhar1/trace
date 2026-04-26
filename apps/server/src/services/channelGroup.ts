@@ -2,6 +2,7 @@ import type { ActorType } from "@trace/gql";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
+import { assertActorOrgAccess } from "./actor-auth.js";
 
 export class ChannelGroupService {
   async list(organizationId: string) {
@@ -14,6 +15,8 @@ export class ChannelGroupService {
 
   async create(input: { organizationId: string; name: string; position?: number | null }, actorType: ActorType, actorId: string) {
     const [group] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await assertActorOrgAccess(tx, input.organizationId, actorType, actorId);
+
       // If no position specified, append after all top-level items (ungrouped channels + groups)
       let position = input.position ?? null;
       if (position === null) {
@@ -58,6 +61,12 @@ export class ChannelGroupService {
 
   async update(id: string, input: { name?: string | null; position?: number | null; isCollapsed?: boolean | null }, actorType: ActorType, actorId: string) {
     const [group] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.channelGroup.findFirstOrThrow({
+        where: { id },
+        select: { organizationId: true },
+      });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
+
       const data: Record<string, unknown> = {};
       if (input.name != null) data.name = input.name;
       if (input.position != null) data.position = input.position;
@@ -88,6 +97,7 @@ export class ChannelGroupService {
   async delete(id: string, actorType: ActorType, actorId: string) {
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const group = await tx.channelGroup.findUniqueOrThrow({ where: { id } });
+      await assertActorOrgAccess(tx, group.organizationId, actorType, actorId);
 
       // Find channels in this group before ungrouping
       const affectedChannels = await tx.channel.findMany({
@@ -123,6 +133,18 @@ export class ChannelGroupService {
 
   async moveChannel(input: { channelId: string; groupId?: string | null; position: number }, actorType: ActorType, actorId: string) {
     const [channel] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.channel.findFirstOrThrow({
+        where: { id: input.channelId },
+        select: { organizationId: true },
+      });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
+      if (input.groupId) {
+        await tx.channelGroup.findFirstOrThrow({
+          where: { id: input.groupId, organizationId: existing.organizationId },
+          select: { id: true },
+        });
+      }
+
       const channel = await tx.channel.update({
         where: { id: input.channelId },
         data: {
@@ -149,6 +171,8 @@ export class ChannelGroupService {
 
   async reorderGroups(organizationId: string, groupIds: string[], actorType: ActorType, actorId: string) {
     const groups = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await assertActorOrgAccess(tx, organizationId, actorType, actorId);
+
       const updated = await Promise.all(
         groupIds.map((id, index) =>
           tx.channelGroup.update({
@@ -177,6 +201,25 @@ export class ChannelGroupService {
 
   async reorderChannels(groupId: string | null, channelIds: string[], actorType: ActorType, actorId: string) {
     const channels = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const scopedChannels = await tx.channel.findMany({
+        where: { id: { in: channelIds } },
+        select: { id: true, organizationId: true },
+      });
+      if (scopedChannels.length !== channelIds.length) {
+        throw new Error("Channel not found");
+      }
+      const organizationId = scopedChannels[0]?.organizationId;
+      if (!organizationId || scopedChannels.some((channel) => channel.organizationId !== organizationId)) {
+        throw new Error("Channels must belong to the same organization");
+      }
+      await assertActorOrgAccess(tx, organizationId, actorType, actorId);
+      if (groupId) {
+        await tx.channelGroup.findFirstOrThrow({
+          where: { id: groupId, organizationId },
+          select: { id: true },
+        });
+      }
+
       const updated = await Promise.all(
         channelIds.map((id, index) =>
           tx.channel.update({
@@ -188,7 +231,6 @@ export class ChannelGroupService {
 
       if (updated.length === 0) return [];
 
-      const organizationId = updated[0].organizationId;
       await eventService.create({
         organizationId,
         scopeType: "system",

@@ -1,5 +1,6 @@
 export interface Platform {
   apiUrl: string;
+  authMode: "cookie" | "bearer";
   storage: {
     getItem(key: string): string | null | Promise<string | null>;
     setItem(key: string, value: string): void | Promise<void>;

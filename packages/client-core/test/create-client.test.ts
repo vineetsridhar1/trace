@@ -51,6 +51,7 @@ describe("createGqlClient", () => {
 
     setPlatform({
       apiUrl: "http://example.test",
+      authMode: "bearer",
       storage: {
         getItem: () => null,
         setItem: () => undefined,
