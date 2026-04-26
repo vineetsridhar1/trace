@@ -35,6 +35,7 @@ export interface IconButtonProps {
 
 const GLYPH_SIZE: Record<IconButtonSize, number> = { sm: 18, md: 22, lg: 28 };
 const HIT_SIZE: Record<IconButtonSize, number> = { sm: 44, md: 44, lg: 48 };
+const SYMBOL_OPTICAL_Y_OFFSET = -3;
 
 const HAPTIC_MAP: Record<HapticStrength, Haptics.ImpactFeedbackStyle> = {
   light: Haptics.ImpactFeedbackStyle.Light,
@@ -88,7 +89,11 @@ export function IconButton({
         // glyph-equivalent bounds, not the SF Symbol's intrinsic content
         // size (which is often wider than tall and biases the icon off-axis
         // inside the Pressable's center).
-        style={{ width: GLYPH_SIZE[size], height: GLYPH_SIZE[size] }}
+        style={{
+          width: GLYPH_SIZE[size],
+          height: GLYPH_SIZE[size],
+          transform: [{ translateY: SYMBOL_OPTICAL_Y_OFFSET }],
+        }}
       />
     </Pressable>
   );
