@@ -147,8 +147,11 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
       return;
     }
     let cancelled = false;
-    setLoading(true);
-    setFetchError(null);
+    const isInitialLoad = status === null;
+    if (isInitialLoad) {
+      setLoading(true);
+      setFetchError(null);
+    }
     void getClient()
       .query(
         LINKED_CHECKOUT_STATUS_QUERY,
@@ -159,7 +162,11 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
       .then((result) => {
         if (cancelled) return;
         if (result.error) {
-          setFetchError(result.error.message);
+          if (isInitialLoad) {
+            setFetchError(result.error.message);
+          } else {
+            console.warn("[linkedCheckoutStatus] refresh failed", result.error);
+          }
           setLoading(false);
           return;
         }
@@ -169,13 +176,17 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setFetchError(err instanceof Error ? err.message : String(err));
+        if (isInitialLoad) {
+          setFetchError(err instanceof Error ? err.message : String(err));
+        } else {
+          console.warn("[linkedCheckoutStatus] refresh threw", err);
+        }
         setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [accessLoaded, available, groupId, repoId, refreshTick]);
+  }, [accessLoaded, available, groupId, refreshTick, repoId, status]);
 
   const isAttachedToThisGroup = status?.attachedSessionGroupId === groupId;
   const isAttachedElsewhere = !!status?.isAttached && !isAttachedToThisGroup;
