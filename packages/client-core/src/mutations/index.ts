@@ -596,6 +596,7 @@ export const LINK_LINKED_CHECKOUT_REPO_MUTATION = gql`
     ) {
       ok
       error
+      errorCode
       status {
         ${LINKED_CHECKOUT_STATUS_FIELDS}
       }
@@ -610,6 +611,8 @@ export const SYNC_LINKED_CHECKOUT_MUTATION = gql`
     $branch: String!
     $commitSha: String
     $autoSyncEnabled: Boolean
+    $conflictStrategy: LinkedCheckoutSyncConflictStrategy
+    $commitMessage: String
   ) {
     syncLinkedCheckout(
       sessionGroupId: $sessionGroupId
@@ -617,9 +620,12 @@ export const SYNC_LINKED_CHECKOUT_MUTATION = gql`
       branch: $branch
       commitSha: $commitSha
       autoSyncEnabled: $autoSyncEnabled
+      conflictStrategy: $conflictStrategy
+      commitMessage: $commitMessage
     ) {
       ok
       error
+      errorCode
       status {
         ${LINKED_CHECKOUT_STATUS_FIELDS}
       }
@@ -632,6 +638,7 @@ export const RESTORE_LINKED_CHECKOUT_MUTATION = gql`
     restoreLinkedCheckout(sessionGroupId: $sessionGroupId, repoId: $repoId) {
       ok
       error
+      errorCode
       status {
         ${LINKED_CHECKOUT_STATUS_FIELDS}
       }
@@ -640,10 +647,15 @@ export const RESTORE_LINKED_CHECKOUT_MUTATION = gql`
 `;
 
 export const COMMIT_LINKED_CHECKOUT_CHANGES_MUTATION = gql`
-  mutation CommitLinkedCheckoutChanges($sessionGroupId: ID!, $repoId: ID!) {
-    commitLinkedCheckoutChanges(sessionGroupId: $sessionGroupId, repoId: $repoId) {
+  mutation CommitLinkedCheckoutChanges($sessionGroupId: ID!, $repoId: ID!, $message: String) {
+    commitLinkedCheckoutChanges(
+      sessionGroupId: $sessionGroupId
+      repoId: $repoId
+      message: $message
+    ) {
       ok
       error
+      errorCode
       status {
         ${LINKED_CHECKOUT_STATUS_FIELDS}
       }
@@ -660,6 +672,7 @@ export const SET_LINKED_CHECKOUT_AUTO_SYNC_MUTATION = gql`
     ) {
       ok
       error
+      errorCode
       status {
         ${LINKED_CHECKOUT_STATUS_FIELDS}
       }

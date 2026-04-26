@@ -159,6 +159,8 @@ export interface BridgeSyncLinkedCheckoutCommand {
   branch: string;
   commitSha?: string | null;
   autoSyncEnabled?: boolean;
+  conflictStrategy?: "discard" | "commit" | "rebase" | null;
+  commitMessage?: string | null;
 }
 
 export interface BridgeCommitLinkedCheckoutCommand {
@@ -166,6 +168,7 @@ export interface BridgeCommitLinkedCheckoutCommand {
   requestId: string;
   repoId: string;
   sessionGroupId: string;
+  message?: string | null;
 }
 
 export interface BridgeRestoreLinkedCheckoutCommand {
@@ -338,10 +341,13 @@ export interface BridgeLinkedCheckoutStatus {
   hasUncommittedChanges: boolean;
 }
 
+export type BridgeLinkedCheckoutErrorCode = "DIRTY_ROOT_CHECKOUT";
+
 export interface BridgeLinkedCheckoutActionResultPayload {
   ok: boolean;
   status: BridgeLinkedCheckoutStatus;
   error: string | null;
+  errorCode?: BridgeLinkedCheckoutErrorCode | null;
 }
 
 export interface BridgeLinkedCheckoutStatusResult {

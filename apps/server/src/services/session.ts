@@ -4379,7 +4379,12 @@ export class SessionService {
     branch: string,
     organizationId: string,
     userId: string,
-    options?: { commitSha?: string | null; autoSyncEnabled?: boolean },
+    options?: {
+      commitSha?: string | null;
+      autoSyncEnabled?: boolean;
+      conflictStrategy?: "discard" | "commit" | "rebase";
+      commitMessage?: string | null;
+    },
   ) {
     await this.assertRepoExists(repoId, organizationId);
     const runtimeId = await this.resolveLinkedCheckoutRuntime(
@@ -4394,6 +4399,8 @@ export class SessionService {
       branch,
       commitSha: options?.commitSha,
       autoSyncEnabled: options?.autoSyncEnabled,
+      conflictStrategy: options?.conflictStrategy,
+      commitMessage: options?.commitMessage,
     });
   }
 
@@ -4418,6 +4425,7 @@ export class SessionService {
     repoId: string,
     organizationId: string,
     userId: string,
+    message?: string | null,
   ) {
     await this.assertRepoExists(repoId, organizationId);
     const runtimeId = await this.resolveLinkedCheckoutRuntime(
@@ -4429,6 +4437,7 @@ export class SessionService {
     return sessionRouter.commitLinkedCheckoutChanges(runtimeId, {
       repoId,
       sessionGroupId,
+      message,
     });
   }
 

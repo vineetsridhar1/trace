@@ -562,9 +562,14 @@ export type InboxItemType =
 export type LinkedCheckoutActionResult = {
   __typename?: "LinkedCheckoutActionResult";
   error?: Maybe<Scalars["String"]["output"]>;
+  errorCode?: Maybe<LinkedCheckoutErrorCode>;
   ok: Scalars["Boolean"]["output"];
   status: LinkedCheckoutStatus;
 };
+
+export type LinkedCheckoutErrorCode = "DIRTY_ROOT_CHECKOUT";
+
+export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE";
 
 export type LinkedCheckoutStatus = {
   __typename?: "LinkedCheckoutStatus";
@@ -741,6 +746,7 @@ export type MutationCommentOnTicketArgs = {
 };
 
 export type MutationCommitLinkedCheckoutChangesArgs = {
+  message?: InputMaybe<Scalars["String"]["input"]>;
   repoId: Scalars["ID"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
 };
@@ -1018,6 +1024,8 @@ export type MutationSyncLinkedCheckoutArgs = {
   autoSyncEnabled?: InputMaybe<Scalars["Boolean"]["input"]>;
   branch: Scalars["String"]["input"];
   commitSha?: InputMaybe<Scalars["String"]["input"]>;
+  commitMessage?: InputMaybe<Scalars["String"]["input"]>;
+  conflictStrategy?: InputMaybe<LinkedCheckoutSyncConflictStrategy>;
   repoId: Scalars["ID"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
 };

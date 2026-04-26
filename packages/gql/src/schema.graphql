@@ -1109,6 +1109,11 @@ type LinkedCheckoutActionResult {
   ok: Boolean!
   status: LinkedCheckoutStatus!
   error: String
+  errorCode: LinkedCheckoutErrorCode
+}
+
+enum LinkedCheckoutErrorCode {
+  DIRTY_ROOT_CHECKOUT
 }
 
 # --- Mutations ---
@@ -1185,8 +1190,14 @@ type Mutation {
     branch: String!
     commitSha: String
     autoSyncEnabled: Boolean
+    conflictStrategy: LinkedCheckoutSyncConflictStrategy
+    commitMessage: String
   ): LinkedCheckoutActionResult!
-  commitLinkedCheckoutChanges(sessionGroupId: ID!, repoId: ID!): LinkedCheckoutActionResult!
+  commitLinkedCheckoutChanges(
+    sessionGroupId: ID!
+    repoId: ID!
+    message: String
+  ): LinkedCheckoutActionResult!
   restoreLinkedCheckout(sessionGroupId: ID!, repoId: ID!): LinkedCheckoutActionResult!
   setLinkedCheckoutAutoSync(
     sessionGroupId: ID!
@@ -1249,6 +1260,12 @@ type Mutation {
   createAiConversation(organizationId: ID!, input: CreateAiConversationInput!): AiConversation!
   sendTurn(branchId: ID!, content: String!): Turn!
   updateAiConversationTitle(conversationId: ID!, title: String!): AiConversation!
+}
+
+enum LinkedCheckoutSyncConflictStrategy {
+  DISCARD
+  COMMIT
+  REBASE
 }
 
 # --- Subscriptions ---

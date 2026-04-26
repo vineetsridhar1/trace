@@ -362,6 +362,8 @@ export const sessionMutations = {
       branch: string;
       commitSha?: string | null;
       autoSyncEnabled?: boolean | null;
+      conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE" | null;
+      commitMessage?: string | null;
     },
     ctx: Context,
   ) => {
@@ -376,12 +378,21 @@ export const sessionMutations = {
       {
         commitSha: args.commitSha ?? undefined,
         autoSyncEnabled: args.autoSyncEnabled ?? undefined,
+        conflictStrategy:
+          args.conflictStrategy === "DISCARD"
+            ? "discard"
+            : args.conflictStrategy === "COMMIT"
+              ? "commit"
+              : args.conflictStrategy === "REBASE"
+                ? "rebase"
+                : undefined,
+        commitMessage: args.commitMessage ?? undefined,
       },
     );
   },
   commitLinkedCheckoutChanges: (
     _: unknown,
-    args: { sessionGroupId: string; repoId: string },
+    args: { sessionGroupId: string; repoId: string; message?: string | null },
     ctx: Context,
   ) => {
     if (!ctx.userId) throw new AuthenticationError();
@@ -391,6 +402,7 @@ export const sessionMutations = {
       args.repoId,
       orgId,
       ctx.userId,
+      args.message ?? undefined,
     );
   },
   restoreLinkedCheckout: (

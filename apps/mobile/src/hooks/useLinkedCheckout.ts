@@ -12,6 +12,7 @@ import {
 import type {
   BridgeRuntimeAccess,
   LinkedCheckoutActionResult,
+  LinkedCheckoutErrorCode,
   LinkedCheckoutStatus,
   Repo,
   SessionConnection,
@@ -23,6 +24,12 @@ export type LinkedCheckoutAction = "sync" | "commit" | "restore" | "toggle-auto-
 interface ActionOutcome {
   ok: boolean;
   error: string | null;
+  errorCode?: LinkedCheckoutErrorCode | null;
+}
+
+export interface SyncConflictResolutionInput {
+  conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE";
+  commitMessage?: string;
 }
 
 export interface UseLinkedCheckoutResult {
@@ -41,7 +48,7 @@ export interface UseLinkedCheckoutResult {
   hasUncommittedChanges: boolean;
   pendingAction: LinkedCheckoutAction | null;
   refresh: () => void;
-  sync: () => Promise<ActionOutcome>;
+  sync: (input?: SyncConflictResolutionInput) => Promise<ActionOutcome>;
   commitChanges: () => Promise<ActionOutcome>;
   restore: () => Promise<ActionOutcome>;
   toggleAutoSync: () => Promise<ActionOutcome>;
@@ -140,8 +147,11 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
       return;
     }
     let cancelled = false;
-    setLoading(true);
-    setFetchError(null);
+    const isInitialLoad = status === null;
+    if (isInitialLoad) {
+      setLoading(true);
+      setFetchError(null);
+    }
     void getClient()
       .query(
         LINKED_CHECKOUT_STATUS_QUERY,
@@ -152,7 +162,11 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
       .then((result) => {
         if (cancelled) return;
         if (result.error) {
-          setFetchError(result.error.message);
+          if (isInitialLoad) {
+            setFetchError(result.error.message);
+          } else {
+            console.warn("[linkedCheckoutStatus] refresh failed", result.error);
+          }
           setLoading(false);
           return;
         }
@@ -162,13 +176,17 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setFetchError(err instanceof Error ? err.message : String(err));
+        if (isInitialLoad) {
+          setFetchError(err instanceof Error ? err.message : String(err));
+        } else {
+          console.warn("[linkedCheckoutStatus] refresh threw", err);
+        }
         setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [accessLoaded, available, groupId, repoId, refreshTick]);
+  }, [accessLoaded, available, groupId, refreshTick, repoId, status]);
 
   const isAttachedToThisGroup = status?.attachedSessionGroupId === groupId;
   const isAttachedElsewhere = !!status?.isAttached && !isAttachedToThisGroup;
@@ -204,11 +222,16 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
         const payload = await perform();
         if (!payload) return { ok: false, error: "No response from server." };
         setStatus(payload.status);
-        return { ok: payload.ok, error: payload.error ?? null };
+        return {
+          ok: payload.ok,
+          error: payload.error ?? null,
+          errorCode: payload.errorCode ?? null,
+        };
       } catch (err) {
         return {
           ok: false,
           error: err instanceof Error ? err.message : String(err),
+          errorCode: null,
         };
       } finally {
         pendingRef.current = null;
@@ -218,7 +241,7 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
     [],
   );
 
-  const sync = useCallback(async (): Promise<ActionOutcome> => {
+  const sync = useCallback(async (input?: SyncConflictResolutionInput): Promise<ActionOutcome> => {
     if (!repoId || !branch) return { ok: false, error: "Missing repo or branch." };
     return runAction("sync", async () => {
       const result = await getClient()
@@ -227,6 +250,8 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
           repoId,
           branch,
           autoSyncEnabled: true,
+          conflictStrategy: input?.conflictStrategy,
+          commitMessage: input?.commitMessage,
         })
         .toPromise();
       if (result.error) throw result.error;

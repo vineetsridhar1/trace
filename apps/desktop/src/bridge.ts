@@ -97,6 +97,7 @@ async function buildLinkedCheckoutFailureResult(repoId: string, error: unknown) 
     ok: false,
     status,
     error: message,
+    errorCode: null,
   };
 }
 
@@ -1075,6 +1076,8 @@ export class BridgeClient implements IBridgeClient {
           branch: cmd.branch,
           commitSha: cmd.commitSha,
           autoSyncEnabled: cmd.autoSyncEnabled,
+          conflictStrategy: cmd.conflictStrategy,
+          commitMessage: cmd.commitMessage,
         })
           .then((result) => {
             this.send({
@@ -1101,6 +1104,7 @@ export class BridgeClient implements IBridgeClient {
         void commitLinkedCheckoutChanges({
           repoId: cmd.repoId,
           sessionGroupId: cmd.sessionGroupId,
+          message: cmd.message,
         })
           .then((result) => {
             this.send({

@@ -58,6 +58,7 @@ declare global {
     ok: boolean;
     status: DesktopLinkedCheckoutStatus;
     error: string | null;
+    errorCode?: "DIRTY_ROOT_CHECKOUT" | null;
   };
 
   type DesktopLinkedCheckoutSyncInput = {
@@ -66,6 +67,8 @@ declare global {
     branch: string;
     commitSha?: string | null;
     autoSyncEnabled?: boolean;
+    conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE" | null;
+    commitMessage?: string | null;
   };
 
   type DesktopRepoGitHookStatus = {
