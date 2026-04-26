@@ -1,4 +1,4 @@
-import { useCallback, useRef, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import {
   Pressable,
   ScrollView,
@@ -28,6 +28,7 @@ function Section({
   children: ReactNode;
 }) {
   const theme = useTheme();
+  const [pendingModel, setPendingModel] = useState<string | null>(null);
   return (
     <View style={styles.section}>
       <Text variant="footnote" color="mutedForeground" style={styles.sectionTitle}>
@@ -189,11 +190,17 @@ export function SessionModelPickerSheetContent({
       }
 
       onSelectModel?.();
+      setPendingModel(nextModel);
       const changed = await handleModelChange(nextModel);
-      if (changed) onClose?.();
+      setPendingModel(null);
+      if (changed) {
+        onClose?.();
+      }
     },
     [canInteract, handleModelChange, onClose, onSelectModel, selectedModel],
   );
+
+  const displayedModel = pendingModel ?? selectedModel;
 
   return (
     <ScrollView
@@ -239,7 +246,7 @@ export function SessionModelPickerSheetContent({
           <ModelRow
             key={option.value}
             title={option.label}
-            selected={selectedModel === option.value}
+            selected={displayedModel === option.value}
             disabled={!canInteract}
             separator={index < modelOptions.length - 1}
             onSelect={() => void handleSelectModel(option.value)}

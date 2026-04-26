@@ -7,7 +7,6 @@ import {
   getDefaultModel,
   hasQuestionBlock,
   hasPlanBlock,
-  isSupportedModel,
   type GitCheckpointBridgePayload,
   type GitCheckpointContext,
   type BridgeSessionGitSyncStatus,
@@ -559,11 +558,12 @@ async function prependSourceSessionContext(
   return `${context}\n\n${prompt}`;
 }
 
-function validateModelForTool(tool: string, model: string): string {
-  if (!isSupportedModel(tool, model)) {
-    throw new Error(`Unsupported model "${model}" for tool "${tool}"`);
+function normalizeModel(model: string): string {
+  const trimmed = model.trim();
+  if (!trimmed) {
+    throw new Error("Model cannot be empty");
   }
-  return model;
+  return trimmed;
 }
 
 const FULLY_UNLOADED_AGENT_STATUSES: readonly AgentStatus[] = ["failed", "stopped"];
@@ -1128,9 +1128,7 @@ export class SessionService {
       throw new Error("Git checkpoint not found");
     }
 
-    const model = input.model
-      ? validateModelForTool(input.tool, input.model)
-      : getDefaultModel(input.tool);
+    const model = input.model ? normalizeModel(input.model) : getDefaultModel(input.tool);
 
     const restoreGroup = restoreCheckpoint
       ? await prisma.sessionGroup.findFirst({
@@ -2015,7 +2013,7 @@ export class SessionService {
     const nextTool = config.tool ?? prev.tool;
     const nextModel =
       config.model != null
-        ? validateModelForTool(nextTool, config.model)
+        ? normalizeModel(config.model)
         : toolChanged
           ? (getDefaultModel(nextTool) ?? null)
           : undefined;
