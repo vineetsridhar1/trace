@@ -22,7 +22,7 @@
       "package": "org.gettrace.mobile",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#020412"
+        "backgroundColor": "#010312"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
