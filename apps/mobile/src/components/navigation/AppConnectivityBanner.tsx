@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { AppState, StyleSheet, View, type AppStateStatus } from "react-native";
 import { SymbolView } from "expo-symbols";
 import Animated, {
   Easing,
@@ -16,6 +16,8 @@ import { alpha, useTheme } from "@/theme";
 import { useConnectionStore } from "@/stores/connection";
 
 const RECONNECTING_DELAY_MS = 10_000;
+const OFFLINE_DELAY_MS = 3_000;
+const FOREGROUND_GRACE_MS = 4_000;
 
 export function AppConnectivityBanner() {
   const theme = useTheme();
@@ -25,24 +27,71 @@ export function AppConnectivityBanner() {
   const wsConnected = useConnectionStore((s) => s.connected);
   const disconnectedAt = useConnectionStore((s) => s.disconnectedAt);
   const hasConnectedBefore = useConnectionStore((s) => s.hasConnectedBefore);
+  const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState);
+  const [foregroundedAt, setForegroundedAt] = useState(Date.now());
+  const [networkDisconnectedAt, setNetworkDisconnectedAt] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
   const pulse = useSharedValue(1);
+  const appActive = appState === "active";
 
   useEffect(() => {
-    if (!disconnectedAt || wsConnected || !hasConnectedBefore || !isConnected) return;
+    const sub = AppState.addEventListener("change", (nextState) => {
+      setAppState(nextState);
+      if (nextState === "active") {
+        const timestamp = Date.now();
+        setForegroundedAt(timestamp);
+        setNow(timestamp);
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!appActive || !isResolved || isConnected) {
+      setNetworkDisconnectedAt(null);
+      return;
+    }
+    setNetworkDisconnectedAt((current) => current ?? Date.now());
+  }, [appActive, isConnected, isResolved]);
+
+  useEffect(() => {
+    if (!appActive) return;
+    const inForegroundGrace = now - foregroundedAt < FOREGROUND_GRACE_MS;
+    const waitingForOfflineDelay =
+      isResolved && !isConnected && networkDisconnectedAt !== null;
+    const waitingForReconnectDelay =
+      isConnected && hasConnectedBefore && !wsConnected && disconnectedAt !== null;
+    if (!inForegroundGrace && !waitingForOfflineDelay && !waitingForReconnectDelay) return;
     const interval = setInterval(() => {
       setNow(Date.now());
     }, 1000);
     return () => clearInterval(interval);
-  }, [disconnectedAt, hasConnectedBefore, isConnected, wsConnected]);
+  }, [
+    appActive,
+    disconnectedAt,
+    foregroundedAt,
+    hasConnectedBefore,
+    isConnected,
+    isResolved,
+    networkDisconnectedAt,
+    now,
+    wsConnected,
+  ]);
 
+  const foregroundGraceElapsed = appActive && now - foregroundedAt >= FOREGROUND_GRACE_MS;
   const reconnecting =
+    foregroundGraceElapsed &&
     isConnected &&
     hasConnectedBefore &&
     !wsConnected &&
     disconnectedAt !== null &&
     now - disconnectedAt >= RECONNECTING_DELAY_MS;
-  const offline = isResolved && !isConnected;
+  const offline =
+    foregroundGraceElapsed &&
+    isResolved &&
+    !isConnected &&
+    networkDisconnectedAt !== null &&
+    now - networkDisconnectedAt >= OFFLINE_DELAY_MS;
 
   useEffect(() => {
     if (!reconnecting || reducedMotion) {
