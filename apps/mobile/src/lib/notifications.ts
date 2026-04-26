@@ -48,9 +48,7 @@ function projectId(): string | null {
   return typeof configured === "string" && configured.length > 0 ? configured : null;
 }
 
-function pushPlatform(): "ios" | "android" {
-  return Platform.OS === "android" ? "android" : "ios";
-}
+const pushPlatform = (): "ios" | "android" => (Platform.OS === "android" ? "android" : "ios");
 
 export async function ensureRegistered(): Promise<void> {
   if (Platform.OS !== "ios" && Platform.OS !== "android") return;
@@ -90,13 +88,11 @@ export async function unregister(): Promise<void> {
     .mutation(UNREGISTER_PUSH_TOKEN_MUTATION, { token: registration.token })
     .toPromise();
   if (result.error) throw result.error;
-  await clearPushRegistration();
-  await Notifications.setBadgeCountAsync(0);
+  await Promise.all([clearPushRegistration(), Notifications.setBadgeCountAsync(0)]);
 }
 
 export async function clearLocalNotificationState(): Promise<void> {
-  await clearPushRegistration();
-  await Notifications.setBadgeCountAsync(0);
+  await Promise.all([clearPushRegistration(), Notifications.setBadgeCountAsync(0)]);
 }
 
 export function useRegisterPushToken(): void {
