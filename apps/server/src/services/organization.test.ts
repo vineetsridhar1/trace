@@ -105,7 +105,8 @@ describe("OrganizationService", () => {
     });
     prismaMock.project.findUniqueOrThrow
       .mockResolvedValueOnce({ organizationId: "org-1" })
-      .mockResolvedValueOnce({ id: "project-1", name: "Roadmap" });
+      .mockResolvedValueOnce({ id: "project-1", name: "Roadmap" })
+      .mockResolvedValueOnce({ organizationId: "org-1" });
     prismaMock.session.findFirstOrThrow.mockResolvedValueOnce({ id: "session-1" });
 
     const service = new OrganizationService();
@@ -148,6 +149,7 @@ describe("OrganizationService", () => {
     ).rejects.toThrow("Not found");
 
     expect(prismaMock.repo.create).not.toHaveBeenCalled();
+    expect(prismaMock.repo.findUnique).not.toHaveBeenCalled();
   });
 
   it("searches users outside the active organization only", async () => {

@@ -375,6 +375,7 @@ describe("runtimeAccessService", () => {
     expect(terminalRelayMock.destroyTerminalsForUser).toHaveBeenCalledWith(
       "user-2",
       new Set(["session-a", "session-b"]),
+      "org-1",
     );
   });
 
@@ -714,6 +715,7 @@ describe("runtimeAccessService", () => {
     expect(terminalRelayMock.destroyTerminalsForUser).toHaveBeenCalledWith(
       "user-2",
       new Set(["session-a"]),
+      "org-1",
     );
     expect(eventServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({

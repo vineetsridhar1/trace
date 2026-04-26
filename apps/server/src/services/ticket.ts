@@ -2,6 +2,7 @@ import type { CreateTicketInput, UpdateTicketInput, ActorType, EntityType } from
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
+import { assertActorOrgAccess } from "./actor-auth.js";
 
 export type CreateTicketServiceInput = CreateTicketInput & {
   actorType: ActorType;
@@ -15,18 +16,6 @@ const TICKET_INCLUDE = {
   assignees: { include: { user: true } },
   links: true,
 } as const;
-
-async function assertActorMembership(organizationId: string, actorId: string) {
-  await prisma.orgMember.findUniqueOrThrow({
-    where: {
-      userId_organizationId: {
-        userId: actorId,
-        organizationId,
-      },
-    },
-    select: { userId: true },
-  });
-}
 
 export class TicketService {
   async list(
@@ -60,9 +49,9 @@ export class TicketService {
   }
 
   async create(input: CreateTicketServiceInput) {
-    await assertActorMembership(input.organizationId, input.actorId);
-
     const [ticket] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await assertActorOrgAccess(tx, input.organizationId, input.actorType, input.actorId);
+
       const ticket = await tx.ticket.create({
         data: {
           title: input.title,
@@ -109,7 +98,9 @@ export class TicketService {
       where: { id },
       select: { organizationId: true, status: true },
     });
-    await assertActorMembership(existing.organizationId, actorId);
+    await prisma.$transaction((tx: Prisma.TransactionClient) =>
+      assertActorOrgAccess(tx, existing.organizationId, actorType, actorId),
+    );
 
     const ticket = await prisma.ticket.update({
       where: { id },
@@ -145,7 +136,9 @@ export class TicketService {
       where: { id: ticketId },
       select: { organizationId: true },
     });
-    await assertActorMembership(ticket.organizationId, actorId);
+    await prisma.$transaction((tx: Prisma.TransactionClient) =>
+      assertActorOrgAccess(tx, ticket.organizationId, actorType, actorId),
+    );
 
     return eventService.create({
       organizationId: ticket.organizationId,
@@ -169,15 +162,7 @@ export class TicketService {
         where: { id: ticketId },
         select: { organizationId: true },
       });
-      await tx.orgMember.findUniqueOrThrow({
-        where: {
-          userId_organizationId: {
-            userId: actorId,
-            organizationId: existing.organizationId,
-          },
-        },
-        select: { userId: true },
-      });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
       await tx.ticketAssignee.create({
         data: { ticketId, userId },
       });
@@ -214,15 +199,7 @@ export class TicketService {
         where: { id: ticketId },
         select: { organizationId: true },
       });
-      await tx.orgMember.findUniqueOrThrow({
-        where: {
-          userId_organizationId: {
-            userId: actorId,
-            organizationId: existing.organizationId,
-          },
-        },
-        select: { userId: true },
-      });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
       await tx.ticketAssignee.delete({
         where: { ticketId_userId: { ticketId, userId } },
       });
@@ -260,15 +237,7 @@ export class TicketService {
         where: { id: ticketId },
         select: { organizationId: true },
       });
-      await tx.orgMember.findUniqueOrThrow({
-        where: {
-          userId_organizationId: {
-            userId: actorId,
-            organizationId: existing.organizationId,
-          },
-        },
-        select: { userId: true },
-      });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
       await tx.ticketLink.create({
         data: { ticketId, entityType, entityId },
       });
@@ -306,15 +275,7 @@ export class TicketService {
         where: { id: ticketId },
         select: { organizationId: true },
       });
-      await tx.orgMember.findUniqueOrThrow({
-        where: {
-          userId_organizationId: {
-            userId: actorId,
-            organizationId: existing.organizationId,
-          },
-        },
-        select: { userId: true },
-      });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
       await tx.ticketLink.delete({
         where: {
           ticketId_entityType_entityId: { ticketId, entityType, entityId },

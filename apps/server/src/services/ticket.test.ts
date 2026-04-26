@@ -136,6 +136,9 @@ describe("TicketService", () => {
     prismaMock.ticket.findUniqueOrThrow
       .mockResolvedValueOnce({ id: "ticket-1", organizationId: "org-1" })
       .mockResolvedValueOnce({ id: "ticket-1", organizationId: "org-1" })
+      .mockResolvedValueOnce({ id: "ticket-1", organizationId: "org-1" })
+      .mockResolvedValueOnce({ id: "ticket-1", organizationId: "org-1" })
+      .mockResolvedValueOnce({ id: "ticket-1", organizationId: "org-1" })
       .mockResolvedValueOnce({ id: "ticket-1", organizationId: "org-1" });
 
     const service = new TicketService();

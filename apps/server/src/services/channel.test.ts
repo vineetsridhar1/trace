@@ -319,11 +319,11 @@ describe("ChannelService", () => {
     });
   });
 
-  it("rejects channel deletion by a user before touching the database", async () => {
+  it("rejects channel deletion by an agent before touching the database", async () => {
     const service = new ChannelService();
 
-    await expect(service.delete("channel-1", "org-1", "user", "user-1")).rejects.toThrow(
-      "Users cannot delete channels directly",
+    await expect(service.delete("channel-1", "org-1", "agent", TRACE_AI_USER_ID)).rejects.toThrow(
+      "Agents cannot delete channels directly",
     );
 
     expect(prismaMock.channel.findUniqueOrThrow).not.toHaveBeenCalled();

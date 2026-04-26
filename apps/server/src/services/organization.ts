@@ -9,6 +9,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { eventService } from "./event.js";
+import { assertActorOrgAccess } from "./actor-auth.js";
 
 const PROJECT_INCLUDE = {
   repo: true,
@@ -16,22 +17,6 @@ const PROJECT_INCLUDE = {
   sessions: { include: { session: true } },
   tickets: { include: { ticket: true } },
 } as const;
-
-async function assertActorMembership(
-  tx: Prisma.TransactionClient,
-  organizationId: string,
-  actorId: string,
-) {
-  await tx.orgMember.findUniqueOrThrow({
-    where: {
-      userId_organizationId: {
-        userId: actorId,
-        organizationId,
-      },
-    },
-    select: { userId: true },
-  });
-}
 
 export class OrganizationService {
   async getOrganization(id: string, userId: string) {
@@ -125,6 +110,10 @@ export class OrganizationService {
   }
 
   async createRepo(input: CreateRepoInput, actorType: ActorType, actorId: string) {
+    await prisma.$transaction((tx: Prisma.TransactionClient) =>
+      assertActorOrgAccess(tx, input.organizationId, actorType, actorId),
+    );
+
     // Deduplicate by remote URL within the org — if it already exists, return it
     const existing = await prisma.repo.findUnique({
       where: {
@@ -139,8 +128,6 @@ export class OrganizationService {
     if (existing) return existing;
 
     const [repo] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      await assertActorMembership(tx, input.organizationId, actorId);
-
       const repo = await tx.repo.create({
         data: {
           name: input.name,
@@ -230,7 +217,7 @@ export class OrganizationService {
 
   async createProject(input: CreateProjectInput, actorType: ActorType, actorId: string) {
     const [project] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      await assertActorMembership(tx, input.organizationId, actorId);
+      await assertActorOrgAccess(tx, input.organizationId, actorType, actorId);
 
       const project = await tx.project.create({
         data: {
@@ -272,7 +259,7 @@ export class OrganizationService {
         where: { id: projectId },
         select: { organizationId: true },
       });
-      await assertActorMembership(tx, project.organizationId, actorId);
+      await assertActorOrgAccess(tx, project.organizationId, actorType, actorId);
 
       const joinOps: Record<EntityType, () => Promise<unknown>> = {
         session: async () => {

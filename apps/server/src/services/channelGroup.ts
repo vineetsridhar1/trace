@@ -2,22 +2,7 @@ import type { ActorType } from "@trace/gql";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
-
-async function assertActorMembership(
-  tx: Prisma.TransactionClient,
-  organizationId: string,
-  actorId: string,
-) {
-  await tx.orgMember.findUniqueOrThrow({
-    where: {
-      userId_organizationId: {
-        userId: actorId,
-        organizationId,
-      },
-    },
-    select: { userId: true },
-  });
-}
+import { assertActorOrgAccess } from "./actor-auth.js";
 
 export class ChannelGroupService {
   async list(organizationId: string) {
@@ -30,7 +15,7 @@ export class ChannelGroupService {
 
   async create(input: { organizationId: string; name: string; position?: number | null }, actorType: ActorType, actorId: string) {
     const [group] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      await assertActorMembership(tx, input.organizationId, actorId);
+      await assertActorOrgAccess(tx, input.organizationId, actorType, actorId);
 
       // If no position specified, append after all top-level items (ungrouped channels + groups)
       let position = input.position ?? null;
@@ -80,7 +65,7 @@ export class ChannelGroupService {
         where: { id },
         select: { organizationId: true },
       });
-      await assertActorMembership(tx, existing.organizationId, actorId);
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
 
       const data: Record<string, unknown> = {};
       if (input.name != null) data.name = input.name;
@@ -112,7 +97,7 @@ export class ChannelGroupService {
   async delete(id: string, actorType: ActorType, actorId: string) {
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const group = await tx.channelGroup.findUniqueOrThrow({ where: { id } });
-      await assertActorMembership(tx, group.organizationId, actorId);
+      await assertActorOrgAccess(tx, group.organizationId, actorType, actorId);
 
       // Find channels in this group before ungrouping
       const affectedChannels = await tx.channel.findMany({
@@ -152,7 +137,7 @@ export class ChannelGroupService {
         where: { id: input.channelId },
         select: { organizationId: true },
       });
-      await assertActorMembership(tx, existing.organizationId, actorId);
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
       if (input.groupId) {
         await tx.channelGroup.findFirstOrThrow({
           where: { id: input.groupId, organizationId: existing.organizationId },
@@ -186,7 +171,7 @@ export class ChannelGroupService {
 
   async reorderGroups(organizationId: string, groupIds: string[], actorType: ActorType, actorId: string) {
     const groups = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      await assertActorMembership(tx, organizationId, actorId);
+      await assertActorOrgAccess(tx, organizationId, actorType, actorId);
 
       const updated = await Promise.all(
         groupIds.map((id, index) =>
@@ -227,7 +212,7 @@ export class ChannelGroupService {
       if (!organizationId || scopedChannels.some((channel) => channel.organizationId !== organizationId)) {
         throw new Error("Channels must belong to the same organization");
       }
-      await assertActorMembership(tx, organizationId, actorId);
+      await assertActorOrgAccess(tx, organizationId, actorType, actorId);
       if (groupId) {
         await tx.channelGroup.findFirstOrThrow({
           where: { id: groupId, organizationId },

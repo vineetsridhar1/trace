@@ -77,6 +77,7 @@ PORT=4000
 JWT_SECRET="trace-dev-secret"
 TRACE_WEB_URL="http://localhost:3000"
 CORS_ALLOWED_ORIGINS=""                # Comma-separated origins for cross-origin deployments
+TRACE_AUTH_COOKIE_SAME_SITE="lax"      # Use "none" for cross-site web/API deployments
 ```
 
 **GitHub OAuth App setup:** Create a GitHub OAuth App at [github.com/settings/developers](https://github.com/settings/developers) with:
