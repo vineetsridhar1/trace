@@ -47,6 +47,10 @@ export function ListRow({
   const titleColor: keyof Theme["colors"] = destructive
     ? "destructive"
     : "foreground";
+  const feedbackColor = alpha(
+    destructive ? theme.colors.destructive : theme.colors.accent,
+    0.14,
+  );
 
   function handlePress(e: GestureResponderEvent) {
     if (haptic === "light") void hapticFeedback.light();
@@ -108,7 +112,7 @@ export function ListRow({
       style={({ pressed }) => [
         styles.row,
         containerStyle,
-        (pressed || hovered) && { backgroundColor: alpha(theme.colors.accent, 0.14) },
+        (pressed || hovered) && { backgroundColor: feedbackColor },
         style,
       ]}
     >

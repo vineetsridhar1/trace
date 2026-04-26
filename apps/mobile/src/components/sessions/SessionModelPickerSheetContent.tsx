@@ -8,7 +8,6 @@ import { SymbolView } from "expo-symbols";
 import { useEntityField } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
 import { ListRow, Text } from "@/components/design-system";
-import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
 import { useSessionComposerConfig } from "./session-input-composer/useSessionComposerConfig";
 
@@ -73,7 +72,7 @@ export function SessionModelPickerSheetContent({
   const isTerminal = worktreeDeleted === true || sessionStatus === "merged";
   const isDisconnected = connection?.state === "disconnected";
   const canInteract = !isTerminal && !isDisconnected && agentStatus !== "active" && !isOptimistic;
-  const canSelectModel = !isTerminal && !isOptimistic;
+  const canSelectModel = canInteract;
 
   const {
     currentTool: selectedTool,
