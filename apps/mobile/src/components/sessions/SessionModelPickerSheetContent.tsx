@@ -10,7 +10,7 @@ import { useEntityField } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
 import { ListRow, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
-import { useTheme } from "@/theme";
+import { alpha, useTheme } from "@/theme";
 import { useSessionComposerConfig } from "./session-input-composer/useSessionComposerConfig";
 
 interface SessionModelPickerSheetContentProps {
@@ -83,7 +83,8 @@ function ModelRow({
           borderBottomColor: theme.colors.border,
           borderBottomWidth: separator ? StyleSheet.hairlineWidth : 0,
         },
-        pressed && { backgroundColor: theme.colors.surfaceElevated },
+        selected && { backgroundColor: alpha(theme.colors.accent, 0.1) },
+        pressed && { backgroundColor: alpha(theme.colors.accent, 0.18) },
         disabled && styles.disabledRow,
       ]}
     >
