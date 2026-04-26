@@ -34,6 +34,30 @@ async function resolveBaseBranch(
   return `origin/${defaultBranch}`;
 }
 
+async function getCurrentBranch(worktreePath: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("git", ["symbolic-ref", "--short", "-q", "HEAD"], {
+      cwd: worktreePath,
+    });
+    const branch = stdout.trim();
+    return branch.length > 0 ? branch : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveWorktreeBranch(
+  slug: string,
+  startBranch: string | undefined,
+  preserveBranchName: boolean | undefined,
+): string {
+  const generatedBranch = `trace/${slug}`;
+  if (preserveBranchName && startBranch && startBranch !== generatedBranch) {
+    return startBranch;
+  }
+  return generatedBranch;
+}
+
 export async function createWorktree({
   repoPath,
   repoId,
@@ -42,6 +66,7 @@ export async function createWorktree({
   slug,
   defaultBranch,
   startBranch,
+  preserveBranchName,
   checkpointSha,
   gitHooksEnabled,
 }: {
@@ -55,6 +80,8 @@ export async function createWorktree({
   defaultBranch: string;
   /** Branch to base the new worktree on (e.g. from the parent session). Falls back to defaultBranch. */
   startBranch?: string;
+  /** Reuse the persisted branch name instead of generating trace/{slug}. */
+  preserveBranchName?: boolean;
   /** Commit SHA to restore from instead of branching from origin/{startBranch|defaultBranch}. */
   checkpointSha?: string;
   /** When enabled for the linked repo, install or repair Trace-managed hooks. */
@@ -62,12 +89,13 @@ export async function createWorktree({
 }): Promise<{ workdir: string; branch: string; slug: string }> {
   const sessionsDir = path.join(os.homedir(), "trace", "sessions", repoId);
   const worktreeSlug = slug ?? generateAnimalSlug(await getUsedSlugs(sessionsDir, repoPath));
-  const branch = `trace/${worktreeSlug}`;
+  const branch = resolveWorktreeBranch(worktreeSlug, startBranch, preserveBranchName);
   const targetPath = path.join(sessionsDir, worktreeSlug);
 
   // If the worktree directory already exists, reuse it
   if (fs.existsSync(targetPath)) {
-    return { workdir: targetPath, branch, slug: worktreeSlug };
+    const currentBranch = await getCurrentBranch(targetPath);
+    return { workdir: targetPath, branch: currentBranch ?? branch, slug: worktreeSlug };
   }
 
   // Ensure parent directory exists
