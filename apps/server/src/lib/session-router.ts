@@ -79,6 +79,12 @@ export interface RuntimeInstance {
   linkedCheckouts: Map<string, BridgeLinkedCheckoutStatus>;
 }
 
+export interface StaleRuntimeSnapshot {
+  runtimeId: string;
+  sessionIds: string[];
+  lastHeartbeat: number;
+}
+
 // --- SessionAdapter interface ---
 // Each hosting mode implements this. The router dispatches through it.
 
@@ -665,9 +671,9 @@ export class SessionRouter {
   }
 
   /** Check for stale runtimes that have missed heartbeats. Returns affected session IDs. */
-  checkStaleRuntimes(): Array<{ runtimeId: string; sessionIds: string[] }> {
+  checkStaleRuntimes(): StaleRuntimeSnapshot[] {
     const now = Date.now();
-    const stale: Array<{ runtimeId: string; sessionIds: string[] }> = [];
+    const stale: StaleRuntimeSnapshot[] = [];
     for (const [runtimeId, runtime] of this.runtimes) {
       if (now - runtime.lastHeartbeat > SessionRouter.HEARTBEAT_TIMEOUT_MS) {
         runtimeDebug("detected stale runtime", {
@@ -677,10 +683,43 @@ export class SessionRouter {
           readyState: runtime.ws.readyState,
           boundSessions: [...runtime.boundSessions],
         });
-        stale.push({ runtimeId, sessionIds: [...runtime.boundSessions] });
+        stale.push({
+          runtimeId,
+          sessionIds: [...runtime.boundSessions],
+          lastHeartbeat: runtime.lastHeartbeat,
+        });
       }
     }
     return stale;
+  }
+
+  /**
+   * Evict a runtime only if it is still the same stale instance we observed
+   * earlier. This avoids racing a reconnect that reused the same runtime ID.
+   */
+  evictRuntimeIfStale(runtimeId: string, expectedLastHeartbeat: number): string[] {
+    const runtime = this.runtimes.get(runtimeId);
+    if (!runtime) return [];
+
+    if (runtime.lastHeartbeat !== expectedLastHeartbeat) {
+      runtimeDebug("skipped stale runtime eviction after reconnect", {
+        runtimeId,
+        expectedLastHeartbeat,
+        actualLastHeartbeat: runtime.lastHeartbeat,
+        boundSessions: [...runtime.boundSessions],
+      });
+      return [];
+    }
+
+    if (Date.now() - runtime.lastHeartbeat <= SessionRouter.HEARTBEAT_TIMEOUT_MS) {
+      runtimeDebug("skipped stale runtime eviction after fresh heartbeat", {
+        runtimeId,
+        lastHeartbeat: runtime.lastHeartbeat,
+      });
+      return [];
+    }
+
+    return this.unregisterRuntime(runtimeId);
   }
 
   getRuntimeDiagnostics(): Array<Record<string, unknown>> {

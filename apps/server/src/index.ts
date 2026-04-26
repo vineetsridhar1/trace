@@ -112,8 +112,15 @@ async function main() {
       runtimeDebug("stale runtime monitor evicting runtime", {
         runtimeId: stale.runtimeId,
         sessionIds: stale.sessionIds,
+        lastHeartbeat: stale.lastHeartbeat,
       });
-      const affectedSessions = sessionRouter.unregisterRuntime(stale.runtimeId);
+      const affectedSessions = sessionRouter.evictRuntimeIfStale(
+        stale.runtimeId,
+        stale.lastHeartbeat,
+      );
+      if (affectedSessions.length === 0) {
+        continue;
+      }
       if (stale.runtimeId) {
         void runtimeAccessService.markRuntimeDisconnected(stale.runtimeId);
       }
