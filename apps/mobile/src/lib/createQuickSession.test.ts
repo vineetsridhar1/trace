@@ -8,12 +8,23 @@ const setOverlaySessionIdMock = vi.fn();
 const lightMock = vi.fn();
 const successMock = vi.fn();
 const errorMock = vi.fn();
+const insertOptimisticSessionPairMock = vi.fn();
+const reconcileOptimisticSessionPairMock = vi.fn();
+const rollbackOptimisticSessionPairMock = vi.fn();
+const tryOpenSessionPlayerMock = vi.fn();
+const closeSessionPlayerMock = vi.fn();
 
 const START_SESSION_MUTATION = "START_SESSION_MUTATION";
 const RUN_SESSION_MUTATION = "RUN_SESSION_MUTATION";
 const TERMINATE_SESSION_MUTATION = "TERMINATE_SESSION_MUTATION";
 
 const entityState = {
+  channels: {
+    channel_1: {
+      id: "channel_1",
+      repo: { id: "repo_channel" },
+    },
+  } as Record<string, Record<string, unknown>>,
   sessions: {
     source_session: {
       id: "source_session",
@@ -49,9 +60,9 @@ vi.mock("@trace/client-core", () => ({
   generateUUID: vi.fn(),
   getSessionChannelId: vi.fn(() => "channel_fallback"),
   getSessionGroupChannelId: vi.fn(() => "channel_group"),
-  insertOptimisticSessionPair: vi.fn(),
-  reconcileOptimisticSessionPair: vi.fn(),
-  rollbackOptimisticSessionPair: vi.fn(),
+  insertOptimisticSessionPair: insertOptimisticSessionPairMock,
+  reconcileOptimisticSessionPair: reconcileOptimisticSessionPairMock,
+  rollbackOptimisticSessionPair: rollbackOptimisticSessionPairMock,
   START_SESSION_MUTATION,
   RUN_SESSION_MUTATION,
   TERMINATE_SESSION_MUTATION,
@@ -96,9 +107,51 @@ vi.mock("@/lib/session-hosting", () => ({
 }));
 
 vi.mock("@/lib/sessionPlayer", () => ({
-  closeSessionPlayer: vi.fn(),
-  tryOpenSessionPlayer: vi.fn(),
+  closeSessionPlayer: closeSessionPlayerMock,
+  tryOpenSessionPlayer: tryOpenSessionPlayerMock,
 }));
+
+describe("createQuickSession", () => {
+  beforeEach(() => {
+    replaceMock.mockReset();
+    alertMock.mockReset();
+    mutationMock.mockReset();
+    fetchSessionGroupDetailMock.mockReset();
+    setOverlaySessionIdMock.mockReset();
+    lightMock.mockReset();
+    errorMock.mockReset();
+    insertOptimisticSessionPairMock.mockReset();
+    reconcileOptimisticSessionPairMock.mockReset();
+    rollbackOptimisticSessionPairMock.mockReset();
+    tryOpenSessionPlayerMock.mockReset();
+    closeSessionPlayerMock.mockReset();
+  });
+
+  it("opens only the real session after it is created and hydrated", async () => {
+    mutationMock.mockImplementation((document: string) => {
+      if (document === START_SESSION_MUTATION) {
+        return {
+          toPromise: async () => ({
+            data: { startSession: { id: "session_new", sessionGroupId: "group_new" } },
+          }),
+        };
+      }
+      throw new Error(`Unexpected mutation ${document}`);
+    });
+    fetchSessionGroupDetailMock.mockResolvedValue(true);
+
+    const { createQuickSession } = await import("./createQuickSession");
+    await createQuickSession("channel_1");
+
+    expect(insertOptimisticSessionPairMock).not.toHaveBeenCalled();
+    expect(reconcileOptimisticSessionPairMock).not.toHaveBeenCalled();
+    expect(rollbackOptimisticSessionPairMock).not.toHaveBeenCalled();
+    expect(tryOpenSessionPlayerMock).not.toHaveBeenCalled();
+    expect(fetchSessionGroupDetailMock).toHaveBeenCalledWith("group_new");
+    expect(setOverlaySessionIdMock).toHaveBeenCalledWith("session_new");
+    expect(replaceMock).toHaveBeenCalledWith("/sessions/group_new/session_new");
+  });
+});
 
 describe("startPlanImplementationSession", () => {
   beforeEach(() => {
@@ -110,6 +163,11 @@ describe("startPlanImplementationSession", () => {
     lightMock.mockReset();
     successMock.mockReset();
     errorMock.mockReset();
+    insertOptimisticSessionPairMock.mockReset();
+    reconcileOptimisticSessionPairMock.mockReset();
+    rollbackOptimisticSessionPairMock.mockReset();
+    tryOpenSessionPlayerMock.mockReset();
+    closeSessionPlayerMock.mockReset();
   });
 
   it("starts, runs, navigates, and terminates the source session", async () => {
