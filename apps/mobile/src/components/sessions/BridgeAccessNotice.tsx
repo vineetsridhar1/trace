@@ -5,11 +5,11 @@ import { REQUEST_BRIDGE_ACCESS_MUTATION } from "@trace/client-core";
 import type { BridgeAccessCapability } from "@trace/gql";
 import { Button, Text } from "@/components/design-system";
 import { SessionComposerBottomSheet } from "@/components/sessions/session-input-composer/SessionComposerBottomSheet";
-import type { BridgeRuntimeAccessInfo } from "@/hooks/useBridgeRuntimeAccess";
 import {
   isBridgeInteractionAllowed,
   isBridgeTerminalAllowed,
 } from "@/hooks/useBridgeRuntimeAccess";
+import type { BridgeRuntimeAccessInfo } from "@/stores/bridge-access";
 import {
   describeBridgeAccessScope,
   formatCapabilities,

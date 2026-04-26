@@ -38,6 +38,11 @@ function eventNodeIds(nodes: SessionNode[] | undefined): string[] {
   return (nodes ?? []).flatMap((node) => (node.kind === "event" ? [node.id] : []));
 }
 
+function requireLatest(value: UseSessionNodesResult | null): UseSessionNodesResult {
+  expect(value).not.toBeNull();
+  return value as UseSessionNodesResult;
+}
+
 describe("useSessionNodes", () => {
   beforeEach(() => {
     useEntityStore.getState().reset();
@@ -60,14 +65,15 @@ describe("useSessionNodes", () => {
       renderer = TestRenderer.create(<Probe frozen={false} />);
     });
 
-    expect(eventNodeIds(latest?.nodes)).toEqual(["event-1"]);
+    expect(eventNodeIds(requireLatest(latest).nodes)).toEqual(["event-1"]);
 
     act(() => {
       renderer.update(<Probe frozen={true} />);
     });
 
-    const frozenNodes = latest?.nodes;
-    const frozenEvents = latest?.events;
+    const frozenSnapshot = requireLatest(latest);
+    const frozenNodes = frozenSnapshot.nodes;
+    const frozenEvents = frozenSnapshot.events;
     renders = 0;
 
     act(() => {
@@ -75,14 +81,14 @@ describe("useSessionNodes", () => {
     });
 
     expect(renders).toBe(0);
-    expect(latest?.nodes).toBe(frozenNodes);
-    expect(latest?.events).toBe(frozenEvents);
-    expect(eventNodeIds(latest?.nodes)).toEqual(["event-1"]);
+    expect(requireLatest(latest).nodes).toBe(frozenNodes);
+    expect(requireLatest(latest).events).toBe(frozenEvents);
+    expect(eventNodeIds(requireLatest(latest).nodes)).toEqual(["event-1"]);
 
     act(() => {
       renderer.update(<Probe frozen={false} />);
     });
 
-    expect(eventNodeIds(latest?.nodes)).toEqual(["event-1", "event-2"]);
+    expect(eventNodeIds(requireLatest(latest).nodes)).toEqual(["event-1", "event-2"]);
   });
 });
