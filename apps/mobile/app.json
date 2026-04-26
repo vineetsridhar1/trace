@@ -15,8 +15,7 @@
     },
     "ios": {
       "bundleIdentifier": "org.gettrace.mobile",
-      "supportsTablet": false,
-      "associatedDomains": ["applinks:trace.app"]
+      "supportsTablet": false
     },
     "android": {
       "package": "org.gettrace.mobile",

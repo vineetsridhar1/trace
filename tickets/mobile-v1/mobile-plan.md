@@ -359,7 +359,7 @@ Full-screen modals for:
 ### 9.4 Deep linking
 
 - Scheme: `trace://`
-- Universal links: `https://trace.app/m/...` (configured via Apple App Site Association)
+- Universal links: `https://example.com/m/...` (configured via Apple App Site Association)
 - Supported paths:
   - `trace://sessions/:groupId/:sessionId` — opens the Session Player (§10.8) pointing at that session
   - `trace://channels/:id` — opens coding channel

@@ -821,9 +821,9 @@ describe("oauth origin allowlist", () => {
   });
 
   it("includes CORS_ALLOWED_ORIGINS when set", () => {
-    vi.stubEnv("CORS_ALLOWED_ORIGINS", "https://trace.app, https://staging.trace.app");
+    vi.stubEnv("CORS_ALLOWED_ORIGINS", "https://example.com, https://staging.example.com");
     const origins = getAllowedOAuthOrigins();
-    expect(origins.has("https://trace.app")).toBe(true);
-    expect(origins.has("https://staging.trace.app")).toBe(true);
+    expect(origins.has("https://example.com")).toBe(true);
+    expect(origins.has("https://staging.example.com")).toBe(true);
   });
 });
