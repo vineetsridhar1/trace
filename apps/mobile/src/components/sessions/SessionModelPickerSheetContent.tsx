@@ -74,7 +74,6 @@ function ModelRow({
       accessibilityRole="button"
       accessibilityLabel={title}
       accessibilityState={{ disabled, selected }}
-      cancelable={false}
       disabled={disabled}
       onPress={commit}
       style={({ pressed }) => [
