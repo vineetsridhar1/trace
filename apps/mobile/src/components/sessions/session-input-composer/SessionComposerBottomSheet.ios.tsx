@@ -7,6 +7,9 @@ import {
   type SessionComposerBottomSheetProps,
 } from "./SessionComposerBottomSheetBase";
 
+const SHEET_DETENT = 0.9;
+const PRESENTATION_DETENTS = [SHEET_DETENT];
+
 export function SessionComposerBottomSheet(props: SessionComposerBottomSheetProps) {
   if (!shouldUseNativeExpoSheet()) {
     return <SessionComposerBottomSheetBase {...props} />;
@@ -21,7 +24,7 @@ function NativeSessionComposerBottomSheet({
   onDismissed,
   children,
 }: SessionComposerBottomSheetProps) {
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
   const [content, setContent] = useState(children);
 
@@ -47,6 +50,10 @@ function NativeSessionComposerBottomSheet({
   );
 
   const hostStyle = useMemo(() => [styles.host, { width }], [width]);
+  const sheetContentStyle = useMemo(
+    () => [styles.sheetContent, { height: Math.round(height * SHEET_DETENT) }],
+    [height],
+  );
 
   if (!mounted) return null;
 
@@ -56,10 +63,10 @@ function NativeSessionComposerBottomSheet({
         <BottomSheet
           isOpened={visible}
           onIsOpenedChange={handlePresentedChange}
-          presentationDetents={["medium", "large"]}
+          presentationDetents={PRESENTATION_DETENTS}
           presentationDragIndicator="visible"
         >
-          <View style={styles.sheetContent}>{content}</View>
+          <View style={sheetContentStyle}>{content}</View>
         </BottomSheet>
       </Host>
     </View>
@@ -81,7 +88,6 @@ const styles = StyleSheet.create({
     height: 1,
   },
   sheetContent: {
-    flex: 1,
     minHeight: 0,
     paddingHorizontal: 20,
     paddingTop: 12,
