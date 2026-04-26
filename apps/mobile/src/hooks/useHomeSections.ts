@@ -127,7 +127,7 @@ interface HomeSectionsResult {
  * When `collectRepos` is true, also collects distinct repos from the unfiltered
  * (no repoId) visible groups in a single pass, avoiding a second full traversal.
  */
-function buildHomeSections(
+export function buildHomeSections(
   state: EntityState,
   userId: string,
   repoId: string | null,
@@ -183,11 +183,10 @@ function buildHomeSections(
 
     const isDone = session.agentStatus === "done" || session.sessionStatus === "in_review";
     if (isDone) {
-      const updatedTs = timestampMs(session.updatedAt);
-      if (updatedTs >= cutoff) {
+      if (sortTs >= cutoff) {
         const existing = groupDone.get(groupId);
-        if (!existing || updatedTs > existing.ts) {
-          groupDone.set(groupId, { ts: updatedTs });
+        if (!existing || sortTs > existing.ts) {
+          groupDone.set(groupId, { ts: sortTs });
         }
       }
     }
