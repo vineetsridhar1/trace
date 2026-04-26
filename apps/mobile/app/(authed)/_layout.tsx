@@ -18,11 +18,11 @@ export default function AuthedLayout() {
 
   return (
     <View style={{ flex: 1 }}>
-      <AppConnectivityBanner />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="sessions" options={{ headerShown: false }} />
       </Stack>
+      <AppConnectivityBanner />
     </View>
   );
 }
