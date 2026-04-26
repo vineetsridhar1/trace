@@ -257,6 +257,7 @@ export function createPrismaMock() {
     channelGroup: {
       create: vi.fn(),
       findFirst: vi.fn(),
+      findFirstOrThrow: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),

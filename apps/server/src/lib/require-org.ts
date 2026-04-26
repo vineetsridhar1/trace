@@ -10,3 +10,11 @@ export function requireOrgContext(ctx: Context): string {
   }
   return ctx.organizationId;
 }
+
+export function assertOrgAccess(ctx: Context, organizationId: string): string {
+  const orgId = requireOrgContext(ctx);
+  if (orgId !== organizationId) {
+    throw new Error("Not authorized for this organization");
+  }
+  return orgId;
+}

@@ -16,6 +16,18 @@ const TICKET_INCLUDE = {
   links: true,
 } as const;
 
+async function assertActorMembership(organizationId: string, actorId: string) {
+  await prisma.orgMember.findUniqueOrThrow({
+    where: {
+      userId_organizationId: {
+        userId: actorId,
+        organizationId,
+      },
+    },
+    select: { userId: true },
+  });
+}
+
 export class TicketService {
   async list(
     organizationId: string,
@@ -33,8 +45,11 @@ export class TicketService {
     return prisma.ticket.findMany({ where, include: TICKET_INCLUDE });
   }
 
-  async get(id: string) {
-    return prisma.ticket.findUnique({ where: { id }, include: TICKET_INCLUDE });
+  async get(id: string, organizationId: string) {
+    return prisma.ticket.findFirst({
+      where: { id, organizationId },
+      include: TICKET_INCLUDE,
+    });
   }
 
   async listForSession(sessionId: string) {
@@ -45,6 +60,8 @@ export class TicketService {
   }
 
   async create(input: CreateTicketServiceInput) {
+    await assertActorMembership(input.organizationId, input.actorId);
+
     const [ticket] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const ticket = await tx.ticket.create({
         data: {
@@ -92,6 +109,7 @@ export class TicketService {
       where: { id },
       select: { organizationId: true, status: true },
     });
+    await assertActorMembership(existing.organizationId, actorId);
 
     const ticket = await prisma.ticket.update({
       where: { id },
@@ -127,6 +145,7 @@ export class TicketService {
       where: { id: ticketId },
       select: { organizationId: true },
     });
+    await assertActorMembership(ticket.organizationId, actorId);
 
     return eventService.create({
       organizationId: ticket.organizationId,
@@ -146,6 +165,19 @@ export class TicketService {
     actorId: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.ticket.findUniqueOrThrow({
+        where: { id: ticketId },
+        select: { organizationId: true },
+      });
+      await tx.orgMember.findUniqueOrThrow({
+        where: {
+          userId_organizationId: {
+            userId: actorId,
+            organizationId: existing.organizationId,
+          },
+        },
+        select: { userId: true },
+      });
       await tx.ticketAssignee.create({
         data: { ticketId, userId },
       });
@@ -178,6 +210,19 @@ export class TicketService {
     actorId: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.ticket.findUniqueOrThrow({
+        where: { id: ticketId },
+        select: { organizationId: true },
+      });
+      await tx.orgMember.findUniqueOrThrow({
+        where: {
+          userId_organizationId: {
+            userId: actorId,
+            organizationId: existing.organizationId,
+          },
+        },
+        select: { userId: true },
+      });
       await tx.ticketAssignee.delete({
         where: { ticketId_userId: { ticketId, userId } },
       });
@@ -211,6 +256,19 @@ export class TicketService {
     actorId: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.ticket.findUniqueOrThrow({
+        where: { id: ticketId },
+        select: { organizationId: true },
+      });
+      await tx.orgMember.findUniqueOrThrow({
+        where: {
+          userId_organizationId: {
+            userId: actorId,
+            organizationId: existing.organizationId,
+          },
+        },
+        select: { userId: true },
+      });
       await tx.ticketLink.create({
         data: { ticketId, entityType, entityId },
       });
@@ -244,6 +302,19 @@ export class TicketService {
     actorId: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.ticket.findUniqueOrThrow({
+        where: { id: ticketId },
+        select: { organizationId: true },
+      });
+      await tx.orgMember.findUniqueOrThrow({
+        where: {
+          userId_organizationId: {
+            userId: actorId,
+            organizationId: existing.organizationId,
+          },
+        },
+        select: { userId: true },
+      });
       await tx.ticketLink.delete({
         where: {
           ticketId_entityType_entityId: { ticketId, entityType, entityId },

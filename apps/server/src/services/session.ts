@@ -1009,8 +1009,15 @@ export class SessionService {
     });
   }
 
-  async get(id: string) {
-    return prisma.session.findUnique({ where: { id }, include: SESSION_INCLUDE });
+  async get(id: string, organizationId?: string) {
+    if (!organizationId) {
+      return prisma.session.findUnique({ where: { id }, include: SESSION_INCLUDE });
+    }
+
+    return prisma.session.findFirst({
+      where: { id, organizationId },
+      include: SESSION_INCLUDE,
+    });
   }
 
   async listByUser(

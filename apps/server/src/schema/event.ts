@@ -3,8 +3,8 @@ import type { ScopeInput, EventType } from "@trace/gql";
 import { eventService } from "../services/event.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { filterAsyncIterator } from "../lib/async-iterator.js";
-import { assertChannelAccess, assertChatAccess } from "../services/access.js";
-import { requireOrgContext } from "../lib/require-org.js";
+import { assertChannelAccess, assertChatAccess, assertScopeAccess } from "../services/access.js";
+import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
 
 const CHANNEL_MESSAGE_EVENTS = new Set<EventType>([
   "message_sent",
@@ -205,11 +205,9 @@ export const eventSubscriptions = {
   },
 
   sessionEvents: {
-    subscribe: (_: unknown, args: { sessionId: string; organizationId: string }, ctx: Context) => {
-      const orgId = requireOrgContext(ctx);
-      if (orgId !== args.organizationId) {
-        throw new Error("Not authorized for this organization");
-      }
+    subscribe: async (_: unknown, args: { sessionId: string; organizationId: string }, ctx: Context) => {
+      assertOrgAccess(ctx, args.organizationId);
+      await assertScopeAccess("session", args.sessionId, ctx.userId, ctx.organizationId);
       return pubsub.asyncIterator(topics.sessionEvents(args.sessionId));
     },
   },

@@ -17,6 +17,22 @@ const PROJECT_INCLUDE = {
   tickets: { include: { ticket: true } },
 } as const;
 
+async function assertActorMembership(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorId: string,
+) {
+  await tx.orgMember.findUniqueOrThrow({
+    where: {
+      userId_organizationId: {
+        userId: actorId,
+        organizationId,
+      },
+    },
+    select: { userId: true },
+  });
+}
+
 export class OrganizationService {
   async getOrganization(id: string, userId: string) {
     await prisma.orgMember.findUniqueOrThrow({
@@ -123,6 +139,8 @@ export class OrganizationService {
     if (existing) return existing;
 
     const [repo] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await assertActorMembership(tx, input.organizationId, actorId);
+
       const repo = await tx.repo.create({
         data: {
           name: input.name,
@@ -212,6 +230,8 @@ export class OrganizationService {
 
   async createProject(input: CreateProjectInput, actorType: ActorType, actorId: string) {
     const [project] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await assertActorMembership(tx, input.organizationId, actorId);
+
       const project = await tx.project.create({
         data: {
           name: input.name,
@@ -252,11 +272,30 @@ export class OrganizationService {
         where: { id: projectId },
         select: { organizationId: true },
       });
+      await assertActorMembership(tx, project.organizationId, actorId);
 
       const joinOps: Record<EntityType, () => Promise<unknown>> = {
-        session: () => tx.sessionProject.create({ data: { sessionId: entityId, projectId } }),
-        ticket: () => tx.ticketProject.create({ data: { ticketId: entityId, projectId } }),
-        channel: () => tx.channelProject.create({ data: { channelId: entityId, projectId } }),
+        session: async () => {
+          await tx.session.findFirstOrThrow({
+            where: { id: entityId, organizationId: project.organizationId },
+            select: { id: true },
+          });
+          return tx.sessionProject.create({ data: { sessionId: entityId, projectId } });
+        },
+        ticket: async () => {
+          await tx.ticket.findFirstOrThrow({
+            where: { id: entityId, organizationId: project.organizationId },
+            select: { id: true },
+          });
+          return tx.ticketProject.create({ data: { ticketId: entityId, projectId } });
+        },
+        channel: async () => {
+          await tx.channel.findFirstOrThrow({
+            where: { id: entityId, organizationId: project.organizationId },
+            select: { id: true },
+          });
+          return tx.channelProject.create({ data: { channelId: entityId, projectId } });
+        },
         chat: () => {
           throw new Error("Chats cannot be linked to projects");
         },
