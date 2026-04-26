@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Alert, Pressable, StyleSheet, View } from "react-native";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import { Spinner, Text } from "@/components/design-system";
@@ -9,6 +9,7 @@ import {
   type LinkedCheckoutAction,
   type UseLinkedCheckoutResult,
 } from "@/hooks/useLinkedCheckout";
+import { LinkedCheckoutSyncConflictSheet } from "./LinkedCheckoutSyncConflictSheet";
 
 interface LinkedCheckoutPanelSectionProps {
   groupId: string;
@@ -29,6 +30,8 @@ export function LinkedCheckoutPanelSection({ groupId }: LinkedCheckoutPanelSecti
 
 function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
   const theme = useTheme();
+  const [syncConflictOpen, setSyncConflictOpen] = useState(false);
+  const [syncConflictError, setSyncConflictError] = useState<string | null>(null);
   const {
     loading,
     fetchError,
@@ -64,7 +67,48 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
     [],
   );
 
-  const onSync = useCallback(() => void handle("sync", sync), [handle, sync]);
+  const onSync = useCallback(async () => {
+    void haptic.light();
+    const outcome = await sync();
+    if (!outcome.ok) {
+      if (outcome.errorCode === "DIRTY_ROOT_CHECKOUT") {
+        setSyncConflictError(outcome.error);
+        setSyncConflictOpen(true);
+        return;
+      }
+      void haptic.error();
+      Alert.alert(ACTION_ALERT_TITLE.sync, outcome.error ?? "Unknown error.");
+      return;
+    }
+    setSyncConflictError(null);
+    setSyncConflictOpen(false);
+    void haptic.success();
+  }, [sync]);
+
+  const onResolveSyncConflict = useCallback(
+    async ({
+      strategy,
+      commitMessage,
+    }: {
+      strategy: "DISCARD" | "COMMIT" | "REBASE";
+      commitMessage?: string;
+    }) => {
+      void haptic.light();
+      const outcome = await sync({
+        conflictStrategy: strategy,
+        commitMessage,
+      });
+      if (!outcome.ok) {
+        void haptic.error();
+        Alert.alert(ACTION_ALERT_TITLE.sync, outcome.error ?? "Unknown error.");
+        return;
+      }
+      setSyncConflictError(null);
+      setSyncConflictOpen(false);
+      void haptic.success();
+    },
+    [sync],
+  );
   const onCommitChanges = useCallback(
     () => void handle("commit", commitChanges),
     [commitChanges, handle],
@@ -73,6 +117,18 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
   const onTogglePause = useCallback(
     () => void handle("toggle-auto-sync", toggleAutoSync),
     [handle, toggleAutoSync],
+  );
+  const conflictSheet = (
+    <LinkedCheckoutSyncConflictSheet
+      open={syncConflictOpen}
+      error={syncConflictError}
+      pending={pendingAction === "sync"}
+      onClose={() => {
+        if (pendingAction === "sync") return;
+        setSyncConflictOpen(false);
+      }}
+      onResolve={onResolveSyncConflict}
+    />
   );
 
   if (loading) {
@@ -128,6 +184,7 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
   if (isAttachedElsewhere) {
     return (
       <View style={styles.container}>
+        {conflictSheet}
         <SectionHeader />
         <Text variant="footnote" color="mutedForeground">
           Main worktree is attached to another workspace.
@@ -157,6 +214,7 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
 
   return (
     <View style={styles.container}>
+      {conflictSheet}
       <SectionHeader />
       <Text variant="footnote" color="mutedForeground" numberOfLines={2}>
         {subtitle}
@@ -172,7 +230,7 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
         autoSyncEnabled={status?.autoSyncEnabled ?? false}
         hasUncommittedChanges={hasUncommittedChanges}
         isAttachedToThisGroup={isAttachedToThisGroup}
-        onSync={onSync}
+        onSync={() => void onSync()}
         onCommitChanges={onCommitChanges}
         onTogglePause={onTogglePause}
         onRestore={onRestore}
