@@ -1,12 +1,8 @@
 import { router } from "expo-router";
 import { Alert } from "react-native";
 import {
-  generateUUID,
   getSessionChannelId,
   getSessionGroupChannelId,
-  insertOptimisticSessionPair,
-  reconcileOptimisticSessionPair,
-  rollbackOptimisticSessionPair,
   RUN_SESSION_MUTATION,
   START_SESSION_MUTATION,
   TERMINATE_SESSION_MUTATION,
@@ -19,43 +15,31 @@ import { getConnectionMode } from "@/lib/connection-target";
 import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
 import { resolveMobileSessionHosting } from "@/lib/session-hosting";
-import { closeSessionPlayer, tryOpenSessionPlayer } from "@/lib/sessionPlayer";
 import { fetchSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { useMobileUIStore } from "@/stores/ui";
 
 const DEFAULT_TOOL: CodingTool = "claude_code";
+const pendingQuickSessionChannels = new Set<string>();
 
 interface CreateAgentTabOptions {
   navigate?: (sessionGroupId: string, sessionId: string) => void;
 }
 
 /**
- * Mobile twin of web's `createQuickSession`: inserts optimistic session
- * entities, routes to the temp session page, and fires the real mutation
- * in the background. When the server responds, the temp entities are
- * swapped for the real ones and the route is updated in place.
+ * Start the session, prefetch its workspace, then open the session page.
  */
 export async function createQuickSession(channelId: string): Promise<void> {
+  if (pendingQuickSessionChannels.has(channelId)) return;
+  pendingQuickSessionChannels.add(channelId);
+
   const channel = useEntityStore.getState().channels[channelId];
   const channelRepoId = channel?.repo?.id;
 
-  const tempSessionId = generateUUID();
-  const tempGroupId = generateUUID();
   const tool = DEFAULT_TOOL;
   const model = getDefaultModel(tool);
   const hosting = resolveMobileSessionHosting(getConnectionMode());
 
-  insertOptimisticSessionPair({
-    tempSessionId,
-    tempGroupId,
-    tool,
-    model,
-    hosting,
-    channelId,
-    repoId: channelRepoId,
-  });
   void haptic.light();
-  tryOpenSessionPlayer(tempSessionId);
 
   try {
     const result = await getClient()
@@ -78,36 +62,19 @@ export async function createQuickSession(channelId: string): Promise<void> {
       throw new Error("Server did not return a session id");
     }
 
-    // Swap entities first, then retarget the route so the page never
-    // dereferences a deleted temp id. React batches these updates.
-    reconcileOptimisticSessionPair({
-      tempSessionId,
-      tempGroupId,
-      realSessionId: session.id,
-      realGroupId: session.sessionGroupId,
-      tool,
-      model,
-      hosting,
-      channelId,
-      repoId: channelRepoId,
+    void fetchSessionGroupDetail(session.sessionGroupId).catch((error: unknown) => {
+      console.warn("[createQuickSession] failed to prefetch session group", error);
     });
+
     const ui = useMobileUIStore.getState();
-    if (ui.overlaySessionId === tempSessionId) {
-      ui.setOverlaySessionId(session.id);
-      router.replace(`/sessions/${session.sessionGroupId}/${session.id}` as never);
-    }
+    ui.setOverlaySessionId(session.id);
+    router.push(`/sessions/${session.sessionGroupId}/${session.id}` as never);
   } catch (err) {
-    rollbackOptimisticSessionPair({ tempSessionId, tempGroupId });
-    // Only close the routed session view if it's still pointed at the temp
-    // session — the user may have navigated elsewhere while the mutation
-    // was in flight.
-    const ui = useMobileUIStore.getState();
-    if (ui.overlaySessionId === tempSessionId) {
-      closeSessionPlayer();
-    }
     const message = err instanceof Error ? err.message : "Please try again.";
     void haptic.error();
     Alert.alert("Couldn't start session", message);
+  } finally {
+    pendingQuickSessionChannels.delete(channelId);
   }
 }
 

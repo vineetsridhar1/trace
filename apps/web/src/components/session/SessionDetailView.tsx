@@ -145,8 +145,9 @@ export function SessionDetailView({
   scrollToEventId?: string | null;
   onScrollComplete?: () => void;
 }) {
+  const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
   const { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents } =
-    useSessionEvents(sessionId);
+    useSessionEvents(sessionId, { skip: isOptimistic === true });
   const scopeKey = eventScopeKey("session", sessionId);
   const events = useScopedEvents(scopeKey);
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
@@ -219,6 +220,7 @@ export function SessionDetailView({
 
   // Fetch full session detail — merge to avoid wiping fields set by events
   useEffect(() => {
+    if (isOptimistic) return;
     client
       .query(SESSION_DETAIL_QUERY, { id: sessionId })
       .toPromise()
@@ -265,7 +267,7 @@ export function SessionDetailView({
           useEntityStore.setState(update);
         }
       });
-  }, [sessionId]);
+  }, [sessionId, isOptimistic]);
 
   const { nodes, completedAgentTools, toolResultByUseId } = useMemo(
     () => buildSessionNodes(eventIds, events),

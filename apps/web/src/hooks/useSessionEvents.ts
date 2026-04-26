@@ -66,8 +66,9 @@ const SESSION_EVENTS_SUBSCRIPTION = gql`
   }
 `;
 
-export function useSessionEvents(sessionId: string) {
-  const [loading, setLoading] = useState(true);
+export function useSessionEvents(sessionId: string, options?: { skip?: boolean }) {
+  const skip = options?.skip === true;
+  const [loading, setLoading] = useState(!skip);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlder, setHasOlder] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +80,7 @@ export function useSessionEvents(sessionId: string) {
 
   // Fetch the most recent page of events on mount
   const fetchEvents = useCallback(async () => {
-    if (!activeOrgId) return;
+    if (skip || !activeOrgId) return;
 
     setError(null);
     const result = await client
@@ -111,17 +112,24 @@ export function useSessionEvents(sessionId: string) {
       }
     }
     setLoading(false);
-  }, [activeOrgId, sessionId]);
+  }, [activeOrgId, sessionId, skip]);
 
   useEffect(() => {
+    if (skip) {
+      setLoading(false);
+      setHasOlder(false);
+      hasOlderRef.current = false;
+      setError(null);
+      return;
+    }
     fetchEvents();
-  }, [fetchEvents]);
+  }, [fetchEvents, skip]);
 
   // Subscribe to session-scoped events for full payloads.
   // The org-wide subscription trims session_output payloads to metadata only;
   // this subscription delivers full content for the session being viewed.
   useEffect(() => {
-    if (!activeOrgId) return;
+    if (skip || !activeOrgId) return;
 
     const subscription = client
       .subscription(SESSION_EVENTS_SUBSCRIPTION, {
@@ -134,11 +142,12 @@ export function useSessionEvents(sessionId: string) {
       });
 
     return () => subscription.unsubscribe();
-  }, [activeOrgId, sessionId]);
+  }, [activeOrgId, sessionId, skip]);
 
   // Load an older page of events (called when user scrolls to top)
   const fetchOlderEvents = useCallback(async () => {
     if (
+      skip ||
       !activeOrgId ||
       !oldestTimestampRef.current ||
       loadingOlderRef.current ||
@@ -180,7 +189,7 @@ export function useSessionEvents(sessionId: string) {
     }
     loadingOlderRef.current = false;
     setLoadingOlder(false);
-  }, [activeOrgId, sessionId]);
+  }, [activeOrgId, sessionId, skip]);
 
   // Derive eventIds from the scoped bucket — O(session events) not O(all events)
   const eventIds = useScopedEventIds(scopeKey);

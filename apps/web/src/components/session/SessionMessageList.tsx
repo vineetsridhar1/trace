@@ -264,8 +264,7 @@ export function SessionMessageList({
             <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-surface-deep text-muted-foreground shadow-sm">
               <Sparkles size={20} />
             </div>
-            <p className="text-base font-medium text-foreground">New session</p>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            <p className="text-sm leading-6 text-muted-foreground">
               Ask the agent to inspect code, make a change, or answer a question to get started.
             </p>
           </div>
