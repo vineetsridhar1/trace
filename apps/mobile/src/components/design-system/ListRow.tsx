@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { haptic as hapticFeedback } from "@/lib/haptics";
-import { useTheme, type Theme } from "@/theme";
+import { alpha, useTheme, type Theme } from "@/theme";
 import { Text } from "./Text";
 
 export type ListRowHaptic = "light" | "selection" | "none";
@@ -43,9 +43,14 @@ export function ListRow({
   style,
 }: ListRowProps) {
   const theme = useTheme();
+  const [hovered, setHovered] = useState(false);
   const titleColor: keyof Theme["colors"] = destructive
     ? "destructive"
     : "foreground";
+  const feedbackColor = alpha(
+    destructive ? theme.colors.destructive : theme.colors.accent,
+    0.14,
+  );
 
   function handlePress(e: GestureResponderEvent) {
     if (haptic === "light") void hapticFeedback.light();
@@ -100,12 +105,14 @@ export function ListRow({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? title}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
       onPress={handlePress}
       onLongPress={onLongPress}
       style={({ pressed }) => [
         styles.row,
         containerStyle,
-        pressed && { backgroundColor: theme.colors.surfaceElevated },
+        (pressed || hovered) && { backgroundColor: feedbackColor },
         style,
       ]}
     >

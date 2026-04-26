@@ -34,6 +34,15 @@ export function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEnti
   if (payload.type === "branch_renamed" && typeof payload.branch === "string") {
     return { branch: payload.branch };
   }
+  if (payload.type === "config_changed") {
+    const connection = asJsonObject(payload.connection);
+    return {
+      ...(typeof payload.tool === "string" ? { tool: payload.tool as SessionEntity["tool"] } : {}),
+      ...(typeof payload.model === "string" ? { model: payload.model } : {}),
+      ...(typeof payload.hosting === "string" ? { hosting: payload.hosting as SessionEntity["hosting"] } : {}),
+      ...(connection ? { connection: connection as SessionEntity["connection"] } : {}),
+    };
+  }
   if (payload.type === "question_pending" || payload.type === "plan_pending") {
     return { sessionStatus: "needs_input" as SessionStatus };
   }

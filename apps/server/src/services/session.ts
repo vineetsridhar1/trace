@@ -560,10 +560,14 @@ async function prependSourceSessionContext(
 }
 
 function validateModelForTool(tool: string, model: string): string {
-  if (!isSupportedModel(tool, model)) {
-    throw new Error(`Unsupported model "${model}" for tool "${tool}"`);
+  const trimmed = model.trim();
+  if (!trimmed) {
+    throw new Error("Model cannot be empty");
   }
-  return model;
+  if (!isSupportedModel(tool, trimmed)) {
+    throw new Error(`Unsupported model "${trimmed}" for tool "${tool}"`);
+  }
+  return trimmed;
 }
 
 const FULLY_UNLOADED_AGENT_STATUSES: readonly AgentStatus[] = ["failed", "stopped"];
