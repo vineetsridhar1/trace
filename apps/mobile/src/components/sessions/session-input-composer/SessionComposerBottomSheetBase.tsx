@@ -32,6 +32,7 @@ export function SessionComposerBottomSheetBase({
   const { height: windowHeight } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
   const [content, setContent] = useState(children);
+  const [settled, setSettled] = useState(false);
   const translateY = useSharedValue(windowHeight);
   const dragY = useSharedValue(0);
   const backdropOpacity = useSharedValue(0);
@@ -50,10 +51,13 @@ export function SessionComposerBottomSheetBase({
   );
 
   const animateIn = useCallback(() => {
+    setSettled(false);
     dragY.value = 0;
     translateY.value = windowHeight;
     backdropOpacity.value = 0;
-    translateY.value = withSpring(0, theme.motion.springs.gentle);
+    translateY.value = withSpring(0, theme.motion.springs.gentle, (finished) => {
+      if (finished) runOnJS(setSettled)(true);
+    });
     backdropOpacity.value = withTiming(1, { duration: theme.motion.durations.base });
   }, [
     backdropOpacity,
@@ -66,6 +70,7 @@ export function SessionComposerBottomSheetBase({
 
   const animateOut = useCallback(
     (notifyParent: boolean) => {
+      setSettled(false);
       translateY.value = translateY.value + dragY.value;
       dragY.value = 0;
       translateY.value = withTiming(
@@ -134,9 +139,13 @@ export function SessionComposerBottomSheetBase({
     };
   });
 
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value + dragY.value }],
-  }));
+  const sheetStyle = useAnimatedStyle(() => {
+    const offset = translateY.value + dragY.value;
+    if (settled && Math.abs(offset) < 0.5) return {};
+    return {
+      transform: [{ translateY: offset }],
+    };
+  }, [settled]);
 
   if (!mounted) return null;
 
