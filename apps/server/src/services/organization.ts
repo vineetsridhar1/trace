@@ -1,4 +1,5 @@
 import type {
+  CreateOrganizationInput,
   CreateRepoInput,
   UpdateRepoInput,
   CreateProjectInput,
@@ -106,6 +107,66 @@ export class OrganizationService {
       select: { id: true, name: true, email: true, avatarUrl: true },
       orderBy: [{ name: "asc" }, { email: "asc" }],
       take: 10,
+    });
+  }
+
+  async createOrganization(input: CreateOrganizationInput, actorId: string) {
+    const name = input.name.trim();
+    if (!name) {
+      throw new Error("Organization name is required");
+    }
+
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.user.findUniqueOrThrow({
+        where: { id: actorId },
+        select: { id: true },
+      });
+
+      const organization = await tx.organization.create({
+        data: { name },
+        select: { id: true, name: true },
+      });
+
+      const member = await tx.orgMember.create({
+        data: {
+          userId: actorId,
+          organizationId: organization.id,
+          role: "admin",
+        },
+        include: {
+          user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+          organization: { select: { id: true, name: true } },
+        },
+      });
+
+      await tx.orgMember.create({
+        data: {
+          userId: TRACE_AI_USER_ID,
+          organizationId: organization.id,
+          role: "member",
+        },
+      });
+
+      await eventService.create(
+        {
+          organizationId: organization.id,
+          scopeType: "system",
+          scopeId: organization.id,
+          eventType: "organization_created",
+          payload: {
+            organization,
+            member: {
+              userId: actorId,
+              role: "admin",
+            },
+          },
+          actorType: "user",
+          actorId,
+        },
+        tx,
+      );
+
+      return member;
     });
   }
 

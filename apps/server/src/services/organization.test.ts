@@ -24,6 +24,62 @@ describe("OrganizationService", () => {
     prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "user-1" });
   });
 
+  it("creates organizations with the creator as admin and emits organization_created", async () => {
+    prismaMock.user.findUniqueOrThrow.mockResolvedValueOnce({ id: "user-1" });
+    prismaMock.organization.create.mockResolvedValueOnce({ id: "org-1", name: "Acme" });
+    prismaMock.orgMember.create
+      .mockResolvedValueOnce({
+        organizationId: "org-1",
+        userId: "user-1",
+        role: "admin",
+        organization: { id: "org-1", name: "Acme" },
+      })
+      .mockResolvedValueOnce({
+        organizationId: "org-1",
+        userId: "00000000-0000-4000-a000-000000000001",
+        role: "member",
+      });
+
+    const service = new OrganizationService();
+    const member = await service.createOrganization({ name: " Acme " }, "user-1");
+
+    expect(member).toMatchObject({
+      organizationId: "org-1",
+      userId: "user-1",
+      role: "admin",
+      organization: { id: "org-1", name: "Acme" },
+    });
+    expect(prismaMock.organization.create).toHaveBeenCalledWith({
+      data: { name: "Acme" },
+      select: { id: true, name: true },
+    });
+    expect(prismaMock.orgMember.create).toHaveBeenNthCalledWith(2, {
+      data: {
+        userId: "00000000-0000-4000-a000-000000000001",
+        organizationId: "org-1",
+        role: "member",
+      },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      {
+        organizationId: "org-1",
+        scopeType: "system",
+        scopeId: "org-1",
+        eventType: "organization_created",
+        payload: {
+          organization: { id: "org-1", name: "Acme" },
+          member: {
+            userId: "user-1",
+            role: "admin",
+          },
+        },
+        actorType: "user",
+        actorId: "user-1",
+      },
+      prismaMock,
+    );
+  });
+
   it("deduplicates repos by remote url within an org", async () => {
     prismaMock.repo.findUnique.mockResolvedValueOnce({ id: "repo-1" });
 

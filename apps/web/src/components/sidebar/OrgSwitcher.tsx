@@ -1,7 +1,8 @@
-import { ChevronDown, Check } from "lucide-react";
+import { ChevronDown, Check, Plus } from "lucide-react";
 import { useAuthStore, type OrgMembership } from "@trace/client-core";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { getInitials } from "../../lib/utils";
+import { CreateOrganizationDialog } from "./CreateOrganizationDialog";
 
 export function OrgSwitcher({ large }: { large?: boolean }) {
   const orgMemberships = useAuthStore((s: { orgMemberships: OrgMembership[] }) => s.orgMemberships);
@@ -10,24 +11,7 @@ export function OrgSwitcher({ large }: { large?: boolean }) {
 
   const activeOrg = orgMemberships.find((m: OrgMembership) => m.organizationId === activeOrgId)?.organization;
   const orgList = orgMemberships.map((m: OrgMembership) => m.organization);
-  const triggerClassName = `flex h-full w-full items-center gap-2 px-3 transition-colors ${orgList.length > 1 ? "cursor-pointer hover:bg-surface-elevated" : ""} ${large ? "py-2.5" : ""}`;
-
-  if (orgList.length <= 1) {
-    return (
-      <div className={triggerClassName}>
-        <div
-          className={`flex shrink-0 items-center justify-center rounded-lg bg-accent font-bold text-accent-foreground ${large ? "h-7.5 w-7.5 text-xs" : "h-7 w-7 text-xs"}`}
-        >
-          {getInitials(activeOrg?.name ?? "")}
-        </div>
-        <span
-          className={`flex-1 truncate text-left font-semibold text-foreground ${large ? "text-[15px]" : "text-sm"}`}
-        >
-          {activeOrg?.name ?? "Workspace"}
-        </span>
-      </div>
-    );
-  }
+  const triggerClassName = `flex h-full w-full cursor-pointer items-center gap-2 px-3 transition-colors hover:bg-surface-elevated ${large ? "py-2.5" : ""}`;
 
   return (
     <Popover>
@@ -61,6 +45,20 @@ export function OrgSwitcher({ large }: { large?: boolean }) {
             {org.id === activeOrgId && <Check size={14} className="text-accent" />}
           </button>
         ))}
+        <div className="my-1 h-px bg-border" />
+        <CreateOrganizationDialog
+          trigger={
+            <button
+              type="button"
+              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-surface-hover"
+            >
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-surface-elevated text-muted-foreground">
+                <Plus size={13} />
+              </div>
+              <span className="flex-1 truncate text-left">New organization</span>
+            </button>
+          }
+        />
       </PopoverContent>
     </Popover>
   );
