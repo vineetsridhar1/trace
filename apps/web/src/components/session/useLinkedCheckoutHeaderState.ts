@@ -133,9 +133,24 @@ export function useLinkedCheckoutHeaderState({
     if (!repoId || !groupBranch || !runtimeInstanceId || pending) return;
 
     try {
-      setSyncConflictError(
-        "Preview mode: this dialog is being shown directly from Sync so you can validate the web UI before deploying the server changes.",
-      );
+      const result = await runSync();
+      if (!result) return;
+
+      if (!result.ok) {
+        if (result.errorCode === "DIRTY_ROOT_CHECKOUT") {
+          setSyncConflictError(result.error);
+          return;
+        }
+        toast.error("Failed to sync main worktree", {
+          description: result.error ?? "Unknown error",
+        });
+        return;
+      }
+
+      setSyncConflictError(null);
+      toast.success("Main worktree synced", {
+        description: `Now following ${groupBranch} on ${runtimeDisplayLabel}.`,
+      });
     } catch (error) {
       toast.error("Failed to sync main worktree", {
         description: error instanceof Error ? error.message : String(error),
