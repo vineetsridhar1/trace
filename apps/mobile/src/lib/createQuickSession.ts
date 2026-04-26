@@ -19,15 +19,19 @@ import { fetchSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { useMobileUIStore } from "@/stores/ui";
 
 const DEFAULT_TOOL: CodingTool = "claude_code";
+const pendingQuickSessionChannels = new Set<string>();
 
 interface CreateAgentTabOptions {
   navigate?: (sessionGroupId: string, sessionId: string) => void;
 }
 
 /**
- * Start the session, hydrate its real workspace, then open the session page.
+ * Start the session, prefetch its workspace, then open the session page.
  */
 export async function createQuickSession(channelId: string): Promise<void> {
+  if (pendingQuickSessionChannels.has(channelId)) return;
+  pendingQuickSessionChannels.add(channelId);
+
   const channel = useEntityStore.getState().channels[channelId];
   const channelRepoId = channel?.repo?.id;
 
@@ -58,10 +62,9 @@ export async function createQuickSession(channelId: string): Promise<void> {
       throw new Error("Server did not return a session id");
     }
 
-    const hydrated = await fetchSessionGroupDetail(session.sessionGroupId);
-    if (!hydrated && !useEntityStore.getState().sessions[session.id]?.sessionGroupId) {
-      throw new Error("Couldn't load the new session");
-    }
+    void fetchSessionGroupDetail(session.sessionGroupId).catch((error: unknown) => {
+      console.warn("[createQuickSession] failed to prefetch session group", error);
+    });
 
     const ui = useMobileUIStore.getState();
     ui.setOverlaySessionId(session.id);
@@ -70,6 +73,8 @@ export async function createQuickSession(channelId: string): Promise<void> {
     const message = err instanceof Error ? err.message : "Please try again.";
     void haptic.error();
     Alert.alert("Couldn't start session", message);
+  } finally {
+    pendingQuickSessionChannels.delete(channelId);
   }
 }
 

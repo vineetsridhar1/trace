@@ -11,6 +11,8 @@ import { navigateToSession } from "../stores/ui";
 import { getDefaultModel } from "../components/session/modelOptions";
 import { isLocalMode } from "./runtime-mode";
 
+const pendingQuickSessionChannels = new Set<string>();
+
 /**
  * Resolve the best runtime for a new session based on user preference.
  * Prefers a connected local bridge when defaultHosting is "bridge",
@@ -51,6 +53,9 @@ async function resolveDefaultRuntime(
  * Starts the session, then navigates once the service returns the real IDs.
  */
 export async function createQuickSession(channelId: string): Promise<void> {
+  if (pendingQuickSessionChannels.has(channelId)) return;
+  pendingQuickSessionChannels.add(channelId);
+
   const prefTool = usePreferencesStore.getState().defaultTool ?? "claude_code";
   const prefModel = usePreferencesStore.getState().defaultModel ?? getDefaultModel(prefTool);
 
@@ -110,5 +115,7 @@ export async function createQuickSession(channelId: string): Promise<void> {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     toast.error("Failed to create session", { description: message });
+  } finally {
+    pendingQuickSessionChannels.delete(channelId);
   }
 }

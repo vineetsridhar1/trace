@@ -154,6 +154,57 @@ describe("createQuickSession", () => {
     expect(pushMock).toHaveBeenCalledWith("/sessions/group_new/session_new");
     expect(replaceMock).not.toHaveBeenCalled();
   });
+
+  it("still opens the real session when group prefetch fails", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mutationMock.mockImplementation((document: string) => {
+      if (document === START_SESSION_MUTATION) {
+        return {
+          toPromise: async () => ({
+            data: { startSession: { id: "session_new", sessionGroupId: "group_new" } },
+          }),
+        };
+      }
+      throw new Error(`Unexpected mutation ${document}`);
+    });
+    fetchSessionGroupDetailMock.mockRejectedValue(new Error("network"));
+
+    const { createQuickSession } = await import("./createQuickSession");
+    await createQuickSession("channel_1");
+    await Promise.resolve();
+
+    expect(setOverlaySessionIdMock).toHaveBeenCalledWith("session_new");
+    expect(pushMock).toHaveBeenCalledWith("/sessions/group_new/session_new");
+    expect(alertMock).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it("ignores duplicate starts while one is already pending for the channel", async () => {
+    let resolveStart: ((value: { data: { startSession: { id: string; sessionGroupId: string } } }) => void) | undefined;
+    mutationMock.mockImplementation((document: string) => {
+      if (document === START_SESSION_MUTATION) {
+        return {
+          toPromise: () =>
+            new Promise((resolve) => {
+              resolveStart = resolve;
+            }),
+        };
+      }
+      throw new Error(`Unexpected mutation ${document}`);
+    });
+    fetchSessionGroupDetailMock.mockResolvedValue(true);
+
+    const { createQuickSession } = await import("./createQuickSession");
+    const first = createQuickSession("channel_1");
+    const second = createQuickSession("channel_1");
+
+    expect(mutationMock).toHaveBeenCalledTimes(1);
+    await second;
+    resolveStart?.({ data: { startSession: { id: "session_new", sessionGroupId: "group_new" } } });
+    await first;
+
+    expect(pushMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("startPlanImplementationSession", () => {
