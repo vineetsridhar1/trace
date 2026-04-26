@@ -30,6 +30,10 @@ function sortTimestamp(session: SessionEntity): number {
   );
 }
 
+function rowTimestamp(session: SessionEntity): number {
+  return timestampMs(session.lastMessageAt ?? session.updatedAt);
+}
+
 function ownedBy(session: SessionEntity, userId: string): boolean {
   const createdBy = session.createdBy as { id?: string } | undefined | null;
   return typeof createdBy?.id === "string" && createdBy.id === userId;
@@ -127,7 +131,7 @@ interface HomeSectionsResult {
  * When `collectRepos` is true, also collects distinct repos from the unfiltered
  * (no repoId) visible groups in a single pass, avoiding a second full traversal.
  */
-function buildHomeSections(
+export function buildHomeSections(
   state: EntityState,
   userId: string,
   repoId: string | null,
@@ -183,11 +187,11 @@ function buildHomeSections(
 
     const isDone = session.agentStatus === "done" || session.sessionStatus === "in_review";
     if (isDone) {
-      const updatedTs = timestampMs(session.updatedAt);
-      if (updatedTs >= cutoff) {
+      const doneTs = rowTimestamp(session);
+      if (doneTs >= cutoff) {
         const existing = groupDone.get(groupId);
-        if (!existing || updatedTs > existing.ts) {
-          groupDone.set(groupId, { ts: updatedTs });
+        if (!existing || doneTs > existing.ts) {
+          groupDone.set(groupId, { ts: doneTs });
         }
       }
     }
