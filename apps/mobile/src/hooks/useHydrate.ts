@@ -11,11 +11,13 @@ import {
 } from "@trace/client-core";
 import type { Channel, ChannelGroup, Event, Session, SessionGroup } from "@trace/gql";
 import { isUnauthorized } from "@/lib/auth";
+import { reconcileEntitySnapshot, resetEntitySnapshots } from "@/lib/entitySnapshots";
 import { latestTimestamp, mergeSessionGroupEntity } from "@/lib/session-group";
 import { userFacingError } from "@/lib/requestError";
 import { timedEventIngest } from "@/lib/perf";
 import { getClient } from "@/lib/urql";
 import { useConnectionStore, type ConnectionState } from "@/stores/connection";
+import { useRefreshStatusStore } from "@/stores/refresh-status";
 
 const ORGANIZATION_QUERY = gql`
   query MobileOrganization($id: ID!) {
@@ -158,26 +160,42 @@ async function doRefreshOrgData(activeOrgId: string): Promise<RefreshOrgDataResu
   }
 
   const upsertMany = useEntityStore.getState().upsertMany;
+  const setOrgStatus = useRefreshStatusStore.getState().setOrgStatus;
 
-  const channels = (orgResult.data?.organization?.channels ?? []) as Array<
-    Channel & { id: string }
-  >;
-  if (channels.length > 0) upsertMany("channels", channels);
+  const channels = (orgResult.data?.organization?.channels ?? []) as Array<Channel & { id: string }>;
+  if (orgResult.data?.organization) {
+    if (channels.length > 0) upsertMany("channels", channels);
+    reconcileEntitySnapshot("channels", `org:${activeOrgId}`, channels.map((channel) => channel.id));
+  }
 
   const channelGroups = (groupsResult.data?.channelGroups ?? []) as Array<
     ChannelGroup & { id: string }
   >;
-  if (channelGroups.length > 0) upsertMany("channelGroups", channelGroups);
+  if (groupsResult.data?.channelGroups) {
+    if (channelGroups.length > 0) upsertMany("channelGroups", channelGroups);
+    reconcileEntitySnapshot(
+      "channelGroups",
+      `org:${activeOrgId}`,
+      channelGroups.map((group) => group.id),
+    );
+  }
 
   const sessions = (sessionsResult.data?.mySessions ?? []) as Array<Session & { id: string }>;
   const sessionGroups = sessionGroupsFromSessions(sessions);
-  if (sessionGroups.length > 0) upsertMany("sessionGroups", sessionGroups);
-  if (sessions.length > 0) upsertMany("sessions", sessions);
+  if (sessionsResult.data?.mySessions) {
+    if (sessionGroups.length > 0) upsertMany("sessionGroups", sessionGroups);
+    if (sessions.length > 0) upsertMany("sessions", sessions);
+    reconcileEntitySnapshot(
+      "sessionGroups",
+      `home:${activeOrgId}`,
+      sessionGroups.map((group) => group.id),
+    );
+    reconcileEntitySnapshot("sessions", `home:${activeOrgId}`, sessions.map((session) => session.id));
+  }
 
   void getPlatform().storage.setItem(ME_REFRESH_KEY, String(Date.now()));
 
-  return {
-    authorized: true,
+  const status = {
     channelsError:
       orgResult.error || groupsResult.error
         ? userFacingError(
@@ -188,6 +206,13 @@ async function doRefreshOrgData(activeOrgId: string): Promise<RefreshOrgDataResu
     homeError: sessionsResult.error
       ? userFacingError(sessionsResult.error, "Couldn't refresh your home feed.")
       : null,
+  } satisfies Omit<RefreshOrgDataResult, "authorized">;
+
+  setOrgStatus(activeOrgId, status);
+
+  return {
+    authorized: true,
+    ...status,
   };
 }
 
@@ -237,8 +262,14 @@ function sessionGroupsFromSessions(
 
 export function useHydrate(activeOrgId: string | null): void {
   const logout = useAuthStore((s: AuthState) => s.logout);
+  const previousOrgIdRef = useRef<string | null>(activeOrgId);
 
   useEffect(() => {
+    if (previousOrgIdRef.current !== activeOrgId) {
+      resetEntitySnapshots();
+      useRefreshStatusStore.getState().reset();
+    }
+    previousOrgIdRef.current = activeOrgId;
     if (!activeOrgId) return;
     let cancelled = false;
     const client = getClient();

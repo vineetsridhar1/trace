@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import { EmptyState } from "@/components/design-system";
@@ -12,6 +12,7 @@ import {
 } from "@/hooks/useCodingChannels";
 import { refreshOrgData } from "@/hooks/useHydrate";
 import { haptic } from "@/lib/haptics";
+import { orgRefreshStatus, useRefreshStatusStore } from "@/stores/refresh-status";
 import { useTheme } from "@/theme";
 
 export default function ChannelsIndex() {
@@ -20,21 +21,10 @@ export default function ChannelsIndex() {
   const logout = useAuthStore((s: AuthState) => s.logout);
 
   const [refreshing, setRefreshing] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadError = useRefreshStatusStore((s) => orgRefreshStatus(s.byOrg, activeOrgId).channelsError);
 
   const keys = useCodingChannelKeys({ search: "" });
   const activeCounts = useChannelActiveSessionCounts();
-
-  useEffect(() => {
-    if (!activeOrgId) {
-      setLoadError(null);
-      return;
-    }
-    void refreshOrgData(activeOrgId).then((result) => {
-      if (!result.authorized) return;
-      setLoadError(result.channelsError);
-    });
-  }, [activeOrgId]);
 
   const handleRefresh = useCallback(async () => {
     if (!activeOrgId) return;
@@ -47,7 +37,6 @@ export default function ChannelsIndex() {
         await logout();
         return;
       }
-      setLoadError(result.channelsError);
     } finally {
       setRefreshing(false);
     }

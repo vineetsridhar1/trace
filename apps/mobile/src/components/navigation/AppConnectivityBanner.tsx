@@ -11,6 +11,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Glass, Text } from "@/components/design-system";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { alpha, useTheme } from "@/theme";
 import { useConnectionStore } from "@/stores/connection";
 
@@ -19,7 +20,8 @@ const RECONNECTING_DELAY_MS = 10_000;
 export function AppConnectivityBanner() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { isConnected } = useNetworkStatus();
+  const { isConnected, isResolved } = useNetworkStatus();
+  const reducedMotion = useReducedMotion();
   const wsConnected = useConnectionStore((s) => s.connected);
   const disconnectedAt = useConnectionStore((s) => s.disconnectedAt);
   const hasConnectedBefore = useConnectionStore((s) => s.hasConnectedBefore);
@@ -40,10 +42,10 @@ export function AppConnectivityBanner() {
     !wsConnected &&
     disconnectedAt !== null &&
     now - disconnectedAt >= RECONNECTING_DELAY_MS;
-  const offline = !isConnected;
+  const offline = isResolved && !isConnected;
 
   useEffect(() => {
-    if (!reconnecting) {
+    if (!reconnecting || reducedMotion) {
       pulse.value = 1;
       return;
     }
@@ -52,7 +54,7 @@ export function AppConnectivityBanner() {
       -1,
       true,
     );
-  }, [pulse, reconnecting, theme.motion.durations.slow]);
+  }, [pulse, reconnecting, reducedMotion, theme.motion.durations.slow]);
 
   const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
 
@@ -97,7 +99,7 @@ export function AppConnectivityBanner() {
           style={[
             styles.iconChip,
             { backgroundColor: banner.tint, borderColor: banner.borderColor },
-            reconnecting ? pulseStyle : null,
+            reconnecting && !reducedMotion ? pulseStyle : null,
           ]}
         >
           <SymbolView

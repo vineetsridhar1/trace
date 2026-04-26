@@ -5,6 +5,7 @@ import {
   type SessionGroupEntity,
 } from "@trace/client-core";
 import type { Session, SessionGroup } from "@trace/gql";
+import { reconcileEntitySnapshot } from "@/lib/entitySnapshots";
 import { userFacingError } from "@/lib/requestError";
 import { getClient } from "@/lib/urql";
 
@@ -97,5 +98,8 @@ export async function fetchChannelSessionGroups(
   if (sessions.length > 0) {
     upsertMany("sessions", sessions as Array<SessionEntity & { id: string }>);
   }
+  const snapshotKey = `${channelId}:${view}`;
+  reconcileEntitySnapshot("sessionGroups", snapshotKey, groups.map((group) => group.id));
+  reconcileEntitySnapshot("sessions", snapshotKey, sessions.map((session) => session.id));
   return null;
 }
