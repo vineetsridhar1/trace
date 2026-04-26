@@ -48,7 +48,7 @@ export function OnboardingChecklist({ status }: Props) {
             done={status.githubSet}
             icon={Github}
             title="Add a GitHub token"
-            description="Used when Trace needs GitHub credentials for repository access."
+            description="Used for repository access in cloud sessions."
             onClick={() => openSettings("api-keys")}
           />
         )}

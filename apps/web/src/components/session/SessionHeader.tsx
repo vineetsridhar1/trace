@@ -5,6 +5,7 @@ import {
   WifiOff,
   Loader2,
   Monitor,
+  Cloud,
   TerminalSquare,
   GitPullRequest,
   Maximize2,
@@ -47,6 +48,7 @@ export function SessionHeader({
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
     | string
     | undefined;
+  const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
     | undefined;
@@ -96,7 +98,8 @@ export function SessionHeader({
   }, [disconnected]);
 
   const runtimeLabel = connection?.runtimeLabel as string | undefined;
-  const runtimeDisplayLabel = runtimeLabel ?? null;
+  const isCloud = hosting === "cloud";
+  const runtimeDisplayLabel = isCloud ? "Cloud" : (runtimeLabel ?? null);
   const displaySessionStatus = getDisplaySessionStatus(
     sessionStatus,
     prUrl,
@@ -179,7 +182,7 @@ export function SessionHeader({
 
       {runtimeDisplayLabel && (
         <span className="flex shrink-0 items-center gap-1 rounded-md bg-surface-elevated px-2 py-1 text-xs text-muted-foreground">
-          <Monitor size={12} />
+          {isCloud ? <Cloud size={12} /> : <Monitor size={12} />}
           {runtimeDisplayLabel}
         </span>
       )}

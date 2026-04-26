@@ -91,8 +91,9 @@ export function useSessionComposerConfig({
     [],
   );
 
-  const bridgeIcon: SFSymbol = "laptopcomputer";
-  const bridgeLabel = connection?.runtimeLabel ?? "Local";
+  const bridgeIcon: SFSymbol = hosting === "cloud" ? "cloud" : "laptopcomputer";
+  const bridgeLabel =
+    hosting === "cloud" ? "Cloud" : (connection?.runtimeLabel ?? "Local");
 
   return {
     bridgeIcon,

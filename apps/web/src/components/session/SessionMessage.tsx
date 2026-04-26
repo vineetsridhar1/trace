@@ -184,7 +184,9 @@ export const SessionMessage = memo(function SessionMessage({
           text={
             typeof payload?.targetRuntimeLabel === "string" && payload.targetRuntimeLabel
               ? `Moved session to ${payload.targetRuntimeLabel}`
-              : "Moved session to another runtime"
+              : payload?.targetHosting === "cloud"
+                ? "Moved session to cloud"
+                : "Moved session to another runtime"
           }
         />
       ) : (
