@@ -26,7 +26,10 @@ import {
   createChatMembershipLoader,
 } from "./dataloader.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
+const JWT_SECRET = process.env.JWT_SECRET ?? (process.env.NODE_ENV === "test" ? "trace-test-secret" : null);
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET must be set");
+}
 const BRIDGE_AUTH_TOKEN_TTL_SECONDS = 5 * 60;
 
 type SessionTokenPayload = {
