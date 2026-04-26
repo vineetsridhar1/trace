@@ -5,6 +5,8 @@ import {
   type SessionGroupEntity,
 } from "@trace/client-core";
 import type { Session, SessionGroup } from "@trace/gql";
+import { reconcileEntitySnapshot } from "@/lib/entitySnapshots";
+import { userFacingError } from "@/lib/requestError";
 import { getClient } from "@/lib/urql";
 
 const SESSION_GROUPS_QUERY = gql`
@@ -69,12 +71,17 @@ function variablesForView(
 export async function fetchChannelSessionGroups(
   channelId: string,
   view: SessionGroupsView,
-): Promise<void> {
+): Promise<string | null> {
   const client = getClient();
   const result = await client
     .query(SESSION_GROUPS_QUERY, variablesForView(channelId, view))
     .toPromise();
-  if (result.error || !result.data?.sessionGroups) return;
+  if (result.error) {
+    return userFacingError(result.error, "Couldn't load sessions for this channel.");
+  }
+  if (!result.data?.sessionGroups) {
+    return "Couldn't load sessions for this channel.";
+  }
   const groups = result.data.sessionGroups as Array<SessionGroup & { id: string }>;
   const upsertMany = useEntityStore.getState().upsertMany;
   const sessions = groups.flatMap((g) => g.sessions ?? []) as Array<Session & { id: string }>;
@@ -91,4 +98,8 @@ export async function fetchChannelSessionGroups(
   if (sessions.length > 0) {
     upsertMany("sessions", sessions as Array<SessionEntity & { id: string }>);
   }
+  const snapshotKey = `${channelId}:${view}`;
+  reconcileEntitySnapshot("sessionGroups", snapshotKey, groups.map((group) => group.id));
+  reconcileEntitySnapshot("sessions", snapshotKey, sessions.map((session) => session.id));
+  return null;
 }

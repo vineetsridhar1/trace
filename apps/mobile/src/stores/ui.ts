@@ -89,7 +89,6 @@ export const useMobileUIStore = create<MobileUIState>((set: SetState<MobileUISta
   setActiveAccessoryIndex: (i) => set({ activeAccessoryIndex: i }),
   setOverlaySessionId: (id) => set({ overlaySessionId: id }),
   setActiveMenuClose: (close) => set({ activeMenuClose: close }),
-
   markChannelDone: (id) =>
     set((s) => ({ channelDoneBadges: { ...s.channelDoneBadges, [id]: true } })),
   markSessionDone: (id) =>

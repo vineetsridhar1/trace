@@ -229,7 +229,12 @@ export default function PairLocalScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={() => router.back()}
+            hitSlop={12}
+          >
             <Text variant="subheadline" color="mutedForeground">
               Back
             </Text>

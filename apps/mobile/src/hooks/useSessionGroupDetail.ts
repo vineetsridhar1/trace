@@ -7,6 +7,7 @@ import {
   type SessionEntity,
 } from "@trace/client-core";
 import type { Session, SessionGroup } from "@trace/gql";
+import { userFacingError } from "@/lib/requestError";
 import { mergeSessionGroupEntity } from "@/lib/session-group";
 import { getClient } from "@/lib/urql";
 
@@ -116,10 +117,20 @@ function areIdsEqual(a: string[], b: string[]): boolean {
   return true;
 }
 
-async function doFetchSessionGroupDetail(groupId: string): Promise<boolean> {
+interface SessionGroupDetailResult {
+  ok: boolean;
+  error: string | null;
+}
+
+async function doFetchSessionGroupDetail(groupId: string): Promise<SessionGroupDetailResult> {
   const result = await getClient().query(SESSION_GROUP_DETAIL_QUERY, { id: groupId }).toPromise();
   const group = result.data?.sessionGroup as (SessionGroup & { id: string }) | null | undefined;
-  if (result.error || !group) return false;
+  if (result.error) {
+    return { ok: false, error: userFacingError(result.error, "Couldn't load this workspace.") };
+  }
+  if (!group) {
+    return { ok: false, error: "Couldn't load this workspace." };
+  }
 
   const existing = useEntityStore.getState();
   const sessions = (group.sessions ?? []) as Array<Session & { id: string }>;
@@ -143,7 +154,7 @@ async function doFetchSessionGroupDetail(groupId: string): Promise<boolean> {
   if (mergedSessions.length > 0) {
     existing.upsertMany("sessions", mergedSessions);
   }
-  return true;
+  return { ok: true, error: null };
 }
 
 /**
@@ -158,18 +169,20 @@ async function doFetchSessionGroupDetail(groupId: string): Promise<boolean> {
  * This guards against repeated open attempts and overlapping overlay-mount
  * fetches without requiring callers to reason about request coalescing.
  */
-const inflightGroupFetches = new Map<string, Promise<boolean>>();
+const inflightGroupFetches = new Map<string, Promise<SessionGroupDetailResult>>();
 const lastGroupFetchAt = new Map<string, number>();
 const FETCH_TTL_MS = 30_000;
 
-export function fetchSessionGroupDetail(groupId: string): Promise<boolean> {
+export function fetchSessionGroupDetail(groupId: string): Promise<SessionGroupDetailResult> {
   const existing = inflightGroupFetches.get(groupId);
   if (existing) return existing;
   const lastAt = lastGroupFetchAt.get(groupId) ?? 0;
-  if (lastAt && Date.now() - lastAt < FETCH_TTL_MS) return Promise.resolve(true);
-  const promise = doFetchSessionGroupDetail(groupId).then((success) => {
-    if (success) lastGroupFetchAt.set(groupId, Date.now());
-    return success;
+  if (lastAt && Date.now() - lastAt < FETCH_TTL_MS) {
+    return Promise.resolve({ ok: true, error: null });
+  }
+  const promise = doFetchSessionGroupDetail(groupId).then((result) => {
+    if (result.ok) lastGroupFetchAt.set(groupId, Date.now());
+    return result;
   }).finally(() => {
     inflightGroupFetches.delete(groupId);
   });
@@ -177,8 +190,11 @@ export function fetchSessionGroupDetail(groupId: string): Promise<boolean> {
   return promise;
 }
 
-export function useEnsureSessionGroupDetail(groupId: string | undefined): boolean {
+export function useEnsureSessionGroupDetail(
+  groupId: string | undefined,
+): { loading: boolean; error: string | null } {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!groupId) return;
@@ -202,15 +218,17 @@ export function useEnsureSessionGroupDetail(groupId: string | undefined): boolea
       return;
     }
     if (!alreadyHydrated) setLoading(true);
-    fetchSessionGroupDetail(groupId).finally(() => {
-      if (!cancelled) setLoading(false);
+    void fetchSessionGroupDetail(groupId).then((result) => {
+      if (cancelled) return;
+      setError(result.error);
+      setLoading(false);
     });
     return () => {
       cancelled = true;
     };
   }, [groupId]);
 
-  return loading;
+  return { loading, error };
 }
 
 export function useSessionGroupSessionIds(groupId: string): string[] {

@@ -26,6 +26,7 @@ export function MessageImageModal({ item, onClose }: MessageImageModalProps) {
       onRequestClose={onClose}
     >
       <Pressable
+        accessible={false}
         onPress={onClose}
         style={[styles.modalBackdrop, { backgroundColor: alpha("#000000", 0.94) }]}
       >
@@ -47,6 +48,7 @@ export function MessageImageModal({ item, onClose }: MessageImageModalProps) {
           <View style={styles.modalImageFrame}>
             {uri ? (
               <Pressable
+                accessible={false}
                 onPress={(event) => event.stopPropagation()}
                 style={[styles.modalImageSurface, imageSurfaceStyle]}
               >

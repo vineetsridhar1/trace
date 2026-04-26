@@ -10,6 +10,7 @@ import { SessionGroupRow } from "@/components/channels/SessionGroupRow";
 import { useHomeSections, type HomeSectionKind } from "@/hooks/useHomeSections";
 import { refreshOrgData } from "@/hooks/useHydrate";
 import { haptic } from "@/lib/haptics";
+import { orgRefreshStatus, useRefreshStatusStore } from "@/stores/refresh-status";
 import { useMobileUIStore, type MobileUIState } from "@/stores/ui";
 
 type HomeListItem =
@@ -22,6 +23,7 @@ export default function AuthedHome() {
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
   const logout = useAuthStore((s: AuthState) => s.logout);
   const repoFilter = useMobileUIStore((s: MobileUIState) => s.homeRepoFilter);
+  const loadError = useRefreshStatusStore((s) => orgRefreshStatus(s.byOrg, activeOrgId).homeError);
   const sections = useHomeSections(userId, repoFilter);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -41,10 +43,11 @@ export default function AuthedHome() {
     void haptic.medium();
     setRefreshing(true);
     try {
-      const ok = await refreshOrgData(activeOrgId);
-      if (!ok) {
+      const result = await refreshOrgData(activeOrgId);
+      if (!result.authorized) {
         useEntityStore.getState().reset();
         await logout();
+        return;
       }
     } finally {
       setRefreshing(false);
@@ -66,7 +69,13 @@ export default function AuthedHome() {
       onRefresh={handleRefresh}
       refreshing={refreshing}
       ListHeaderComponent={ListHeader}
-      ListEmptyComponent={<HomeEmpty hasRepoFilter={repoFilter !== null} />}
+      ListEmptyComponent={
+        <HomeEmpty
+          hasRepoFilter={repoFilter !== null}
+          error={loadError}
+          onRetry={() => void handleRefresh()}
+        />
+      }
       style={{ flex: 1, backgroundColor: theme.colors.background }}
     />
   );
@@ -87,17 +96,34 @@ function getItemType(item: HomeListItem): string {
   return item.kind;
 }
 
-function HomeEmpty({ hasRepoFilter }: { hasRepoFilter: boolean }) {
+function HomeEmpty({
+  hasRepoFilter,
+  error,
+  onRetry,
+}: {
+  hasRepoFilter: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
   return (
     <View style={styles.empty}>
       <EmptyState
-        icon={hasRepoFilter ? "line.3.horizontal.decrease.circle" : "checkmark.seal"}
-        title={hasRepoFilter ? "Nothing in this repo" : "All clear"}
+        icon={
+          error
+            ? "exclamationmark.triangle"
+            : hasRepoFilter
+              ? "line.3.horizontal.decrease.circle"
+              : "checkmark.seal"
+        }
+        title={error ? "Couldn't load home" : hasRepoFilter ? "Nothing in this repo" : "All clear"}
         subtitle={
-          hasRepoFilter
+          error
+            ? error
+            : hasRepoFilter
             ? "No sessions for the selected repo right now."
             : "Sessions that need you will show up here."
         }
+        action={error ? { label: "Retry", onPress: onRetry } : undefined}
       />
     </View>
   );
