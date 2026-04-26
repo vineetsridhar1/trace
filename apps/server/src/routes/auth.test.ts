@@ -144,9 +144,14 @@ describe("local login", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { token: string; organizationId: string };
-    expect(jwt.verify(body.token, JWT_SECRET)).toMatchObject({ userId: "user-1" });
+    const body = (await res.json()) as { organizationId: string; user: { id: string } };
     expect(body.organizationId).toBe("org-1");
+    expect(body.user.id).toBe("user-1");
+    const setCookie = res.headers.get("set-cookie") ?? "";
+    expect(setCookie).toContain("trace_token=");
+    const cookieToken = /trace_token=([^;]+)/.exec(setCookie)?.[1];
+    expect(cookieToken).toBeTruthy();
+    expect(jwt.verify(cookieToken!, JWT_SECRET)).toMatchObject({ userId: "user-1" });
     expect(prismaMock.user.create).toHaveBeenCalledWith({
       data: {
         email: expect.stringMatching(/^jane-developer-[a-f0-9]{24}@trace\.local$/),
@@ -250,9 +255,13 @@ describe("local login", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { token: string; organizationId: string };
-    expect(jwt.verify(body.token, JWT_SECRET)).toMatchObject({ userId: "user-1" });
+    const body = (await res.json()) as { organizationId: string; user: { id: string } };
+    expect(body.user.id).toBe("user-1");
     expect(body.organizationId).toBe("org-1");
+    const setCookie = res.headers.get("set-cookie") ?? "";
+    const cookieToken = /trace_token=([^;]+)/.exec(setCookie)?.[1];
+    expect(cookieToken).toBeTruthy();
+    expect(jwt.verify(cookieToken!, JWT_SECRET)).toMatchObject({ userId: "user-1" });
     expect(prismaMock.user.findFirst).toHaveBeenCalledWith({
       where: {
         email: {
@@ -494,7 +503,7 @@ describe("local-mode external auth", () => {
     const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
     const res = await fetch(`${baseUrl}/auth/me`, {
       headers: {
-        Authorization: `Bearer ${token}`,
+        Cookie: `trace_token=${token}`,
       },
     });
 
@@ -779,9 +788,13 @@ describe("github oauth callback", () => {
 
     expect(res.status).toBe(200);
     const body = await res.text();
+    expect(res.headers.get("set-cookie") ?? "").toContain("trace_token=");
     expect(body).toContain("window.opener.postMessage");
+    expect(body).toContain('BroadcastChannel("trace_auth")');
     expect(body).toContain("http://localhost:3000");
     expect(body).not.toContain("trace://auth/callback");
+    expect(body).not.toContain("localStorage.setItem");
+    expect(body).not.toContain("token:");
   });
 
   it("ignores an invalid state and defaults to web origin", async () => {
@@ -806,6 +819,19 @@ describe("github oauth callback", () => {
     const body = await res.text();
     expect(body).toContain("window.opener.postMessage");
     expect(body).not.toContain("evil.example.com");
+  });
+
+  it("clears the browser session cookie on logout", async () => {
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/auth/logout`, {
+      method: "POST",
+      headers: {
+        Cookie: `trace_token=${token}`,
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("set-cookie") ?? "").toContain("trace_token=;");
   });
 });
 

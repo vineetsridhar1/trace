@@ -6,7 +6,6 @@ import { isLocalMode } from "../../lib/runtime-mode";
 
 export function LoginPage() {
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
-  const signInWithToken = useAuthStore((s: AuthState) => s.signInWithToken);
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -15,17 +14,13 @@ export function LoginPage() {
   useEffect(() => {
     if (isLocalMode) return;
 
-    function handleAuthSuccess(token?: string) {
-      if (token) {
-        void signInWithToken(token);
-      } else {
-        void fetchMe();
-      }
+    function handleAuthSuccess() {
+      void fetchMe();
     }
 
     function onMessage(event: MessageEvent) {
       if (event.data?.type === "auth:success") {
-        handleAuthSuccess(event.data.token as string | undefined);
+        handleAuthSuccess();
       }
     }
     window.addEventListener("message", onMessage);
@@ -35,26 +30,18 @@ export function LoginPage() {
       bc = new BroadcastChannel("trace_auth");
       bc.onmessage = (event: MessageEvent) => {
         if (event.data?.type === "auth:success") {
-          handleAuthSuccess(event.data.token as string | undefined);
+          handleAuthSuccess();
         }
       };
     } catch {
-      // BroadcastChannel unavailable — localStorage fallback still works.
+      // BroadcastChannel unavailable.
     }
-
-    function onStorage(event: StorageEvent) {
-      if (event.key === "trace_token" && event.newValue) {
-        handleAuthSuccess(event.newValue);
-      }
-    }
-    window.addEventListener("storage", onStorage);
 
     return () => {
       window.removeEventListener("message", onMessage);
-      window.removeEventListener("storage", onStorage);
       bc?.close();
     };
-  }, [fetchMe, signInWithToken]);
+  }, [fetchMe]);
 
   const loginWithLocalName = useCallback(async (
     rawName: string,
@@ -75,9 +62,9 @@ export function LoginPage() {
         body: JSON.stringify(trimmedName ? { name: trimmedName } : {}),
       });
       const payload = await response.json().catch(
-        () => ({} as { error?: string; token?: string; user?: { name?: string } }),
+        () => ({} as { error?: string; user?: { name?: string } }),
       );
-      if (!response.ok || typeof payload.token !== "string") {
+      if (!response.ok) {
         throw new Error(payload.error ?? "Failed to sign in");
       }
       const persistedName =
@@ -85,7 +72,7 @@ export function LoginPage() {
       if (persistedName.length >= 2) {
         localStorage.setItem(LOCAL_LOGIN_NAME_KEY, persistedName);
       }
-      await signInWithToken(payload.token);
+      await fetchMe();
       return true;
     } catch (loginError) {
       if (!options?.silent) {
@@ -95,7 +82,7 @@ export function LoginPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [signInWithToken, submitting]);
+  }, [fetchMe, submitting]);
 
   useEffect(() => {
     if (!isLocalMode || autoLoginAttempted) return;

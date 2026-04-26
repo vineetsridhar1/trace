@@ -53,6 +53,7 @@ export type GqlClient = Client & { dispose: () => Promise<void> };
  */
 export function createGqlClient(options: CreateGqlClientOptions): GqlClient {
   const platform = getPlatform();
+  const usesBearerAuth = platform.authMode === "bearer";
 
   const wsClient = createWSClient({
     url: options.wsUrl,
@@ -60,7 +61,7 @@ export function createGqlClient(options: CreateGqlClientOptions): GqlClient {
     connectionParams: () => {
       const { token, activeOrgId } = useAuthStore.getState();
       return {
-        ...(token ? { token } : {}),
+        ...(usesBearerAuth && token ? { token } : {}),
         ...(activeOrgId ? { organizationId: activeOrgId } : {}),
       };
     },
@@ -93,7 +94,7 @@ export function createGqlClient(options: CreateGqlClientOptions): GqlClient {
     exchanges: [
       fetchExchange,
       subscriptionExchange({
-        forwardSubscription(request) {
+        forwardSubscription(request: { query: unknown }) {
           const input = { ...request, query: request.query || "" };
           return {
             subscribe(sink: {

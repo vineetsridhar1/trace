@@ -382,7 +382,9 @@ export async function buildWsContext(
   cookieHeader?: string,
   request?: RequestAuthSource,
 ): Promise<Context> {
-  const token = (connectionParams?.token as string) ?? parseCookieToken(cookieHeader);
+  const token =
+    (typeof connectionParams?.token === "string" ? connectionParams.token : undefined) ??
+    parseCookieToken(cookieHeader);
 
   if (!token) throw new AuthenticationError("Missing auth token for WebSocket");
 

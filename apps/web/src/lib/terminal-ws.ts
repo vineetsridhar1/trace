@@ -11,10 +11,6 @@ const FATAL_TERMINAL_ERRORS = new Set([
 ]);
 const FATAL_TERMINAL_CLOSE_CODES = new Set([1008]);
 
-function getToken(): string | null {
-  return localStorage.getItem("trace_token");
-}
-
 export type TerminalSocketEvent =
   | { type: "ready" }
   | { type: "output"; data: string }
@@ -54,11 +50,7 @@ export class TerminalSocket {
   }
 
   private openSocket(): void {
-    const token = getToken();
-    const url = token
-      ? `${wsBase}/terminal?token=${encodeURIComponent(token)}`
-      : `${wsBase}/terminal`;
-    this.ws = new WebSocket(url);
+    this.ws = new WebSocket(`${wsBase}/terminal`);
 
     this.ws.onopen = () => {
       this.awaitingReconnectReady = this.reconnectAttempts > 0;

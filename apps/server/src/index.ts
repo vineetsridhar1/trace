@@ -30,6 +30,7 @@ import { connectRedis, disconnectRedis } from "./lib/redis.js";
 import { pubsub } from "./lib/pubsub.js";
 import { runtimeAccessService } from "./services/runtime-access.js";
 import { isLocalMode } from "./lib/mode.js";
+import { getAllowedCorsOrigins, isCorsOriginAllowed } from "./lib/cors.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -40,6 +41,12 @@ async function main() {
   const schema = makeExecutableSchema({ typeDefs, resolvers });
   const PORT = Number(process.env.PORT) || 4000 + Number(process.env.TRACE_PORT || 0);
   const localMode = isLocalMode();
+  const allowedCorsOrigins = getAllowedCorsOrigins({
+    localMode,
+    nodeEnv: process.env.NODE_ENV,
+    traceWebUrl: process.env.TRACE_WEB_URL,
+    corsAllowedOrigins: process.env.CORS_ALLOWED_ORIGINS,
+  });
   let startupReady = false;
 
   app.get("/health", (_req: express.Request, res: express.Response) => {
@@ -54,7 +61,16 @@ async function main() {
 
   app.use(
     cors({
-      origin: process.env.CORS_ALLOWED_ORIGINS ? process.env.CORS_ALLOWED_ORIGINS.split(",") : true,
+      origin(
+        origin: string | undefined,
+        callback: (error: Error | null, allow?: boolean) => void,
+      ) {
+        if (isCorsOriginAllowed(allowedCorsOrigins, origin)) {
+          callback(null, true);
+          return;
+        }
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
+      },
       credentials: true,
     }),
   );
