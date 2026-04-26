@@ -9,27 +9,18 @@ import {
 import { usePreferencesStore } from "../stores/preferences";
 import { navigateToSession } from "../stores/ui";
 import { getDefaultModel } from "../components/session/modelOptions";
-import { isLocalMode } from "./runtime-mode";
 
 const pendingQuickSessionChannels = new Set<string>();
 
 /**
- * Resolve the best runtime for a new session based on user preference.
- * Prefers a connected local bridge when defaultHosting is "bridge",
- * falls back to cloud if none available.
+ * Resolve the best connected local runtime for a new session.
  */
 async function resolveDefaultRuntime(
   tool: string,
   channelRepoId: string | undefined,
 ): Promise<{
   runtimeInstanceId: string | undefined;
-  hosting: "cloud" | "local";
 }> {
-  const pref = usePreferencesStore.getState().defaultHosting;
-  if (!isLocalMode && pref === "cloud") {
-    return { runtimeInstanceId: undefined, hosting: "cloud" };
-  }
-
   try {
     const result = await client.query(AVAILABLE_RUNTIMES_QUERY, { tool }).toPromise();
     const runtimes = (result.data?.availableRuntimes ?? []) as SessionRuntimeInstance[];
@@ -38,12 +29,12 @@ async function resolveDefaultRuntime(
       ? connected.filter((r) => r.registeredRepoIds.includes(channelRepoId))
       : connected;
     if (eligible.length > 0) {
-      return { runtimeInstanceId: eligible[0].id, hosting: "local" };
+      return { runtimeInstanceId: eligible[0].id };
     }
   } catch {
-    // Fall through to cloud
+    // Fall through to the explicit missing-runtime error below.
   }
-  return { runtimeInstanceId: undefined, hosting: isLocalMode ? "local" : "cloud" };
+  return { runtimeInstanceId: undefined };
 }
 
 /**
@@ -71,9 +62,8 @@ export async function createQuickSession(channelId: string): Promise<void> {
       : undefined;
 
   try {
-    const { runtimeInstanceId, hosting } = await resolveDefaultRuntime(prefTool, channelRepoId);
-    const isCloud = !isLocalMode && (!runtimeInstanceId || hosting === "cloud");
-    if (isLocalMode && !runtimeInstanceId) {
+    const { runtimeInstanceId } = await resolveDefaultRuntime(prefTool, channelRepoId);
+    if (!runtimeInstanceId) {
       throw new Error("No connected local runtime available");
     }
 
@@ -82,8 +72,8 @@ export async function createQuickSession(channelId: string): Promise<void> {
         input: {
           tool: prefTool,
           model: prefModel ?? undefined,
-          hosting: isCloud ? "cloud" : (isLocalMode ? "local" : undefined),
-          runtimeInstanceId: isCloud ? undefined : runtimeInstanceId,
+          hosting: "local",
+          runtimeInstanceId,
           channelId,
           repoId: channelRepoId ?? undefined,
         },

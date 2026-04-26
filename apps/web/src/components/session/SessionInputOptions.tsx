@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, Cloud, Monitor } from "lucide-react";
+import { AlertTriangle, Monitor } from "lucide-react";
 import type { CodingTool, SessionConnection, SessionRuntimeInstance } from "@trace/gql";
 import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
@@ -9,10 +9,8 @@ import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "@trace
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
 import { getModelsForTool, getDefaultModel, getModelLabel } from "./modelOptions";
-import { CLOUD_RUNTIME_ID } from "./RuntimeSelector";
 import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
 import { cn } from "../../lib/utils";
-import { isLocalMode } from "../../lib/runtime-mode";
 
 const UNBOUND_LOCAL_RUNTIME_ID = "__unbound_local__";
 
@@ -41,7 +39,6 @@ export function SessionInputOptions({
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
-  const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | SessionConnection
@@ -61,10 +58,7 @@ export function SessionInputOptions({
 
   const runtimeLabel = connection?.runtimeLabel ?? null;
   const runtimeInstanceId = connection?.runtimeInstanceId ?? null;
-  const isCloud = !isLocalMode && hosting === "cloud";
-  const currentRuntimeValue = isLocalMode
-    ? (runtimeInstanceId ?? UNBOUND_LOCAL_RUNTIME_ID)
-    : (isCloud ? CLOUD_RUNTIME_ID : (runtimeInstanceId ?? CLOUD_RUNTIME_ID));
+  const currentRuntimeValue = runtimeInstanceId ?? UNBOUND_LOCAL_RUNTIME_ID;
 
   // Fetch runtimes when not_started so user can switch
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
@@ -127,9 +121,8 @@ export function SessionInputOptions({
     async (value: string | null) => {
       if (isOptimistic || value === currentRuntimeValue) return;
       if (!value) return;
-      if (isLocalMode && value === UNBOUND_LOCAL_RUNTIME_ID) return;
+      if (value === UNBOUND_LOCAL_RUNTIME_ID) return;
 
-      const newIsCloud = !isLocalMode && value === CLOUD_RUNTIME_ID;
       const rt = runtimes.find((r: SessionRuntimeInstance) => r.id === value);
       const nextConnection: SessionConnection = {
         __typename: connection?.__typename ?? "SessionConnection",
@@ -139,13 +132,13 @@ export function SessionInputOptions({
         lastError: connection?.lastError ?? null,
         lastSeen: connection?.lastSeen ?? null,
         retryCount: connection?.retryCount ?? 0,
-        runtimeInstanceId: newIsCloud ? null : value,
-        runtimeLabel: newIsCloud ? null : (rt?.label ?? null),
+        runtimeInstanceId: value,
+        runtimeLabel: rt?.label ?? null,
         state: connection?.state ?? "disconnected",
       };
 
       const rollback = applyOptimisticPatch("sessions", sessionId, {
-        hosting: newIsCloud ? "cloud" : (rt?.hostingMode ?? "local"),
+        hosting: rt?.hostingMode ?? "local",
         connection: nextConnection,
       });
 
@@ -153,8 +146,8 @@ export function SessionInputOptions({
         const result = await client
           .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
             sessionId,
-            hosting: newIsCloud ? "cloud" : (isLocalMode ? "local" : undefined),
-            runtimeInstanceId: newIsCloud ? undefined : value,
+            hosting: "local",
+            runtimeInstanceId: value,
           })
           .toPromise();
         if (result.error) throw result.error;
@@ -251,11 +244,7 @@ export function SessionInputOptions({
           <SelectTrigger className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
             <SelectValue>
               <span className="flex items-center gap-1">
-                {isCloud ? (
-                  <>
-                    <Cloud size={12} className="text-blue-400" /> Cloud
-                  </>
-                ) : !runtimeInstanceId ? (
+                {!runtimeInstanceId ? (
                   <>
                     <AlertTriangle size={12} className="text-amber-500" /> No local runtime
                   </>
@@ -268,14 +257,7 @@ export function SessionInputOptions({
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {!isLocalMode && (
-              <SelectItem value={CLOUD_RUNTIME_ID}>
-                <span className="flex items-center gap-1.5">
-                  <Cloud size={12} className="text-blue-400" /> Cloud
-                </span>
-              </SelectItem>
-            )}
-            {isLocalMode && !runtimeInstanceId && (
+            {!runtimeInstanceId && (
               <SelectItem value={UNBOUND_LOCAL_RUNTIME_ID} disabled>
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <AlertTriangle size={12} className="text-amber-500" /> No local runtime
