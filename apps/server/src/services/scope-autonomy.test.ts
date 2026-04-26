@@ -174,10 +174,15 @@ describe("updateScopeAiMode", () => {
   });
 
   it("clears override when aiMode is null", async () => {
+    prismaMock.ticket.findFirst.mockResolvedValueOnce({ id: "ticket-1" });
     prismaMock.ticket.update.mockResolvedValueOnce({});
 
     await updateScopeAiMode({ scopeType: "ticket", scopeId: "ticket-1", aiMode: null, userId: "user-1", organizationId: "org-1" });
 
+    expect(prismaMock.ticket.findFirst).toHaveBeenCalledWith({
+      where: { id: "ticket-1", organizationId: "org-1" },
+      select: { id: true },
+    });
     expect(prismaMock.ticket.update).toHaveBeenCalledWith({
       where: { id: "ticket-1" },
       data: { aiMode: null },

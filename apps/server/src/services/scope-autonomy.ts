@@ -200,18 +200,50 @@ export async function updateScopeAiMode(input: {
   const { scopeType, scopeId, aiMode } = input;
 
   switch (scopeType) {
-    case "chat":
+    case "chat": {
+      await prisma.chat.findFirstOrThrow({
+        where: {
+          id: scopeId,
+          members: {
+            some: {
+              user: {
+                orgMemberships: { some: { organizationId: input.organizationId } },
+              },
+            },
+          },
+        },
+        select: { id: true },
+      });
       await prisma.chat.update({ where: { id: scopeId }, data: { aiMode } });
       break;
-    case "ticket":
+    }
+    case "ticket": {
+      const ticket = await prisma.ticket.findFirst({
+        where: { id: scopeId, organizationId: input.organizationId },
+        select: { id: true },
+      });
+      if (!ticket) throw new Error("Scope not found in this organization");
       await prisma.ticket.update({ where: { id: scopeId }, data: { aiMode } });
       break;
-    case "channel":
+    }
+    case "channel": {
+      const channel = await prisma.channel.findFirst({
+        where: { id: scopeId, organizationId: input.organizationId },
+        select: { id: true },
+      });
+      if (!channel) throw new Error("Scope not found in this organization");
       await prisma.channel.update({ where: { id: scopeId }, data: { aiMode } });
       break;
-    case "project":
+    }
+    case "project": {
+      const project = await prisma.project.findFirst({
+        where: { id: scopeId, organizationId: input.organizationId },
+        select: { id: true },
+      });
+      if (!project) throw new Error("Scope not found in this organization");
       await prisma.project.update({ where: { id: scopeId }, data: { aiMode } });
       break;
+    }
     default:
       throw new Error(`Cannot set aiMode on scope type: ${scopeType as string}`);
   }

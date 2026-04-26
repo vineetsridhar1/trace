@@ -47,6 +47,7 @@ export const sessionQueries = {
     },
     ctx: Context,
   ) => {
+    assertOrgAccess(ctx, args.organizationId);
     return sessionService.listByUser(args.organizationId, ctx.userId, {
       agentStatus: args.agentStatus ?? undefined,
       includeMerged: args.includeMerged ?? true,
@@ -237,13 +238,16 @@ export const sessionMutations = {
       organizationId: requireOrgContext(ctx),
     });
   },
-  terminateSession: (_: unknown, args: { id: string }, ctx: Context) => {
+  terminateSession: async (_: unknown, args: { id: string }, ctx: Context) => {
+    await assertScopeAccess("session", args.id, ctx.userId, requireOrgContext(ctx));
     return sessionService.terminate(args.id, ctx.actorType, ctx.userId);
   },
-  dismissSession: (_: unknown, args: { id: string }, ctx: Context) => {
+  dismissSession: async (_: unknown, args: { id: string }, ctx: Context) => {
+    await assertScopeAccess("session", args.id, ctx.userId, requireOrgContext(ctx));
     return sessionService.dismiss(args.id, ctx.actorType, ctx.userId);
   },
-  deleteSession: (_: unknown, args: { id: string }, ctx: Context) => {
+  deleteSession: async (_: unknown, args: { id: string }, ctx: Context) => {
+    await assertScopeAccess("session", args.id, ctx.userId, requireOrgContext(ctx));
     return sessionService.delete(args.id, ctx.actorType, ctx.userId);
   },
   archiveSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
@@ -276,7 +280,7 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
-  sendSessionMessage: (
+  sendSessionMessage: async (
     _: unknown,
     args: {
       sessionId: string;
@@ -287,6 +291,7 @@ export const sessionMutations = {
     },
     ctx: Context,
   ) => {
+    await assertScopeAccess("session", args.sessionId, ctx.userId, requireOrgContext(ctx));
     return sessionService.sendMessage({
       sessionId: args.sessionId,
       text: args.text,

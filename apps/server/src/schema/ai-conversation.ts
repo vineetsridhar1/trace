@@ -3,6 +3,7 @@ import type { AiConversationVisibility, CreateAiConversationInput } from "@trace
 import { aiConversationService } from "../services/aiConversation.js";
 import { aiTurnService } from "../services/aiTurn.js";
 import { pubsub, topics } from "../lib/pubsub.js";
+import { assertOrgAccess } from "../lib/require-org.js";
 
 export const aiConversationQueries = {
   aiConversations: (
@@ -10,6 +11,7 @@ export const aiConversationQueries = {
     args: { organizationId: string; visibility?: AiConversationVisibility },
     ctx: Context,
   ) => {
+    assertOrgAccess(ctx, args.organizationId);
     return aiConversationService.getConversations({
       organizationId: args.organizationId,
       userId: ctx.userId,
@@ -32,6 +34,7 @@ export const aiConversationMutations = {
     args: { organizationId: string; input: CreateAiConversationInput },
     ctx: Context,
   ) => {
+    assertOrgAccess(ctx, args.organizationId);
     return aiConversationService.createConversation(
       {
         organizationId: args.organizationId,
