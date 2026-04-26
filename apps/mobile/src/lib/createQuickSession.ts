@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { Alert } from "react-native";
 import {
+  AVAILABLE_RUNTIMES_QUERY,
   getSessionChannelId,
   getSessionGroupChannelId,
   RUN_SESSION_MUTATION,
@@ -10,7 +11,7 @@ import {
   type SessionEntity,
 } from "@trace/client-core";
 import { getDefaultModel } from "@trace/shared";
-import type { CodingTool } from "@trace/gql";
+import type { CodingTool, SessionRuntimeInstance } from "@trace/gql";
 import { getConnectionMode } from "@/lib/connection-target";
 import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
@@ -20,6 +21,23 @@ import { useMobileUIStore } from "@/stores/ui";
 
 const DEFAULT_TOOL: CodingTool = "claude_code";
 const pendingQuickSessionChannels = new Set<string>();
+
+async function resolveDefaultRuntime(
+  tool: CodingTool,
+  channelRepoId: string | undefined,
+): Promise<string | undefined> {
+  try {
+    const result = await getClient().query(AVAILABLE_RUNTIMES_QUERY, { tool }).toPromise();
+    const runtimes = (result.data?.availableRuntimes ?? []) as SessionRuntimeInstance[];
+    const connected = runtimes.filter((runtime) => runtime.connected && runtime.hostingMode === "local");
+    const eligible = channelRepoId
+      ? connected.filter((runtime) => runtime.registeredRepoIds.includes(channelRepoId))
+      : connected;
+    return eligible[0]?.id;
+  } catch {
+    return undefined;
+  }
+}
 
 interface CreateAgentTabOptions {
   navigate?: (sessionGroupId: string, sessionId: string) => void;
@@ -42,6 +60,11 @@ export async function createQuickSession(channelId: string): Promise<void> {
   void haptic.light();
 
   try {
+    const runtimeInstanceId = await resolveDefaultRuntime(tool, channelRepoId);
+    if (!runtimeInstanceId) {
+      throw new Error("No connected local runtime available");
+    }
+
     const result = await getClient()
       .mutation<{ startSession: { id: string; sessionGroupId: string } }>(
         START_SESSION_MUTATION,
@@ -50,6 +73,7 @@ export async function createQuickSession(channelId: string): Promise<void> {
             tool,
             model,
             hosting,
+            runtimeInstanceId,
             channelId,
             repoId: channelRepoId,
           },
