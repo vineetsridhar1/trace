@@ -77,8 +77,14 @@ function ModelRow({
     touchStartRef.current = { x: pageX, y: pageY };
   }, []);
 
+  const handlePressIn = useCallback(() => {
+    handledTouchRef.current = true;
+    commit();
+  }, [commit]);
+
   const handleTouchEnd = useCallback(
     (event: GestureResponderEvent) => {
+      if (handledTouchRef.current) return;
       const start = touchStartRef.current;
       touchStartRef.current = null;
       if (!start) return;
@@ -110,6 +116,7 @@ function ModelRow({
       disabled={disabled}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      onPressIn={handlePressIn}
       onPress={handlePress}
       style={({ pressed }) => [
         styles.modelRow,
@@ -161,6 +168,7 @@ export function SessionModelPickerSheetContent({
   const isTerminal = worktreeDeleted === true || sessionStatus === "merged";
   const isDisconnected = connection?.state === "disconnected";
   const canInteract = !isTerminal && !isDisconnected && agentStatus !== "active" && !isOptimistic;
+  const canSelectModel = !isTerminal && !isOptimistic;
 
   const {
     currentTool: selectedTool,
@@ -182,7 +190,7 @@ export function SessionModelPickerSheetContent({
 
   const handleSelectModel = useCallback(
     async (nextModel: string) => {
-      if (!canInteract) return;
+      if (!canSelectModel) return;
       if (selectedModel === nextModel) {
         onSelectModel?.();
         onClose?.();
@@ -197,7 +205,7 @@ export function SessionModelPickerSheetContent({
         onClose?.();
       }
     },
-    [canInteract, handleModelChange, onClose, onSelectModel, selectedModel],
+    [canSelectModel, handleModelChange, onClose, onSelectModel, selectedModel],
   );
 
   const displayedModel = pendingModel ?? selectedModel;
@@ -247,7 +255,7 @@ export function SessionModelPickerSheetContent({
             key={option.value}
             title={option.label}
             selected={displayedModel === option.value}
-            disabled={!canInteract}
+            disabled={!canSelectModel}
             separator={index < modelOptions.length - 1}
             onSelect={() => void handleSelectModel(option.value)}
           />
