@@ -503,7 +503,7 @@ describe("local-mode external auth", () => {
     const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
     const res = await fetch(`${baseUrl}/auth/me`, {
       headers: {
-        Cookie: `trace_token=${token}`,
+        Authorization: `Bearer ${token}`,
       },
     });
 
@@ -565,6 +565,34 @@ describe("bridge auth tokens", () => {
       tokenType: "bridge_auth",
     });
     expect(Date.parse(body.expiresAt)).not.toBeNaN();
+  });
+
+  it("reads auth/me from the browser session cookie without echoing the token", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: "user-1",
+      email: "local@trace.dev",
+      name: "Local User",
+      avatarUrl: null,
+      orgMemberships: [],
+    });
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/auth/me`, {
+      headers: {
+        Cookie: `trace_token=${token}`,
+      },
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      user: {
+        id: "user-1",
+        email: "local@trace.dev",
+        name: "Local User",
+        avatarUrl: null,
+        orgMemberships: [],
+      },
+    });
   });
 });
 

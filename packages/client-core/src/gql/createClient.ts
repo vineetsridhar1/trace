@@ -94,7 +94,7 @@ export function createGqlClient(options: CreateGqlClientOptions): GqlClient {
     exchanges: [
       fetchExchange,
       subscriptionExchange({
-        forwardSubscription(request: { query: unknown }) {
+        forwardSubscription(request) {
           const input = { ...request, query: request.query || "" };
           return {
             subscribe(sink: {

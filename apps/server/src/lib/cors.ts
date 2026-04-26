@@ -1,3 +1,5 @@
+import type { IncomingHttpHeaders } from "http";
+
 export interface AllowedCorsOriginsOptions {
   localMode: boolean;
   nodeEnv?: string;
@@ -35,4 +37,38 @@ export function getAllowedCorsOrigins(options: AllowedCorsOriginsOptions): Set<s
 export function isCorsOriginAllowed(allowedOrigins: Set<string>, origin?: string): boolean {
   if (!origin) return true;
   return allowedOrigins.has(origin);
+}
+
+export function readHeaderValue(
+  headers: IncomingHttpHeaders,
+  key: string,
+): string | undefined {
+  const value = headers[key.toLowerCase()] ?? headers[key];
+  const first = Array.isArray(value) ? value[0] : value;
+  const trimmed = typeof first === "string" ? first.trim() : "";
+  return trimmed || undefined;
+}
+
+export function readOriginFromReferer(referer: string | undefined): string | undefined {
+  if (!referer) return undefined;
+  try {
+    return new URL(referer).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+export function getRequestOrigin(headers: IncomingHttpHeaders): string | undefined {
+  return (
+    readHeaderValue(headers, "origin") ??
+    readOriginFromReferer(readHeaderValue(headers, "referer"))
+  );
+}
+
+export function isAllowedBrowserOrigin(
+  allowedOrigins: Set<string>,
+  headers: IncomingHttpHeaders,
+): boolean {
+  const origin = getRequestOrigin(headers);
+  return Boolean(origin && allowedOrigins.has(origin));
 }

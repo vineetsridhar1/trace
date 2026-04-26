@@ -26,10 +26,12 @@ import {
   createChatMembershipLoader,
 } from "./dataloader.js";
 
-const JWT_SECRET = process.env.JWT_SECRET ?? (process.env.NODE_ENV === "test" ? "trace-test-secret" : null);
-if (!JWT_SECRET) {
+const configuredJwtSecret =
+  process.env.JWT_SECRET ?? (process.env.NODE_ENV === "test" ? "trace-test-secret" : null);
+if (!configuredJwtSecret) {
   throw new Error("JWT_SECRET must be set");
 }
+const JWT_SECRET: string = configuredJwtSecret;
 const BRIDGE_AUTH_TOKEN_TTL_SECONDS = 5 * 60;
 
 type SessionTokenPayload = {
@@ -58,7 +60,9 @@ type RequestAuthSource = {
 
 function parseSessionToken(token: string): SessionTokenPayload | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as SessionTokenPayload | BridgeAuthTokenPayload;
+    const payload = jwt.verify(token, JWT_SECRET) as unknown as
+      | SessionTokenPayload
+      | BridgeAuthTokenPayload;
     if (
       !payload ||
       typeof payload !== "object" ||
@@ -225,7 +229,7 @@ export function createBridgeAuthToken(input: {
 
 export function verifyBridgeAuthToken(token: string): BridgeAuthTokenPayload | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as BridgeAuthTokenPayload;
+    const payload = jwt.verify(token, JWT_SECRET) as unknown as BridgeAuthTokenPayload;
     if (
       !payload ||
       typeof payload !== "object" ||
