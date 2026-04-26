@@ -33,7 +33,8 @@
   "config": {
     "forge": {
       "packagerConfig": {
-        "asar": true
+        "asar": true,
+        "icon": "assets/icon"
       },
       "makers": [
         {
