@@ -45,6 +45,7 @@ export interface BridgePrepareCommand {
   repoRemoteUrl: string;
   defaultBranch: string;
   branch?: string;
+  preserveBranchName?: boolean;
   checkpointSha?: string;
   readOnly?: boolean;
 }
@@ -61,6 +62,7 @@ export interface BridgeUpgradeWorkspaceCommand {
   repoRemoteUrl: string;
   defaultBranch: string;
   branch?: string;
+  preserveBranchName?: boolean;
 }
 
 export interface BridgeTerminateCommand {
