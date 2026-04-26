@@ -47,11 +47,11 @@ describe("SessionRouter stale runtime eviction", () => {
       supportedTools: ["codex"],
     });
 
-    const affectedSessions = router.evictRuntimeIfStale(
+    const eviction = router.evictRuntimeIfStale(
       stale.runtimeId,
       stale.lastHeartbeat,
     );
-    expect(affectedSessions).toEqual([]);
+    expect(eviction).toEqual({ evicted: false, affectedSessions: [] });
     expect(router.getRuntime("runtime-1")?.ws).toBe(reconnectedWs);
     expect(router.getRuntimeForSession("session-1")?.id).toBe("runtime-1");
   });
@@ -72,13 +72,37 @@ describe("SessionRouter stale runtime eviction", () => {
 
     now.mockReturnValue(SessionRouter.HEARTBEAT_TIMEOUT_MS + 1);
     const [stale] = router.checkStaleRuntimes();
-    const affectedSessions = router.evictRuntimeIfStale(
+    const eviction = router.evictRuntimeIfStale(
       stale.runtimeId,
       stale.lastHeartbeat,
     );
 
-    expect(affectedSessions).toEqual(["session-1"]);
+    expect(eviction).toEqual({ evicted: true, affectedSessions: ["session-1"] });
     expect(router.getRuntime("runtime-1")).toBeUndefined();
     expect(router.getRuntimeForSession("session-1")).toBeUndefined();
+  });
+
+  it("reports eviction even when the stale runtime had no bound sessions", () => {
+    const router = new SessionRouter();
+    const now = vi.spyOn(Date, "now");
+
+    now.mockReturnValue(0);
+    router.registerRuntime({
+      id: "runtime-1",
+      label: "Laptop",
+      ws: makeWs(),
+      hostingMode: "local",
+      supportedTools: ["codex"],
+    });
+
+    now.mockReturnValue(SessionRouter.HEARTBEAT_TIMEOUT_MS + 1);
+    const [stale] = router.checkStaleRuntimes();
+    const eviction = router.evictRuntimeIfStale(
+      stale.runtimeId,
+      stale.lastHeartbeat,
+    );
+
+    expect(eviction).toEqual({ evicted: true, affectedSessions: [] });
+    expect(router.getRuntime("runtime-1")).toBeUndefined();
   });
 });

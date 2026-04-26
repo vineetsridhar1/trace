@@ -85,6 +85,11 @@ export interface StaleRuntimeSnapshot {
   lastHeartbeat: number;
 }
 
+export interface StaleRuntimeEvictionResult {
+  evicted: boolean;
+  affectedSessions: string[];
+}
+
 // --- SessionAdapter interface ---
 // Each hosting mode implements this. The router dispatches through it.
 
@@ -94,6 +99,8 @@ export interface SessionAdapterCreateOptions {
   sessionGroupId?: string;
   /** Animal slug for the worktree. If set, reuses the existing slug. */
   slug?: string;
+  /** Preserve the persisted branch name instead of generating trace/{slug}. */
+  preserveBranchName?: boolean;
   tool: string;
   model?: string;
   repo?: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
@@ -185,6 +192,7 @@ function createCloudAdapter(cloudMachineService: CloudMachineService): SessionAd
               sessionId: options.sessionId,
               sessionGroupId: options.sessionGroupId,
               slug: options.slug,
+              preserveBranchName: options.preserveBranchName,
               repoId: options.repo.id,
               repoName: options.repo.name,
               repoRemoteUrl: options.repo.remoteUrl,
@@ -275,6 +283,7 @@ const localAdapter: SessionAdapter = {
       sessionId: options.sessionId,
       sessionGroupId: options.sessionGroupId,
       slug: options.slug,
+      preserveBranchName: options.preserveBranchName,
       repoId: options.repo.id,
       repoName: options.repo.name,
       repoRemoteUrl: options.repo.remoteUrl,
@@ -697,9 +706,12 @@ export class SessionRouter {
    * Evict a runtime only if it is still the same stale instance we observed
    * earlier. This avoids racing a reconnect that reused the same runtime ID.
    */
-  evictRuntimeIfStale(runtimeId: string, expectedLastHeartbeat: number): string[] {
+  evictRuntimeIfStale(
+    runtimeId: string,
+    expectedLastHeartbeat: number,
+  ): StaleRuntimeEvictionResult {
     const runtime = this.runtimes.get(runtimeId);
-    if (!runtime) return [];
+    if (!runtime) return { evicted: false, affectedSessions: [] };
 
     if (runtime.lastHeartbeat !== expectedLastHeartbeat) {
       runtimeDebug("skipped stale runtime eviction after reconnect", {
@@ -708,7 +720,7 @@ export class SessionRouter {
         actualLastHeartbeat: runtime.lastHeartbeat,
         boundSessions: [...runtime.boundSessions],
       });
-      return [];
+      return { evicted: false, affectedSessions: [] };
     }
 
     if (Date.now() - runtime.lastHeartbeat <= SessionRouter.HEARTBEAT_TIMEOUT_MS) {
@@ -716,10 +728,13 @@ export class SessionRouter {
         runtimeId,
         lastHeartbeat: runtime.lastHeartbeat,
       });
-      return [];
+      return { evicted: false, affectedSessions: [] };
     }
 
-    return this.unregisterRuntime(runtimeId);
+    return {
+      evicted: true,
+      affectedSessions: this.unregisterRuntime(runtimeId),
+    };
   }
 
   getRuntimeDiagnostics(): Array<Record<string, unknown>> {

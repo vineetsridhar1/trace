@@ -114,17 +114,17 @@ async function main() {
         sessionIds: stale.sessionIds,
         lastHeartbeat: stale.lastHeartbeat,
       });
-      const affectedSessions = sessionRouter.evictRuntimeIfStale(
+      const eviction = sessionRouter.evictRuntimeIfStale(
         stale.runtimeId,
         stale.lastHeartbeat,
       );
-      if (affectedSessions.length === 0) {
+      if (!eviction.evicted) {
         continue;
       }
       if (stale.runtimeId) {
         void runtimeAccessService.markRuntimeDisconnected(stale.runtimeId);
       }
-      for (const sessionId of affectedSessions) {
+      for (const sessionId of eviction.affectedSessions) {
         runtimeDebug("marking session disconnected after stale runtime eviction", {
           runtimeId: stale.runtimeId,
           sessionId,

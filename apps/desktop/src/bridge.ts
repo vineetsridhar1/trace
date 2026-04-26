@@ -841,6 +841,7 @@ export class BridgeClient implements IBridgeClient {
           repoName,
           defaultBranch,
           branch,
+          preserveBranchName,
           checkpointSha,
           readOnly,
         } = cmd;
@@ -876,6 +877,7 @@ export class BridgeClient implements IBridgeClient {
             slug,
             defaultBranch,
             startBranch: branch,
+            preserveBranchName,
             checkpointSha,
             gitHooksEnabled: repoConfig.gitHooksEnabled,
           });
@@ -899,7 +901,16 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "upgrade_workspace": {
-        const { sessionId, sessionGroupId, slug, repoId, repoName, defaultBranch, branch } = cmd;
+        const {
+          sessionId,
+          sessionGroupId,
+          slug,
+          repoId,
+          repoName,
+          defaultBranch,
+          branch,
+          preserveBranchName,
+        } = cmd;
         const repoConfig = getRepoConfig(repoId);
         const repoPath = repoConfig?.path;
 
@@ -920,6 +931,7 @@ export class BridgeClient implements IBridgeClient {
           slug,
           defaultBranch,
           startBranch: branch,
+          preserveBranchName,
           gitHooksEnabled: repoConfig.gitHooksEnabled,
         })
           .then(({ workdir, branch: worktreeBranch, slug: worktreeSlug }) => {
