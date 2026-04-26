@@ -2,7 +2,7 @@
 
 ## Summary
 
-Wire up both the custom scheme (`trace://`) and Apple universal links (`https://example.com/m/...`) so that tapping notifications, pasted links, and web-to-mobile transitions all land on the correct screen with correct state. Expo Router handles most of this once config is right.
+Wire up both the custom scheme (`trace://`) and Apple universal links (`https://gettrace.org/m/...`) so that tapping notifications, pasted links, and web-to-mobile transitions all land on the correct screen with correct state. Expo Router handles most of this once config is right.
 
 ## What needs to happen
 
@@ -13,9 +13,9 @@ Wire up both the custom scheme (`trace://`) and Apple universal links (`https://
     - `trace://channels/:id` → coding channel
     - `trace://auth/callback?token=...` → handled by sign-in flow (ticket 09)
   - Verify via `xcrun simctl openurl booted trace://sessions/g1/s1` — should route correctly when signed in (and show sign-in otherwise with a redirect-after-auth parameter).
-- **Universal links (`https://example.com/m/...`)**:
-  - Add `ios.associatedDomains: ['applinks:example.com']` to `app.json`.
-  - Server: host `.well-known/apple-app-site-association` at `https://example.com/` with:
+- **Universal links (`https://gettrace.org/m/...`)**:
+  - Add `ios.associatedDomains: ['applinks:gettrace.org']` to `app.json`.
+  - Server: host `.well-known/apple-app-site-association` at `https://gettrace.org/` with:
     ```json
     {
       "applinks": {
@@ -45,12 +45,12 @@ Wire up both the custom scheme (`trace://`) and Apple universal links (`https://
 
 - [ ] `trace://` scheme routes to correct screens when signed in
 - [ ] When signed out, deep link is remembered and applied after auth
-- [ ] Universal links work: tapping `https://example.com/m/sessions/...` opens the app
+- [ ] Universal links work: tapping `https://gettrace.org/m/sessions/...` opens the app
 - [ ] AASA file validates via Apple's validator
 
 ## How to test
 
 1. `xcrun simctl openurl booted trace://sessions/g1/s1` → session stream for that id (or 404 screen if not found).
 2. Sign out → `xcrun simctl openurl booted trace://sessions/g1/s1` → sign-in → after auth → session stream.
-3. On a real device, SMS yourself `https://example.com/m/sessions/g1/s1` → tap → app opens directly to session.
+3. On a real device, SMS yourself `https://gettrace.org/m/sessions/g1/s1` → tap → app opens directly to session.
 4. Apple AASA validator (https://branch.io/resources/aasa-validator/) reports valid.

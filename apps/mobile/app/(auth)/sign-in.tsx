@@ -14,8 +14,8 @@ import { haptic } from "@/lib/haptics";
 import { recreateClient } from "@/lib/urql";
 
 const REDIRECT_URL = "trace://auth/callback";
-const TERMS_URL = "https://example.com/terms";
-const PRIVACY_URL = "https://example.com/privacy";
+const TERMS_URL = "https://gettrace.org/terms";
+const PRIVACY_URL = "https://gettrace.org/privacy";
 
 function tokenFromCallback(rawUrl: string): string | null {
   try {

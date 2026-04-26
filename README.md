@@ -118,6 +118,15 @@ pnpm dev:desktop   # Electron app (loads web from :3000)
 
 Open [http://localhost:3000](http://localhost:3000) and sign in with GitHub.
 
+### Running against production
+
+For developing the web or desktop app against the production server:
+
+```bash
+pnpm dev:web:prod      # Web app → production API
+pnpm dev:desktop:prod  # Desktop → production API + local web
+```
+
 ## Tech Stack
 
 ### Server

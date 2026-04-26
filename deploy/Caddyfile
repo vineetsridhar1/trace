@@ -1,4 +1,4 @@
-trace.example.com {
+gettrace.org, www.gettrace.org {
 	encode zstd gzip
 
 	@backend path /auth* /graphql* /uploads* /webhooks/github* /ws* /bridge* /terminal* /health

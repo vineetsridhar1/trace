@@ -4,7 +4,7 @@ import { prisma } from "../lib/db.js";
 import { apiTokenService } from "./api-token.js";
 import { eventService } from "./event.js";
 
-const WEBHOOK_BASE_URL = process.env.WEBHOOK_BASE_URL ?? "http://localhost:4000";
+const WEBHOOK_BASE_URL = process.env.WEBHOOK_BASE_URL ?? "https://gettrace.org";
 
 /** Extract owner/repo from a GitHub remote URL (HTTPS or SSH). */
 function parseGitHubRepo(remoteUrl: string): { owner: string; repo: string } | null {
