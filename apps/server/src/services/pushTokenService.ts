@@ -29,6 +29,11 @@ export class PushTokenService {
     return result.count > 0;
   }
 
+  async unregisterAllForUser(userId: string): Promise<number> {
+    const result = await prisma.pushToken.deleteMany({ where: { userId } });
+    return result.count;
+  }
+
   async listActiveTokensForUser(userId: string, organizationId: string | null) {
     return prisma.pushToken.findMany({
       where: { userId, organizationId },

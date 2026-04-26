@@ -72,6 +72,13 @@ describe("PushTokenService", () => {
     await expect(service.unregister({ userId: "u-1", token: "missing" })).resolves.toBe(false);
   });
 
+  it("unregisterAllForUser removes every token for a user", async () => {
+    prismaMock.pushToken.deleteMany.mockResolvedValueOnce({ count: 2 });
+    const service = new PushTokenService();
+    await expect(service.unregisterAllForUser("u-1")).resolves.toBe(2);
+    expect(prismaMock.pushToken.deleteMany).toHaveBeenCalledWith({ where: { userId: "u-1" } });
+  });
+
   it("listActiveTokensForUser scopes strictly to (userId, organizationId) — excludes null-org tokens", async () => {
     const rows = [
       { id: "pt-1", userId: "u-1", token: "tok-a", platform: "ios", organizationId: "o-1" },

@@ -94,6 +94,11 @@ export async function unregister(): Promise<void> {
   await Notifications.setBadgeCountAsync(0);
 }
 
+export async function clearLocalNotificationState(): Promise<void> {
+  await clearPushRegistration();
+  await Notifications.setBadgeCountAsync(0);
+}
+
 export function useRegisterPushToken(): void {
   const router = useRouter();
   const user = useAuthStore((s: AuthState) => s.user);

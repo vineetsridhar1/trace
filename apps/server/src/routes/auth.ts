@@ -23,6 +23,7 @@ import {
   revokeLocalMobileDevice,
   revokeLocalMobileDeviceByToken,
 } from "../services/local-mobile-auth.js";
+import { pushTokenService } from "../services/pushTokenService.js";
 
 const router: RouterType = Router();
 
@@ -626,6 +627,9 @@ router.post("/auth/logout", async (req: Request, res: Response) => {
   }
   if (authenticated?.auth.kind === "local_mobile") {
     await revokeLocalMobileDeviceByToken(authenticated.token);
+  }
+  if (authenticated) {
+    await pushTokenService.unregisterAllForUser(authenticated.auth.userId);
   }
   res.clearCookie("trace_token", {
     path: "/",

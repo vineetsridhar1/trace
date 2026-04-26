@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as Clipboard from "expo-clipboard";
-import { Alert, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Button, Text } from "@/components/design-system";
 import { handleMobileSignOut } from "@/lib/auth";
@@ -112,9 +112,7 @@ export function NoOrgWelcome() {
           <Button
             title="Sign out"
             onPress={() => {
-              void handleMobileSignOut().catch(() => {
-                Alert.alert("Could not sign out", "Push notification cleanup failed. Please try again.");
-              });
+              void handleMobileSignOut();
             }}
             variant="ghost"
             size="md"

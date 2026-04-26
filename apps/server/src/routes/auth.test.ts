@@ -685,6 +685,7 @@ describe("local mobile pairing", () => {
       revokedAt: null,
     });
     prismaMock.localMobileDevice.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.pushToken.deleteMany.mockResolvedValue({ count: 1 });
 
     const res = await fetch(`${baseUrl}/auth/logout`, {
       method: "POST",
@@ -693,6 +694,7 @@ describe("local mobile pairing", () => {
 
     expect(res.status).toBe(200);
     expect(prismaMock.localMobileDevice.updateMany).toHaveBeenCalledTimes(2);
+    expect(prismaMock.pushToken.deleteMany).toHaveBeenCalledWith({ where: { userId: "user-1" } });
   });
 });
 
