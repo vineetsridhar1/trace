@@ -15,6 +15,9 @@
     "preview": {
       "distribution": "internal",
       "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://gettrace.org"
+      },
       "ios": {
         "simulator": false
       }
@@ -22,7 +25,10 @@
     "production": {
       "distribution": "store",
       "channel": "production",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://gettrace.org"
+      }
     }
   },
   "submit": {
