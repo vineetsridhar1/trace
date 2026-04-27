@@ -3,11 +3,11 @@ import { useAuthStore, type OrgMembership } from "@trace/client-core";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { getInitials } from "../../lib/utils";
 import { CreateOrganizationDialog } from "./CreateOrganizationDialog";
+import { switchActiveOrganization } from "../../lib/org-switch";
 
 export function OrgSwitcher({ large }: { large?: boolean }) {
   const orgMemberships = useAuthStore((s: { orgMemberships: OrgMembership[] }) => s.orgMemberships);
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
-  const setActiveOrg = useAuthStore((s: { setActiveOrg: (orgId: string) => void }) => s.setActiveOrg);
 
   const activeOrg = orgMemberships.find((m: OrgMembership) => m.organizationId === activeOrgId)?.organization;
   const orgList = orgMemberships.map((m: OrgMembership) => m.organization);
@@ -44,7 +44,7 @@ export function OrgSwitcher({ large }: { large?: boolean }) {
         {orgList.map((org: { id: string; name: string }) => (
           <button
             key={org.id}
-            onClick={() => setActiveOrg(org.id)}
+            onClick={() => switchActiveOrganization(org.id)}
             className={`flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors hover:bg-surface-hover ${
               org.id === activeOrgId ? "bg-surface-hover text-foreground" : "text-muted-foreground"
             }`}

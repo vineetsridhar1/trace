@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FormEvent, ReactElement } from "react";
 import { Plus } from "lucide-react";
 import { useAuthStore, type AuthState } from "@trace/client-core";
+import { switchActiveOrganization } from "../../lib/org-switch";
 import { client } from "../../lib/urql";
 import { Button } from "../ui/button";
 import {
@@ -35,7 +36,6 @@ type CreatedOrgMembership = {
 
 export function CreateOrganizationDialog({ trigger }: { trigger?: ReactElement }) {
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
-  const setActiveOrg = useAuthStore((s: AuthState) => s.setActiveOrg);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -66,7 +66,7 @@ export function CreateOrganizationDialog({ trigger }: { trigger?: ReactElement }
       const membership = result.data?.createOrganization as CreatedOrgMembership | undefined;
       await fetchMe();
       if (membership?.organization.id) {
-        setActiveOrg(membership.organization.id);
+        switchActiveOrganization(membership.organization.id);
       }
 
       setName("");
