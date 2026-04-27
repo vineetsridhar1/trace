@@ -1,6 +1,6 @@
 import { router } from "expo-router";
-import { useEntityStore } from "@trace/client-core";
-import { selectActiveSessionIds } from "@/lib/activeSessions";
+import { useAuthStore, useEntityStore } from "@trace/client-core";
+import { selectOwnedActiveSessionIds } from "@/lib/activeSessions";
 import { fetchSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { fetchSessionDetail } from "@/hooks/useSessionDetail";
 import { useMobileUIStore } from "@/stores/ui";
@@ -17,7 +17,8 @@ export function tryOpenSessionPlayer(sessionId: string | null | undefined): bool
   const sessionGroupId = useEntityStore.getState().sessions[sessionId]?.sessionGroupId;
   if (!sessionGroupId) return false;
 
-  const activeIds = selectActiveSessionIds(useEntityStore.getState());
+  const userId = useAuthStore.getState().user?.id ?? null;
+  const activeIds = selectOwnedActiveSessionIds(useEntityStore.getState(), userId);
   const activeIndex = activeIds.indexOf(sessionId);
   if (activeIndex >= 0) ui.setActiveAccessoryIndex(activeIndex);
 

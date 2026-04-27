@@ -1,17 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { router } from "expo-router";
 import {
   FlatList,
   type LayoutChangeEvent,
   type ListRenderItem,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  Pressable,
   StyleSheet,
   View,
 } from "react-native";
 import { useShallow } from "zustand/react/shallow";
-import { useEntityStore } from "@trace/client-core";
+import {
+  useAuthStore,
+  useEntityStore,
+  type AuthState,
+  type EntityState,
+} from "@trace/client-core";
+import { Text } from "@/components/design-system/Text";
 import { haptic } from "@/lib/haptics";
-import { selectActiveSessionIds } from "@/lib/activeSessions";
+import { selectOwnedActiveSessionIds } from "@/lib/activeSessions";
 import { useMobileUIStore } from "@/stores/ui";
 import { useTheme } from "@/theme";
 import { ActiveSessionsAccessoryRow } from "./ActiveSessionsAccessoryRow";
@@ -19,7 +27,10 @@ import { ActiveSessionsAccessoryRow } from "./ActiveSessionsAccessoryRow";
 const keyExtractor = (id: string) => id;
 
 export function ActiveSessionsAccessory() {
-  const ids = useEntityStore(useShallow(selectActiveSessionIds));
+  const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
+  const ids = useEntityStore(
+    useShallow((state: EntityState) => selectOwnedActiveSessionIds(state, userId)),
+  );
   const index = useMobileUIStore((s) => s.activeAccessoryIndex);
   const setIndex = useMobileUIStore((s) => s.setActiveAccessoryIndex);
   const theme = useTheme();
@@ -84,7 +95,25 @@ export function ActiveSessionsAccessory() {
     [width, theme],
   );
 
-  if (ids.length === 0) return null;
+  const handleStartSession = useCallback(() => {
+    void haptic.light();
+    router.push("/channels" as never);
+  }, []);
+
+  if (ids.length === 0) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Start a session"
+        style={styles.emptyAction}
+        onPress={handleStartSession}
+      >
+        <Text variant="callout" color="foreground" style={styles.emptyLabel}>
+          Start a session
+        </Text>
+      </Pressable>
+    );
+  }
 
   return (
     <View style={styles.container} onLayout={onLayout}>
@@ -108,4 +137,12 @@ export function ActiveSessionsAccessory() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  emptyAction: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  emptyLabel: { fontWeight: "600" },
 });
