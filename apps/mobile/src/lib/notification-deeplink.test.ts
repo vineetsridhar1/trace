@@ -7,7 +7,7 @@ describe("routePathFromNotificationLink", () => {
   });
 
   it("normalizes Trace universal links", () => {
-    expect(routePathFromNotificationLink("https://trace.app/m/sessions/g1/s1")).toBe(
+    expect(routePathFromNotificationLink("https://gettrace.org/m/sessions/g1/s1")).toBe(
       "/sessions/g1/s1",
     );
   });

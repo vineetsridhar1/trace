@@ -1,6 +1,7 @@
 {
   "expo": {
     "name": "Trace",
+    "owner": "vineets123",
     "slug": "trace-mobile",
     "version": "0.0.1",
     "scheme": "trace",
@@ -16,7 +17,7 @@
     "ios": {
       "bundleIdentifier": "org.gettrace.mobile",
       "supportsTablet": false,
-      "associatedDomains": ["applinks:trace.app"]
+      "associatedDomains": ["applinks:gettrace.org"]
     },
     "android": {
       "package": "org.gettrace.mobile",
@@ -48,6 +49,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "fe5684ac-1711-4b45-b3e6-40a9b8d63c16"
+      },
+      "router": {}
     }
   }
 }
