@@ -85,7 +85,8 @@ describe("PushNotificationService", () => {
       body: JSON.stringify([
         {
           to: "ExponentPushToken[token-1]",
-          title: 'Session "Fix flaky CI" is completed',
+          title: "Fix flaky CI",
+          body: "AI completed this session",
           data: { deepLink: "trace://sessions/group-1/session-1" },
         },
       ]),
@@ -148,7 +149,8 @@ describe("PushNotificationService", () => {
       body: JSON.stringify([
         {
           to: "ExponentPushToken[token-1]",
-          title: 'AI is awaiting your input for "Fix flaky CI"',
+          title: "Fix flaky CI",
+          body: "AI is awaiting your input",
           data: { deepLink: "trace://sessions/group-1/session-1" },
         },
       ]),

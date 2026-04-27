@@ -75,14 +75,16 @@ function isCompletedTermination(payload: unknown): boolean {
 
 function completionNotification(sessionName: string, sessionGroupId: string, sessionId: string) {
   return {
-    title: `Session "${sessionName}" is completed`,
+    title: sessionName,
+    body: "AI completed this session",
     deepLink: `trace://sessions/${sessionGroupId}/${sessionId}`,
   } satisfies NotificationContent;
 }
 
 function needsInputNotification(sessionName: string, sessionGroupId: string, sessionId: string) {
   return {
-    title: `AI is awaiting your input for "${sessionName}"`,
+    title: sessionName,
+    body: "AI is awaiting your input",
     deepLink: `trace://sessions/${sessionGroupId}/${sessionId}`,
   } satisfies NotificationContent;
 }
