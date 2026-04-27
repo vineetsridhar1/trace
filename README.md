@@ -1,11 +1,12 @@
 <h1 align="center">Trace</h1>
 
 <p align="center">
-  <strong>Open-source work OS for humans and AI agents.</strong>
+  <strong>Open-source control plane for multiplayer AI coding sessions.</strong>
 </p>
 
 <p align="center">
-  Chat, tickets, project management, and AI coding sessions in one shared event log.
+  Run Claude Code, Codex, and other coding tools locally or in the cloud. Inspect
+  progress from web, desktop, and mobile.
 </p>
 
 <p align="center">
@@ -26,27 +27,25 @@
 
 ## What is Trace?
 
-# A shared workspace where every action is an event
+# A shared cockpit for AI coding work
 
-Trace is a communication, project management, and AI development platform built
-around a single idea: **the difference between chat, tickets, and coding sessions
-is mostly artificial**.
+Trace is a self-hosted workspace for running, monitoring, and collaborating on
+AI coding sessions. It gives every session a durable home: status, files,
+terminal output, branch state, checkpoints, runtime access, and history.
 
-A message, a ticket update, an agent decision, a terminal event, and a session
-state change are all events in the same append-only log. Humans and agents use
-the same service layer, the same permissions model, and the same workspace.
+Instead of keeping AI coding work scattered across terminal tabs and local
+folders, Trace makes each session visible to the team. Start a session on a repo,
+watch it work, inspect the files it touched, hand it off, resume it later, or
+check in from your phone.
 
-It looks like a team workspace. Under the hood it is an event-sourced control
-plane for human and agent work.
+**Run many coding sessions without losing track of any of them.**
 
-**Manage the work, the conversation, and the agent runtime in one place.**
-
-|        | Flow              | Example                                                                 |
-| ------ | ----------------- | ----------------------------------------------------------------------- |
-| **01** | Talk              | Discuss a bug, feature, incident, or decision in a channel.             |
-| **02** | Turn it into work | Create tickets, link repos, start sessions, and preserve context.       |
-| **03** | Let agents help   | Run Claude Code, Codex, or another coding tool locally or in the cloud. |
-| **04** | Audit everything  | Follow the event log from conversation to code to review.               |
+|        | Flow            | Example                                                                 |
+| ------ | --------------- | ----------------------------------------------------------------------- |
+| **01** | Connect a repo  | Register a local checkout or a hosted repository.                       |
+| **02** | Start a session | Launch Claude Code, Codex, or another coding tool against a branch.     |
+| **03** | Follow along    | Watch status, terminal output, file changes, checkpoints, and runtimes. |
+| **04** | Collaborate     | Review, hand off, resume, archive, or continue from mobile.             |
 
 <br/>
 
@@ -56,14 +55,14 @@ plane for human and agent work.
     <td align="center"><strong>Works with</strong></td>
     <td align="center"><strong>Claude Code</strong><br/><sub>coding tool adapter</sub></td>
     <td align="center"><strong>Codex</strong><br/><sub>coding tool adapter</sub></td>
-    <td align="center"><strong>Electron</strong><br/><sub>local sessions</sub></td>
-    <td align="center"><strong>Fly.io</strong><br/><sub>cloud sessions</sub></td>
-    <td align="center"><strong>OpenAI</strong><br/><sub>LLM adapter</sub></td>
-    <td align="center"><strong>Anthropic</strong><br/><sub>LLM adapter</sub></td>
+    <td align="center"><strong>Desktop</strong><br/><sub>local sessions</sub></td>
+    <td align="center"><strong>Containers</strong><br/><sub>cloud sessions</sub></td>
+    <td align="center"><strong>Web</strong><br/><sub>control surface</sub></td>
+    <td align="center"><strong>Mobile</strong><br/><sub>monitor and approve</sub></td>
   </tr>
 </table>
 
-<em>Adapters are pluggable. The core system does not depend on one model, host, or coding tool.</em>
+<em>Bring your coding tool. Trace manages the session lifecycle around it.</em>
 
 </div>
 
@@ -71,12 +70,12 @@ plane for human and agent work.
 
 ## Trace is right for you if
 
-- You want one place for **team communication, tickets, and AI coding sessions**.
-- You run multiple coding agents and need to know **what each one did and why**.
-- You want agents to operate as first-class actors, not as a separate sidecar mode.
-- You care about event history, auditability, permissions, and real-time sync.
-- You want local sessions through a desktop bridge and cloud sessions through a container runtime.
-- You want to build on a service layer that clients and agents both use directly.
+- You run multiple AI coding sessions and need a clear view of what each one is doing.
+- You want coding sessions to be shared, resumable, and inspectable by a team.
+- You want local sessions through a desktop bridge and cloud sessions through containers.
+- You want to review branches, files, terminals, and checkpoints from one place.
+- You want mobile access for checking progress and responding while away from your desk.
+- You want a pluggable runtime layer instead of hardcoding one coding tool or host.
 
 <br/>
 
@@ -85,53 +84,53 @@ plane for human and agent work.
 <table>
 <tr>
 <td width="33%" valign="top">
-<h3>Shared Event Log</h3>
-Every meaningful action becomes an immutable event. The UI, API, subscriptions,
-agent runtime, and stores all derive state from the same stream.
+<h3>Session Control</h3>
+Start, pause, resume, terminate, archive, fork, and inspect AI coding sessions
+with durable status and history.
 </td>
 <td width="33%" valign="top">
-<h3>First-Class Agents</h3>
-Agents are actors with the same service-layer access pattern as users. The
-difference is metadata, not a separate architecture.
+<h3>Multiplayer Review</h3>
+Share the same session surface across the team so people can follow progress,
+review changes, and continue work from the same context.
 </td>
 <td width="33%" valign="top">
-<h3>AI Coding Sessions</h3>
-Start, pause, resume, terminate, fork, and inspect coding sessions. Run them
-locally through Electron or in cloud containers.
+<h3>Local Desktop Bridge</h3>
+Run sessions against local repos through Electron with controlled access to
+worktrees, terminals, files, and branch sync.
 </td>
 </tr>
 <tr>
 <td valign="top">
-<h3>Channels and Chats</h3>
-Use channels, DMs, session threads, and scoped event views to keep discussion
-and work history connected.
+<h3>Cloud Runtimes</h3>
+Run container-backed sessions for hosted work, using the same session model as
+local desktop sessions.
 </td>
 <td valign="top">
-<h3>Tickets and Projects</h3>
-Track work with priorities, statuses, repos, projects, links, and suggestions
-generated from the same workspace context.
+<h3>Mobile Monitoring</h3>
+Use the Expo mobile client to check session state, inspect activity, and keep
+work moving away from your laptop.
 </td>
 <td valign="top">
-<h3>Pluggable Boundaries</h3>
-Session adapters, coding tool adapters, and LLM adapters keep vendors out of
-the core business logic.
+<h3>File and Terminal Visibility</h3>
+Open files, view diffs, inspect terminal output, and keep runtime state attached
+to the session instead of a disposable tab.
 </td>
 </tr>
 <tr>
 <td valign="top">
-<h3>Desktop Bridge</h3>
-The Electron app runs local sessions and exposes controlled access to local
-repos, worktrees, terminals, and files.
+<h3>Session Lineage</h3>
+Fork, branch, merge, archive, and restore sessions while preserving where each
+piece of work came from.
 </td>
 <td valign="top">
-<h3>Mobile Client</h3>
-An Expo client shares the same client-core stores and GraphQL operations as the
-web app.
+<h3>Runtime Access Controls</h3>
+Approve local runtime access and bridge permissions explicitly, with scoped
+session and terminal capabilities.
 </td>
 <td valign="top">
-<h3>Thin GraphQL API</h3>
-GraphQL is the external interface. Resolvers call services. Business logic
-lives in the service layer.
+<h3>Adapter Architecture</h3>
+Swap coding tools, hosting modes, and model providers without rewriting the
+core session layer.
 </td>
 </tr>
 </table>
@@ -140,41 +139,40 @@ lives in the service layer.
 
 ## Problems Trace solves
 
-| Without Trace                                                                  | With Trace                                                                                         |
-| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| AI coding sessions live in terminal tabs with little shared memory.            | Sessions are workspace entities with status, lineage, events, files, terminals, and messages.      |
-| Chat, tickets, and code work drift apart.                                      | Conversations, tickets, sessions, repos, and projects are linked peers in the same organization.   |
-| Agents need custom backchannels to update state.                               | Agents use the same service layer as humans and emit the same event types.                         |
-| Real-time clients refetch or maintain competing caches.                        | Mutations produce events, subscriptions deliver them, and Zustand stores derive state from events. |
-| Adding a new coding tool or hosting mode requires touching core product logic. | Adapters isolate coding tools, session hosts, and LLM providers.                                   |
-| It is hard to reconstruct why work happened.                                   | The event log records actor, scope, payload, and resulting state transitions.                      |
+| Without Trace                                                                            | With Trace                                                                                       |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| You have several Claude Code or Codex terminals open and cannot tell which one did what. | Every session has status, branch state, files, terminal output, and history in one place.        |
+| Work disappears when a terminal closes or a machine reboots.                             | Sessions are durable workspace entities that can be resumed, reviewed, archived, or forked.      |
+| Teammates cannot inspect what a coding tool is doing without screen sharing.             | The session surface is multiplayer and visible from web, desktop, and mobile.                    |
+| Local and cloud coding runs behave like different products.                              | Local desktop sessions and cloud container sessions share the same lifecycle and data model.     |
+| File changes, checkpoints, and runtime logs live in separate places.                     | Trace keeps files, diffs, terminal state, checkpoints, and runtime metadata attached to session. |
+| Adding a new coding tool requires product-specific plumbing everywhere.                  | Coding tools plug in through adapters around a stable session model.                             |
 
 <br/>
 
 ## Why Trace is different
 
-Trace treats the service layer as the product.
+Trace treats AI coding sessions as collaborative, durable workspace objects.
 
-|                                     |                                                                                                     |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **Events are the source of truth.** | Clients request actions. Services validate, authorize, mutate, append events, and broadcast them.   |
-| **Agents are not special cases.**   | Agent actors and human actors go through the same authorization and business logic.                 |
-| **Entities are flat.**              | Channels, sessions, tickets, repos, and projects are organization-scoped peers linked by relations. |
-| **GraphQL stays thin.**             | Resolvers parse input, call services, and format output. They do not own business rules.            |
-| **Adapters keep vendors outside.**  | Cloud hosts, local bridges, coding tools, and LLMs are replaceable implementation details.          |
-| **Client state is predictable.**    | urql transports data; Zustand owns state; event handlers normalize updates.                         |
+|                                      |                                                                                                     |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| **Sessions are first-class.**        | A run is not just a terminal process; it has lifecycle, history, files, runtime state, and lineage. |
+| **Local and cloud share one model.** | Desktop bridges and hosted containers both connect through the same session router.                 |
+| **The UI is multiplayer.**           | Web, desktop, and mobile clients subscribe to the same workspace state.                             |
+| **Runtime boundaries are explicit.** | Local filesystem and terminal access are granted through bridge permissions and scoped capability.  |
+| **Adapters keep tools replaceable.** | Claude Code, Codex, container hosts, and model providers live behind interfaces.                    |
+| **GraphQL stays thin.**              | Resolvers call services; services own validation, authorization, persistence, and event emission.   |
 
 <br/>
 
 ## What Trace is not
 
-|                             |                                                                                                   |
-| --------------------------- | ------------------------------------------------------------------------------------------------- |
-| **Not just a chatbot.**     | Chat is one event surface. The product model also includes work, code sessions, repos, and audit. |
-| **Not a ticket wrapper.**   | Tickets are part of the event model, not the center of the system.                                |
-| **Not an agent framework.** | Trace coordinates agents and runtimes; it does not require one agent implementation.              |
-| **Not GraphQL-first.**      | GraphQL is the public API boundary. The service layer is the source of product behavior.          |
-| **Not vendor-locked.**      | Claude Code, Codex, Anthropic, OpenAI, Fly.io, and Electron are adapters, not core assumptions.   |
+|                               |                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------ |
+| **Not a coding tool.**        | Trace runs and coordinates coding tools; it does not replace Claude Code, Codex, or your editor. |
+| **Not an IDE.**               | It is a control plane for sessions, files, branches, terminals, and review.                      |
+| **Not a single-tab wrapper.** | Trace is for many sessions, many repos, and many people following work together.                 |
+| **Not vendor-locked.**        | Coding tools, hosting modes, and model providers are adapters.                                   |
 
 <br/>
 
@@ -244,7 +242,7 @@ Create a GitHub OAuth app at
 - Homepage URL: `http://localhost:3000`
 - Authorization callback URL: `http://localhost:4000/auth/github/callback`
 
-Trace uses `pgvector` for semantic memory and summaries. Enable it before
+Trace uses `pgvector` for indexing and retrieval features. Enable it before
 migrating:
 
 ```sql
@@ -277,15 +275,15 @@ pnpm dev:desktop      # Electron desktop bridge
 ## Architecture
 
 ```text
-Web / Mobile / Desktop  ->  GraphQL  ->  Service Layer  <-  Agent Runtime
+Web / Mobile / Desktop  ->  GraphQL  ->  Service Layer  <-  Session Runtimes
                                              |
                                       Event Store
                                       PostgreSQL
 ```
 
-The service layer owns validation, authorization, business logic, persistence,
-event creation, and broadcasting. External clients use GraphQL. The agent
-runtime calls services directly.
+The service layer owns validation, authorization, session lifecycle, persistence,
+event creation, and broadcasting. External clients use GraphQL. Local and cloud
+runtimes connect through the session router and bridge protocols.
 
 ### Monorepo layout
 
@@ -299,7 +297,7 @@ apps/
 
 packages/
   gql/                GraphQL schema, codegen, generated TypeScript types
-  client-core/        Client stores, GraphQL operations, event handling
+  client-core/        Client stores, GraphQL operations, session event handling
   shared/             Adapter interfaces and runtime protocol types
 ```
 
@@ -307,24 +305,24 @@ packages/
 
 - Schema source of truth: `packages/gql/src/schema.graphql`.
 - Resolvers are thin wrappers around services.
-- Services are the only layer that creates events.
-- Clients and agents never write events directly.
+- Services own session lifecycle and event creation.
+- Clients and runtimes never write event rows directly.
 - Zustand owns client state; urql is transport only.
-- Events are partitioned by scope in the client store.
+- Session events are partitioned by scope in the client store.
 - Vendor-specific code belongs inside adapter implementations.
 
 <br/>
 
 ## Tech stack
 
-| Area    | Stack                                                                |
-| ------- | -------------------------------------------------------------------- |
-| Server  | Apollo Server, Express, Prisma, PostgreSQL, Redis, WebSockets        |
-| Web     | React, Vite, urql, Zustand, Tailwind CSS, shadcn/ui, framer-motion   |
-| Mobile  | Expo, React Native, Expo Router, shared client-core stores           |
-| Desktop | Electron, WebSocket bridge, local repo/session control               |
-| Agents  | Service-layer runtime, policy pipeline, LLM adapters, tool adapters  |
-| Codegen | GraphQL Code Generator, Prisma Client, TypeScript project references |
+| Area     | Stack                                                                |
+| -------- | -------------------------------------------------------------------- |
+| Server   | Apollo Server, Express, Prisma, PostgreSQL, Redis, WebSockets        |
+| Web      | React, Vite, urql, Zustand, Tailwind CSS, shadcn/ui, framer-motion   |
+| Mobile   | Expo, React Native, Expo Router, shared client-core stores           |
+| Desktop  | Electron, WebSocket bridge, local repo/session control               |
+| Runtimes | Session router, bridge protocol, coding tool adapters, LLM adapters  |
+| Codegen  | GraphQL Code Generator, Prisma Client, TypeScript project references |
 
 Trace can use AG Grid Enterprise for data-dense tables. Local development works
 without a committed license key. Production builds should provide
@@ -373,17 +371,18 @@ Yes. `pnpm dev:local` runs a local database, web app, API server, and Electron
 bridge. Local mode uses local auth instead of GitHub OAuth.
 
 **Do I need Claude Code or Codex installed?**
-Only if you want to run sessions with those tools locally. The platform is built
-around coding tool adapters, so additional tools can be added without changing
-the core service model.
+Only if you want to run sessions with those tools locally. Trace is built around
+coding tool adapters, so additional tools can be added without changing the core
+session model.
 
-**Can agents modify Trace state directly?**
-No. Agents call services. Services validate permissions, perform mutations,
-append events, and broadcast updates.
+**Can teammates follow a session from another machine?**
+Yes. Session state is stored on the server and rendered through the web and
+mobile clients. Local filesystem access still goes through the approved desktop
+bridge.
 
-**Why not use GraphQL for the agent runtime?**
-GraphQL is the external client API. The agent runtime runs inside the system and
-calls the same services directly, avoiding duplicate business logic.
+**Can I run sessions in the cloud?**
+Yes. The container bridge provides the hosted runtime path. Local desktop and
+cloud sessions share the same lifecycle model.
 
 **Can I self-host production?**
 Yes. The repo includes a Dockerfile and example EC2/Caddy deployment files under
@@ -395,11 +394,11 @@ and model/tool API keys.
 ## Roadmap
 
 - Broader coding tool adapter support.
-- Richer agent autonomy controls and review workflows.
-- Better mobile workflows for monitoring and approving agent work.
-- More deployment templates.
+- Richer multiplayer review workflows for active sessions.
+- Better mobile flows for monitoring and approving session work.
+- More deployment templates for local and cloud runtimes.
 - Public docs for adapter development.
-- Stronger observability around cost, runtime health, and event processing.
+- Stronger observability around runtime health, session cost, and branch state.
 
 <br/>
 
@@ -419,5 +418,5 @@ Trace is open source under the [GNU Affero General Public License v3.0](LICENSE)
 ---
 
 <p align="center">
-  <sub>Built for teams where humans and agents work in the same room.</sub>
+  <sub>Built for teams running more AI coding sessions than one terminal can hold.</sub>
 </p>
