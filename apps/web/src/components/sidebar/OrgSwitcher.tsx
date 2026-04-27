@@ -30,32 +30,52 @@ export function OrgSwitcher({ large }: { large?: boolean }) {
         </span>
         <ChevronDown size={large ? 15 : 14} className="text-muted-foreground" />
       </PopoverTrigger>
-      <PopoverContent side="bottom" align="center" sideOffset={4} className="!w-56 gap-0 p-1.5">
-        <p className="px-2 py-1 text-xs font-medium text-muted-foreground">Switch server</p>
+      <PopoverContent
+        side="bottom"
+        align="start"
+        sideOffset={6}
+        className="!w-64 gap-0 overflow-hidden rounded-lg border border-border bg-surface-elevated p-1.5 shadow-lg"
+      >
+        <div className="px-2.5 pb-1.5 pt-1">
+          <p className="text-[11px] font-medium uppercase text-muted-foreground">
+            Organizations
+          </p>
+        </div>
         {orgList.map((org: { id: string; name: string }) => (
           <button
             key={org.id}
             onClick={() => setActiveOrg(org.id)}
-            className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-surface-hover"
+            className={`flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors hover:bg-surface-hover ${
+              org.id === activeOrgId ? "bg-surface-hover text-foreground" : "text-muted-foreground"
+            }`}
           >
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-surface-elevated text-[10px] font-semibold text-muted-foreground">
+            <div
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold ${
+                org.id === activeOrgId
+                  ? "bg-accent text-accent-foreground"
+                  : "bg-surface-deep text-muted-foreground"
+              }`}
+            >
               {getInitials(org.name)}
             </div>
-            <span className="flex-1 truncate">{org.name}</span>
-            {org.id === activeOrgId && <Check size={14} className="text-accent" />}
+            <span className="flex-1 truncate text-left font-medium">{org.name}</span>
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+              {org.id === activeOrgId ? <Check size={14} className="text-accent" /> : null}
+            </span>
           </button>
         ))}
-        <div className="my-1 h-px bg-border" />
+        <div className="mx-2 my-1.5 h-px bg-border" />
         <CreateOrganizationDialog
           trigger={
             <button
               type="button"
-              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-surface-hover"
+              className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
             >
-              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-surface-elevated text-muted-foreground">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-deep text-muted-foreground">
                 <Plus size={13} />
               </div>
-              <span className="flex-1 truncate text-left">New organization</span>
+              <span className="flex-1 truncate text-left font-medium">Create organization</span>
+              <span className="h-5 w-5 shrink-0" />
             </button>
           }
         />
