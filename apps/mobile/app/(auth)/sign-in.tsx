@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import * as ExpoLinking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
@@ -14,8 +14,6 @@ import { haptic } from "@/lib/haptics";
 import { recreateClient } from "@/lib/urql";
 
 const REDIRECT_URL = "trace://auth/callback";
-const TERMS_URL = "https://gettrace.org/terms";
-const PRIVACY_URL = "https://gettrace.org/privacy";
 
 function tokenFromCallback(rawUrl: string): string | null {
   try {
@@ -97,24 +95,6 @@ export default function SignInScreen() {
               <Text style={styles.buttonText}>Continue with GitHub</Text>
             )}
           </Pressable>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Pair with local session"
-            onPress={() => router.push("/pair-local")}
-            disabled={loading}
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              (pressed || loading) && styles.buttonPressed,
-            ]}
-          >
-            <Text style={styles.secondaryButtonText}>Pair with local session</Text>
-            <Text style={styles.secondaryHint}>
-              {pairedLocalUrl
-                ? `Saved host: ${pairedLocalUrl}`
-                : "Scan a QR code from your local Trace app"}
-            </Text>
-          </Pressable>
         </View>
         {error && <Text style={styles.error}>{error}</Text>}
       </View>
@@ -122,20 +102,16 @@ export default function SignInScreen() {
       <View style={styles.footer}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Open Terms"
-          onPress={() => Linking.openURL(TERMS_URL)}
+          accessibilityLabel="Pair with local session"
+          onPress={() => router.push("/pair-local")}
+          disabled={loading}
           hitSlop={12}
+          style={({ pressed }) => [styles.footerAction, (pressed || loading) && styles.buttonPressed]}
         >
-          <Text style={styles.footerLink}>Terms</Text>
-        </Pressable>
-        <Text style={styles.footerSep}>·</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Open Privacy"
-          onPress={() => Linking.openURL(PRIVACY_URL)}
-          hitSlop={12}
-        >
-          <Text style={styles.footerLink}>Privacy</Text>
+          <Text style={styles.footerActionText}>Pair with local session</Text>
+          <Text style={styles.footerHint}>
+            {pairedLocalUrl ? `Saved host: ${pairedLocalUrl}` : "Scan a QR code from local Trace"}
+          </Text>
         </Pressable>
       </View>
     </View>
@@ -157,7 +133,6 @@ const styles = StyleSheet.create({
   },
   actions: {
     width: "100%",
-    gap: 12,
     alignItems: "center",
   },
   wordmark: {
@@ -174,18 +149,6 @@ const styles = StyleSheet.create({
     minWidth: 240,
     alignItems: "center",
   },
-  secondaryButton: {
-    width: "100%",
-    maxWidth: 320,
-    borderRadius: 24,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#2f2f2f",
-    backgroundColor: "#111",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 4,
-    alignItems: "center",
-  },
   buttonPressed: {
     opacity: 0.7,
   },
@@ -194,33 +157,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  secondaryButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  secondaryHint: {
-    color: "#888",
-    fontSize: 12,
-    textAlign: "center",
-  },
   error: {
     color: "#ff6b6b",
     textAlign: "center",
     paddingHorizontal: 24,
   },
   footer: {
-    flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    gap: 12,
+    paddingBottom: 8,
   },
-  footerLink: {
+  footerAction: {
+    alignItems: "center",
+    gap: 4,
+  },
+  footerActionText: {
     color: "#888",
     fontSize: 13,
+    fontWeight: "600",
   },
-  footerSep: {
-    color: "#444",
-    fontSize: 13,
+  footerHint: {
+    color: "#666",
+    fontSize: 11,
+    textAlign: "center",
   },
 });

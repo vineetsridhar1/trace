@@ -229,6 +229,7 @@ export const sessionMutations = {
       ...args.input,
       organizationId: orgId,
       createdById: ctx.userId,
+      clientSource: ctx.clientSource,
     });
   },
   runSession: (
@@ -240,6 +241,7 @@ export const sessionMutations = {
     return sessionService.run(args.id, args.prompt, args.interactionMode ?? undefined, {
       userId: ctx.userId,
       organizationId: requireOrgContext(ctx),
+      clientSource: ctx.clientSource,
     });
   },
   terminateSession: async (_: unknown, args: { id: string }, ctx: Context) => {
@@ -304,6 +306,7 @@ export const sessionMutations = {
       actorId: ctx.userId,
       interactionMode: args.interactionMode ?? undefined,
       clientMutationId: args.clientMutationId ?? undefined,
+      clientSource: ctx.clientSource,
     });
   },
   retrySessionConnection: (_: unknown, args: { sessionId: string }, ctx: Context) => {
@@ -449,6 +452,7 @@ export const sessionMutations = {
       actorId: ctx.userId,
       interactionMode: args.interactionMode ?? undefined,
       organizationId: requireOrgContext(ctx),
+      clientSource: ctx.clientSource,
     });
   },
   removeQueuedMessage: (_: unknown, args: { id: string }, ctx: Context) => {

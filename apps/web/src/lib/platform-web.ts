@@ -2,6 +2,7 @@ import { setPlatform } from "@trace/client-core";
 
 setPlatform({
   apiUrl: import.meta.env.VITE_API_URL ?? "",
+  clientSource: "web",
   authMode: "cookie",
   storage: {
     getItem: (key: string) => localStorage.getItem(key),

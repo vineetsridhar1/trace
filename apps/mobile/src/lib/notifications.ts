@@ -11,6 +11,10 @@ import {
   type EntityState,
 } from "@trace/client-core";
 import {
+  deepLinkFromNotificationData,
+  sessionIdFromNotificationLink,
+} from "@/lib/notification-deeplink";
+import {
   clearPushRegistration,
   readPushRegistration,
   writePushRegistration,
@@ -37,7 +41,10 @@ function selectNeedsInputCount(state: EntityState): number {
 
 function projectId(): string | null {
   const extra = Constants.expoConfig?.extra as { eas?: { projectId?: unknown } } | undefined;
-  const configured = extra?.eas?.projectId ?? Constants.easConfig?.projectId ?? process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
+  const configured =
+    extra?.eas?.projectId ??
+    Constants.easConfig?.projectId ??
+    process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
   return typeof configured === "string" && configured.length > 0 ? configured : null;
 }
 
@@ -64,7 +71,11 @@ export async function ensureRegistered(): Promise<void> {
 
   const token = (await Notifications.getExpoPushTokenAsync({ projectId: id })).data;
   const previous = await readPushRegistration();
-  if (previous?.token === token && previous.userId === user?.id && previous.organizationId === activeOrgId) {
+  if (
+    previous?.token === token &&
+    previous.userId === user?.id &&
+    previous.organizationId === activeOrgId
+  ) {
     return;
   }
   if (previous?.token && previous.token !== token) {
@@ -92,6 +103,21 @@ export async function unregister(): Promise<void> {
 export async function clearLocalNotificationState(): Promise<void> {
   await Promise.all([clearPushRegistration(), Notifications.setBadgeCountAsync(0)]);
 }
+
+export async function dismissNotificationsForSession(sessionId: string): Promise<void> {
+  if (!sessionId) return;
+  const delivered = await Notifications.getPresentedNotificationsAsync();
+  const matches = delivered.filter((notification) => {
+    const deepLink = deepLinkFromNotificationData(notification.request.content.data);
+    return deepLink ? sessionIdFromNotificationLink(deepLink) === sessionId : false;
+  });
+  await Promise.all(
+    matches.map((notification) =>
+      Notifications.dismissNotificationAsync(notification.request.identifier),
+    ),
+  );
+}
+
 export function useRegisterPushToken(): void {
   const user = useAuthStore((s: AuthState) => s.user);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);

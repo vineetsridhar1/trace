@@ -163,9 +163,32 @@ describe("auth helpers", () => {
 
     expect(context.userId).toBe("user-1");
     expect(context.organizationId).toBe("org-1");
+    expect(context.clientSource).toBeNull();
     expect(context.role).toBe("admin");
     expect(context.actorType).toBe("user");
     expect(createUserLoaderMock).toHaveBeenCalled();
+  });
+
+  it("reads the client source header into HTTP context", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({
+      role: "admin",
+    });
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+
+    const context = await buildContext({
+      req: {
+        headers: {
+          authorization: `Bearer ${token}`,
+          "x-organization-id": "org-1",
+          "x-trace-client-source": "mobile",
+        },
+        cookies: {},
+      },
+    } as unknown as Parameters<typeof buildContext>[0]);
+
+    expect(context.clientSource).toBe("mobile");
   });
 
   it("requires a token for HTTP context construction", async () => {

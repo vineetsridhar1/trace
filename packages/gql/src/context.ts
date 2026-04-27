@@ -5,6 +5,8 @@ export interface Context {
   userId: string;
   /** Active organization ID — set from X-Organization-Id header. Null for org-less operations (e.g. DMs). */
   organizationId: string | null;
+  /** Best-effort client source hint from the GraphQL transport. */
+  clientSource: string | null;
   /** Role in the active organization. Null when organizationId is null. */
   role: UserRole | null;
   actorType: ActorType;

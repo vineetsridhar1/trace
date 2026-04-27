@@ -1,5 +1,14 @@
 function notificationRoute(path: string): string | null {
-  return path.startsWith("/sessions/") ? path : null;
+  if (path.startsWith("/sessions/")) return path;
+  if (path === "/connections" || path === "/(connections)") return "/(connections)";
+  return null;
+}
+
+export function sessionIdFromNotificationLink(deepLink: string): string | null {
+  const path = routePathFromNotificationLink(deepLink);
+  if (!path?.startsWith("/sessions/")) return null;
+  const parts = path.split("/");
+  return parts.length >= 4 && parts[3] ? parts[3] : null;
 }
 
 export function routePathFromNotificationLink(deepLink: string): string | null {

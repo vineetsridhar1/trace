@@ -63,6 +63,7 @@ export function createGqlClient(options: CreateGqlClientOptions): GqlClient {
       return {
         ...(usesBearerAuth && token ? { token } : {}),
         ...(activeOrgId ? { organizationId: activeOrgId } : {}),
+        clientSource: platform.clientSource,
       };
     },
     shouldRetry: () => true,
@@ -89,7 +90,10 @@ export function createGqlClient(options: CreateGqlClientOptions): GqlClient {
     fetch: platform.fetch,
     fetchOptions: () => ({
       credentials: "include" as const,
-      headers: getAuthHeaders(),
+      headers: {
+        ...getAuthHeaders(),
+        "x-trace-client-source": platform.clientSource,
+      },
     }),
     exchanges: [
       fetchExchange,

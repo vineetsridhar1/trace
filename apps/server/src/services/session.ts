@@ -33,6 +33,7 @@ export type StartSessionServiceInput = StartSessionInput & {
   sourceSessionId?: string | null;
   organizationId: string;
   createdById: string;
+  clientSource?: string | null;
 };
 
 type SessionStartMetadata = {
@@ -48,6 +49,11 @@ type PendingInputInfo = {
   kind: "question" | "plan";
   toolUseId: string | null;
 };
+
+function normalizeClientSource(source: string | null | undefined): string | null {
+  const trimmed = source?.trim();
+  return trimmed ? trimmed : null;
+}
 
 function getAssistantBlocks(data: Record<string, unknown>): Record<string, unknown>[] | null {
   if (data.type !== "assistant") return null;
@@ -113,6 +119,7 @@ type PendingSessionCommand =
       type: "run";
       prompt?: string | null;
       interactionMode?: string | null;
+      clientSource?: string | null;
       checkpointContext?: GitCheckpointContext | null;
       workspaceUpgrade?: boolean;
     }
@@ -120,6 +127,7 @@ type PendingSessionCommand =
       type: "send";
       prompt: string;
       interactionMode?: string | null;
+      clientSource?: string | null;
       checkpointContext?: GitCheckpointContext | null;
       imageKeys?: string[] | null;
       workspaceUpgrade?: boolean;
@@ -1502,6 +1510,7 @@ export class SessionService {
             session: serializeSession(session),
             sessionGroup: sessionGroupSnapshot,
             prompt: input.prompt ?? null,
+            clientSource: normalizeClientSource(input.clientSource),
             sourceSessionId: input.sourceSessionId ?? null,
             restoreCheckpointId: restoreCheckpoint?.id ?? null,
             restoreCheckpointSha: restoreCheckpoint?.commitSha ?? null,
@@ -1553,7 +1562,7 @@ export class SessionService {
     id: string,
     prompt?: string | null,
     interactionMode?: string,
-    access?: { userId: string; organizationId: string },
+    access?: { userId: string; organizationId: string; clientSource?: string | null },
   ) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id },
@@ -1594,6 +1603,7 @@ export class SessionService {
         type: "run",
         prompt: prompt ?? null,
         interactionMode: interactionMode ?? null,
+        clientSource: normalizeClientSource(access?.clientSource),
         checkpointContext: buildCheckpointContextFromStartMeta({
           sessionId: id,
           sessionGroupId: session.sessionGroupId,
@@ -1614,6 +1624,7 @@ export class SessionService {
             type: "run",
             prompt: prompt ?? null,
             interactionMode: interactionMode ?? null,
+            clientSource: normalizeClientSource(access?.clientSource),
             checkpointContext: buildCheckpointContextFromStartMeta({
               sessionId: id,
               sessionGroupId: session.sessionGroupId,
@@ -1730,6 +1741,7 @@ export class SessionService {
         type: "run",
         prompt: resolvedPrompt ?? null,
         interactionMode: interactionMode ?? null,
+        clientSource: normalizeClientSource(access?.clientSource),
         checkpointContext,
       });
       await this.persistConnectionFailure(id, session.organizationId, deliveryResult, "run");
@@ -1770,6 +1782,7 @@ export class SessionService {
         sessionId: id,
         agentStatus: "active",
         sessionStatus: "in_progress",
+        clientSource: normalizeClientSource(access?.clientSource),
         ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "user",
@@ -2476,6 +2489,7 @@ export class SessionService {
     actorId,
     interactionMode,
     clientMutationId,
+    clientSource,
   }: {
     sessionId: string;
     text: string;
@@ -2484,6 +2498,7 @@ export class SessionService {
     actorId: string;
     interactionMode?: string;
     clientMutationId?: string;
+    clientSource?: string | null;
   }) {
     if (imageKeys?.length) {
       for (const key of imageKeys) {
@@ -2562,6 +2577,7 @@ export class SessionService {
               type: "send",
               prompt: text,
               interactionMode: interactionMode ?? null,
+              clientSource: normalizeClientSource(clientSource),
               checkpointContext: null,
               ...(imageKeys?.length ? { imageKeys } : {}),
             } as unknown as Prisma.InputJsonValue,
@@ -2617,6 +2633,7 @@ export class SessionService {
         type: "send",
         prompt: text,
         interactionMode: interactionMode ?? null,
+        clientSource: normalizeClientSource(clientSource),
         checkpointContext: null,
         ...(imageKeys?.length ? { imageKeys } : {}),
       };
@@ -2728,6 +2745,7 @@ export class SessionService {
           type: "send",
           prompt,
           interactionMode: interactionMode ?? null,
+          clientSource: normalizeClientSource(clientSource),
           checkpointContext,
           ...(imageKeys?.length ? { imageKeys } : {}),
         },
@@ -2807,6 +2825,7 @@ export class SessionService {
         sessionId,
         agentStatus: "active",
         sessionStatus: "in_progress",
+        clientSource: normalizeClientSource(clientSource),
         ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType,
@@ -2837,12 +2856,14 @@ export class SessionService {
     actorId,
     interactionMode,
     organizationId,
+    clientSource,
   }: {
     sessionId: string;
     text: string;
     actorId: string;
     interactionMode?: string;
     organizationId: string;
+    clientSource?: string | null;
   }) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
@@ -2883,6 +2904,7 @@ export class SessionService {
       eventType: "queued_message_added",
       payload: {
         sessionId,
+        clientSource: normalizeClientSource(clientSource),
         queuedMessage: {
           id: queuedMessage.id,
           sessionId: queuedMessage.sessionId,
@@ -2970,12 +2992,17 @@ export class SessionService {
     if (!popped) return false;
 
     try {
+      const queuedMessageClientSource = await this.loadQueuedMessageClientSource(
+        sessionId,
+        popped.id,
+      );
       await this.sendMessage({
         sessionId,
         text: popped.text,
         actorType: "user",
         actorId: popped.createdById,
         interactionMode: popped.interactionMode ?? undefined,
+        clientSource: queuedMessageClientSource,
       });
     } catch (error) {
       // Re-insert the message so it's not lost
@@ -4899,6 +4926,7 @@ export class SessionService {
         prompt: pending.prompt,
         interactionMode:
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
+        clientSource: typeof pending.clientSource === "string" ? pending.clientSource : null,
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
         imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
         workspaceUpgrade: pending.workspaceUpgrade === true,
@@ -4910,6 +4938,7 @@ export class SessionService {
         prompt: typeof pending.prompt === "string" ? pending.prompt : null,
         interactionMode:
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
+        clientSource: typeof pending.clientSource === "string" ? pending.clientSource : null,
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
         workspaceUpgrade: pending.workspaceUpgrade === true,
       };
@@ -5097,12 +5126,47 @@ export class SessionService {
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_resumed",
-      payload: { sessionId, ...(sessionGroup ? { sessionGroup } : {}) },
+      payload: {
+        sessionId,
+        clientSource: normalizeClientSource(pending.clientSource),
+        ...(sessionGroup ? { sessionGroup } : {}),
+      },
       actorType: "system",
       actorId: "system",
     });
 
     return "delivered";
+  }
+
+  private async loadQueuedMessageClientSource(
+    sessionId: string,
+    queuedMessageId: string,
+  ): Promise<string | null> {
+    const events = await prisma.event.findMany({
+      where: {
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "queued_message_added",
+      },
+      orderBy: { timestamp: "desc" },
+      take: 20,
+    });
+
+    for (const event of events) {
+      if (!event.payload || typeof event.payload !== "object" || Array.isArray(event.payload))
+        continue;
+      const payload = event.payload as Record<string, unknown>;
+      const queuedMessage = payload.queuedMessage;
+      if (!queuedMessage || typeof queuedMessage !== "object" || Array.isArray(queuedMessage)) {
+        continue;
+      }
+      if ((queuedMessage as Record<string, unknown>).id !== queuedMessageId) continue;
+      return normalizeClientSource(
+        typeof payload.clientSource === "string" ? payload.clientSource : null,
+      );
+    }
+
+    return null;
   }
 
   private async persistConnectionFailure(
