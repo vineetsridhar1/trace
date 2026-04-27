@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import {
-  commitLinkedCheckoutChanges,
   linkLinkedCheckoutRepo,
   restoreLinkedCheckout,
   setLinkedCheckoutAutoSync,
@@ -35,7 +34,6 @@ export interface LinkedCheckoutHeaderState {
   syncConflictError: string | null;
   onLinkRepo: () => Promise<void>;
   onSync: () => Promise<void>;
-  onCommitChanges: () => Promise<void>;
   onResolveSyncConflict: (input: {
     strategy: "DISCARD" | "COMMIT" | "REBASE";
     commitMessage?: string;
@@ -172,9 +170,7 @@ export function useLinkedCheckoutHeaderState({
       if (!result) return;
 
       if (!result.ok) {
-        toast.error("Failed to sync main worktree", {
-          description: result.error ?? "Unknown error",
-        });
+        setSyncConflictError(result.error ?? "Unknown error");
         return;
       }
 
@@ -214,28 +210,6 @@ export function useLinkedCheckoutHeaderState({
       toast.success("Main worktree restored");
     } catch (error) {
       toast.error("Failed to restore main worktree", {
-        description: error instanceof Error ? error.message : String(error),
-      });
-    }
-  };
-
-  const onCommitChanges = async () => {
-    if (!repoId || !runtimeInstanceId || pending) return;
-
-    try {
-      const result = await commitLinkedCheckoutChanges(repoId, sessionGroupId, runtimeInstanceId);
-      if (!result.ok) {
-        toast.error("Failed to commit main worktree changes", {
-          description: result.error ?? "Unknown error",
-        });
-        return;
-      }
-
-      toast.success("Main worktree changes committed", {
-        description: summaryBranch ? `Committed on ${summaryBranch}.` : undefined,
-      });
-    } catch (error) {
-      toast.error("Failed to commit main worktree changes", {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -285,7 +259,6 @@ export function useLinkedCheckoutHeaderState({
     syncConflictError,
     onLinkRepo,
     onSync,
-    onCommitChanges,
     onResolveSyncConflict,
     onCloseSyncConflict: () => setSyncConflictError(null),
     onRestore,

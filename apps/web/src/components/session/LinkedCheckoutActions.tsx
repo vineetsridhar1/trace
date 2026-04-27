@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GitCommitHorizontal, Loader2, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
+import { Loader2, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
 import { Button } from "../ui/button";
 import { LinkedCheckoutSyncConflictDialog } from "./LinkedCheckoutSyncConflictDialog";
 import type { LinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
@@ -8,7 +8,7 @@ interface Props {
   state: LinkedCheckoutHeaderState;
 }
 
-type PendingAction = "link" | "sync" | "commit" | "restore" | "toggle-auto-sync" | null;
+type PendingAction = "link" | "sync" | "restore" | "toggle-auto-sync" | null;
 
 export function LinkedCheckoutActions({ state }: Props) {
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
@@ -19,12 +19,10 @@ export function LinkedCheckoutActions({ state }: Props) {
     isAttachedToThisGroup,
     pending,
     autoSyncEnabled,
-    hasUncommittedChanges,
     canLinkRepo,
     requiresRepoLink,
     onLinkRepo,
     onSync,
-    onCommitChanges,
     onResolveSyncConflict,
     onCloseSyncConflict,
     onRestore,
@@ -69,24 +67,6 @@ export function LinkedCheckoutActions({ state }: Props) {
         onClose={onCloseSyncConflict}
         onResolve={onResolveSyncConflict}
       />
-
-      {isAttachedToThisGroup && hasUncommittedChanges && (
-        <Button
-          variant={iconButtonVariant}
-          size="icon"
-          className={iconButtonClassName}
-          onClick={() => void runAction("commit", onCommitChanges)}
-          disabled={pending}
-          aria-label="Commit main worktree changes"
-          title="Commit main worktree changes"
-        >
-          {pendingAction === "commit" ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <GitCommitHorizontal size={14} />
-          )}
-        </Button>
-      )}
 
       <Button
         variant={iconButtonVariant}
