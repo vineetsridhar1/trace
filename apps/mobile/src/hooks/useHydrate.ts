@@ -6,11 +6,10 @@ import {
   handleOrgEvent,
   useAuthStore,
   useEntityStore,
-  type AuthState,
   type SessionGroupEntity,
 } from "@trace/client-core";
 import type { Channel, ChannelGroup, Event, Session, SessionGroup } from "@trace/gql";
-import { isUnauthorized } from "@/lib/auth";
+import { handleUnauthorized, isUnauthorized } from "@/lib/auth";
 import { latestTimestamp, mergeSessionGroupEntity } from "@/lib/session-group";
 import { timedEventIngest } from "@/lib/perf";
 import { getClient } from "@/lib/urql";
@@ -198,29 +197,22 @@ function sessionGroupsFromSessions(
 }
 
 export function useHydrate(activeOrgId: string | null): void {
-  const logout = useAuthStore((s: AuthState) => s.logout);
-
   useEffect(() => {
     if (!activeOrgId) return;
     let cancelled = false;
     const client = getClient();
 
-    async function handle401() {
-      useEntityStore.getState().reset();
-      await logout();
-    }
-
     void (async () => {
       const ok = await refreshOrgData(activeOrgId);
       if (cancelled) return;
-      if (!ok) await handle401();
+      if (!ok) await handleUnauthorized();
     })();
 
     const subscription = client
       .subscription(ORG_EVENTS_SUBSCRIPTION, { organizationId: activeOrgId })
       .subscribe((result: { error?: unknown; data?: { orgEvents?: Event } }) => {
         if (isUnauthorized(result.error)) {
-          void handle401();
+          void handleUnauthorized();
           return;
         }
         if (result.error) {
@@ -237,7 +229,7 @@ export function useHydrate(activeOrgId: string | null): void {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [activeOrgId, logout]);
+  }, [activeOrgId]);
 
   // Catch up list-level state (sessions, channels, unread counts) after a WS
   // reconnect: the server's in-memory pubsub has no replay, so events emitted

@@ -65,6 +65,13 @@ function isAllowedOrigin(origin: string): boolean {
   return getAllowedOAuthOrigins().has(origin);
 }
 
+function logoutPushToken(req: Request): string | null {
+  const body = req.body as unknown;
+  if (!body || typeof body !== "object") return null;
+  const token = (body as { pushToken?: unknown }).pushToken;
+  return typeof token === "string" && token.length > 0 ? token : null;
+}
+
 export function createOAuthStateToken(origin: string): string {
   return jwt.sign({ origin, tokenType: "oauth_state" } satisfies OAuthStatePayload, JWT_SECRET, {
     expiresIn: OAUTH_STATE_TTL_SECONDS,
@@ -622,14 +629,15 @@ router.get("/auth/bridge-token", async (req: Request, res: Response) => {
 // Logout
 router.post("/auth/logout", async (req: Request, res: Response) => {
   const authenticated = await resolveAuthenticatedUser(req);
+  const pushToken = logoutPushToken(req);
   if (rejectExternalLocalModeRequest(req, res, authenticated)) {
     return;
   }
   if (authenticated?.auth.kind === "local_mobile") {
     await revokeLocalMobileDeviceByToken(authenticated.token);
   }
-  if (authenticated) {
-    await pushTokenService.unregisterAllForUser(authenticated.auth.userId);
+  if (authenticated && pushToken) {
+    await pushTokenService.unregister({ userId: authenticated.auth.userId, token: pushToken });
   }
   res.clearCookie("trace_token", {
     path: "/",

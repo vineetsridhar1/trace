@@ -6,6 +6,7 @@ const logout = vi.fn();
 const resetEntities = vi.fn();
 const unregister = vi.fn();
 const clearLocalNotificationState = vi.fn();
+const readPushRegistration = vi.fn();
 
 vi.mock("@trace/client-core", () => ({
   useAuthStore: {
@@ -29,6 +30,10 @@ vi.mock("@/lib/notifications", () => ({
   unregister,
 }));
 
+vi.mock("@/lib/notification-registration", () => ({
+  readPushRegistration,
+}));
+
 vi.mock("@/stores/ui", () => ({
   useMobileUIStore: {
     getState: () => ({
@@ -45,8 +50,14 @@ describe("handleMobileSignOut", () => {
     resetEntities.mockReset();
     unregister.mockReset();
     clearLocalNotificationState.mockReset();
+    readPushRegistration.mockReset();
     unregister.mockResolvedValue(undefined);
     clearLocalNotificationState.mockResolvedValue(undefined);
+    readPushRegistration.mockResolvedValue({
+      token: "ExponentPushToken[current-device]",
+      userId: "user-1",
+      organizationId: "org-1",
+    });
   });
 
   it("resets UI state, recreates the client, and logs out", async () => {
@@ -73,7 +84,7 @@ describe("handleMobileSignOut", () => {
 
     expect(resetUi).toHaveBeenCalledTimes(1);
     expect(recreateClient).toHaveBeenCalledTimes(1);
-    expect(logout).toHaveBeenCalledTimes(1);
+    expect(logout).toHaveBeenCalledWith({ pushToken: "ExponentPushToken[current-device]" });
     expect(unregister).toHaveBeenCalledTimes(1);
     expect(clearLocalNotificationState).toHaveBeenCalledTimes(1);
     expect(order).toEqual([
@@ -98,5 +109,15 @@ describe("handleMobileSignOut", () => {
     expect(logout).toHaveBeenCalledTimes(1);
     expect(clearLocalNotificationState).toHaveBeenCalledTimes(1);
     warn.mockRestore();
+  });
+
+  it("clears local notification state on unauthorized logout", async () => {
+    const { handleUnauthorized } = await import("./auth");
+
+    await handleUnauthorized();
+
+    expect(resetEntities).toHaveBeenCalledTimes(1);
+    expect(logout).toHaveBeenCalledTimes(1);
+    expect(clearLocalNotificationState).toHaveBeenCalledTimes(1);
   });
 });

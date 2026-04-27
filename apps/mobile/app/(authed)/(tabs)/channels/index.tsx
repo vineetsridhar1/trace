@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { FlashList } from "@shopify/flash-list";
-import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
+import { useAuthStore, type AuthState } from "@trace/client-core";
 import { EmptyState } from "@/components/design-system";
 import { ChannelListRow } from "@/components/channels/ChannelListRow";
 import { ChannelGroupHeader } from "@/components/channels/ChannelGroupHeader";
@@ -11,13 +11,13 @@ import {
   type ChannelListItemKey,
 } from "@/hooks/useCodingChannels";
 import { refreshOrgData } from "@/hooks/useHydrate";
+import { handleUnauthorized } from "@/lib/auth";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
 
 export default function ChannelsIndex() {
   const theme = useTheme();
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
-  const logout = useAuthStore((s: AuthState) => s.logout);
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -31,13 +31,12 @@ export default function ChannelsIndex() {
     try {
       const ok = await refreshOrgData(activeOrgId);
       if (!ok) {
-        useEntityStore.getState().reset();
-        await logout();
+        await handleUnauthorized();
       }
     } finally {
       setRefreshing(false);
     }
-  }, [activeOrgId, logout]);
+  }, [activeOrgId]);
 
   const renderListItem = useCallback(
     ({ item }: { item: ChannelListItemKey }) => {

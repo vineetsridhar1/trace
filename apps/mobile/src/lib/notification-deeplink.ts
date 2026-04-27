@@ -1,16 +1,21 @@
+function notificationRoute(path: string): string | null {
+  return path.startsWith("/sessions/") ? path : null;
+}
+
 export function routePathFromNotificationLink(deepLink: string): string | null {
-  if (deepLink.startsWith("/")) return deepLink;
+  if (deepLink.startsWith("/")) return notificationRoute(deepLink);
 
   try {
     const url = new URL(deepLink);
     if (url.protocol === "trace:") {
       const host = url.hostname ? `/${url.hostname}` : "";
-      return `${host}${url.pathname}${url.search}`;
+      return notificationRoute(`${host}${url.pathname}${url.search}`);
     }
     if (url.protocol === "https:" && url.hostname === "trace.app") {
-      return url.pathname.startsWith("/m/")
+      const path = url.pathname.startsWith("/m/")
         ? `${url.pathname.slice(2)}${url.search}`
         : `${url.pathname}${url.search}`;
+      return notificationRoute(path);
     }
   } catch {
     return null;

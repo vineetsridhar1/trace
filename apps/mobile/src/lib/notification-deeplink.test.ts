@@ -15,4 +15,9 @@ describe("routePathFromNotificationLink", () => {
   it("rejects unsupported external links", () => {
     expect(routePathFromNotificationLink("https://example.com/m/sessions/g1/s1")).toBeNull();
   });
+
+  it("rejects unsupported internal notification routes", () => {
+    expect(routePathFromNotificationLink("trace://settings")).toBeNull();
+    expect(routePathFromNotificationLink("/settings")).toBeNull();
+  });
 });

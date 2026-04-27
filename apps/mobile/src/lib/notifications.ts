@@ -38,39 +38,42 @@ function selectNeedsInputCount(state: EntityState): number {
 }
 
 function projectId(): string | null {
-  const extra = Constants.expoConfig?.extra as
-    | { eas?: { projectId?: unknown } }
-    | undefined;
-  const configured =
-    extra?.eas?.projectId ??
-    Constants.easConfig?.projectId ??
-    process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
+  const extra = Constants.expoConfig?.extra as { eas?: { projectId?: unknown } } | undefined;
+  const configured = extra?.eas?.projectId ?? Constants.easConfig?.projectId ?? process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
   return typeof configured === "string" && configured.length > 0 ? configured : null;
 }
 
 const pushPlatform = (): "ios" | "android" => (Platform.OS === "android" ? "android" : "ios");
 
+async function unregisterToken(token: string): Promise<void> {
+  const result = await getClient().mutation(UNREGISTER_PUSH_TOKEN_MUTATION, { token }).toPromise();
+  if (result.error) throw result.error;
+}
+
 export async function ensureRegistered(): Promise<void> {
   if (Platform.OS !== "ios" && Platform.OS !== "android") return;
   const { activeOrgId, user } = useAuthStore.getState();
+  const id = projectId();
+  if (!id) {
+    console.warn("[notifications] missing EAS project id; skipping push registration");
+    return;
+  }
   let permissions = await Notifications.getPermissionsAsync();
   if (permissions.status === "undetermined") {
     permissions = await Notifications.requestPermissionsAsync();
   }
   if (permissions.status !== "granted") return;
 
-  const id = projectId();
-  if (!id) {
-    console.warn("[notifications] missing EAS project id; skipping push registration");
-    return;
-  }
-
   const token = (await Notifications.getExpoPushTokenAsync({ projectId: id })).data;
   const previous = await readPushRegistration();
   if (previous?.token === token && previous.userId === user?.id && previous.organizationId === activeOrgId) {
     return;
   }
-
+  if (previous?.token && previous.token !== token) {
+    await unregisterToken(previous.token).catch((err: unknown) =>
+      console.warn("[notifications] stale push unregister failed", err),
+    );
+  }
   const result = await getClient()
     .mutation(REGISTER_PUSH_TOKEN_MUTATION, { token, platform: pushPlatform() })
     .toPromise();
@@ -84,17 +87,13 @@ export async function unregister(): Promise<void> {
     await Notifications.setBadgeCountAsync(0);
     return;
   }
-  const result = await getClient()
-    .mutation(UNREGISTER_PUSH_TOKEN_MUTATION, { token: registration.token })
-    .toPromise();
-  if (result.error) throw result.error;
+  await unregisterToken(registration.token);
   await Promise.all([clearPushRegistration(), Notifications.setBadgeCountAsync(0)]);
 }
 
 export async function clearLocalNotificationState(): Promise<void> {
   await Promise.all([clearPushRegistration(), Notifications.setBadgeCountAsync(0)]);
 }
-
 export function useRegisterPushToken(): void {
   const router = useRouter();
   const user = useAuthStore((s: AuthState) => s.user);
