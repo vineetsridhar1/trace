@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useAuthStore, useEntityStore, type SessionEntity } from "@trace/client-core";
 import { useSidebarData } from "../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../hooks/useSidebarTabScroll";
 import { features } from "../lib/features";
@@ -13,6 +14,8 @@ import { getPreferredSidebarTab, getTabIndex, type SidebarTab } from "./sidebar/
 import { Sidebar, SidebarContent, SidebarFooter, useSidebar } from "./ui/sidebar";
 
 export function AppSidebar() {
+  const currentUserId = useAuthStore((s) => s.user?.id);
+  const hasOwnedSession = useEntityStore((s) => hasSessionCreatedByUser(s.sessions, currentUserId));
   const activePage = useUIStore((s: UIState) => s.activePage);
   const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
   const setActiveChannelId = useUIStore((s: UIState) => s.setActiveChannelId);
@@ -161,9 +164,11 @@ export function AppSidebar() {
               </div>
             )}
             <div className="border-t border-border/70">
-              <div className="px-2 py-1.5">
-                <ConnectionsButton />
-              </div>
+              {hasOwnedSession && (
+                <div className="px-2 py-1.5">
+                  <ConnectionsButton />
+                </div>
+              )}
               <UserMenu />
             </div>
           </SidebarFooter>
@@ -183,4 +188,12 @@ export function AppSidebar() {
       />
     </>
   );
+}
+
+function hasSessionCreatedByUser(
+  sessions: Record<string, SessionEntity>,
+  userId: string | undefined,
+): boolean {
+  if (!userId) return false;
+  return Object.values(sessions).some((session: SessionEntity) => session.createdBy?.id === userId);
 }
