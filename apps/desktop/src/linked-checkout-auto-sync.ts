@@ -48,7 +48,7 @@ export async function hasInProgressGitOperation(repoPath: string): Promise<boole
 
 export interface LinkedCheckoutAutoSyncDeps {
   revParseHead: (repoPath: string) => Promise<string>;
-  refreshRemoteRefs: (repoPath: string) => Promise<void>;
+  refreshRemoteRefs: (repoPath: string, branch: string) => Promise<void>;
   hasTrackedChanges: (repoPath: string) => Promise<boolean>;
   switchDetached: (repoPath: string, sha: string) => Promise<void>;
   getCurrentBranch: (repoPath: string) => Promise<string | null>;
@@ -58,8 +58,18 @@ export interface LinkedCheckoutAutoSyncDeps {
 
 const defaultDeps: LinkedCheckoutAutoSyncDeps = {
   revParseHead: (repoPath) => runGit(repoPath, ["rev-parse", "HEAD"]),
-  refreshRemoteRefs: async (repoPath) => {
-    await runGit(repoPath, ["fetch", "origin"]);
+  refreshRemoteRefs: async (repoPath, branch) => {
+    try {
+      await runGit(repoPath, [
+        "fetch",
+        "origin",
+        `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
+      ]);
+    } catch (error) {
+      const message = formatGitError(error);
+      if (message.includes("couldn't find remote ref")) return;
+      throw error;
+    }
   },
   hasTrackedChanges: async (repoPath) => {
     const status = await runGit(repoPath, ["status", "--porcelain", "--untracked-files=no"]);
@@ -234,7 +244,7 @@ export class LinkedCheckoutAutoSyncManager {
       }
 
       try {
-        await this.deps.refreshRemoteRefs(repoPath);
+        await this.deps.refreshRemoteRefs(repoPath, targetBranch);
       } catch (error) {
         const message = formatGitError(error);
         this.logTick("failed refreshing remote refs", {

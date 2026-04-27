@@ -152,7 +152,7 @@ describe("LinkedCheckoutAutoSyncManager", () => {
 
     await manager.reconcileAll();
 
-    expect(deps.refreshRemoteRefs).toHaveBeenCalledWith("/tmp/repo-repo-1");
+    expect(deps.refreshRemoteRefs).toHaveBeenCalledWith("/tmp/repo-repo-1", "main");
     expect(deps.switchDetached).toHaveBeenCalledWith("/tmp/repo-repo-1", "b".repeat(40));
     expect(configMock.__state.repos["repo-1"].linkedCheckout).toMatchObject({
       lastSyncedCommitSha: "b".repeat(40),
@@ -232,7 +232,7 @@ describe("LinkedCheckoutAutoSyncManager", () => {
     expect(configMock.setRepoLinkedCheckout).not.toHaveBeenCalled();
   });
 
-  it("refreshes origin before resolving the target branch", async () => {
+  it("refreshes the target branch remote before resolving the target branch", async () => {
     seedAttachment("repo-1", {
       targetBranch: "trace/rhino",
       lastSyncedCommitSha: "a".repeat(40),
@@ -250,7 +250,7 @@ describe("LinkedCheckoutAutoSyncManager", () => {
 
     await manager.reconcileAll();
 
-    expect(deps.refreshRemoteRefs).toHaveBeenCalledWith("/tmp/repo-repo-1");
+    expect(deps.refreshRemoteRefs).toHaveBeenCalledWith("/tmp/repo-repo-1", "trace/rhino");
     expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledWith(
       "/tmp/repo-repo-1",
       "trace/rhino",
