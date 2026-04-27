@@ -18,6 +18,7 @@ import { haptic } from "@/lib/haptics";
 import { applyOptimisticPatch } from "@/lib/optimisticEntity";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
+import { styles as composerStyles } from "./session-input-composer/styles";
 
 interface SessionRuntimePickerSheetContentProps {
   sessionId: string;
@@ -227,44 +228,48 @@ export function SessionRuntimePickerSheetContent({
         </Text>
       </View>
 
-      <View style={[styles.menuContainer, theme.shadows.lg]}>
-        <Glass preset="card" interactive style={styles.menuSurface}>
-          <View style={styles.menuContent}>
-            {rows.map((row, index) => (
-              <ListRow
-                key={row.key}
-                title={row.title}
-                subtitle={row.subtitle}
-                leading={
-                  <SymbolView name={row.icon} size={16} tintColor={theme.colors.mutedForeground} />
-                }
-                trailing={
-                  row.selected ? (
-                    <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
-                  ) : row.canRequestAccess ? (
-                    <Button
-                      title={row.requestPending ? "Pending" : "Request"}
-                      size="sm"
-                      variant="secondary"
-                      disabled={row.requestPending}
-                      loading={requestingRuntimeId === row.runtime.id}
-                      onPress={() => void handleRequestAccess(row.runtime)}
-                    />
-                  ) : undefined
-                }
-                onPress={!row.disabled ? () => void handleSelect(row.value) : undefined}
-                haptic="selection"
-                separator={false}
-                style={{
-                  ...styles.menuRow,
-                  marginBottom: index < rows.length - 1 ? 2 : 0,
-                  ...(row.disabled && !row.selected ? styles.disabledRow : null),
-                }}
-              />
-            ))}
-          </View>
-        </Glass>
-      </View>
+      <Glass
+        preset="input"
+        interactive
+        style={[
+          composerStyles.inputCard,
+          styles.runtimeInputSurface,
+          { borderColor: theme.colors.border },
+        ]}
+      >
+        {rows.map((row, index) => (
+          <ListRow
+            key={row.key}
+            title={row.title}
+            subtitle={row.subtitle}
+            leading={
+              <SymbolView name={row.icon} size={16} tintColor={theme.colors.mutedForeground} />
+            }
+            trailing={
+              row.selected ? (
+                <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
+              ) : row.canRequestAccess ? (
+                <Button
+                  title={row.requestPending ? "Pending" : "Request"}
+                  size="sm"
+                  variant="secondary"
+                  disabled={row.requestPending}
+                  loading={requestingRuntimeId === row.runtime.id}
+                  onPress={() => void handleRequestAccess(row.runtime)}
+                />
+              ) : undefined
+            }
+            onPress={!row.disabled ? () => void handleSelect(row.value) : undefined}
+            haptic="selection"
+            separator={false}
+            style={{
+              ...styles.runtimeInputRow,
+              marginBottom: index < rows.length - 1 ? 2 : 0,
+              ...(row.disabled && !row.selected ? styles.disabledRow : null),
+            }}
+          />
+        ))}
+      </Glass>
 
       {rows.length === 0 ? (
         <Text variant="footnote" color="mutedForeground">
@@ -282,19 +287,14 @@ const styles = StyleSheet.create({
   header: {
     gap: 4,
   },
-  menuContainer: {
-    marginTop: 10,
-  },
-  menuSurface: {
-    borderRadius: 20,
+  runtimeInputSurface: {
+    paddingHorizontal: 6,
+    paddingVertical: 6,
     overflow: "hidden",
   },
-  menuContent: {
-    padding: 6,
-  },
-  menuRow: {
+  runtimeInputRow: {
     minHeight: 56,
-    borderRadius: 8,
+    borderRadius: 16,
   },
   disabledRow: {
     opacity: 0.5,
