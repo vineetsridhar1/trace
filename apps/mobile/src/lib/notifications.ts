@@ -101,12 +101,32 @@ export function useRegisterPushToken(): void {
   const needsInputCount = useEntityStore(selectNeedsInputCount);
   const previousAuthed = useRef(false);
   const previousOrgId = useRef<string | null>(null);
+  const lastHandledNotificationId = useRef<string | null>(null);
 
   useEffect(() => {
+    void Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        if (!response) return;
+        const requestId = response.notification.request.identifier;
+        if (lastHandledNotificationId.current === requestId) return;
+        const deepLink = deepLinkFromNotificationData(response.notification.request.content.data);
+        const path = deepLink ? routePathFromNotificationLink(deepLink) : null;
+        if (!path) return;
+        lastHandledNotificationId.current = requestId;
+        router.push(path as Href);
+      })
+      .catch((err: unknown) => {
+        console.warn("[notifications] last response lookup failed", err);
+      });
+
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const requestId = response.notification.request.identifier;
+      if (lastHandledNotificationId.current === requestId) return;
       const deepLink = deepLinkFromNotificationData(response.notification.request.content.data);
       const path = deepLink ? routePathFromNotificationLink(deepLink) : null;
-      if (path) router.push(path as Href);
+      if (!path) return;
+      lastHandledNotificationId.current = requestId;
+      router.push(path as Href);
     });
     return () => sub.remove();
   }, [router]);

@@ -12,6 +12,10 @@ describe("routePathFromNotificationLink", () => {
     );
   });
 
+  it("normalizes native app-link paths", () => {
+    expect(routePathFromNotificationLink("/m/sessions/g1/s1")).toBe("/sessions/g1/s1");
+  });
+
   it("rejects unsupported external links", () => {
     expect(routePathFromNotificationLink("https://example.com/m/sessions/g1/s1")).toBeNull();
   });
