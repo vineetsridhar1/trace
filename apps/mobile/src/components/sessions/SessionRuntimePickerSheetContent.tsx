@@ -13,7 +13,7 @@ import type {
   SessionConnection,
   SessionRuntimeInstance,
 } from "@trace/gql";
-import { Button, ListRow, Text } from "@/components/design-system";
+import { Button, Glass, ListRow, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { applyOptimisticPatch } from "@/lib/optimisticEntity";
 import { getClient } from "@/lib/urql";
@@ -227,15 +227,10 @@ export function SessionRuntimePickerSheetContent({
         </Text>
       </View>
 
-      <View
-        style={[
-          styles.card,
-          {
-            backgroundColor: theme.colors.surfaceElevated,
-            borderColor: theme.colors.borderMuted,
-            borderRadius: theme.radius.lg,
-          },
-        ]}
+      <Glass
+        preset="card"
+        interactive
+        style={[styles.card, { borderColor: theme.colors.borderMuted }]}
       >
         {rows.map((row, index) => (
           <ListRow
@@ -265,7 +260,7 @@ export function SessionRuntimePickerSheetContent({
             style={row.disabled && !row.selected ? styles.disabledRow : undefined}
           />
         ))}
-      </View>
+      </Glass>
 
       {rows.length === 0 ? (
         <Text variant="footnote" color="mutedForeground">
