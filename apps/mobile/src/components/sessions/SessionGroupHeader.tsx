@@ -3,7 +3,6 @@ import { Alert, Linking, StyleSheet, View, type LayoutChangeEvent } from "react-
 import * as Clipboard from "expo-clipboard";
 import { ARCHIVE_SESSION_GROUP_MUTATION, useEntityField } from "@trace/client-core";
 import type { SessionConnection } from "@trace/gql";
-import { createAgentTab } from "@/lib/createQuickSession";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
@@ -106,11 +105,6 @@ export function SessionGroupHeader({
     void haptic.light();
   }, [groupId, sessionId]);
 
-  const handleCreateAgentTab = useCallback(() => {
-    if (!sessionId) return;
-    void createAgentTab(sessionId);
-  }, [sessionId]);
-
   const handleOpenTabSwitcher = useCallback(() => {
     setTabSwitcherOpen(true);
   }, []);
@@ -125,13 +119,6 @@ export function SessionGroupHeader({
         title: "Tabs & terminals",
         systemIcon: "rectangle.on.rectangle",
         onPress: handleOpenTabSwitcher,
-      });
-    }
-    if (sessionId && !sessionOptimistic) {
-      items.push({
-        title: "New agent tab",
-        systemIcon: "plus.rectangle.on.rectangle",
-        onPress: handleCreateAgentTab,
       });
     }
     if (canMoveSession) {
@@ -160,7 +147,6 @@ export function SessionGroupHeader({
   }, [
     archivedAt,
     canMoveSession,
-    handleCreateAgentTab,
     handleArchive,
     handleOpenMoveSheet,
     handleOpenTabSwitcher,
