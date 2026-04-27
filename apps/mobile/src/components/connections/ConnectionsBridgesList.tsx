@@ -3,8 +3,10 @@ import { Alert, RefreshControl, ScrollView, StyleSheet, View } from "react-nativ
 import {
   APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION,
   DENY_BRIDGE_ACCESS_REQUEST_MUTATION,
+  REQUEST_BRIDGE_ACCESS_MUTATION,
   REVOKE_BRIDGE_ACCESS_GRANT_MUTATION,
   UPDATE_BRIDGE_ACCESS_GRANT_MUTATION,
+  useAuthStore,
 } from "@trace/client-core";
 import type { BridgeAccessCapability } from "@trace/gql";
 import { EmptyState, Text } from "@/components/design-system";
@@ -21,6 +23,7 @@ import {
 export function ConnectionsBridgesList() {
   const theme = useTheme();
   const { connections, loading, error, refresh } = useConnections();
+  const userId = useAuthStore((s) => s.user?.id ?? null);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<ConnectionAccessRequest | null>(null);
@@ -115,6 +118,19 @@ export function ConnectionsBridgesList() {
     });
   };
 
+  const requestBridgeAccess = (connectionId: string, runtimeInstanceId: string) => {
+    void runAction(connectionId, async () => {
+      const result = await getClient()
+        .mutation(REQUEST_BRIDGE_ACCESS_MUTATION, {
+          runtimeInstanceId,
+          scopeType: "all_sessions",
+          requestedCapabilities: ["session", "terminal"] satisfies BridgeAccessCapability[],
+        })
+        .toPromise();
+      if (result.error) throw result.error;
+    });
+  };
+
   if (loading && connections.length === 0) {
     return <CenteredText text="Loading bridges..." />;
   }
@@ -156,7 +172,11 @@ export function ConnectionsBridgesList() {
           onReviewRequest={setSelectedRequest}
           onDeny={denyRequest}
           onManageGrant={setSelectedGrant}
+          onRequestAccess={(connection) =>
+            requestBridgeAccess(connection.bridge.id, connection.bridge.instanceId)
+          }
           onRefresh={refresh}
+          currentUserId={userId}
         />
       ))}
       <ConnectionsBridgeAccessSheet
