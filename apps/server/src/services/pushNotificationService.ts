@@ -6,19 +6,6 @@ import { pushTokenService } from "./pushTokenService.js";
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_CHUNK_SIZE = 100;
 
-const SESSION_STATUS_EVENTS = new Set<EventType>([
-  "session_terminated",
-  "session_pr_merged",
-]);
-
-const agentStatusLabel: Record<string, string> = {
-  active: "Active",
-  done: "Done",
-  failed: "Failed",
-  not_started: "Creating...",
-  stopped: "Stopped",
-};
-
 interface PushMessage {
   to: string;
   title: string;
@@ -73,15 +60,56 @@ function bridgeAccessNotification(payload: unknown): {
   };
 }
 
-function statusLabel(payload: unknown, fallback: string | null): string {
+function isNeedsInputOutput(eventType: EventType, payload: unknown): boolean {
   const data = asJsonObject(payload);
-  const status =
-    typeof data?.agentStatus === "string"
-      ? data.agentStatus
-      : typeof data?.sessionStatus === "string"
-        ? data.sessionStatus
-        : fallback;
-  return status ? (agentStatusLabel[status] ?? status) : "updated";
+  if (eventType !== "session_output") return false;
+  return data?.type === "question_pending" || data?.type === "plan_pending";
+}
+
+function isCompletedTermination(payload: unknown): boolean {
+  const data = asJsonObject(payload);
+  if (!data) return false;
+  if (data.sessionStatus === "needs_input") return false;
+  return data.agentStatus === "done" || data.sessionStatus === "merged";
+}
+
+function completionNotification(sessionName: string, sessionGroupId: string, sessionId: string) {
+  return {
+    title: `Session "${sessionName}" is completed`,
+    deepLink: `trace://sessions/${sessionGroupId}/${sessionId}`,
+  } satisfies NotificationContent;
+}
+
+function needsInputNotification(sessionName: string, sessionGroupId: string, sessionId: string) {
+  return {
+    title: `AI is awaiting your input for "${sessionName}"`,
+    deepLink: `trace://sessions/${sessionGroupId}/${sessionId}`,
+  } satisfies NotificationContent;
+}
+
+interface SessionNotificationContext {
+  createdById: string;
+  name: string;
+  sessionGroupId: string;
+}
+
+async function loadSessionNotificationContext(
+  sessionId: string,
+): Promise<SessionNotificationContext | null> {
+  const session = await prisma.session.findUnique({
+    where: { id: sessionId },
+    select: {
+      createdById: true,
+      name: true,
+      sessionGroupId: true,
+    },
+  });
+  if (!session?.createdById || !session.sessionGroupId) return null;
+  return {
+    createdById: session.createdById,
+    name: session.name?.trim() || "Untitled session",
+    sessionGroupId: session.sessionGroupId,
+  };
 }
 
 export class PushNotificationService {
@@ -91,29 +119,45 @@ export class PushNotificationService {
       return;
     }
 
-    if (SESSION_STATUS_EVENTS.has(event.eventType) && event.scopeType === "session") {
-      await this.notifySessionStatus(event);
+    if (event.scopeType !== "session") return;
+
+    if (event.eventType === "session_output" && isNeedsInputOutput(event.eventType, event.payload)) {
+      await this.notifyNeedsInput(event);
+      return;
+    }
+
+    if (event.eventType === "session_terminated" && isCompletedTermination(event.payload)) {
+      await this.notifyCompleted(event);
+      return;
+    }
+
+    if (event.eventType === "session_pr_merged") {
+      await this.notifyCompleted(event);
     }
   }
 
-  private async notifySessionStatus(event: PrismaEvent): Promise<void> {
-    const session = await prisma.session.findUnique({
-      where: { id: event.scopeId },
-      select: {
-        createdById: true,
-        name: true,
-        sessionGroupId: true,
-        agentStatus: true,
-      },
-    });
-    if (!session?.createdById || !session.sessionGroupId) return;
+  private async notifyCompleted(event: PrismaEvent): Promise<void> {
+    const session = await loadSessionNotificationContext(event.scopeId);
+    if (!session) return;
     if (event.actorType === "user" && event.actorId === session.createdById) return;
 
-    const name = session.name?.trim() || "Untitled session";
-    await this.sendToUser(session.createdById, event.organizationId, {
-      title: `"${name}" is now ${statusLabel(event.payload, session.agentStatus)}`,
-      deepLink: `trace://sessions/${session.sessionGroupId}/${event.scopeId}`,
-    });
+    await this.sendToUser(
+      session.createdById,
+      event.organizationId,
+      completionNotification(session.name, session.sessionGroupId, event.scopeId),
+    );
+  }
+
+  private async notifyNeedsInput(event: PrismaEvent): Promise<void> {
+    const session = await loadSessionNotificationContext(event.scopeId);
+    if (!session) return;
+    if (event.actorType === "user" && event.actorId === session.createdById) return;
+
+    await this.sendToUser(
+      session.createdById,
+      event.organizationId,
+      needsInputNotification(session.name, session.sessionGroupId, event.scopeId),
+    );
   }
 
   private async notifyBridgeAccessRequested(event: PrismaEvent): Promise<void> {

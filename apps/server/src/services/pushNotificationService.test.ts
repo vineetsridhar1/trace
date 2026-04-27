@@ -64,16 +64,15 @@ describe("PushNotificationService", () => {
     vi.unstubAllGlobals();
   });
 
-  it("sends session status pushes to the session owner", async () => {
+  it("sends completion pushes to the session owner", async () => {
     prismaMock.session.findUnique.mockResolvedValue({
       createdById: "user-1",
       name: "Fix flaky CI",
       sessionGroupId: "group-1",
-      agentStatus: "failed",
     });
 
     await new PushNotificationService().notifyForEvent(
-      event({ payload: { agentStatus: "failed" } }),
+      event({ payload: { agentStatus: "done", sessionStatus: "in_progress" } }),
     );
 
     expect(prismaMock.pushToken.findMany).toHaveBeenCalledWith({
@@ -86,7 +85,7 @@ describe("PushNotificationService", () => {
       body: JSON.stringify([
         {
           to: "ExponentPushToken[token-1]",
-          title: '"Fix flaky CI" is now Failed',
+          title: 'Session "Fix flaky CI" is completed',
           data: { deepLink: "trace://sessions/group-1/session-1" },
         },
       ]),
@@ -98,11 +97,14 @@ describe("PushNotificationService", () => {
       createdById: "user-1",
       name: "Fix flaky CI",
       sessionGroupId: "group-1",
-      agentStatus: "done",
     });
 
     await new PushNotificationService().notifyForEvent(
-      event({ actorType: "user", actorId: "user-1" }),
+      event({
+        actorType: "user",
+        actorId: "user-1",
+        payload: { agentStatus: "done", sessionStatus: "in_progress" },
+      }),
     );
 
     expect(fetch).not.toHaveBeenCalled();
@@ -113,7 +115,6 @@ describe("PushNotificationService", () => {
       createdById: "user-1",
       name: "Fix flaky CI",
       sessionGroupId: "group-1",
-      agentStatus: "done",
     });
 
     await new PushNotificationService().notifyForEvent(
@@ -121,6 +122,44 @@ describe("PushNotificationService", () => {
     );
     await new PushNotificationService().notifyForEvent(
       event({ eventType: "session_resumed", actorType: "user", actorId: "user-2" }),
+    );
+
+    expect(prismaMock.session.findUnique).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("sends awaiting-input pushes when the AI asks for input", async () => {
+    prismaMock.session.findUnique.mockResolvedValue({
+      createdById: "user-1",
+      name: "Fix flaky CI",
+      sessionGroupId: "group-1",
+    });
+
+    await new PushNotificationService().notifyForEvent(
+      event({
+        eventType: "session_output",
+        payload: { type: "question_pending", sessionStatus: "needs_input" },
+      }),
+    );
+
+    expect(fetch).toHaveBeenCalledWith("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        {
+          to: "ExponentPushToken[token-1]",
+          title: 'AI is awaiting your input for "Fix flaky CI"',
+          data: { deepLink: "trace://sessions/group-1/session-1" },
+        },
+      ]),
+    });
+  });
+
+  it("does not send completion pushes for terminated sessions awaiting input", async () => {
+    await new PushNotificationService().notifyForEvent(
+      event({
+        payload: { agentStatus: "done", sessionStatus: "needs_input" },
+      }),
     );
 
     expect(prismaMock.session.findUnique).not.toHaveBeenCalled();
