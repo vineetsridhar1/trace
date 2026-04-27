@@ -2,17 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, ScrollView, StyleSheet, View } from "react-native";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import {
-  AVAILABLE_RUNTIMES_QUERY,
+  AVAILABLE_SESSION_RUNTIMES_QUERY,
   REQUEST_BRIDGE_ACCESS_MUTATION,
   UPDATE_SESSION_CONFIG_MUTATION,
   useEntityField,
 } from "@trace/client-core";
-import type {
-  BridgeAccessCapability,
-  CodingTool,
-  SessionConnection,
-  SessionRuntimeInstance,
-} from "@trace/gql";
+import type { BridgeAccessCapability, SessionConnection, SessionRuntimeInstance } from "@trace/gql";
 import { Button, ListRow, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { applyOptimisticPatch } from "@/lib/optimisticEntity";
@@ -45,7 +40,6 @@ export function SessionRuntimePickerSheetContent({
 }: SessionRuntimePickerSheetContentProps) {
   const theme = useTheme();
 
-  const tool = useEntityField("sessions", sessionId, "tool") as string | null | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | SessionConnection
     | null
@@ -61,7 +55,6 @@ export function SessionRuntimePickerSheetContent({
     | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic");
 
-  const currentTool: CodingTool = tool === "codex" ? "codex" : "claude_code";
   const canChangeBridge = agentStatus === "not_started" && !isOptimistic;
   const runtimeInstanceId = connection?.runtimeInstanceId ?? null;
   const currentRuntimeValue = runtimeInstanceId;
@@ -74,14 +67,13 @@ export function SessionRuntimePickerSheetContent({
       return [];
     }
     const result = await getClient()
-      .query(AVAILABLE_RUNTIMES_QUERY, {
-        tool: currentTool,
-        sessionGroupId: sessionGroupId ?? null,
+      .query(AVAILABLE_SESSION_RUNTIMES_QUERY, {
+        sessionId,
       })
       .toPromise();
-    const data = result.data?.availableRuntimes as SessionRuntimeInstance[] | undefined;
+    const data = result.data?.availableSessionRuntimes as SessionRuntimeInstance[] | undefined;
     return data ?? [];
-  }, [canChangeBridge, currentTool, sessionGroupId]);
+  }, [canChangeBridge, sessionId]);
 
   useEffect(() => {
     let cancelled = false;
