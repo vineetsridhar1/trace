@@ -30,12 +30,26 @@ export function SessionStreamError({ error, onRetry }: { error: string; onRetry:
 }
 
 /** Solid stream surface shown once hydration completes but no events exist. */
-export function SessionStreamEmpty({ agentStatus }: { agentStatus?: AgentStatus | null }) {
+export function SessionStreamEmpty({
+  agentStatus,
+  bottomInset = 0,
+}: {
+  agentStatus?: AgentStatus | null;
+  bottomInset?: number;
+}) {
   const theme = useTheme();
   const notStarted = agentStatus === "not_started";
 
   return (
-    <View style={[styles.emptyState, { paddingHorizontal: theme.spacing.lg }]}>
+    <View
+      style={[
+        styles.emptyState,
+        {
+          paddingHorizontal: theme.spacing.lg,
+          paddingBottom: bottomInset,
+        },
+      ]}
+    >
       <SymbolView
         name={notStarted ? "sparkles" : "hourglass"}
         size={28}
