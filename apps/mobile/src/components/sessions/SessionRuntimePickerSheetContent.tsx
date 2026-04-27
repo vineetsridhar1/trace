@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, ScrollView, StyleSheet, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import {
   AVAILABLE_SESSION_RUNTIMES_QUERY,
@@ -8,11 +8,11 @@ import {
   useEntityField,
 } from "@trace/client-core";
 import type { BridgeAccessCapability, SessionConnection, SessionRuntimeInstance } from "@trace/gql";
-import { Button, ListRow, Text } from "@/components/design-system";
+import { ListRow, Spinner, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { applyOptimisticPatch } from "@/lib/optimisticEntity";
 import { getClient } from "@/lib/urql";
-import { useTheme } from "@/theme";
+import { alpha, useTheme } from "@/theme";
 
 interface SessionRuntimePickerSheetContentProps {
   sessionId: string;
@@ -31,6 +31,46 @@ interface RuntimeRow {
   runtime: SessionRuntimeInstance;
   requestPending: boolean;
   canRequestAccess: boolean;
+}
+
+function RuntimeRequestPill({
+  title,
+  disabled,
+  loading,
+  onPress,
+}: {
+  title: string;
+  disabled?: boolean;
+  loading?: boolean;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  const inactive = disabled || loading;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: inactive, busy: loading }}
+      disabled={inactive}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.requestPill,
+        {
+          backgroundColor: theme.colors.surfaceElevated,
+          opacity: disabled ? 0.5 : 1,
+        },
+        pressed && !inactive ? { backgroundColor: alpha(theme.colors.foreground, 0.08) } : null,
+      ]}
+    >
+      {loading ? (
+        <Spinner size="small" color="foreground" />
+      ) : (
+        <Text variant="subheadline" color="foreground" align="center">
+          {title}
+        </Text>
+      )}
+    </Pressable>
+  );
 }
 
 export function SessionRuntimePickerSheetContent({
@@ -241,10 +281,8 @@ export function SessionRuntimePickerSheetContent({
               row.selected ? (
                 <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
               ) : row.canRequestAccess ? (
-                <Button
+                <RuntimeRequestPill
                   title={row.requestPending ? "Pending" : "Request"}
-                  size="sm"
-                  variant="secondary"
                   disabled={row.requestPending}
                   loading={requestingRuntimeId === row.runtime.id}
                   onPress={() => void handleRequestAccess(row.runtime)}
@@ -278,6 +316,15 @@ const styles = StyleSheet.create({
   card: {
     overflow: "hidden",
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  requestPill: {
+    minHeight: 36,
+    minWidth: 86,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    alignItems: "center",
+    justifyContent: "center",
   },
   disabledRow: {
     opacity: 0.5,
