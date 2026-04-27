@@ -70,7 +70,7 @@ export function NoOrgWelcome() {
             <RefreshCw size={14} className={checking ? "animate-spin" : undefined} />
             {checking ? "Checking..." : "Check again"}
           </Button>
-          <Button variant="ghost" onClick={logout} className="gap-2 text-destructive">
+          <Button variant="ghost" onClick={() => void logout()} className="gap-2 text-destructive">
             <LogOut size={14} />
             Sign out
           </Button>

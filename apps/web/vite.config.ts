@@ -49,7 +49,14 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
         navigateFallback: "/index.html",
         // Don't cache API/WS requests
-        navigateFallbackDenylist: [/^\/graphql/, /^\/ws/, /^\/auth/, /^\/terminal/],
+        navigateFallbackDenylist: [
+          /^\/graphql/,
+          /^\/ws/,
+          /^\/auth/,
+          /^\/terminal/,
+          /^\/\.well-known/,
+          /^\/apple-app-site-association/,
+        ],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
