@@ -1613,6 +1613,7 @@ export type SessionGroupStatus =
 
 export type SessionRuntimeInstance = {
   __typename?: "SessionRuntimeInstance";
+  access: BridgeRuntimeAccess;
   connected: Scalars["Boolean"]["output"];
   hostingMode: HostingMode;
   id: Scalars["ID"]["output"];

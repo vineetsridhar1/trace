@@ -3339,6 +3339,90 @@ describe("SessionService", () => {
     });
   });
 
+  describe("listRuntimesForTool", () => {
+    it("returns compatible same-org local runtimes with access state even before access is granted", async () => {
+      sessionRouterMock.listRuntimes.mockReturnValueOnce([
+        {
+          id: "runtime-owned",
+          label: "Owned laptop",
+          organizationId: "org-1",
+          hostingMode: "local",
+          supportedTools: ["claude_code"],
+          registeredRepoIds: ["repo-1"],
+          boundSessions: new Set<string>(),
+          ws: { readyState: 1, OPEN: 1 },
+        },
+        {
+          id: "runtime-requestable",
+          label: "Teammate laptop",
+          organizationId: "org-1",
+          hostingMode: "local",
+          supportedTools: ["claude_code"],
+          registeredRepoIds: ["repo-1"],
+          boundSessions: new Set<string>(),
+          ws: { readyState: 1, OPEN: 1 },
+        },
+        {
+          id: "runtime-other-org",
+          label: "Other org laptop",
+          organizationId: "org-2",
+          hostingMode: "local",
+          supportedTools: ["claude_code"],
+          registeredRepoIds: ["repo-1"],
+          boundSessions: new Set<string>(),
+          ws: { readyState: 1, OPEN: 1 },
+        },
+        {
+          id: "runtime-cloud",
+          label: "Cloud",
+          organizationId: "org-1",
+          hostingMode: "cloud",
+          supportedTools: ["claude_code"],
+          registeredRepoIds: ["repo-1"],
+          boundSessions: new Set<string>(),
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ] as unknown as ReturnType<typeof sessionRouterMock.listRuntimes>);
+      runtimeAccessServiceMock.getAccessState
+        .mockResolvedValueOnce({
+          runtimeInstanceId: "runtime-owned",
+          hostingMode: "local",
+          connected: true,
+          allowed: true,
+          isOwner: true,
+          capabilities: ["session", "terminal"],
+        })
+        .mockResolvedValueOnce({
+          runtimeInstanceId: "runtime-requestable",
+          hostingMode: "local",
+          connected: true,
+          allowed: false,
+          isOwner: false,
+          capabilities: [],
+          ownerUser: { id: "owner-1", name: "Owner One" },
+          pendingRequest: null,
+        });
+
+      const result = await service.listRuntimesForTool("claude_code", "org-1", "user-1", "group-1");
+
+      expect(result).toHaveLength(2);
+      expect(result.map((runtime) => runtime.id)).toEqual(["runtime-owned", "runtime-requestable"]);
+      expect(result[1].access).toEqual(
+        expect.objectContaining({
+          allowed: false,
+          ownerUser: { id: "owner-1", name: "Owner One" },
+        }),
+      );
+      expect(runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds).not.toHaveBeenCalled();
+      expect(runtimeAccessServiceMock.getAccessState).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runtimeInstanceId: "runtime-requestable",
+          sessionGroupId: "group-1",
+        }),
+      );
+    });
+  });
+
   describe("listBranches", () => {
     it("rejects a client-supplied sessionGroupId that doesn't own the repo", async () => {
       // Repo exists in org, session group is real, but its repoId != requested repo.

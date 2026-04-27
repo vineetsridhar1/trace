@@ -4268,18 +4268,12 @@ export class SessionService {
       runtimeDiagnostics: diagnostics,
     });
 
-    const accessibleRuntimeIds = await runtimeAccessService.listAccessibleRuntimeInstanceIds({
-      userId,
-      organizationId,
-      sessionGroupId,
-    });
-
     const allRuntimes = sessionRouter
       .listRuntimes()
       .filter(
         (runtime) =>
           runtime.hostingMode === "local" &&
-          accessibleRuntimeIds.has(runtime.id) &&
+          runtime.organizationId === organizationId &&
           runtime.supportedTools.includes(tool),
       );
 
@@ -4296,15 +4290,24 @@ export class SessionService {
           });
     const orgSessionIds = new Set(sessions.map((session: { id: string }) => session.id));
 
-    const result = allRuntimes.map((r) => ({
-      id: r.id,
-      label: r.label,
-      hostingMode: r.hostingMode,
-      supportedTools: r.supportedTools,
-      connected: r.ws.readyState === r.ws.OPEN,
-      sessionCount: [...r.boundSessions].filter((sessionId) => orgSessionIds.has(sessionId)).length,
-      registeredRepoIds: r.registeredRepoIds,
-    }));
+    const result = await Promise.all(
+      allRuntimes.map(async (r) => ({
+        id: r.id,
+        label: r.label,
+        hostingMode: r.hostingMode,
+        supportedTools: r.supportedTools,
+        connected: r.ws.readyState === r.ws.OPEN,
+        sessionCount: [...r.boundSessions].filter((sessionId) => orgSessionIds.has(sessionId))
+          .length,
+        registeredRepoIds: r.registeredRepoIds,
+        access: await runtimeAccessService.getAccessState({
+          userId,
+          organizationId,
+          runtimeInstanceId: r.id,
+          sessionGroupId,
+        }),
+      })),
+    );
 
     runtimeDebug("availableRuntimes query resolved", {
       tool,
