@@ -151,11 +151,7 @@ function MorphingMenu({ actions, accessibilityLabel }: SessionActionsMenuProps) 
           {mounted ? (
             <Animated.View
               pointerEvents={open ? "auto" : "none"}
-              style={[
-                styles.menuLayer,
-                { width: MENU_WIDTH, height: menuHeight },
-                menuStyle,
-              ]}
+              style={[styles.menuLayer, { width: MENU_WIDTH, height: menuHeight }, menuStyle]}
             >
               <MenuList actions={actions} onPick={handleItem} />
             </Animated.View>

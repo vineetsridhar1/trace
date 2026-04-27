@@ -63,17 +63,12 @@ export const SessionGroupSectionHeader = memo(function SessionGroupSectionHeader
         {
           paddingHorizontal: theme.spacing.lg,
           paddingVertical: theme.spacing.sm,
-          backgroundColor: pressed
-            ? theme.colors.surfaceElevated
-            : theme.colors.background,
+          backgroundColor: pressed ? theme.colors.surfaceElevated : theme.colors.background,
         },
       ]}
     >
       <View style={[styles.dot, { backgroundColor: color }]} />
-      <Text
-        variant="footnote"
-        style={[styles.label, { color, fontWeight: "600" }]}
-      >
+      <Text variant="footnote" style={[styles.label, { color, fontWeight: "600" }]}>
         {label}
       </Text>
       <Text variant="caption1" color="dimForeground">

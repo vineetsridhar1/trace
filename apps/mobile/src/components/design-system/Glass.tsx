@@ -63,7 +63,7 @@ export function Glass({
   const resolvedTint = tint ?? config.tint;
 
   const baseStyle: ViewStyle = {
-    backgroundColor: liquidGlassAvailable ? resolvedTint : resolvedTint ?? theme.colors.glassTint,
+    backgroundColor: liquidGlassAvailable ? resolvedTint : (resolvedTint ?? theme.colors.glassTint),
     borderRadius: radius,
     overflow: "hidden",
   };

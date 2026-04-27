@@ -140,7 +140,11 @@ export function GroupHeader({
         </button>
       )}
 
-      <SessionMoveButton sessionId={selectedSessionId} disabled={!canMoveSession} disabledReason={moveDisabledReason} />
+      <SessionMoveButton
+        sessionId={selectedSessionId}
+        disabled={!canMoveSession}
+        disabledReason={moveDisabledReason}
+      />
 
       <button
         onClick={onToggleSidebar}

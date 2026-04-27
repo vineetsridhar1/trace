@@ -1,10 +1,8 @@
 import { gql } from "@urql/core";
-import {
-  useEntityStore,
-  type SessionEntity,
-  type SessionGroupEntity,
-} from "@trace/client-core";
+import { useEntityStore, type SessionEntity, type SessionGroupEntity } from "@trace/client-core";
 import type { Session, SessionGroup } from "@trace/gql";
+import { reconcileEntitySnapshot } from "@/lib/entitySnapshots";
+import { userFacingError } from "@/lib/requestError";
 import { getClient } from "@/lib/urql";
 
 const SESSION_GROUPS_QUERY = gql`
@@ -24,7 +22,9 @@ const SESSION_GROUPS_QUERY = gql`
       archivedAt
       createdAt
       updatedAt
-      channel { id }
+      channel {
+        id
+      }
       sessions {
         id
         name
@@ -39,9 +39,18 @@ const SESSION_GROUPS_QUERY = gql`
         sessionGroupId
         lastMessageAt
         lastUserMessageAt
-        createdBy { id name avatarUrl }
-        repo { id name }
-        channel { id }
+        createdBy {
+          id
+          name
+          avatarUrl
+        }
+        repo {
+          id
+          name
+        }
+        channel {
+          id
+        }
         createdAt
         updatedAt
       }
@@ -51,10 +60,7 @@ const SESSION_GROUPS_QUERY = gql`
 
 export type SessionGroupsView = "active" | "merged" | "archived";
 
-function variablesForView(
-  channelId: string,
-  view: SessionGroupsView,
-): Record<string, unknown> {
+function variablesForView(channelId: string, view: SessionGroupsView): Record<string, unknown> {
   if (view === "archived") return { channelId, archived: true };
   if (view === "merged") return { channelId, archived: false, status: "merged" };
   return { channelId, archived: false };
@@ -69,12 +75,17 @@ function variablesForView(
 export async function fetchChannelSessionGroups(
   channelId: string,
   view: SessionGroupsView,
-): Promise<void> {
+): Promise<string | null> {
   const client = getClient();
   const result = await client
     .query(SESSION_GROUPS_QUERY, variablesForView(channelId, view))
     .toPromise();
-  if (result.error || !result.data?.sessionGroups) return;
+  if (result.error) {
+    return userFacingError(result.error, "Couldn't load sessions for this channel.");
+  }
+  if (!result.data?.sessionGroups) {
+    return "Couldn't load sessions for this channel.";
+  }
   const groups = result.data.sessionGroups as Array<SessionGroup & { id: string }>;
   const upsertMany = useEntityStore.getState().upsertMany;
   const sessions = groups.flatMap((g) => g.sessions ?? []) as Array<Session & { id: string }>;
@@ -82,13 +93,22 @@ export async function fetchChannelSessionGroups(
     "sessionGroups",
     groups.map((g) => ({
       ...g,
-      _sortTimestamp:
-        g.sessions?.[0]?.lastMessageAt
-        ?? g.sessions?.[0]?.updatedAt
-        ?? g.updatedAt,
+      _sortTimestamp: g.sessions?.[0]?.lastMessageAt ?? g.sessions?.[0]?.updatedAt ?? g.updatedAt,
     })) as Array<SessionGroupEntity & { id: string }>,
   );
   if (sessions.length > 0) {
     upsertMany("sessions", sessions as Array<SessionEntity & { id: string }>);
   }
+  const snapshotKey = `${channelId}:${view}`;
+  reconcileEntitySnapshot(
+    "sessionGroups",
+    snapshotKey,
+    groups.map((group) => group.id),
+  );
+  reconcileEntitySnapshot(
+    "sessions",
+    snapshotKey,
+    sessions.map((session) => session.id),
+  );
+  return null;
 }

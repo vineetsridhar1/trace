@@ -3,11 +3,7 @@ import { chatService } from "./chat.js";
 import { channelService } from "./channel.js";
 
 export class ThreadService {
-  async getReplies(
-    rootMessageId: string,
-    userId: string,
-    opts?: { after?: Date; limit?: number },
-  ) {
+  async getReplies(rootMessageId: string, userId: string, opts?: { after?: Date; limit?: number }) {
     const rootMessage = await prisma.message.findUniqueOrThrow({
       where: { id: rootMessageId },
       select: {

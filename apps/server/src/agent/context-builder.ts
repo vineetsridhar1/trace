@@ -461,11 +461,23 @@ async function findRelevantEntities(input: {
   // --- Ticket search by relevance (runs in parallel with link collection) ---
   const searchText = extractSearchText(input.events);
   const ticketSearchPromise = searchText.trim()
-    ? ticketService.searchByRelevance({
-        organizationId: input.organizationId,
-        query: searchText,
-        limit: 5,
-      }).catch(() => [] as Array<{ id: string; title: string; description: string | null; status: string; priority: string | null; labels: string[] }>)
+    ? ticketService
+        .searchByRelevance({
+          organizationId: input.organizationId,
+          query: searchText,
+          limit: 5,
+        })
+        .catch(
+          () =>
+            [] as Array<{
+              id: string;
+              title: string;
+              description: string | null;
+              status: string;
+              priority: string | null;
+              labels: string[];
+            }>,
+        )
     : Promise.resolve([]);
 
   // --- Collect all Hop 1 links that need fetching ---
@@ -543,9 +555,7 @@ async function findRelevantEntities(input: {
 
   // --- Follow links from Hop 1 ticket entities (Hop 2) ---
   // Batch-fetch all ticket links in one query, then batch-fetch the linked entities
-  const hop1TicketIds = entities
-    .filter((e) => e.type === "ticket" && e.hop === 1)
-    .map((e) => e.id);
+  const hop1TicketIds = entities.filter((e) => e.type === "ticket" && e.hop === 1).map((e) => e.id);
 
   if (hop1TicketIds.length > 0) {
     const allTicketLinks = await prisma.ticketLink.findMany({
@@ -643,87 +653,139 @@ async function batchFetchLinkedEntities(
   const sessionIds = grouped.get("session");
   if (sessionIds?.length) {
     queries.push(
-      prisma.session.findMany({
-        where: { id: { in: sessionIds } },
-        select: { id: true, name: true, agentStatus: true, sessionStatus: true, tool: true },
-      }).then((rows: Array<{ id: string; name: string | null; agentStatus: string; sessionStatus: string; tool: string }>) => {
-        for (const s of rows) {
-          result.set(`session:${s.id}`, {
-            type: "session", id: s.id,
-            data: { id: s.id, name: s.name, agentStatus: s.agentStatus, sessionStatus: s.sessionStatus, tool: s.tool },
-          });
-        }
-      }).catch(() => {}),
+      prisma.session
+        .findMany({
+          where: { id: { in: sessionIds } },
+          select: { id: true, name: true, agentStatus: true, sessionStatus: true, tool: true },
+        })
+        .then(
+          (
+            rows: Array<{
+              id: string;
+              name: string | null;
+              agentStatus: string;
+              sessionStatus: string;
+              tool: string;
+            }>,
+          ) => {
+            for (const s of rows) {
+              result.set(`session:${s.id}`, {
+                type: "session",
+                id: s.id,
+                data: {
+                  id: s.id,
+                  name: s.name,
+                  agentStatus: s.agentStatus,
+                  sessionStatus: s.sessionStatus,
+                  tool: s.tool,
+                },
+              });
+            }
+          },
+        )
+        .catch(() => {}),
     );
   }
 
   const channelIds = grouped.get("channel");
   if (channelIds?.length) {
     queries.push(
-      prisma.channel.findMany({
-        where: { id: { in: channelIds } },
-        select: { id: true, name: true, type: true },
-      }).then((rows: Array<{ id: string; name: string; type: string }>) => {
-        for (const c of rows) {
-          result.set(`channel:${c.id}`, {
-            type: "channel", id: c.id,
-            data: { id: c.id, name: c.name, type: c.type },
-          });
-        }
-      }).catch(() => {}),
+      prisma.channel
+        .findMany({
+          where: { id: { in: channelIds } },
+          select: { id: true, name: true, type: true },
+        })
+        .then((rows: Array<{ id: string; name: string; type: string }>) => {
+          for (const c of rows) {
+            result.set(`channel:${c.id}`, {
+              type: "channel",
+              id: c.id,
+              data: { id: c.id, name: c.name, type: c.type },
+            });
+          }
+        })
+        .catch(() => {}),
     );
   }
 
   const chatIds = grouped.get("chat");
   if (chatIds?.length) {
     queries.push(
-      prisma.chat.findMany({
-        where: { id: { in: chatIds } },
-        select: { id: true, name: true, type: true },
-      }).then((rows: Array<{ id: string; name: string | null; type: string }>) => {
-        for (const ch of rows) {
-          // Privacy guard: never include DM chats as linked entities
-          if (ch.type === "dm") continue;
-          result.set(`chat:${ch.id}`, {
-            type: "chat", id: ch.id,
-            data: { id: ch.id, name: ch.name, type: ch.type },
-          });
-        }
-      }).catch(() => {}),
+      prisma.chat
+        .findMany({
+          where: { id: { in: chatIds } },
+          select: { id: true, name: true, type: true },
+        })
+        .then((rows: Array<{ id: string; name: string | null; type: string }>) => {
+          for (const ch of rows) {
+            // Privacy guard: never include DM chats as linked entities
+            if (ch.type === "dm") continue;
+            result.set(`chat:${ch.id}`, {
+              type: "chat",
+              id: ch.id,
+              data: { id: ch.id, name: ch.name, type: ch.type },
+            });
+          }
+        })
+        .catch(() => {}),
     );
   }
 
   const ticketIds = grouped.get("ticket");
   if (ticketIds?.length) {
     queries.push(
-      prisma.ticket.findMany({
-        where: { id: { in: ticketIds } },
-        select: { id: true, title: true, status: true, priority: true, labels: true },
-      }).then((rows: Array<{ id: string; title: string; status: string; priority: string | null; labels: string[] }>) => {
-        for (const t of rows) {
-          result.set(`ticket:${t.id}`, {
-            type: "ticket", id: t.id,
-            data: { id: t.id, title: t.title, status: t.status, priority: t.priority, labels: t.labels },
-          });
-        }
-      }).catch(() => {}),
+      prisma.ticket
+        .findMany({
+          where: { id: { in: ticketIds } },
+          select: { id: true, title: true, status: true, priority: true, labels: true },
+        })
+        .then(
+          (
+            rows: Array<{
+              id: string;
+              title: string;
+              status: string;
+              priority: string | null;
+              labels: string[];
+            }>,
+          ) => {
+            for (const t of rows) {
+              result.set(`ticket:${t.id}`, {
+                type: "ticket",
+                id: t.id,
+                data: {
+                  id: t.id,
+                  title: t.title,
+                  status: t.status,
+                  priority: t.priority,
+                  labels: t.labels,
+                },
+              });
+            }
+          },
+        )
+        .catch(() => {}),
     );
   }
 
   const projectIds = grouped.get("project");
   if (projectIds?.length) {
     queries.push(
-      prisma.project.findMany({
-        where: { id: { in: projectIds } },
-        select: { id: true, name: true },
-      }).then((rows: Array<{ id: string; name: string }>) => {
-        for (const p of rows) {
-          result.set(`project:${p.id}`, {
-            type: "project", id: p.id,
-            data: { id: p.id, name: p.name },
-          });
-        }
-      }).catch(() => {}),
+      prisma.project
+        .findMany({
+          where: { id: { in: projectIds } },
+          select: { id: true, name: true },
+        })
+        .then((rows: Array<{ id: string; name: string }>) => {
+          for (const p of rows) {
+            result.set(`project:${p.id}`, {
+              type: "project",
+              id: p.id,
+              data: { id: p.id, name: p.name },
+            });
+          }
+        })
+        .catch(() => {}),
     );
   }
 
@@ -797,9 +859,7 @@ function extractPrimaryText(payload: Record<string, unknown>): string | null {
   return candidate ? truncateText(candidate) : null;
 }
 
-function buildEntitySnapshot(
-  entity: ContextEntity,
-): EntitySnapshot {
+function buildEntitySnapshot(entity: ContextEntity): EntitySnapshot {
   const data = entity.data;
   const label =
     stringifyScalar(data.title) ??
@@ -901,7 +961,9 @@ function deriveDecisionContext(input: {
   }
 
   if (isMention) {
-    constraints.push("The agent was directly mentioned and should treat this as an explicit request.");
+    constraints.push(
+      "The agent was directly mentioned and should treat this as an explicit request.",
+    );
   }
 
   if (scopeType === "chat") {
@@ -930,11 +992,16 @@ function deriveDecisionContext(input: {
     }
 
     if (triggerEvent.eventType === "session_terminated") {
-      const failed = triggerEvent.payload.status === "failed" || triggerEvent.payload.agentStatus === "failed";
+      const failed =
+        triggerEvent.payload.status === "failed" || triggerEvent.payload.agentStatus === "failed";
       canonicalState.push(`session_outcome: ${failed ? "failed" : "completed"}`);
     }
 
-    pushFact(canonicalState, "agent_status", scopeData.agentStatus ?? triggerEvent.payload.agentStatus);
+    pushFact(
+      canonicalState,
+      "agent_status",
+      scopeData.agentStatus ?? triggerEvent.payload.agentStatus,
+    );
     pushFact(canonicalState, "repo", repo?.name ?? repo?.id);
     pushFact(canonicalState, "branch", sessionGroup?.branch);
     pushFact(canonicalState, "pr_url", sessionGroup?.prUrl);
@@ -973,8 +1040,8 @@ function toRecentSignal(event: AgentEvent, agentId: string): RecentSignal | null
 
   if (event.eventType === "message_sent" && event.actorType === "user" && text) {
     const mentions = event.payload.mentions;
-    const mentioned = Array.isArray(mentions) &&
-      mentions.some((m) => asRecord(m)?.userId === agentId);
+    const mentioned =
+      Array.isArray(mentions) && mentions.some((m) => asRecord(m)?.userId === agentId);
 
     return {
       timestamp: event.timestamp,
@@ -1004,7 +1071,8 @@ function toRecentSignal(event: AgentEvent, agentId: string): RecentSignal | null
   }
 
   if (event.eventType === "session_pr_opened") {
-    const prUrl = stringifyScalar(event.payload.prUrl) ??
+    const prUrl =
+      stringifyScalar(event.payload.prUrl) ??
       stringifyScalar(asRecord(event.payload.sessionGroup)?.prUrl);
 
     return {
@@ -1020,7 +1088,8 @@ function toRecentSignal(event: AgentEvent, agentId: string): RecentSignal | null
     const changes: string[] = [];
     if (stringifyScalar(event.payload.status)) changes.push(`status=${event.payload.status}`);
     if (stringifyScalar(event.payload.priority)) changes.push(`priority=${event.payload.priority}`);
-    if (stringifyScalar(event.payload.title)) changes.push(`title=${truncateText(String(event.payload.title), 80)}`);
+    if (stringifyScalar(event.payload.title))
+      changes.push(`title=${truncateText(String(event.payload.title), 80)}`);
 
     return {
       timestamp: event.timestamp,
@@ -1365,9 +1434,12 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
     organizationId,
     isDm: isDmScope,
     orgDefault: agentSettings.autonomyMode,
-    prefetchedAiMode: scopeEntityAiMode != null
-      ? (scopeEntityAiMode as import("@prisma/client").AutonomyMode)
-      : scopeEntity ? null : undefined,
+    prefetchedAiMode:
+      scopeEntityAiMode != null
+        ? (scopeEntityAiMode as import("@prisma/client").AutonomyMode)
+        : scopeEntity
+          ? null
+          : undefined,
   });
 
   // --- 6c. Canonical decision context + compact entity snapshots ---
@@ -1413,30 +1485,33 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
   if (budget.sections.memories > 0) {
     try {
       // Build query text from trigger event for semantic search
-      const triggerText = triggerEvent.payload.text ??
+      const triggerText =
+        triggerEvent.payload.text ??
         triggerEvent.payload.title ??
         triggerEvent.payload.content ??
         JSON.stringify(triggerEvent.payload).slice(0, 200);
 
-      const rawMemories = await memoryService.hybridSearch({
-        organizationId,
-        scopeType: scopeType as PrismaScopeType,
-        scopeId,
-        isDm: isDmScope,
-        queryText: String(triggerText),
-        relevantSubjects,
-        tokenBudget: budget.sections.memories,
-      }).catch(() =>
-        // Fall back to recency-only if hybrid search fails (e.g., no embeddings)
-        memoryService.fetchForContext({
+      const rawMemories = await memoryService
+        .hybridSearch({
           organizationId,
           scopeType: scopeType as PrismaScopeType,
           scopeId,
           isDm: isDmScope,
+          queryText: String(triggerText),
           relevantSubjects,
           tokenBudget: budget.sections.memories,
-        }),
-      );
+        })
+        .catch(() =>
+          // Fall back to recency-only if hybrid search fails (e.g., no embeddings)
+          memoryService.fetchForContext({
+            organizationId,
+            scopeType: scopeType as PrismaScopeType,
+            scopeId,
+            isDm: isDmScope,
+            relevantSubjects,
+            tokenBudget: budget.sections.memories,
+          }),
+        );
       memories = rawMemories.map((m) => ({
         kind: m.kind,
         subjectType: m.subjectType,
@@ -1527,7 +1602,8 @@ function isTriggerMention(triggerEvent: AgentEvent, agentId: string): boolean {
   return (
     Array.isArray(mentions) &&
     mentions.some(
-      (m) => typeof m === "object" && m !== null && (m as Record<string, unknown>).userId === agentId,
+      (m) =>
+        typeof m === "object" && m !== null && (m as Record<string, unknown>).userId === agentId,
     )
   );
 }

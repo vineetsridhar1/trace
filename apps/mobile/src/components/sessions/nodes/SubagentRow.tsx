@@ -19,12 +19,7 @@ const PREVIEW_LEN = 80;
  * nested-event expansion (children render nothing on mobile in V1 — the node
  * builder already hides `parentId`-carrying events).
  */
-export function SubagentRow({
-  description,
-  subagentType,
-  isLoading,
-  result,
-}: SubagentRowProps) {
+export function SubagentRow({ description, subagentType, isLoading, result }: SubagentRowProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const tint = colorForType(theme, subagentType);
@@ -63,12 +58,7 @@ export function SubagentRow({
         <Text variant="caption1" style={{ color: tint, fontWeight: "600" }}>
           {subagentType}
         </Text>
-        <Text
-          variant="caption1"
-          color="foreground"
-          numberOfLines={1}
-          style={styles.description}
-        >
+        <Text variant="caption1" color="foreground" numberOfLines={1} style={styles.description}>
           {description}
         </Text>
       </Pressable>
@@ -102,7 +92,17 @@ export function SubagentRow({
   );
 }
 
-function colorForType(theme: { colors: { accent: string; statusInReview: string; statusMerged: string; mutedForeground: string } }, type: string): string {
+function colorForType(
+  theme: {
+    colors: {
+      accent: string;
+      statusInReview: string;
+      statusMerged: string;
+      mutedForeground: string;
+    };
+  },
+  type: string,
+): string {
   const lowered = type.toLowerCase();
   if (lowered.startsWith("explore")) return theme.colors.statusInReview;
   if (lowered.startsWith("plan")) return theme.colors.statusMerged;

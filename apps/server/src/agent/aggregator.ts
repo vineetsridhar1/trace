@@ -304,9 +304,8 @@ export class EventAggregator {
 
     // Track the most restrictive maxTier across all events in the window
     if (routing.maxTier !== undefined) {
-      window.maxTier = window.maxTier !== undefined
-        ? Math.min(window.maxTier, routing.maxTier)
-        : routing.maxTier;
+      window.maxTier =
+        window.maxTier !== undefined ? Math.min(window.maxTier, routing.maxTier) : routing.maxTier;
     }
 
     // Check max events threshold

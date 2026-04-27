@@ -3,8 +3,8 @@ import type { ScopeInput, EventType } from "@trace/gql";
 import { eventService } from "../services/event.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { filterAsyncIterator } from "../lib/async-iterator.js";
-import { assertChannelAccess, assertChatAccess } from "../services/access.js";
-import { requireOrgContext } from "../lib/require-org.js";
+import { assertChannelAccess, assertChatAccess, assertScopeAccess } from "../services/access.js";
+import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
 
 const CHANNEL_MESSAGE_EVENTS = new Set<EventType>([
   "message_sent",
@@ -24,7 +24,12 @@ function canViewSystemEvent(
     return true;
   }
 
-  if (!userId || !event.payload || typeof event.payload !== "object" || Array.isArray(event.payload)) {
+  if (
+    !userId ||
+    !event.payload ||
+    typeof event.payload !== "object" ||
+    Array.isArray(event.payload)
+  ) {
     return false;
   }
 
@@ -94,7 +99,10 @@ export const eventQueries = {
     for (const event of events) {
       if (event.scopeType === "chat") {
         chatIds.add(event.scopeId);
-      } else if (event.scopeType === "channel" && CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)) {
+      } else if (
+        event.scopeType === "channel" &&
+        CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)
+      ) {
         channelIds.add(event.scopeId);
       }
     }
@@ -102,35 +110,42 @@ export const eventQueries = {
     // Two batch queries instead of N individual queries
     const [chatMembership, channelMembership] = await Promise.all([
       chatIds.size > 0
-        ? Promise.all([...chatIds].map((id) => ctx.chatMembershipLoader.load(id)))
-            .then((results) => {
+        ? Promise.all([...chatIds].map((id) => ctx.chatMembershipLoader.load(id))).then(
+            (results) => {
               const map = new Map<string, boolean>();
               [...chatIds].forEach((id, i) => map.set(id, results[i]));
               return map;
-            })
+            },
+          )
         : Promise.resolve(new Map<string, boolean>()),
       channelIds.size > 0
-        ? Promise.all([...channelIds].map((id) => ctx.channelMembershipLoader.load(id)))
-            .then((results) => {
+        ? Promise.all([...channelIds].map((id) => ctx.channelMembershipLoader.load(id))).then(
+            (results) => {
               const map = new Map<string, boolean>();
               [...channelIds].forEach((id, i) => map.set(id, results[i]));
               return map;
-            })
+            },
+          )
         : Promise.resolve(new Map<string, boolean>()),
     ]);
 
-    return events.filter((event: { scopeType: string; scopeId: string; eventType: string; payload?: unknown }) => {
-      if (!canViewSystemEvent(event, ctx.userId)) {
-        return false;
-      }
-      if (event.scopeType === "chat") {
-        return chatMembership.get(event.scopeId) ?? false;
-      }
-      if (event.scopeType === "channel" && CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)) {
-        return channelMembership.get(event.scopeId) ?? false;
-      }
-      return true;
-    });
+    return events.filter(
+      (event: { scopeType: string; scopeId: string; eventType: string; payload?: unknown }) => {
+        if (!canViewSystemEvent(event, ctx.userId)) {
+          return false;
+        }
+        if (event.scopeType === "chat") {
+          return chatMembership.get(event.scopeId) ?? false;
+        }
+        if (
+          event.scopeType === "channel" &&
+          CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)
+        ) {
+          return channelMembership.get(event.scopeId) ?? false;
+        }
+        return true;
+      },
+    );
   },
 };
 
@@ -153,9 +168,7 @@ export const eventSubscriptions = {
             eventType: EventType;
             payload?: unknown;
           };
-        }>(
-          topics.orgEvents(args.organizationId),
-        ),
+        }>(topics.orgEvents(args.organizationId)),
         async (payload) => {
           const event = payload.orgEvents;
 
@@ -181,7 +194,10 @@ export const eventSubscriptions = {
             membershipCache.set(cacheKey, result);
             return result;
           }
-          if (event.scopeType === "channel" && CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)) {
+          if (
+            event.scopeType === "channel" &&
+            CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)
+          ) {
             const cacheKey = `channel:${event.scopeId}`;
             const cached = membershipCache.get(cacheKey);
             if (cached !== undefined) return cached;
@@ -205,11 +221,13 @@ export const eventSubscriptions = {
   },
 
   sessionEvents: {
-    subscribe: (_: unknown, args: { sessionId: string; organizationId: string }, ctx: Context) => {
-      const orgId = requireOrgContext(ctx);
-      if (orgId !== args.organizationId) {
-        throw new Error("Not authorized for this organization");
-      }
+    subscribe: async (
+      _: unknown,
+      args: { sessionId: string; organizationId: string },
+      ctx: Context,
+    ) => {
+      assertOrgAccess(ctx, args.organizationId);
+      await assertScopeAccess("session", args.sessionId, ctx.userId, ctx.organizationId);
       return pubsub.asyncIterator(topics.sessionEvents(args.sessionId));
     },
   },

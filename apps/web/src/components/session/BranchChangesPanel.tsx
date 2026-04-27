@@ -35,10 +35,7 @@ const statusColor: Record<string, string> = {
   C: "text-blue-400 fill-blue-400",
 };
 
-export function BranchChangesPanel({
-  sessionGroupId,
-  onFileClick,
-}: BranchChangesPanelProps) {
+export function BranchChangesPanel({ sessionGroupId, onFileClick }: BranchChangesPanelProps) {
   const [files, setFiles] = useState<BranchDiffFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,10 +76,7 @@ export function BranchChangesPanel({
       <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
         <p className="text-xs text-red-400">Failed to load changes</p>
         <p className="text-[11px] text-muted-foreground">{error}</p>
-        <button
-          onClick={fetchDiff}
-          className="mt-1 text-[11px] text-blue-400 hover:underline"
-        >
+        <button onClick={fetchDiff} className="mt-1 text-[11px] text-blue-400 hover:underline">
           Retry
         </button>
       </div>
@@ -93,10 +87,7 @@ export function BranchChangesPanel({
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
         <p className="text-xs text-muted-foreground">No changes on this branch</p>
-        <button
-          onClick={fetchDiff}
-          className="mt-1 text-[11px] text-blue-400 hover:underline"
-        >
+        <button onClick={fetchDiff} className="mt-1 text-[11px] text-blue-400 hover:underline">
           Refresh
         </button>
       </div>
@@ -138,13 +129,9 @@ export function BranchChangesPanel({
                 <span className="text-foreground">{fileName}</span>
               </span>
               <span className="shrink-0 font-mono text-[10px]">
-                {file.additions > 0 && (
-                  <span className="text-green-400">+{file.additions}</span>
-                )}
+                {file.additions > 0 && <span className="text-green-400">+{file.additions}</span>}
                 {file.additions > 0 && file.deletions > 0 && " "}
-                {file.deletions > 0 && (
-                  <span className="text-red-400">-{file.deletions}</span>
-                )}
+                {file.deletions > 0 && <span className="text-red-400">-{file.deletions}</span>}
               </span>
             </button>
           );

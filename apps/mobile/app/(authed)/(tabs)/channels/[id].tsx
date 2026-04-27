@@ -51,6 +51,7 @@ export default function ChannelDetail() {
   const theme = useTheme();
   const [scope, setScope] = useState<ActiveSegment>("all");
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<SessionGroupSectionStatus>>(
     () => new Set(DEFAULT_COLLAPSED),
   );
@@ -61,7 +62,7 @@ export default function ChannelDetail() {
 
   useEffect(() => {
     if (!channelId) return;
-    void fetchChannelSessionGroups(channelId, "active");
+    void fetchChannelSessionGroups(channelId, "active").then(setLoadError);
   }, [channelId]);
 
   const handleRefresh = useCallback(async () => {
@@ -69,11 +70,13 @@ export default function ChannelDetail() {
     void haptic.medium();
     setRefreshing(true);
     try {
-      const tasks: Promise<unknown>[] = [fetchChannelSessionGroups(channelId, "active")];
+      const tasks: Promise<unknown>[] = [
+        fetchChannelSessionGroups(channelId, "active").then(setLoadError),
+      ];
       if (activeOrgId) {
         tasks.push(
-          refreshOrgData(activeOrgId).then((ok) => {
-            if (!ok) {
+          refreshOrgData(activeOrgId).then((result) => {
+            if (!result.authorized) {
               return handleUnauthorized();
             }
             return undefined;
@@ -181,7 +184,9 @@ export default function ChannelDetail() {
         onRefresh={handleRefresh}
         refreshing={refreshing}
         ListHeaderComponent={<SessionGroupsHeader segment={scope} onSegmentChange={setScope} />}
-        ListEmptyComponent={<ActiveEmpty scope={scope} />}
+        ListEmptyComponent={
+          <ActiveEmpty scope={scope} error={loadError} onRetry={() => void handleRefresh()} />
+        }
       />
     </>
   );
@@ -195,7 +200,25 @@ function getItemType(item: ListItem): string {
   return item.kind;
 }
 
-function ActiveEmpty({ scope }: { scope: ActiveSegment }) {
+function ActiveEmpty({
+  scope,
+  error,
+  onRetry,
+}: {
+  scope: ActiveSegment;
+  error: string | null;
+  onRetry: () => void;
+}) {
+  if (error) {
+    return (
+      <EmptyState
+        icon="exclamationmark.triangle"
+        title="Couldn't load this channel"
+        subtitle={error}
+        action={{ label: "Retry", onPress: onRetry }}
+      />
+    );
+  }
   if (scope === "mine") {
     return (
       <EmptyState

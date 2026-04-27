@@ -5,6 +5,7 @@ import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Button, Text } from "@/components/design-system";
 import { handleMobileSignOut } from "@/lib/auth";
 import { useTheme } from "@/theme";
+import { CreateOrganizationForm } from "@/components/settings/CreateOrganizationForm";
 
 export function NoOrgWelcome() {
   const theme = useTheme();
@@ -57,21 +58,17 @@ export function NoOrgWelcome() {
         <Text variant="title2" color="foreground">
           Welcome to Trace
         </Text>
-        <Text
-          variant="footnote"
-          color="mutedForeground"
-          style={styles.message}
-        >
-          Trace is in developer preview only. Ask an admin to invite you to
-          their organization and share the email below.
+        <Text variant="footnote" color="mutedForeground" style={styles.message}>
+          Create an organization to start your own workspace, or ask an admin to invite you and
+          share the email below.
         </Text>
 
+        <View style={styles.createBlock}>
+          <CreateOrganizationForm />
+        </View>
+
         <View style={styles.emailBlock}>
-          <Text
-            variant="caption1"
-            color="dimForeground"
-            style={styles.emailLabel}
-          >
+          <Text variant="caption1" color="dimForeground" style={styles.emailLabel}>
             YOUR EMAIL
           </Text>
           <View
@@ -84,12 +81,7 @@ export function NoOrgWelcome() {
               },
             ]}
           >
-            <Text
-              variant="callout"
-              color="foreground"
-              numberOfLines={1}
-              style={styles.emailValue}
-            >
+            <Text variant="callout" color="foreground" numberOfLines={1} style={styles.emailValue}>
               {email}
             </Text>
             <Button
@@ -140,8 +132,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   emailBlock: {
-    marginTop: 24,
+    marginTop: 20,
     gap: 8,
+  },
+  createBlock: {
+    marginTop: 24,
   },
   emailLabel: {
     letterSpacing: 0.8,

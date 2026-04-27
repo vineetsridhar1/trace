@@ -35,10 +35,7 @@ export const MessageImageGallery = memo(function MessageImageGallery({
           />
         ))}
       </View>
-      <MessageImageModal
-        item={selectedImage}
-        onClose={() => setSelectedImage(null)}
-      />
+      <MessageImageModal item={selectedImage} onClose={() => setSelectedImage(null)} />
     </>
   );
 });

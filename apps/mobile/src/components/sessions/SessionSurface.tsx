@@ -77,7 +77,7 @@ export function SessionSurface({
     | string
     | null
     | undefined;
-  const loading = useEnsureSessionGroupDetail(groupId ?? undefined);
+  const { loading, error } = useEnsureSessionGroupDetail(groupId ?? undefined);
   // Loads queuedMessages + per-session gitCheckpoints that the group query
   // doesn't surface — needed by CheckpointMarker (ticket 21) and the queued-
   // messages strip (ticket 23).
@@ -178,6 +178,10 @@ export function SessionSurface({
         <Spinner size="small" color="mutedForeground" />
       </View>
     );
+  }
+
+  if (!groupName) {
+    return <SessionSurfaceEmpty message={error ?? "Couldn't load this workspace."} />;
   }
 
   return (

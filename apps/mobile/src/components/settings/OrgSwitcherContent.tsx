@@ -11,6 +11,7 @@ import { ListRow, Text } from "@/components/design-system";
 import { recreateClient } from "@/lib/urql";
 import { useMobileUIStore } from "@/stores/ui";
 import { useTheme } from "@/theme";
+import { CreateOrganizationForm } from "./CreateOrganizationForm";
 
 function formatRole(role: OrgMembership["role"]): string {
   return role.slice(0, 1).toUpperCase() + role.slice(1);
@@ -34,10 +35,7 @@ export function OrgSwitcherContent() {
   }
 
   return (
-    <ScrollView
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.content}
-    >
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Text variant="headline">Switch organization</Text>
         <Text variant="footnote" color="mutedForeground">
@@ -64,11 +62,7 @@ export function OrgSwitcherContent() {
               subtitle={formatRole(membership.role)}
               trailing={
                 active ? (
-                  <SymbolView
-                    name="checkmark"
-                    size={16}
-                    tintColor={theme.colors.accent}
-                  />
+                  <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
                 ) : undefined
               }
               onPress={() => handleSelect(membership.organizationId)}
@@ -77,6 +71,25 @@ export function OrgSwitcherContent() {
             />
           );
         })}
+      </View>
+
+      <View
+        style={[
+          styles.createSection,
+          {
+            backgroundColor: theme.colors.surfaceElevated,
+            borderColor: theme.colors.borderMuted,
+            borderRadius: theme.radius.lg,
+          },
+        ]}
+      >
+        <Text variant="subheadline" color="foreground">
+          New organization
+        </Text>
+        <Text variant="footnote" color="mutedForeground">
+          Create a separate workspace and switch to it immediately.
+        </Text>
+        <CreateOrganizationForm onCreated={() => router.back()} />
       </View>
     </ScrollView>
   );
@@ -92,5 +105,10 @@ const styles = StyleSheet.create({
   list: {
     overflow: "hidden",
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  createSection: {
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 10,
+    padding: 16,
   },
 });

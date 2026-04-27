@@ -37,24 +37,33 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function Row({ children, style }: { children: ReactNode; style?: ViewStyle }) {
   return (
-    <View
-      style={[
-        { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
-        style,
-      ]}
-    >
+    <View style={[{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" }, style]}>
       {children}
     </View>
   );
 }
 
 const TYPOGRAPHY_VARIANTS: TypographyVariant[] = [
-  "largeTitle", "title1", "title2", "headline", "body",
-  "callout", "subheadline", "footnote", "caption1", "caption2", "mono",
+  "largeTitle",
+  "title1",
+  "title2",
+  "headline",
+  "body",
+  "callout",
+  "subheadline",
+  "footnote",
+  "caption1",
+  "caption2",
+  "mono",
 ];
 
 const CHIP_VARIANTS: ChipVariant[] = [
-  "inProgress", "needsInput", "done", "failed", "merged", "inReview",
+  "inProgress",
+  "needsInput",
+  "done",
+  "failed",
+  "merged",
+  "inReview",
 ];
 
 const STATUS_DOT_STATUSES: StatusDotStatus[] = ["active", "done", "failed", "stopped"];
@@ -70,12 +79,16 @@ export default function DesignSystemScreen() {
       style={{ flex: 1, backgroundColor: theme.colors.background }}
       contentContainerStyle={{ padding: theme.spacing.lg, paddingBottom: 80 }}
     >
-      <Text variant="title2" style={{ marginBottom: theme.spacing.xl }}>Design System</Text>
+      <Text variant="title2" style={{ marginBottom: theme.spacing.xl }}>
+        Design System
+      </Text>
 
       <Section title="Typography">
         <View style={{ gap: 4 }}>
           {TYPOGRAPHY_VARIANTS.map((v) => (
-            <Text key={v} variant={v}>{v}</Text>
+            <Text key={v} variant={v}>
+              {v}
+            </Text>
           ))}
         </View>
       </Section>
@@ -101,15 +114,26 @@ export default function DesignSystemScreen() {
           <IconButton symbol="plus" size="md" onPress={() => {}} accessibilityLabel="add md" />
           <IconButton symbol="plus" size="lg" onPress={() => {}} accessibilityLabel="add lg" />
           <IconButton symbol="ellipsis" onPress={() => {}} accessibilityLabel="more" />
-          <IconButton symbol="trash" color="destructive" onPress={() => {}} accessibilityLabel="delete" />
+          <IconButton
+            symbol="trash"
+            color="destructive"
+            onPress={() => {}}
+            accessibilityLabel="delete"
+          />
         </Row>
       </Section>
 
       <Section title="Cards">
         <View style={{ gap: 8 }}>
-          <Card><Text variant="body">Static card</Text></Card>
-          <Card onPress={() => {}}><Text variant="body">Pressable card (tap for scale + haptic)</Text></Card>
-          <Card glass><Text variant="body">Glass card</Text></Card>
+          <Card>
+            <Text variant="body">Static card</Text>
+          </Card>
+          <Card onPress={() => {}}>
+            <Text variant="body">Pressable card (tap for scale + haptic)</Text>
+          </Card>
+          <Card glass>
+            <Text variant="body">Glass card</Text>
+          </Card>
         </View>
       </Section>
 
@@ -126,14 +150,22 @@ export default function DesignSystemScreen() {
           {STATUS_DOT_STATUSES.map((s) => (
             <View key={s} style={{ alignItems: "center", gap: 4 }}>
               <StatusDot status={s} size="md" />
-              <Text variant="caption2" color="dimForeground">{s}</Text>
+              <Text variant="caption2" color="dimForeground">
+                {s}
+              </Text>
             </View>
           ))}
         </Row>
       </Section>
 
       <Section title="List Rows">
-        <View style={{ borderRadius: theme.radius.lg, overflow: "hidden", backgroundColor: theme.colors.surface }}>
+        <View
+          style={{
+            borderRadius: theme.radius.lg,
+            overflow: "hidden",
+            backgroundColor: theme.colors.surface,
+          }}
+        >
           <ListRow title="Simple row" />
           <ListRow title="With subtitle" subtitle="Supporting detail text" />
           <ListRow title="Disclosure" disclosureIndicator />

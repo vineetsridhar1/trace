@@ -1,7 +1,7 @@
 import type { Context } from "../context.js";
 import type { InboxItemStatus } from "@prisma/client";
 import { inboxService } from "../services/inbox.js";
-import { requireOrgContext } from "../lib/require-org.js";
+import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
 import { ActionExecutor, type PlannedAction, type AgentContext } from "../agent/executor.js";
 import { ticketService } from "../services/ticket.js";
 import { chatService } from "../services/chat.js";
@@ -23,7 +23,12 @@ const executor = new ActionExecutor({
 });
 
 export const inboxQueries = {
-  inboxItems: (_: unknown, args: { organizationId: string; status?: InboxItemStatus }, ctx: Context) => {
+  inboxItems: (
+    _: unknown,
+    args: { organizationId: string; status?: InboxItemStatus },
+    ctx: Context,
+  ) => {
+    assertOrgAccess(ctx, args.organizationId);
     return inboxService.listForUser(args.organizationId, ctx.userId, args.status ?? undefined);
   },
 };
@@ -49,9 +54,7 @@ export const inboxMutations = {
     const storedArgs = payload.args as Record<string, unknown> | undefined;
 
     if (actionType && storedArgs) {
-      const finalArgs = args.edits
-        ? { ...storedArgs, ...args.edits }
-        : storedArgs;
+      const finalArgs = args.edits ? { ...storedArgs, ...args.edits } : storedArgs;
 
       const action: PlannedAction = { actionType, args: finalArgs };
       // Use the accepting user's ID — they're the one approving this action
@@ -71,11 +74,7 @@ export const inboxMutations = {
     return inboxService.acceptSuggestion(args.inboxItemId, ctx.userId, orgId);
   },
 
-  dismissAgentSuggestion: async (
-    _: unknown,
-    args: { inboxItemId: string },
-    ctx: Context,
-  ) => {
+  dismissAgentSuggestion: async (_: unknown, args: { inboxItemId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     const item = await inboxService.dismissSuggestion(args.inboxItemId, ctx.userId, orgId);
 

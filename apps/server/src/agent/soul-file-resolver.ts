@@ -60,7 +60,9 @@ function truncateToTokenBudget(text: string, budget: number): string {
   const targetWords = Math.floor(budget / 1.3);
   if (words.length <= targetWords) return text;
 
-  return words.slice(0, targetWords).join(" ") + "\n\n[truncated — soul file exceeded token budget]";
+  return (
+    words.slice(0, targetWords).join(" ") + "\n\n[truncated — soul file exceeded token budget]"
+  );
 }
 
 // ---------------------------------------------------------------------------

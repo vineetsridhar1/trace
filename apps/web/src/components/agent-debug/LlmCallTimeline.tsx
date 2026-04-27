@@ -21,7 +21,11 @@ function TimelineEntry({ call }: { key?: string | number; call: LlmCallData }) {
           className="flex items-center gap-3 w-full px-3 py-2 hover:bg-muted/50 transition-colors"
           onClick={() => setExpanded(!expanded)}
         >
-          {expanded ? <ChevronDown size={14} className="text-muted-foreground shrink-0" /> : <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
+          {expanded ? (
+            <ChevronDown size={14} className="text-muted-foreground shrink-0" />
+          ) : (
+            <ChevronRight size={14} className="text-muted-foreground shrink-0" />
+          )}
           <span className="text-xs font-mono text-foreground truncate">{call.model}</span>
           <div className="flex items-center gap-3 ml-auto text-xs text-muted-foreground shrink-0">
             <span className="flex items-center gap-1" title="Tokens (in/out)">
@@ -60,7 +64,9 @@ export function LlmCallTimeline({ calls }: { calls: LlmCallData[] }) {
   if (calls.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-surface-deep p-4 text-center">
-        <p className="text-xs text-muted-foreground">No per-call data available for this execution</p>
+        <p className="text-xs text-muted-foreground">
+          No per-call data available for this execution
+        </p>
       </div>
     );
   }
@@ -73,7 +79,9 @@ export function LlmCallTimeline({ calls }: { calls: LlmCallData[] }) {
     <div className="space-y-3">
       {/* Summary bar */}
       <div className="flex items-center gap-4 text-xs text-muted-foreground px-1">
-        <span>{calls.length} turn{calls.length !== 1 ? "s" : ""}</span>
+        <span>
+          {calls.length} turn{calls.length !== 1 ? "s" : ""}
+        </span>
         <span className="flex items-center gap-1">
           <ArrowDownUp size={12} />
           {totalTokensIn.toLocaleString()} in / {totalTokensOut.toLocaleString()} out

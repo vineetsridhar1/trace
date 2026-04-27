@@ -1,15 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import {
-  runPlanner,
-  setAdapterForTest,
-} from "./planner.js";
+import { runPlanner, setAdapterForTest } from "./planner.js";
 import type { AgentContextPacket } from "./context-builder.js";
-import type {
-  LLMAdapter,
-  LLMRequestOptions,
-  LLMResponse,
-  LLMStreamEvent,
-} from "@trace/shared";
+import type { LLMAdapter, LLMRequestOptions, LLMResponse, LLMStreamEvent } from "@trace/shared";
 import { getAllActions } from "./action-registry.js";
 
 // ---------------------------------------------------------------------------
@@ -259,8 +251,7 @@ describe("Tier 2 Planner", () => {
       const adapter = makeMockAdapter({
         disposition: "suggest",
         confidence: 0.75,
-        rationaleSummary:
-          "A matching ticket already exists — suggesting a reply referencing it.",
+        rationaleSummary: "A matching ticket already exists — suggesting a reply referencing it.",
         proposedActions: [
           {
             actionType: "message.send",
@@ -352,9 +343,7 @@ describe("Tier 2 Planner", () => {
         disposition: "act",
         confidence: 0.9,
         rationaleSummary: "Acting on it.",
-        proposedActions: [
-          { actionType: "nonexistent.action", args: {} },
-        ],
+        proposedActions: [{ actionType: "nonexistent.action", args: {} }],
       });
 
       const result = await runPlanner(makeContextPacket(), { adapter });

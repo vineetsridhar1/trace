@@ -3,6 +3,7 @@ import path from "path";
 import {
   assertValidCommitSha,
   type BridgeLinkedCheckoutActionResultPayload,
+  type BridgeLinkedCheckoutErrorCode,
   type BridgeLinkedCheckoutStatus,
 } from "@trace/shared";
 import {
@@ -67,11 +68,24 @@ export interface SyncLinkedCheckoutInput {
   branch: string;
   commitSha?: string | null;
   autoSyncEnabled?: boolean;
+  conflictStrategy?: "discard" | "commit" | "rebase" | null;
+  commitMessage?: string | null;
 }
 
 export interface CommitLinkedCheckoutChangesInput {
   repoId: string;
   sessionGroupId: string;
+  message?: string | null;
+}
+
+class LinkedCheckoutError extends Error {
+  readonly errorCode: BridgeLinkedCheckoutErrorCode;
+
+  constructor(message: string, errorCode: BridgeLinkedCheckoutErrorCode) {
+    super(message);
+    this.name = "LinkedCheckoutError";
+    this.errorCode = errorCode;
+  }
 }
 
 type CheckoutEntry =
@@ -93,6 +107,7 @@ interface ChangedPathState {
 }
 
 const LINKED_CHECKOUT_COMMIT_MESSAGE = "Commit linked checkout changes";
+const LINKED_CHECKOUT_REBASE_STASH_MESSAGE = "Trace linked checkout rebase";
 
 async function getCurrentCommitSha(repoPath: string): Promise<string> {
   return runGit(repoPath, ["rev-parse", "HEAD"]);
@@ -103,9 +118,26 @@ async function hasTrackedChanges(repoPath: string): Promise<boolean> {
   return status.length > 0;
 }
 
+async function listUntrackedPaths(repoPath: string): Promise<string[]> {
+  const { stdout } = await execFileAsync(
+    "git",
+    ["ls-files", "--others", "--exclude-standard", "-z"],
+    {
+      cwd: repoPath,
+      maxBuffer: GIT_MAX_BUFFER,
+    },
+  );
+  return parseNullSeparated(stdout);
+}
+
 async function hasUncommittedChanges(repoPath: string): Promise<boolean> {
   const status = await runGit(repoPath, ["status", "--porcelain", "--untracked-files=all"]);
   return status.length > 0;
+}
+
+function resolveCommitMessage(message?: string | null): string {
+  const trimmed = message?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : LINKED_CHECKOUT_COMMIT_MESSAGE;
 }
 
 function parseNullSeparated(output: string): string[] {
@@ -127,6 +159,34 @@ async function listChangedPaths(repoPath: string): Promise<string[]> {
   return [
     ...new Set([...parseNullSeparated(trackedStdout), ...parseNullSeparated(untrackedStdout)]),
   ];
+}
+
+async function discardAllChanges(repoPath: string): Promise<void> {
+  await runGit(repoPath, ["reset", "--hard", "HEAD"]);
+  await runGit(repoPath, ["clean", "-fd"]);
+}
+
+async function stashAllChanges(repoPath: string): Promise<boolean> {
+  const before = await hasUncommittedChanges(repoPath);
+  if (!before) return false;
+
+  await execFileAsync(
+    "git",
+    ["stash", "push", "--include-untracked", "--message", LINKED_CHECKOUT_REBASE_STASH_MESSAGE],
+    {
+      cwd: repoPath,
+      maxBuffer: GIT_MAX_BUFFER,
+    },
+  );
+
+  return true;
+}
+
+async function popStashedChanges(repoPath: string): Promise<void> {
+  await execFileAsync("git", ["stash", "pop", "--index"], {
+    cwd: repoPath,
+    maxBuffer: GIT_MAX_BUFFER,
+  });
 }
 
 async function listStagedPaths(repoPath: string): Promise<string[]> {
@@ -173,6 +233,42 @@ async function resolveRefCommitSha(repoPath: string, ref: string): Promise<strin
   if (!isSafeGitRef(ref)) return null;
   if (!(await refExists(repoPath, ref))) return null;
   return runGit(repoPath, ["rev-parse", `${ref}^{commit}`]);
+}
+
+async function listTreePaths(repoPath: string, ref: string): Promise<string[]> {
+  const { stdout } = await execFileAsync("git", ["ls-tree", "-r", "-z", "--name-only", ref], {
+    cwd: repoPath,
+    maxBuffer: GIT_MAX_BUFFER,
+  });
+  return parseNullSeparated(stdout);
+}
+
+async function hasConflictingUntrackedPaths(
+  repoPath: string,
+  targetCommitSha: string,
+): Promise<boolean> {
+  const untrackedPaths = await listUntrackedPaths(repoPath);
+  if (untrackedPaths.length === 0) return false;
+
+  const targetPaths = await listTreePaths(repoPath, targetCommitSha);
+  if (targetPaths.length === 0) return false;
+
+  return untrackedPaths.some((untrackedPath) =>
+    targetPaths.some(
+      (targetPath) =>
+        targetPath === untrackedPath ||
+        targetPath.startsWith(`${untrackedPath}/`) ||
+        untrackedPath.startsWith(`${targetPath}/`),
+    ),
+  );
+}
+
+async function requiresSyncConflictResolution(
+  repoPath: string,
+  targetCommitSha: string,
+): Promise<boolean> {
+  if (await hasTrackedChanges(repoPath)) return true;
+  return hasConflictingUntrackedPaths(repoPath, targetCommitSha);
 }
 
 async function isAncestorCommit(
@@ -427,6 +523,53 @@ function applyChangedPathsToWorktree(
   }
 }
 
+async function commitChangedPathsToWorktree(
+  repoPath: string,
+  worktreePath: string,
+  changedPaths: string[],
+  commitMessage: string,
+): Promise<string> {
+  const overlappingStagedPaths = (await listStagedPaths(worktreePath)).filter((changedPath) =>
+    changedPaths.includes(changedPath),
+  );
+  if (overlappingStagedPaths.length > 0) {
+    throw new Error(
+      `Cannot commit main worktree changes because the Trace worktree already has staged changes on the same paths: ${previewPaths(
+        overlappingStagedPaths,
+      )}`,
+    );
+  }
+
+  const changedPathStates = await loadChangedPathStates(repoPath, changedPaths);
+  const conflicts = findConflictingPaths(worktreePath, changedPathStates);
+  if (conflicts.length > 0) {
+    throw new Error(
+      `Cannot commit main worktree changes because the Trace worktree also changed: ${previewPaths(
+        conflicts,
+      )}`,
+    );
+  }
+
+  applyChangedPathsToWorktree(repoPath, worktreePath, changedPathStates);
+
+  let targetCommitSha = await getCurrentCommitSha(worktreePath);
+  const importedChangesDirty = await hasUncommittedChangesForPaths(worktreePath, changedPaths);
+  if (importedChangesDirty) {
+    await execFileAsync("git", ["add", "-A", "--", ...changedPaths], {
+      cwd: worktreePath,
+      maxBuffer: GIT_MAX_BUFFER,
+    });
+    await execFileAsync("git", ["commit", "--only", "-m", commitMessage, "--", ...changedPaths], {
+      cwd: worktreePath,
+      maxBuffer: GIT_MAX_BUFFER,
+    });
+    targetCommitSha = await getCurrentCommitSha(worktreePath);
+  }
+
+  await restoreRootCheckoutPaths(repoPath, changedPathStates);
+  return targetCommitSha;
+}
+
 async function restoreRootCheckoutPaths(
   repoPath: string,
   changedPaths: ChangedPathState[],
@@ -523,12 +666,18 @@ async function actionResult(
   repoId: string,
   ok: boolean,
   error: string | null = null,
+  errorCode: BridgeLinkedCheckoutErrorCode | null = null,
 ): Promise<LinkedCheckoutActionResult> {
   return {
     ok,
     error,
+    errorCode,
     status: await readStatus(repoId),
   };
+}
+
+function getLinkedCheckoutErrorCode(error: unknown): BridgeLinkedCheckoutErrorCode | null {
+  return error instanceof LinkedCheckoutError ? error.errorCode : null;
 }
 
 export async function pauseExistingAttachment(repoId: string, error: string): Promise<void> {
@@ -582,35 +731,93 @@ export function syncLinkedCheckout(
     }
 
     try {
-      if (await hasTrackedChanges(repoPath)) {
-        throw new Error(
-          "Root checkout has tracked changes. Commit, stash, or discard them before syncing.",
-        );
-      }
-
       const existingAttachment = getRepoConfig(input.repoId)?.linkedCheckout ?? null;
       const restorePoint = existingAttachment ?? (await captureRestorePoint(repoPath));
-      const targetCommitSha = await resolveTargetCommitSha(repoPath, input.branch, input.commitSha);
+      let targetCommitSha = await resolveTargetCommitSha(repoPath, input.branch, input.commitSha);
+      let rebaseAttachmentPrimed = false;
 
-      await switchToDetachedCommit(repoPath, targetCommitSha);
+      if (await requiresSyncConflictResolution(repoPath, targetCommitSha)) {
+        if (input.conflictStrategy === "discard") {
+          await discardAllChanges(repoPath);
+        } else if (input.conflictStrategy === "commit") {
+          const changedPaths = await listChangedPaths(repoPath);
+          if (changedPaths.length === 0) {
+            throw new Error("Root checkout has no live changes to commit.");
+          }
 
-      await setRepoLinkedCheckout(input.repoId, {
-        sessionGroupId: input.sessionGroupId,
-        targetBranch: input.branch,
-        autoSyncEnabled: input.autoSyncEnabled ?? true,
-        originalBranch: restorePoint.originalBranch,
-        originalCommitSha: restorePoint.originalCommitSha,
-        lastSyncedCommitSha: targetCommitSha,
-        lastSyncError: null,
-        lastSyncAt: new Date().toISOString(),
-      });
+          const worktreePath = await findWorktreePathForBranch(repoPath, input.branch);
+          if (!worktreePath) {
+            throw new Error("Trace worktree is not available for the attached branch.");
+          }
+
+          targetCommitSha = await commitChangedPathsToWorktree(
+            repoPath,
+            worktreePath,
+            changedPaths,
+            resolveCommitMessage(input.commitMessage),
+          );
+        } else if (input.conflictStrategy === "rebase") {
+          const hadStash = await stashAllChanges(repoPath);
+          await switchToDetachedCommit(repoPath, targetCommitSha);
+          await setRepoLinkedCheckout(input.repoId, {
+            sessionGroupId: input.sessionGroupId,
+            targetBranch: input.branch,
+            autoSyncEnabled: input.autoSyncEnabled ?? true,
+            originalBranch: restorePoint.originalBranch,
+            originalCommitSha: restorePoint.originalCommitSha,
+            lastSyncedCommitSha: targetCommitSha,
+            lastSyncError: null,
+            lastSyncAt: new Date().toISOString(),
+          });
+          rebaseAttachmentPrimed = true;
+          if (hadStash) {
+            await popStashedChanges(repoPath);
+          }
+        } else {
+          throw new LinkedCheckoutError(
+            "Root checkout has local changes that must be resolved before syncing.",
+            "DIRTY_ROOT_CHECKOUT",
+          );
+        }
+      }
+
+      if (input.conflictStrategy !== "rebase") {
+        await switchToDetachedCommit(repoPath, targetCommitSha);
+      }
+
+      if (!rebaseAttachmentPrimed) {
+        await setRepoLinkedCheckout(input.repoId, {
+          sessionGroupId: input.sessionGroupId,
+          targetBranch: input.branch,
+          autoSyncEnabled: input.autoSyncEnabled ?? true,
+          originalBranch: restorePoint.originalBranch,
+          originalCommitSha: restorePoint.originalCommitSha,
+          lastSyncedCommitSha: targetCommitSha,
+          lastSyncError: null,
+          lastSyncAt: new Date().toISOString(),
+        });
+      } else {
+        const latestAttachment = getRepoConfig(input.repoId)?.linkedCheckout;
+        if (latestAttachment) {
+          await setRepoLinkedCheckout(input.repoId, {
+            ...latestAttachment,
+            autoSyncEnabled: input.autoSyncEnabled ?? latestAttachment.autoSyncEnabled,
+            lastSyncedCommitSha: targetCommitSha,
+            lastSyncError: null,
+            lastSyncAt: new Date().toISOString(),
+          });
+        }
+      }
       triggerAutoSyncReconcile(input.repoId);
 
       return actionResult(input.repoId, true);
     } catch (error) {
       const message = formatGitError(error);
-      await pauseExistingAttachment(input.repoId, message);
-      return actionResult(input.repoId, false, message);
+      const errorCode = getLinkedCheckoutErrorCode(error);
+      if (errorCode !== "DIRTY_ROOT_CHECKOUT") {
+        await pauseExistingAttachment(input.repoId, message);
+      }
+      return actionResult(input.repoId, false, message, errorCode);
     }
   });
 }
@@ -658,49 +865,12 @@ export function commitLinkedCheckoutChanges(
       if (!worktreePath) {
         throw new Error("Trace worktree is not available for the attached branch.");
       }
-
-      const overlappingStagedPaths = (await listStagedPaths(worktreePath)).filter((changedPath) =>
-        changedPaths.includes(changedPath),
+      const targetCommitSha = await commitChangedPathsToWorktree(
+        repoPath,
+        worktreePath,
+        changedPaths,
+        resolveCommitMessage(input.message),
       );
-      if (overlappingStagedPaths.length > 0) {
-        throw new Error(
-          `Cannot commit main worktree changes because the Trace worktree already has staged changes on the same paths: ${previewPaths(
-            overlappingStagedPaths,
-          )}`,
-        );
-      }
-
-      const changedPathStates = await loadChangedPathStates(repoPath, changedPaths);
-      const conflicts = findConflictingPaths(worktreePath, changedPathStates);
-      if (conflicts.length > 0) {
-        throw new Error(
-          `Cannot commit main worktree changes because the Trace worktree also changed: ${previewPaths(
-            conflicts,
-          )}`,
-        );
-      }
-
-      applyChangedPathsToWorktree(repoPath, worktreePath, changedPathStates);
-
-      let targetCommitSha = await getCurrentCommitSha(worktreePath);
-      const importedChangesDirty = await hasUncommittedChangesForPaths(worktreePath, changedPaths);
-      if (importedChangesDirty) {
-        await execFileAsync("git", ["add", "-A", "--", ...changedPaths], {
-          cwd: worktreePath,
-          maxBuffer: GIT_MAX_BUFFER,
-        });
-        await execFileAsync(
-          "git",
-          ["commit", "--only", "-m", LINKED_CHECKOUT_COMMIT_MESSAGE, "--", ...changedPaths],
-          {
-            cwd: worktreePath,
-            maxBuffer: GIT_MAX_BUFFER,
-          },
-        );
-        targetCommitSha = await getCurrentCommitSha(worktreePath);
-      }
-
-      await restoreRootCheckoutPaths(repoPath, changedPathStates);
       await switchToDetachedCommit(repoPath, targetCommitSha);
 
       const latestAttachment = getRepoConfig(input.repoId)?.linkedCheckout;

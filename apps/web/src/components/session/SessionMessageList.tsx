@@ -206,7 +206,9 @@ export function SessionMessageList({
   const [highlightEventId, setHighlightEventId] = useState<string | null>(null);
   useEffect(() => {
     if (!scrollToEventId) return;
-    const targetIndex = nodes.findIndex((n) => n.kind !== "readglob-group" && n.id === scrollToEventId);
+    const targetIndex = nodes.findIndex(
+      (n) => n.kind !== "readglob-group" && n.id === scrollToEventId,
+    );
     if (targetIndex >= 0) {
       virtualizer.scrollToIndex(targetIndex, { align: "center", behavior: "smooth" });
       setHighlightEventId(scrollToEventId);
@@ -264,8 +266,7 @@ export function SessionMessageList({
             <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-surface-deep text-muted-foreground shadow-sm">
               <Sparkles size={20} />
             </div>
-            <p className="text-base font-medium text-foreground">New session</p>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            <p className="text-sm leading-6 text-muted-foreground">
               Ask the agent to inspect code, make a change, or answer a question to get started.
             </p>
           </div>
@@ -319,7 +320,11 @@ export function SessionMessageList({
                 {node.kind === "event" ? (
                   <div
                     data-event-id={node.id}
-                    className={highlightEventId === node.id ? "rounded-lg ring-2 ring-primary/50 transition-all duration-500" : undefined}
+                    className={
+                      highlightEventId === node.id
+                        ? "rounded-lg ring-2 ring-primary/50 transition-all duration-500"
+                        : undefined
+                    }
                   >
                     <SessionMessage
                       id={node.id}
@@ -342,10 +347,7 @@ export function SessionMessageList({
                     timestamp={node.timestamp}
                   />
                 ) : node.kind === "ask-user-question" ? (
-                  <AskUserQuestionInline
-                    questions={node.questions}
-                    timestamp={node.timestamp}
-                  />
+                  <AskUserQuestionInline questions={node.questions} timestamp={node.timestamp} />
                 ) : (
                   <ReadGlobGroup items={node.items} />
                 )}

@@ -18,18 +18,8 @@ function AvatarImage({
   return <img src={avatarUrl} alt={actorName} className={className} />;
 }
 
-function AvatarInitial({
-  actorName,
-  className,
-}: {
-  actorName: string;
-  className: string;
-}) {
-  return (
-    <div className={className}>
-      {actorName[0]?.toUpperCase()}
-    </div>
-  );
+function AvatarInitial({ actorName, className }: { actorName: string; className: string }) {
+  return <div className={className}>{actorName[0]?.toUpperCase()}</div>;
 }
 
 export function MessageAvatar({ actorId, actorName, avatarUrl }: MessageAvatarProps) {
@@ -45,11 +35,7 @@ export function MessageAvatar({ actorId, actorName, avatarUrl }: MessageAvatarPr
 
   if (actorId) {
     return (
-      <UserProfileChatCard
-        userId={actorId}
-        fallbackName={actorName}
-        fallbackAvatarUrl={avatarUrl}
-      >
+      <UserProfileChatCard userId={actorId} fallbackName={actorName} fallbackAvatarUrl={avatarUrl}>
         {avatar}
       </UserProfileChatCard>
     );
@@ -71,11 +57,7 @@ export function SmallMessageAvatar({ actorId, actorName, avatarUrl }: MessageAva
 
   if (actorId) {
     return (
-      <UserProfileChatCard
-        userId={actorId}
-        fallbackName={actorName}
-        fallbackAvatarUrl={avatarUrl}
-      >
+      <UserProfileChatCard userId={actorId} fallbackName={actorName} fallbackAvatarUrl={avatarUrl}>
         {avatar}
       </UserProfileChatCard>
     );

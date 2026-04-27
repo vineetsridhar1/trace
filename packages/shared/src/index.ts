@@ -69,6 +69,7 @@ export type {
   BridgeSkillInfo,
   BridgeSkillsResult,
   BridgeLinkedCheckoutStatus,
+  BridgeLinkedCheckoutErrorCode,
   BridgeSessionGitSyncStatus,
   BridgeSessionGitSyncStatusResult,
   BridgeLinkedCheckoutActionResultPayload,

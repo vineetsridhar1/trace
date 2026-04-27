@@ -51,6 +51,7 @@ describe("createGqlClient", () => {
 
     setPlatform({
       apiUrl: "http://example.test",
+      authMode: "bearer",
       storage: {
         getItem: () => null,
         setItem: () => undefined,
@@ -84,10 +85,9 @@ describe("createGqlClient", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(createWebSocket).toHaveBeenCalledWith(
-      "ws://example.test/graphql",
-      ["graphql-transport-ws"],
-    );
+    expect(createWebSocket).toHaveBeenCalledWith("ws://example.test/graphql", [
+      "graphql-transport-ws",
+    ]);
 
     subscription.unsubscribe();
     socket.onclose?.({

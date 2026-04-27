@@ -82,11 +82,7 @@ export function TopBarPill({ actions = [], avatar }: TopBarPillProps) {
             <Avatar name={avatar.name} uri={avatar.uri} size="sm" />
           </Pressable>
         ) : (
-          <View
-            accessible
-            accessibilityLabel={avatar.accessibilityLabel}
-            style={styles.slot}
-          >
+          <View accessible accessibilityLabel={avatar.accessibilityLabel} style={styles.slot}>
             <Avatar name={avatar.name} uri={avatar.uri} size="sm" />
           </View>
         ))}

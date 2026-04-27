@@ -16,9 +16,7 @@ export const ticketColumns: ColDef<TicketRow>[] = [
     flex: 2,
     minWidth: 200,
     filter: true,
-    cellRenderer: (params: ICellRendererParams<TicketRow>) => (
-      <TicketTitleCell row={params.data} />
-    ),
+    cellRenderer: (params: ICellRendererParams<TicketRow>) => <TicketTitleCell row={params.data} />,
   },
   {
     colId: "status",
@@ -26,7 +24,8 @@ export const ticketColumns: ColDef<TicketRow>[] = [
     field: "status",
     width: 120,
     filter: true,
-    valueFormatter: (params: { value: unknown }) => ticketStatusLabel[params.value as TicketStatus] ?? params.value,
+    valueFormatter: (params: { value: unknown }) =>
+      ticketStatusLabel[params.value as TicketStatus] ?? params.value,
     cellRenderer: (params: ICellRendererParams<TicketRow>) => (
       <TicketStatusCell row={params.data} />
     ),
@@ -39,7 +38,8 @@ export const ticketColumns: ColDef<TicketRow>[] = [
     field: "priority",
     width: 110,
     filter: true,
-    valueFormatter: (params: { value: unknown }) => ticketPriorityLabel[params.value as Priority] ?? params.value,
+    valueFormatter: (params: { value: unknown }) =>
+      ticketPriorityLabel[params.value as Priority] ?? params.value,
     cellRenderer: (params: ICellRendererParams<TicketRow>) => (
       <TicketPriorityCell row={params.data} />
     ),

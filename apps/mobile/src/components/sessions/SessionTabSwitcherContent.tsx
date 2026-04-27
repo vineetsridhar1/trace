@@ -1,11 +1,13 @@
 import { useCallback, useMemo, useState } from "react";
-import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
-import { StyleSheet, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { useEntityField } from "@trace/client-core";
 import { EmptyState, ListRow, Spinner, Text } from "@/components/design-system";
-import { useEnsureSessionGroupDetail, useSessionGroupSessionIds } from "@/hooks/useSessionGroupDetail";
+import {
+  useEnsureSessionGroupDetail,
+  useSessionGroupSessionIds,
+} from "@/hooks/useSessionGroupDetail";
 import { createAgentTab } from "@/lib/createQuickSession";
 import { useMobileUIStore } from "@/stores/ui";
 import { useTheme } from "@/theme";
@@ -21,8 +23,6 @@ interface SessionTabSwitcherContentProps {
   contentInset?: "none" | "sheet";
 }
 
-const ROW_HEIGHT = 68;
-
 export function SessionTabSwitcherContent({
   groupId,
   activeSessionId,
@@ -33,13 +33,11 @@ export function SessionTabSwitcherContent({
 }: SessionTabSwitcherContentProps) {
   const router = useRouter();
   const theme = useTheme();
-  const loading = useEnsureSessionGroupDetail(groupId);
+  const { loading, error } = useEnsureSessionGroupDetail(groupId);
   const groupName = useEntityField("sessionGroups", groupId, "name") as string | null | undefined;
-  const activeSessionOptimistic = useEntityField(
-    "sessions",
-    activeSessionId,
-    "_optimistic",
-  ) as boolean | undefined;
+  const activeSessionOptimistic = useEntityField("sessions", activeSessionId, "_optimistic") as
+    | boolean
+    | undefined;
   const sessionIds = useSessionGroupSessionIds(groupId);
   const [creating, setCreating] = useState(false);
   const navigationDelayMs = closeDelayMs ?? (onClose ? theme.motion.durations.fast : 0);
@@ -80,9 +78,7 @@ export function SessionTabSwitcherContent({
   const headerSubtitle = useMemo(() => {
     const count = sessionIds.length;
     if (count === 0) return "No agent tabs loaded yet.";
-    return count === 1
-      ? "1 open tab in this workspace."
-      : `${count} open tabs in this workspace.`;
+    return count === 1 ? "1 open tab in this workspace." : `${count} open tabs in this workspace.`;
   }, [sessionIds.length]);
 
   if (loading && !groupName) {
@@ -99,16 +95,19 @@ export function SessionTabSwitcherContent({
         <EmptyState
           icon="rectangle.on.rectangle"
           title="Couldn't load tabs"
-          subtitle="This workspace's tab list isn't available right now."
+          subtitle={error ?? "This workspace's tab list isn't available right now."}
         />
       </View>
     );
   }
 
   return (
-    <View
-      style={[
-        styles.root,
+    <ScrollView
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
         contentInset === "sheet"
           ? {
               paddingHorizontal: theme.spacing.lg,
@@ -202,7 +201,6 @@ export function SessionTabSwitcherContent({
         <View
           style={[
             styles.section,
-            styles.listSection,
             {
               backgroundColor: theme.colors.surfaceElevated,
               borderColor: theme.colors.borderMuted,
@@ -215,30 +213,28 @@ export function SessionTabSwitcherContent({
               Agent tabs
             </Text>
           </View>
-          <FlashList
-            data={sessionIds}
-            renderItem={({ item, index }) => (
-              <SessionTabSwitcherRow
-                sessionId={item}
-                active={item === activeSessionId && activePane === "session"}
-                separator={index < sessionIds.length - 1}
-                onPress={() => navigateToSession(groupId, item)}
-              />
-            )}
-            keyExtractor={(item) => item}
-            showsVerticalScrollIndicator={false}
-            style={styles.list}
-          />
+          {sessionIds.map((item, index) => (
+            <SessionTabSwitcherRow
+              key={item}
+              sessionId={item}
+              active={item === activeSessionId && activePane === "session"}
+              separator={index < sessionIds.length - 1}
+              onPress={() => navigateToSession(groupId, item)}
+            />
+          ))}
         </View>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  content: {
     gap: 16,
+    paddingBottom: 8,
   },
   header: {
     gap: 4,
@@ -251,13 +247,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  listSection: {
-    flex: 1,
-    minHeight: ROW_HEIGHT * 2,
-  },
-  list: {
-    flex: 1,
   },
   center: {
     flex: 1,

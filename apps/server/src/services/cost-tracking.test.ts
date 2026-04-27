@@ -126,10 +126,10 @@ describe("CostTrackingService", () => {
   });
 
   it("retries with update on unique constraint race condition", async () => {
-    const p2002Error = new Prisma.PrismaClientKnownRequestError(
-      "Unique constraint failed",
-      { code: "P2002", clientVersion: "6.0.0" },
-    );
+    const p2002Error = new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+      code: "P2002",
+      clientVersion: "6.0.0",
+    });
     prismaMock.agentCostTracker.upsert.mockRejectedValueOnce(p2002Error);
     prismaMock.agentCostTracker.update.mockResolvedValueOnce({
       organizationId: "org-1",
@@ -148,9 +148,7 @@ describe("CostTrackingService", () => {
   });
 
   it("rethrows non-P2002 errors", async () => {
-    prismaMock.agentCostTracker.upsert.mockRejectedValueOnce(
-      new Error("connection lost"),
-    );
+    prismaMock.agentCostTracker.upsert.mockRejectedValueOnce(new Error("connection lost"));
 
     await expect(
       service.recordCost({

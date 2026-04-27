@@ -21,19 +21,25 @@ import { applyOptimisticPatches } from "../lib/optimistic-entity";
 
 const MOVE_CHANNEL_MUTATION = gql`
   mutation MoveChannel($input: MoveChannelInput!) {
-    moveChannel(input: $input) { id }
+    moveChannel(input: $input) {
+      id
+    }
   }
 `;
 
 const UPDATE_CHANNEL_GROUP_POSITION_MUTATION = gql`
   mutation UpdateChannelGroupPosition($id: ID!, $input: UpdateChannelGroupInput!) {
-    updateChannelGroup(id: $id, input: $input) { id }
+    updateChannelGroup(id: $id, input: $input) {
+      id
+    }
   }
 `;
 
 const REORDER_CHANNELS_MUTATION = gql`
   mutation ReorderChannels($input: ReorderChannelsInput!) {
-    reorderChannels(input: $input) { id }
+    reorderChannels(input: $input) {
+      id
+    }
   }
 `;
 
@@ -45,9 +51,7 @@ export function groupContainerId(groupId: string) {
 
 /** Extract sortable item IDs from top-level items */
 export function topLevelSortableIds(items: TopLevelItem[]): string[] {
-  return items.map((item) =>
-    item.kind === "channel" ? `channel:${item.id}` : `group:${item.id}`
-  );
+  return items.map((item) => (item.kind === "channel" ? `channel:${item.id}` : `group:${item.id}`));
 }
 
 /** Extract sortable item IDs for a group's channels */
@@ -56,7 +60,9 @@ export function groupSortableIds(channelIds: string[]): string[] {
 }
 
 /** Parse a sortable ID back to type + entity ID */
-export function parseSortableId(sortableId: string): { type: "channel" | "group"; id: string } | null {
+export function parseSortableId(
+  sortableId: string,
+): { type: "channel" | "group"; id: string } | null {
   if (sortableId.startsWith("channel:")) return { type: "channel", id: sortableId.slice(8) };
   if (sortableId.startsWith("group:")) return { type: "group", id: sortableId.slice(6) };
   return null;
@@ -85,7 +91,7 @@ function findContainer({
   const isTopLevel = topLevelItems.some(
     (item) =>
       (parsed.type === "channel" && item.kind === "channel" && item.id === parsed.id) ||
-      (parsed.type === "group" && item.kind === "group" && item.id === parsed.id)
+      (parsed.type === "group" && item.kind === "group" && item.id === parsed.id),
   );
   if (isTopLevel) return TOP_LEVEL_CONTAINER;
 
@@ -132,7 +138,9 @@ export function useChannelDnd({
 
   // Track the items during a drag for cross-container moves
   const [activeTopLevel, setActiveTopLevel] = useState<TopLevelItem[] | null>(null);
-  const [activeGroupChannels, setActiveGroupChannels] = useState<Record<string, string[]> | null>(null);
+  const [activeGroupChannels, setActiveGroupChannels] = useState<Record<string, string[]> | null>(
+    null,
+  );
 
   // Snapshot the original positions before drag for reverting on cancel
   const originalRef = useRef<{
@@ -140,100 +148,104 @@ export function useChannelDnd({
     groups: Record<string, string[]>;
   } | null>(null);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   // The current items (either mid-drag state or source of truth)
   const currentTopLevel = activeTopLevel ?? topLevelItems;
   const currentGroupChannels = activeGroupChannels ?? channelIdsByGroup;
 
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    const parsed = parseSortableId(String(event.active.id));
-    if (!parsed) return;
+  const handleDragStart = useCallback(
+    (event: DragStartEvent) => {
+      const parsed = parseSortableId(String(event.active.id));
+      if (!parsed) return;
 
-    if (parsed.type === "channel") {
-      const channel = useEntityStore.getState().channels[parsed.id];
-      setDragItem({ type: "channel", id: parsed.id, name: channel?.name ?? "Channel" });
-    } else {
-      const group = useEntityStore.getState().channelGroups[parsed.id];
-      setDragItem({ type: "group", id: parsed.id, name: group?.name ?? "Group" });
-    }
-
-    // Snapshot current state
-    const snapshotTopLevel = [...topLevelItems];
-    const snapshotGroups = cloneGroups(channelIdsByGroup);
-    originalRef.current = { topLevel: snapshotTopLevel, groups: snapshotGroups };
-    setActiveTopLevel([...snapshotTopLevel]);
-    setActiveGroupChannels(cloneGroups(snapshotGroups));
-  }, [topLevelItems, channelIdsByGroup]);
-
-  const handleDragOver = useCallback((event: DragOverEvent) => {
-    const { active, over } = event;
-    if (!over || !activeTopLevel || !activeGroupChannels) return;
-
-    const activeId = String(active.id);
-    const overId = String(over.id);
-    const activeParsed = parseSortableId(activeId);
-    if (!activeParsed) return;
-
-    // Groups can only reorder at top level, not move into other groups
-    if (activeParsed.type === "group") return;
-
-    const activeContainer = resolveContainer(activeId, activeTopLevel, activeGroupChannels);
-    const overContainer = resolveContainer(overId, activeTopLevel, activeGroupChannels);
-
-    if (!activeContainer || !overContainer || activeContainer === overContainer) return;
-
-    // Moving between containers
-    const channelId = activeParsed.id;
-    const nextTopLevel = [...activeTopLevel];
-    const nextGroups = cloneGroups(activeGroupChannels);
-
-    // Remove from source
-    if (activeContainer === TOP_LEVEL_CONTAINER) {
-      const idx = nextTopLevel.findIndex((i) => i.kind === "channel" && i.id === channelId);
-      if (idx !== -1) nextTopLevel.splice(idx, 1);
-    } else {
-      const srcGroupId = activeContainer.replace("group-container:", "");
-      const srcList = nextGroups[srcGroupId];
-      if (srcList) {
-        const idx = srcList.indexOf(channelId);
-        if (idx !== -1) srcList.splice(idx, 1);
+      if (parsed.type === "channel") {
+        const channel = useEntityStore.getState().channels[parsed.id];
+        setDragItem({ type: "channel", id: parsed.id, name: channel?.name ?? "Channel" });
+      } else {
+        const group = useEntityStore.getState().channelGroups[parsed.id];
+        setDragItem({ type: "group", id: parsed.id, name: group?.name ?? "Group" });
       }
-    }
 
-    // Add to destination
-    if (overContainer === TOP_LEVEL_CONTAINER) {
-      // Find insertion index based on overId
-      const overParsed = parseSortableId(overId);
-      let insertIdx = nextTopLevel.length;
-      if (overParsed) {
-        const overIdx = nextTopLevel.findIndex(
-          (i) =>
-            (overParsed.type === "channel" && i.kind === "channel" && i.id === overParsed.id) ||
-            (overParsed.type === "group" && i.kind === "group" && i.id === overParsed.id)
-        );
-        if (overIdx !== -1) insertIdx = overIdx;
-      }
-      nextTopLevel.splice(insertIdx, 0, { kind: "channel", id: channelId, position: insertIdx });
-    } else {
-      const destGroupId = overContainer.replace("group-container:", "");
-      if (!nextGroups[destGroupId]) nextGroups[destGroupId] = [];
-      const destList = nextGroups[destGroupId];
-      // Find insertion index
-      const overParsed = parseSortableId(overId);
-      let insertIdx = destList.length;
-      if (overParsed?.type === "channel") {
-        const overIdx = destList.indexOf(overParsed.id);
-        if (overIdx !== -1) insertIdx = overIdx;
-      }
-      destList.splice(insertIdx, 0, channelId);
-    }
+      // Snapshot current state
+      const snapshotTopLevel = [...topLevelItems];
+      const snapshotGroups = cloneGroups(channelIdsByGroup);
+      originalRef.current = { topLevel: snapshotTopLevel, groups: snapshotGroups };
+      setActiveTopLevel([...snapshotTopLevel]);
+      setActiveGroupChannels(cloneGroups(snapshotGroups));
+    },
+    [topLevelItems, channelIdsByGroup],
+  );
 
-    setActiveTopLevel(nextTopLevel);
-    setActiveGroupChannels(nextGroups);
-  }, [activeTopLevel, activeGroupChannels]);
+  const handleDragOver = useCallback(
+    (event: DragOverEvent) => {
+      const { active, over } = event;
+      if (!over || !activeTopLevel || !activeGroupChannels) return;
+
+      const activeId = String(active.id);
+      const overId = String(over.id);
+      const activeParsed = parseSortableId(activeId);
+      if (!activeParsed) return;
+
+      // Groups can only reorder at top level, not move into other groups
+      if (activeParsed.type === "group") return;
+
+      const activeContainer = resolveContainer(activeId, activeTopLevel, activeGroupChannels);
+      const overContainer = resolveContainer(overId, activeTopLevel, activeGroupChannels);
+
+      if (!activeContainer || !overContainer || activeContainer === overContainer) return;
+
+      // Moving between containers
+      const channelId = activeParsed.id;
+      const nextTopLevel = [...activeTopLevel];
+      const nextGroups = cloneGroups(activeGroupChannels);
+
+      // Remove from source
+      if (activeContainer === TOP_LEVEL_CONTAINER) {
+        const idx = nextTopLevel.findIndex((i) => i.kind === "channel" && i.id === channelId);
+        if (idx !== -1) nextTopLevel.splice(idx, 1);
+      } else {
+        const srcGroupId = activeContainer.replace("group-container:", "");
+        const srcList = nextGroups[srcGroupId];
+        if (srcList) {
+          const idx = srcList.indexOf(channelId);
+          if (idx !== -1) srcList.splice(idx, 1);
+        }
+      }
+
+      // Add to destination
+      if (overContainer === TOP_LEVEL_CONTAINER) {
+        // Find insertion index based on overId
+        const overParsed = parseSortableId(overId);
+        let insertIdx = nextTopLevel.length;
+        if (overParsed) {
+          const overIdx = nextTopLevel.findIndex(
+            (i) =>
+              (overParsed.type === "channel" && i.kind === "channel" && i.id === overParsed.id) ||
+              (overParsed.type === "group" && i.kind === "group" && i.id === overParsed.id),
+          );
+          if (overIdx !== -1) insertIdx = overIdx;
+        }
+        nextTopLevel.splice(insertIdx, 0, { kind: "channel", id: channelId, position: insertIdx });
+      } else {
+        const destGroupId = overContainer.replace("group-container:", "");
+        if (!nextGroups[destGroupId]) nextGroups[destGroupId] = [];
+        const destList = nextGroups[destGroupId];
+        // Find insertion index
+        const overParsed = parseSortableId(overId);
+        let insertIdx = destList.length;
+        if (overParsed?.type === "channel") {
+          const overIdx = destList.indexOf(overParsed.id);
+          if (overIdx !== -1) insertIdx = overIdx;
+        }
+        destList.splice(insertIdx, 0, channelId);
+      }
+
+      setActiveTopLevel(nextTopLevel);
+      setActiveGroupChannels(nextGroups);
+    },
+    [activeTopLevel, activeGroupChannels],
+  );
 
   async function persistTopLevelOrder(items: TopLevelItem[]) {
     const optimisticPatches: Array<{
@@ -253,9 +265,11 @@ export function useChannelDnd({
           data: { groupId: null, position: index } as Partial<Channel>,
         });
         updates.push(
-          client.mutation(MOVE_CHANNEL_MUTATION, {
-            input: { channelId: item.id, groupId: null, position: index },
-          }).toPromise()
+          client
+            .mutation(MOVE_CHANNEL_MUTATION, {
+              input: { channelId: item.id, groupId: null, position: index },
+            })
+            .toPromise(),
         );
       } else {
         const group = channelGroupsById[item.id];
@@ -266,9 +280,12 @@ export function useChannelDnd({
           data: { position: index } as Partial<ChannelGroup>,
         });
         updates.push(
-          client.mutation(UPDATE_CHANNEL_GROUP_POSITION_MUTATION, {
-            id: item.id, input: { position: index },
-          }).toPromise()
+          client
+            .mutation(UPDATE_CHANNEL_GROUP_POSITION_MUTATION, {
+              id: item.id,
+              input: { position: index },
+            })
+            .toPromise(),
         );
       }
     }
@@ -295,9 +312,11 @@ export function useChannelDnd({
     );
 
     try {
-      const result = await client.mutation(REORDER_CHANNELS_MUTATION, {
-        input: { groupId, channelIds: nextChannelIds },
-      }).toPromise();
+      const result = await client
+        .mutation(REORDER_CHANNELS_MUTATION, {
+          input: { groupId, channelIds: nextChannelIds },
+        })
+        .toPromise();
       if (result.error) throw result.error;
     } catch (error) {
       rollback();
@@ -312,117 +331,132 @@ export function useChannelDnd({
     originalRef.current = null;
   }, []);
 
-  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
-    const { active, over } = event;
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event;
 
-    if (!over || !activeOrgId || !activeTopLevel || !activeGroupChannels) {
-      clearDragState();
-      return;
-    }
+      if (!over || !activeOrgId || !activeTopLevel || !activeGroupChannels) {
+        clearDragState();
+        return;
+      }
 
-    const activeId = String(active.id);
-    const overId = String(over.id);
-    const activeParsed = parseSortableId(activeId);
-    if (!activeParsed) {
-      clearDragState();
-      return;
-    }
+      const activeId = String(active.id);
+      const overId = String(over.id);
+      const activeParsed = parseSortableId(activeId);
+      if (!activeParsed) {
+        clearDragState();
+        return;
+      }
 
-    const activeContainer = resolveContainer(activeId, activeTopLevel, activeGroupChannels);
-    const overContainer = resolveContainer(overId, activeTopLevel, activeGroupChannels);
+      const activeContainer = resolveContainer(activeId, activeTopLevel, activeGroupChannels);
+      const overContainer = resolveContainer(overId, activeTopLevel, activeGroupChannels);
 
-    // Same-container reorder
-    if (activeContainer && activeContainer === overContainer && activeId !== overId) {
-      if (activeContainer === TOP_LEVEL_CONTAINER) {
-        const oldIndex = activeTopLevel.findIndex((i: TopLevelItem) =>
-          activeParsed.type === "channel"
-            ? i.kind === "channel" && i.id === activeParsed.id
-            : i.kind === "group" && i.id === activeParsed.id
-        );
-        const overParsed = parseSortableId(overId);
-        const newIndex = overParsed
-          ? activeTopLevel.findIndex((i: TopLevelItem) =>
-              overParsed.type === "channel"
-                ? i.kind === "channel" && i.id === overParsed.id
-                : i.kind === "group" && i.id === overParsed.id
-            )
-          : -1;
-        if (oldIndex !== -1 && newIndex !== -1) {
-          const reordered = arrayMove(activeTopLevel, oldIndex, newIndex);
-          try {
-            await persistTopLevelOrder(reordered);
-          } catch (error) {
-            console.error("Failed to persist top-level channel order:", error);
-          } finally {
-            clearDragState();
-          }
-          return;
-        }
-      } else {
-        const groupId = activeContainer.replace("group-container:", "");
-        const list = activeGroupChannels[groupId] ?? [];
-        if (activeParsed.type === "channel") {
+      // Same-container reorder
+      if (activeContainer && activeContainer === overContainer && activeId !== overId) {
+        if (activeContainer === TOP_LEVEL_CONTAINER) {
+          const oldIndex = activeTopLevel.findIndex((i: TopLevelItem) =>
+            activeParsed.type === "channel"
+              ? i.kind === "channel" && i.id === activeParsed.id
+              : i.kind === "group" && i.id === activeParsed.id,
+          );
           const overParsed = parseSortableId(overId);
-          if (overParsed?.type === "channel") {
-            const oldIndex = list.indexOf(activeParsed.id);
-            const newIndex = list.indexOf(overParsed.id);
-            if (oldIndex !== -1 && newIndex !== -1) {
-              const reordered = arrayMove(list, oldIndex, newIndex);
-              try {
-                await persistGroupOrder(groupId, reordered);
-              } catch (error) {
-                console.error("Failed to persist grouped channel order:", error);
-              } finally {
-                clearDragState();
+          const newIndex = overParsed
+            ? activeTopLevel.findIndex((i: TopLevelItem) =>
+                overParsed.type === "channel"
+                  ? i.kind === "channel" && i.id === overParsed.id
+                  : i.kind === "group" && i.id === overParsed.id,
+              )
+            : -1;
+          if (oldIndex !== -1 && newIndex !== -1) {
+            const reordered = arrayMove(activeTopLevel, oldIndex, newIndex);
+            try {
+              await persistTopLevelOrder(reordered);
+            } catch (error) {
+              console.error("Failed to persist top-level channel order:", error);
+            } finally {
+              clearDragState();
+            }
+            return;
+          }
+        } else {
+          const groupId = activeContainer.replace("group-container:", "");
+          const list = activeGroupChannels[groupId] ?? [];
+          if (activeParsed.type === "channel") {
+            const overParsed = parseSortableId(overId);
+            if (overParsed?.type === "channel") {
+              const oldIndex = list.indexOf(activeParsed.id);
+              const newIndex = list.indexOf(overParsed.id);
+              if (oldIndex !== -1 && newIndex !== -1) {
+                const reordered = arrayMove(list, oldIndex, newIndex);
+                try {
+                  await persistGroupOrder(groupId, reordered);
+                } catch (error) {
+                  console.error("Failed to persist grouped channel order:", error);
+                } finally {
+                  clearDragState();
+                }
+                return;
               }
-              return;
             }
           }
         }
       }
-    }
 
-    // Cross-container move was already handled in onDragOver
-    // Just persist the current state
-    const finalTopLevel = activeTopLevel;
-    const finalGroups = activeGroupChannels;
-    const orig = originalRef.current;
+      // Cross-container move was already handled in onDragOver
+      // Just persist the current state
+      const finalTopLevel = activeTopLevel;
+      const finalGroups = activeGroupChannels;
+      const orig = originalRef.current;
 
-    if (!orig) {
-      clearDragState();
-      return;
-    }
-
-    // Persist all changes
-    const promises: Promise<unknown>[] = [];
-
-    // Only persist top-level if it actually changed
-    if (JSON.stringify(topLevelSortableIds(finalTopLevel)) !== JSON.stringify(topLevelSortableIds(orig.topLevel))) {
-      promises.push(persistTopLevelOrder(finalTopLevel));
-    }
-
-    // Persist any group that changed
-    for (const [groupId, channelIds] of Object.entries(finalGroups) as Array<[string, string[]]>) {
-      const origIds = orig.groups[groupId] ?? [];
-      if (JSON.stringify(channelIds) !== JSON.stringify(origIds)) {
-        promises.push(persistGroupOrder(groupId, channelIds));
+      if (!orig) {
+        clearDragState();
+        return;
       }
-    }
-    // Check for groups that had items removed (now empty or different)
-    for (const [groupId, origIds] of Object.entries(orig.groups) as Array<[string, string[]]>) {
-      if (!(groupId in finalGroups) && origIds.length > 0) {
-        promises.push(persistGroupOrder(groupId, []));
-      }
-    }
 
-    try {
-      await Promise.all(promises);
-    } catch (error) {
-      console.error("Failed to persist channel drag operation:", error);
-    } finally {
-      clearDragState();
-    }
-  }, [activeOrgId, activeTopLevel, activeGroupChannels, channelsById, channelGroupsById, clearDragState]);
+      // Persist all changes
+      const promises: Promise<unknown>[] = [];
+
+      // Only persist top-level if it actually changed
+      if (
+        JSON.stringify(topLevelSortableIds(finalTopLevel)) !==
+        JSON.stringify(topLevelSortableIds(orig.topLevel))
+      ) {
+        promises.push(persistTopLevelOrder(finalTopLevel));
+      }
+
+      // Persist any group that changed
+      for (const [groupId, channelIds] of Object.entries(finalGroups) as Array<
+        [string, string[]]
+      >) {
+        const origIds = orig.groups[groupId] ?? [];
+        if (JSON.stringify(channelIds) !== JSON.stringify(origIds)) {
+          promises.push(persistGroupOrder(groupId, channelIds));
+        }
+      }
+      // Check for groups that had items removed (now empty or different)
+      for (const [groupId, origIds] of Object.entries(orig.groups) as Array<[string, string[]]>) {
+        if (!(groupId in finalGroups) && origIds.length > 0) {
+          promises.push(persistGroupOrder(groupId, []));
+        }
+      }
+
+      try {
+        await Promise.all(promises);
+      } catch (error) {
+        console.error("Failed to persist channel drag operation:", error);
+      } finally {
+        clearDragState();
+      }
+    },
+    [
+      activeOrgId,
+      activeTopLevel,
+      activeGroupChannels,
+      channelsById,
+      channelGroupsById,
+      clearDragState,
+    ],
+  );
 
   const handleDragCancel = clearDragState;
 
@@ -434,62 +468,64 @@ export function useChannelDnd({
    *  to find the closest channel item — this makes both cross-container
    *  moves and within-group reordering work correctly.
    */
-  const collisionDetection: CollisionDetection = useCallback((args) => {
-    const pw = pointerWithin(args);
-    if (pw.length === 0) return closestCenter(args);
+  const collisionDetection: CollisionDetection = useCallback(
+    (args) => {
+      const pw = pointerWithin(args);
+      if (pw.length === 0) return closestCenter(args);
 
-    const overId = getFirstCollision(pw, "id");
-    if (overId == null) return closestCenter(args);
+      const overId = getFirstCollision(pw, "id");
+      if (overId == null) return closestCenter(args);
 
-    const overIdStr = String(overId);
-    const activeParsed = parseSortableId(String(args.active.id));
+      const overIdStr = String(overId);
+      const activeParsed = parseSortableId(String(args.active.id));
 
-    // When a channel is dragged over a group area, resolve to the closest
-    // channel inside that group (or the container itself if the group is empty).
-    //
-    // We only drill into a group when the pointer is actually over the group
-    // body (droppable).  The droppable ref lives on the body div, so
-    // "group-container:xxx" only appears in pointerWithin results when the
-    // pointer is over the body.  If only "group:xxx" (the sortable outer div)
-    // is hit — e.g. the pointer is over the header — we return it as-is so
-    // handleDragOver sees a top-level item and can move the channel OUT.
-    if (activeParsed?.type === "channel") {
-      const pointerOverBody = (groupId: string) =>
-        pw.some((c: { id: string | number }) => String(c.id) === groupContainerId(groupId));
+      // When a channel is dragged over a group area, resolve to the closest
+      // channel inside that group (or the container itself if the group is empty).
+      //
+      // We only drill into a group when the pointer is actually over the group
+      // body (droppable).  The droppable ref lives on the body div, so
+      // "group-container:xxx" only appears in pointerWithin results when the
+      // pointer is over the body.  If only "group:xxx" (the sortable outer div)
+      // is hit — e.g. the pointer is over the header — we return it as-is so
+      // handleDragOver sees a top-level item and can move the channel OUT.
+      if (activeParsed?.type === "channel") {
+        const pointerOverBody = (groupId: string) =>
+          pw.some((c: { id: string | number }) => String(c.id) === groupContainerId(groupId));
 
-      let targetGroupId: string | null = null;
+        let targetGroupId: string | null = null;
 
-      if (overIdStr.startsWith("group-container:")) {
-        targetGroupId = overIdStr.replace("group-container:", "");
-      } else if (overIdStr.startsWith("group:")) {
-        const gid = overIdStr.replace("group:", "");
-        // Only drill in when the pointer is over the body droppable
-        if (pointerOverBody(gid)) {
-          targetGroupId = gid;
-        }
-        // Otherwise fall through — return group:xxx as a top-level hit
-      }
-
-      if (targetGroupId) {
-        const groupChannels =
-          (activeGroupChannels ?? channelIdsByGroup)[targetGroupId] ?? [];
-
-        if (groupChannels.length > 0) {
-          const channelSortableIds = groupChannels.map((id: string) => `channel:${id}`);
-          const filteredContainers = args.droppableContainers.filter((c: { id: string | number }) =>
-            channelSortableIds.includes(String(c.id))
-          );
-          const closest = closestCenter({ ...args, droppableContainers: filteredContainers });
-          if (closest.length > 0) return closest;
+        if (overIdStr.startsWith("group-container:")) {
+          targetGroupId = overIdStr.replace("group-container:", "");
+        } else if (overIdStr.startsWith("group:")) {
+          const gid = overIdStr.replace("group:", "");
+          // Only drill in when the pointer is over the body droppable
+          if (pointerOverBody(gid)) {
+            targetGroupId = gid;
+          }
+          // Otherwise fall through — return group:xxx as a top-level hit
         }
 
-        // Empty group — return the container so handleDragOver can move into it
-        return [{ id: groupContainerId(targetGroupId) }];
-      }
-    }
+        if (targetGroupId) {
+          const groupChannels = (activeGroupChannels ?? channelIdsByGroup)[targetGroupId] ?? [];
 
-    return [{ id: overId }];
-  }, [activeGroupChannels, channelIdsByGroup]);
+          if (groupChannels.length > 0) {
+            const channelSortableIds = groupChannels.map((id: string) => `channel:${id}`);
+            const filteredContainers = args.droppableContainers.filter(
+              (c: { id: string | number }) => channelSortableIds.includes(String(c.id)),
+            );
+            const closest = closestCenter({ ...args, droppableContainers: filteredContainers });
+            if (closest.length > 0) return closest;
+          }
+
+          // Empty group — return the container so handleDragOver can move into it
+          return [{ id: groupContainerId(targetGroupId) }];
+        }
+      }
+
+      return [{ id: overId }];
+    },
+    [activeGroupChannels, channelIdsByGroup],
+  );
 
   return {
     dragItem,

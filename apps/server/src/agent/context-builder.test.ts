@@ -1,8 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import {
-  estimateTokens,
-  buildContext,
-} from "./context-builder.js";
+import { estimateTokens, buildContext } from "./context-builder.js";
 import type { AggregatedBatch } from "./aggregator.js";
 import type { AgentEvent } from "./router.js";
 import type { OrgAgentSettings } from "../services/agent-identity.js";
@@ -201,7 +198,10 @@ describe("buildContext", () => {
       scopeKey: "ticket:ticket_1",
       events: [makeEvent({ scopeType: "ticket", scopeId: "ticket_1" })],
     });
-    const ticketPacket = await buildContext({ batch: ticketBatch, agentSettings: makeAgentSettings() });
+    const ticketPacket = await buildContext({
+      batch: ticketBatch,
+      agentSettings: makeAgentSettings(),
+    });
     expect(ticketPacket.permissions.actions.some((a) => a.name === "message.send")).toBe(false);
   });
 
@@ -416,7 +416,10 @@ describe("buildContext", () => {
         eventType: "session_output",
         actorType: "system",
         actorId: "system",
-        payload: { type: "assistant", message: { content: [{ type: "text", text: "tool chatter" }] } },
+        payload: {
+          type: "assistant",
+          message: { content: [{ type: "text", text: "tool chatter" }] },
+        },
         timestamp: new Date("2026-04-03T19:54:50Z"),
       },
       {
@@ -464,7 +467,9 @@ describe("buildContext", () => {
 
     expect(packet.recentSignals.some((signal) => signal.kind === "session_completed")).toBe(true);
     expect(packet.recentSignals.some((signal) => signal.kind === "message")).toBe(true);
-    expect(packet.recentSignals.some((signal) => signal.sourceEventId === "evt_recent_session_output")).toBe(false);
+    expect(
+      packet.recentSignals.some((signal) => signal.sourceEventId === "evt_recent_session_output"),
+    ).toBe(false);
   });
 
   it("marks direct mentions in decisionContext", async () => {

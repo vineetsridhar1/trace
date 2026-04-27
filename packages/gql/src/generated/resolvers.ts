@@ -402,6 +402,10 @@ export type CreateChatInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type CreateOrganizationInput = {
+  name: Scalars["String"]["input"];
+};
+
 export type CreateProjectInput = {
   name: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
@@ -473,6 +477,7 @@ export type EventType =
   | "message_deleted"
   | "message_edited"
   | "message_sent"
+  | "organization_created"
   | "queued_message_added"
   | "queued_message_removed"
   | "queued_messages_cleared"
@@ -565,9 +570,12 @@ export type InboxItemType =
 export type LinkedCheckoutActionResult = {
   __typename?: "LinkedCheckoutActionResult";
   error?: Maybe<Scalars["String"]["output"]>;
+  errorCode?: Maybe<LinkedCheckoutErrorCode>;
   ok: Scalars["Boolean"]["output"];
   status: LinkedCheckoutStatus;
 };
+
+export type LinkedCheckoutErrorCode = "DIRTY_ROOT_CHECKOUT";
 
 export type LinkedCheckoutStatus = {
   __typename?: "LinkedCheckoutStatus";
@@ -587,6 +595,8 @@ export type LinkedCheckoutStatus = {
   restoreCommitSha?: Maybe<Scalars["String"]["output"]>;
   targetBranch?: Maybe<Scalars["String"]["output"]>;
 };
+
+export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE";
 
 export type Message = {
   __typename?: "Message";
@@ -621,7 +631,7 @@ export type Mutation = {
   addChatMember: Chat;
   addOrgMember: OrgMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
-  archiveSessionGroup: SessionGroup;
+  archiveSessionGroup?: Maybe<SessionGroup>;
   assignTicket: Ticket;
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
@@ -631,6 +641,7 @@ export type Mutation = {
   createChannelGroup: ChannelGroup;
   createChannelTerminal: Terminal;
   createChat: Chat;
+  createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
   createTerminal: Terminal;
@@ -744,6 +755,7 @@ export type MutationCommentOnTicketArgs = {
 };
 
 export type MutationCommitLinkedCheckoutChangesArgs = {
+  message?: InputMaybe<Scalars["String"]["input"]>;
   repoId: Scalars["ID"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
 };
@@ -770,6 +782,10 @@ export type MutationCreateChannelTerminalArgs = {
 
 export type MutationCreateChatArgs = {
   input: CreateChatInput;
+};
+
+export type MutationCreateOrganizationArgs = {
+  input: CreateOrganizationInput;
 };
 
 export type MutationCreateProjectArgs = {
@@ -1020,7 +1036,9 @@ export type MutationSubscribeArgs = {
 export type MutationSyncLinkedCheckoutArgs = {
   autoSyncEnabled?: InputMaybe<Scalars["Boolean"]["input"]>;
   branch: Scalars["String"]["input"];
+  commitMessage?: InputMaybe<Scalars["String"]["input"]>;
   commitSha?: InputMaybe<Scalars["String"]["input"]>;
+  conflictStrategy?: InputMaybe<LinkedCheckoutSyncConflictStrategy>;
   repoId: Scalars["ID"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
 };
@@ -1961,6 +1979,7 @@ export type ResolversTypes = ResolversObject<{
   CreateChannelGroupInput: CreateChannelGroupInput;
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
+  CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
@@ -1982,7 +2001,9 @@ export type ResolversTypes = ResolversObject<{
   Int: ResolverTypeWrapper<Scalars["Int"]["output"]>;
   JSON: ResolverTypeWrapper<Scalars["JSON"]["output"]>;
   LinkedCheckoutActionResult: ResolverTypeWrapper<LinkedCheckoutActionResult>;
+  LinkedCheckoutErrorCode: LinkedCheckoutErrorCode;
   LinkedCheckoutStatus: ResolverTypeWrapper<LinkedCheckoutStatus>;
+  LinkedCheckoutSyncConflictStrategy: LinkedCheckoutSyncConflictStrategy;
   Message: ResolverTypeWrapper<Message>;
   ModelTier: ModelTier;
   MoveChannelInput: MoveChannelInput;
@@ -2074,6 +2095,7 @@ export type ResolversParentTypes = ResolversObject<{
   CreateChannelGroupInput: CreateChannelGroupInput;
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
+  CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
@@ -2624,6 +2646,7 @@ export type LinkedCheckoutActionResultResolvers<
     ResolversParentTypes["LinkedCheckoutActionResult"],
 > = ResolversObject<{
   error?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  errorCode?: Resolver<Maybe<ResolversTypes["LinkedCheckoutErrorCode"]>, ParentType, ContextType>;
   ok?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   status?: Resolver<ResolversTypes["LinkedCheckoutStatus"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
@@ -2703,7 +2726,7 @@ export type MutationResolvers<
     RequireFields<MutationApproveBridgeAccessRequestArgs, "requestId">
   >;
   archiveSessionGroup?: Resolver<
-    ResolversTypes["SessionGroup"],
+    Maybe<ResolversTypes["SessionGroup"]>,
     ParentType,
     ContextType,
     RequireFields<MutationArchiveSessionGroupArgs, "id">
@@ -2764,6 +2787,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationCreateChatArgs, "input">
+  >;
+  createOrganization?: Resolver<
+    ResolversTypes["OrgMember"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCreateOrganizationArgs, "input">
   >;
   createProject?: Resolver<
     ResolversTypes["Project"],

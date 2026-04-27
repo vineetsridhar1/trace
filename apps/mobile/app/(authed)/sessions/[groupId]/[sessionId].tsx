@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 import { useEntityField } from "@trace/client-core";
 import type { Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  Button,
-  EmptyState,
-  Screen,
-  Spinner,
-} from "@/components/design-system";
+import { Button, EmptyState, Screen, Spinner } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
 import { BrowserPanel } from "@/components/sessions/BrowserPanel";
 import { SessionPageHeader } from "@/components/sessions/SessionPageHeader";
@@ -18,6 +15,7 @@ import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel
 import { resolveBrowserUrl } from "@/lib/browser";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { useMobileUIStore } from "@/stores/ui";
+import { alpha, useTheme } from "@/theme";
 import {
   fetchSessionGroupDetail,
   useEnsureSessionGroupDetail,
@@ -25,6 +23,9 @@ import {
 } from "@/hooks/useSessionGroupDetail";
 
 type SessionPaneMode = "session" | "terminal" | "browser";
+
+const HEADER_BLUR_INTENSITY = 3;
+const HEADER_FADE_EXTRA_HEIGHT = 56;
 
 /**
  * Standalone mobile session page. Reuses the session surface building blocks
@@ -37,9 +38,10 @@ export default function SessionStreamScreen() {
     sessionId: string;
     pane?: string;
   }>();
+  const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const loadingGroup = useEnsureSessionGroupDetail(groupId);
+  const { loading: loadingGroup, error: groupError } = useEnsureSessionGroupDetail(groupId);
   const sessionIds = useSessionGroupSessionIds(groupId);
   const overlaySessionId = useMobileUIStore((s) => s.overlaySessionId);
   const activeMenuClose = useMobileUIStore((s) => s.activeMenuClose);
@@ -52,16 +54,13 @@ export default function SessionStreamScreen() {
   const activePane: SessionPaneMode =
     pane === "terminal" ? "terminal" : pane === "browser" ? "browser" : "session";
   const hydratedGroupId =
-    (useEntityField("sessions", sessionId, "sessionGroupId") as string | null | undefined)
-    ?? groupId;
+    (useEntityField("sessions", sessionId, "sessionGroupId") as string | null | undefined) ??
+    groupId;
   const prUrl = useEntityField("sessionGroups", hydratedGroupId, "prUrl") as
     | string
     | null
     | undefined;
-  const repo = useEntityField("sessionGroups", hydratedGroupId, "repo") as
-    | Repo
-    | null
-    | undefined;
+  const repo = useEntityField("sessionGroups", hydratedGroupId, "repo") as Repo | null | undefined;
   const groupName = useEntityField("sessionGroups", hydratedGroupId, "name") as
     | string
     | null
@@ -129,13 +128,8 @@ export default function SessionStreamScreen() {
   const browserEnabled = !sessionOptimistic && !handoffPending && !showLoading;
 
   return (
-    <Screen
-      edges={["left", "right"]}
-      background="background"
-      style={styles.root}
-    >
+    <Screen edges={["left", "right"]} background="background" style={styles.root}>
       <Stack.Screen options={{ headerShown: false }} />
-
       <View pointerEvents="box-none" style={styles.headerOverlay}>
         {showLoading ? null : (
           <View onLayout={handleOverlayLayout} style={{ paddingTop: insets.top }}>
@@ -157,7 +151,6 @@ export default function SessionStreamScreen() {
           </View>
         )}
       </View>
-
       <View style={styles.content}>
         {showLoading ? (
           <View style={styles.center}>
@@ -168,7 +161,7 @@ export default function SessionStreamScreen() {
             <EmptyState
               icon="exclamationmark.triangle"
               title="Couldn't load workspace"
-              subtitle="The workspace couldn't be loaded. Try again or go back."
+              subtitle={groupError ?? "The workspace couldn't be loaded. Try again or go back."}
             />
             <View style={styles.retryButton}>
               <Button title="Retry" variant="secondary" onPress={handleRetryGroup} />
@@ -210,6 +203,27 @@ export default function SessionStreamScreen() {
         )}
       </View>
 
+      {!showLoading && !missingGroup && activePane === "session" && overlayHeight > 0 ? (
+        <>
+          <BlurView
+            pointerEvents="none"
+            tint={theme.scheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
+            intensity={HEADER_BLUR_INTENSITY}
+            style={[styles.headerBlur, { height: overlayHeight - 8 }]}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={[
+              alpha(theme.colors.background, 1),
+              alpha(theme.colors.background, 0.48),
+              alpha(theme.colors.background, 0),
+            ]}
+            locations={[0, 0.68, 1]}
+            style={[styles.headerFade, { height: overlayHeight + HEADER_FADE_EXTRA_HEIGHT }]}
+          />
+        </>
+      ) : null}
+
       {activeMenuClose ? (
         <Pressable
           accessibilityLabel="Dismiss menu"
@@ -231,6 +245,20 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
+  },
+  headerFade: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 9,
+  },
+  headerBlur: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 8,
   },
   content: {
     flex: 1,

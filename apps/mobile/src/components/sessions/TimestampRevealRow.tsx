@@ -51,11 +51,7 @@ export function TimestampRevealRow({
       {timestampLabel ? (
         <Animated.View
           pointerEvents="none"
-          style={[
-            styles.timestampReveal,
-            { right: paddingHorizontal },
-            timestampStyle,
-          ]}
+          style={[styles.timestampReveal, { right: paddingHorizontal }, timestampStyle]}
         >
           <Text variant="caption2" color="dimForeground">
             {timestampLabel}

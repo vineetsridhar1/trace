@@ -62,10 +62,9 @@ router.post("/uploads/presign", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "organizationId is required" });
   }
 
-  const effectiveOrganizationId =
-    isLocalMode()
-      ? await getCanonicalLocalOrganizationId()
-      : organizationId;
+  const effectiveOrganizationId = isLocalMode()
+    ? await getCanonicalLocalOrganizationId()
+    : organizationId;
   if (!effectiveOrganizationId) {
     return res.status(403).json({ error: "No active organization found" });
   }

@@ -393,7 +393,17 @@ async function pushSchema(databaseUrl, env) {
   log("ensuring pgvector extension");
   await runCommand(
     "prisma db execute",
-    ["--filter", "@trace/server", "exec", "prisma", "db", "execute", "--stdin", "--url", databaseUrl],
+    [
+      "--filter",
+      "@trace/server",
+      "exec",
+      "prisma",
+      "db",
+      "execute",
+      "--stdin",
+      "--url",
+      databaseUrl,
+    ],
     env,
     "CREATE EXTENSION IF NOT EXISTS vector;",
   );
@@ -553,11 +563,7 @@ async function main() {
     "server health",
   );
 
-  await waitForHttp(
-    webUrl,
-    async () => true,
-    "web app",
-  );
+  await waitForHttp(webUrl, async () => true, "web app");
 
   log("opening Electron");
   spawnLongRunning("electron", ["--filter", "@trace/desktop", "dev"], sharedEnv);

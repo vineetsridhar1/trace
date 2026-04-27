@@ -116,12 +116,9 @@ export function useMyBridges(activeOrgId: string | null): {
       if (AppState.currentState === "active") void fetchOnce(false);
     }, POLL_INTERVAL_MS);
 
-    const appStateSub = AppState.addEventListener(
-      "change",
-      (state: AppStateStatus) => {
-        if (state === "active") void fetchOnce(false);
-      },
-    );
+    const appStateSub = AppState.addEventListener("change", (state: AppStateStatus) => {
+      if (state === "active") void fetchOnce(false);
+    });
 
     return () => {
       cancelledRef.current = true;

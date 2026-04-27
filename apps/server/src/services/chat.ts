@@ -65,7 +65,10 @@ export class ChatService {
     // Default group name: comma-separated member names
     const groupName = isDM
       ? null
-      : (input.name ?? validMembers.map((m: { id: string; name: string | null }) => m.name ?? "Unknown").join(", "));
+      : (input.name ??
+        validMembers
+          .map((m: { id: string; name: string | null }) => m.name ?? "Unknown")
+          .join(", "));
 
     const eventOrgId = await resolveEventOrgId(actorId);
 
@@ -128,7 +131,10 @@ export class ChatService {
     try {
       result = await prisma.$transaction(createChatInTx);
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && (error as Prisma.PrismaClientKnownRequestError).code === "P2002") {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error as Prisma.PrismaClientKnownRequestError).code === "P2002"
+      ) {
         return prisma.chat.findFirstOrThrow({
           where: {
             type: isDM ? "dm" : "group",

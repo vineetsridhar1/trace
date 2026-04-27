@@ -39,10 +39,7 @@ export function NewActivityPill({
   }, [visible, progress, theme.motion.springs.smooth, theme.motion.durations.fast]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: (1 - progress.value) * 8 },
-      { scale: 0.96 + progress.value * 0.04 },
-    ],
+    transform: [{ translateY: (1 - progress.value) * 8 }, { scale: 0.96 + progress.value * 0.04 }],
   }));
 
   function handlePress() {

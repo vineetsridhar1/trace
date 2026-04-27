@@ -26,7 +26,8 @@ export function ChatHeader({ chatId }: { chatId: string }) {
   const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
 
   const otherMember = members?.find((member) => member.user.id !== currentUserId);
-  const displayName = name ?? (type === "dm" ? (otherMember?.user.name ?? "Direct Message") : "Group Chat");
+  const displayName =
+    name ?? (type === "dm" ? (otherMember?.user.name ?? "Direct Message") : "Group Chat");
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -52,7 +53,9 @@ export function ChatHeader({ chatId }: { chatId: string }) {
 
     const rollback = applyOptimisticPatch("chats", chatId, { name: trimmed });
     try {
-      const result = await client.mutation(RENAME_CHAT_MUTATION, { chatId, name: trimmed }).toPromise();
+      const result = await client
+        .mutation(RENAME_CHAT_MUTATION, { chatId, name: trimmed })
+        .toPromise();
       if (result.error) throw result.error;
     } catch (error) {
       rollback();
@@ -100,12 +103,12 @@ export function ChatHeader({ chatId }: { chatId: string }) {
               className="h-7 rounded border border-border bg-surface-elevated px-2 text-lg font-bold text-foreground outline-none focus:border-ring"
             />
           ) : (
-            <button
-              onClick={handleStartEdit}
-              className="group/title flex items-center gap-1.5"
-            >
+            <button onClick={handleStartEdit} className="group/title flex items-center gap-1.5">
               <h2 className="text-lg font-bold text-foreground">{displayName}</h2>
-              <Pencil size={14} className="text-muted-foreground opacity-0 transition-opacity group-hover/title:opacity-100" />
+              <Pencil
+                size={14}
+                className="text-muted-foreground opacity-0 transition-opacity group-hover/title:opacity-100"
+              />
             </button>
           )}
           <div className="ml-auto flex items-center gap-2">

@@ -20,7 +20,7 @@ import {
 
 export function ConnectionsBridgesList() {
   const theme = useTheme();
-  const { connections, loading, refresh } = useConnections();
+  const { connections, loading, error, refresh } = useConnections();
   const [refreshing, setRefreshing] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<ConnectionAccessRequest | null>(null);
@@ -117,6 +117,18 @@ export function ConnectionsBridgesList() {
 
   if (loading && connections.length === 0) {
     return <CenteredText text="Loading bridges..." />;
+  }
+  if (error && connections.length === 0) {
+    return (
+      <View style={styles.center}>
+        <EmptyState
+          icon="exclamationmark.triangle"
+          title="Couldn't load bridges"
+          subtitle={error}
+          action={{ label: "Retry", onPress: () => void handleRefresh() }}
+        />
+      </View>
+    );
   }
   if (connections.length === 0) {
     return (

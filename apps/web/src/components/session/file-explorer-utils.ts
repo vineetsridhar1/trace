@@ -1,11 +1,4 @@
-import {
-  File,
-  FileCode,
-  FileJson,
-  FileText,
-  Image,
-  Settings,
-} from "lucide-react";
+import { File, FileCode, FileJson, FileText, Image, Settings } from "lucide-react";
 
 export interface FileTreeNode {
   name: string;

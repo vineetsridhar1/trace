@@ -57,9 +57,7 @@ export function SessionInput({
     | boolean
     | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
-  const images = useDraftsStore(
-    (s) => s.drafts[sessionId]?.images ?? EMPTY_IMAGES,
-  );
+  const images = useDraftsStore((s) => s.drafts[sessionId]?.images ?? EMPTY_IMAGES);
   const setDraftImages = useDraftsStore((s) => s.setDraftImages);
   const setDraftText = useDraftsStore((s) => s.setDraftText);
   const [initialDraftHtml] = useState(
@@ -80,12 +78,12 @@ export function SessionInput({
   const canSend =
     bridgeInteractionAllowed &&
     !isOptimistic &&
-    (isNotStarted ||
-      canSendMessage(agentStatus, connection, worktreeDeleted) ||
-      canQueue);
+    (isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted) || canQueue);
   const displayModel = model ? getModelLabel(model) : "Claude Code";
 
-  const _lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as string | undefined;
+  const _lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as
+    | string
+    | undefined;
   const lastUserMessageAt = isActive ? _lastUserMessageAt : undefined;
 
   const slashCommands = useSlashCommands(sessionId);
@@ -97,134 +95,143 @@ export function SessionInput({
     });
   }, []);
 
-  const handleImagePaste = useCallback((files: File[]) => {
-    if (isSendingRef.current) return;
-    setDraftImages(sessionId, (prev) => {
-      const remaining = MAX_IMAGES - prev.length;
-      if (remaining <= 0) return prev;
-      const newImages: ImageAttachment[] = files.slice(0, remaining).map((file) => ({
-        id: generateUUID(),
-        file,
-        previewUrl: URL.createObjectURL(file),
-        s3Key: null,
-        uploading: false,
-      }));
-      return [...prev, ...newImages];
-    });
-  }, [sessionId, setDraftImages]);
+  const handleImagePaste = useCallback(
+    (files: File[]) => {
+      if (isSendingRef.current) return;
+      setDraftImages(sessionId, (prev) => {
+        const remaining = MAX_IMAGES - prev.length;
+        if (remaining <= 0) return prev;
+        const newImages: ImageAttachment[] = files.slice(0, remaining).map((file) => ({
+          id: generateUUID(),
+          file,
+          previewUrl: URL.createObjectURL(file),
+          s3Key: null,
+          uploading: false,
+        }));
+        return [...prev, ...newImages];
+      });
+    },
+    [sessionId, setDraftImages],
+  );
 
-  const handleRemoveImage = useCallback((id: string) => {
-    setDraftImages(sessionId, (prev) => {
-      const img = prev.find((i) => i.id === id);
-      if (img) URL.revokeObjectURL(img.previewUrl);
-      return prev.filter((i) => i.id !== id);
-    });
-  }, [sessionId, setDraftImages]);
+  const handleRemoveImage = useCallback(
+    (id: string) => {
+      setDraftImages(sessionId, (prev) => {
+        const img = prev.find((i) => i.id === id);
+        if (img) URL.revokeObjectURL(img.previewUrl);
+        return prev.filter((i) => i.id !== id);
+      });
+    },
+    [sessionId, setDraftImages],
+  );
 
-  const handleSubmit = useCallback(async (_html: string, text: string) => {
-    if (isSendingRef.current) return;
-    if ((!text && images.length === 0) || !canSend) return;
+  const handleSubmit = useCallback(
+    async (_html: string, text: string) => {
+      if (isSendingRef.current) return;
+      if ((!text && images.length === 0) || !canSend) return;
 
-    if (text === "/clear") {
-      const channelId = useUIStore.getState().activeChannelId;
-      if (channelId) {
-        void createQuickSession(channelId);
+      if (text === "/clear") {
+        const channelId = useUIStore.getState().activeChannelId;
+        if (channelId) {
+          void createQuickSession(channelId);
+        }
+        return;
       }
-      return;
-    }
 
-    isSendingRef.current = true;
-    setIsSending(true);
-    try {
-      const savedImages = [...images];
-      const imagePreviewUrls = savedImages.map((img) => img.previewUrl);
-      const wrappedText = !text ? "" : text.startsWith("/") ? text : wrapPrompt(mode, text);
+      isSendingRef.current = true;
+      setIsSending(true);
+      try {
+        const savedImages = [...images];
+        const imagePreviewUrls = savedImages.map((img) => img.previewUrl);
+        const wrappedText = !text ? "" : text.startsWith("/") ? text : wrapPrompt(mode, text);
 
-      if (canQueue) {
+        if (canQueue) {
+          try {
+            const result = await client
+              .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
+                sessionId,
+                text: wrappedText,
+                interactionMode: mode === "code" ? undefined : mode,
+              })
+              .toPromise();
+
+            if (result.error) {
+              throw result.error;
+            }
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Failed to queue message");
+            throw error;
+          }
+          return;
+        }
+
+        let imageKeys: string[] = [];
+        if (savedImages.length > 0) {
+          const savedIds = new Set(savedImages.map((img) => img.id));
+          setDraftImages(sessionId, (prev) =>
+            prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: true } : img)),
+          );
+          const orgId = useAuthStore.getState().activeOrgId;
+          try {
+            imageKeys = await Promise.all(
+              savedImages.map((img) => uploadImage(img.file, orgId ?? undefined)),
+            );
+          } catch (error) {
+            setDraftImages(sessionId, (prev) =>
+              prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: false } : img)),
+            );
+            toast.error(error instanceof Error ? error.message : "Failed to upload image");
+            throw error;
+          }
+        }
+
+        const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
+          sessionId,
+          wrappedText,
+          imageKeys.length > 0 ? { imageKeys, imagePreviewUrls } : undefined,
+        );
+
+        const savedIds = new Set(savedImages.map((img) => img.id));
+        setDraftImages(sessionId, (prev) => prev.filter((img) => !savedIds.has(img.id)));
+
         try {
           const result = await client
-            .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
+            .mutation(SEND_SESSION_MESSAGE_MUTATION, {
               sessionId,
               text: wrappedText,
+              imageKeys: imageKeys.length > 0 ? imageKeys : undefined,
               interactionMode: mode === "code" ? undefined : mode,
+              clientMutationId,
             })
             .toPromise();
 
           if (result.error) {
             throw result.error;
           }
+
+          const realEventId = result.data?.sendSessionMessage?.id;
+          if (!realEventId) {
+            throw new Error("Failed to send message");
+          }
+
+          reconcileOptimisticSessionMessage(sessionId, tempEventId, realEventId);
+          for (const img of savedImages) URL.revokeObjectURL(img.previewUrl);
         } catch (error) {
-          toast.error(error instanceof Error ? error.message : "Failed to queue message");
+          removeOptimisticSessionMessage(sessionId, tempEventId);
+          setDraftImages(sessionId, (prev) => [
+            ...savedImages.map((img) => ({ ...img, uploading: false })),
+            ...prev,
+          ]);
+          toast.error(error instanceof Error ? error.message : "Failed to send message");
           throw error;
         }
-        return;
+      } finally {
+        isSendingRef.current = false;
+        setIsSending(false);
       }
-
-      let imageKeys: string[] = [];
-      if (savedImages.length > 0) {
-        const savedIds = new Set(savedImages.map((img) => img.id));
-        setDraftImages(sessionId, (prev) =>
-          prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: true } : img)),
-        );
-        const orgId = useAuthStore.getState().activeOrgId;
-        try {
-          imageKeys = await Promise.all(
-            savedImages.map((img) => uploadImage(img.file, orgId ?? undefined)),
-          );
-        } catch (error) {
-          setDraftImages(sessionId, (prev) =>
-            prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: false } : img)),
-          );
-          toast.error(error instanceof Error ? error.message : "Failed to upload image");
-          throw error;
-        }
-      }
-
-      const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
-        sessionId,
-        wrappedText,
-        imageKeys.length > 0 ? { imageKeys, imagePreviewUrls } : undefined,
-      );
-
-      const savedIds = new Set(savedImages.map((img) => img.id));
-      setDraftImages(sessionId, (prev) => prev.filter((img) => !savedIds.has(img.id)));
-
-      try {
-        const result = await client
-          .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-            sessionId,
-            text: wrappedText,
-            imageKeys: imageKeys.length > 0 ? imageKeys : undefined,
-            interactionMode: mode === "code" ? undefined : mode,
-            clientMutationId,
-          })
-          .toPromise();
-
-        if (result.error) {
-          throw result.error;
-        }
-
-        const realEventId = result.data?.sendSessionMessage?.id;
-        if (!realEventId) {
-          throw new Error("Failed to send message");
-        }
-
-        reconcileOptimisticSessionMessage(sessionId, tempEventId, realEventId);
-        for (const img of savedImages) URL.revokeObjectURL(img.previewUrl);
-      } catch (error) {
-        removeOptimisticSessionMessage(sessionId, tempEventId);
-        setDraftImages(sessionId, (prev) => [
-          ...savedImages.map((img) => ({ ...img, uploading: false })),
-          ...prev,
-        ]);
-        toast.error(error instanceof Error ? error.message : "Failed to send message");
-        throw error;
-      }
-    } finally {
-      isSendingRef.current = false;
-      setIsSending(false);
-    }
-  }, [sessionId, mode, canSend, canQueue, images]);
+    },
+    [sessionId, mode, canSend, canQueue, images],
+  );
 
   // If the user has bridge access (owner or granted), a disconnected session
   // belongs to the recovery panel — not the permission prompt. Non-owners
@@ -268,11 +275,20 @@ export function SessionInput({
           <Tooltip>
             <TooltipTrigger className="flex items-center text-muted-foreground">
               {hosting === "cloud" ? (
-                <Cloud size={14} className={cn("transition-colors", MODE_CONFIG[mode as InteractionMode].iconColor)} />
+                <Cloud
+                  size={14}
+                  className={cn(
+                    "transition-colors",
+                    MODE_CONFIG[mode as InteractionMode].iconColor,
+                  )}
+                />
               ) : (
                 <Monitor
                   size={14}
-                  className={cn("transition-colors", MODE_CONFIG[mode as InteractionMode].iconColor)}
+                  className={cn(
+                    "transition-colors",
+                    MODE_CONFIG[mode as InteractionMode].iconColor,
+                  )}
                 />
               )}
             </TooltipTrigger>
@@ -344,9 +360,7 @@ export function SessionInput({
         )}
       </div>
 
-      {isActive && (
-        <AiLoadingIndicator model={displayModel} startedAt={lastUserMessageAt} />
-      )}
+      {isActive && <AiLoadingIndicator model={displayModel} startedAt={lastUserMessageAt} />}
       <SessionInputOptions
         sessionId={sessionId}
         mode={mode}

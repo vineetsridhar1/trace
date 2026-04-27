@@ -46,7 +46,10 @@ export class ChannelService {
       where: { channelId, leftAt: null },
       include: { user: { select: { id: true, email: true, name: true, avatarUrl: true } } },
     });
-    return members.map((member: typeof members[number]) => ({ user: member.user, joinedAt: member.joinedAt }));
+    return members.map((member: (typeof members)[number]) => ({
+      user: member.user,
+      joinedAt: member.joinedAt,
+    }));
   }
 
   async create(input: CreateChannelInput, actorType: ActorType, actorId: string) {
@@ -128,22 +131,32 @@ export class ChannelService {
       }
       const normalizedMembers = await normalizeMembers(tx, { type: "channel", id: channel.id });
 
-      const event = await eventService.create({
-        organizationId: input.organizationId,
-        scopeType: "channel",
-        scopeId: channel.id,
-        eventType: "channel_created",
-        payload: {
-          channel: {
-            id: channel.id, name: channel.name, type: channel.type, position: channel.position,
-            groupId: channel.groupId, repoId: channel.repoId, baseBranch: channel.baseBranch,
-            ...(channel.repoId && repoName ? { repo: { id: channel.repoId, name: repoName } } : {}),
-            members: normalizedMembers,
+      const event = await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "channel",
+          scopeId: channel.id,
+          eventType: "channel_created",
+          payload: {
+            channel: {
+              id: channel.id,
+              name: channel.name,
+              type: channel.type,
+              position: channel.position,
+              groupId: channel.groupId,
+              repoId: channel.repoId,
+              baseBranch: channel.baseBranch,
+              ...(channel.repoId && repoName
+                ? { repo: { id: channel.repoId, name: repoName } }
+                : {}),
+              members: normalizedMembers,
+            },
           },
+          actorType,
+          actorId,
         },
-        actorType,
-        actorId,
-      }, tx);
+        tx,
+      );
 
       return [channel, event] as const;
     });
@@ -151,7 +164,12 @@ export class ChannelService {
     return channel;
   }
 
-  async update(channelId: string, input: UpdateChannelInput, actorType: ActorType, actorId: string) {
+  async update(
+    channelId: string,
+    input: UpdateChannelInput,
+    actorType: ActorType,
+    actorId: string,
+  ) {
     const channel = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const existing = await tx.channel.findUniqueOrThrow({
         where: { id: channelId },
@@ -159,7 +177,9 @@ export class ChannelService {
       });
 
       await tx.orgMember.findUniqueOrThrow({
-        where: { userId_organizationId: { userId: actorId, organizationId: existing.organizationId } },
+        where: {
+          userId_organizationId: { userId: actorId, organizationId: existing.organizationId },
+        },
       });
 
       const data: Record<string, unknown> = {};
@@ -172,7 +192,12 @@ export class ChannelService {
           if (!Array.isArray(scripts)) throw new Error("runScripts must be an array");
           if (scripts.length > 10) throw new Error("runScripts cannot exceed 10 entries");
           for (const entry of scripts) {
-            if (typeof entry !== "object" || entry === null || typeof (entry as Record<string, unknown>).name !== "string" || typeof (entry as Record<string, unknown>).command !== "string") {
+            if (
+              typeof entry !== "object" ||
+              entry === null ||
+              typeof (entry as Record<string, unknown>).name !== "string" ||
+              typeof (entry as Record<string, unknown>).command !== "string"
+            ) {
               throw new Error("Each runScript must have a name and command string");
             }
           }
@@ -186,22 +211,30 @@ export class ChannelService {
 
       const updated = await tx.channel.update({ where: { id: channelId }, data });
 
-      await eventService.create({
-        organizationId: existing.organizationId,
-        scopeType: "system",
-        scopeId: existing.organizationId,
-        eventType: "channel_updated",
-        payload: {
-          channel: {
-            id: updated.id, name: updated.name, type: updated.type,
-            position: updated.position, groupId: updated.groupId,
-            repoId: updated.repoId, baseBranch: updated.baseBranch,
-            setupScript: updated.setupScript, runScripts: updated.runScripts,
+      await eventService.create(
+        {
+          organizationId: existing.organizationId,
+          scopeType: "system",
+          scopeId: existing.organizationId,
+          eventType: "channel_updated",
+          payload: {
+            channel: {
+              id: updated.id,
+              name: updated.name,
+              type: updated.type,
+              position: updated.position,
+              groupId: updated.groupId,
+              repoId: updated.repoId,
+              baseBranch: updated.baseBranch,
+              setupScript: updated.setupScript,
+              runScripts: updated.runScripts,
+            },
           },
+          actorType,
+          actorId,
         },
-        actorType,
-        actorId,
-      }, tx);
+        tx,
+      );
 
       return updated;
     });
@@ -227,7 +260,9 @@ export class ChannelService {
       });
 
       await tx.orgMember.findUniqueOrThrow({
-        where: { userId_organizationId: { userId: actorId, organizationId: channel.organizationId } },
+        where: {
+          userId_organizationId: { userId: actorId, organizationId: channel.organizationId },
+        },
       });
 
       const existingMembership = await tx.channelMember.findUnique({
@@ -247,28 +282,33 @@ export class ChannelService {
 
       const normalizedMembers = await normalizeMembers(tx, { type: "channel", id: channelId });
 
-      await eventService.create({
-        organizationId: channel.organizationId,
-        scopeType: "channel",
-        scopeId: channelId,
-        eventType: "channel_member_added",
-        payload: {
-          userId: actorId,
-          channel: {
-            id: channel.id,
-            name: channel.name,
-            type: channel.type,
-            position: channel.position,
-            groupId: channel.groupId,
-            repoId: channel.repoId,
-            baseBranch: channel.baseBranch,
-            ...(channel.repoId && channel.repo ? { repo: { id: channel.repoId, name: channel.repo.name } } : {}),
-            members: normalizedMembers,
+      await eventService.create(
+        {
+          organizationId: channel.organizationId,
+          scopeType: "channel",
+          scopeId: channelId,
+          eventType: "channel_member_added",
+          payload: {
+            userId: actorId,
+            channel: {
+              id: channel.id,
+              name: channel.name,
+              type: channel.type,
+              position: channel.position,
+              groupId: channel.groupId,
+              repoId: channel.repoId,
+              baseBranch: channel.baseBranch,
+              ...(channel.repoId && channel.repo
+                ? { repo: { id: channel.repoId, name: channel.repo.name } }
+                : {}),
+              members: normalizedMembers,
+            },
           },
+          actorType,
+          actorId,
         },
-        actorType,
-        actorId,
-      }, tx);
+        tx,
+      );
     });
 
     return prisma.channel.findUniqueOrThrow({
@@ -309,28 +349,33 @@ export class ChannelService {
 
       const normalizedMembers = await normalizeMembers(tx, { type: "channel", id: channelId });
 
-      await eventService.create({
-        organizationId: channel.organizationId,
-        scopeType: "channel",
-        scopeId: channelId,
-        eventType: "channel_member_removed",
-        payload: {
-          userId: actorId,
-          channel: {
-            id: channel.id,
-            name: channel.name,
-            type: channel.type,
-            position: channel.position,
-            groupId: channel.groupId,
-            repoId: channel.repoId,
-            baseBranch: channel.baseBranch,
-            ...(channel.repoId && channel.repo ? { repo: { id: channel.repoId, name: channel.repo.name } } : {}),
-            members: normalizedMembers,
+      await eventService.create(
+        {
+          organizationId: channel.organizationId,
+          scopeType: "channel",
+          scopeId: channelId,
+          eventType: "channel_member_removed",
+          payload: {
+            userId: actorId,
+            channel: {
+              id: channel.id,
+              name: channel.name,
+              type: channel.type,
+              position: channel.position,
+              groupId: channel.groupId,
+              repoId: channel.repoId,
+              baseBranch: channel.baseBranch,
+              ...(channel.repoId && channel.repo
+                ? { repo: { id: channel.repoId, name: channel.repo.name } }
+                : {}),
+              members: normalizedMembers,
+            },
           },
+          actorType,
+          actorId,
         },
-        actorType,
-        actorId,
-      }, tx);
+        tx,
+      );
     });
 
     return prisma.channel.findUniqueOrThrow({
@@ -359,9 +404,8 @@ export class ChannelService {
     const normalized = normalizeMessageInput(text, html);
 
     // Agents can post to any channel in their org without membership
-    const memberFilter = actorType === "agent"
-      ? {}
-      : { members: { some: { userId: actorId, leftAt: null } } };
+    const memberFilter =
+      actorType === "agent" ? {} : { members: { some: { userId: actorId, leftAt: null } } };
 
     const channel = await prisma.channel.findFirstOrThrow({
       where: { id: channelId, ...memberFilter },
@@ -407,15 +451,20 @@ export class ChannelService {
         data: { updatedAt: createdMessage.createdAt },
       });
 
-      await eventService.create({
-        organizationId: channel.organizationId,
-        scopeType: "channel",
-        scopeId: channel.id,
-        eventType: "message_sent",
-        payload: buildMessageEventPayload(createdMessage) as unknown as PrismaTypes.InputJsonValue,
-        actorType,
-        actorId,
-      }, tx);
+      await eventService.create(
+        {
+          organizationId: channel.organizationId,
+          scopeType: "channel",
+          scopeId: channel.id,
+          eventType: "message_sent",
+          payload: buildMessageEventPayload(
+            createdMessage,
+          ) as unknown as PrismaTypes.InputJsonValue,
+          actorType,
+          actorId,
+        },
+        tx,
+      );
 
       return createdMessage;
     });
@@ -502,15 +551,20 @@ export class ChannelService {
         data: { updatedAt: editedAt },
       });
 
-      await eventService.create({
-        organizationId: channel.organizationId,
-        scopeType: "channel",
-        scopeId: channelId,
-        eventType: "message_edited",
-        payload: buildMessageEventPayload(updatedMessage) as unknown as PrismaTypes.InputJsonValue,
-        actorType,
-        actorId,
-      }, tx);
+      await eventService.create(
+        {
+          organizationId: channel.organizationId,
+          scopeType: "channel",
+          scopeId: channelId,
+          eventType: "message_edited",
+          payload: buildMessageEventPayload(
+            updatedMessage,
+          ) as unknown as PrismaTypes.InputJsonValue,
+          actorType,
+          actorId,
+        },
+        tx,
+      );
 
       return updatedMessage;
     });
@@ -566,20 +620,23 @@ export class ChannelService {
         data: { updatedAt: deletedAt },
       });
 
-      await eventService.create({
-        organizationId: channel.organizationId,
-        scopeType: "channel",
-        scopeId: channelId,
-        eventType: "message_deleted",
-        payload: {
-          messageId: deletedMessage.id,
-          channelId: deletedMessage.channelId,
-          parentMessageId: deletedMessage.parentMessageId,
-          deletedAt: deletedMessage.deletedAt?.toISOString() ?? null,
-        } as PrismaTypes.InputJsonValue,
-        actorType,
-        actorId,
-      }, tx);
+      await eventService.create(
+        {
+          organizationId: channel.organizationId,
+          scopeType: "channel",
+          scopeId: channelId,
+          eventType: "message_deleted",
+          payload: {
+            messageId: deletedMessage.id,
+            channelId: deletedMessage.channelId,
+            parentMessageId: deletedMessage.parentMessageId,
+            deletedAt: deletedMessage.deletedAt?.toISOString() ?? null,
+          } as PrismaTypes.InputJsonValue,
+          actorType,
+          actorId,
+        },
+        tx,
+      );
 
       return deletedMessage;
     });
@@ -683,19 +740,22 @@ export class ChannelService {
       await tx.ticket.updateMany({ where: { channelId: id }, data: { channelId: null } });
       await tx.channel.delete({ where: { id } });
 
-      await eventService.create({
-        organizationId: channel.organizationId,
-        scopeType: "system",
-        scopeId: channel.organizationId,
-        eventType: "channel_deleted",
-        payload: {
-          channelId: id,
-          name: channel.name,
-          groupId: channel.groupId,
+      await eventService.create(
+        {
+          organizationId: channel.organizationId,
+          scopeType: "system",
+          scopeId: channel.organizationId,
+          eventType: "channel_deleted",
+          payload: {
+            channelId: id,
+            name: channel.name,
+            groupId: channel.groupId,
+          },
+          actorType,
+          actorId,
         },
-        actorType,
-        actorId,
-      }, tx);
+        tx,
+      );
     });
 
     return true;
@@ -711,9 +771,8 @@ export class ChannelService {
     actorId: string,
   ) {
     // Agents can post to any channel in their org without membership
-    const memberFilter = actorType === "agent"
-      ? {}
-      : { members: { some: { userId: actorId, leftAt: null } } };
+    const memberFilter =
+      actorType === "agent" ? {} : { members: { some: { userId: actorId, leftAt: null } } };
 
     const channel = await prisma.channel.findFirstOrThrow({
       where: { id: channelId, type: "coding", ...memberFilter },

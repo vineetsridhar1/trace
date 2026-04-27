@@ -1,10 +1,7 @@
 import { useCallback, useMemo } from "react";
 import type { SFSymbol } from "expo-symbols";
 import { UPDATE_SESSION_CONFIG_MUTATION } from "@trace/client-core";
-import type {
-  CodingTool,
-  SessionConnection,
-} from "@trace/gql";
+import type { CodingTool, SessionConnection } from "@trace/gql";
 import { getDefaultModel, getModelLabel, getModelsForTool } from "@trace/shared";
 import { haptic } from "@/lib/haptics";
 import { applyOptimisticPatch } from "@/lib/optimisticEntity";
@@ -33,7 +30,7 @@ export function useSessionComposerConfig({
 }: UseSessionComposerConfigOptions) {
   const handleToolChange = useCallback(
     async (newTool: CodingTool) => {
-      if (tool === newTool) return;
+      if (tool === newTool) return true;
       const newDefault = getDefaultModel(newTool) ?? null;
       const rollback = applyOptimisticPatch("sessions", sessionId, {
         tool: newTool,
@@ -48,10 +45,12 @@ export function useSessionComposerConfig({
           })
           .toPromise();
         if (result.error) throw result.error;
+        return true;
       } catch (err) {
         rollback();
         void haptic.error();
         console.warn("[updateSessionConfig] tool change failed", err);
+        return false;
       }
     },
     [sessionId, tool],
@@ -59,17 +58,19 @@ export function useSessionComposerConfig({
 
   const handleModelChange = useCallback(
     async (newModel: string) => {
-      if (model === newModel) return;
+      if (model === newModel) return true;
       const rollback = applyOptimisticPatch("sessions", sessionId, { model: newModel });
       try {
         const result = await getClient()
           .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, model: newModel })
           .toPromise();
         if (result.error) throw result.error;
+        return true;
       } catch (err) {
         rollback();
         void haptic.error();
         console.warn("[updateSessionConfig] model change failed", err);
+        return false;
       }
     },
     [model, sessionId],
@@ -88,8 +89,7 @@ export function useSessionComposerConfig({
   );
 
   const bridgeIcon: SFSymbol = hosting === "cloud" ? "cloud" : "laptopcomputer";
-  const bridgeLabel =
-    hosting === "cloud" ? "Cloud" : (connection?.runtimeLabel ?? "Local");
+  const bridgeLabel = hosting === "cloud" ? "Cloud" : (connection?.runtimeLabel ?? "Local");
 
   return {
     bridgeIcon,

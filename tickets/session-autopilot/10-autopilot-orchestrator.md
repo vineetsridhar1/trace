@@ -39,4 +39,3 @@ Create the background process that decides when Autopilot should review a worker
 1. Complete a worker session and verify one review run starts.
 2. Emit duplicate completion signals and verify no duplicate run starts.
 3. Trigger `run now` and verify the same execution path is used.
-

@@ -15,8 +15,12 @@ const TOOL_LABELS: Record<string, string> = {
 export function SessionDefaultsSection() {
   const defaultTool = usePreferencesStore((s: { defaultTool: string | null }) => s.defaultTool);
   const defaultModel = usePreferencesStore((s: { defaultModel: string | null }) => s.defaultModel);
-  const setDefaultTool = usePreferencesStore((s: { setDefaultTool: (tool: string | null) => void }) => s.setDefaultTool);
-  const setDefaultModel = usePreferencesStore((s: { setDefaultModel: (model: string | null) => void }) => s.setDefaultModel);
+  const setDefaultTool = usePreferencesStore(
+    (s: { setDefaultTool: (tool: string | null) => void }) => s.setDefaultTool,
+  );
+  const setDefaultModel = usePreferencesStore(
+    (s: { setDefaultModel: (model: string | null) => void }) => s.setDefaultModel,
+  );
 
   const effectiveTool = defaultTool ?? "claude_code";
   const modelOptions = getModelsForTool(effectiveTool);

@@ -11,7 +11,6 @@ import { useEntityField } from "@trace/client-core";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { cn } from "../../lib/utils";
-import { isLocalMode } from "../../lib/runtime-mode";
 
 interface PlanResponseBarProps {
   sessionId: string;
@@ -25,15 +24,22 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
   const [selected, setSelected] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const [sending, setSending] = useState(false);
-  const openSessionTab = useUIStore((s: { openSessionTab: (groupId: string, sessionId: string) => void }) => s.openSessionTab);
-  const channel = useEntityField("sessions", sessionId, "channel") as { id: string } | null | undefined;
-  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
+  const openSessionTab = useUIStore(
+    (s: { openSessionTab: (groupId: string, sessionId: string) => void }) => s.openSessionTab,
+  );
+  const channel = useEntityField("sessions", sessionId, "channel") as
+    | { id: string }
+    | null
+    | undefined;
+  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
+    | string
+    | undefined;
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
   const branch = useEntityField("sessions", sessionId, "branch") as string | undefined;
-  const defaultHosting = hosting ?? (isLocalMode ? "local" : "cloud");
+  const defaultHosting = hosting ?? "local";
 
   const handleClearContext = useCallback(async () => {
     if (sending || !sessionGroupId) return;
@@ -76,16 +82,30 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
     } finally {
       setSending(false);
     }
-  }, [sending, sessionGroupId, planContent, tool, model, defaultHosting, channel?.id, repo?.id, branch, sessionId, openSessionTab]);
+  }, [
+    sending,
+    sessionGroupId,
+    planContent,
+    tool,
+    model,
+    defaultHosting,
+    channel?.id,
+    repo?.id,
+    branch,
+    sessionId,
+    openSessionTab,
+  ]);
 
   const handleKeepContext = useCallback(async () => {
     if (sending) return;
     setSending(true);
     try {
-      await client.mutation(SEND_SESSION_MESSAGE_MUTATION, {
-        sessionId,
-        text: "Approved. Implement this plan.",
-      }).toPromise();
+      await client
+        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+          sessionId,
+          text: "Approved. Implement this plan.",
+        })
+        .toPromise();
     } finally {
       setSending(false);
     }
@@ -96,11 +116,13 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
     if (!text || sending) return;
     setSending(true);
     try {
-      await client.mutation(SEND_SESSION_MESSAGE_MUTATION, {
-        sessionId,
-        text: `Please revise the plan: ${text}`,
-        interactionMode: "plan",
-      }).toPromise();
+      await client
+        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+          sessionId,
+          text: `Please revise the plan: ${text}`,
+          interactionMode: "plan",
+        })
+        .toPromise();
       setFeedback("");
     } finally {
       setSending(false);

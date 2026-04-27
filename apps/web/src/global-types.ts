@@ -4,7 +4,6 @@ declare global {
     readonly VITE_API_URL?: string;
     readonly VITE_WS_URL?: string;
     readonly VITE_TRACE_LOCAL_MODE?: string;
-    readonly VITE_AG_GRID_LICENSE_KEY?: string;
     readonly VITE_ENABLE_MESSAGING?: string;
     readonly VITE_ENABLE_TICKETS?: string;
     readonly VITE_ENABLE_AGENT_DEBUG?: string;
@@ -58,6 +57,7 @@ declare global {
     ok: boolean;
     status: DesktopLinkedCheckoutStatus;
     error: string | null;
+    errorCode?: "DIRTY_ROOT_CHECKOUT" | null;
   };
 
   type DesktopLinkedCheckoutSyncInput = {
@@ -66,6 +66,8 @@ declare global {
     branch: string;
     commitSha?: string | null;
     autoSyncEnabled?: boolean;
+    conflictStrategy?: "DISCARD" | "COMMIT" | "REBASE" | null;
+    commitMessage?: string | null;
   };
 
   type DesktopRepoGitHookStatus = {

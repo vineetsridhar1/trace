@@ -29,8 +29,7 @@ export function deriveSessionGroupStatus(
   if (prUrl) return "in_review";
   if (
     sessions.some(
-      (session) =>
-        session?.agentStatus === "active" || session?.sessionStatus === "in_progress",
+      (session) => session?.agentStatus === "active" || session?.sessionStatus === "in_progress",
     )
   ) {
     return "in_progress";

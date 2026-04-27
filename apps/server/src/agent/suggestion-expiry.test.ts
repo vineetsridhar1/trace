@@ -20,10 +20,7 @@ vi.mock("./policy-engine.js", () => ({
   cleanupSuggestionRates: (...args: unknown[]) => mockCleanupSuggestionRates(...args),
 }));
 
-import {
-  startSuggestionExpiryWorker,
-  stopSuggestionExpiryWorker,
-} from "./suggestion-expiry.js";
+import { startSuggestionExpiryWorker, stopSuggestionExpiryWorker } from "./suggestion-expiry.js";
 
 describe("suggestion-expiry worker", () => {
   beforeEach(() => {

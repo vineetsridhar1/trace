@@ -1,6 +1,12 @@
-import type { CSSProperties } from "react"
-import { Toaster as Sonner, type ToasterProps } from "sonner"
-import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
+import type { CSSProperties } from "react";
+import { Toaster as Sonner, type ToasterProps } from "sonner";
+import {
+  CircleCheckIcon,
+  InfoIcon,
+  TriangleAlertIcon,
+  OctagonXIcon,
+  Loader2Icon,
+} from "lucide-react";
 
 const icons = {
   success: <CircleCheckIcon className="size-4" />,
@@ -8,14 +14,14 @@ const icons = {
   warning: <TriangleAlertIcon className="size-4" />,
   error: <OctagonXIcon className="size-4" />,
   loading: <Loader2Icon className="size-4 animate-spin" />,
-}
+};
 
 const toasterStyle = {
   "--normal-bg": "var(--popover)",
   "--normal-text": "var(--popover-foreground)",
   "--normal-border": "var(--border)",
   "--border-radius": "var(--radius)",
-} as CSSProperties
+} as CSSProperties;
 
 const Toaster = ({ ...props }: ToasterProps) => {
   return (
@@ -27,7 +33,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       closeButton
       {...props}
     />
-  )
-}
+  );
+};
 
-export { Toaster }
+export { Toaster };

@@ -33,11 +33,7 @@ export function MessageBody({
   return (
     <>
       {editing ? (
-        <InlineMessageEditor
-          initialHtml={editorHtml}
-          onSave={onSaveEdit}
-          onCancel={onCancelEdit}
-        />
+        <InlineMessageEditor initialHtml={editorHtml} onSave={onSaveEdit} onCancel={onCancelEdit} />
       ) : deletedAt ? (
         <p className="m-0 italic text-[15px] leading-snug text-muted-foreground">
           This message has been deleted.
@@ -45,9 +41,7 @@ export function MessageBody({
       ) : html ? (
         <MessageContent html={html} />
       ) : (
-        <p className="m-0 whitespace-pre-wrap text-[15px] leading-snug text-foreground">
-          {text}
-        </p>
+        <p className="m-0 whitespace-pre-wrap text-[15px] leading-snug text-foreground">{text}</p>
       )}
       {!editing && editedAt && !deletedAt && (
         <span className="text-[11px] text-muted-foreground">(edited)</span>

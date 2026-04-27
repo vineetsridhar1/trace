@@ -10,9 +10,10 @@ export interface ToolResultRowProps {
 }
 
 export function ToolResultRow({ name, output, timestamp }: ToolResultRowProps) {
-  const commandResult = output && typeof output === "object" && typeof output.command === "string"
-    ? formatCommandLabel(output.command)
-    : null;
+  const commandResult =
+    output && typeof output === "object" && typeof output.command === "string"
+      ? formatCommandLabel(output.command)
+      : null;
   let renderedOutput: string | Record<string, unknown> | undefined = output;
   if (output && typeof output === "object" && "output" in output) {
     const nestedOutput = output.output;
@@ -38,11 +39,7 @@ export function ToolResultRow({ name, output, timestamp }: ToolResultRowProps) {
 
   return (
     <div className="tool-cmd-row">
-      <button
-        type="button"
-        className="tool-cmd-button"
-        onClick={() => setOpen(!open)}
-      >
+      <button type="button" className="tool-cmd-button" onClick={() => setOpen(!open)}>
         <span
           className="tool-cmd-chevron"
           style={{ transform: open ? "rotate(90deg)" : undefined }}
@@ -53,10 +50,7 @@ export function ToolResultRow({ name, output, timestamp }: ToolResultRowProps) {
         <span className="tool-cmd-time">{formatTime(timestamp)}</span>
       </button>
       {renderedOutput && (
-        <div
-          className="tool-cmd-body"
-          style={{ maxHeight: open ? `${bodyHeight}px` : "0px" }}
-        >
+        <div className="tool-cmd-body" style={{ maxHeight: open ? `${bodyHeight}px` : "0px" }}>
           <div ref={bodyRef}>
             {commandResult && <div className="tool-cmd-section-label">Output</div>}
             <pre className="tool-cmd-output">{serializeUnknown(renderedOutput)}</pre>

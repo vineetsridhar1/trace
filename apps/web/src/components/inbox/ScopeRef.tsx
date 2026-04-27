@@ -23,7 +23,8 @@ export function ScopeRef({ scopeType, scopeId }: { scopeType: string; scopeId: s
             : undefined;
 
   const display = value ?? scopeId.slice(0, 8);
-  const icon = scopeType === "channel" ? <Hash size={11} className="text-muted-foreground" /> : null;
+  const icon =
+    scopeType === "channel" ? <Hash size={11} className="text-muted-foreground" /> : null;
 
   return (
     <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground">

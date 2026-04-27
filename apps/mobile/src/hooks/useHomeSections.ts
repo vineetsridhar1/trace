@@ -30,6 +30,10 @@ function sortTimestamp(session: SessionEntity): number {
   );
 }
 
+function rowTimestamp(session: SessionEntity): number {
+  return timestampMs(session.lastMessageAt ?? session.updatedAt);
+}
+
 function ownedBy(session: SessionEntity, userId: string): boolean {
   const createdBy = session.createdBy as { id?: string } | undefined | null;
   return typeof createdBy?.id === "string" && createdBy.id === userId;
@@ -87,9 +91,7 @@ function pendingMeta(state: EntityState, sessionId: string, fallbackTs: number):
     }
   }
 
-  return bestRank === 2
-    ? { rank: 2, ts: fallbackTs }
-    : { rank: bestRank, ts: bestTs };
+  return bestRank === 2 ? { rank: 2, ts: fallbackTs } : { rank: bestRank, ts: bestTs };
 }
 
 function areSectionsEqual(a: HomeSection[], b: HomeSection[]): boolean {
@@ -127,7 +129,7 @@ interface HomeSectionsResult {
  * When `collectRepos` is true, also collects distinct repos from the unfiltered
  * (no repoId) visible groups in a single pass, avoiding a second full traversal.
  */
-function buildHomeSections(
+export function buildHomeSections(
   state: EntityState,
   userId: string,
   repoId: string | null,
@@ -167,7 +169,11 @@ function buildHomeSections(
     if (session.sessionStatus === "needs_input") {
       const meta = pendingMeta(state, session.id, sortTs);
       const existing = groupNeedsInput.get(groupId);
-      if (!existing || meta.rank < existing.rank || (meta.rank === existing.rank && meta.ts > existing.ts)) {
+      if (
+        !existing ||
+        meta.rank < existing.rank ||
+        (meta.rank === existing.rank && meta.ts > existing.ts)
+      ) {
         groupNeedsInput.set(groupId, { rank: meta.rank, ts: meta.ts });
       }
       continue;
@@ -183,11 +189,11 @@ function buildHomeSections(
 
     const isDone = session.agentStatus === "done" || session.sessionStatus === "in_review";
     if (isDone) {
-      const updatedTs = timestampMs(session.updatedAt);
-      if (updatedTs >= cutoff) {
+      const doneTs = rowTimestamp(session);
+      if (doneTs >= cutoff) {
         const existing = groupDone.get(groupId);
-        if (!existing || updatedTs > existing.ts) {
-          groupDone.set(groupId, { ts: updatedTs });
+        if (!existing || doneTs > existing.ts) {
+          groupDone.set(groupId, { ts: doneTs });
         }
       }
     }

@@ -11,7 +11,10 @@ export type ActorSummary = {
 /** Resolve a single actor reference to an ActorSummary */
 export async function resolveActor(
   ref: { actorType: string; actorId: string },
-  userLoader?: DataLoader<string, { id: string; name: string | null; avatarUrl: string | null } | null>,
+  userLoader?: DataLoader<
+    string,
+    { id: string; name: string | null; avatarUrl: string | null } | null
+  >,
 ): Promise<ActorSummary> {
   const actor: ActorSummary = {
     type: ref.actorType,
@@ -48,8 +51,12 @@ export async function resolveActor(
 export async function resolveActors(
   refs: Array<{ actorType: string; actorId: string }>,
 ): Promise<Map<string, ActorSummary>> {
-  const userIds = [...new Set(refs.filter((ref) => ref.actorType === "user").map((ref) => ref.actorId))];
-  const agentIds = [...new Set(refs.filter((ref) => ref.actorType === "agent").map((ref) => ref.actorId))];
+  const userIds = [
+    ...new Set(refs.filter((ref) => ref.actorType === "user").map((ref) => ref.actorId)),
+  ];
+  const agentIds = [
+    ...new Set(refs.filter((ref) => ref.actorType === "agent").map((ref) => ref.actorId)),
+  ];
 
   // Agents are now User rows — fetch all user + agent IDs together
   const allUserIds = [...new Set([...userIds, ...agentIds])];

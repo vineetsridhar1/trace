@@ -50,6 +50,22 @@ describe("sessionPatchFromOutput", () => {
     expect(patch?.connection).toEqual({ state: "disconnected" });
   });
 
+  it("returns config patch for config_changed", () => {
+    const patch = sessionPatchFromOutput({
+      type: "config_changed",
+      tool: "codex",
+      model: "gpt-5.5",
+      hosting: "local",
+      connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+    });
+    expect(patch).toEqual({
+      tool: "codex",
+      model: "gpt-5.5",
+      hosting: "local",
+      connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+    });
+  });
+
   it("returns undefined for unknown subtypes", () => {
     expect(sessionPatchFromOutput({ type: "assistant" })).toBeUndefined();
   });
@@ -102,10 +118,7 @@ describe("extractMessagePreview", () => {
       extractMessagePreview("session_output", {
         type: "assistant",
         message: {
-          content: [
-            { type: "tool_use" },
-            { type: "text", text: "hi there" },
-          ],
+          content: [{ type: "tool_use" }, { type: "text", text: "hi there" }],
         },
       }),
     ).toBe("hi there");

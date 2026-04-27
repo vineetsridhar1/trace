@@ -16,6 +16,7 @@ import { DISMISS_SESSION_MUTATION, generateUUID, useEntityField } from "@trace/c
 import type { CodingTool, SessionConnection } from "@trace/gql";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
 import { useClipboardImage } from "@/hooks/useClipboardImage";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useSlashCommands } from "@/hooks/useSlashCommands";
 import { haptic } from "@/lib/haptics";
 import { recordPerf } from "@/lib/perf";
@@ -57,12 +58,6 @@ const EMPTY_IMAGES: ImageAttachment[] = [];
 type ComposerSheet = "model" | "runtime" | null;
 const composerMotionEasing = Easing.inOut(Easing.ease);
 const composerMotionDuration = 150;
-const composerRowTransition =
-  LinearTransition.duration(composerMotionDuration).easing(composerMotionEasing);
-const trailingActionEnter =
-  SlideInRight.duration(composerMotionDuration).easing(composerMotionEasing);
-const trailingActionExit =
-  SlideOutRight.duration(composerMotionDuration).easing(composerMotionEasing);
 
 /**
  * Session composer: a single-line-start liquid glass input next to a
@@ -78,6 +73,7 @@ export function SessionInputComposer({
   keyboardVisible = false,
 }: SessionInputComposerProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const resolvedBottomSafeAreaInset = bottomSafeAreaInset ?? insets.bottom;
 
@@ -141,13 +137,16 @@ export function SessionInputComposer({
   const isDisconnected = connection?.state === "disconnected";
   const canRetryConnection = connection?.canRetry === true;
 
-  const onFailure = useCallback((draft: string, message: string) => {
-    setText(draft);
-    const restoredSelection = { start: draft.length, end: draft.length };
-    applySelectionOverride(restoredSelection);
-    setErrorDraft(draft);
-    setErrorMessage(message);
-  }, [applySelectionOverride]);
+  const onFailure = useCallback(
+    (draft: string, message: string) => {
+      setText(draft);
+      const restoredSelection = { start: draft.length, end: draft.length };
+      applySelectionOverride(restoredSelection);
+      setErrorDraft(draft);
+      setErrorMessage(message);
+    },
+    [applySelectionOverride],
+  );
 
   const onSuccess = useCallback(() => {
     setText("");
@@ -236,6 +235,15 @@ export function SessionInputComposer({
     });
   }, [height, inputHeight, theme.motion.durations.fast]);
   const inputAnimatedStyle = useAnimatedStyle(() => ({ height: inputHeight.value }));
+  const composerRowTransition = reducedMotion
+    ? undefined
+    : LinearTransition.duration(composerMotionDuration).easing(composerMotionEasing);
+  const trailingActionEnter = reducedMotion
+    ? undefined
+    : SlideInRight.duration(composerMotionDuration).easing(composerMotionEasing);
+  const trailingActionExit = reducedMotion
+    ? undefined
+    : SlideOutRight.duration(composerMotionDuration).easing(composerMotionEasing);
 
   const handleCloseSheet = useCallback(() => {
     setActiveSheet(null);

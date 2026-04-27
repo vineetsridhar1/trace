@@ -36,7 +36,10 @@ export function InboxPlanBody({
         <button
           type="button"
           disabled={sending}
-          onClick={(e: React.MouseEvent) => { e.stopPropagation(); onApproveNew(); }}
+          onClick={(e: React.MouseEvent) => {
+            e.stopPropagation();
+            onApproveNew();
+          }}
           className={cn(
             "flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium transition-colors",
             "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
@@ -49,7 +52,10 @@ export function InboxPlanBody({
         <button
           type="button"
           disabled={sending}
-          onClick={(e: React.MouseEvent) => { e.stopPropagation(); onApproveKeep(); }}
+          onClick={(e: React.MouseEvent) => {
+            e.stopPropagation();
+            onApproveKeep();
+          }}
           className={cn(
             "flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium transition-colors",
             "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
@@ -62,7 +68,10 @@ export function InboxPlanBody({
         <button
           type="button"
           disabled={sending}
-          onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDismiss(); }}
+          onClick={(e: React.MouseEvent) => {
+            e.stopPropagation();
+            onDismiss();
+          }}
           className={cn(
             "flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium transition-colors",
             "text-muted-foreground hover:bg-surface-elevated hover:text-red-400",
@@ -95,7 +104,11 @@ export function InboxPlanBody({
         <button
           type="button"
           disabled={!reviseText.trim() || sending}
-          onClick={(e: React.MouseEvent) => { e.stopPropagation(); onRevise(reviseText.trim()); setReviseText(""); }}
+          onClick={(e: React.MouseEvent) => {
+            e.stopPropagation();
+            onRevise(reviseText.trim());
+            setReviseText("");
+          }}
           className="flex shrink-0 items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
         >
           <Send size={12} />

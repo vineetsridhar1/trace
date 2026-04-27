@@ -31,7 +31,13 @@ type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
 export const useTerminalStore = create<TerminalState>((set: SetState<TerminalState>) => ({
   terminals: {},
 
-  addTerminal: (id: string, sessionId: string, sessionGroupId: string, status?: TerminalStatus, opts?: { customName?: string; initialCommand?: string }) =>
+  addTerminal: (
+    id: string,
+    sessionId: string,
+    sessionGroupId: string,
+    status?: TerminalStatus,
+    opts?: { customName?: string; initialCommand?: string },
+  ) =>
     set((state: TerminalState) => ({
       terminals: {
         ...state.terminals,
@@ -71,7 +77,9 @@ export const useTerminalStore = create<TerminalState>((set: SetState<TerminalSta
 export function useSessionGroupTerminals(sessionGroupId: string): TerminalEntry[] {
   return useTerminalStore(
     useShallow((state: TerminalState) =>
-      Object.values(state.terminals).filter((terminal: TerminalEntry) => terminal.sessionGroupId === sessionGroupId),
+      Object.values(state.terminals).filter(
+        (terminal: TerminalEntry) => terminal.sessionGroupId === sessionGroupId,
+      ),
     ),
   );
 }

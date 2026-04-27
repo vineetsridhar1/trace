@@ -1,9 +1,4 @@
-import type {
-  ExecutionDisposition,
-  ExecutionStatus,
-  ModelTier,
-  Prisma,
-} from "@prisma/client";
+import type { ExecutionDisposition, ExecutionStatus, ModelTier, Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 
 export interface WriteExecutionLogInput {
@@ -58,8 +53,7 @@ export class ExecutionLoggingService {
         inputTokens: input.inputTokens,
         outputTokens: input.outputTokens,
         estimatedCostCents: input.estimatedCostCents,
-        contextTokenAllocation: (input.contextTokenAllocation ??
-          {}) as Prisma.InputJsonValue,
+        contextTokenAllocation: (input.contextTokenAllocation ?? {}) as Prisma.InputJsonValue,
         disposition: input.disposition,
         confidence: input.confidence,
         plannedActions: (input.plannedActions ?? []) as Prisma.InputJsonValue,
@@ -128,10 +122,7 @@ export class ExecutionLoggingService {
     return prisma.agentExecutionLog.count({ where });
   }
 
-  async getByTriggerEvent(input: {
-    organizationId: string;
-    triggerEventId: string;
-  }) {
+  async getByTriggerEvent(input: { organizationId: string; triggerEventId: string }) {
     return prisma.agentExecutionLog.findMany({
       where: {
         organizationId: input.organizationId,

@@ -1,11 +1,11 @@
-import { create } from 'zustand';
-import type { ColDef, GridOptions } from 'ag-grid-community';
-import { lazy, Suspense } from 'react';
-import type { TableState } from './table-types';
+import { create } from "zustand";
+import type { ColDef, GridOptions } from "ag-grid-community";
+import { lazy, Suspense } from "react";
+import type { TableState } from "./table-types";
 
 // React.lazy cannot preserve generic type parameters. We load the module
 // and assert the grid component inside createTable where T is known.
-const lazyModule = lazy(() => import('./AgGridTableGrid'));
+const lazyModule = lazy(() => import("./AgGridTableGrid"));
 
 const createTableStore = <T,>(columns: ColDef<T>[] = []) => {
   return create<TableState<T>>((set: (partial: Partial<TableState<T>>) => void) => ({
@@ -37,7 +37,7 @@ export const createTable = <T extends { id: string }>({
   }: {
     agGridOptions?: GridOptions<T>;
     className?: string;
-    columnDefs?: GridOptions<T>['columnDefs'];
+    columnDefs?: GridOptions<T>["columnDefs"];
     selectedRowIds?: string[];
   }) => {
     const rows = useTable((state: TableState<T>) => state.rows);
@@ -53,7 +53,7 @@ export const createTable = <T extends { id: string }>({
     const Grid = lazyModule as unknown as React.ComponentType<{
       id: string;
       rows: T[];
-      columns: GridOptions<T>['columnDefs'];
+      columns: GridOptions<T>["columnDefs"];
       className?: string;
       selectedRowIds?: string[];
       agGridOptions?: GridOptions<T>;

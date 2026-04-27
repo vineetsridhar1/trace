@@ -1,8 +1,5 @@
 import { MessageSquare, Pencil, Trash2 } from "lucide-react";
-import {
-  Sheet,
-  SheetContent,
-} from "../ui/sheet";
+import { Sheet, SheetContent } from "../ui/sheet";
 
 interface MessageActionsSheetProps {
   open: boolean;
@@ -21,7 +18,11 @@ export function MessageActionsSheet({
 }: MessageActionsSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" showCloseButton={false} className="rounded-t-xl px-0 pb-[env(safe-area-inset-bottom)]">
+      <SheetContent
+        side="bottom"
+        showCloseButton={false}
+        className="rounded-t-xl px-0 pb-[env(safe-area-inset-bottom)]"
+      >
         {/* Drag handle */}
         <div className="flex justify-center pb-2 pt-3">
           <div className="h-1 w-10 rounded-full bg-muted-foreground/30" />

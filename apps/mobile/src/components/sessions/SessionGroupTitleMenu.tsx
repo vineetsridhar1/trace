@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Modal, Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+  type LayoutChangeEvent,
+} from "react-native";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { BlurView } from "expo-blur";
 import { SymbolView, type SFSymbol } from "expo-symbols";
@@ -10,6 +18,7 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEntityField } from "@trace/client-core";
 import type { SessionConnection, SessionGroupStatus } from "@trace/gql";
 import { ListRow, Spinner, Text } from "@/components/design-system";
@@ -21,7 +30,8 @@ import { LinkedCheckoutPanelSection } from "./LinkedCheckoutPanelSection";
 const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
 
 const PILL_HEIGHT = 48;
-const PANEL_HEIGHT = 320;
+const PANEL_MAX_HEIGHT = 420;
+const PANEL_VIEWPORT_MARGIN = 24;
 const PILL_RADIUS = 14;
 const PANEL_RADIUS = 20;
 
@@ -92,9 +102,13 @@ function MorphingTitle({
   const [triggerWidth, setTriggerWidth] = useState(0);
   // Where the pill sits in window coordinates — captured on open so the
   // Modal glass renders at the same screen position.
-  const [triggerPos, setTriggerPos] = useState<{ x: number; y: number; width: number } | null>(null);
+  const [triggerPos, setTriggerPos] = useState<{ x: number; y: number; width: number } | null>(
+    null,
+  );
   const anchorRef = useRef<View>(null);
   const progress = useSharedValue(0);
+  const window = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   const handleAnchorLayout = useCallback((e: LayoutChangeEvent) => {
     setTriggerWidth(e.nativeEvent.layout.width);
@@ -129,6 +143,11 @@ function MorphingTitle({
 
   const startWidth = triggerPos?.width ?? triggerWidth ?? PILL_HEIGHT;
   const endWidth = Math.max(fullWidth, startWidth);
+  const availablePanelHeight = Math.max(
+    PILL_HEIGHT,
+    window.height - (triggerPos?.y ?? 0) - insets.bottom - PANEL_VIEWPORT_MARGIN,
+  );
+  const panelHeight = Math.min(PANEL_MAX_HEIGHT, availablePanelHeight);
 
   // Shape morph: rounded pill -> wider rounded card, anchored at the trigger's
   // top-left corner. The expanded state also pulls left into the full header
@@ -140,12 +159,8 @@ function MorphingTitle({
       [triggerPos?.x ?? 0, (triggerPos?.x ?? 0) - expandLeftInset],
     ),
     width: interpolate(progress.value, [0, 1], [startWidth, endWidth]),
-    height: interpolate(progress.value, [0, 1], [PILL_HEIGHT, PANEL_HEIGHT]),
-    borderRadius: interpolate(
-      progress.value,
-      [0, 1],
-      [PILL_RADIUS, PANEL_RADIUS],
-    ),
+    height: interpolate(progress.value, [0, 1], [PILL_HEIGHT, panelHeight]),
+    borderRadius: interpolate(progress.value, [0, 1], [PILL_RADIUS, PANEL_RADIUS]),
     transform: [
       {
         translateY: interpolate(progress.value, [0, 0.5, 1], [0, 26, 0]),
@@ -209,29 +224,27 @@ function MorphingTitle({
             isInteractive
             glassEffectStyle="regular"
             colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-            style={[
-              styles.portalGlass,
-              { top: triggerPos.y },
-              glassStyle,
-            ]}
+            style={[styles.portalGlass, { top: triggerPos.y }, glassStyle]}
           >
             <Animated.View
               pointerEvents={open ? "auto" : "none"}
-              style={[
-                styles.panelLayer,
-                { width: endWidth, height: PANEL_HEIGHT },
-                panelStyle,
-              ]}
+              style={[styles.panelLayer, { width: endWidth, height: panelHeight }, panelStyle]}
             >
-              <PanelContent
-                groupId={groupId}
-                sessionId={sessionId}
-                browserEnabled={browserEnabled}
-                onOpenBrowser={() => {
-                  close();
-                  onOpenBrowser?.();
-                }}
-              />
+              <ScrollView
+                bounces={false}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.panelScrollContent}
+              >
+                <PanelContent
+                  groupId={groupId}
+                  sessionId={sessionId}
+                  browserEnabled={browserEnabled}
+                  onOpenBrowser={() => {
+                    close();
+                    onOpenBrowser?.();
+                  }}
+                />
+              </ScrollView>
             </Animated.View>
 
             <Animated.View
@@ -268,19 +281,12 @@ function TitleRow({
   nameLines?: number;
 }) {
   const theme = useTheme();
-  const name = useEntityField("sessionGroups", groupId, "name") as
+  const name = useEntityField("sessionGroups", groupId, "name") as string | null | undefined;
+  const status = useEntityField("sessionGroups", groupId, "status") as string | null | undefined;
+  const agentStatus = useEntityField("sessions", sessionId ?? "", "agentStatus") as
     | string
     | null
     | undefined;
-  const status = useEntityField("sessionGroups", groupId, "status") as
-    | string
-    | null
-    | undefined;
-  const agentStatus = useEntityField(
-    "sessions",
-    sessionId ?? "",
-    "agentStatus",
-  ) as string | null | undefined;
   const hosting = useEntityField("sessions", sessionId ?? "", "hosting") as
     | string
     | null
@@ -290,8 +296,7 @@ function TitleRow({
     | null
     | undefined;
   const bridgeIcon: SFSymbol = hosting === "cloud" ? "cloud" : "laptopcomputer";
-  const bridgeLabel =
-    hosting === "cloud" ? "Cloud" : (connection?.runtimeLabel ?? "Local");
+  const bridgeLabel = hosting === "cloud" ? "Cloud" : (connection?.runtimeLabel ?? "Local");
   const showBridge = !!sessionId && !!hosting;
 
   return (
@@ -356,10 +361,7 @@ function PanelContent({
   onOpenBrowser?: () => void;
 }) {
   const theme = useTheme();
-  const branch = useEntityField("sessionGroups", groupId, "branch") as
-    | string
-    | null
-    | undefined;
+  const branch = useEntityField("sessionGroups", groupId, "branch") as string | null | undefined;
   return (
     <View style={styles.panelBody}>
       <View style={[styles.panelTitleSlot, { paddingVertical: theme.spacing.sm }]}>
@@ -370,11 +372,7 @@ function PanelContent({
           <Text variant="caption1" color="mutedForeground">
             Branch
           </Text>
-          <Text
-            variant="caption1"
-            numberOfLines={1}
-            style={styles.branchValue}
-          >
+          <Text variant="caption1" numberOfLines={1} style={styles.branchValue}>
             {branch}
           </Text>
         </View>
@@ -391,7 +389,9 @@ function PanelContent({
         >
           <ListRow
             title="Open Browser"
-            subtitle={browserEnabled ? "Preview this workspace" : "Available after the session loads"}
+            subtitle={
+              browserEnabled ? "Preview this workspace" : "Available after the session loads"
+            }
             leading={
               <SymbolView
                 name="globe"
@@ -436,10 +436,7 @@ function FallbackTitlePill({
       <BlurView
         tint={theme.scheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
         intensity={50}
-        style={[
-          styles.fallbackPill,
-          { borderRadius: PILL_RADIUS },
-        ]}
+        style={[styles.fallbackPill, { borderRadius: PILL_RADIUS }]}
       >
         {onOpenBrowser ? (
           <Pressable
@@ -539,6 +536,9 @@ const styles = StyleSheet.create({
   },
   panelBody: {
     flex: 1,
+  },
+  panelScrollContent: {
+    flexGrow: 1,
   },
   panelTitleSlot: {
     minHeight: PILL_HEIGHT,

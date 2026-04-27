@@ -27,6 +27,7 @@ export function ConnectionsRepoAccordion({
     <View>
       <Pressable
         accessibilityRole="button"
+        accessibilityLabel={`${entry.repo.name}, main worktree, ${expanded ? "expanded" : "collapsed"}`}
         accessibilityState={{ expanded }}
         onPress={() => {
           void haptic.light();
@@ -61,6 +62,7 @@ export function ConnectionsRepoAccordion({
           {group ? (
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel={`Open synced session ${group.name}${branch ? ` on ${branch}` : ""}`}
               onPress={() => router.push(`/sessions/${group.id}`)}
               style={({ pressed }) => [styles.syncedRow, { opacity: pressed ? 0.7 : 1 }]}
             >

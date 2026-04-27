@@ -50,6 +50,7 @@ vi.mock("./runtime-debug.js", () => ({
 
 import * as config from "./config.js";
 import * as linkedCheckout from "./linked-checkout.js";
+import { runtimeDebug } from "./runtime-debug.js";
 import {
   LinkedCheckoutAutoSyncManager,
   type LinkedCheckoutAutoSyncDeps,
@@ -70,6 +71,7 @@ const linkedCheckoutMock = linkedCheckout as unknown as {
   pauseExistingAttachment: ReturnType<typeof vi.fn>;
   resolveTargetCommitSha: ReturnType<typeof vi.fn>;
 };
+const runtimeDebugMock = runtimeDebug as ReturnType<typeof vi.fn>;
 
 function seedAttachment(
   repoId: string,
@@ -125,6 +127,7 @@ beforeEach(() => {
   configMock.setRepoLinkedCheckout.mockClear();
   linkedCheckoutMock.pauseExistingAttachment.mockClear();
   linkedCheckoutMock.resolveTargetCommitSha.mockClear();
+  runtimeDebugMock.mockClear();
   linkedCheckoutMock.resolveTargetCommitSha.mockImplementation(
     async (_repoPath: string, branch: string) => {
       if (branch === "main") return "a".repeat(40);
@@ -266,6 +269,20 @@ describe("LinkedCheckoutAutoSyncManager", () => {
     expect(linkedCheckoutMock.resolveTargetCommitSha).not.toHaveBeenCalled();
   });
 
+  it("does not leave the global tick marked in-flight when there are no active repos", async () => {
+    seedAttachment("repo-1", { autoSyncEnabled: false });
+    const deps = makeDeps();
+    const manager = new LinkedCheckoutAutoSyncManager(15_000, deps);
+
+    await manager.reconcileAll();
+    await manager.reconcileAll();
+
+    expect(runtimeDebugMock).not.toHaveBeenCalledWith(
+      "auto-sync tick skipped because another tick is already running",
+      undefined,
+    );
+  });
+
   it("reconcile(repoId) runs a single tick for the given repo", async () => {
     seedAttachment("repo-1");
     seedAttachment("repo-2");
@@ -307,9 +324,10 @@ describe("LinkedCheckoutAutoSyncManager", () => {
     const manager = new LinkedCheckoutAutoSyncManager(15_000, deps);
 
     manager.start();
-    await Promise.resolve();
 
-    expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
+    });
 
     await vi.advanceTimersByTimeAsync(15_000);
     expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
@@ -335,9 +353,10 @@ describe("LinkedCheckoutAutoSyncManager", () => {
     const manager = new LinkedCheckoutAutoSyncManager(15_000, deps);
 
     manager.start();
-    await Promise.resolve();
 
-    expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
+    });
 
     manager.stop();
     resolveGate.resolve("a".repeat(40));

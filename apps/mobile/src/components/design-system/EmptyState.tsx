@@ -17,13 +17,7 @@ export interface EmptyStateProps {
   style?: ViewStyle;
 }
 
-export function EmptyState({
-  icon,
-  title,
-  subtitle,
-  action,
-  style,
-}: EmptyStateProps) {
+export function EmptyState({ icon, title, subtitle, action, style }: EmptyStateProps) {
   const theme = useTheme();
 
   return (
@@ -38,23 +32,13 @@ export function EmptyState({
         {title}
       </Text>
       {subtitle ? (
-        <Text
-          variant="footnote"
-          color="mutedForeground"
-          align="center"
-          style={styles.subtitle}
-        >
+        <Text variant="footnote" color="mutedForeground" align="center" style={styles.subtitle}>
           {subtitle}
         </Text>
       ) : null}
       {action ? (
         <View style={styles.action}>
-          <Button
-            title={action.label}
-            onPress={action.onPress}
-            variant="secondary"
-            size="md"
-          />
+          <Button title={action.label} onPress={action.onPress} variant="secondary" size="md" />
         </View>
       ) : null}
     </View>

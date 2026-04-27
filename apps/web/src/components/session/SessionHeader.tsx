@@ -64,9 +64,13 @@ export function SessionHeader({
     | Record<string, unknown>
     | null
     | undefined;
-  const setActiveSessionId = useUIStore((s: { setActiveSessionId: (id: string | null) => void }) => s.setActiveSessionId);
+  const setActiveSessionId = useUIStore(
+    (s: { setActiveSessionId: (id: string | null) => void }) => s.setActiveSessionId,
+  );
   const isFullscreen = useDetailPanelStore((s: { isFullscreen: boolean }) => s.isFullscreen);
-  const toggleFullscreen = useDetailPanelStore((s: { toggleFullscreen: () => void }) => s.toggleFullscreen);
+  const toggleFullscreen = useDetailPanelStore(
+    (s: { toggleFullscreen: () => void }) => s.toggleFullscreen,
+  );
   const [showHistory, setShowHistory] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
   const prUrl = groupPrUrl ?? null;
@@ -212,7 +216,11 @@ export function SessionHeader({
           </button>
         )}
 
-        <SessionMoveButton sessionId={sessionId} disabled={!canMoveSession} disabledReason={moveDisabledReason} />
+        <SessionMoveButton
+          sessionId={sessionId}
+          disabled={!canMoveSession}
+          disabledReason={moveDisabledReason}
+        />
 
         <div className="relative" ref={historyRef}>
           <button

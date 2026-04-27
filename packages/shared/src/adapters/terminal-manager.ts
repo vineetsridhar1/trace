@@ -22,9 +22,10 @@ export class TerminalManager {
     private callbacks: TerminalCallbacks,
     options?: TerminalManagerOptions,
   ) {
-    this.defaultShell = options?.defaultShell
-      ?? process.env.SHELL
-      ?? (os.platform() === "win32" ? "powershell.exe" : "/bin/bash");
+    this.defaultShell =
+      options?.defaultShell ??
+      process.env.SHELL ??
+      (os.platform() === "win32" ? "powershell.exe" : "/bin/bash");
   }
 
   create(terminalId: string, sessionId: string, cwd: string, cols: number, rows: number): void {

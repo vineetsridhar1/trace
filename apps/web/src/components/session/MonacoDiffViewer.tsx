@@ -40,32 +40,34 @@ export function MonacoDiffViewer({
     setLoading(true);
     setError(null);
 
-    const fetchOriginal = status === "A"
-      ? Promise.resolve("")
-      : client
-          .query(SESSION_GROUP_FILE_AT_REF_QUERY, {
-            sessionGroupId,
-            filePath,
-            ref: defaultBranch,
-          })
-          .toPromise()
-          .then((r: { error?: unknown; data?: Record<string, unknown> }) => {
-            if (r.error) return "";
-            return (r.data?.sessionGroupFileAtRef as string) ?? "";
-          });
+    const fetchOriginal =
+      status === "A"
+        ? Promise.resolve("")
+        : client
+            .query(SESSION_GROUP_FILE_AT_REF_QUERY, {
+              sessionGroupId,
+              filePath,
+              ref: defaultBranch,
+            })
+            .toPromise()
+            .then((r: { error?: unknown; data?: Record<string, unknown> }) => {
+              if (r.error) return "";
+              return (r.data?.sessionGroupFileAtRef as string) ?? "";
+            });
 
-    const fetchModified = status === "D"
-      ? Promise.resolve("")
-      : client
-          .query(SESSION_GROUP_FILE_CONTENT_QUERY, {
-            sessionGroupId,
-            filePath,
-          })
-          .toPromise()
-          .then((r: { error?: { message: string }; data?: Record<string, unknown> }) => {
-            if (r.error) throw new Error(r.error.message);
-            return (r.data?.sessionGroupFileContent as string) ?? "";
-          });
+    const fetchModified =
+      status === "D"
+        ? Promise.resolve("")
+        : client
+            .query(SESSION_GROUP_FILE_CONTENT_QUERY, {
+              sessionGroupId,
+              filePath,
+            })
+            .toPromise()
+            .then((r: { error?: { message: string }; data?: Record<string, unknown> }) => {
+              if (r.error) throw new Error(r.error.message);
+              return (r.data?.sessionGroupFileContent as string) ?? "";
+            });
 
     Promise.all([fetchOriginal, fetchModified])
       .then(([orig, mod]) => {

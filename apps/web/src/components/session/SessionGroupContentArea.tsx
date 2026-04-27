@@ -31,8 +31,6 @@ export function SessionGroupContentArea({
   scrollToEventId,
   onScrollComplete,
 }: SessionGroupContentAreaProps) {
-  const isOptimistic = selectedSession?._optimistic === true;
-
   if (activeFilePath?.startsWith("diff:")) {
     return (
       <div className="h-full">
@@ -71,20 +69,6 @@ export function SessionGroupContentArea({
     return (
       <div className="h-full bg-[#0a0a0a]">
         <TerminalInstance terminalId={activeTerminalId} visible />
-      </div>
-    );
-  }
-
-  if (isOptimistic) {
-    return (
-      <div className="flex h-full items-center justify-center px-6 text-center">
-        <div className="max-w-sm space-y-2">
-          <p className="text-sm font-medium text-foreground">Creating session...</p>
-          <p className="text-sm text-muted-foreground">
-            The session is being created in the background. Input and runtime controls will unlock
-            once the real session ID is ready.
-          </p>
-        </div>
       </div>
     );
   }

@@ -2,10 +2,7 @@ import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useEntityStore, type EntityState } from "@trace/client-core";
 import type { SessionGroupEntity, SessionEntity } from "@trace/client-core";
 import { getSessionGroupChannelId } from "@trace/client-core";
-import {
-  getSessionGroupDisplayStatus,
-  getSessionGroupAgentStatus,
-} from "../session/sessionStatus";
+import { getSessionGroupDisplayStatus, getSessionGroupAgentStatus } from "../session/sessionStatus";
 import type { SessionGroupRow } from "./sessions-table-types";
 
 type SessionGroupRowSelection = {
@@ -14,28 +11,22 @@ type SessionGroupRowSelection = {
 };
 
 function getSessionMessageTimestamp(session: SessionEntity | undefined): string | undefined {
-  return (
-    session?.lastMessageAt
-    ?? session?.lastUserMessageAt
-    ?? undefined
-  );
+  return session?.lastMessageAt ?? session?.lastUserMessageAt ?? undefined;
 }
 
 function getSessionSortTimestamp(session: SessionEntity | undefined): string | undefined {
-  return (
-    getSessionMessageTimestamp(session)
-    ?? session?.updatedAt
-    ?? session?.createdAt
-  );
+  return getSessionMessageTimestamp(session) ?? session?.updatedAt ?? session?.createdAt;
 }
 
 function buildRowSignature(row: SessionGroupRow): string {
   const latestSession = row.latestSession;
-  const latestRepo = (latestSession?.repo as { id?: string; name?: string } | null | undefined) ?? null;
+  const latestRepo =
+    (latestSession?.repo as { id?: string; name?: string } | null | undefined) ?? null;
   const groupRepo = (row.repo as { id?: string; name?: string } | null | undefined) ?? null;
-  const createdBy = (row.createdBySession?.createdBy as
-    | { id?: string; name?: string; avatarUrl?: string | null }
-    | undefined) ?? null;
+  const createdBy =
+    (row.createdBySession?.createdBy as
+      | { id?: string; name?: string; avatarUrl?: string | null }
+      | undefined) ?? null;
 
   return [
     row.id,
@@ -122,7 +113,9 @@ export function useSessionGroupRows(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         )[0];
         const agentStatuses = groupSessions.map((session: SessionEntity) => session.agentStatus);
-        const sessionStatuses = groupSessions.map((session: SessionEntity) => session.sessionStatus);
+        const sessionStatuses = groupSessions.map(
+          (session: SessionEntity) => session.sessionStatus,
+        );
         const prUrl = group.prUrl as string | null | undefined;
         const archivedAt = group.archivedAt as string | null | undefined;
         const displaySessionStatus =
@@ -141,13 +134,9 @@ export function useSessionGroupRows(
           displayAgentStatus,
           _sessionCount: groupSessions.length,
           _groupLastMessageAt:
-            getSessionMessageTimestamp(latestMessageSession)
-            ?? group.updatedAt
-            ?? group.createdAt,
+            getSessionMessageTimestamp(latestMessageSession) ?? group.updatedAt ?? group.createdAt,
           _sortTimestamp:
-            getSessionMessageTimestamp(latestMessageSession)
-            ?? group.updatedAt
-            ?? group.createdAt,
+            getSessionMessageTimestamp(latestMessageSession) ?? group.updatedAt ?? group.createdAt,
         } as SessionGroupRow;
 
         if (shouldIncludeArchived) {

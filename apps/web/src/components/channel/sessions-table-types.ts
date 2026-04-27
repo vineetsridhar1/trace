@@ -11,6 +11,24 @@ export type SessionGroupRow = SessionGroupEntity & {
   _sessionCount: number;
 };
 
+export type SessionStatusHeaderRow = {
+  id: string;
+  displaySessionStatus: string;
+  _isStatusHeader: true;
+  _status: string;
+  _count: number;
+  _expanded: boolean;
+  _filterTextByColumn: Record<string, string>;
+};
+
+export type SessionGridRow = SessionGroupRow | SessionStatusHeaderRow;
+
+export function isSessionStatusHeaderRow(
+  row: SessionGridRow | undefined,
+): row is SessionStatusHeaderRow {
+  return Boolean(row && "_isStatusHeader" in row && row._isStatusHeader === true);
+}
+
 export const COMPACT_BREAKPOINT = 600;
 export const FILTER_STORAGE_KEY_PREFIX = "trace:sessions-filter:";
 

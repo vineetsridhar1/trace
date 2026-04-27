@@ -96,8 +96,7 @@ function buildUserPrompt(input: GenerateSummaryInput): string {
   for (const event of input.events) {
     const payloadStr = JSON.stringify(event.payload);
     // Truncate very large payloads to keep token count reasonable
-    const truncated =
-      payloadStr.length > 500 ? payloadStr.slice(0, 500) + "..." : payloadStr;
+    const truncated = payloadStr.length > 500 ? payloadStr.slice(0, 500) + "..." : payloadStr;
     parts.push(
       `- [${event.timestamp}] ${event.eventType} by ${event.actorType}:${event.actorId} — ${truncated}`,
     );
@@ -112,9 +111,7 @@ function buildUserPrompt(input: GenerateSummaryInput): string {
 // Generator
 // ---------------------------------------------------------------------------
 
-export async function generateSummary(
-  input: GenerateSummaryInput,
-): Promise<GenerateSummaryResult> {
+export async function generateSummary(input: GenerateSummaryInput): Promise<GenerateSummaryResult> {
   const adapter = getAgentLLMAdapter();
   const userPrompt = buildUserPrompt(input);
 

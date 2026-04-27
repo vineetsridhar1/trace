@@ -97,10 +97,7 @@ export function parseTraceCheckpointContextId(message: string): string | null {
   return match?.[1]?.trim() || null;
 }
 
-export function addTraceCheckpointTrailer(
-  message: string,
-  checkpointContextId: string,
-): string {
+export function addTraceCheckpointTrailer(message: string, checkpointContextId: string): string {
   if (!checkpointContextId.trim()) return message;
   if (parseTraceCheckpointContextId(message)) return message;
 
@@ -200,10 +197,7 @@ export function extractGitToolResultTrigger(
 
         // Also check for error indicators in the content string.
         // A failed git commit/push usually prints to stderr which shows up in content.
-        const resultText =
-          typeof block.content === "string"
-            ? block.content
-            : "";
+        const resultText = typeof block.content === "string" ? block.content : "";
         if (looksLikeGitFailure(resultText)) continue;
 
         return { ...pending, toolUseId: block.tool_use_id };

@@ -53,11 +53,20 @@ export async function publishWorkerStatus(status: WorkerStatusData): Promise<voi
     };
     // Add optional metric fields if present
     for (const key of [
-      "activePipelines", "pendingPipelines",
-      "pipelineStarted", "pipelineCompleted", "pipelineFailed",
-      "llmCallsTotal", "llmCallsFailed", "llmRetriesTotal",
-      "eventsProcessed", "eventsDropped", "batchesClosed",
-      "totalCostCents", "totalInputTokens", "totalOutputTokens",
+      "activePipelines",
+      "pendingPipelines",
+      "pipelineStarted",
+      "pipelineCompleted",
+      "pipelineFailed",
+      "llmCallsTotal",
+      "llmCallsFailed",
+      "llmRetriesTotal",
+      "eventsProcessed",
+      "eventsDropped",
+      "batchesClosed",
+      "totalCostCents",
+      "totalInputTokens",
+      "totalOutputTokens",
     ] as const) {
       if (status[key] !== undefined) {
         hash[key] = String(status[key]);

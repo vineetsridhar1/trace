@@ -218,9 +218,9 @@ describe("ActionExecutor", () => {
   });
 
   it("dispatches ticket.query via searchByRelevance", async () => {
-    (services.ticketService as any).searchByRelevance = vi.fn().mockResolvedValue([
-      { id: "ticket-1", title: "Login bug" },
-    ]);
+    (services.ticketService as any).searchByRelevance = vi
+      .fn()
+      .mockResolvedValue([{ id: "ticket-1", title: "Login bug" }]);
     const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
 
     const result = await executor.execute(
@@ -238,7 +238,9 @@ describe("ActionExecutor", () => {
 
   it("dispatches ticket.get via getById", async () => {
     (services.ticketService as any).getById = vi.fn().mockResolvedValue({
-      id: "ticket-42", title: "Login bug", status: "in_progress",
+      id: "ticket-42",
+      title: "Login bug",
+      status: "in_progress",
     });
     const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
 
@@ -267,9 +269,9 @@ describe("ActionExecutor", () => {
   });
 
   it("dispatches suggestion.query via listAgentSuggestions", async () => {
-    (services.inboxService as any).listAgentSuggestions = vi.fn().mockResolvedValue([
-      { id: "inbox-1", title: "Create ticket", status: "active" },
-    ]);
+    (services.inboxService as any).listAgentSuggestions = vi
+      .fn()
+      .mockResolvedValue([{ id: "inbox-1", title: "Create ticket", status: "active" }]);
     const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
 
     const result = await executor.execute(
@@ -278,17 +280,20 @@ describe("ActionExecutor", () => {
     );
 
     expect(result.status).toBe("success");
-    expect((services.inboxService as any).listAgentSuggestions).toHaveBeenCalledWith(
-      "org-1",
-      { status: "active", limit: 10 },
-    );
+    expect((services.inboxService as any).listAgentSuggestions).toHaveBeenCalledWith("org-1", {
+      status: "active",
+      limit: 10,
+    });
   });
 
   it("dispatches message.sendToChannel", async () => {
     const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
 
     const result = await executor.execute(
-      { actionType: "message.sendToChannel", args: { channelId: "chan-1", text: "hello", threadId: "msg-1" } },
+      {
+        actionType: "message.sendToChannel",
+        args: { channelId: "chan-1", text: "hello", threadId: "msg-1" },
+      },
       { ...ctx, triggerEventId: "evt-channel" },
     );
 
@@ -306,7 +311,10 @@ describe("ActionExecutor", () => {
     const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
 
     const result = await executor.execute(
-      { actionType: "channel.sendMessage", args: { channelId: "chan-1", text: "hello", threadId: "msg-1" } },
+      {
+        actionType: "channel.sendMessage",
+        args: { channelId: "chan-1", text: "hello", threadId: "msg-1" },
+      },
       { ...ctx, triggerEventId: "evt-channel-new" },
     );
 
@@ -324,11 +332,17 @@ describe("ActionExecutor", () => {
     const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
 
     const first = await executor.execute(
-      { actionType: "channel.sendMessage", args: { channelId: "chan-1", text: "hello", threadId: "msg-1" } },
+      {
+        actionType: "channel.sendMessage",
+        args: { channelId: "chan-1", text: "hello", threadId: "msg-1" },
+      },
       { ...ctx, triggerEventId: "evt-channel-alias" },
     );
     const second = await executor.execute(
-      { actionType: "message.sendToChannel", args: { channelId: "chan-1", text: "hello", threadId: "msg-1" } },
+      {
+        actionType: "message.sendToChannel",
+        args: { channelId: "chan-1", text: "hello", threadId: "msg-1" },
+      },
       { ...ctx, triggerEventId: "evt-channel-alias" },
     );
 

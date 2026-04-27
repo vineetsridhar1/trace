@@ -11,10 +11,7 @@ interface SessionComposerToolLogoProps {
   size: number;
 }
 
-export function SessionComposerToolLogo({
-  tool,
-  size,
-}: SessionComposerToolLogoProps) {
+export function SessionComposerToolLogo({ tool, size }: SessionComposerToolLogoProps) {
   return (
     <Image
       source={tool === "codex" ? CODEX_LOGO : CLAUDE_LOGO}

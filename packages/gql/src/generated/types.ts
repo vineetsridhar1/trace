@@ -399,6 +399,10 @@ export type CreateChatInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type CreateOrganizationInput = {
+  name: Scalars["String"]["input"];
+};
+
 export type CreateProjectInput = {
   name: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
@@ -470,6 +474,7 @@ export type EventType =
   | "message_deleted"
   | "message_edited"
   | "message_sent"
+  | "organization_created"
   | "queued_message_added"
   | "queued_message_removed"
   | "queued_messages_cleared"
@@ -562,9 +567,12 @@ export type InboxItemType =
 export type LinkedCheckoutActionResult = {
   __typename?: "LinkedCheckoutActionResult";
   error?: Maybe<Scalars["String"]["output"]>;
+  errorCode?: Maybe<LinkedCheckoutErrorCode>;
   ok: Scalars["Boolean"]["output"];
   status: LinkedCheckoutStatus;
 };
+
+export type LinkedCheckoutErrorCode = "DIRTY_ROOT_CHECKOUT";
 
 export type LinkedCheckoutStatus = {
   __typename?: "LinkedCheckoutStatus";
@@ -584,6 +592,8 @@ export type LinkedCheckoutStatus = {
   restoreCommitSha?: Maybe<Scalars["String"]["output"]>;
   targetBranch?: Maybe<Scalars["String"]["output"]>;
 };
+
+export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE";
 
 export type Message = {
   __typename?: "Message";
@@ -618,7 +628,7 @@ export type Mutation = {
   addChatMember: Chat;
   addOrgMember: OrgMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
-  archiveSessionGroup: SessionGroup;
+  archiveSessionGroup?: Maybe<SessionGroup>;
   assignTicket: Ticket;
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
@@ -628,6 +638,7 @@ export type Mutation = {
   createChannelGroup: ChannelGroup;
   createChannelTerminal: Terminal;
   createChat: Chat;
+  createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
   createTerminal: Terminal;
@@ -741,6 +752,7 @@ export type MutationCommentOnTicketArgs = {
 };
 
 export type MutationCommitLinkedCheckoutChangesArgs = {
+  message?: InputMaybe<Scalars["String"]["input"]>;
   repoId: Scalars["ID"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
 };
@@ -767,6 +779,10 @@ export type MutationCreateChannelTerminalArgs = {
 
 export type MutationCreateChatArgs = {
   input: CreateChatInput;
+};
+
+export type MutationCreateOrganizationArgs = {
+  input: CreateOrganizationInput;
 };
 
 export type MutationCreateProjectArgs = {
@@ -1017,7 +1033,9 @@ export type MutationSubscribeArgs = {
 export type MutationSyncLinkedCheckoutArgs = {
   autoSyncEnabled?: InputMaybe<Scalars["Boolean"]["input"]>;
   branch: Scalars["String"]["input"];
+  commitMessage?: InputMaybe<Scalars["String"]["input"]>;
   commitSha?: InputMaybe<Scalars["String"]["input"]>;
+  conflictStrategy?: InputMaybe<LinkedCheckoutSyncConflictStrategy>;
   repoId: Scalars["ID"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
 };

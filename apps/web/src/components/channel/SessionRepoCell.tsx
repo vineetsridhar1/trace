@@ -7,11 +7,7 @@ export function SessionRepoCell({ row }: { row?: SessionGroupRow }) {
 
   if (!repo && !slug) return null;
 
-  const text = repo && slug
-    ? `${repo.name} / ${slug}`
-    : repo
-      ? repo.name
-      : slug;
+  const text = repo && slug ? `${repo.name} / ${slug}` : repo ? repo.name : slug;
 
   return <span className="truncate text-xs text-muted-foreground">{text}</span>;
 }

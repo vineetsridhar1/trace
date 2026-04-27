@@ -57,12 +57,12 @@ interface Thresholds {
  * Values: { suggestMin, actMin } — minimum confidence to suggest or act.
  */
 const THRESHOLD_MATRIX: Record<string, Thresholds> = {
-  "low:suggest":    { suggestMin: 0.3, actMin: 0.6 },
-  "low:act":        { suggestMin: 0.2, actMin: 0.4 },
+  "low:suggest": { suggestMin: 0.3, actMin: 0.6 },
+  "low:act": { suggestMin: 0.2, actMin: 0.4 },
   "medium:suggest": { suggestMin: 0.5, actMin: 0.9 },
-  "medium:act":     { suggestMin: 0.3, actMin: 0.7 },
-  "high:suggest":   { suggestMin: 0.6, actMin: 0.95 },
-  "high:act":       { suggestMin: 0.5, actMin: 0.85 },
+  "medium:act": { suggestMin: 0.3, actMin: 0.7 },
+  "high:suggest": { suggestMin: 0.6, actMin: 0.95 },
+  "high:act": { suggestMin: 0.5, actMin: 0.85 },
 };
 
 function getThresholds(risk: RiskLevel, mode: AutonomyMode): Thresholds {
@@ -184,7 +184,12 @@ function isMessageAction(actionType: string): boolean {
 
 const DISMISSAL_COOLDOWN_SECONDS = 24 * 60 * 60; // 24 hours
 
-function dismissalRedisKey(orgId: string, scopeType: string, scopeId: string, itemType: string): string {
+function dismissalRedisKey(
+  orgId: string,
+  scopeType: string,
+  scopeId: string,
+  itemType: string,
+): string {
   return `suppress:${orgId}:${scopeType}:${scopeId}:${itemType}`;
 }
 
@@ -198,7 +203,12 @@ export async function recordDismissal(input: {
   scopeId: string;
   itemType: string;
 }): Promise<void> {
-  const key = dismissalRedisKey(input.organizationId, input.scopeType, input.scopeId, input.itemType);
+  const key = dismissalRedisKey(
+    input.organizationId,
+    input.scopeType,
+    input.scopeId,
+    input.itemType,
+  );
   await redis.set(key, "1", "EX", DISMISSAL_COOLDOWN_SECONDS);
 }
 
@@ -212,7 +222,12 @@ async function isDismissalCooldownActive(input: {
   itemType: string;
 }): Promise<boolean> {
   try {
-    const key = dismissalRedisKey(input.organizationId, input.scopeType, input.scopeId, input.itemType);
+    const key = dismissalRedisKey(
+      input.organizationId,
+      input.scopeType,
+      input.scopeId,
+      input.itemType,
+    );
     const exists = await redis.exists(key);
     return exists === 1;
   } catch {
@@ -285,10 +300,7 @@ export async function evaluatePolicy(input: PolicyEngineInput): Promise<PolicyRe
   }
 
   // ── Hard rule: planner said ignore/summarize → no actions to route ──
-  if (
-    plannerOutput.disposition === "ignore" ||
-    plannerOutput.disposition === "summarize"
-  ) {
+  if (plannerOutput.disposition === "ignore" || plannerOutput.disposition === "summarize") {
     return {
       actions: plannerOutput.proposedActions.map((action) => ({
         action,
@@ -385,7 +397,11 @@ async function evaluateAction(input: {
     decision = "suggest";
     reason = `confidence_${confidence}_gte_suggest_${thresholds.suggestMin}`;
   } else {
-    return { action, decision: "drop", reason: `confidence_${confidence}_below_suggest_${thresholds.suggestMin}` };
+    return {
+      action,
+      decision: "drop",
+      reason: `confidence_${confidence}_below_suggest_${thresholds.suggestMin}`,
+    };
   }
 
   // ── DM promotion: suggest → execute (message actions only) ──

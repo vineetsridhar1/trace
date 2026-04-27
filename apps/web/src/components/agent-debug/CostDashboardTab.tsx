@@ -123,9 +123,15 @@ export function CostDashboardTab() {
     fetchCosts();
   }, [fetchCosts]);
 
-  const maxCents = dailyCosts.reduce((max: number, d: CostEntry) => Math.max(max, d.totalCostCents), 0);
+  const maxCents = dailyCosts.reduce(
+    (max: number, d: CostEntry) => Math.max(max, d.totalCostCents),
+    0,
+  );
   const totalSpent = dailyCosts.reduce((sum: number, d: CostEntry) => sum + d.totalCostCents, 0);
-  const totalCalls = dailyCosts.reduce((sum: number, d: CostEntry) => sum + d.tier2Calls + d.tier3Calls + d.summaryCalls, 0);
+  const totalCalls = dailyCosts.reduce(
+    (sum: number, d: CostEntry) => sum + d.tier2Calls + d.tier3Calls + d.summaryCalls,
+    0,
+  );
 
   return (
     <div className="p-4 space-y-6">
@@ -242,12 +248,24 @@ export function CostDashboardTab() {
                 <thead>
                   <tr className="border-b border-border bg-surface-deep">
                     <th className="px-3 py-2 text-left font-medium text-muted-foreground">Date</th>
-                    <th className="px-3 py-2 text-right font-medium text-muted-foreground">Total</th>
-                    <th className="px-3 py-2 text-right font-medium text-muted-foreground">T2 Calls</th>
-                    <th className="px-3 py-2 text-right font-medium text-muted-foreground">T2 Cost</th>
-                    <th className="px-3 py-2 text-right font-medium text-muted-foreground">T3 Calls</th>
-                    <th className="px-3 py-2 text-right font-medium text-muted-foreground">T3 Cost</th>
-                    <th className="px-3 py-2 text-right font-medium text-muted-foreground">Summary</th>
+                    <th className="px-3 py-2 text-right font-medium text-muted-foreground">
+                      Total
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium text-muted-foreground">
+                      T2 Calls
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium text-muted-foreground">
+                      T2 Cost
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium text-muted-foreground">
+                      T3 Calls
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium text-muted-foreground">
+                      T3 Cost
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium text-muted-foreground">
+                      Summary
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -257,11 +275,15 @@ export function CostDashboardTab() {
                       <td className="px-3 py-2 text-right font-mono text-foreground">
                         {entry.totalCostCents.toFixed(2)}c
                       </td>
-                      <td className="px-3 py-2 text-right font-mono text-muted-foreground">{entry.tier2Calls}</td>
+                      <td className="px-3 py-2 text-right font-mono text-muted-foreground">
+                        {entry.tier2Calls}
+                      </td>
                       <td className="px-3 py-2 text-right font-mono text-muted-foreground">
                         {entry.tier2CostCents.toFixed(2)}c
                       </td>
-                      <td className="px-3 py-2 text-right font-mono text-muted-foreground">{entry.tier3Calls}</td>
+                      <td className="px-3 py-2 text-right font-mono text-muted-foreground">
+                        {entry.tier3Calls}
+                      </td>
                       <td className="px-3 py-2 text-right font-mono text-muted-foreground">
                         {entry.tier3CostCents.toFixed(2)}c
                       </td>

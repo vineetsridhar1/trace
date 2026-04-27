@@ -1,17 +1,9 @@
 import type { ReactNode } from "react";
 import { Pressable, View, type ViewStyle } from "react-native";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
-import {
-  useTheme,
-  type ShadowLevel,
-  type Theme,
-  type ThemeSpacing,
-} from "@/theme";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { useTheme, type ShadowLevel, type Theme, type ThemeSpacing } from "@/theme";
 import { Glass } from "./Glass";
 
 export type CardElevation = "low" | "medium" | "high";
@@ -83,6 +75,7 @@ export function Card({
   style,
 }: CardProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const scale = useSharedValue(1);
 
   const shadow = theme.shadows[ELEVATION_SHADOW[elevation]];
@@ -105,10 +98,12 @@ export function Card({
   }
 
   function handlePressIn() {
+    if (reducedMotion) return;
     scale.value = withSpring(PRESSED_SCALE, theme.motion.springs.snap);
   }
 
   function handlePressOut() {
+    if (reducedMotion) return;
     scale.value = withSpring(1, theme.motion.springs.snap);
   }
 
@@ -126,11 +121,7 @@ export function Card({
         onPressOut={handlePressOut}
         onPress={handlePress}
       >
-        <CardSurface
-          containerStyle={containerStyle}
-          glass={glass}
-          theme={theme}
-        >
+        <CardSurface containerStyle={containerStyle} glass={glass} theme={theme}>
           {children}
         </CardSurface>
       </Pressable>

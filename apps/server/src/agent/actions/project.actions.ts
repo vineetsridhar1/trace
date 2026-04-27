@@ -56,8 +56,7 @@ export const projectActions: AgentActionRegistration[] = [
     name: "project.get",
     service: "organizationService",
     method: "getProject",
-    description:
-      "Get details about a specific project including linked entities.",
+    description: "Get details about a specific project including linked entities.",
     catalogDescription: "Fetch/read/view project details (projectId)",
     risk: "low",
     suggestable: false,
@@ -77,7 +76,6 @@ export const projectActions: AgentActionRegistration[] = [
 
 export const projectDispatchers: Record<string, ActionDispatcher> = {
   "project.create": (services, args, ctx) => {
-
     const { actorType, actorId } = actorInfo(ctx);
     return services.organizationService.createProject(
       {
@@ -91,7 +89,6 @@ export const projectDispatchers: Record<string, ActionDispatcher> = {
   },
 
   "project.linkEntity": (services, args, ctx) => {
-
     const { actorType, actorId } = actorInfo(ctx);
     return services.organizationService.linkEntityToProject(
       args.entityType as EntityType,
@@ -103,7 +100,6 @@ export const projectDispatchers: Record<string, ActionDispatcher> = {
   },
 
   "project.get": (services, args, ctx) => {
-
     return services.organizationService.getProject(args.projectId as string, ctx.organizationId);
   },
 };

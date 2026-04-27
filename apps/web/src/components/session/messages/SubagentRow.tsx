@@ -107,7 +107,9 @@ export function SubagentRow({
           {!isLoading && (result != null || rawResponse != null) && (
             <pre className="subagent-result-pre text-foreground mt-2">
               {result
-                ? result.length > 3000 ? `${result.slice(0, 3000)}...` : result
+                ? result.length > 3000
+                  ? `${result.slice(0, 3000)}...`
+                  : result
                 : serializeUnknown(rawResponse, 2000)}
             </pre>
           )}

@@ -51,7 +51,9 @@ export function AddMemberDialog({ chatId }: { chatId: string }) {
     if (open) fetchMembers();
   }, [open, fetchMembers]);
 
-  const existingMemberIds = new Set(chatMembers?.map((member: { user: { id: string } }) => member.user.id) ?? []);
+  const existingMemberIds = new Set(
+    chatMembers?.map((member: { user: { id: string } }) => member.user.id) ?? [],
+  );
   const availableMembers = members.filter(
     (member: OrgMember) => member.id !== userId && !existingMemberIds.has(member.id),
   );

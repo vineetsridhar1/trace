@@ -1,16 +1,18 @@
-import type { ColDef, ColumnState, GridApi, ICellRendererParams, ValueGetterParams } from "ag-grid-community";
+import type {
+  ColDef,
+  ColumnState,
+  GridApi,
+  ICellRendererParams,
+  ValueGetterParams,
+} from "ag-grid-community";
 import { SessionCompactSummaryCell } from "./SessionCompactSummaryCell";
 import { SessionCreatedByCell } from "./SessionCreatedByCell";
 import { SessionLastActivityCell } from "./SessionLastActivityCell";
 import { SessionNameCell } from "./SessionNameCell";
 import { SessionRepoCell } from "./SessionRepoCell";
-import type { SessionGroupRow } from "./sessions-table-types";
-import { bucketize } from "./sessions-table-types";
-import {
-  getSessionCreatedBy,
-  getSessionLastActivityAt,
-  getSessionRepo,
-} from "./session-cell-data";
+import type { SessionGridRow, SessionGroupRow } from "./sessions-table-types";
+import { bucketize, isSessionStatusHeaderRow } from "./sessions-table-types";
+import { getSessionCreatedBy, getSessionLastActivityAt, getSessionRepo } from "./session-cell-data";
 
 export const SESSION_COLUMN_IDS = {
   compactSummary: "compactSummary",
@@ -21,50 +23,68 @@ export const SESSION_COLUMN_IDS = {
   lastActivityAt: "lastActivityAt",
 } as const;
 
-const statusColumn: ColDef<SessionGroupRow> = {
+function headerFilterText(row: SessionGridRow | undefined, columnId: string): string | undefined {
+  return isSessionStatusHeaderRow(row) ? row._filterTextByColumn[columnId] : undefined;
+}
+
+function rowName(row: SessionGridRow | undefined): string {
+  return row && !isSessionStatusHeaderRow(row) ? row.name : "";
+}
+
+const statusColumn: ColDef<SessionGridRow> = {
   colId: SESSION_COLUMN_IDS.status,
   headerName: "Status",
   field: "displaySessionStatus",
-  rowGroup: true,
   hide: true,
+  filterValueGetter: (params: ValueGetterParams<SessionGridRow>) =>
+    headerFilterText(params.data, SESSION_COLUMN_IDS.status) ??
+    params.data?.displaySessionStatus ??
+    "",
 };
 
-const repoColumn: ColDef<SessionGroupRow> = {
+const repoColumn: ColDef<SessionGridRow> = {
   colId: SESSION_COLUMN_IDS.repo,
   headerName: "Repo",
-  field: "repo" as keyof SessionGroupRow,
   width: 140,
   filter: true,
-  valueGetter: (params: ValueGetterParams<SessionGroupRow>) => getSessionRepo(params.data)?.name ?? "",
-  cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => (
-    <SessionRepoCell row={params.data} />
+  valueGetter: (params: ValueGetterParams<SessionGridRow>) =>
+    headerFilterText(params.data, SESSION_COLUMN_IDS.repo) ??
+    getSessionRepo(params.data as SessionGroupRow | undefined)?.name ??
+    "",
+  cellRenderer: (params: ICellRendererParams<SessionGridRow>) => (
+    <SessionRepoCell row={params.data as SessionGroupRow | undefined} />
   ),
 };
 
-const createdByColumn: ColDef<SessionGroupRow> = {
+const createdByColumn: ColDef<SessionGridRow> = {
   headerName: "Created by",
   colId: SESSION_COLUMN_IDS.createdBy,
   width: 150,
   filter: true,
-  filterValueGetter: (params: ValueGetterParams<SessionGroupRow>) => getSessionCreatedBy(params.data)?.name ?? "",
-  cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => (
-    <SessionCreatedByCell row={params.data} />
+  filterValueGetter: (params: ValueGetterParams<SessionGridRow>) =>
+    headerFilterText(params.data, SESSION_COLUMN_IDS.createdBy) ??
+    getSessionCreatedBy(params.data as SessionGroupRow | undefined)?.name ??
+    "",
+  cellRenderer: (params: ICellRendererParams<SessionGridRow>) => (
+    <SessionCreatedByCell row={params.data as SessionGroupRow | undefined} />
   ),
 };
 
-const lastMessageColumn: ColDef<SessionGroupRow> = {
+const lastMessageColumn: ColDef<SessionGridRow> = {
   headerName: "Last message",
   colId: SESSION_COLUMN_IDS.lastActivityAt,
   width: 120,
   filter: true,
-  valueGetter: (params: ValueGetterParams<SessionGroupRow>) => getSessionLastActivityAt(params.data),
-  cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => (
+  valueGetter: (params: ValueGetterParams<SessionGridRow>) =>
+    headerFilterText(params.data, SESSION_COLUMN_IDS.lastActivityAt) ??
+    getSessionLastActivityAt(params.data as SessionGroupRow | undefined),
+  cellRenderer: (params: ICellRendererParams<SessionGridRow>) => (
     <SessionLastActivityCell value={(params.value as string | undefined) ?? undefined} />
   ),
   comparator: (a: string | undefined, b: string | undefined) => bucketize(a) - bucketize(b),
 };
 
-export const sessionColumns: ColDef<SessionGroupRow>[] = [
+export const sessionColumns: ColDef<SessionGridRow>[] = [
   {
     colId: SESSION_COLUMN_IDS.compactSummary,
     headerName: "Workspace",
@@ -72,8 +92,10 @@ export const sessionColumns: ColDef<SessionGroupRow>[] = [
     flex: 1,
     minWidth: 220,
     hide: true,
-    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => (
-      <SessionCompactSummaryCell row={params.data} />
+    filterValueGetter: (params: ValueGetterParams<SessionGridRow>) =>
+      headerFilterText(params.data, SESSION_COLUMN_IDS.compactSummary) ?? rowName(params.data),
+    cellRenderer: (params: ICellRendererParams<SessionGridRow>) => (
+      <SessionCompactSummaryCell row={params.data as SessionGroupRow | undefined} />
     ),
   },
   {
@@ -83,8 +105,10 @@ export const sessionColumns: ColDef<SessionGroupRow>[] = [
     flex: 2,
     minWidth: 200,
     filter: true,
-    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => (
-      <SessionNameCell row={params.data} />
+    filterValueGetter: (params: ValueGetterParams<SessionGridRow>) =>
+      headerFilterText(params.data, SESSION_COLUMN_IDS.name) ?? rowName(params.data),
+    cellRenderer: (params: ICellRendererParams<SessionGridRow>) => (
+      <SessionNameCell row={params.data as SessionGroupRow | undefined} />
     ),
   },
   statusColumn,
@@ -118,7 +142,7 @@ export function getSessionsColumnState(isCompact: boolean): ColumnState[] {
 // Keep one stable AG Grid column set and switch visibility explicitly. Swapping
 // column definitions caused AG Grid to retain the compact visibility state when
 // returning to desktop mode.
-export function applySessionsColumnMode(api: GridApi<SessionGroupRow>, isCompact: boolean) {
+export function applySessionsColumnMode(api: GridApi<SessionGridRow>, isCompact: boolean) {
   api.applyColumnState({
     state: getSessionsColumnState(isCompact),
     applyOrder: true,

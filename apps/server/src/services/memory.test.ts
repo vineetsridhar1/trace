@@ -150,11 +150,7 @@ describe("memoryService visibility", () => {
       tokenBudget: 10_000,
     });
 
-    expect(results.map((result) => result.id)).toEqual([
-      "same-scope",
-      "same-project",
-      "org-wide",
-    ]);
+    expect(results.map((result) => result.id)).toEqual(["same-scope", "same-project", "org-wide"]);
   });
 
   it("only returns safe org-wide memories when no scope context is provided", async () => {

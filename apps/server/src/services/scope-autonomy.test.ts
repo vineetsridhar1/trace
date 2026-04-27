@@ -69,10 +69,7 @@ describe("resolveAutonomyMode", () => {
       { projectId: "proj-1" },
       { projectId: "proj-2" },
     ]);
-    prismaMock.project.findMany.mockResolvedValueOnce([
-      { aiMode: "act" },
-      { aiMode: "observe" },
-    ]);
+    prismaMock.project.findMany.mockResolvedValueOnce([{ aiMode: "act" }, { aiMode: "observe" }]);
 
     const result = await resolveAutonomyMode({
       scopeType: "ticket",
@@ -165,7 +162,13 @@ describe("updateScopeAiMode", () => {
   it("updates chat aiMode", async () => {
     prismaMock.chat.update.mockResolvedValueOnce({});
 
-    await updateScopeAiMode({ scopeType: "chat", scopeId: "chat-1", aiMode: "observe", userId: "user-1", organizationId: "org-1" });
+    await updateScopeAiMode({
+      scopeType: "chat",
+      scopeId: "chat-1",
+      aiMode: "observe",
+      userId: "user-1",
+      organizationId: "org-1",
+    });
 
     expect(prismaMock.chat.update).toHaveBeenCalledWith({
       where: { id: "chat-1" },
@@ -174,10 +177,21 @@ describe("updateScopeAiMode", () => {
   });
 
   it("clears override when aiMode is null", async () => {
+    prismaMock.ticket.findFirst.mockResolvedValueOnce({ id: "ticket-1" });
     prismaMock.ticket.update.mockResolvedValueOnce({});
 
-    await updateScopeAiMode({ scopeType: "ticket", scopeId: "ticket-1", aiMode: null, userId: "user-1", organizationId: "org-1" });
+    await updateScopeAiMode({
+      scopeType: "ticket",
+      scopeId: "ticket-1",
+      aiMode: null,
+      userId: "user-1",
+      organizationId: "org-1",
+    });
 
+    expect(prismaMock.ticket.findFirst).toHaveBeenCalledWith({
+      where: { id: "ticket-1", organizationId: "org-1" },
+      select: { id: true },
+    });
     expect(prismaMock.ticket.update).toHaveBeenCalledWith({
       where: { id: "ticket-1" },
       data: { aiMode: null },
@@ -186,7 +200,13 @@ describe("updateScopeAiMode", () => {
 
   it("throws for unsupported scope type", async () => {
     await expect(
-      updateScopeAiMode({ scopeType: "session", scopeId: "sess-1", aiMode: "act", userId: "user-1", organizationId: "org-1" }),
+      updateScopeAiMode({
+        scopeType: "session",
+        scopeId: "sess-1",
+        aiMode: "act",
+        userId: "user-1",
+        organizationId: "org-1",
+      }),
     ).rejects.toThrow("Cannot set aiMode on scope type: session");
   });
 });

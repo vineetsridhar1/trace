@@ -1,4 +1,3 @@
-/* eslint-env node */
 /* eslint-disable @typescript-eslint/no-require-imports */
 /* global __dirname, process, require */
 /**
@@ -15,6 +14,10 @@ const gqlDir = path.resolve(__dirname, "..");
 
 try {
   execSync("npx graphql-codegen --config codegen-core.ts", {
+    cwd: gqlDir,
+    stdio: "inherit",
+  });
+  execSync("npx prettier --write src/generated/types.ts src/generated/resolvers.ts", {
     cwd: gqlDir,
     stdio: "inherit",
   });

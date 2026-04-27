@@ -25,9 +25,7 @@ export function HomeButton() {
     >
       <Home size={16} />
       <span>Home</span>
-      {!allDone && (
-        <span className="ml-auto h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
-      )}
+      {!allDone && <span className="ml-auto h-2 w-2 rounded-full bg-accent" aria-hidden="true" />}
     </button>
   );
 }

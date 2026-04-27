@@ -37,7 +37,9 @@ export function DeleteSessionGroupDialog({
     setDeleting(true);
     setError(null);
     try {
-      const result = await client.mutation(DELETE_SESSION_GROUP_MUTATION, { id: groupId }).toPromise();
+      const result = await client
+        .mutation(DELETE_SESSION_GROUP_MUTATION, { id: groupId })
+        .toPromise();
       if (result.error) {
         setError(result.error.message);
         return;
@@ -56,14 +58,12 @@ export function DeleteSessionGroupDialog({
         <DialogHeader>
           <DialogTitle>Delete workspace</DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete <strong>{groupName}</strong>? This will
-            delete {sessionCount === 1 ? "1 session" : `all ${sessionCount} sessions`} in
-            this workspace and cannot be undone.
+            Are you sure you want to delete <strong>{groupName}</strong>? This will delete{" "}
+            {sessionCount === 1 ? "1 session" : `all ${sessionCount} sessions`} in this workspace
+            and cannot be undone.
           </DialogDescription>
         </DialogHeader>
-        {error && (
-          <p className="text-sm text-destructive">{error}</p>
-        )}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
           <Button variant="destructive" disabled={deleting} onClick={handleDelete}>

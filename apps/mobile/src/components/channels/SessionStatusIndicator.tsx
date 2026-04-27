@@ -10,6 +10,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import type { SessionGroupStatus, SessionStatus } from "@trace/gql";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { statusIndicatorColor } from "@/lib/sessionGroupStatus";
 import { useTheme } from "@/theme";
 
@@ -43,6 +44,7 @@ export function SessionStatusIndicator({
   size = 10,
 }: SessionStatusIndicatorProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const color = statusIndicatorColor(theme, status);
   const kind = indicatorKind(status, agentStatus);
 
@@ -59,7 +61,7 @@ export function SessionStatusIndicator({
   }
 
   if (kind === "spinner") {
-    return <SpinningRing size={size} color={color} />;
+    return <SpinningRing size={size} color={color} reducedMotion={reducedMotion} />;
   }
 
   return (
@@ -74,10 +76,23 @@ export function SessionStatusIndicator({
   );
 }
 
-function SpinningRing({ size, color }: { size: number; color: string }) {
+function SpinningRing({
+  size,
+  color,
+  reducedMotion,
+}: {
+  size: number;
+  color: string;
+  reducedMotion: boolean;
+}) {
   const rotation = useSharedValue(0);
 
   useEffect(() => {
+    if (reducedMotion) {
+      cancelAnimation(rotation);
+      rotation.value = 0;
+      return;
+    }
     rotation.value = withRepeat(
       withTiming(360, { duration: 900, easing: Easing.linear }),
       -1,
@@ -86,7 +101,7 @@ function SpinningRing({ size, color }: { size: number; color: string }) {
     return () => {
       cancelAnimation(rotation);
     };
-  }, [rotation]);
+  }, [reducedMotion, rotation]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value}deg` }],

@@ -17,6 +17,8 @@ interface TerminalEntry {
    * another user's machine.
    */
   runtimeInstanceId: string;
+  /** User that created the terminal. Frontend attach/list/destroy is owner-only. */
+  ownerUserId: string | null;
   frontendWs: WebSocket | null;
   /** User who currently has a frontend WebSocket attached to this terminal. */
   attachedUserId: string | null;
@@ -69,6 +71,7 @@ class TerminalRelay {
     sessionId: string,
     sessionGroupId: string | null,
     runtimeInstanceId: string,
+    ownerUserId: string,
     cols: number,
     rows: number,
     cwd?: string,
@@ -80,6 +83,7 @@ class TerminalRelay {
       sessionGroupId,
       kind: "session",
       runtimeInstanceId,
+      ownerUserId,
       frontendWs: null,
       attachedUserId: null,
       ready: false,
@@ -131,6 +135,7 @@ class TerminalRelay {
     organizationId: string,
     repoId: string,
     runtimeInstanceId: string,
+    ownerUserId: string,
     cols: number,
     rows: number,
     cwd: string,
@@ -146,6 +151,7 @@ class TerminalRelay {
       organizationId,
       repoId,
       runtimeInstanceId,
+      ownerUserId,
       frontendWs: null,
       attachedUserId: null,
       ready: false,
@@ -204,6 +210,7 @@ class TerminalRelay {
         sessionId,
         sessionGroupId,
         runtimeInstanceId,
+        "system",
         80,
         24,
         cwd,
@@ -309,6 +316,7 @@ class TerminalRelay {
           organizationId: channel.organizationId,
           repoId: channel.repoId,
           runtimeInstanceId,
+          ownerUserId: null,
           frontendWs: null,
           attachedUserId: null,
           ready: true,
@@ -338,6 +346,7 @@ class TerminalRelay {
         sessionGroupId,
         kind: "session",
         runtimeInstanceId,
+        ownerUserId: null,
         frontendWs: null,
         attachedUserId: null,
         ready: true, // Bridge says it's alive, so it's ready
@@ -465,6 +474,7 @@ class TerminalRelay {
         sessionId: string;
         sessionGroupId: string | null;
         runtimeInstanceId: string;
+        ownerUserId: string | null;
       }
     | {
         kind: "channel";
@@ -472,6 +482,7 @@ class TerminalRelay {
         organizationId: string;
         repoId: string;
         runtimeInstanceId: string;
+        ownerUserId: string | null;
       }
     | null {
     const entry = this.terminals.get(terminalId);
@@ -484,6 +495,7 @@ class TerminalRelay {
         organizationId: entry.organizationId,
         repoId: entry.repoId,
         runtimeInstanceId: entry.runtimeInstanceId,
+        ownerUserId: entry.ownerUserId,
       };
     }
     return {
@@ -491,6 +503,7 @@ class TerminalRelay {
       sessionId: entry.sessionId,
       sessionGroupId: entry.sessionGroupId,
       runtimeInstanceId: entry.runtimeInstanceId,
+      ownerUserId: entry.ownerUserId,
     };
   }
 
@@ -662,11 +675,7 @@ class TerminalRelay {
    * synthetic sessionId (`channel:<id>`) that is never in `sessionIds`, so
    * they must be matched separately.
    */
-  destroyTerminalsForUser(
-    userId: string,
-    sessionIds?: Set<string>,
-    organizationId?: string,
-  ): void {
+  destroyTerminalsForUser(userId: string, sessionIds?: Set<string>, organizationId?: string): void {
     for (const [terminalId, entry] of this.terminals) {
       if (entry.attachedUserId !== userId) continue;
       if (entry.kind === "channel") {

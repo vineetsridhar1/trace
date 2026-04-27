@@ -39,4 +39,3 @@ Add first-class support for retrieving a commit patch from a session runtime. Th
 2. Request its diff through the new server path.
 3. Verify correct output on both local and cloud runtimes.
 4. Verify invalid sha and missing workdir cases return safe errors.
-

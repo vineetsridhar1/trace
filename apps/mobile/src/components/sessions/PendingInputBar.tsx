@@ -1,10 +1,5 @@
 import { useMemo } from "react";
-import {
-  eventScopeKey,
-  useScopedEventIds,
-  useScopedEvents,
-} from "@trace/client-core";
-import type { Event } from "@trace/gql";
+import { eventScopeKey, useScopedEventIds, useScopedEvents } from "@trace/client-core";
 import { findMostRecentPendingInput } from "@/lib/pending-input";
 import { PendingInputPlan } from "./PendingInputPlan";
 import { PendingInputQuestion } from "./PendingInputQuestion";
@@ -23,17 +18,11 @@ interface PendingInputBarProps {
  * flip arrives a tick later. Disappears once the user (or any teammate)
  * sends a follow-up `message_sent` event.
  */
-export function PendingInputBar({
-  sessionId,
-  keyboardVisible = false,
-}: PendingInputBarProps) {
+export function PendingInputBar({ sessionId, keyboardVisible = false }: PendingInputBarProps) {
   const scopeKey = eventScopeKey("session", sessionId);
-  const eventIds = useScopedEventIds(scopeKey, byTimestamp);
+  const eventIds = useScopedEventIds(scopeKey);
   const events = useScopedEvents(scopeKey);
-  const pending = useMemo(
-    () => findMostRecentPendingInput(eventIds, events),
-    [eventIds, events],
-  );
+  const pending = useMemo(() => findMostRecentPendingInput(eventIds, events), [eventIds, events]);
 
   if (!pending) return null;
 
@@ -55,8 +44,4 @@ export function PendingInputBar({
       keyboardVisible={keyboardVisible}
     />
   );
-}
-
-function byTimestamp(a: Event, b: Event): number {
-  return a.timestamp.localeCompare(b.timestamp);
 }

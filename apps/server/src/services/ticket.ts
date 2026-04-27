@@ -2,6 +2,7 @@ import type { CreateTicketInput, UpdateTicketInput, ActorType, EntityType } from
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
+import { assertActorOrgAccess } from "./actor-auth.js";
 
 export type CreateTicketServiceInput = CreateTicketInput & {
   actorType: ActorType;
@@ -33,8 +34,11 @@ export class TicketService {
     return prisma.ticket.findMany({ where, include: TICKET_INCLUDE });
   }
 
-  async get(id: string) {
-    return prisma.ticket.findUnique({ where: { id }, include: TICKET_INCLUDE });
+  async get(id: string, organizationId: string) {
+    return prisma.ticket.findFirst({
+      where: { id, organizationId },
+      include: TICKET_INCLUDE,
+    });
   }
 
   async listForSession(sessionId: string) {
@@ -46,6 +50,8 @@ export class TicketService {
 
   async create(input: CreateTicketServiceInput) {
     const [ticket] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await assertActorOrgAccess(tx, input.organizationId, input.actorType, input.actorId);
+
       const ticket = await tx.ticket.create({
         data: {
           title: input.title,
@@ -67,19 +73,22 @@ export class TicketService {
         include: TICKET_INCLUDE,
       });
 
-      const event = await eventService.create({
-        organizationId: input.organizationId,
-        scopeType: "ticket",
-        scopeId: ticket.id,
-        eventType: "ticket_created",
-        payload: {
-          ticketId: ticket.id,
-          title: ticket.title,
-          priority: ticket.priority,
+      const event = await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "ticket",
+          scopeId: ticket.id,
+          eventType: "ticket_created",
+          payload: {
+            ticketId: ticket.id,
+            title: ticket.title,
+            priority: ticket.priority,
+          },
+          actorType: input.actorType,
+          actorId: input.actorId,
         },
-        actorType: input.actorType,
-        actorId: input.actorId,
-      }, tx);
+        tx,
+      );
 
       return [ticket, event] as const;
     });
@@ -92,14 +101,19 @@ export class TicketService {
       where: { id },
       select: { organizationId: true, status: true },
     });
+    await prisma.$transaction((tx: Prisma.TransactionClient) =>
+      assertActorOrgAccess(tx, existing.organizationId, actorType, actorId),
+    );
 
     const ticket = await prisma.ticket.update({
       where: { id },
       data: {
         ...(input.title !== undefined && input.title !== null && { title: input.title }),
-        ...(input.description !== undefined && input.description !== null && { description: input.description }),
+        ...(input.description !== undefined &&
+          input.description !== null && { description: input.description }),
         ...(input.status !== undefined && input.status !== null && { status: input.status }),
-        ...(input.priority !== undefined && input.priority !== null && { priority: input.priority }),
+        ...(input.priority !== undefined &&
+          input.priority !== null && { priority: input.priority }),
         ...(input.labels !== undefined && input.labels !== null && { labels: input.labels }),
       },
       include: TICKET_INCLUDE,
@@ -127,6 +141,9 @@ export class TicketService {
       where: { id: ticketId },
       select: { organizationId: true },
     });
+    await prisma.$transaction((tx: Prisma.TransactionClient) =>
+      assertActorOrgAccess(tx, ticket.organizationId, actorType, actorId),
+    );
 
     return eventService.create({
       organizationId: ticket.organizationId,
@@ -139,13 +156,23 @@ export class TicketService {
     });
   }
 
-  async assign({ ticketId, userId, actorType, actorId }: {
+  async assign({
+    ticketId,
+    userId,
+    actorType,
+    actorId,
+  }: {
     ticketId: string;
     userId: string;
     actorType: ActorType;
     actorId: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.ticket.findUniqueOrThrow({
+        where: { id: ticketId },
+        select: { organizationId: true },
+      });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
       await tx.ticketAssignee.create({
         data: { ticketId, userId },
       });
@@ -155,15 +182,18 @@ export class TicketService {
         include: TICKET_INCLUDE,
       });
 
-      await eventService.create({
-        organizationId: ticket.organizationId,
-        scopeType: "ticket",
-        scopeId: ticketId,
-        eventType: "ticket_assigned",
-        payload: { ticketId, userId },
-        actorType,
-        actorId,
-      }, tx);
+      await eventService.create(
+        {
+          organizationId: ticket.organizationId,
+          scopeType: "ticket",
+          scopeId: ticketId,
+          eventType: "ticket_assigned",
+          payload: { ticketId, userId },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
 
       return ticket;
     });
@@ -171,13 +201,23 @@ export class TicketService {
     return ticket;
   }
 
-  async unassign({ ticketId, userId, actorType, actorId }: {
+  async unassign({
+    ticketId,
+    userId,
+    actorType,
+    actorId,
+  }: {
     ticketId: string;
     userId: string;
     actorType: ActorType;
     actorId: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.ticket.findUniqueOrThrow({
+        where: { id: ticketId },
+        select: { organizationId: true },
+      });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
       await tx.ticketAssignee.delete({
         where: { ticketId_userId: { ticketId, userId } },
       });
@@ -187,15 +227,18 @@ export class TicketService {
         include: TICKET_INCLUDE,
       });
 
-      await eventService.create({
-        organizationId: ticket.organizationId,
-        scopeType: "ticket",
-        scopeId: ticketId,
-        eventType: "ticket_unassigned",
-        payload: { ticketId, userId },
-        actorType,
-        actorId,
-      }, tx);
+      await eventService.create(
+        {
+          organizationId: ticket.organizationId,
+          scopeType: "ticket",
+          scopeId: ticketId,
+          eventType: "ticket_unassigned",
+          payload: { ticketId, userId },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
 
       return ticket;
     });
@@ -203,7 +246,13 @@ export class TicketService {
     return ticket;
   }
 
-  async link({ ticketId, entityType, entityId, actorType, actorId }: {
+  async link({
+    ticketId,
+    entityType,
+    entityId,
+    actorType,
+    actorId,
+  }: {
     ticketId: string;
     entityType: EntityType;
     entityId: string;
@@ -211,6 +260,11 @@ export class TicketService {
     actorId: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.ticket.findUniqueOrThrow({
+        where: { id: ticketId },
+        select: { organizationId: true },
+      });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
       await tx.ticketLink.create({
         data: { ticketId, entityType, entityId },
       });
@@ -220,15 +274,18 @@ export class TicketService {
         include: TICKET_INCLUDE,
       });
 
-      await eventService.create({
-        organizationId: ticket.organizationId,
-        scopeType: "ticket",
-        scopeId: ticketId,
-        eventType: "ticket_linked",
-        payload: { ticketId, entityType, entityId },
-        actorType,
-        actorId,
-      }, tx);
+      await eventService.create(
+        {
+          organizationId: ticket.organizationId,
+          scopeType: "ticket",
+          scopeId: ticketId,
+          eventType: "ticket_linked",
+          payload: { ticketId, entityType, entityId },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
 
       return ticket;
     });
@@ -236,7 +293,13 @@ export class TicketService {
     return ticket;
   }
 
-  async unlink({ ticketId, entityType, entityId, actorType, actorId }: {
+  async unlink({
+    ticketId,
+    entityType,
+    entityId,
+    actorType,
+    actorId,
+  }: {
     ticketId: string;
     entityType: EntityType;
     entityId: string;
@@ -244,6 +307,11 @@ export class TicketService {
     actorId: string;
   }) {
     const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.ticket.findUniqueOrThrow({
+        where: { id: ticketId },
+        select: { organizationId: true },
+      });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
       await tx.ticketLink.delete({
         where: {
           ticketId_entityType_entityId: { ticketId, entityType, entityId },
@@ -255,15 +323,18 @@ export class TicketService {
         include: TICKET_INCLUDE,
       });
 
-      await eventService.create({
-        organizationId: ticket.organizationId,
-        scopeType: "ticket",
-        scopeId: ticketId,
-        eventType: "ticket_unlinked",
-        payload: { ticketId, entityType, entityId },
-        actorType,
-        actorId,
-      }, tx);
+      await eventService.create(
+        {
+          organizationId: ticket.organizationId,
+          scopeType: "ticket",
+          scopeId: ticketId,
+          eventType: "ticket_unlinked",
+          payload: { ticketId, entityType, entityId },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
 
       return ticket;
     });
@@ -287,11 +358,7 @@ export class TicketService {
    * Uses ILIKE against title and description to find potentially related tickets.
    * Returns top N matches ordered by best match (title match first, then description).
    */
-  async searchByRelevance(input: {
-    organizationId: string;
-    query: string;
-    limit?: number;
-  }) {
+  async searchByRelevance(input: { organizationId: string; query: string; limit?: number }) {
     const limit = input.limit ?? 5;
     const query = input.query.trim();
     if (!query) return [];

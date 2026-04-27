@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { useEntityField } from "@trace/client-core";
@@ -13,13 +13,7 @@ interface SessionModelPickerSheetContentProps {
   onSelectModel?: () => void;
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   const theme = useTheme();
   return (
     <View style={styles.section}>
@@ -48,11 +42,18 @@ export function SessionModelPickerSheetContent({
   onSelectModel,
 }: SessionModelPickerSheetContentProps) {
   const theme = useTheme();
+  const [pendingModel, setPendingModel] = useState<string | null>(null);
 
   const tool = useEntityField("sessions", sessionId, "tool") as string | null | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | null | undefined;
-  const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | null | undefined;
-  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as string | null | undefined;
+  const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as
+    | string
+    | null
+    | undefined;
+  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
+    | string
+    | null
+    | undefined;
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as
     | boolean
     | undefined;
@@ -67,6 +68,7 @@ export function SessionModelPickerSheetContent({
   const isTerminal = worktreeDeleted === true || sessionStatus === "merged";
   const isDisconnected = connection?.state === "disconnected";
   const canInteract = !isTerminal && !isDisconnected && agentStatus !== "active" && !isOptimistic;
+  const canSelectModel = canInteract;
 
   const {
     currentTool: selectedTool,
@@ -86,9 +88,31 @@ export function SessionModelPickerSheetContent({
     tool,
   });
 
+  const handleSelectModel = useCallback(
+    async (nextModel: string) => {
+      if (!canSelectModel) return;
+      if (selectedModel === nextModel) {
+        onSelectModel?.();
+        onClose?.();
+        return;
+      }
+
+      onSelectModel?.();
+      setPendingModel(nextModel);
+      const changed = await handleModelChange(nextModel);
+      setPendingModel(null);
+      if (changed) {
+        onClose?.();
+      }
+    },
+    [canSelectModel, handleModelChange, onClose, onSelectModel, selectedModel],
+  );
+
+  const displayedModel = pendingModel ?? selectedModel;
+
   return (
     <ScrollView
-      keyboardShouldPersistTaps="handled"
+      keyboardShouldPersistTaps="always"
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.content}
     >
@@ -106,11 +130,7 @@ export function SessionModelPickerSheetContent({
             title={option.label}
             trailing={
               selectedTool === option.value ? (
-                <SymbolView
-                  name="checkmark"
-                  size={16}
-                  tintColor={theme.colors.accent}
-                />
+                <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
               ) : undefined
             }
             onPress={
@@ -131,26 +151,14 @@ export function SessionModelPickerSheetContent({
             key={option.value}
             title={option.label}
             trailing={
-              selectedModel === option.value ? (
-                <SymbolView
-                  name="checkmark"
-                  size={16}
-                  tintColor={theme.colors.accent}
-                />
+              displayedModel === option.value ? (
+                <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
               ) : undefined
             }
-            onPress={
-              canInteract && selectedModel !== option.value
-                ? () => {
-                    onSelectModel?.();
-                    onClose?.();
-                    void handleModelChange(option.value);
-                  }
-                : undefined
-            }
-            haptic={selectedModel === option.value ? "none" : "selection"}
             separator={index < modelOptions.length - 1}
-            style={!canInteract ? styles.disabledRow : undefined}
+            onPress={!canSelectModel ? undefined : () => void handleSelectModel(option.value)}
+            haptic={displayedModel === option.value ? "none" : "selection"}
+            style={!canSelectModel ? styles.disabledRow : undefined}
           />
         ))}
       </Section>

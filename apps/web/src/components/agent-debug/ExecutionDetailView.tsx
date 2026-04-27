@@ -105,13 +105,7 @@ function InfoRow({ label, value }: { label: string; value: string | number | nul
   );
 }
 
-export function ExecutionDetailView({
-  logId,
-  onBack,
-}: {
-  logId: string;
-  onBack: () => void;
-}) {
+export function ExecutionDetailView({ logId, onBack }: { logId: string; onBack: () => void }) {
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const [detail, setDetail] = useState<ExecutionLogDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -145,9 +139,7 @@ export function ExecutionDetailView({
           <ArrowLeft size={16} />
         </Button>
         <h2 className="text-sm font-semibold text-foreground">Execution Detail</h2>
-        {detail && (
-          <span className="text-xs font-mono text-muted-foreground">{detail.id}</span>
-        )}
+        {detail && <span className="text-xs font-mono text-muted-foreground">{detail.id}</span>}
       </div>
 
       {loading && (
@@ -175,7 +167,10 @@ export function ExecutionDetailView({
               <InfoRow label="Agent ID" value={detail.agentId} />
               <InfoRow label="Model" value={detail.model} />
               <InfoRow label="Model Tier" value={detail.modelTier} />
-              <InfoRow label="Promoted" value={detail.promoted ? `Yes — ${detail.promotionReason ?? "unknown"}` : "No"} />
+              <InfoRow
+                label="Promoted"
+                value={detail.promoted ? `Yes — ${detail.promotionReason ?? "unknown"}` : "No"}
+              />
               <InfoRow label="Disposition" value={detail.disposition} />
               <InfoRow label="Confidence" value={`${(detail.confidence * 100).toFixed(1)}%`} />
               <InfoRow label="Latency" value={`${detail.latencyMs}ms`} />
@@ -190,25 +185,13 @@ export function ExecutionDetailView({
           <div className="space-y-4">
             <h3 className="text-xs font-semibold text-foreground">Decision Chain</h3>
 
-            <JsonBlock
-              label="Context Token Allocation"
-              data={detail.contextTokenAllocation}
-            />
+            <JsonBlock label="Context Token Allocation" data={detail.contextTokenAllocation} />
 
-            <JsonBlock
-              label="Planned Actions (Planner Output)"
-              data={detail.plannedActions}
-            />
+            <JsonBlock label="Planned Actions (Planner Output)" data={detail.plannedActions} />
 
-            <JsonBlock
-              label="Policy Decision"
-              data={detail.policyDecision}
-            />
+            <JsonBlock label="Policy Decision" data={detail.policyDecision} />
 
-            <JsonBlock
-              label="Final Actions (Executed)"
-              data={detail.finalActions}
-            />
+            <JsonBlock label="Final Actions (Executed)" data={detail.finalActions} />
           </div>
 
           {/* LLM Calls */}

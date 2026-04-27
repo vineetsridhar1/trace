@@ -1,5 +1,6 @@
 import type { Context } from "../context.js";
 import type {
+  CreateOrganizationInput,
   CreateRepoInput,
   UpdateRepoInput,
   CreateProjectInput,
@@ -9,7 +10,7 @@ import type {
 import { organizationService } from "../services/organization.js";
 import { webhookService } from "../services/webhook.js";
 import { orgMemberService } from "../services/org-member.js";
-import { requireOrgContext } from "../lib/require-org.js";
+import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
 export const organizationQueries = {
   organization: (_: unknown, args: { id: string }, ctx: Context) =>
     organizationService.getOrganization(args.id, ctx.userId),
@@ -46,7 +47,11 @@ export const organizationQueries = {
 };
 
 export const organizationMutations = {
+  createOrganization: (_: unknown, args: { input: CreateOrganizationInput }, ctx: Context) => {
+    return organizationService.createOrganization(args.input, ctx.userId);
+  },
   createRepo: (_: unknown, args: { input: CreateRepoInput }, ctx: Context) => {
+    assertOrgAccess(ctx, args.input.organizationId);
     return organizationService.createRepo(args.input, ctx.actorType, ctx.userId);
   },
   updateRepo: (_: unknown, args: { id: string; input: UpdateRepoInput }, ctx: Context) => {
@@ -54,6 +59,7 @@ export const organizationMutations = {
     return organizationService.updateRepo(args.id, orgId, args.input, ctx.actorType, ctx.userId);
   },
   createProject: (_: unknown, args: { input: CreateProjectInput }, ctx: Context) => {
+    assertOrgAccess(ctx, args.input.organizationId);
     return organizationService.createProject(args.input, ctx.actorType, ctx.userId);
   },
   linkEntityToProject: (

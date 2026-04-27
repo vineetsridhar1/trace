@@ -1,17 +1,31 @@
 import type { Context } from "../context.js";
-import type { CreateChannelGroupInput, UpdateChannelGroupInput, MoveChannelInput, ReorderChannelGroupsInput, ReorderChannelsInput } from "@trace/gql";
+import type {
+  CreateChannelGroupInput,
+  UpdateChannelGroupInput,
+  MoveChannelInput,
+  ReorderChannelGroupsInput,
+  ReorderChannelsInput,
+} from "@trace/gql";
 import { channelGroupService } from "../services/channelGroup.js";
+import { assertOrgAccess } from "../lib/require-org.js";
 
 export const channelGroupQueries = {
-  channelGroups: (_: unknown, args: { organizationId: string }) =>
-    channelGroupService.list(args.organizationId),
+  channelGroups: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+    assertOrgAccess(ctx, args.organizationId);
+    return channelGroupService.list(args.organizationId);
+  },
 };
 
 export const channelGroupMutations = {
   createChannelGroup: (_: unknown, args: { input: CreateChannelGroupInput }, ctx: Context) => {
+    assertOrgAccess(ctx, args.input.organizationId);
     return channelGroupService.create(args.input, ctx.actorType, ctx.userId);
   },
-  updateChannelGroup: (_: unknown, args: { id: string; input: UpdateChannelGroupInput }, ctx: Context) => {
+  updateChannelGroup: (
+    _: unknown,
+    args: { id: string; input: UpdateChannelGroupInput },
+    ctx: Context,
+  ) => {
     return channelGroupService.update(args.id, args.input, ctx.actorType, ctx.userId);
   },
   deleteChannelGroup: (_: unknown, args: { id: string }, ctx: Context) => {
@@ -21,9 +35,20 @@ export const channelGroupMutations = {
     return channelGroupService.moveChannel(args.input, ctx.actorType, ctx.userId);
   },
   reorderChannelGroups: (_: unknown, args: { input: ReorderChannelGroupsInput }, ctx: Context) => {
-    return channelGroupService.reorderGroups(args.input.organizationId, args.input.groupIds, ctx.actorType, ctx.userId);
+    assertOrgAccess(ctx, args.input.organizationId);
+    return channelGroupService.reorderGroups(
+      args.input.organizationId,
+      args.input.groupIds,
+      ctx.actorType,
+      ctx.userId,
+    );
   },
   reorderChannels: (_: unknown, args: { input: ReorderChannelsInput }, ctx: Context) => {
-    return channelGroupService.reorderChannels(args.input.groupId ?? null, args.input.channelIds, ctx.actorType, ctx.userId);
+    return channelGroupService.reorderChannels(
+      args.input.groupId ?? null,
+      args.input.channelIds,
+      ctx.actorType,
+      ctx.userId,
+    );
   },
 };

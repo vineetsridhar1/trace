@@ -560,10 +560,14 @@ async function prependSourceSessionContext(
 }
 
 function validateModelForTool(tool: string, model: string): string {
-  if (!isSupportedModel(tool, model)) {
-    throw new Error(`Unsupported model "${model}" for tool "${tool}"`);
+  const trimmed = model.trim();
+  if (!trimmed) {
+    throw new Error("Model cannot be empty");
   }
-  return model;
+  if (!isSupportedModel(tool, trimmed)) {
+    throw new Error(`Unsupported model "${trimmed}" for tool "${tool}"`);
+  }
+  return trimmed;
 }
 
 const FULLY_UNLOADED_AGENT_STATUSES: readonly AgentStatus[] = ["failed", "stopped"];
@@ -584,6 +588,7 @@ export class SessionService {
     sessionId: string;
     sessionGroupId?: string | null;
     slug?: string | null;
+    preserveBranchName?: boolean;
     hosting: string;
     tool: string;
     model?: string | null;
@@ -598,6 +603,7 @@ export class SessionService {
       sessionId: params.sessionId,
       sessionGroupId: params.sessionGroupId ?? undefined,
       slug: params.slug ?? undefined,
+      preserveBranchName: params.preserveBranchName,
       hosting: params.hosting as "cloud" | "local",
       tool: params.tool,
       model: params.model ?? undefined,
@@ -1005,8 +1011,15 @@ export class SessionService {
     });
   }
 
-  async get(id: string) {
-    return prisma.session.findUnique({ where: { id }, include: SESSION_INCLUDE });
+  async get(id: string, organizationId?: string) {
+    if (!organizationId) {
+      return prisma.session.findUnique({ where: { id }, include: SESSION_INCLUDE });
+    }
+
+    return prisma.session.findFirst({
+      where: { id, organizationId },
+      include: SESSION_INCLUDE,
+    });
   }
 
   async listByUser(
@@ -1520,6 +1533,7 @@ export class SessionService {
         sessionId: session.id,
         sessionGroupId: session.sessionGroupId,
         slug: session.sessionGroup?.slug,
+        preserveBranchName: false,
         hosting: session.hosting,
         tool: session.tool,
         model: session.model,
@@ -1629,6 +1643,7 @@ export class SessionService {
           sessionId: id,
           sessionGroupId: session.sessionGroupId,
           slug: session.sessionGroup?.slug,
+          preserveBranchName: false,
           hosting: session.hosting,
           tool: session.tool,
           model: session.model,
@@ -1803,7 +1818,12 @@ export class SessionService {
     );
   }
 
-  async delete(id: string, actorType: ActorType = "system", actorId: string = "system") {
+  async delete(
+    id: string,
+    actorType: ActorType = "system",
+    actorId: string = "system",
+    eventPayloadExtras?: Record<string, unknown>,
+  ) {
     const session = await prisma.session.findUnique({
       where: { id },
       include: SESSION_INCLUDE,
@@ -1870,6 +1890,7 @@ export class SessionService {
         name: session.name,
         sessionGroupId: session.sessionGroupId ?? null,
         deletedSessionGroupId,
+        ...(eventPayloadExtras ?? {}),
       },
       actorType,
       actorId,
@@ -1883,6 +1904,7 @@ export class SessionService {
     organizationId: string,
     actorType: ActorType = "system",
     actorId: string = "system",
+    eventPayloadExtras?: Record<string, unknown>,
   ) {
     const group = await prisma.sessionGroup.findUnique({ where: { id: groupId } });
     if (!group) throw new Error("Session group not found");
@@ -1894,7 +1916,7 @@ export class SessionService {
     });
 
     for (const session of sessions) {
-      await this.delete(session.id, actorType, actorId);
+      await this.delete(session.id, actorType, actorId, eventPayloadExtras);
     }
 
     // If no sessions existed, the group won't have been cascade-deleted, so delete it directly
@@ -1905,7 +1927,10 @@ export class SessionService {
         scopeType: "session",
         scopeId: groupId,
         eventType: "session_deleted",
-        payload: { deletedSessionGroupId: groupId },
+        payload: {
+          deletedSessionGroupId: groupId,
+          ...(eventPayloadExtras ?? {}),
+        },
         actorType,
         actorId,
       });
@@ -2074,6 +2099,7 @@ export class SessionService {
           sessionId,
           sessionGroupId: prev.sessionGroupId,
           slug: prev.sessionGroup?.slug,
+          preserveBranchName: true,
           hosting: newHosting,
           tool: nextTool,
           model: nextModel !== undefined ? nextModel : prev.model,
@@ -2556,6 +2582,7 @@ export class SessionService {
           sessionId,
           sessionGroupId: session.sessionGroupId,
           slug: session.sessionGroup?.slug,
+          preserveBranchName: true,
           hosting: session.hosting,
           tool: session.tool,
           model: session.model,
@@ -3736,6 +3763,7 @@ export class SessionService {
           sessionId,
           sessionGroupId: session.sessionGroupId ?? undefined,
           slug: session.sessionGroup?.slug ?? undefined,
+          preserveBranchName: true,
           repoId: session.repo.id,
           repoName: session.repo.name,
           repoRemoteUrl: session.repo.remoteUrl,
@@ -3957,9 +3985,7 @@ export class SessionService {
     }
 
     if (status.aheadCount > 0 || status.behindCount > 0) {
-      throw new Error(
-        "Cannot move session: local branch must match its upstream before moving.",
-      );
+      throw new Error("Cannot move session: local branch must match its upstream before moving.");
     }
 
     return status;
@@ -3973,8 +3999,14 @@ export class SessionService {
     actorType: ActorType;
     actorId: string;
   }) {
-    const { session, targetHosting, targetRuntimeInstanceId, targetRuntimeLabel, actorType, actorId } =
-      params;
+    const {
+      session,
+      targetHosting,
+      targetRuntimeInstanceId,
+      targetRuntimeLabel,
+      actorType,
+      actorId,
+    } = params;
     const sourceRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
 
     const sourceGitStatus = await this.inspectSessionMoveSource({
@@ -4000,7 +4032,7 @@ export class SessionService {
     sessionRouter.unbindSession(session.id);
 
     const bootstrapPrompt = buildMigrationPrompt();
-    const checkpointSha = sourceGitStatus?.branch ? null : sourceGitStatus?.headCommitSha ?? null;
+    const checkpointSha = sourceGitStatus?.branch ? null : (sourceGitStatus?.headCommitSha ?? null);
     const nextConnection = connJson(
       targetHosting === "local"
         ? defaultConnection({
@@ -4061,6 +4093,7 @@ export class SessionService {
         sessionId: movedSession.id,
         sessionGroupId: movedSession.sessionGroupId,
         slug: movedSession.sessionGroup?.slug,
+        preserveBranchName: true,
         hosting: targetHosting,
         tool: movedSession.tool,
         model: movedSession.model,
@@ -4350,7 +4383,12 @@ export class SessionService {
     branch: string,
     organizationId: string,
     userId: string,
-    options?: { commitSha?: string | null; autoSyncEnabled?: boolean },
+    options?: {
+      commitSha?: string | null;
+      autoSyncEnabled?: boolean;
+      conflictStrategy?: "discard" | "commit" | "rebase";
+      commitMessage?: string | null;
+    },
   ) {
     await this.assertRepoExists(repoId, organizationId);
     const runtimeId = await this.resolveLinkedCheckoutRuntime(
@@ -4365,6 +4403,8 @@ export class SessionService {
       branch,
       commitSha: options?.commitSha,
       autoSyncEnabled: options?.autoSyncEnabled,
+      conflictStrategy: options?.conflictStrategy,
+      commitMessage: options?.commitMessage,
     });
   }
 
@@ -4389,6 +4429,7 @@ export class SessionService {
     repoId: string,
     organizationId: string,
     userId: string,
+    message?: string | null,
   ) {
     await this.assertRepoExists(repoId, organizationId);
     const runtimeId = await this.resolveLinkedCheckoutRuntime(
@@ -4400,6 +4441,7 @@ export class SessionService {
     return sessionRouter.commitLinkedCheckoutChanges(runtimeId, {
       repoId,
       sessionGroupId,
+      message,
     });
   }
 
@@ -4909,6 +4951,7 @@ export class SessionService {
         sessionId,
         sessionGroupId: session.sessionGroupId ?? undefined,
         slug: session.sessionGroup?.slug ?? undefined,
+        preserveBranchName: true,
         repoId: repo.id,
         repoName: repo.name,
         repoRemoteUrl: repo.remoteUrl,
@@ -5272,10 +5315,24 @@ export class SessionService {
   ) {
     const group = await prisma.sessionGroup.findUnique({
       where: { id: groupId },
-      include: { sessions: { select: { id: true }, orderBy: { updatedAt: "desc" } } },
+      include: {
+        sessions: {
+          select: { id: true, lastMessageAt: true },
+          orderBy: { updatedAt: "desc" },
+        },
+      },
     });
     if (!group) throw new Error("Session group not found");
     if (group.organizationId !== organizationId) throw new Error("Session group not found");
+
+    const hasConversation = group.sessions.some((session) => session.lastMessageAt !== null);
+    if (!hasConversation) {
+      await this.deleteGroup(groupId, organizationId, actorType, actorId, {
+        deletionReason: "archived_empty_group",
+        sourceAction: "archive",
+      });
+      return null;
+    }
 
     // Stop all active agents
     await prisma.session.updateMany({

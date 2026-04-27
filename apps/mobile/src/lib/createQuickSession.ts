@@ -1,12 +1,9 @@
 import { router } from "expo-router";
 import { Alert } from "react-native";
 import {
-  generateUUID,
+  AVAILABLE_RUNTIMES_QUERY,
   getSessionChannelId,
   getSessionGroupChannelId,
-  insertOptimisticSessionPair,
-  reconcileOptimisticSessionPair,
-  rollbackOptimisticSessionPair,
   RUN_SESSION_MUTATION,
   START_SESSION_MUTATION,
   TERMINATE_SESSION_MUTATION,
@@ -14,63 +11,74 @@ import {
   type SessionEntity,
 } from "@trace/client-core";
 import { getDefaultModel } from "@trace/shared";
-import type { CodingTool } from "@trace/gql";
+import type { CodingTool, SessionRuntimeInstance } from "@trace/gql";
 import { getConnectionMode } from "@/lib/connection-target";
 import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
 import { resolveMobileSessionHosting } from "@/lib/session-hosting";
-import { closeSessionPlayer, tryOpenSessionPlayer } from "@/lib/sessionPlayer";
 import { fetchSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { useMobileUIStore } from "@/stores/ui";
 
 const DEFAULT_TOOL: CodingTool = "claude_code";
+const pendingQuickSessionChannels = new Set<string>();
+
+async function resolveDefaultRuntime(
+  tool: CodingTool,
+  channelRepoId: string | undefined,
+): Promise<string | undefined> {
+  try {
+    const result = await getClient().query(AVAILABLE_RUNTIMES_QUERY, { tool }).toPromise();
+    const runtimes = (result.data?.availableRuntimes ?? []) as SessionRuntimeInstance[];
+    const connected = runtimes.filter(
+      (runtime) => runtime.connected && runtime.hostingMode === "local",
+    );
+    const eligible = channelRepoId
+      ? connected.filter((runtime) => runtime.registeredRepoIds.includes(channelRepoId))
+      : connected;
+    return eligible[0]?.id;
+  } catch {
+    return undefined;
+  }
+}
 
 interface CreateAgentTabOptions {
   navigate?: (sessionGroupId: string, sessionId: string) => void;
 }
 
 /**
- * Mobile twin of web's `createQuickSession`: inserts optimistic session
- * entities, routes to the temp session page, and fires the real mutation
- * in the background. When the server responds, the temp entities are
- * swapped for the real ones and the route is updated in place.
+ * Start the session, prefetch its workspace, then open the session page.
  */
 export async function createQuickSession(channelId: string): Promise<void> {
+  if (pendingQuickSessionChannels.has(channelId)) return;
+  pendingQuickSessionChannels.add(channelId);
+
   const channel = useEntityStore.getState().channels[channelId];
   const channelRepoId = channel?.repo?.id;
 
-  const tempSessionId = generateUUID();
-  const tempGroupId = generateUUID();
   const tool = DEFAULT_TOOL;
   const model = getDefaultModel(tool);
   const hosting = resolveMobileSessionHosting(getConnectionMode());
 
-  insertOptimisticSessionPair({
-    tempSessionId,
-    tempGroupId,
-    tool,
-    model,
-    hosting,
-    channelId,
-    repoId: channelRepoId,
-  });
   void haptic.light();
-  tryOpenSessionPlayer(tempSessionId);
 
   try {
+    const runtimeInstanceId =
+      hosting === "local" ? await resolveDefaultRuntime(tool, channelRepoId) : undefined;
+    if (hosting === "local" && !runtimeInstanceId) {
+      throw new Error("No connected local runtime available");
+    }
+
     const result = await getClient()
-      .mutation<{ startSession: { id: string; sessionGroupId: string } }>(
-        START_SESSION_MUTATION,
-        {
-          input: {
-            tool,
-            model,
-            hosting,
-            channelId,
-            repoId: channelRepoId,
-          },
+      .mutation<{ startSession: { id: string; sessionGroupId: string } }>(START_SESSION_MUTATION, {
+        input: {
+          tool,
+          model,
+          hosting,
+          runtimeInstanceId,
+          channelId,
+          repoId: channelRepoId,
         },
-      )
+      })
       .toPromise();
     if (result.error) throw result.error;
     const session = result.data?.startSession;
@@ -78,36 +86,19 @@ export async function createQuickSession(channelId: string): Promise<void> {
       throw new Error("Server did not return a session id");
     }
 
-    // Swap entities first, then retarget the route so the page never
-    // dereferences a deleted temp id. React batches these updates.
-    reconcileOptimisticSessionPair({
-      tempSessionId,
-      tempGroupId,
-      realSessionId: session.id,
-      realGroupId: session.sessionGroupId,
-      tool,
-      model,
-      hosting,
-      channelId,
-      repoId: channelRepoId,
+    void fetchSessionGroupDetail(session.sessionGroupId).catch((error: unknown) => {
+      console.warn("[createQuickSession] failed to prefetch session group", error);
     });
+
     const ui = useMobileUIStore.getState();
-    if (ui.overlaySessionId === tempSessionId) {
-      ui.setOverlaySessionId(session.id);
-      router.replace(`/sessions/${session.sessionGroupId}/${session.id}` as never);
-    }
+    ui.setOverlaySessionId(session.id);
+    router.push(`/sessions/${session.sessionGroupId}/${session.id}` as never);
   } catch (err) {
-    rollbackOptimisticSessionPair({ tempSessionId, tempGroupId });
-    // Only close the routed session view if it's still pointed at the temp
-    // session — the user may have navigated elsewhere while the mutation
-    // was in flight.
-    const ui = useMobileUIStore.getState();
-    if (ui.overlaySessionId === tempSessionId) {
-      closeSessionPlayer();
-    }
     const message = err instanceof Error ? err.message : "Please try again.";
     void haptic.error();
     Alert.alert("Couldn't start session", message);
+  } finally {
+    pendingQuickSessionChannels.delete(channelId);
   }
 }
 
@@ -134,7 +125,9 @@ export async function createAgentTab(
     .map((id) => state.sessions[id])
     .filter((session): session is SessionEntity => session !== undefined);
   const channelId =
-    getSessionGroupChannelId(group, groupSessions) ?? getSessionChannelId(sourceSession) ?? undefined;
+    getSessionGroupChannelId(group, groupSessions) ??
+    getSessionChannelId(sourceSession) ??
+    undefined;
   const groupRepo = group?.repo as { id: string } | null | undefined;
   const sourceRepo = sourceSession.repo as { id: string } | null | undefined;
 
@@ -142,21 +135,18 @@ export async function createAgentTab(
 
   try {
     const result = await getClient()
-      .mutation<{ startSession: { id: string; sessionGroupId: string } }>(
-        START_SESSION_MUTATION,
-        {
-          input: {
-            tool: sourceSession.tool as CodingTool,
-            model: sourceSession.model ?? undefined,
-            hosting: sourceSession.hosting,
-            channelId,
-            repoId: groupRepo?.id ?? sourceRepo?.id,
-            branch: group?.branch ?? sourceSession.branch ?? undefined,
-            sessionGroupId,
-            sourceSessionId,
-          },
+      .mutation<{ startSession: { id: string; sessionGroupId: string } }>(START_SESSION_MUTATION, {
+        input: {
+          tool: sourceSession.tool as CodingTool,
+          model: sourceSession.model ?? undefined,
+          hosting: sourceSession.hosting,
+          channelId,
+          repoId: groupRepo?.id ?? sourceRepo?.id,
+          branch: group?.branch ?? sourceSession.branch ?? undefined,
+          sessionGroupId,
+          sourceSessionId,
         },
-      )
+      })
       .toPromise();
 
     if (result.error) throw result.error;
@@ -166,8 +156,8 @@ export async function createAgentTab(
     }
 
     const hydrated = await fetchSessionGroupDetail(session.sessionGroupId);
-    if (!hydrated && !useEntityStore.getState().sessions[session.id]?.sessionGroupId) {
-      throw new Error("Couldn't load the new agent tab");
+    if (!hydrated.ok && !useEntityStore.getState().sessions[session.id]?.sessionGroupId) {
+      throw new Error(hydrated.error ?? "Couldn't load the new agent tab");
     }
     if (options?.navigate) {
       options.navigate(session.sessionGroupId, session.id);
@@ -207,7 +197,9 @@ export async function startPlanImplementationSession(
     .map((id) => state.sessions[id])
     .filter((session): session is SessionEntity => session !== undefined);
   const channelId =
-    getSessionGroupChannelId(group, groupSessions) ?? getSessionChannelId(sourceSession) ?? undefined;
+    getSessionGroupChannelId(group, groupSessions) ??
+    getSessionChannelId(sourceSession) ??
+    undefined;
   const groupRepo = group?.repo as { id: string } | null | undefined;
   const sourceRepo = sourceSession.repo as { id: string } | null | undefined;
   const prompt = `Implement the following plan:\n\n${planContent}`;
@@ -216,22 +208,19 @@ export async function startPlanImplementationSession(
 
   try {
     const result = await getClient()
-      .mutation<{ startSession: { id: string; sessionGroupId: string } }>(
-        START_SESSION_MUTATION,
-        {
-          input: {
-            tool: sourceSession.tool as CodingTool,
-            model: sourceSession.model ?? undefined,
-            hosting: sourceSession.hosting,
-            channelId,
-            repoId: groupRepo?.id ?? sourceRepo?.id,
-            branch: group?.branch ?? sourceSession.branch ?? undefined,
-            sessionGroupId,
-            sourceSessionId,
-            prompt,
-          },
+      .mutation<{ startSession: { id: string; sessionGroupId: string } }>(START_SESSION_MUTATION, {
+        input: {
+          tool: sourceSession.tool as CodingTool,
+          model: sourceSession.model ?? undefined,
+          hosting: sourceSession.hosting,
+          channelId,
+          repoId: groupRepo?.id ?? sourceRepo?.id,
+          branch: group?.branch ?? sourceSession.branch ?? undefined,
+          sessionGroupId,
+          sourceSessionId,
+          prompt,
         },
-      )
+      })
       .toPromise();
 
     if (result.error) throw result.error;

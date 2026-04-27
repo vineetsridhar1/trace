@@ -313,22 +313,21 @@ function buildScopeSection(ctx: AgentContextPacket): string {
 
     if (linkedTickets.length > 0) {
       const ticketList = linkedTickets
-        .map((t) => `${t.id} "${t.title}" (assignees: ${t.assignees.map((a) => a.name ?? a.id).join(", ") || "none"})`)
+        .map(
+          (t) =>
+            `${t.id} "${t.title}" (assignees: ${t.assignees.map((a) => a.name ?? a.id).join(", ") || "none"})`,
+        )
         .join("; ");
       scopeLines.push(`Linked tickets: ${ticketList}`);
     } else {
-      scopeLines.push(
-        "No linked tickets. Do not try to post comments to nonexistent tickets."
-      );
+      scopeLines.push("No linked tickets. Do not try to post comments to nonexistent tickets.");
     }
   }
 
   // Add @mention context hint
   if (ctx.isMention) {
     const replyAction = ctx.scopeType === "channel" ? "channel.sendMessage" : "message.send";
-    scopeLines.push(
-      BLOCK_MENTION_BEHAVIOR.content.replace("{replyAction}", replyAction),
-    );
+    scopeLines.push(BLOCK_MENTION_BEHAVIOR.content.replace("{replyAction}", replyAction));
   }
 
   parts.push(`<scope>\n${scopeLines.join("\n")}\n</scope>`);
@@ -480,7 +479,9 @@ function buildRawContextDebugSection(ctx: AgentContextPacket): string {
     const entityStr = ctx.relevantEntities
       .map((e) => `  [${e.type}:${e.id} hop=${e.hop}] ${JSON.stringify(e.data)}`)
       .join("\n");
-    parts.push(`<relevant_entities count="${ctx.relevantEntities.length}">\n${entityStr}\n</relevant_entities>`);
+    parts.push(
+      `<relevant_entities count="${ctx.relevantEntities.length}">\n${entityStr}\n</relevant_entities>`,
+    );
   }
 
   if (ctx.recentEvents.length > 0) {
@@ -516,10 +517,7 @@ function formatSignalTimestamp(timestamp: string): string {
   return timestamp.replace("T", " ").replace(".000Z", "Z").slice(0, 16);
 }
 
-function resolveSignalActor(
-  actor: string,
-  actorNames: Map<string, string>,
-): string {
+function resolveSignalActor(actor: string, actorNames: Map<string, string>): string {
   if (actor === "system") return "system";
   const [, actorId] = actor.split(":");
   return actorNames.get(actorId) ?? actor;
@@ -596,10 +594,7 @@ function parsePlannerOutput(
   }
 
   // If disposition is act/suggest but no valid actions, downgrade to ignore
-  if (
-    (disposition === "act" || disposition === "suggest") &&
-    proposedActions.length === 0
-  ) {
+  if ((disposition === "act" || disposition === "suggest") && proposedActions.length === 0) {
     return {
       disposition: "ignore",
       confidence,
@@ -711,8 +706,7 @@ export async function runPlanner(
     };
   } catch (error) {
     const latencyMs = Date.now() - startTime;
-    const message =
-      error instanceof Error ? error.message : "Unknown planner error";
+    const message = error instanceof Error ? error.message : "Unknown planner error";
 
     return {
       output: {

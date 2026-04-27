@@ -1,4 +1,5 @@
 import type {
+  CreateOrganizationInput,
   CreateRepoInput,
   UpdateRepoInput,
   CreateProjectInput,
@@ -9,6 +10,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { eventService } from "./event.js";
+import { assertActorOrgAccess } from "./actor-auth.js";
 
 const PROJECT_INCLUDE = {
   repo: true,
@@ -108,7 +110,71 @@ export class OrganizationService {
     });
   }
 
+  async createOrganization(input: CreateOrganizationInput, actorId: string) {
+    const name = input.name.trim();
+    if (!name) {
+      throw new Error("Organization name is required");
+    }
+
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.user.findUniqueOrThrow({
+        where: { id: actorId },
+        select: { id: true },
+      });
+
+      const organization = await tx.organization.create({
+        data: { name },
+        select: { id: true, name: true },
+      });
+
+      const member = await tx.orgMember.create({
+        data: {
+          userId: actorId,
+          organizationId: organization.id,
+          role: "admin",
+        },
+        include: {
+          user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+          organization: { select: { id: true, name: true } },
+        },
+      });
+
+      await tx.orgMember.create({
+        data: {
+          userId: TRACE_AI_USER_ID,
+          organizationId: organization.id,
+          role: "member",
+        },
+      });
+
+      await eventService.create(
+        {
+          organizationId: organization.id,
+          scopeType: "system",
+          scopeId: organization.id,
+          eventType: "organization_created",
+          payload: {
+            organization,
+            member: {
+              userId: actorId,
+              role: "admin",
+            },
+          },
+          actorType: "user",
+          actorId,
+        },
+        tx,
+      );
+
+      return member;
+    });
+  }
+
   async createRepo(input: CreateRepoInput, actorType: ActorType, actorId: string) {
+    await prisma.$transaction((tx: Prisma.TransactionClient) =>
+      assertActorOrgAccess(tx, input.organizationId, actorType, actorId),
+    );
+
     // Deduplicate by remote URL within the org — if it already exists, return it
     const existing = await prisma.repo.findUnique({
       where: {
@@ -212,6 +278,8 @@ export class OrganizationService {
 
   async createProject(input: CreateProjectInput, actorType: ActorType, actorId: string) {
     const [project] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await assertActorOrgAccess(tx, input.organizationId, actorType, actorId);
+
       const project = await tx.project.create({
         data: {
           name: input.name,
@@ -252,11 +320,30 @@ export class OrganizationService {
         where: { id: projectId },
         select: { organizationId: true },
       });
+      await assertActorOrgAccess(tx, project.organizationId, actorType, actorId);
 
       const joinOps: Record<EntityType, () => Promise<unknown>> = {
-        session: () => tx.sessionProject.create({ data: { sessionId: entityId, projectId } }),
-        ticket: () => tx.ticketProject.create({ data: { ticketId: entityId, projectId } }),
-        channel: () => tx.channelProject.create({ data: { channelId: entityId, projectId } }),
+        session: async () => {
+          await tx.session.findFirstOrThrow({
+            where: { id: entityId, organizationId: project.organizationId },
+            select: { id: true },
+          });
+          return tx.sessionProject.create({ data: { sessionId: entityId, projectId } });
+        },
+        ticket: async () => {
+          await tx.ticket.findFirstOrThrow({
+            where: { id: entityId, organizationId: project.organizationId },
+            select: { id: true },
+          });
+          return tx.ticketProject.create({ data: { ticketId: entityId, projectId } });
+        },
+        channel: async () => {
+          await tx.channel.findFirstOrThrow({
+            where: { id: entityId, organizationId: project.organizationId },
+            select: { id: true },
+          });
+          return tx.channelProject.create({ data: { channelId: entityId, projectId } });
+        },
         chat: () => {
           throw new Error("Chats cannot be linked to projects");
         },

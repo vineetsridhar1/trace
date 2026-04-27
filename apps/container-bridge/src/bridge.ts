@@ -78,7 +78,12 @@ async function inspectSessionGitSyncStatus(repoPath: string) {
         maxBuffer: 1024 * 1024,
       }),
       maybeReadGitRef(repoPath, ["symbolic-ref", "--short", "-q", "HEAD"]),
-      maybeReadGitRef(repoPath, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]),
+      maybeReadGitRef(repoPath, [
+        "rev-parse",
+        "--abbrev-ref",
+        "--symbolic-full-name",
+        "@{upstream}",
+      ]),
     ]);
 
   const upstreamCommitSha = upstreamBranch
@@ -684,7 +689,10 @@ export class ContainerBridge implements IBridgeClient {
     if (imageUrls?.length) {
       try {
         imagePaths = await downloadImagesToTempFiles(imageUrls, {
-          fs, path, tmpdir: os.tmpdir, randomUUID: crypto.randomUUID,
+          fs,
+          path,
+          tmpdir: os.tmpdir,
+          randomUUID: crypto.randomUUID,
         });
       } catch (err) {
         console.error(`[container-bridge] Failed to download images for ${sessionId}:`, err);

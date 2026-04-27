@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Alert, Pressable, StyleSheet, View } from "react-native";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import { Spinner, Text } from "@/components/design-system";
@@ -9,6 +9,7 @@ import {
   type LinkedCheckoutAction,
   type UseLinkedCheckoutResult,
 } from "@/hooks/useLinkedCheckout";
+import { LinkedCheckoutSyncConflictSheet } from "./LinkedCheckoutSyncConflictSheet";
 
 interface LinkedCheckoutPanelSectionProps {
   groupId: string;
@@ -29,6 +30,8 @@ export function LinkedCheckoutPanelSection({ groupId }: LinkedCheckoutPanelSecti
 
 function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
   const theme = useTheme();
+  const [syncConflictOpen, setSyncConflictOpen] = useState(false);
+  const [syncConflictError, setSyncConflictError] = useState<string | null>(null);
   const {
     loading,
     fetchError,
@@ -42,7 +45,6 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
     pendingAction,
     refresh,
     sync,
-    commitChanges,
     restore,
     toggleAutoSync,
   } = checkout;
@@ -64,15 +66,64 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
     [],
   );
 
-  const onSync = useCallback(() => void handle("sync", sync), [handle, sync]);
-  const onCommitChanges = useCallback(
-    () => void handle("commit", commitChanges),
-    [commitChanges, handle],
+  const onSync = useCallback(async () => {
+    void haptic.light();
+    const outcome = await sync();
+    if (!outcome.ok) {
+      void haptic.error();
+      if (outcome.errorCode === "DIRTY_ROOT_CHECKOUT") {
+        setSyncConflictError(outcome.error ?? null);
+        setSyncConflictOpen(true);
+        return;
+      }
+      Alert.alert(ACTION_ALERT_TITLE.sync, outcome.error ?? "Unknown error.");
+      return;
+    }
+    setSyncConflictError(null);
+    setSyncConflictOpen(false);
+    void haptic.success();
+  }, [sync]);
+
+  const onResolveSyncConflict = useCallback(
+    async ({
+      strategy,
+      commitMessage,
+    }: {
+      strategy: "DISCARD" | "COMMIT" | "REBASE";
+      commitMessage?: string;
+    }) => {
+      void haptic.light();
+      const outcome = await sync({
+        conflictStrategy: strategy,
+        commitMessage,
+      });
+      if (!outcome.ok) {
+        void haptic.error();
+        setSyncConflictError(outcome.error ?? "Unknown error.");
+        return;
+      }
+      setSyncConflictError(null);
+      setSyncConflictOpen(false);
+      void haptic.success();
+    },
+    [sync],
   );
   const onRestore = useCallback(() => void handle("restore", restore), [handle, restore]);
   const onTogglePause = useCallback(
     () => void handle("toggle-auto-sync", toggleAutoSync),
     [handle, toggleAutoSync],
+  );
+  const conflictSheet = (
+    <LinkedCheckoutSyncConflictSheet
+      open={syncConflictOpen}
+      error={syncConflictError}
+      pending={pendingAction === "sync"}
+      onClose={() => {
+        if (pendingAction === "sync") return;
+        setSyncConflictOpen(false);
+      }}
+      onResolve={onResolveSyncConflict}
+    />
   );
 
   if (loading) {
@@ -128,6 +179,7 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
   if (isAttachedElsewhere) {
     return (
       <View style={styles.container}>
+        {conflictSheet}
         <SectionHeader />
         <Text variant="footnote" color="mutedForeground">
           Main worktree is attached to another workspace.
@@ -136,10 +188,8 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
           theme={theme}
           pendingAction={pendingAction}
           autoSyncEnabled={status?.autoSyncEnabled ?? false}
-          hasUncommittedChanges={false}
           isAttachedToThisGroup={false}
           onSync={onSync}
-          onCommitChanges={onCommitChanges}
           onTogglePause={onTogglePause}
           onRestore={onRestore}
         />
@@ -147,16 +197,18 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
     );
   }
 
-  const subtitle = isAttachedToThisGroup && branch
-    ? `Main worktree following ${branch}${
-        syncedCommitSha ? ` at ${syncedCommitSha.slice(0, 7)}` : ""
-      }${status?.autoSyncEnabled ? "" : " (auto-sync paused)"}${
-        hasUncommittedChanges ? " (has live changes)" : ""
-      }`
-    : "Sync this workspace into your main worktree.";
+  const subtitle =
+    isAttachedToThisGroup && branch
+      ? `Main worktree following ${branch}${
+          syncedCommitSha ? ` at ${syncedCommitSha.slice(0, 7)}` : ""
+        }${status?.autoSyncEnabled ? "" : " (auto-sync paused)"}${
+          hasUncommittedChanges ? " (has live changes)" : ""
+        }`
+      : "Sync this workspace into your main worktree.";
 
   return (
     <View style={styles.container}>
+      {conflictSheet}
       <SectionHeader />
       <Text variant="footnote" color="mutedForeground" numberOfLines={2}>
         {subtitle}
@@ -170,10 +222,8 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
         theme={theme}
         pendingAction={pendingAction}
         autoSyncEnabled={status?.autoSyncEnabled ?? false}
-        hasUncommittedChanges={hasUncommittedChanges}
         isAttachedToThisGroup={isAttachedToThisGroup}
-        onSync={onSync}
-        onCommitChanges={onCommitChanges}
+        onSync={() => void onSync()}
         onTogglePause={onTogglePause}
         onRestore={onRestore}
       />
@@ -193,10 +243,8 @@ interface ActionRowProps {
   theme: Theme;
   pendingAction: LinkedCheckoutAction | null;
   autoSyncEnabled: boolean;
-  hasUncommittedChanges: boolean;
   isAttachedToThisGroup: boolean;
   onSync: () => void;
-  onCommitChanges: () => void;
   onTogglePause: () => void;
   onRestore: () => void;
 }
@@ -205,10 +253,8 @@ function ActionRow({
   theme,
   pendingAction,
   autoSyncEnabled,
-  hasUncommittedChanges,
   isAttachedToThisGroup,
   onSync,
-  onCommitChanges,
   onTogglePause,
   onRestore,
 }: ActionRowProps) {
@@ -226,16 +272,6 @@ function ActionRow({
       />
       {isAttachedToThisGroup ? (
         <>
-          {hasUncommittedChanges ? (
-            <ActionButton
-              theme={theme}
-              label="Commit"
-              symbol="checkmark.circle"
-              loading={pendingAction === "commit"}
-              disabled={busy}
-              onPress={onCommitChanges}
-            />
-          ) : null}
           <ActionButton
             theme={theme}
             label={autoSyncEnabled ? "Pause" : "Resume"}

@@ -21,6 +21,7 @@ const eventServiceMock = eventService as any;
 describe("TicketService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "user-1" });
   });
 
   it("creates tickets with defaults, relationships, and events", async () => {
@@ -58,19 +59,22 @@ describe("TicketService", () => {
       },
       include: expect.any(Object),
     });
-    expect(eventServiceMock.create).toHaveBeenCalledWith({
-      organizationId: "org-1",
-      scopeType: "ticket",
-      scopeId: "ticket-1",
-      eventType: "ticket_created",
-      payload: {
-        ticketId: "ticket-1",
-        title: "Fix auth",
-        priority: "medium",
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      {
+        organizationId: "org-1",
+        scopeType: "ticket",
+        scopeId: "ticket-1",
+        eventType: "ticket_created",
+        payload: {
+          ticketId: "ticket-1",
+          title: "Fix auth",
+          priority: "medium",
+        },
+        actorType: "user",
+        actorId: "user-1",
       },
-      actorType: "user",
-      actorId: "user-1",
-    }, prismaMock);
+      prismaMock,
+    );
   });
 
   it("updates tickets and records prior status in the event payload", async () => {
@@ -135,6 +139,9 @@ describe("TicketService", () => {
     prismaMock.ticket.findUniqueOrThrow
       .mockResolvedValueOnce({ id: "ticket-1", organizationId: "org-1" })
       .mockResolvedValueOnce({ id: "ticket-1", organizationId: "org-1" })
+      .mockResolvedValueOnce({ id: "ticket-1", organizationId: "org-1" })
+      .mockResolvedValueOnce({ id: "ticket-1", organizationId: "org-1" })
+      .mockResolvedValueOnce({ id: "ticket-1", organizationId: "org-1" })
       .mockResolvedValueOnce({ id: "ticket-1", organizationId: "org-1" });
 
     const service = new TicketService();
@@ -174,5 +181,21 @@ describe("TicketService", () => {
         },
       },
     });
+  });
+
+  it("rejects cross-org ticket writes when the actor is not a member", async () => {
+    prismaMock.orgMember.findUniqueOrThrow.mockRejectedValueOnce(new Error("Not found"));
+
+    const service = new TicketService();
+    await expect(
+      service.create({
+        organizationId: "org-2",
+        title: "Fix auth",
+        actorType: "user",
+        actorId: "user-1",
+      } as any),
+    ).rejects.toThrow("Not found");
+
+    expect(prismaMock.ticket.create).not.toHaveBeenCalled();
   });
 });

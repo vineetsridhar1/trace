@@ -1,7 +1,7 @@
 import { prisma } from "../lib/db.js";
 
 async function assertOrgEntityExists(
-  model: "channel" | "session" | "ticket",
+  model: "channel" | "session" | "ticket" | "project",
   id: string,
   organizationId: string,
 ) {
@@ -22,6 +22,12 @@ async function assertOrgEntityExists(
       break;
     case "ticket":
       entity = await prisma.ticket.findFirst({
+        where: { id, organizationId },
+        select: { id: true },
+      });
+      break;
+    case "project":
+      entity = await prisma.project.findFirst({
         where: { id, organizationId },
         select: { id: true },
       });
@@ -98,15 +104,16 @@ export async function assertScopeAccess(
       if (!organizationId) throw new Error("Organization context required for ticket access");
       await assertOrgEntityExists("ticket", scopeId, organizationId);
       return;
+    case "project":
+      if (!organizationId) throw new Error("Organization context required for project access");
+      await assertOrgEntityExists("project", scopeId, organizationId);
+      return;
     default:
       throw new Error(`Unsupported scope type: ${scopeType}`);
   }
 }
 
-export async function assertThreadAccess(
-  rootMessageId: string,
-  userId: string,
-) {
+export async function assertThreadAccess(rootMessageId: string, userId: string) {
   const rootMessage = await prisma.message.findUniqueOrThrow({
     where: { id: rootMessageId },
     select: {

@@ -33,11 +33,11 @@ When channel messages are implemented, they must emit events matching this schem
 
 ## Supported Event Types
 
-| Event Type       | Routing    | Description                        |
-| ---------------- | ---------- | ---------------------------------- |
-| `message_sent`   | aggregate  | New message posted in channel      |
-| `message_edited` | aggregate  | Existing message was edited        |
-| `channel_created`| drop       | Channel was created (not actionable)|
+| Event Type        | Routing   | Description                          |
+| ----------------- | --------- | ------------------------------------ |
+| `message_sent`    | aggregate | New message posted in channel        |
+| `message_edited`  | aggregate | Existing message was edited          |
+| `channel_created` | drop      | Channel was created (not actionable) |
 
 ## Threading
 

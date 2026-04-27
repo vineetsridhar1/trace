@@ -210,9 +210,7 @@ describe("AIService", () => {
         tools: tools as any,
       });
 
-      expect(adapter.complete).toHaveBeenCalledWith(
-        expect.objectContaining({ tools }),
-      );
+      expect(adapter.complete).toHaveBeenCalledWith(expect.objectContaining({ tools }));
     });
   });
 
@@ -329,9 +327,7 @@ describe("AIService", () => {
 
       adapter.complete
         .mockResolvedValueOnce({
-          content: [
-            { type: "tool_use", id: "tool-1", name: "dangerous_tool", input: {} },
-          ],
+          content: [{ type: "tool_use", id: "tool-1", name: "dangerous_tool", input: {} }],
           stopReason: "tool_use",
         })
         .mockResolvedValueOnce({
@@ -467,7 +463,8 @@ describe("AIService", () => {
 
       createLLMAdapterMock.mockReturnValueOnce(adapter);
 
-      const executeToolCall = vi.fn()
+      const executeToolCall = vi
+        .fn()
         .mockImplementation((name: string) =>
           Promise.resolve(name === "tool_a" ? "result_a" : "result_b"),
         );

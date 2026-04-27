@@ -7,26 +7,21 @@ import {
   type SetStateAction,
 } from "react";
 import { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useComposerModePalette, MODE_CYCLE } from "@/hooks/useComposerModePalette";
 import type { ComposerMode } from "@/hooks/useComposerSubmit";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
-import {
-  CHIP_EXPAND_HOLD_MS,
-  MODE_FALLBACK_WIDTH,
-  MODEL_CHIP_SIZE,
-} from "./constants";
+import { CHIP_EXPAND_HOLD_MS, MODE_FALLBACK_WIDTH, MODEL_CHIP_SIZE } from "./constants";
 
 interface UseSessionComposerChipsOptions {
   mode: ComposerMode;
   setMode: Dispatch<SetStateAction<ComposerMode>>;
 }
 
-export function useSessionComposerChips({
-  mode,
-  setMode,
-}: UseSessionComposerChipsOptions) {
+export function useSessionComposerChips({ mode, setMode }: UseSessionComposerChipsOptions) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const [modeWidths, setModeWidths] = useState<Partial<Record<ComposerMode, number>>>({});
   const [modeLabelVisible, setModeLabelVisible] = useState(false);
   const modeCollapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -40,10 +35,12 @@ export function useSessionComposerChips({
   const modeWidth = useSharedValue(modeTargetWidth);
 
   useEffect(() => {
-    modeWidth.value = withTiming(modeTargetWidth, {
-      duration: theme.motion.durations.base,
-    });
-  }, [modeTargetWidth, modeWidth, theme.motion.durations.base]);
+    modeWidth.value = reducedMotion
+      ? modeTargetWidth
+      : withTiming(modeTargetWidth, {
+          duration: theme.motion.durations.base,
+        });
+  }, [modeTargetWidth, modeWidth, reducedMotion, theme.motion.durations.base]);
   const modeWidthAnimatedStyle = useAnimatedStyle(() => ({ width: modeWidth.value }));
 
   const clearModeCollapseTimer = useCallback(() => {

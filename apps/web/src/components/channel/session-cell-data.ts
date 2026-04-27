@@ -6,9 +6,9 @@ export type CreatedByRef = { id: string; name: string; avatarUrl?: string | null
 export function getSessionRepo(data: SessionGroupRow | undefined): RepoRef | null {
   if (!data) return null;
   return (
-    (data.repo as RepoRef | null | undefined)
-    ?? (data.latestSession?.repo as RepoRef | null | undefined)
-    ?? null
+    (data.repo as RepoRef | null | undefined) ??
+    (data.latestSession?.repo as RepoRef | null | undefined) ??
+    null
   );
 }
 

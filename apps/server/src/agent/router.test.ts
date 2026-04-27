@@ -69,10 +69,7 @@ describe("router", () => {
   it("routes mention events directly", () => {
     seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 
-    const result = routeEvent(
-      event({ payload: { mentions: [{ userId: "agent-1" }] } }),
-      settings,
-    );
+    const result = routeEvent(event({ payload: { mentions: [{ userId: "agent-1" }] } }), settings);
 
     expect(result).toEqual({
       decision: "direct",
@@ -96,10 +93,7 @@ describe("router", () => {
   it("suppresses agent self-triggers outside the allowlist", () => {
     seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 
-    const result = routeEvent(
-      event({ actorType: "agent", actorId: "agent-1" }),
-      settings,
-    );
+    const result = routeEvent(event({ actorType: "agent", actorId: "agent-1" }), settings);
 
     expect(result).toEqual({ decision: "drop", reason: "self_trigger" });
   });
@@ -208,10 +202,7 @@ describe("router", () => {
   it("routes @mention of agent directly without tier 3 promotion", () => {
     seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 
-    const result = routeEvent(
-      event({ payload: { mentions: [{ userId: "agent-1" }] } }),
-      settings,
-    );
+    const result = routeEvent(event({ payload: { mentions: [{ userId: "agent-1" }] } }), settings);
 
     // @mentions route directly but don't auto-promote to Tier 3.
     // The planner can escalate via promotionReason if the question is complex.

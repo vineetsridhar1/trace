@@ -1,11 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
-import {
-  formatCommandLabel,
-  formatTime,
-  getCommandPrefix,
-  serializeUnknown,
-} from "./utils";
+import { formatCommandLabel, formatTime, getCommandPrefix, serializeUnknown } from "./utils";
 
 interface CommandExecutionRowProps {
   command: string;
@@ -43,11 +38,7 @@ export function CommandExecutionRow({
 
   return (
     <div className="tool-cmd-row">
-      <button
-        type="button"
-        className="tool-cmd-button"
-        onClick={() => setOpen(!open)}
-      >
+      <button type="button" className="tool-cmd-button" onClick={() => setOpen(!open)}>
         <span
           className="tool-cmd-chevron"
           style={{ transform: open ? "rotate(90deg)" : undefined }}
@@ -59,10 +50,7 @@ export function CommandExecutionRow({
         <span className="tool-cmd-time">{formatTime(timestamp)}</span>
       </button>
       {renderedOutput && (
-        <div
-          className="tool-cmd-body"
-          style={{ maxHeight: open ? `${bodyHeight}px` : "0px" }}
-        >
+        <div className="tool-cmd-body" style={{ maxHeight: open ? `${bodyHeight}px` : "0px" }}>
           <div ref={bodyRef}>
             <div className="tool-cmd-section-label">Output</div>
             <pre className="tool-cmd-output">{renderedOutput}</pre>

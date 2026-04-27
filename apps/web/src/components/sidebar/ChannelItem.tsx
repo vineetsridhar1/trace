@@ -31,7 +31,9 @@ export const ChannelItem = memo(function ChannelItem({
 }) {
   const name = useEntityField("channels", id, "name");
   const type = useEntityField("channels", id, "type");
-  const hasDoneBadge = useUIStore((s: { channelDoneBadges: Record<string, boolean> }) => !!s.channelDoneBadges[id]);
+  const hasDoneBadge = useUIStore(
+    (s: { channelDoneBadges: Record<string, boolean> }) => !!s.channelDoneBadges[id],
+  );
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const sortableData = useMemo(
@@ -39,14 +41,7 @@ export const ChannelItem = memo(function ChannelItem({
     [id, groupId],
   );
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `channel:${id}`,
     data: sortableData,
   });
@@ -61,12 +56,7 @@ export const ChannelItem = memo(function ChannelItem({
     <>
       <ContextMenu>
         <ContextMenuTrigger>
-          <div
-            ref={setNodeRef}
-            style={style}
-            {...attributes}
-            {...listeners}
-          >
+          <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
             <SidebarMenuItem>
               <SidebarMenuButton isActive={isActive} onClick={onClick} tooltip={name ?? ""}>
                 <div className="relative">
@@ -84,10 +74,7 @@ export const ChannelItem = memo(function ChannelItem({
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent>
-          <ContextMenuItem
-            variant="destructive"
-            onClick={() => setDeleteOpen(true)}
-          >
+          <ContextMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
             <Trash2 size={14} className="mr-2" />
             Delete channel
           </ContextMenuItem>

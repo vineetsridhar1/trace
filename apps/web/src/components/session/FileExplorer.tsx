@@ -27,9 +27,7 @@ export function FileExplorer({
     setLoading(true);
     setError(null);
     try {
-      const result = await client
-        .query(SESSION_GROUP_FILES_QUERY, { sessionGroupId })
-        .toPromise();
+      const result = await client.query(SESSION_GROUP_FILES_QUERY, { sessionGroupId }).toPromise();
       if (result.error) {
         setError(result.error.message);
       } else {

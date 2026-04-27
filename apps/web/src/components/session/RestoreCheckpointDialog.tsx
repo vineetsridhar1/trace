@@ -61,10 +61,8 @@ export function RestoreCheckpointDialog({
             <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-foreground">
               {commitSha}
             </code>
-            {subject && (
-              <span className="text-muted-foreground"> — {subject}</span>
-            )}
-            . Your current work will not be lost.
+            {subject && <span className="text-muted-foreground"> — {subject}</span>}. Your current
+            work will not be lost.
           </DialogDescription>
         </DialogHeader>
 
@@ -82,9 +80,7 @@ export function RestoreCheckpointDialog({
           <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button onClick={handleConfirm}>
-            Restore
-          </Button>
+          <Button onClick={handleConfirm}>Restore</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

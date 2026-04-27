@@ -19,13 +19,9 @@ export function MessageImageModal({ item, onClose }: MessageImageModalProps) {
   const imageSurfaceStyle = fitMessageImageSurface(windowWidth, windowHeight, aspectRatio);
 
   return (
-    <Modal
-      visible={item != null}
-      animationType="fade"
-      transparent
-      onRequestClose={onClose}
-    >
+    <Modal visible={item != null} animationType="fade" transparent onRequestClose={onClose}>
       <Pressable
+        accessible={false}
         onPress={onClose}
         style={[styles.modalBackdrop, { backgroundColor: alpha("#000000", 0.94) }]}
       >
@@ -47,14 +43,11 @@ export function MessageImageModal({ item, onClose }: MessageImageModalProps) {
           <View style={styles.modalImageFrame}>
             {uri ? (
               <Pressable
+                accessible={false}
                 onPress={(event) => event.stopPropagation()}
                 style={[styles.modalImageSurface, imageSurfaceStyle]}
               >
-                <Image
-                  source={{ uri }}
-                  resizeMode="contain"
-                  style={styles.modalImage}
-                />
+                <Image source={{ uri }} resizeMode="contain" style={styles.modalImage} />
               </Pressable>
             ) : loading ? (
               <Spinner size="large" />

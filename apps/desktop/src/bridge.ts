@@ -97,6 +97,7 @@ async function buildLinkedCheckoutFailureResult(repoId: string, error: unknown) 
     ok: false,
     status,
     error: message,
+    errorCode: null,
   };
 }
 
@@ -122,7 +123,12 @@ async function inspectSessionGitSyncStatus(repoPath: string) {
         maxBuffer: 1024 * 1024,
       }),
       maybeReadGitRef(repoPath, ["symbolic-ref", "--short", "-q", "HEAD"]),
-      maybeReadGitRef(repoPath, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]),
+      maybeReadGitRef(repoPath, [
+        "rev-parse",
+        "--abbrev-ref",
+        "--symbolic-full-name",
+        "@{upstream}",
+      ]),
     ]);
 
   const upstreamCommitSha = upstreamBranch
@@ -841,6 +847,7 @@ export class BridgeClient implements IBridgeClient {
           repoName,
           defaultBranch,
           branch,
+          preserveBranchName,
           checkpointSha,
           readOnly,
         } = cmd;
@@ -876,6 +883,7 @@ export class BridgeClient implements IBridgeClient {
             slug,
             defaultBranch,
             startBranch: branch,
+            preserveBranchName,
             checkpointSha,
             gitHooksEnabled: repoConfig.gitHooksEnabled,
           });
@@ -899,7 +907,16 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "upgrade_workspace": {
-        const { sessionId, sessionGroupId, slug, repoId, repoName, defaultBranch, branch } = cmd;
+        const {
+          sessionId,
+          sessionGroupId,
+          slug,
+          repoId,
+          repoName,
+          defaultBranch,
+          branch,
+          preserveBranchName,
+        } = cmd;
         const repoConfig = getRepoConfig(repoId);
         const repoPath = repoConfig?.path;
 
@@ -920,6 +937,7 @@ export class BridgeClient implements IBridgeClient {
           slug,
           defaultBranch,
           startBranch: branch,
+          preserveBranchName,
           gitHooksEnabled: repoConfig.gitHooksEnabled,
         })
           .then(({ workdir, branch: worktreeBranch, slug: worktreeSlug }) => {
@@ -1063,6 +1081,8 @@ export class BridgeClient implements IBridgeClient {
           branch: cmd.branch,
           commitSha: cmd.commitSha,
           autoSyncEnabled: cmd.autoSyncEnabled,
+          conflictStrategy: cmd.conflictStrategy,
+          commitMessage: cmd.commitMessage,
         })
           .then((result) => {
             this.send({
@@ -1089,6 +1109,7 @@ export class BridgeClient implements IBridgeClient {
         void commitLinkedCheckoutChanges({
           repoId: cmd.repoId,
           sessionGroupId: cmd.sessionGroupId,
+          message: cmd.message,
         })
           .then((result) => {
             this.send({

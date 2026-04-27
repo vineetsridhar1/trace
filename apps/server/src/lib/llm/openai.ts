@@ -176,7 +176,7 @@ function parseToolArguments(args: string, context: string): Record<string, unkno
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to parse tool arguments";
     throw new Error(`Invalid tool arguments for ${context}: ${message}`, {
-      cause: error instanceof Error ? error : undefined,
+      cause: error,
     });
   }
 }

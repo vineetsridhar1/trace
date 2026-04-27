@@ -327,7 +327,11 @@ export function buildSessionNodes(
   const deduped = deduplicateResultEvents(result, events);
 
   const withQuestions = detectQuestionNodes(deduped, events);
-  return { nodes: detectPlanReviewNodes(withQuestions, events), completedAgentTools, toolResultByUseId };
+  return {
+    nodes: detectPlanReviewNodes(withQuestions, events),
+    completedAgentTools,
+    toolResultByUseId,
+  };
 }
 
 /** Remove duplicate consecutive "result" session_output events */

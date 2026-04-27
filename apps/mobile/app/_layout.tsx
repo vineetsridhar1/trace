@@ -8,11 +8,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { KeyboardProvider } from "react-native-keyboard-controller";
-import {
-  markAppBackgrounded,
-  markAppForegrounded,
-  markAppInteractive,
-} from "@/lib/perf";
+import { markAppBackgrounded, markAppForegrounded, markAppInteractive } from "@/lib/perf";
 
 export default function RootLayout() {
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);

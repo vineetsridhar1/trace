@@ -19,11 +19,7 @@
  */
 
 import type { ExecutionDisposition, ExecutionStatus } from "@prisma/client";
-import type {
-  LLMAssistantContentBlock,
-  LLMMessage,
-  LLMResponse,
-} from "@trace/shared";
+import type { LLMAssistantContentBlock, LLMMessage, LLMResponse } from "@trace/shared";
 import type { OrgAgentSettings } from "../services/agent-identity.js";
 import type { AggregatedBatch } from "./aggregator.js";
 import type { AgentContextPacket } from "./context-builder.js";
@@ -39,7 +35,11 @@ import {
 import type { PolicyDecision, PolicyActionResult } from "./policy-engine.js";
 import type { ExecutionResult } from "./executor.js";
 import { buildContext } from "./context-builder.js";
-import { fetchProjectSoulFile, fetchRepoIdForScope, loadRepoSoulFile } from "./soul-file-resolver.js";
+import {
+  fetchProjectSoulFile,
+  fetchRepoIdForScope,
+  loadRepoSoulFile,
+} from "./soul-file-resolver.js";
 import { evaluatePolicy } from "./policy-engine.js";
 import { ActionExecutor } from "./executor.js";
 import { createSuggestions } from "./suggestion.js";
@@ -140,10 +140,7 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     return;
   }
 
-  const alreadyProcessed = await processedEventService.isProcessed(
-    CONSUMER_NAME,
-    triggerEvent.id,
-  );
+  const alreadyProcessed = await processedEventService.isProcessed(CONSUMER_NAME, triggerEvent.id);
   if (alreadyProcessed) {
     log("trigger event already processed, skipping", {
       eventId: triggerEvent.id,
@@ -163,7 +160,7 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
   const [projectSoulFile, repoSoulFile] = await Promise.all([
     fetchProjectSoulFile(batch.organizationId, scopeType, scopeId).catch(() => undefined),
     fetchRepoIdForScope(batch.organizationId, scopeType, scopeId)
-      .then((repoId) => repoId ? loadRepoSoulFile(repoId) : undefined)
+      .then((repoId) => (repoId ? loadRepoSoulFile(repoId) : undefined))
       .catch(() => undefined),
   ]);
 
@@ -190,9 +187,7 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
   }
 
   // ── DMs always use Sonnet — direct conversations need comprehension ──
-  const isDm =
-    packet.scopeType === "chat" &&
-    packet.scopeEntity?.data.type === "dm";
+  const isDm = packet.scopeType === "chat" && packet.scopeEntity?.data.type === "dm";
   const isDmPromoted = !isRuleBasedTier3 && isDm;
 
   // ── Initialize loop state ──
@@ -200,7 +195,11 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     packet,
     currentTier: isRuleBasedTier3 ? "tier3" : isDmPromoted ? "tier3" : "tier2",
     promoted: isRuleBasedTier3 || isDmPromoted,
-    promotionReason: isRuleBasedTier3 ? "rule_based:router" : isDmPromoted ? "dm_conversation" : undefined,
+    promotionReason: isRuleBasedTier3
+      ? "rule_based:router"
+      : isDmPromoted
+        ? "dm_conversation"
+        : undefined,
     promotedModel: isRuleBasedTier3 ? opusModel : isDmPromoted ? sonnetModel : null,
     messageHistory: [{ role: "user", content: INITIAL_USER_MESSAGE }],
     turnResults: [],
@@ -310,7 +309,14 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     }
 
     if (plannerOutput.disposition === "summarize") {
-      await handleSummarize(state.packet, turnResult, llmResponse, state.turnResults, log, logError);
+      await handleSummarize(
+        state.packet,
+        turnResult,
+        llmResponse,
+        state.turnResults,
+        log,
+        logError,
+      );
       break;
     }
 
@@ -351,11 +357,27 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     }
 
     // ── Feed results back to planner ──
-    appendToolResult(state.messageHistory, llmResponse, turnRecord, turn, log, state.packet.scopeKey);
+    appendToolResult(
+      state.messageHistory,
+      llmResponse,
+      turnRecord,
+      turn,
+      log,
+      state.packet.scopeKey,
+    );
   }
 
   // ── Post-loop ──
-  await postLoop({ state, agentSettings, executor, batch, startTime, replayPacket, blockVersions, logger });
+  await postLoop({
+    state,
+    agentSettings,
+    executor,
+    batch,
+    startTime,
+    replayPacket,
+    blockVersions,
+    logger,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -374,7 +396,8 @@ interface ExecuteTurnInput {
 }
 
 async function executeTurn(input: ExecuteTurnInput): Promise<TurnResult> {
-  const { turn, plannerOutput, llmResponse, turnResult, state, agentSettings, executor, logger } = input;
+  const { turn, plannerOutput, llmResponse, turnResult, state, agentSettings, executor, logger } =
+    input;
   const { log, logError } = logger;
 
   // ── Policy engine ──
@@ -519,9 +542,7 @@ async function executeTurn(input: ExecuteTurnInput): Promise<TurnResult> {
 
 function shouldPromote(state: LoopState, output: PlannerOutput): boolean {
   return (
-    state.currentTier === "tier2" &&
-    output.disposition === "escalate" &&
-    !!output.promotionReason
+    state.currentTier === "tier2" && output.disposition === "escalate" && !!output.promotionReason
   );
 }
 
@@ -539,7 +560,18 @@ interface HandlePromotionInput {
 }
 
 async function handlePromotion(input: HandlePromotionInput): Promise<boolean> {
-  const { state, plannerOutput, llmResponse, batch, agentSettings, sonnetModel, opusModel, projectSoulFile, repoSoulFile, logger } = input;
+  const {
+    state,
+    plannerOutput,
+    llmResponse,
+    batch,
+    agentSettings,
+    sonnetModel,
+    opusModel,
+    projectSoulFile,
+    repoSoulFile,
+    logger,
+  } = input;
   const { log, logError } = logger;
 
   // Record Tier 2 cost before re-running
@@ -612,13 +644,11 @@ async function handlePromotion(input: HandlePromotionInput): Promise<boolean> {
 // Disposition handlers
 // ---------------------------------------------------------------------------
 
-function logUnresolvedEscalation(
-  state: LoopState,
-  log: PipelineLogger["log"],
-): void {
-  const reason = state.currentTier === "tier3"
-    ? "tier3_escalation_unresolvable"
-    : "tier3_promotion_suppressed_by_budget";
+function logUnresolvedEscalation(state: LoopState, log: PipelineLogger["log"]): void {
+  const reason =
+    state.currentTier === "tier3"
+      ? "tier3_escalation_unresolvable"
+      : "tier3_promotion_suppressed_by_budget";
   log("escalation unresolved", {
     scopeKey: state.packet.scopeKey,
     reason,
@@ -671,9 +701,7 @@ function handleIgnore(
     : DEFAULT_MENTION_FALLBACK;
 
   plannerOutput.disposition = "act";
-  plannerOutput.proposedActions = [
-    buildReplyAction(packet, replyText, triggerMessageId),
-  ];
+  plannerOutput.proposedActions = [buildReplyAction(packet, replyText, triggerMessageId)];
 
   const reason = packet.isMention ? "@mention" : "dm";
   log(`${reason} override: planner ignored but forcing reply`, {
@@ -784,9 +812,11 @@ interface PostLoopInput {
 }
 
 function isReplyAction(actionType: string): boolean {
-  return actionType === "message.send" ||
+  return (
+    actionType === "message.send" ||
     actionType === "message.sendToChannel" ||
-    actionType === "channel.sendMessage";
+    actionType === "channel.sendMessage"
+  );
 }
 
 function isChannelReplyAction(actionType: string): boolean {
@@ -794,7 +824,8 @@ function isChannelReplyAction(actionType: string): boolean {
 }
 
 async function postLoop(input: PostLoopInput): Promise<void> {
-  const { state, agentSettings, executor, batch, startTime, replayPacket, blockVersions, logger } = input;
+  const { state, agentSettings, executor, batch, startTime, replayPacket, blockVersions, logger } =
+    input;
   const { log, logError } = logger;
 
   // @mention / DM fallback — guarantee a reply was sent
@@ -834,9 +865,10 @@ async function postLoop(input: PostLoopInput): Promise<void> {
     overallStatus = "dropped";
   }
 
-  const lastTurnOutput = state.turnResults.length > 0
-    ? state.turnResults[state.turnResults.length - 1].plannerOutput
-    : undefined;
+  const lastTurnOutput =
+    state.turnResults.length > 0
+      ? state.turnResults[state.turnResults.length - 1].plannerOutput
+      : undefined;
   const executionDisposition = toExecutionDisposition(lastTurnOutput?.disposition);
 
   const finalActions = [
@@ -929,12 +961,11 @@ async function forceReplyFallback(
   logError: PipelineLogger["logError"],
 ): Promise<void> {
   const triggerMessageId = state.packet.triggerEvent.payload.messageId as string | undefined;
-  const lastRationale = state.turnResults.length > 0
-    ? state.turnResults[state.turnResults.length - 1].plannerOutput.rationaleSummary
-    : undefined;
-  const replyText = isUsableRationale(lastRationale)
-    ? lastRationale
-    : DEFAULT_MENTION_FALLBACK;
+  const lastRationale =
+    state.turnResults.length > 0
+      ? state.turnResults[state.turnResults.length - 1].plannerOutput.rationaleSummary
+      : undefined;
+  const replyText = isUsableRationale(lastRationale) ? lastRationale : DEFAULT_MENTION_FALLBACK;
 
   const reason = state.packet.isMention ? "@mention" : "dm";
   log(`${reason} fallback: no message sent across all turns, forcing reply`, {
@@ -1113,7 +1144,9 @@ function pushEmptyTurn(
 }
 
 function isUsableRationale(rationale: string | undefined): rationale is string {
-  return !!rationale && rationale !== "Defaulted to ignore due to invalid or missing planner output.";
+  return (
+    !!rationale && rationale !== "Defaulted to ignore due to invalid or missing planner output."
+  );
 }
 
 const DISPOSITION_MAP: Record<string, ExecutionDisposition> = {
@@ -1190,10 +1223,21 @@ interface WriteLogInput {
 
 async function writeExecutionLog(input: WriteLogInput): Promise<string | null> {
   const {
-    packet, plannerResult, costCents, agentSettings, batch,
-    disposition, status, policyDecision, finalActions, inboxItemId,
-    modelTier = "tier2", promoted: wasPromoted = false, promotionReason: promoReason,
-    replayPacket: replayPkt, blockVersions: blkVersions,
+    packet,
+    plannerResult,
+    costCents,
+    agentSettings,
+    batch,
+    disposition,
+    status,
+    policyDecision,
+    finalActions,
+    inboxItemId,
+    modelTier = "tier2",
+    promoted: wasPromoted = false,
+    promotionReason: promoReason,
+    replayPacket: replayPkt,
+    blockVersions: blkVersions,
     logger,
   } = input;
   try {

@@ -30,9 +30,25 @@ import { connectRedis, disconnectRedis } from "./lib/redis.js";
 import { pubsub } from "./lib/pubsub.js";
 import { runtimeAccessService } from "./services/runtime-access.js";
 import { isLocalMode } from "./lib/mode.js";
+import {
+  getAllowedCorsOrigins,
+  isAllowedBrowserOrigin,
+  isCorsOriginAllowed,
+  readHeaderValue,
+} from "./lib/cors.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
+const SAFE_HTTP_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+function requestHasSessionCookie(req: Pick<express.Request, "headers">): boolean {
+  const cookie = readHeaderValue(req.headers, "cookie");
+  return /(?:^|;\s*)trace_token=/.test(cookie ?? "");
+}
+
+function requestHasBearerToken(req: Pick<express.Request, "headers">): boolean {
+  return readHeaderValue(req.headers, "authorization")?.startsWith("Bearer ") ?? false;
+}
 
 async function main() {
   const app = express();
@@ -40,6 +56,12 @@ async function main() {
   const schema = makeExecutableSchema({ typeDefs, resolvers });
   const PORT = Number(process.env.PORT) || 4000 + Number(process.env.TRACE_PORT || 0);
   const localMode = isLocalMode();
+  const allowedCorsOrigins = getAllowedCorsOrigins({
+    localMode,
+    nodeEnv: process.env.NODE_ENV,
+    traceWebUrl: process.env.TRACE_WEB_URL,
+    corsAllowedOrigins: process.env.CORS_ALLOWED_ORIGINS,
+  });
   let startupReady = false;
 
   app.get("/health", (_req: express.Request, res: express.Response) => {
@@ -54,7 +76,13 @@ async function main() {
 
   app.use(
     cors({
-      origin: process.env.CORS_ALLOWED_ORIGINS ? process.env.CORS_ALLOWED_ORIGINS.split(",") : true,
+      origin(origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) {
+        if (isCorsOriginAllowed(allowedCorsOrigins, origin)) {
+          callback(null, true);
+          return;
+        }
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
+      },
       credentials: true,
     }),
   );
@@ -66,6 +94,23 @@ async function main() {
 
   app.use(express.json());
   app.use(cookieParser());
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (
+      SAFE_HTTP_METHODS.has(req.method) ||
+      !requestHasSessionCookie(req) ||
+      requestHasBearerToken(req)
+    ) {
+      next();
+      return;
+    }
+
+    if (!isAllowedBrowserOrigin(allowedCorsOrigins, req.headers)) {
+      res.status(403).json({ error: "Invalid request origin" });
+      return;
+    }
+
+    next();
+  });
   app.use(authRouter);
   app.use(uploadRouter);
 
@@ -112,12 +157,16 @@ async function main() {
       runtimeDebug("stale runtime monitor evicting runtime", {
         runtimeId: stale.runtimeId,
         sessionIds: stale.sessionIds,
+        lastHeartbeat: stale.lastHeartbeat,
       });
-      const affectedSessions = sessionRouter.unregisterRuntime(stale.runtimeId);
+      const eviction = sessionRouter.evictRuntimeIfStale(stale.runtimeId, stale.lastHeartbeat);
+      if (!eviction.evicted) {
+        continue;
+      }
       if (stale.runtimeId) {
         void runtimeAccessService.markRuntimeDisconnected(stale.runtimeId);
       }
-      for (const sessionId of affectedSessions) {
+      for (const sessionId of eviction.affectedSessions) {
         runtimeDebug("marking session disconnected after stale runtime eviction", {
           runtimeId: stale.runtimeId,
           sessionId,
@@ -134,6 +183,19 @@ async function main() {
   // Route WebSocket upgrades by path
   httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const { pathname } = new URL(req.url ?? "", "http://localhost");
+    const rejectUpgrade = (statusCode: number, message: string): void => {
+      socket.write(`HTTP/1.1 ${statusCode} ${message}\r\n\r\n`);
+      socket.destroy();
+    };
+    const hasBrowserOrigin = Boolean(readHeaderValue(req.headers, "origin"));
+    if (
+      (pathname === "/ws" || pathname === "/terminal") &&
+      hasBrowserOrigin &&
+      !isAllowedBrowserOrigin(allowedCorsOrigins, req.headers)
+    ) {
+      rejectUpgrade(403, "Forbidden");
+      return;
+    }
 
     if (pathname === "/ws") {
       wsServer.handleUpgrade(req, socket, head, (ws: WebSocket) => {
@@ -149,21 +211,18 @@ async function main() {
 
         if (cloudToken) {
           if (!cloudMachineService) {
-            socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-            socket.destroy();
+            rejectUpgrade(401, "Unauthorized");
             return;
           }
           if (!(await cloudMachineService.isValidBridgeToken(cloudToken))) {
-            socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-            socket.destroy();
+            rejectUpgrade(401, "Unauthorized");
             return;
           }
           bridgeReq.bridgeAuth = { kind: "cloud" };
         } else if (bridgeAuthToken) {
           const payload = verifyBridgeAuthToken(bridgeAuthToken);
           if (!payload) {
-            socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-            socket.destroy();
+            rejectUpgrade(401, "Unauthorized");
             return;
           }
           bridgeReq.bridgeAuth = {
@@ -173,8 +232,7 @@ async function main() {
             instanceId: payload.instanceId,
           };
         } else {
-          socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-          socket.destroy();
+          rejectUpgrade(401, "Unauthorized");
           return;
         }
 

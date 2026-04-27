@@ -92,16 +92,14 @@ export function BridgeAccessSection() {
   const [runtimes, setRuntimes] = useState<BridgeRuntimeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
-  const [grantTerminalByRequestId, setGrantTerminalByRequestId] = useState<
-    Record<string, boolean>
-  >({});
+  const [grantTerminalByRequestId, setGrantTerminalByRequestId] = useState<Record<string, boolean>>(
+    {},
+  );
   const refreshTick = useUIStore((s: { refreshTick: number }) => s.refreshTick);
 
   const buildCapabilities = useCallback(
     (requestId: string): BridgeAccessCapability[] =>
-      grantTerminalByRequestId[requestId]
-        ? ["session", "terminal"]
-        : ["session"],
+      grantTerminalByRequestId[requestId] ? ["session", "terminal"] : ["session"],
     [grantTerminalByRequestId],
   );
 
@@ -225,64 +223,134 @@ export function BridgeAccessSection() {
                         const requestedTerminal =
                           request.requestedCapabilities?.includes("terminal") ?? false;
                         return (
-                        <div key={request.id} className="rounded-lg border border-border bg-surface-deep p-3">
-                          <div className="text-sm font-medium text-foreground">
-                            {request.requesterUser.name || request.requesterUser.email || "Unknown user"}
-                          </div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {describeScope(request.scopeType, request.sessionGroup)}
-                          </div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            Requested {formatDate(request.createdAt)}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            Expires {formatDate(request.requestedExpiresAt)}
-                          </div>
-                          {request.requestedCapabilities && request.requestedCapabilities.length > 0 ? (
-                            <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                              <Zap size={11} />
-                              Asked for: {formatCapabilities(request.requestedCapabilities)}
+                          <div
+                            key={request.id}
+                            className="rounded-lg border border-border bg-surface-deep p-3"
+                          >
+                            <div className="text-sm font-medium text-foreground">
+                              {request.requesterUser.name ||
+                                request.requesterUser.email ||
+                                "Unknown user"}
                             </div>
-                          ) : null}
-                          <div className="mt-3 rounded-md border border-border/60 bg-surface p-2">
-                            <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                              <Shield size={11} />
-                              Grant capabilities
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {describeScope(request.scopeType, request.sessionGroup)}
                             </div>
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              <div className="rounded-md border border-border bg-surface-deep px-2.5 py-1.5 text-xs text-foreground">
-                                <div className="font-medium">Sessions</div>
-                                <div className="text-[11px] text-muted-foreground">Required</div>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              Requested {formatDate(request.createdAt)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              Expires {formatDate(request.requestedExpiresAt)}
+                            </div>
+                            {request.requestedCapabilities &&
+                            request.requestedCapabilities.length > 0 ? (
+                              <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                                <Zap size={11} />
+                                Asked for: {formatCapabilities(request.requestedCapabilities)}
                               </div>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setGrantTerminalByRequestId((prev) => ({
-                                    ...prev,
-                                    [request.id]: !grantTerminal,
-                                  }))
-                                }
-                                className={cn(
-                                  "rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors",
-                                  grantTerminal
-                                    ? "border-foreground bg-surface-elevated text-foreground"
-                                    : "border-border bg-surface-deep text-muted-foreground hover:text-foreground",
-                                )}
-                              >
-                                <div className="font-medium">Terminal</div>
-                                <div className="text-[11px] text-muted-foreground">
-                                  {grantTerminal
-                                    ? "Will grant shell access"
-                                    : requestedTerminal
-                                      ? "Requester asked — still off"
-                                      : "Off"}
+                            ) : null}
+                            <div className="mt-3 rounded-md border border-border/60 bg-surface p-2">
+                              <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                <Shield size={11} />
+                                Grant capabilities
+                              </div>
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <div className="rounded-md border border-border bg-surface-deep px-2.5 py-1.5 text-xs text-foreground">
+                                  <div className="font-medium">Sessions</div>
+                                  <div className="text-[11px] text-muted-foreground">Required</div>
                                 </div>
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setGrantTerminalByRequestId((prev) => ({
+                                      ...prev,
+                                      [request.id]: !grantTerminal,
+                                    }))
+                                  }
+                                  className={cn(
+                                    "rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors",
+                                    grantTerminal
+                                      ? "border-foreground bg-surface-elevated text-foreground"
+                                      : "border-border bg-surface-deep text-muted-foreground hover:text-foreground",
+                                  )}
+                                >
+                                  <div className="font-medium">Terminal</div>
+                                  <div className="text-[11px] text-muted-foreground">
+                                    {grantTerminal
+                                      ? "Will grant shell access"
+                                      : requestedTerminal
+                                        ? "Requester asked — still off"
+                                        : "Off"}
+                                  </div>
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {request.sessionGroup?.id && (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {request.sessionGroup?.id && (
+                                <Button
+                                  size="sm"
+                                  disabled={pendingActionId === request.id}
+                                  onClick={() =>
+                                    void runAction(
+                                      request.id,
+                                      async () => {
+                                        const result = await client
+                                          .mutation(APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION, {
+                                            requestId: request.id,
+                                            scopeType: "session_group",
+                                            sessionGroupId: request.sessionGroup?.id,
+                                            expiresAt: null,
+                                            capabilities: buildCapabilities(request.id),
+                                          })
+                                          .toPromise();
+                                        if (result.error) throw result.error;
+                                      },
+                                      `Access granted — ${formatCapabilities(buildCapabilities(request.id))}`,
+                                    )
+                                  }
+                                >
+                                  Approve This Session
+                                </Button>
+                              )}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger
+                                  className={cn(buttonVariants({ size: "sm" }), "gap-1")}
+                                  disabled={pendingActionId === request.id}
+                                >
+                                  Approve All Sessions
+                                  <ChevronDown size={14} />
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start" className="w-44">
+                                  {BRIDGE_ACCESS_APPROVAL_OPTIONS.map((option) => (
+                                    <DropdownMenuItem
+                                      key={option.id}
+                                      onClick={() =>
+                                        void runAction(
+                                          request.id,
+                                          async () => {
+                                            const result = await client
+                                              .mutation(APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION, {
+                                                requestId: request.id,
+                                                scopeType: "all_sessions",
+                                                sessionGroupId: null,
+                                                expiresAt: getBridgeAccessApprovalExpiresAt(
+                                                  option.id,
+                                                ),
+                                                capabilities: buildCapabilities(request.id),
+                                              })
+                                              .toPromise();
+                                            if (result.error) throw result.error;
+                                          },
+                                          `Access granted for ${option.label} — ${formatCapabilities(buildCapabilities(request.id))}`,
+                                        )
+                                      }
+                                    >
+                                      {option.label}
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                               <Button
+                                variant="outline"
                                 size="sm"
                                 disabled={pendingActionId === request.id}
                                 onClick={() =>
@@ -290,82 +358,20 @@ export function BridgeAccessSection() {
                                     request.id,
                                     async () => {
                                       const result = await client
-                                        .mutation(APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION, {
+                                        .mutation(DENY_BRIDGE_ACCESS_REQUEST_MUTATION, {
                                           requestId: request.id,
-                                          scopeType: "session_group",
-                                          sessionGroupId: request.sessionGroup?.id,
-                                          expiresAt: null,
-                                          capabilities: buildCapabilities(request.id),
                                         })
                                         .toPromise();
                                       if (result.error) throw result.error;
                                     },
-                                    `Access granted — ${formatCapabilities(buildCapabilities(request.id))}`,
+                                    "Request denied",
                                   )
                                 }
                               >
-                                Approve This Session
+                                Deny
                               </Button>
-                            )}
-                            <DropdownMenu>
-                              <DropdownMenuTrigger
-                                className={cn(buttonVariants({ size: "sm" }), "gap-1")}
-                                disabled={pendingActionId === request.id}
-                              >
-                                Approve All Sessions
-                                <ChevronDown size={14} />
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="start" className="w-44">
-                                {BRIDGE_ACCESS_APPROVAL_OPTIONS.map((option) => (
-                                  <DropdownMenuItem
-                                    key={option.id}
-                                    onClick={() =>
-                                      void runAction(
-                                        request.id,
-                                        async () => {
-                                          const result = await client
-                                            .mutation(APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION, {
-                                              requestId: request.id,
-                                              scopeType: "all_sessions",
-                                              sessionGroupId: null,
-                                              expiresAt: getBridgeAccessApprovalExpiresAt(option.id),
-                                              capabilities: buildCapabilities(request.id),
-                                            })
-                                            .toPromise();
-                                          if (result.error) throw result.error;
-                                        },
-                                        `Access granted for ${option.label} — ${formatCapabilities(buildCapabilities(request.id))}`,
-                                      )
-                                    }
-                                  >
-                                    {option.label}
-                                  </DropdownMenuItem>
-                                ))}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={pendingActionId === request.id}
-                              onClick={() =>
-                                void runAction(
-                                  request.id,
-                                  async () => {
-                                    const result = await client
-                                      .mutation(DENY_BRIDGE_ACCESS_REQUEST_MUTATION, {
-                                        requestId: request.id,
-                                      })
-                                      .toPromise();
-                                    if (result.error) throw result.error;
-                                  },
-                                  "Request denied",
-                                )
-                              }
-                            >
-                              Deny
-                            </Button>
+                            </div>
                           </div>
-                        </div>
                         );
                       })}
                     </div>
@@ -386,9 +392,7 @@ export function BridgeAccessSection() {
                         const hasTerminal = grantCaps.includes("terminal");
                         const toggleTerminal = async () => {
                           const nextCaps: BridgeAccessCapability[] = hasTerminal
-                            ? ensureSessionCapability(
-                                grantCaps.filter((c) => c !== "terminal"),
-                              )
+                            ? ensureSessionCapability(grantCaps.filter((c) => c !== "terminal"))
                             : ensureSessionCapability([...grantCaps, "terminal"]);
                           await runAction(
                             grant.id,
@@ -407,7 +411,10 @@ export function BridgeAccessSection() {
                           );
                         };
                         return (
-                          <div key={grant.id} className="rounded-lg border border-border bg-surface-deep p-3">
+                          <div
+                            key={grant.id}
+                            className="rounded-lg border border-border bg-surface-deep p-3"
+                          >
                             <div className="text-sm font-medium text-foreground">
                               {grant.granteeUser.name || grant.granteeUser.email || "Unknown user"}
                             </div>

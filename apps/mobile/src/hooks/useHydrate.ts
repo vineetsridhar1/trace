@@ -10,10 +10,13 @@ import {
 } from "@trace/client-core";
 import type { Channel, ChannelGroup, Event, Session, SessionGroup } from "@trace/gql";
 import { handleUnauthorized, isUnauthorized } from "@/lib/auth";
+import { reconcileEntitySnapshot, resetEntitySnapshots } from "@/lib/entitySnapshots";
 import { latestTimestamp, mergeSessionGroupEntity } from "@/lib/session-group";
+import { userFacingError } from "@/lib/requestError";
 import { timedEventIngest } from "@/lib/perf";
 import { getClient } from "@/lib/urql";
 import { useConnectionStore, type ConnectionState } from "@/stores/connection";
+import { useRefreshStatusStore } from "@/stores/refresh-status";
 
 const ORGANIZATION_QUERY = gql`
   query MobileOrganization($id: ID!) {
@@ -27,7 +30,10 @@ const ORGANIZATION_QUERY = gql`
         position
         groupId
         baseBranch
-        repo { id name }
+        repo {
+          id
+          name
+        }
       }
     }
   }
@@ -45,11 +51,7 @@ const CHANNEL_GROUPS_QUERY = gql`
 `;
 
 const MY_SESSIONS_QUERY = gql`
-  query MobileMySessions(
-    $organizationId: ID!
-    $includeMerged: Boolean
-    $includeArchived: Boolean
-  ) {
+  query MobileMySessions($organizationId: ID!, $includeMerged: Boolean, $includeArchived: Boolean) {
     mySessions(
       organizationId: $organizationId
       includeMerged: $includeMerged
@@ -62,8 +64,16 @@ const MY_SESSIONS_QUERY = gql`
       tool
       model
       hosting
-      createdBy { id name avatarUrl }
-      repo { id name remoteUrl }
+      createdBy {
+        id
+        name
+        avatarUrl
+      }
+      repo {
+        id
+        name
+        remoteUrl
+      }
       sessionGroupId
       sessionGroup {
         id
@@ -78,17 +88,33 @@ const MY_SESSIONS_QUERY = gql`
         setupError
         createdAt
         updatedAt
-        channel { id }
-        repo { id name remoteUrl defaultBranch }
+        channel {
+          id
+        }
+        repo {
+          id
+          name
+          remoteUrl
+          defaultBranch
+        }
       }
-      channel { id name }
+      channel {
+        id
+        name
+      }
       branch
       workdir
       prUrl
       worktreeDeleted
       lastUserMessageAt
       lastMessageAt
-      queuedMessages { id sessionId text position createdAt }
+      queuedMessages {
+        id
+        sessionId
+        text
+        position
+        createdAt
+      }
       createdAt
       updatedAt
     }
@@ -103,7 +129,12 @@ const ORG_EVENTS_SUBSCRIPTION = gql`
       scopeId
       eventType
       payload
-      actor { type id name avatarUrl }
+      actor {
+        type
+        id
+        name
+        avatarUrl
+      }
       parentId
       timestamp
       metadata
@@ -114,16 +145,13 @@ const ORG_EVENTS_SUBSCRIPTION = gql`
 const ME_REFRESH_KEY = "trace_me_last_fetched_at";
 const ME_REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 
-/**
- * Fetch org data (channels, groups, sessions) and upsert into the entity store.
- * Returns true on success, false if the server returned a 401-equivalent.
- * Shared between initial hydration and manual pull-to-refresh.
- *
- * Guards against stale writes: if the active org changes (or the user signs
- * out) while queries are in flight, the upserts are skipped so the store
- * doesn't get repopulated with the previous org's data after a reset.
- */
-export async function refreshOrgData(activeOrgId: string): Promise<boolean> {
+export interface RefreshOrgDataResult {
+  authorized: boolean;
+  channelsError: string | null;
+  homeError: string | null;
+}
+
+async function doRefreshOrgData(activeOrgId: string): Promise<RefreshOrgDataResult> {
   const client = getClient();
 
   const [orgResult, groupsResult, sessionsResult] = await Promise.all([
@@ -142,31 +170,101 @@ export async function refreshOrgData(activeOrgId: string): Promise<boolean> {
     isUnauthorized(groupsResult.error) ||
     isUnauthorized(sessionsResult.error)
   ) {
-    return false;
+    return {
+      authorized: false,
+      channelsError: null,
+      homeError: null,
+    };
   }
 
   // Bail if the user switched orgs or signed out while we were fetching.
-  if (useAuthStore.getState().activeOrgId !== activeOrgId) return true;
+  if (useAuthStore.getState().activeOrgId !== activeOrgId) {
+    return {
+      authorized: true,
+      channelsError: null,
+      homeError: null,
+    };
+  }
 
   const upsertMany = useEntityStore.getState().upsertMany;
+  const setOrgStatus = useRefreshStatusStore.getState().setOrgStatus;
 
   const channels = (orgResult.data?.organization?.channels ?? []) as Array<
     Channel & { id: string }
   >;
-  if (channels.length > 0) upsertMany("channels", channels);
+  if (orgResult.data?.organization) {
+    if (channels.length > 0) upsertMany("channels", channels);
+    reconcileEntitySnapshot(
+      "channels",
+      `org:${activeOrgId}`,
+      channels.map((channel) => channel.id),
+    );
+  }
 
   const channelGroups = (groupsResult.data?.channelGroups ?? []) as Array<
     ChannelGroup & { id: string }
   >;
-  if (channelGroups.length > 0) upsertMany("channelGroups", channelGroups);
+  if (groupsResult.data?.channelGroups) {
+    if (channelGroups.length > 0) upsertMany("channelGroups", channelGroups);
+    reconcileEntitySnapshot(
+      "channelGroups",
+      `org:${activeOrgId}`,
+      channelGroups.map((group) => group.id),
+    );
+  }
 
   const sessions = (sessionsResult.data?.mySessions ?? []) as Array<Session & { id: string }>;
   const sessionGroups = sessionGroupsFromSessions(sessions);
-  if (sessionGroups.length > 0) upsertMany("sessionGroups", sessionGroups);
-  if (sessions.length > 0) upsertMany("sessions", sessions);
+  if (sessionsResult.data?.mySessions) {
+    if (sessionGroups.length > 0) upsertMany("sessionGroups", sessionGroups);
+    if (sessions.length > 0) upsertMany("sessions", sessions);
+    reconcileEntitySnapshot(
+      "sessionGroups",
+      `home:${activeOrgId}`,
+      sessionGroups.map((group) => group.id),
+    );
+    reconcileEntitySnapshot(
+      "sessions",
+      `home:${activeOrgId}`,
+      sessions.map((session) => session.id),
+    );
+  }
 
   void getPlatform().storage.setItem(ME_REFRESH_KEY, String(Date.now()));
-  return true;
+
+  const status = {
+    channelsError:
+      orgResult.error || groupsResult.error
+        ? userFacingError(orgResult.error ?? groupsResult.error, "Couldn't refresh channels.")
+        : null,
+    homeError: sessionsResult.error
+      ? userFacingError(sessionsResult.error, "Couldn't refresh your home feed.")
+      : null,
+  } satisfies Omit<RefreshOrgDataResult, "authorized">;
+
+  setOrgStatus(activeOrgId, status);
+
+  return {
+    authorized: true,
+    ...status,
+  };
+}
+
+const inflightRefreshes = new Map<string, Promise<RefreshOrgDataResult>>();
+
+/**
+ * Fetch org data (channels, groups, sessions) and upsert successful slices
+ * into the entity store. Query failures are reported per-screen so empty-state
+ * rendering stays scoped to the fetch that actually powers that screen.
+ */
+export function refreshOrgData(activeOrgId: string): Promise<RefreshOrgDataResult> {
+  const existing = inflightRefreshes.get(activeOrgId);
+  if (existing) return existing;
+  const promise = doRefreshOrgData(activeOrgId).finally(() => {
+    inflightRefreshes.delete(activeOrgId);
+  });
+  inflightRefreshes.set(activeOrgId, promise);
+  return promise;
 }
 
 function sessionGroupsFromSessions(
@@ -197,15 +295,21 @@ function sessionGroupsFromSessions(
 }
 
 export function useHydrate(activeOrgId: string | null): void {
+  const previousOrgIdRef = useRef<string | null>(activeOrgId);
   useEffect(() => {
+    if (previousOrgIdRef.current !== activeOrgId) {
+      resetEntitySnapshots();
+      useRefreshStatusStore.getState().reset();
+    }
+    previousOrgIdRef.current = activeOrgId;
     if (!activeOrgId) return;
     let cancelled = false;
     const client = getClient();
 
     void (async () => {
-      const ok = await refreshOrgData(activeOrgId);
+      const result = await refreshOrgData(activeOrgId);
       if (cancelled) return;
-      if (!ok) await handleUnauthorized();
+      if (!result.authorized) await handleUnauthorized();
     })();
 
     const subscription = client
@@ -234,18 +338,21 @@ export function useHydrate(activeOrgId: string | null): void {
   // Catch up list-level state (sessions, channels, unread counts) after a WS
   // reconnect: the server's in-memory pubsub has no replay, so events emitted
   // while the socket was down are lost to the live subscription.
-  const reconnectCounter = useConnectionStore(
-    (s: ConnectionState) => s.reconnectCounter,
-  );
+  const reconnectCounter = useConnectionStore((s: ConnectionState) => s.reconnectCounter);
   const baselineReconnectCounter = useRef(reconnectCounter);
   useEffect(() => {
     if (!activeOrgId) return;
     if (reconnectCounter <= baselineReconnectCounter.current) return;
     baselineReconnectCounter.current = reconnectCounter;
-    refreshOrgData(activeOrgId).catch((err: unknown) => {
+    void (async () => {
+      const result = await refreshOrgData(activeOrgId);
+      if (!result.authorized) {
+        await handleUnauthorized();
+      }
+    })().catch((err: unknown) => {
       console.warn("[hydrate] reconnect refresh failed", err);
     });
-  }, [reconnectCounter, activeOrgId]);
+  }, [activeOrgId, reconnectCounter]);
 
   // Re-fetch /auth/me on app foreground if it's been more than 24h since any
   // successful request. Unrelated to WS state — this is a periodic auth-staleness

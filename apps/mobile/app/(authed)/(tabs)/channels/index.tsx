@@ -13,6 +13,7 @@ import {
 import { refreshOrgData } from "@/hooks/useHydrate";
 import { handleUnauthorized } from "@/lib/auth";
 import { haptic } from "@/lib/haptics";
+import { orgRefreshStatus, useRefreshStatusStore } from "@/stores/refresh-status";
 import { useTheme } from "@/theme";
 
 export default function ChannelsIndex() {
@@ -20,6 +21,9 @@ export default function ChannelsIndex() {
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
 
   const [refreshing, setRefreshing] = useState(false);
+  const loadError = useRefreshStatusStore(
+    (s) => orgRefreshStatus(s.byOrg, activeOrgId).channelsError,
+  );
 
   const keys = useCodingChannelKeys({ search: "" });
   const activeCounts = useChannelActiveSessionCounts();
@@ -29,8 +33,8 @@ export default function ChannelsIndex() {
     void haptic.medium();
     setRefreshing(true);
     try {
-      const ok = await refreshOrgData(activeOrgId);
-      if (!ok) {
+      const result = await refreshOrgData(activeOrgId);
+      if (!result.authorized) {
         await handleUnauthorized();
       }
     } finally {
@@ -57,7 +61,7 @@ export default function ChannelsIndex() {
       contentInsetAdjustmentBehavior="automatic"
       onRefresh={handleRefresh}
       refreshing={refreshing}
-      ListEmptyComponent={<ChannelsEmpty />}
+      ListEmptyComponent={<ChannelsEmpty error={loadError} onRetry={() => void handleRefresh()} />}
       style={{ flex: 1, backgroundColor: theme.colors.background }}
     />
   );
@@ -71,12 +75,13 @@ function getItemType(item: ChannelListItemKey): string {
   return item.startsWith("group:") ? "group" : "channel";
 }
 
-function ChannelsEmpty() {
+function ChannelsEmpty({ error, onRetry }: { error: string | null; onRetry: () => void }) {
   return (
     <EmptyState
-      icon="tray"
-      title="No coding channels yet"
-      subtitle="Channels appear here as they're created in the web app."
+      icon={error ? "exclamationmark.triangle" : "tray"}
+      title={error ? "Couldn't load channels" : "No coding channels yet"}
+      subtitle={error ? error : "Channels appear here as they're created in the web app."}
+      action={error ? { label: "Retry", onPress: onRetry } : undefined}
     />
   );
 }

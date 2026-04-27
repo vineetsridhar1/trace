@@ -29,21 +29,18 @@ function parseCheckpointContext(raw: unknown): GitCheckpointContext | null {
 
   const context = raw as Record<string, unknown>;
   if (
-    typeof context.checkpointContextId !== "string"
-    || typeof context.sessionId !== "string"
-    || typeof context.sessionGroupId !== "string"
-    || typeof context.repoId !== "string"
-    || typeof context.updatedAt !== "string"
+    typeof context.checkpointContextId !== "string" ||
+    typeof context.sessionId !== "string" ||
+    typeof context.sessionGroupId !== "string" ||
+    typeof context.repoId !== "string" ||
+    typeof context.updatedAt !== "string"
   ) {
     return null;
   }
 
   return {
     checkpointContextId: context.checkpointContextId,
-    promptEventId:
-      typeof context.promptEventId === "string"
-        ? context.promptEventId
-        : null,
+    promptEventId: typeof context.promptEventId === "string" ? context.promptEventId : null,
     sessionId: context.sessionId,
     sessionGroupId: context.sessionGroupId,
     repoId: context.repoId,
@@ -56,7 +53,11 @@ function parseQueuedCheckpoint(raw: unknown): QueuedGitHookCheckpoint | null {
 
   const entry = raw as Record<string, unknown>;
   if (typeof entry.sessionId !== "string") return null;
-  if (!entry.checkpoint || typeof entry.checkpoint !== "object" || Array.isArray(entry.checkpoint)) {
+  if (
+    !entry.checkpoint ||
+    typeof entry.checkpoint !== "object" ||
+    Array.isArray(entry.checkpoint)
+  ) {
     return null;
   }
 
@@ -157,8 +158,11 @@ async function migrateLegacyQueueOnce(): Promise<void> {
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => {
-        try { return parseQueuedCheckpoint(JSON.parse(line)); }
-        catch { return null; }
+        try {
+          return parseQueuedCheckpoint(JSON.parse(line));
+        } catch {
+          return null;
+        }
       })
       .filter((e): e is QueuedGitHookCheckpoint => e != null);
     for (const entry of legacyEntries) {

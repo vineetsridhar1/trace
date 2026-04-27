@@ -1,22 +1,12 @@
 import { useEffect, useState, type ComponentType } from "react";
-import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
-  StyleSheet,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, Platform, Pressable, StyleSheet, TextInput, View } from "react-native";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Button, Screen, Text } from "@/components/design-system";
-import {
-  activatePairedLocalConnection,
-  getOrCreateLocalInstallId,
-} from "@/lib/connection-target";
+import { activatePairedLocalConnection, getOrCreateLocalInstallId } from "@/lib/connection-target";
 import { haptic } from "@/lib/haptics";
 import { recreateClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
@@ -197,7 +187,9 @@ export default function PairLocalScreen() {
       const result = await cameraModule.requestCameraPermissionsAsync();
       setCameraPermission(result.granted ? "granted" : "denied");
       if (!result.granted) {
-        setError("Camera access is required for scanning, but you can still paste the pairing code.");
+        setError(
+          "Camera access is required for scanning, but you can still paste the pairing code.",
+        );
         void haptic.error();
       }
     } catch {
@@ -229,7 +221,12 @@ export default function PairLocalScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={() => router.back()}
+            hitSlop={12}
+          >
             <Text variant="subheadline" color="mutedForeground">
               Back
             </Text>

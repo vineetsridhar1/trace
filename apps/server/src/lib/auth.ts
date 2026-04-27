@@ -25,8 +25,9 @@ import {
   createChannelMembershipLoader,
   createChatMembershipLoader,
 } from "./dataloader.js";
+import { resolveJwtSecret } from "./jwt-secret.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
+const JWT_SECRET = resolveJwtSecret();
 const BRIDGE_AUTH_TOKEN_TTL_SECONDS = 5 * 60;
 
 type SessionTokenPayload = {
@@ -55,7 +56,9 @@ type RequestAuthSource = {
 
 function parseSessionToken(token: string): SessionTokenPayload | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as SessionTokenPayload | BridgeAuthTokenPayload;
+    const payload = jwt.verify(token, JWT_SECRET) as unknown as
+      | SessionTokenPayload
+      | BridgeAuthTokenPayload;
     if (
       !payload ||
       typeof payload !== "object" ||
@@ -222,7 +225,7 @@ export function createBridgeAuthToken(input: {
 
 export function verifyBridgeAuthToken(token: string): BridgeAuthTokenPayload | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as BridgeAuthTokenPayload;
+    const payload = jwt.verify(token, JWT_SECRET) as unknown as BridgeAuthTokenPayload;
     if (
       !payload ||
       typeof payload !== "object" ||
@@ -315,8 +318,6 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
     throw new AuthenticationError("User not found");
   }
 
-  const isSuperAdmin = user.email === "vineets1600@gmail.com";
-
   // Resolve organization from X-Organization-Id header
   const orgHeader = req.headers["x-organization-id"];
   const requestedOrgId = Array.isArray(orgHeader) ? orgHeader[0] : orgHeader;
@@ -327,7 +328,7 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
   const localModeMembership = await getLocalModeOrgMembership(user.id);
   if (localModeMembership) {
     organizationId = localModeMembership.organizationId;
-    role = isSuperAdmin ? "admin" : localModeMembership.role;
+    role = localModeMembership.role;
   } else if (authSubject?.kind === "local_mobile") {
     if (requestedOrgId && requestedOrgId !== authSubject.organizationId) {
       throw new AuthenticationError("This mobile device is only paired for one organization");
@@ -337,20 +338,20 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
       throw new AuthenticationError("Not a member of this organization");
     }
     organizationId = authSubject.organizationId;
-    role = isSuperAdmin ? "admin" : (membership.role as Context["role"]);
+    role = membership.role as Context["role"];
   } else if (requestedOrgId) {
     const membership = await resolveOrgMembership(user.id, requestedOrgId);
     if (!membership) {
       throw new AuthenticationError("Not a member of this organization");
     }
     organizationId = requestedOrgId;
-    role = isSuperAdmin ? "admin" : (membership.role as Context["role"]);
+    role = membership.role as Context["role"];
   } else {
     // Fall back to first org membership
     const firstMembership = await getFirstOrgMembership(user.id);
     if (firstMembership) {
       organizationId = firstMembership.organizationId;
-      role = isSuperAdmin ? "admin" : (firstMembership.role as Context["role"]);
+      role = firstMembership.role as Context["role"];
     }
   }
 
@@ -379,7 +380,9 @@ export async function buildWsContext(
   cookieHeader?: string,
   request?: RequestAuthSource,
 ): Promise<Context> {
-  const token = (connectionParams?.token as string) ?? parseCookieToken(cookieHeader);
+  const token =
+    (typeof connectionParams?.token === "string" ? connectionParams.token : undefined) ??
+    parseCookieToken(cookieHeader);
 
   if (!token) throw new AuthenticationError("Missing auth token for WebSocket");
 
@@ -398,8 +401,6 @@ export async function buildWsContext(
   });
   if (!user) throw new AuthenticationError("User not found");
 
-  const isSuperAdmin = user.email === "vineets1600@gmail.com";
-
   // Resolve organization from connectionParams
   const requestedOrgId = connectionParams?.organizationId as string | undefined;
 
@@ -409,7 +410,7 @@ export async function buildWsContext(
   const localModeMembership = await getLocalModeOrgMembership(user.id);
   if (localModeMembership) {
     organizationId = localModeMembership.organizationId;
-    role = isSuperAdmin ? "admin" : localModeMembership.role;
+    role = localModeMembership.role;
   } else if (authSubject.kind === "local_mobile") {
     if (requestedOrgId && requestedOrgId !== authSubject.organizationId) {
       throw new AuthenticationError("This mobile device is only paired for one organization");
@@ -419,18 +420,18 @@ export async function buildWsContext(
       throw new AuthenticationError("Not a member of this organization");
     }
     organizationId = authSubject.organizationId;
-    role = isSuperAdmin ? "admin" : (membership.role as Context["role"]);
+    role = membership.role as Context["role"];
   } else if (requestedOrgId) {
     const membership = await resolveOrgMembership(user.id, requestedOrgId);
     if (membership) {
       organizationId = requestedOrgId;
-      role = isSuperAdmin ? "admin" : (membership.role as Context["role"]);
+      role = membership.role as Context["role"];
     }
   } else {
     const firstMembership = await getFirstOrgMembership(user.id);
     if (firstMembership) {
       organizationId = firstMembership.organizationId;
-      role = isSuperAdmin ? "admin" : (firstMembership.role as Context["role"]);
+      role = firstMembership.role as Context["role"];
     }
   }
 

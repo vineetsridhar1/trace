@@ -104,7 +104,8 @@ export const bridgeAccessMutations = {
 
 export const bridgeAccessTypeResolvers = {
   BridgeRuntime: {
-    connected: (runtime: { instanceId: string }) => sessionRouter.isRuntimeAvailable(runtime.instanceId),
+    connected: (runtime: { instanceId: string }) =>
+      sessionRouter.isRuntimeAvailable(runtime.instanceId),
     linkedCheckouts: (runtime: { instanceId: string }) => {
       const live = sessionRouter.getRuntime(runtime.instanceId);
       if (!live || live.ws.readyState !== live.ws.OPEN) return [];
@@ -127,17 +128,15 @@ export const bridgeAccessTypeResolvers = {
       ctx: Context,
     ) => {
       if (!status.attachedSessionGroupId || !ctx.organizationId) return null;
-      const group = (await ctx.sessionGroupLoader.load(status.attachedSessionGroupId)) as
-        | { organizationId: string }
-        | null;
+      const group = (await ctx.sessionGroupLoader.load(status.attachedSessionGroupId)) as {
+        organizationId: string;
+      } | null;
       if (!group || group.organizationId !== ctx.organizationId) return null;
       return group;
     },
     repo: async (status: { repoId: string }, _args: unknown, ctx: Context) => {
       if (!ctx.organizationId) return null;
-      const repo = (await ctx.repoLoader.load(status.repoId)) as
-        | { organizationId: string }
-        | null;
+      const repo = (await ctx.repoLoader.load(status.repoId)) as { organizationId: string } | null;
       if (!repo || repo.organizationId !== ctx.organizationId) return null;
       return repo;
     },

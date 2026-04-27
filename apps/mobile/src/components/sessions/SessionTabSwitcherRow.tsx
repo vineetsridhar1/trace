@@ -34,30 +34,20 @@ export function SessionTabSwitcherRow({
       title={name ?? "Session"}
       subtitle={sessionSubtitle(active, sessionStatus, agentStatus)}
       leading={
-        <SessionStatusIndicator
-          status={sessionStatus}
-          agentStatus={agentStatus}
-          size={10}
-        />
+        <SessionStatusIndicator status={sessionStatus} agentStatus={agentStatus} size={10} />
       }
       trailing={
         active ? (
-          <SymbolView
-            name="checkmark"
-            size={16}
-            tintColor={theme.colors.accent}
-          />
+          <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
         ) : undefined
       }
       onPress={onPress}
       haptic={active ? "none" : "selection"}
       separator={separator}
-      accessibilityLabel={active ? `${name ?? "Session"}, current tab` : `Switch to ${name ?? "session"}`}
-      style={
-        active
-          ? { backgroundColor: alpha(theme.colors.accent, 0.12) }
-          : undefined
+      accessibilityLabel={
+        active ? `${name ?? "Session"}, current tab` : `Switch to ${name ?? "session"}`
       }
+      style={active ? { backgroundColor: alpha(theme.colors.accent, 0.12) } : undefined}
     />
   );
 }

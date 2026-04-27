@@ -60,8 +60,8 @@ export function ActiveSessionsAccessory() {
     // Animate only on real index changes. A width change (tab-bar minimize
     // shrinks the accessory) must snap to the same page, not animate through
     // neighbouring sessions.
-    const animated = lastScrolledIndexRef.current !== null
-      && lastScrolledIndexRef.current !== index;
+    const animated =
+      lastScrolledIndexRef.current !== null && lastScrolledIndexRef.current !== index;
     lastScrolledIndexRef.current = index;
     listRef.current?.scrollToOffset({ offset: index * width, animated });
   }, [index, width, ids.length]);

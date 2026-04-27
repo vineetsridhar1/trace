@@ -32,6 +32,10 @@ export interface AuthState {
 
 type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
 
+function shouldUseBearerAuth(): boolean {
+  return getPlatform().authMode === "bearer";
+}
+
 async function readActiveOrgId(): Promise<string | null> {
   const value = await getPlatform().storage.getItem(ACTIVE_ORG_KEY);
   return value ?? null;
@@ -45,20 +49,27 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
   token: null,
 
   signInWithToken: async (token: string) => {
-    await getPlatform().secureStorage.setToken(token);
-    set({ token });
+    if (shouldUseBearerAuth()) {
+      await getPlatform().secureStorage.setToken(token);
+      set({ token });
+    } else {
+      set({ token: null });
+    }
     await useAuthStore.getState().fetchMe();
   },
 
   fetchMe: async () => {
     const platform = getPlatform();
     try {
-      // Hydrate the in-memory token from secure storage on first call so
-      // synchronous consumers (getAuthHeaders, WS connection params) see it.
-      let token = useAuthStore.getState().token;
-      if (!token) {
-        token = await platform.secureStorage.getToken();
-        if (token) set({ token });
+      let token: string | null = null;
+      if (platform.authMode === "bearer") {
+        // Hydrate the in-memory token from secure storage on first call so
+        // synchronous consumers (getAuthHeaders, WS connection params) see it.
+        token = useAuthStore.getState().token;
+        if (!token) {
+          token = await platform.secureStorage.getToken();
+          if (token) set({ token });
+        }
       }
 
       const headers: Record<string, string> = {};
@@ -113,9 +124,11 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
 
   logout: async (options?: LogoutOptions) => {
     const platform = getPlatform();
-    const token = useAuthStore.getState().token;
     const headers: Record<string, string> = {};
-    if (token) headers.Authorization = `Bearer ${token}`;
+    if (platform.authMode === "bearer") {
+      const token = useAuthStore.getState().token;
+      if (token) headers.Authorization = `Bearer ${token}`;
+    }
     const body = options?.pushToken ? JSON.stringify({ pushToken: options.pushToken }) : undefined;
     if (body) headers["Content-Type"] = "application/json";
     try {
@@ -161,7 +174,7 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
 export function getAuthHeaders(): Record<string, string> {
   const { token, activeOrgId } = useAuthStore.getState();
   const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (shouldUseBearerAuth() && token) headers.Authorization = `Bearer ${token}`;
   if (activeOrgId) headers["X-Organization-Id"] = activeOrgId;
   return headers;
 }

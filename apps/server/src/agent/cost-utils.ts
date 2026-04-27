@@ -25,9 +25,7 @@ export function estimateCostCents(
   inputTokens: number,
   outputTokens: number,
 ): number {
-  const match = MODEL_COST_PREFIXES.find(([prefix]) =>
-    model.startsWith(prefix),
-  );
+  const match = MODEL_COST_PREFIXES.find(([prefix]) => model.startsWith(prefix));
   const rates = match ? match[1] : DEFAULT_COST;
   return (inputTokens * rates.input + outputTokens * rates.output) * 100;
 }

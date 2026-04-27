@@ -3,6 +3,9 @@ import { StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { RETRY_SESSION_CONNECTION_MUTATION } from "@trace/client-core";
 import { Button, Text } from "@/components/design-system";
+import { useAppForegroundStatus } from "@/hooks/useAppForegroundStatus";
+import { useNowTicker } from "@/hooks/useNowTicker";
+import { shouldShowSessionConnectionLost } from "@/lib/connectivityVisibility";
 import { alpha, useTheme } from "@/theme";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
@@ -20,6 +23,15 @@ interface ConnectionLostBannerProps {
  */
 export function ConnectionLostBanner({ sessionId, reason }: ConnectionLostBannerProps) {
   const theme = useTheme();
+  const { appActive, foregroundedAt } = useAppForegroundStatus();
+  const tickEnabled =
+    appActive &&
+    !shouldShowSessionConnectionLost({
+      appActive,
+      foregroundedAt,
+      now: Date.now(),
+    });
+  const now = useNowTicker(tickEnabled);
   const [pending, setPending] = useState(false);
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -33,10 +45,12 @@ export function ConnectionLostBanner({ sessionId, reason }: ConnectionLostBanner
     if (pending) return;
     setPending(true);
     void haptic.light();
-    await getClient()
-      .mutation(RETRY_SESSION_CONNECTION_MUTATION, { sessionId })
-      .toPromise();
+    await getClient().mutation(RETRY_SESSION_CONNECTION_MUTATION, { sessionId }).toPromise();
     if (mountedRef.current) setPending(false);
+  }
+
+  if (!shouldShowSessionConnectionLost({ appActive, foregroundedAt, now })) {
+    return null;
   }
 
   return (

@@ -1,12 +1,12 @@
 import type { Context } from "../context.js";
-import { executionLoggingService, type QueryExecutionLogsInput } from "../services/execution-logging.js";
+import {
+  executionLoggingService,
+  type QueryExecutionLogsInput,
+} from "../services/execution-logging.js";
 import { costTrackingService } from "../services/cost-tracking.js";
 import { orgMemberService } from "../services/org-member.js";
 import { llmCallLoggingService } from "../services/llm-call-logging.js";
-import {
-  getWorkerStatus,
-  getAggregationWindows,
-} from "../services/agent-worker-status.js";
+import { getWorkerStatus, getAggregationWindows } from "../services/agent-worker-status.js";
 
 export const agentDebugTypeResolvers = {
   AgentExecutionLog: {
@@ -86,11 +86,7 @@ export const agentDebugQueries = {
     return { budget, dailyCosts: dailyCosts };
   },
 
-  agentWorkerStatus: async (
-    _: unknown,
-    args: { organizationId: string },
-    ctx: Context,
-  ) => {
+  agentWorkerStatus: async (_: unknown, args: { organizationId: string }, ctx: Context) => {
     await orgMemberService.assertMembership(ctx.userId, args.organizationId);
 
     const status = await getWorkerStatus();
@@ -102,11 +98,7 @@ export const agentDebugQueries = {
     };
   },
 
-  agentAggregationWindows: async (
-    _: unknown,
-    args: { organizationId: string },
-    ctx: Context,
-  ) => {
+  agentAggregationWindows: async (_: unknown, args: { organizationId: string }, ctx: Context) => {
     await orgMemberService.assertMembership(ctx.userId, args.organizationId);
 
     const windows = await getAggregationWindows(args.organizationId);

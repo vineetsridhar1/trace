@@ -49,11 +49,9 @@ describe("isBlockedSessionEvent", () => {
   });
 
   it("returns false for normal session_paused", () => {
-    expect(
-      isBlockedSessionEvent(
-        sessionEvent({ eventType: "session_paused", payload: {} }),
-      ),
-    ).toBe(false);
+    expect(isBlockedSessionEvent(sessionEvent({ eventType: "session_paused", payload: {} }))).toBe(
+      false,
+    );
   });
 
   it("returns false for completed session_terminated", () => {
@@ -91,9 +89,7 @@ describe("isSessionCompletionEvent", () => {
   });
 
   it("returns true for session_pr_opened", () => {
-    expect(
-      isSessionCompletionEvent(sessionEvent({ eventType: "session_pr_opened" })),
-    ).toBe(true);
+    expect(isSessionCompletionEvent(sessionEvent({ eventType: "session_pr_opened" }))).toBe(true);
   });
 
   it("returns false for failed session_terminated", () => {
@@ -114,9 +110,7 @@ describe("isSessionCompletionEvent", () => {
 
   it("returns false for non-session scope", () => {
     expect(
-      isSessionCompletionEvent(
-        sessionEvent({ scopeType: "chat", eventType: "session_pr_opened" }),
-      ),
+      isSessionCompletionEvent(sessionEvent({ scopeType: "chat", eventType: "session_pr_opened" })),
     ).toBe(false);
   });
 });
@@ -127,16 +121,12 @@ describe("isSessionProgressEvent", () => {
   });
 
   it("returns false for session_started", () => {
-    expect(
-      isSessionProgressEvent(sessionEvent({ eventType: "session_started" })),
-    ).toBe(false);
+    expect(isSessionProgressEvent(sessionEvent({ eventType: "session_started" }))).toBe(false);
   });
 
   it("returns false for non-session scope", () => {
     expect(
-      isSessionProgressEvent(
-        sessionEvent({ scopeType: "chat", eventType: "session_output" }),
-      ),
+      isSessionProgressEvent(sessionEvent({ scopeType: "chat", eventType: "session_output" })),
     ).toBe(false);
   });
 });
@@ -172,9 +162,7 @@ describe("extractBlockageInfo", () => {
   });
 
   it("returns generic message for unknown event types", () => {
-    const info = extractBlockageInfo(
-      sessionEvent({ eventType: "session_started", payload: {} }),
-    );
+    const info = extractBlockageInfo(sessionEvent({ eventType: "session_started", payload: {} }));
     expect(info).toBe("Session encountered an issue.");
   });
 });

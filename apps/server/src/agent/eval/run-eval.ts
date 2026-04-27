@@ -49,8 +49,12 @@ async function main(): Promise<void> {
   console.log("EVAL RESULTS");
   console.log("=".repeat(60));
   console.log(`Total cases:           ${summary.totalCases}`);
-  console.log(`Disposition match:     ${summary.dispositionMatchCount}/${summary.totalCases} (${(summary.dispositionMatchCount / summary.totalCases * 100).toFixed(1)}%)`);
-  console.log(`Avg confidence delta:  ${summary.avgConfidenceDelta >= 0 ? "+" : ""}${summary.avgConfidenceDelta.toFixed(3)}`);
+  console.log(
+    `Disposition match:     ${summary.dispositionMatchCount}/${summary.totalCases} (${((summary.dispositionMatchCount / summary.totalCases) * 100).toFixed(1)}%)`,
+  );
+  console.log(
+    `Avg confidence delta:  ${summary.avgConfidenceDelta >= 0 ? "+" : ""}${summary.avgConfidenceDelta.toFixed(3)}`,
+  );
   console.log(`Avg action overlap:    ${(summary.avgActionSetOverlap * 100).toFixed(1)}%`);
   console.log(`Avg composite score:   ${(summary.avgComposite * 100).toFixed(1)}%`);
   console.log(`Prompt versions:       ${JSON.stringify(summary.promptVersions)}`);
@@ -63,9 +67,9 @@ async function main(): Promise<void> {
       const match = r.scores.dispositionMatch ? "MATCH" : "DIFF";
       console.log(
         `  ${r.caseId.slice(0, 8)} | ${match} | ` +
-        `disp: ${r.replayDisposition} | conf: ${r.replayConfidence.toFixed(2)} | ` +
-        `actions: [${r.replayActions.join(", ")}] | ` +
-        `composite: ${(r.scores.composite * 100).toFixed(0)}% | ${r.latencyMs}ms`,
+          `disp: ${r.replayDisposition} | conf: ${r.replayConfidence.toFixed(2)} | ` +
+          `actions: [${r.replayActions.join(", ")}] | ` +
+          `composite: ${(r.scores.composite * 100).toFixed(0)}% | ${r.latencyMs}ms`,
       );
     }
   }

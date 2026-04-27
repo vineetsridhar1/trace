@@ -8,18 +8,19 @@ import type {
 import { useUIStore, type UIState } from "../../stores/ui";
 import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog";
 import { motion } from "framer-motion";
-import type { SessionGroupRow } from "./sessions-table-types";
+import type { SessionGridRow } from "./sessions-table-types";
 import { FILTER_STORAGE_KEY_PREFIX } from "./sessions-table-types";
 import { applySessionsColumnMode } from "./sessions-table-columns";
 import { SessionsGridTable } from "./SessionsGridTable";
 import { useCompactTableMode } from "./useCompactTableMode";
 import { useSessionsGridOptions } from "./useSessionsGridOptions";
 import { useSessionGroupRows } from "./useSessionGroupRows";
+import { useSessionStatusGrouping } from "./useSessionStatusGrouping";
 import { useSessionsGridTable } from "./useSessionsGridTable";
 
 export function SessionsTable({ channelId }: { channelId: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const gridApiRef = useRef<GridApi<SessionGroupRow> | null>(null);
+  const gridApiRef = useRef<GridApi<SessionGridRow> | null>(null);
   const { fadeControls, isCompact } = useCompactTableMode(containerRef);
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
   const [archiveTarget, setArchiveTarget] = useState<{
@@ -29,14 +30,19 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   } | null>(null);
 
   const filteredGroups = useSessionGroupRows(channelId);
+  const { gridRows, onFilterModelChanged, onToggleStatusGroup } =
+    useSessionStatusGrouping(filteredGroups);
 
   useEffect(() => {
-    useSessionsGridTable.getState().setRows(filteredGroups);
-  }, [filteredGroups]);
+    useSessionsGridTable.getState().setRows(gridRows);
+  }, [gridRows]);
 
-  const applyColumnMode = useCallback((api: GridApi<SessionGroupRow>) => {
-    applySessionsColumnMode(api, isCompact);
-  }, [isCompact]);
+  const applyColumnMode = useCallback(
+    (api: GridApi<SessionGridRow>) => {
+      applySessionsColumnMode(api, isCompact);
+    },
+    [isCompact],
+  );
 
   useEffect(() => {
     const api = gridApiRef.current;
@@ -45,8 +51,10 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   }, [applyColumnMode]);
 
   const getContextMenuItems = useCallback(
-    (params: GetContextMenuItemsParams<SessionGroupRow>): (DefaultMenuItem | MenuItemDef<SessionGroupRow>)[] => {
-      if (!params.node?.data) return [];
+    (
+      params: GetContextMenuItemsParams<SessionGridRow>,
+    ): (DefaultMenuItem | MenuItemDef<SessionGridRow>)[] => {
+      if (!params.node?.data || "_isStatusHeader" in params.node.data) return [];
       const group = params.node.data;
       const sessionId = group.latestSession?.id;
       return [
@@ -82,10 +90,12 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     filterStorageKey,
     getContextMenuItems,
     isCompact,
+    onFilterModelChanged,
     onGridReady: (event) => {
       gridApiRef.current = event.api;
       applyColumnMode(event.api);
     },
+    onToggleStatusGroup,
   });
   const selectedRowIds = activeSessionGroupId ? [activeSessionGroupId] : undefined;
 

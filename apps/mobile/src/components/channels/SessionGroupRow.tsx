@@ -10,6 +10,7 @@ import ContextMenu, {
 import { ARCHIVE_SESSION_GROUP_MUTATION, useEntityField } from "@trace/client-core";
 import { Avatar, Chip, Text } from "@/components/design-system";
 import { SessionStatusIndicator } from "@/components/channels/SessionStatusIndicator";
+import { buildSessionRowAccessibilityLabel } from "@/lib/accessibility";
 import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
 import { usePressScale } from "@/lib/motion";
@@ -124,13 +125,20 @@ export const SessionGroupRow = memo(function SessionGroupRow({
   const chipVariant = mapStatusToChipVariant(status);
   const timestamp = lastMessageAt ?? updatedAt ?? null;
   const secondaryLabel = latestSessionRepo?.name ?? groupRepo?.name ?? branch ?? null;
+  const accessibilityLabel = buildSessionRowAccessibilityLabel({
+    name,
+    status,
+    secondaryLabel,
+    preview: lastEventPreview,
+    syncedBridgeLabel: attached?.bridgeLabel ?? null,
+  });
 
   return (
     <ContextMenu actions={actions} onPress={handleMenuPress} preview={null}>
       <Animated.View style={pressScaleStyle}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={attached ? `${name}, synced to ${attached.bridgeLabel}` : name}
+          accessibilityLabel={accessibilityLabel}
           onPress={handlePress}
           onPressIn={handlePressIn}
           onPressOut={onPressOut}

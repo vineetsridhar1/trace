@@ -1,19 +1,18 @@
 import { setPlatform } from "@trace/client-core";
 
-const TOKEN_KEY = "trace_token";
-
 setPlatform({
   apiUrl: import.meta.env.VITE_API_URL ?? "",
+  authMode: "cookie",
   storage: {
-    getItem: (k) => localStorage.getItem(k),
-    setItem: (k, v) => localStorage.setItem(k, v),
-    removeItem: (k) => localStorage.removeItem(k),
+    getItem: (key: string) => localStorage.getItem(key),
+    setItem: (key: string, value: string) => localStorage.setItem(key, value),
+    removeItem: (key: string) => localStorage.removeItem(key),
   },
   secureStorage: {
-    getToken: async () => localStorage.getItem(TOKEN_KEY),
-    setToken: async (t) => localStorage.setItem(TOKEN_KEY, t),
-    clearToken: async () => localStorage.removeItem(TOKEN_KEY),
+    getToken: async () => null,
+    setToken: async () => {},
+    clearToken: async () => {},
   },
   fetch: window.fetch.bind(window),
-  createWebSocket: (url, protocols) => new WebSocket(url, protocols),
+  createWebSocket: (url: string, protocols?: string[]) => new WebSocket(url, protocols),
 });

@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
-import { Platform, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import {
+  Platform,
+  StyleSheet,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import Animated, { Keyframe, type SharedValue } from "react-native-reanimated";
 import { Text } from "@/components/design-system";
@@ -41,6 +47,10 @@ interface SessionStreamListProps {
    */
   isNearBottomRef: MutableRefObject<boolean>;
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  onScrollBeginDrag: () => void;
+  onScrollEndDrag: () => void;
+  onMomentumScrollBegin: () => void;
+  onMomentumScrollEnd: () => void;
   fetchOlderEvents: () => Promise<void>;
 }
 
@@ -59,6 +69,10 @@ export function SessionStreamList({
   bottomInset = 0,
   isNearBottomRef,
   onScroll,
+  onScrollBeginDrag,
+  onScrollEndDrag,
+  onMomentumScrollBegin,
+  onMomentumScrollEnd,
   fetchOlderEvents,
 }: SessionStreamListProps) {
   const theme = useTheme();
@@ -99,13 +113,7 @@ export function SessionStreamList({
       if (!isFreshLast) return body;
       return <Animated.View entering={messageEnter}>{body}</Animated.View>;
     },
-    [
-      acceptEntering,
-      horizontalPadding,
-      isNearBottomRef,
-      renderContext,
-      revealX,
-    ],
+    [acceptEntering, horizontalPadding, isNearBottomRef, renderContext, revealX],
   );
 
   const keyExtractor = useCallback((item: SessionStreamListItem) => item.key, []);
@@ -122,6 +130,10 @@ export function SessionStreamList({
       maxItemsInRecyclePool={24}
       inverted={false}
       onScroll={onScroll}
+      onScrollBeginDrag={onScrollBeginDrag}
+      onScrollEndDrag={onScrollEndDrag}
+      onMomentumScrollBegin={onMomentumScrollBegin}
+      onMomentumScrollEnd={onMomentumScrollEnd}
       scrollEventThrottle={16}
       keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
       keyboardShouldPersistTaps="handled"

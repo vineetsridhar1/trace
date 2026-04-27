@@ -16,7 +16,8 @@ export const chatActions: AgentActionRegistration[] = [
     method: "sendMessage",
     description:
       "Send a message in a chat. Use to communicate with team members, provide updates, or respond to questions. Only for direct/group chats — use channel.sendMessage for channel messages.",
-    catalogDescription: "Send/post/write a message in a DM or group chat (chatId, text, html, parentId)",
+    catalogDescription:
+      "Send/post/write a message in a DM or group chat (chatId, text, html, parentId)",
     risk: "medium",
     suggestable: true,
     tier: "core",
@@ -34,8 +35,7 @@ export const chatActions: AgentActionRegistration[] = [
     name: "chat.create",
     service: "chatService",
     method: "create",
-    description:
-      "Start a new direct message or group chat with specified members.",
+    description: "Start a new direct message or group chat with specified members.",
     catalogDescription: "Start/open/create a new DM or group chat (memberIds, name)",
     risk: "medium",
     suggestable: true,
@@ -57,8 +57,7 @@ export const chatActions: AgentActionRegistration[] = [
     name: "chat.editMessage",
     service: "chatService",
     method: "editMessage",
-    description:
-      "Edit a previously sent message in a chat.",
+    description: "Edit a previously sent message in a chat.",
     catalogDescription: "Edit/modify a chat message (messageId, html)",
     risk: "medium",
     suggestable: true,
@@ -75,8 +74,7 @@ export const chatActions: AgentActionRegistration[] = [
     name: "chat.deleteMessage",
     service: "chatService",
     method: "deleteMessage",
-    description:
-      "Delete a message from a chat. This is a destructive action.",
+    description: "Delete a message from a chat. This is a destructive action.",
     catalogDescription: "Delete/remove a message from a chat (messageId)",
     risk: "high",
     suggestable: true,
@@ -92,8 +90,7 @@ export const chatActions: AgentActionRegistration[] = [
     name: "chat.addMember",
     service: "chatService",
     method: "addMember",
-    description:
-      "Add a user to an existing group chat.",
+    description: "Add a user to an existing group chat.",
     catalogDescription: "Add/invite a user to a group chat (chatId, userId)",
     risk: "medium",
     suggestable: true,
@@ -110,8 +107,7 @@ export const chatActions: AgentActionRegistration[] = [
     name: "chat.leave",
     service: "chatService",
     method: "leave",
-    description:
-      "Leave a group chat.",
+    description: "Leave a group chat.",
     catalogDescription: "Leave/exit a group chat (chatId)",
     risk: "low",
     suggestable: false,
@@ -127,8 +123,7 @@ export const chatActions: AgentActionRegistration[] = [
     name: "chat.rename",
     service: "chatService",
     method: "rename",
-    description:
-      "Rename a group chat.",
+    description: "Rename a group chat.",
     catalogDescription: "Rename/retitle a group chat (chatId, name)",
     risk: "medium",
     suggestable: true,
@@ -145,8 +140,7 @@ export const chatActions: AgentActionRegistration[] = [
     name: "chat.get",
     service: "chatService",
     method: "getChat",
-    description:
-      "Get details about a specific chat including members and type (DM vs group).",
+    description: "Get details about a specific chat including members and type (DM vs group).",
     catalogDescription: "Fetch/read/view chat details (chatId)",
     risk: "low",
     suggestable: false,
@@ -171,7 +165,10 @@ export const chatActions: AgentActionRegistration[] = [
     parameters: {
       fields: {
         chatId: { type: "string", description: "The chat to read messages from", required: true },
-        limit: { type: "number", description: "Maximum number of messages to return (default 20, max 50)" },
+        limit: {
+          type: "number",
+          description: "Maximum number of messages to return (default 20, max 50)",
+        },
       },
     },
     scopes: ["chat"],
@@ -180,8 +177,7 @@ export const chatActions: AgentActionRegistration[] = [
     name: "chat.list",
     service: "chatService",
     method: "getChats",
-    description:
-      "List all chats (DMs and group chats) the agent is a member of.",
+    description: "List all chats (DMs and group chats) the agent is a member of.",
     catalogDescription: "List/browse all chats the agent is in",
     risk: "low",
     suggestable: false,
@@ -195,8 +191,7 @@ export const chatActions: AgentActionRegistration[] = [
     name: "chat.getMembers",
     service: "chatService",
     method: "getMembers",
-    description:
-      "List all members of a chat. Use to see who is in a group chat.",
+    description: "List all members of a chat. Use to see who is in a group chat.",
     catalogDescription: "List/get members of a chat (chatId)",
     risk: "low",
     suggestable: false,
@@ -289,11 +284,7 @@ export const chatDispatchers: Record<string, ActionDispatcher> = {
 
   "chat.listMessages": (services, args, ctx) => {
     const limit = Math.min(typeof args.limit === "number" ? args.limit : 20, 50);
-    return services.chatService.getMessages(
-      args.chatId as string,
-      ctx.agentId,
-      { limit },
-    );
+    return services.chatService.getMessages(args.chatId as string, ctx.agentId, { limit });
   },
 
   "chat.list": (services, _args, ctx) => {

@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { RETRY_SESSION_CONNECTION_MUTATION } from "@trace/client-core";
 import { Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
+import { userFacingError } from "@/lib/requestError";
 import { getClient } from "@/lib/urql";
 import { alpha, useTheme } from "@/theme";
 
@@ -18,18 +19,18 @@ interface ComposerConnectionNoticeProps {
  * so the message is adjacent to the (disabled) input. When `canRetry` is
  * false the Retry button is disabled and tinted with the destructive color.
  */
-export function ComposerConnectionNotice({
-  sessionId,
-  canRetry,
-}: ComposerConnectionNoticeProps) {
+export function ComposerConnectionNotice({ sessionId, canRetry }: ComposerConnectionNoticeProps) {
   const theme = useTheme();
   const [pending, setPending] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const retryErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      if (retryErrorTimeoutRef.current) clearTimeout(retryErrorTimeoutRef.current);
     };
   }, []);
 
@@ -42,6 +43,11 @@ export function ComposerConnectionNotice({
       .toPromise();
     if (result.error) {
       void haptic.error();
+      setRetryError(userFacingError(result.error, "Retry failed. Try again shortly."));
+      if (retryErrorTimeoutRef.current) clearTimeout(retryErrorTimeoutRef.current);
+      retryErrorTimeoutRef.current = setTimeout(() => {
+        if (mountedRef.current) setRetryError(null);
+      }, 3000);
       console.warn("[retrySessionConnection] failed", result.error);
     }
     if (mountedRef.current) setPending(false);
@@ -60,13 +66,8 @@ export function ComposerConnectionNotice({
         },
       ]}
     >
-      <Text
-        variant="caption1"
-        color="mutedForeground"
-        style={styles.caption}
-        numberOfLines={1}
-      >
-        Session offline — retry to reconnect
+      <Text variant="caption1" color="mutedForeground" style={styles.caption} numberOfLines={1}>
+        {retryError ?? "Session offline — retry to reconnect"}
       </Text>
       <Pressable
         accessibilityRole="button"
@@ -79,9 +80,7 @@ export function ComposerConnectionNotice({
             borderColor: canRetry
               ? alpha(theme.colors.foreground, 0.16)
               : alpha(theme.colors.destructive, 0.3),
-            backgroundColor: canRetry
-              ? "transparent"
-              : alpha(theme.colors.destructive, 0.08),
+            backgroundColor: canRetry ? "transparent" : alpha(theme.colors.destructive, 0.08),
             opacity: retryActive ? (pressed ? 0.7 : 1) : 0.5,
           },
         ]}

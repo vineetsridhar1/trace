@@ -3,10 +3,7 @@ import type { Event, EventType, ScopeType } from "@trace/gql";
 import { handleOrgEvent } from "../src/events/handlers.js";
 import { useEntityStore } from "../src/stores/entity.js";
 import { useAuthStore } from "../src/stores/auth.js";
-import {
-  setOrgEventUIBindings,
-  type OrgEventUIBindings,
-} from "../src/events/ui-bindings.js";
+import { setOrgEventUIBindings, type OrgEventUIBindings } from "../src/events/ui-bindings.js";
 
 function resetStores() {
   useEntityStore.setState({
@@ -24,6 +21,7 @@ function resetStores() {
     messages: {},
     queuedMessages: {},
     eventsByScope: {},
+    _eventIdsByScope: {},
     _sessionIdsByGroup: {},
     _messageIdsByScope: {},
     _eventIdsByParentId: {},
@@ -145,6 +143,30 @@ describe("handleOrgEvent", () => {
     const bucket = useEntityStore.getState().eventsByScope["session:session-1"];
     expect(bucket).toBeDefined();
     expect(bucket?.[event.id]).toEqual(event);
+    expect(useEntityStore.getState()._eventIdsByScope["session:session-1"]).toEqual([event.id]);
+  });
+
+  it("keeps scoped event ids ordered by timestamp", () => {
+    const newer = makeEvent({
+      eventType: "session_output",
+      scopeId: "session-1",
+      timestamp: "2026-01-01T00:00:02.000Z",
+      payload: { type: "assistant", message: { content: [{ type: "text", text: "newer" }] } },
+    });
+    const older = makeEvent({
+      eventType: "session_output",
+      scopeId: "session-1",
+      timestamp: "2026-01-01T00:00:01.000Z",
+      payload: { type: "assistant", message: { content: [{ type: "text", text: "older" }] } },
+    });
+
+    handleOrgEvent(newer);
+    handleOrgEvent(older);
+
+    expect(useEntityStore.getState()._eventIdsByScope["session:session-1"]).toEqual([
+      older.id,
+      newer.id,
+    ]);
   });
 
   it("upserts a new session and its session group on session_started", () => {
@@ -186,11 +208,7 @@ describe("handleOrgEvent", () => {
     });
     handleOrgEvent(event);
     expect(harness.openSessionTab).toHaveBeenCalledWith("group-1", "session-new");
-    expect(harness.navigateToSession).toHaveBeenCalledWith(
-      "channel-7",
-      "group-1",
-      "session-new",
-    );
+    expect(harness.navigateToSession).toHaveBeenCalledWith("channel-7", "group-1", "session-new");
   });
 
   it("marks badges when an off-screen session reaches a terminal state", () => {
@@ -405,9 +423,7 @@ describe("handleOrgEvent", () => {
     );
 
     expect(useEntityStore.getState().queuedMessages["qm-1"]).toBeDefined();
-    expect(
-      useEntityStore.getState()._queuedMessageIdsBySession["session-1"],
-    ).toContain("qm-1");
+    expect(useEntityStore.getState()._queuedMessageIdsBySession["session-1"]).toContain("qm-1");
 
     handleOrgEvent(
       makeEvent({

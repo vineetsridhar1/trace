@@ -268,9 +268,7 @@ describe("ChatService", () => {
     });
 
     const service = new ChatService();
-    await expect(
-      service.rename("chat-1", "Renamed", "user", "user-1"),
-    ).resolves.toEqual({
+    await expect(service.rename("chat-1", "Renamed", "user", "user-1")).resolves.toEqual({
       id: "chat-1",
       name: "Renamed",
       members: [],

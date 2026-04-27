@@ -228,6 +228,7 @@ enum EventType {
   ticket_linked
   ticket_unlinked
   entity_linked
+  organization_created
   repo_created
   repo_updated
   channel_created
@@ -1009,6 +1010,10 @@ input CreateAiConversationInput {
   visibility: AiConversationVisibility
 }
 
+input CreateOrganizationInput {
+  name: String!
+}
+
 # --- Queries ---
 
 type Query {
@@ -1109,6 +1114,11 @@ type LinkedCheckoutActionResult {
   ok: Boolean!
   status: LinkedCheckoutStatus!
   error: String
+  errorCode: LinkedCheckoutErrorCode
+}
+
+enum LinkedCheckoutErrorCode {
+  DIRTY_ROOT_CHECKOUT
 }
 
 # --- Mutations ---
@@ -1131,7 +1141,7 @@ type Mutation {
   terminateSession(id: ID!): Session!
   dismissSession(id: ID!): Session!
   deleteSession(id: ID!): Session!
-  archiveSessionGroup(id: ID!): SessionGroup!
+  archiveSessionGroup(id: ID!): SessionGroup
   deleteSessionGroup(id: ID!): Boolean!
   updateSessionConfig(
     sessionId: ID!
@@ -1185,8 +1195,14 @@ type Mutation {
     branch: String!
     commitSha: String
     autoSyncEnabled: Boolean
+    conflictStrategy: LinkedCheckoutSyncConflictStrategy
+    commitMessage: String
   ): LinkedCheckoutActionResult!
-  commitLinkedCheckoutChanges(sessionGroupId: ID!, repoId: ID!): LinkedCheckoutActionResult!
+  commitLinkedCheckoutChanges(
+    sessionGroupId: ID!
+    repoId: ID!
+    message: String
+  ): LinkedCheckoutActionResult!
   restoreLinkedCheckout(sessionGroupId: ID!, repoId: ID!): LinkedCheckoutActionResult!
   setLinkedCheckoutAutoSync(
     sessionGroupId: ID!
@@ -1201,6 +1217,7 @@ type Mutation {
   linkTicket(ticketId: ID!, entityType: EntityType!, entityId: ID!): Ticket!
   unlinkTicket(ticketId: ID!, entityType: EntityType!, entityId: ID!): Ticket!
   linkEntityToProject(entityType: EntityType!, entityId: ID!, projectId: ID!): Project!
+  createOrganization(input: CreateOrganizationInput!): OrgMember!
   createRepo(input: CreateRepoInput!): Repo!
   updateRepo(id: ID!, input: UpdateRepoInput!): Repo!
   createProject(input: CreateProjectInput!): Project!
@@ -1249,6 +1266,12 @@ type Mutation {
   createAiConversation(organizationId: ID!, input: CreateAiConversationInput!): AiConversation!
   sendTurn(branchId: ID!, content: String!): Turn!
   updateAiConversationTitle(conversationId: ID!, title: String!): AiConversation!
+}
+
+enum LinkedCheckoutSyncConflictStrategy {
+  DISCARD
+  COMMIT
+  REBASE
 }
 
 # --- Subscriptions ---

@@ -2,7 +2,11 @@
  * Session domain actions — start, run, sendMessage, terminate, dismiss, delete, get
  */
 
-import type { AgentActionRegistration, ActionDispatcher, StartSessionServiceInput } from "./types.js";
+import type {
+  AgentActionRegistration,
+  ActionDispatcher,
+  StartSessionServiceInput,
+} from "./types.js";
 import { actorInfo } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -16,13 +20,18 @@ export const sessionActions: AgentActionRegistration[] = [
     method: "start",
     description:
       "Start a new coding session. This is a high-risk action — only use when there is a clear, well-defined task that requires a coding session and high confidence it will be useful.",
-    catalogDescription: "Start/launch/create a new coding session (prompt, channelId, repoId, tool)",
+    catalogDescription:
+      "Start/launch/create a new coding session (prompt, channelId, repoId, tool)",
     risk: "high",
     suggestable: true,
     tier: "core",
     parameters: {
       fields: {
-        prompt: { type: "string", description: "The task description / prompt for the session", required: true },
+        prompt: {
+          type: "string",
+          description: "The task description / prompt for the session",
+          required: true,
+        },
         channelId: { type: "string", description: "Channel to associate the session with" },
         repoId: { type: "string", description: "Repository to work in" },
         tool: {
@@ -30,8 +39,14 @@ export const sessionActions: AgentActionRegistration[] = [
           description: "Coding tool to use",
           enum: ["claude_code", "codex", "custom"],
         },
-        sessionGroupId: { type: "string", description: "Existing session group to add the session to" },
-        sourceSessionId: { type: "string", description: "Session to copy context/workdir from when starting the new session" },
+        sessionGroupId: {
+          type: "string",
+          description: "Existing session group to add the session to",
+        },
+        sourceSessionId: {
+          type: "string",
+          description: "Session to copy context/workdir from when starting the new session",
+        },
       },
     },
     scopes: ["chat", "channel", "ticket", "session"],
@@ -93,8 +108,7 @@ export const sessionActions: AgentActionRegistration[] = [
     name: "session.dismiss",
     service: "sessionService",
     method: "dismiss",
-    description:
-      "Dismiss/archive a completed session. Use to clean up sessions that are done.",
+    description: "Dismiss/archive a completed session. Use to clean up sessions that are done.",
     catalogDescription: "Dismiss/archive a completed session (sessionId)",
     risk: "medium",
     suggestable: true,
@@ -110,8 +124,7 @@ export const sessionActions: AgentActionRegistration[] = [
     name: "session.delete",
     service: "sessionService",
     method: "delete",
-    description:
-      "Delete a session permanently. This is a destructive action.",
+    description: "Delete a session permanently. This is a destructive action.",
     catalogDescription: "Delete/remove a session permanently (sessionId)",
     risk: "high",
     suggestable: true,
@@ -189,10 +202,7 @@ export const sessionDispatchers: Record<string, ActionDispatcher> = {
   },
 
   "session.run": (services, args) => {
-    return services.sessionService.run(
-      args.sessionId as string,
-      args.prompt as string | undefined,
-    );
+    return services.sessionService.run(args.sessionId as string, args.prompt as string | undefined);
   },
 
   "session.sendMessage": (services, args, ctx) => {

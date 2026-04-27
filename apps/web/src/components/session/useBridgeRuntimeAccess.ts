@@ -42,9 +42,7 @@ export type BridgeRuntimeAccessInfo = {
 // non-owners without a grant still get the permission prompt so they can
 // request access even while the bridge is offline (requests are durable
 // and the owner can approve them on reconnect).
-export function isBridgeInteractionAllowed(
-  access: BridgeRuntimeAccessInfo | null,
-): boolean {
+export function isBridgeInteractionAllowed(access: BridgeRuntimeAccessInfo | null): boolean {
   if (!access) return true;
   if (access.hostingMode !== "local") return true;
   if (access.allowed || access.isOwner) return true;

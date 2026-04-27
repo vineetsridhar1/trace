@@ -32,6 +32,7 @@ export function SessionComposerBottomSheetBase({
   const { height: windowHeight } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
   const [content, setContent] = useState(children);
+  const [settled, setSettled] = useState(false);
   const translateY = useSharedValue(windowHeight);
   const dragY = useSharedValue(0);
   const backdropOpacity = useSharedValue(0);
@@ -50,10 +51,13 @@ export function SessionComposerBottomSheetBase({
   );
 
   const animateIn = useCallback(() => {
+    setSettled(false);
     dragY.value = 0;
     translateY.value = windowHeight;
     backdropOpacity.value = 0;
-    translateY.value = withSpring(0, theme.motion.springs.gentle);
+    translateY.value = withSpring(0, theme.motion.springs.gentle, (finished) => {
+      if (finished) runOnJS(setSettled)(true);
+    });
     backdropOpacity.value = withTiming(1, { duration: theme.motion.durations.base });
   }, [
     backdropOpacity,
@@ -66,6 +70,7 @@ export function SessionComposerBottomSheetBase({
 
   const animateOut = useCallback(
     (notifyParent: boolean) => {
+      setSettled(false);
       translateY.value = translateY.value + dragY.value;
       dragY.value = 0;
       translateY.value = withTiming(
@@ -77,14 +82,7 @@ export function SessionComposerBottomSheetBase({
       );
       backdropOpacity.value = withTiming(0, { duration: theme.motion.durations.fast });
     },
-    [
-      backdropOpacity,
-      dragY,
-      finishClose,
-      theme.motion.durations.fast,
-      translateY,
-      windowHeight,
-    ],
+    [backdropOpacity, dragY, finishClose, theme.motion.durations.fast, translateY, windowHeight],
   );
 
   useEffect(() => {
@@ -116,8 +114,7 @@ export function SessionComposerBottomSheetBase({
           dragY.value = Math.max(event.translationY, 0);
         })
         .onEnd((event) => {
-          const shouldClose =
-            dragY.value > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY;
+          const shouldClose = dragY.value > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY;
           if (shouldClose) {
             runOnJS(handlePanEnd)();
             return;
@@ -134,9 +131,13 @@ export function SessionComposerBottomSheetBase({
     };
   });
 
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value + dragY.value }],
-  }));
+  const sheetStyle = useAnimatedStyle(() => {
+    const offset = translateY.value + dragY.value;
+    if (settled && Math.abs(offset) < 0.5) return {};
+    return {
+      transform: [{ translateY: offset }],
+    };
+  }, [settled]);
 
   if (!mounted) return null;
 
@@ -151,11 +152,7 @@ export function SessionComposerBottomSheetBase({
     >
       <View style={styles.root}>
         <Animated.View
-          style={[
-            styles.backdrop,
-            { backgroundColor: alpha("#000000", 0.32) },
-            backdropStyle,
-          ]}
+          style={[styles.backdrop, { backgroundColor: alpha("#000000", 0.32) }, backdropStyle]}
         >
           <Pressable
             accessibilityLabel="Dismiss composer picker"
@@ -179,22 +176,10 @@ export function SessionComposerBottomSheetBase({
         >
           <GestureDetector gesture={sheetGesture}>
             <View style={styles.grabberSlot}>
-              <View
-                style={[
-                  styles.grabber,
-                  { backgroundColor: theme.colors.borderMuted },
-                ]}
-              />
+              <View style={[styles.grabber, { backgroundColor: theme.colors.borderMuted }]} />
             </View>
           </GestureDetector>
-          <View
-            style={[
-              styles.content,
-              { paddingHorizontal: theme.spacing.lg },
-            ]}
-          >
-            {content}
-          </View>
+          <View style={[styles.content, { paddingHorizontal: theme.spacing.lg }]}>{content}</View>
         </Animated.View>
       </View>
     </Modal>

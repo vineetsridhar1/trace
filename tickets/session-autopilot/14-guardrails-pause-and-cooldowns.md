@@ -36,4 +36,3 @@ Add the loop protections that keep Session Autopilot useful instead of noisy: ma
 2. Replay a review on the same checkpoint and verify no action is taken.
 3. Pause Autopilot and verify worker completion no longer triggers review.
 4. Dismiss a validation inbox item and verify cooldown behavior.
-

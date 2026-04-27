@@ -6,10 +6,7 @@ import { startPlanImplementationSession } from "@/lib/createQuickSession";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { alpha, useTheme } from "@/theme";
-import {
-  PendingInputShell,
-  pendingInputStyles,
-} from "./PendingInputShell";
+import { PendingInputShell, pendingInputStyles } from "./PendingInputShell";
 import { SessionComposerActionButton } from "./session-input-composer/SessionComposerActionButton";
 import { styles as composerStyles } from "./session-input-composer/styles";
 
@@ -217,11 +214,7 @@ export function PendingInputPlan({
             placeholderTextColor={theme.colors.dimForeground}
             editable={!sending}
             returnKeyType="send"
-            style={[
-              composerStyles.input,
-              styles.feedbackInput,
-              { color: theme.colors.foreground },
-            ]}
+            style={[composerStyles.input, styles.feedbackInput, { color: theme.colors.foreground }]}
           />
         </Glass>
         <SessionComposerActionButton

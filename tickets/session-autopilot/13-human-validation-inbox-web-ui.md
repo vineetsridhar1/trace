@@ -40,4 +40,3 @@ Render Autopilot validation requests as a dedicated inbox surface on web. This i
 2. Verify correct rendering and action buttons.
 3. Open session and PR from the item.
 4. Confirm non-Autopilot inbox items still render unchanged.
-

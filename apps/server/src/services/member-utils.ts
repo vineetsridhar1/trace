@@ -23,7 +23,11 @@ export async function normalizeMembers(
     where: { id: { in: userIds } },
     select: { id: true, name: true, avatarUrl: true },
   });
-  const userMap = new Map(users.map((u: { id: string; name: string | null; avatarUrl: string | null }) => [u.id, u] as const));
+  const userMap = new Map(
+    users.map(
+      (u: { id: string; name: string | null; avatarUrl: string | null }) => [u.id, u] as const,
+    ),
+  );
 
   return members.map((m: { userId: string; joinedAt: Date }) => ({
     user: userMap.get(m.userId) ?? { id: m.userId, name: "Unknown", avatarUrl: null },

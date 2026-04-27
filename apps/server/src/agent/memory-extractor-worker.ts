@@ -344,10 +344,7 @@ async function doExtractForScope(
   // chronologically and can advance the watermark to the newest processed event.
   const events = await prisma.event.findMany({
     where: whereClause,
-    orderBy: [
-      { timestamp: "asc" },
-      { id: "asc" },
-    ],
+    orderBy: [{ timestamp: "asc" }, { id: "asc" }],
     take: EVENTS_PER_EXTRACTION,
   });
 
@@ -410,17 +407,15 @@ async function doExtractForScope(
 
   // Track cost
   if (result.inputTokens > 0 || result.outputTokens > 0) {
-    const costCents = estimateCostCents(
-      EXTRACTION_MODEL,
-      result.inputTokens,
-      result.outputTokens,
-    );
-    await costTrackingService.recordCost({
-      organizationId,
-      modelTier: "tier2",
-      costCents,
-      isSummary: false,
-    }).catch(() => {});
+    const costCents = estimateCostCents(EXTRACTION_MODEL, result.inputTokens, result.outputTokens);
+    await costTrackingService
+      .recordCost({
+        organizationId,
+        modelTier: "tier2",
+        costCents,
+        isSummary: false,
+      })
+      .catch(() => {});
   }
 
   // Advance watermark to the newest processed event's timestamp.
@@ -440,10 +435,7 @@ async function doExtractForScope(
       scopeId,
       watermark: nextWatermark,
     }),
-    orderBy: [
-      { timestamp: "asc" },
-      { id: "asc" },
-    ],
+    orderBy: [{ timestamp: "asc" }, { id: "asc" }],
     select: { id: true },
   });
   await markScopeProgress(scopeRef, events.length, !!remaining);
@@ -512,9 +504,7 @@ async function runExtractionCycle(): Promise<void> {
 // Public API
 // ---------------------------------------------------------------------------
 
-export function startMemoryExtractorWorker(
-  activeOrgsFn: () => Iterable<string>,
-): void {
+export function startMemoryExtractorWorker(activeOrgsFn: () => Iterable<string>): void {
   getActiveOrgs = activeOrgsFn;
   pollTimer = setInterval(() => {
     runExtractionCycle().catch((err) => logError("extraction cycle unhandled", err));

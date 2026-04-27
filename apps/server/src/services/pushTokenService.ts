@@ -14,7 +14,12 @@ export interface UnregisterPushTokenInput {
 }
 
 export class PushTokenService {
-  async register({ userId, organizationId, token, platform }: RegisterPushTokenInput): Promise<boolean> {
+  async register({
+    userId,
+    organizationId,
+    token,
+    platform,
+  }: RegisterPushTokenInput): Promise<boolean> {
     const now = new Date();
     await prisma.pushToken.upsert({
       where: { userId_token: { userId, token } },
