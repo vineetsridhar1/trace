@@ -84,7 +84,9 @@ export function ActiveSessionsAccessory() {
     [width, theme],
   );
 
-  if (ids.length === 0) return null;
+  if (ids.length === 0) {
+    return <View pointerEvents="none" style={styles.hidden} />;
+  }
 
   return (
     <View style={styles.container} onLayout={onLayout}>
@@ -108,4 +110,5 @@ export function ActiveSessionsAccessory() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  hidden: { height: 0 },
 });
