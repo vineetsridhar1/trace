@@ -4,8 +4,10 @@ const mocks = vi.hoisted(() => ({
   registerRuntime: vi.fn(),
   unregisterRuntime: vi.fn(),
   getRuntime: vi.fn(() => undefined),
+  getRuntimeForSession: vi.fn(() => undefined),
   getLinkedCheckoutStatus: vi.fn(() => Promise.resolve()),
   restoreSessionsForRuntime: vi.fn(() => Promise.resolve()),
+  recordOutput: vi.fn(() => Promise.resolve()),
   registerLocalRuntimeConnection: vi.fn(),
   restoreTerminals: vi.fn(() => Promise.resolve()),
 }));
@@ -15,6 +17,7 @@ vi.mock("./session-router.js", () => ({
     registerRuntime: mocks.registerRuntime,
     unregisterRuntime: mocks.unregisterRuntime,
     getRuntime: mocks.getRuntime,
+    getRuntimeForSession: mocks.getRuntimeForSession,
     getLinkedCheckoutStatus: mocks.getLinkedCheckoutStatus,
   },
 }));
@@ -22,6 +25,7 @@ vi.mock("./session-router.js", () => ({
 vi.mock("../services/session.js", () => ({
   sessionService: {
     restoreSessionsForRuntime: mocks.restoreSessionsForRuntime,
+    recordOutput: mocks.recordOutput,
   },
 }));
 
@@ -147,5 +151,36 @@ describe("bridge handler auth", () => {
       }),
     );
     expect(ws.close).not.toHaveBeenCalledWith(1008, "Bridge auth mismatch");
+  });
+
+  it("ignores session output for sessions not bound to this bridge runtime", async () => {
+    const ws = createMockWs();
+    mocks.getRuntimeForSession.mockReturnValue({
+      id: "cloud-machine-other",
+      ws: createMockWs(),
+    });
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "cloud",
+        instanceId: "cloud-machine-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "cloud-machine-owned",
+      hostingMode: "cloud",
+    });
+    await Promise.resolve();
+    ws.emitMessage({
+      type: "session_output",
+      sessionId: "victim-session",
+      data: { type: "assistant", message: "spoofed" },
+    });
+    await Promise.resolve();
+
+    expect(mocks.recordOutput).not.toHaveBeenCalled();
   });
 });

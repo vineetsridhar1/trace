@@ -74,6 +74,20 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
     queues.set(sessionId, next);
   }
 
+  function isSessionBoundToThisRuntime(sessionId: unknown): sessionId is string {
+    if (typeof sessionId !== "string" || !sessionId) return false;
+    const runtime = sessionRouter.getRuntimeForSession(sessionId);
+    const allowed = runtime?.id === runtimeId && runtime.ws === ws;
+    if (!allowed) {
+      runtimeDebug("bridge ignored message for unbound session", {
+        runtimeId,
+        sessionId,
+        boundRuntimeId: runtime?.id ?? null,
+      });
+    }
+    return allowed;
+  }
+
   ws.on("message", (raw: Buffer | string) => {
     try {
       const msg = JSON.parse(raw.toString());
@@ -383,18 +397,18 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         return;
       }
 
-      if (msg.type === "session_output" && msg.sessionId) {
-        const sessionId = msg.sessionId as string;
+      if (msg.type === "session_output" && isSessionBoundToThisRuntime(msg.sessionId)) {
+        const sessionId = msg.sessionId;
         const data = (msg.data ?? {}) as Record<string, unknown>;
 
         enqueueEvent(sessionId, async () => {
           await sessionService.recordOutput(sessionId, data);
         });
-      } else if (msg.type === "session_complete" && msg.sessionId) {
+      } else if (msg.type === "session_complete" && isSessionBoundToThisRuntime(msg.sessionId)) {
         enqueueEvent(msg.sessionId, async () => {
           await sessionService.complete(msg.sessionId);
         });
-      } else if (msg.type === "workspace_ready" && msg.sessionId) {
+      } else if (msg.type === "workspace_ready" && isSessionBoundToThisRuntime(msg.sessionId)) {
         enqueueEvent(msg.sessionId, async () => {
           await sessionService.workspaceReady(
             msg.sessionId,
@@ -403,24 +417,32 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             msg.slug as string | undefined,
           );
         });
-      } else if (msg.type === "workspace_failed" && msg.sessionId) {
+      } else if (msg.type === "workspace_failed" && isSessionBoundToThisRuntime(msg.sessionId)) {
         enqueueEvent(msg.sessionId, async () => {
           await sessionService.workspaceFailed(
             msg.sessionId,
             (msg.error as string) ?? "Unknown error",
           );
         });
-      } else if (msg.type === "register_session" && msg.sessionId) {
+      } else if (msg.type === "register_session" && isSessionBoundToThisRuntime(msg.sessionId)) {
         runtimeDebug("received register_session", { runtimeId, sessionId: msg.sessionId });
         sessionRouter.bindSession(msg.sessionId, runtimeId);
-      } else if (msg.type === "tool_session_id" && msg.sessionId && msg.toolSessionId) {
+      } else if (
+        msg.type === "tool_session_id" &&
+        isSessionBoundToThisRuntime(msg.sessionId) &&
+        msg.toolSessionId
+      ) {
         enqueueEvent(msg.sessionId, async () => {
           await sessionService.storeToolSessionId(
             msg.sessionId as string,
             msg.toolSessionId as string,
           );
         });
-      } else if (msg.type === "tool_session_missing" && msg.sessionId && msg.toolSessionId) {
+      } else if (
+        msg.type === "tool_session_missing" &&
+        isSessionBoundToThisRuntime(msg.sessionId) &&
+        msg.toolSessionId
+      ) {
         const imageUrls = Array.isArray(msg.imageUrls)
           ? (msg.imageUrls as unknown[]).filter((url): url is string => typeof url === "string")
           : undefined;
@@ -439,7 +461,11 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             imageUrls,
           });
         });
-      } else if (msg.type === "git_checkpoint" && msg.sessionId && msg.checkpoint) {
+      } else if (
+        msg.type === "git_checkpoint" &&
+        isSessionBoundToThisRuntime(msg.sessionId) &&
+        msg.checkpoint
+      ) {
         enqueueEvent(msg.sessionId, async () => {
           await sessionService.recordGitCheckpoint(msg.sessionId as string, msg.checkpoint);
         });
