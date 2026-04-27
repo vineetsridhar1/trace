@@ -27,29 +27,41 @@ export function EmptyState({ icon, title, subtitle, action, style }: EmptyStateP
     <View style={[styles.container, style]}>
       <View
         style={[
-          styles.iconWell,
+          styles.panel,
           {
-            backgroundColor: iconBackground,
-            borderColor: alpha(iconColor, 0.22),
-            borderRadius: theme.radius.lg,
+            backgroundColor: alpha(theme.colors.surfaceElevated, 0.72),
+            borderColor: theme.colors.borderMuted,
+            borderRadius: theme.radius.xl,
+            ...theme.shadows.sm,
           },
         ]}
       >
-        <SymbolView name={icon} size={30} tintColor={iconColor} />
-      </View>
-      <Text variant="headline" color="foreground" align="center" style={styles.title}>
-        {title}
-      </Text>
-      {subtitle ? (
-        <Text variant="footnote" color="mutedForeground" align="center" style={styles.subtitle}>
-          {subtitle}
-        </Text>
-      ) : null}
-      {action ? (
-        <View style={styles.action}>
-          <Button title={action.label} onPress={action.onPress} variant="secondary" size="md" />
+        <View
+          style={[
+            styles.iconWell,
+            {
+              backgroundColor: iconBackground,
+              borderColor: alpha(iconColor, 0.22),
+              borderRadius: theme.radius.lg,
+            },
+          ]}
+        >
+          <SymbolView name={icon} size={30} tintColor={iconColor} />
         </View>
-      ) : null}
+        <Text variant="headline" color="foreground" align="center" style={styles.title}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text variant="footnote" color="mutedForeground" align="center" style={styles.subtitle}>
+            {subtitle}
+          </Text>
+        ) : null}
+        {action ? (
+          <View style={styles.action}>
+            <Button title={action.label} onPress={action.onPress} variant="secondary" size="md" />
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -58,11 +70,16 @@ const styles = StyleSheet.create({
   container: {
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 36,
+  },
+  panel: {
     width: "100%",
-    maxWidth: 320,
-    alignSelf: "center",
-    paddingHorizontal: 28,
-    paddingVertical: 44,
+    maxWidth: 340,
+    alignItems: "center",
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 24,
+    paddingVertical: 28,
   },
   iconWell: {
     width: 58,

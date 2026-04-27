@@ -79,8 +79,8 @@ function ChannelsEmpty({ error, onRetry }: { error: string | null; onRetry: () =
   return (
     <EmptyState
       icon={error ? "exclamationmark.triangle" : "tray"}
-      title={error ? "Couldn't load channels" : "No channels yet"}
-      subtitle={error ? error : "Coding channels will appear here after they're created."}
+      title={error ? "Couldn't load channels" : "No coding channels yet"}
+      subtitle={error ? error : "Channels appear here as they're created in the web app."}
       action={error ? { label: "Retry", onPress: onRetry } : undefined}
     />
   );

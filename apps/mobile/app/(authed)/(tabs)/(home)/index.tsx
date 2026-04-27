@@ -110,19 +110,13 @@ function HomeEmpty({
               ? "line.3.horizontal.decrease.circle"
               : "checkmark.seal"
         }
-        title={
-          error
-            ? "Couldn't load home"
-            : hasRepoFilter
-              ? "No repo sessions need attention"
-              : "No sessions need attention"
-        }
+        title={error ? "Couldn't load home" : hasRepoFilter ? "Nothing in this repo" : "All clear"}
         subtitle={
           error
             ? error
             : hasRepoFilter
-              ? "No sessions from this repo need your attention right now."
-              : "Sessions that need your attention will appear here."
+              ? "No sessions for the selected repo right now."
+              : "Sessions that need you will show up here."
         }
         action={error ? { label: "Retry", onPress: onRetry } : undefined}
       />

@@ -223,16 +223,16 @@ function ActiveEmpty({
     return (
       <EmptyState
         icon="person"
-        title="No sessions started by you"
-        subtitle="Switch to All to see every active session in this channel."
+        title="No sessions you started"
+        subtitle="Switch to All to see everything happening in this channel."
       />
     );
   }
   return (
     <EmptyState
       icon="bolt.horizontal"
-      title="No active sessions"
-      subtitle="Start a session to see it here."
+      title="No active sessions in this channel"
+      subtitle="Start a session from the web app to see it here."
     />
   );
 }
