@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Alert, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import {
   APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION,
@@ -28,6 +28,31 @@ export function ConnectionsBridgesList() {
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<ConnectionAccessRequest | null>(null);
   const [selectedGrant, setSelectedGrant] = useState<ConnectionAccessGrant | null>(null);
+  const [locallyResolvedRequestIds, setLocallyResolvedRequestIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  const visibleConnections = useMemo(() => {
+    if (locallyResolvedRequestIds.size === 0) return connections;
+    return connections.map((connection) => ({
+      ...connection,
+      bridge: {
+        ...connection.bridge,
+        accessRequests: connection.bridge.accessRequests.filter(
+          (request) => !locallyResolvedRequestIds.has(request.id),
+        ),
+      },
+    }));
+  }, [connections, locallyResolvedRequestIds]);
+
+  const markRequestResolved = useCallback((requestId: string) => {
+    setLocallyResolvedRequestIds((current) => {
+      if (current.has(requestId)) return current;
+      const next = new Set(current);
+      next.add(requestId);
+      return next;
+    });
+  }, []);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -71,6 +96,7 @@ export function ConnectionsBridgesList() {
         })
         .toPromise();
       if (result.error) throw result.error;
+      markRequestResolved(input.requestId);
       setSelectedRequest(null);
     });
   };
@@ -81,6 +107,7 @@ export function ConnectionsBridgesList() {
         .mutation(DENY_BRIDGE_ACCESS_REQUEST_MUTATION, { requestId: request.id })
         .toPromise();
       if (result.error) throw result.error;
+      markRequestResolved(request.id);
       setSelectedRequest(null);
     });
   };
@@ -131,10 +158,10 @@ export function ConnectionsBridgesList() {
     });
   };
 
-  if (loading && connections.length === 0) {
+  if (loading && visibleConnections.length === 0) {
     return <CenteredText text="Loading bridges..." />;
   }
-  if (error && connections.length === 0) {
+  if (error && visibleConnections.length === 0) {
     return (
       <View style={styles.center}>
         <EmptyState
@@ -146,7 +173,7 @@ export function ConnectionsBridgesList() {
       </View>
     );
   }
-  if (connections.length === 0) {
+  if (visibleConnections.length === 0) {
     return (
       <View style={styles.center}>
         <EmptyState
@@ -164,7 +191,7 @@ export function ConnectionsBridgesList() {
       contentContainerStyle={[styles.content, { padding: theme.spacing.lg }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
     >
-      {connections.map((connection) => (
+      {visibleConnections.map((connection) => (
         <ConnectionsBridgeSection
           key={connection.bridge.id}
           connection={connection}
