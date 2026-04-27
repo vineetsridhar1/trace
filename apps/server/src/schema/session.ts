@@ -443,12 +443,18 @@ export const sessionMutations = {
   },
   queueSessionMessage: (
     _: unknown,
-    args: { sessionId: string; text: string; interactionMode?: string | null },
+    args: {
+      sessionId: string;
+      text: string;
+      imageKeys?: string[] | null;
+      interactionMode?: string | null;
+    },
     ctx: Context,
   ) => {
     return sessionService.queueMessage({
       sessionId: args.sessionId,
       text: args.text,
+      imageKeys: args.imageKeys ?? undefined,
       actorId: ctx.userId,
       interactionMode: args.interactionMode ?? undefined,
       organizationId: requireOrgContext(ctx),

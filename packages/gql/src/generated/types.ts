@@ -910,6 +910,7 @@ export type MutationMuteScopeArgs = {
 };
 
 export type MutationQueueSessionMessageArgs = {
+  imageKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   sessionId: Scalars["ID"]["input"];
   text: Scalars["String"]["input"];
@@ -1481,6 +1482,7 @@ export type QueuedMessage = {
   __typename?: "QueuedMessage";
   createdAt: Scalars["DateTime"]["output"];
   id: Scalars["ID"]["output"];
+  imageKeys: Array<Scalars["String"]["output"]>;
   interactionMode?: Maybe<Scalars["String"]["output"]>;
   position: Scalars["Int"]["output"];
   sessionId: Scalars["ID"]["output"];

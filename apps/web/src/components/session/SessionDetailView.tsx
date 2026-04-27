@@ -128,6 +128,7 @@ const SESSION_DETAIL_QUERY = gql`
         id
         sessionId
         text
+        imageKeys
         interactionMode
         position
         createdAt

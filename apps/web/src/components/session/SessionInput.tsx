@@ -145,29 +145,9 @@ export function SessionInput({
         const imagePreviewUrls = savedImages.map((img) => img.previewUrl);
         const wrappedText = !text ? "" : text.startsWith("/") ? text : wrapPrompt(mode, text);
 
-        if (canQueue) {
-          try {
-            const result = await client
-              .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
-                sessionId,
-                text: wrappedText,
-                interactionMode: mode === "code" ? undefined : mode,
-              })
-              .toPromise();
-
-            if (result.error) {
-              throw result.error;
-            }
-          } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Failed to queue message");
-            throw error;
-          }
-          return;
-        }
-
         let imageKeys: string[] = [];
+        const savedIds = new Set(savedImages.map((img) => img.id));
         if (savedImages.length > 0) {
-          const savedIds = new Set(savedImages.map((img) => img.id));
           setDraftImages(sessionId, (prev) =>
             prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: true } : img)),
           );
@@ -185,13 +165,39 @@ export function SessionInput({
           }
         }
 
+        if (canQueue) {
+          try {
+            const result = await client
+              .mutation(QUEUE_SESSION_MESSAGE_MUTATION, {
+                sessionId,
+                text: wrappedText,
+                imageKeys: imageKeys.length > 0 ? imageKeys : undefined,
+                interactionMode: mode === "code" ? undefined : mode,
+              })
+              .toPromise();
+
+            if (result.error) {
+              throw result.error;
+            }
+
+            setDraftImages(sessionId, (prev) => prev.filter((img) => !savedIds.has(img.id)));
+            for (const img of savedImages) URL.revokeObjectURL(img.previewUrl);
+          } catch (error) {
+            setDraftImages(sessionId, (prev) =>
+              prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: false } : img)),
+            );
+            toast.error(error instanceof Error ? error.message : "Failed to queue message");
+            throw error;
+          }
+          return;
+        }
+
         const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
           sessionId,
           wrappedText,
           imageKeys.length > 0 ? { imageKeys, imagePreviewUrls } : undefined,
         );
 
-        const savedIds = new Set(savedImages.map((img) => img.id));
         setDraftImages(sessionId, (prev) => prev.filter((img) => !savedIds.has(img.id)));
 
         try {
@@ -329,7 +335,7 @@ export function SessionInput({
           <>
             <button
               onClick={() => void editorRef.current?.submit()}
-              disabled={!hasContent || !canSend}
+              disabled={(!hasContent && images.length === 0) || !canSend || isSending}
               className={cn(
                 "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
                 MODE_CONFIG[mode as InteractionMode].sendButton,
