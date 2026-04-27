@@ -18,6 +18,7 @@ import {
   writePushRegistration,
 } from "@/lib/notification-registration";
 import { getClient } from "@/lib/urql";
+import "@/lib/notification-handlers";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({

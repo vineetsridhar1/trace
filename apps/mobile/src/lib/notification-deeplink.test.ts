@@ -12,6 +12,13 @@ describe("routePathFromNotificationLink", () => {
     );
   });
 
+  it("normalizes bridge review links to the connections tab", () => {
+    expect(routePathFromNotificationLink("trace://connections")).toBe("/(connections)");
+    expect(routePathFromNotificationLink("https://gettrace.org/m/connections")).toBe(
+      "/(connections)",
+    );
+  });
+
   it("rejects unsupported external links", () => {
     expect(routePathFromNotificationLink("https://example.com/m/sessions/g1/s1")).toBeNull();
   });

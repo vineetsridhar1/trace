@@ -1,5 +1,7 @@
 function notificationRoute(path: string): string | null {
-  return path.startsWith("/sessions/") ? path : null;
+  if (path.startsWith("/sessions/")) return path;
+  if (path === "/connections" || path === "/(connections)") return "/(connections)";
+  return null;
 }
 
 export function routePathFromNotificationLink(deepLink: string): string | null {
