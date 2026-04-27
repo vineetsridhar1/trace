@@ -7,6 +7,7 @@ import {
 import type { ParamListBase, TabNavigationState } from "@react-navigation/native";
 import { useEntityStore, type EntityState } from "@trace/client-core";
 import { ActiveSessionsAccessory } from "@/components/navigation/ActiveSessionsAccessory";
+import { selectActiveSessionIds } from "@/lib/activeSessions";
 
 const BottomTabNavigator = createNativeBottomTabNavigator().Navigator;
 const NativeTabs = withLayoutContext<
@@ -42,6 +43,9 @@ const connectionsIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"
 
 export default function TabsLayout() {
   const needsInputCount = useEntityStore(selectNeedsInputCount);
+  const activeSessionCount = useEntityStore(
+    (state: EntityState) => selectActiveSessionIds(state).length,
+  );
 
   return (
     <NativeTabs
@@ -49,7 +53,7 @@ export default function TabsLayout() {
       // first route otherwise, and `(connections)` sorts before `(home)`.
       initialRouteName="(home)"
       minimizeBehavior="onScrollDown"
-      renderBottomAccessoryView={renderAccessory}
+      renderBottomAccessoryView={activeSessionCount > 0 ? renderAccessory : undefined}
     >
       <NativeTabs.Screen
         name="(home)"
