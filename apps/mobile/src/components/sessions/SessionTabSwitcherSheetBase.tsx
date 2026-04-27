@@ -166,10 +166,9 @@ export function SessionTabSwitcherSheetBase({
             {
               backgroundColor: theme.colors.surface,
               borderColor: theme.colors.borderMuted,
-              borderTopLeftRadius: theme.radius.xl,
-              borderTopRightRadius: theme.radius.xl,
+              height: windowHeight,
               paddingBottom: Math.max(insets.bottom, theme.spacing.lg),
-              paddingTop: theme.spacing.sm,
+              paddingTop: Math.max(insets.top, theme.spacing.sm),
             },
             sheetStyle,
           ]}
@@ -212,8 +211,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   sheet: {
-    maxHeight: "78%",
-    minHeight: "42%",
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   grabberSlot: {
