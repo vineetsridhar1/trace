@@ -146,7 +146,7 @@ async function loadSessionNotificationContext(
   return {
     createdById: session.createdById,
     name: session.name?.trim() || "Untitled session",
-    channelName: session.channel?.name?.trim() || "Unknown channel",
+    channelName: session.channel?.name?.trim() ? `#${session.channel.name.trim()}` : "#unknown-channel",
     sessionGroupId: session.sessionGroupId,
   };
 }

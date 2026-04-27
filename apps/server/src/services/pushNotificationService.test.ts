@@ -100,7 +100,7 @@ describe("PushNotificationService", () => {
         {
           to: "ExponentPushToken[token-1]",
           title: "Fix flaky CI",
-          subtitle: "mobile",
+          subtitle: "#mobile",
           body: "Done. I updated the flaky CI check.",
           data: { deepLink: "trace://sessions/group-1/session-1" },
         },
@@ -178,7 +178,7 @@ describe("PushNotificationService", () => {
         {
           to: "ExponentPushToken[token-1]",
           title: "Fix flaky CI",
-          subtitle: "mobile",
+          subtitle: "#mobile",
           body: "I need clarification on which auth flow to keep.",
           data: { deepLink: "trace://sessions/group-1/session-1" },
         },
