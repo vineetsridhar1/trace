@@ -1,27 +1,35 @@
 import { describe, expect, it } from "vitest";
-import {
-  gitRemoteToBrowserUrl,
-  normalizeBrowserInputUrl,
-  resolveBrowserUrl,
-} from "./browser";
+import { gitRemoteToBrowserUrl, normalizeBrowserInputUrl, resolveBrowserUrl } from "./browser";
 
 describe("resolveBrowserUrl", () => {
   it("prefers an explicit override", () => {
-    expect(resolveBrowserUrl("https://example.com", "https://github.com/org/repo/pull/1", "git@github.com:org/repo.git")).toBe("https://example.com");
+    expect(
+      resolveBrowserUrl(
+        "https://example.com",
+        "https://github.com/org/repo/pull/1",
+        "git@github.com:org/repo.git",
+      ),
+    ).toBe("https://example.com");
   });
 
   it("falls back to the PR URL before the repo remote", () => {
-    expect(resolveBrowserUrl(null, "https://github.com/org/repo/pull/1", "git@github.com:org/repo.git")).toBe("https://github.com/org/repo/pull/1");
+    expect(
+      resolveBrowserUrl(null, "https://github.com/org/repo/pull/1", "git@github.com:org/repo.git"),
+    ).toBe("https://github.com/org/repo/pull/1");
   });
 
   it("converts ssh remotes to browser URLs", () => {
-    expect(resolveBrowserUrl(null, null, "git@github.com:org/repo.git")).toBe("https://github.com/org/repo");
+    expect(resolveBrowserUrl(null, null, "git@github.com:org/repo.git")).toBe(
+      "https://github.com/org/repo",
+    );
   });
 });
 
 describe("gitRemoteToBrowserUrl", () => {
   it("strips .git from https remotes", () => {
-    expect(gitRemoteToBrowserUrl("https://github.com/org/repo.git")).toBe("https://github.com/org/repo");
+    expect(gitRemoteToBrowserUrl("https://github.com/org/repo.git")).toBe(
+      "https://github.com/org/repo",
+    );
   });
 });
 

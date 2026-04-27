@@ -18,11 +18,7 @@ function computeDiff(oldStr: string, newStr: string): DiffLine[] {
 
   for (const change of changes) {
     const lines = change.value.replace(/\n$/, "").split("\n");
-    const type: DiffLine["type"] = change.added
-      ? "added"
-      : change.removed
-        ? "removed"
-        : "context";
+    const type: DiffLine["type"] = change.added ? "added" : change.removed ? "removed" : "context";
 
     for (const text of lines) {
       result.push({ type, text });
@@ -37,15 +33,10 @@ export function InlineDiffView({ oldString, newString, filePath }: InlineDiffVie
 
   return (
     <div className="inline-diff-view">
-      {filePath && (
-        <div className="inline-diff-filepath">{filePath}</div>
-      )}
+      {filePath && <div className="inline-diff-filepath">{filePath}</div>}
       <div className="inline-diff-lines">
         {lines.map((line: DiffLine, i: number) => (
-          <div
-            key={i}
-            className={`inline-diff-line inline-diff-${line.type}`}
-          >
+          <div key={i} className={`inline-diff-line inline-diff-${line.type}`}>
             <span className="inline-diff-marker">
               {line.type === "removed" ? "−" : line.type === "added" ? "+" : " "}
             </span>

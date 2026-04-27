@@ -45,9 +45,7 @@ export function QueuedMessagesList({ sessionId }: { sessionId: string }) {
   return (
     <div className="flex flex-col gap-1 px-4 pb-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">
-          Queued ({ids.length})
-        </span>
+        <span className="text-xs text-muted-foreground">Queued ({ids.length})</span>
         {ids.length > 1 && (
           <button
             onClick={handleClearAll}

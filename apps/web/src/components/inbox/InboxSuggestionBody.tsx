@@ -88,31 +88,37 @@ export function InboxSuggestionBody({
             <ScopeRef scopeType={payload.scopeType} scopeId={payload.scopeId} />
           )}
           {confidence !== undefined && (
-            <span className={cn(
-              "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-              confidence >= 0.8
-                ? "bg-emerald-500/10 text-emerald-400"
-                : confidence >= 0.5
-                  ? "bg-amber-500/10 text-amber-400"
-                  : "bg-zinc-500/10 text-zinc-400",
-            )}>
+            <span
+              className={cn(
+                "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                confidence >= 0.8
+                  ? "bg-emerald-500/10 text-emerald-400"
+                  : confidence >= 0.5
+                    ? "bg-amber-500/10 text-amber-400"
+                    : "bg-zinc-500/10 text-zinc-400",
+              )}
+            >
               {Math.round(confidence * 100)}% confident
             </span>
           )}
           {expiry && (
-            <span className={cn(
-              "flex items-center gap-0.5 text-[10px]",
-              expiry.urgent ? "text-amber-400" : "text-muted-foreground/60",
-            )}>
+            <span
+              className={cn(
+                "flex items-center gap-0.5 text-[10px]",
+                expiry.urgent ? "text-amber-400" : "text-muted-foreground/60",
+              )}
+            >
               <Clock size={10} />
               {expiry.text}
             </span>
           )}
           {actionType === "ticket.create" && priority && (
-            <span className={cn(
-              "rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize",
-              PRIORITY_STYLES[priority] ?? "bg-zinc-500/10 text-zinc-400",
-            )}>
+            <span
+              className={cn(
+                "rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize",
+                PRIORITY_STYLES[priority] ?? "bg-zinc-500/10 text-zinc-400",
+              )}
+            >
               {priority}
             </span>
           )}
@@ -135,7 +141,10 @@ export function InboxSuggestionBody({
           <button
             type="button"
             disabled={sending}
-            onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleAccept(); }}
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              handleAccept();
+            }}
             className={cn(
               "flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/90",
               sending && "opacity-50",
@@ -149,7 +158,10 @@ export function InboxSuggestionBody({
             <button
               type="button"
               disabled={sending}
-              onClick={(e: React.MouseEvent) => { e.stopPropagation(); setExpanded(!expanded); }}
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                setExpanded(!expanded);
+              }}
               className={cn(
                 "flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors",
                 expanded
@@ -166,7 +178,10 @@ export function InboxSuggestionBody({
           <button
             type="button"
             disabled={sending}
-            onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDismiss(); }}
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              onDismiss();
+            }}
             className={cn(
               "ml-auto flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground/60 transition-colors hover:text-red-400",
               sending && "opacity-50",

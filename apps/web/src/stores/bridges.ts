@@ -50,6 +50,6 @@ export function useAttachedCheckoutForGroup(
   sessionGroupId: string | null | undefined,
 ): AttachedCheckoutInfo | null {
   return useBridgesStore((s: BridgesState) =>
-    sessionGroupId ? s.attachedByGroupId[sessionGroupId] ?? null : null,
+    sessionGroupId ? (s.attachedByGroupId[sessionGroupId] ?? null) : null,
   );
 }

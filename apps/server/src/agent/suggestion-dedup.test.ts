@@ -22,8 +22,7 @@ const mockFindActiveSuggestionsByScope = vi.fn().mockResolvedValue([]);
 vi.mock("../services/inbox.js", () => ({
   inboxService: {
     createItem: (...args: unknown[]) => mockCreateItem(...args),
-    findActiveSuggestionsByScope: (...args: unknown[]) =>
-      mockFindActiveSuggestionsByScope(...args),
+    findActiveSuggestionsByScope: (...args: unknown[]) => mockFindActiveSuggestionsByScope(...args),
   },
 }));
 

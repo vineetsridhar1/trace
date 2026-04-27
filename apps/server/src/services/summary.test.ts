@@ -106,10 +106,7 @@ describe("summaryService event replay", () => {
           },
         ],
       },
-      orderBy: [
-        { timestamp: "asc" },
-        { id: "asc" },
-      ],
+      orderBy: [{ timestamp: "asc" }, { id: "asc" }],
       take: 100,
     });
   });

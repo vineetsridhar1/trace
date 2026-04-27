@@ -31,20 +31,20 @@ Add the premium model tier for high-stakes decisions. Tier 3 uses an Opus-class 
 ## Completion requirements
 
 - [x] Planner supports Tier 2 and Tier 3 model selection
-  <!-- `planner.ts:58` exports `DEFAULT_TIER3_MODEL` ("claude-opus-4-20250514"). `runPlanner(ctx, { model })` accepts model override. Pipeline passes Tier 3 model via `options.model`. -->
+<!-- `planner.ts:58` exports `DEFAULT_TIER3_MODEL` ("claude-opus-4-20250514"). `runPlanner(ctx, { model })` accepts model override. Pipeline passes Tier 3 model via `options.model`. -->
 - [x] Router identifies Tier 3 trigger conditions
   <!-- `router.ts:77-104` `shouldPromoteToTier3()` checks: ticket_assigned to agent, urgent/high priority tickets. Sets `maxTier=3` on RoutingResult. -->
   <!-- Updated after multi-turn PR: @mention Tier 3 auto-promotion removed. The default model is now Haiku; the planner chooses its own escalation target via `promotionTarget: "sonnet" | "opus"`. Rule-based Tier 3 remains for ticket assignments and urgent/high priority tickets only. -->
 - [x] Model-requested promotion works (Tier 2 promotionReason → re-run with Tier 3)
-  <!-- `pipeline.ts:151-222` detects `escalate` + `promotionReason`, checks budget via `costTrackingService.checkBudget()`, rebuilds context with `TIER3_TOKEN_BUDGET`, re-runs planner with Tier 3 model. Tier 2 output is fully discarded. -->
+<!-- `pipeline.ts:151-222` detects `escalate` + `promotionReason`, checks budget via `costTrackingService.checkBudget()`, rebuilds context with `TIER3_TOKEN_BUDGET`, re-runs planner with Tier 3 model. Tier 2 output is fully discarded. -->
 - [x] Rule-based promotion bypasses Tier 2 entirely
-  <!-- `pipeline.ts:112-113` checks `batch.maxTier === 3`, builds context with Tier 3 budget, runs planner with Tier 3 model directly. -->
+<!-- `pipeline.ts:112-113` checks `batch.maxTier === 3`, builds context with Tier 3 budget, runs planner with Tier 3 model directly. -->
 - [x] Tier 3 gets a larger context token budget
-  <!-- `context-builder.ts:152-165` `TIER3_TOKEN_BUDGET` = 100K total (vs 60K for Tier 2). Section budgets scaled proportionally. `BuildContextInput.tokenBudget` accepts override. -->
+<!-- `context-builder.ts:152-165` `TIER3_TOKEN_BUDGET` = 100K total (vs 60K for Tier 2). Section budgets scaled proportionally. `BuildContextInput.tokenBudget` accepts override. -->
 - [x] Cost budget enforcement suppresses Tier 3 when budget is low
-  <!-- Router: `router.ts:267-270` sets `maxTier=2` when budget fraction < 0.5. Pipeline: `pipeline.ts:176-177` re-checks `checkBudget()` before model-requested promotion, suppresses when `remainingPercent < 50`. Double-layered defense. -->
+<!-- Router: `router.ts:267-270` sets `maxTier=2` when budget fraction < 0.5. Pipeline: `pipeline.ts:176-177` re-checks `checkBudget()` before model-requested promotion, suppresses when `remainingPercent < 50`. Double-layered defense. -->
 - [x] Execution logs record tier, promotion status, and reason
-  <!-- All `writeExecutionLog` calls pass `modelTier`, `promoted`, `promotionReason`. `WriteLogInput` interface at `pipeline.ts:544-549`. -->
+<!-- All `writeExecutionLog` calls pass `modelTier`, `promoted`, `promotionReason`. `WriteLogInput` interface at `pipeline.ts:544-549`. -->
 
 ## How to test
 

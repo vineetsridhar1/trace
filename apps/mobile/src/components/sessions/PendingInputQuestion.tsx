@@ -1,9 +1,6 @@
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
-import {
-  SEND_SESSION_MESSAGE_MUTATION,
-  useQuestionState,
-} from "@trace/client-core";
+import { SEND_SESSION_MESSAGE_MUTATION, useQuestionState } from "@trace/client-core";
 import type { Question } from "@trace/shared";
 import { Glass, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
@@ -103,12 +100,7 @@ export function PendingInputQuestion({
                 </Text>
               ) : null}
             </View>
-            <Text
-              variant="body"
-              color="foreground"
-              style={styles.questionText}
-              numberOfLines={4}
-            >
+            <Text variant="body" color="foreground" style={styles.questionText} numberOfLines={4}>
               {question.question}
             </Text>
             {question.options.length > 0
@@ -181,11 +173,7 @@ export function PendingInputQuestion({
             placeholderTextColor={theme.colors.dimForeground}
             editable={!sending}
             returnKeyType={hasAllAnswers ? "send" : "next"}
-            style={[
-              composerStyles.input,
-              styles.customInput,
-              { color: theme.colors.foreground },
-            ]}
+            style={[composerStyles.input, styles.customInput, { color: theme.colors.foreground }]}
           />
         </Glass>
         {total > 1 ? (

@@ -54,10 +54,7 @@ export default function AuthedHome() {
     }
   }, [activeOrgId, logout]);
 
-  const ListHeader = useMemo(
-    () => <HomeRepoFilter userId={userId} />,
-    [userId],
-  );
+  const ListHeader = useMemo(() => <HomeRepoFilter userId={userId} />, [userId]);
 
   return (
     <FlashList
@@ -120,8 +117,8 @@ function HomeEmpty({
           error
             ? error
             : hasRepoFilter
-            ? "No sessions for the selected repo right now."
-            : "Sessions that need you will show up here."
+              ? "No sessions for the selected repo right now."
+              : "Sessions that need you will show up here."
         }
         action={error ? { label: "Retry", onPress: onRetry } : undefined}
       />

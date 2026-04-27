@@ -19,6 +19,7 @@ Prevent the agent from suggesting the same thing twice. If users discuss the sam
 ### Suggestion expiry
 
 <!-- Updated after implementation: TTL values match ticket #14's implementation in suggestion.ts EXPIRY_DEFAULTS_MS. Expiry job runs every 60s (not 15min) for faster cleanup; processed event cleanup runs every ~15min. -->
+
 - Each suggestion type has a default TTL (as implemented in ticket #14):
   - `ticket_suggestion`: 72 hours
   - `field_change_suggestion`: 72 hours
@@ -31,6 +32,7 @@ Prevent the agent from suggesting the same thing twice. If users discuss the sam
 - A periodic background maintenance worker (runs every 60s) queries for active InboxItems past their expiry and resolves them as `expired`
 
 ### Processed event cleanup
+
 <!-- Added after ticket 08: The `ProcessedAgentEvent` table (ticket 08) grows unboundedly as the worker processes events. Add a periodic cleanup job that deletes records older than 7 days (events are unlikely to be replayed after that). Run alongside the suggestion expiry job. Query: `DELETE FROM "ProcessedAgentEvent" WHERE "processedAt" < NOW() - INTERVAL '7 days'` -->
 
 - Add a periodic cleanup for the `ProcessedAgentEvent` table (from ticket 08)

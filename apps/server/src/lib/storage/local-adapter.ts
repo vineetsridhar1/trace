@@ -31,7 +31,8 @@ export class LocalStorageAdapter implements StorageAdapter {
     this.rootDir = process.env.LOCAL_STORAGE_DIR
       ? path.resolve(process.env.LOCAL_STORAGE_DIR)
       : path.resolve(process.cwd(), "tmp/uploads");
-    this.publicUrl = process.env.STORAGE_PUBLIC_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
+    this.publicUrl =
+      process.env.STORAGE_PUBLIC_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
     fs.mkdirSync(this.rootDir, { recursive: true });
   }
 

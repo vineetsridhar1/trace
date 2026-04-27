@@ -29,7 +29,9 @@ async function resolveDefaultRuntime(
   try {
     const result = await getClient().query(AVAILABLE_RUNTIMES_QUERY, { tool }).toPromise();
     const runtimes = (result.data?.availableRuntimes ?? []) as SessionRuntimeInstance[];
-    const connected = runtimes.filter((runtime) => runtime.connected && runtime.hostingMode === "local");
+    const connected = runtimes.filter(
+      (runtime) => runtime.connected && runtime.hostingMode === "local",
+    );
     const eligible = channelRepoId
       ? connected.filter((runtime) => runtime.registeredRepoIds.includes(channelRepoId))
       : connected;
@@ -60,25 +62,23 @@ export async function createQuickSession(channelId: string): Promise<void> {
   void haptic.light();
 
   try {
-    const runtimeInstanceId = await resolveDefaultRuntime(tool, channelRepoId);
-    if (!runtimeInstanceId) {
+    const runtimeInstanceId =
+      hosting === "local" ? await resolveDefaultRuntime(tool, channelRepoId) : undefined;
+    if (hosting === "local" && !runtimeInstanceId) {
       throw new Error("No connected local runtime available");
     }
 
     const result = await getClient()
-      .mutation<{ startSession: { id: string; sessionGroupId: string } }>(
-        START_SESSION_MUTATION,
-        {
-          input: {
-            tool,
-            model,
-            hosting,
-            runtimeInstanceId,
-            channelId,
-            repoId: channelRepoId,
-          },
+      .mutation<{ startSession: { id: string; sessionGroupId: string } }>(START_SESSION_MUTATION, {
+        input: {
+          tool,
+          model,
+          hosting,
+          runtimeInstanceId,
+          channelId,
+          repoId: channelRepoId,
         },
-      )
+      })
       .toPromise();
     if (result.error) throw result.error;
     const session = result.data?.startSession;
@@ -125,7 +125,9 @@ export async function createAgentTab(
     .map((id) => state.sessions[id])
     .filter((session): session is SessionEntity => session !== undefined);
   const channelId =
-    getSessionGroupChannelId(group, groupSessions) ?? getSessionChannelId(sourceSession) ?? undefined;
+    getSessionGroupChannelId(group, groupSessions) ??
+    getSessionChannelId(sourceSession) ??
+    undefined;
   const groupRepo = group?.repo as { id: string } | null | undefined;
   const sourceRepo = sourceSession.repo as { id: string } | null | undefined;
 
@@ -133,21 +135,18 @@ export async function createAgentTab(
 
   try {
     const result = await getClient()
-      .mutation<{ startSession: { id: string; sessionGroupId: string } }>(
-        START_SESSION_MUTATION,
-        {
-          input: {
-            tool: sourceSession.tool as CodingTool,
-            model: sourceSession.model ?? undefined,
-            hosting: sourceSession.hosting,
-            channelId,
-            repoId: groupRepo?.id ?? sourceRepo?.id,
-            branch: group?.branch ?? sourceSession.branch ?? undefined,
-            sessionGroupId,
-            sourceSessionId,
-          },
+      .mutation<{ startSession: { id: string; sessionGroupId: string } }>(START_SESSION_MUTATION, {
+        input: {
+          tool: sourceSession.tool as CodingTool,
+          model: sourceSession.model ?? undefined,
+          hosting: sourceSession.hosting,
+          channelId,
+          repoId: groupRepo?.id ?? sourceRepo?.id,
+          branch: group?.branch ?? sourceSession.branch ?? undefined,
+          sessionGroupId,
+          sourceSessionId,
         },
-      )
+      })
       .toPromise();
 
     if (result.error) throw result.error;
@@ -198,7 +197,9 @@ export async function startPlanImplementationSession(
     .map((id) => state.sessions[id])
     .filter((session): session is SessionEntity => session !== undefined);
   const channelId =
-    getSessionGroupChannelId(group, groupSessions) ?? getSessionChannelId(sourceSession) ?? undefined;
+    getSessionGroupChannelId(group, groupSessions) ??
+    getSessionChannelId(sourceSession) ??
+    undefined;
   const groupRepo = group?.repo as { id: string } | null | undefined;
   const sourceRepo = sourceSession.repo as { id: string } | null | undefined;
   const prompt = `Implement the following plan:\n\n${planContent}`;
@@ -207,22 +208,19 @@ export async function startPlanImplementationSession(
 
   try {
     const result = await getClient()
-      .mutation<{ startSession: { id: string; sessionGroupId: string } }>(
-        START_SESSION_MUTATION,
-        {
-          input: {
-            tool: sourceSession.tool as CodingTool,
-            model: sourceSession.model ?? undefined,
-            hosting: sourceSession.hosting,
-            channelId,
-            repoId: groupRepo?.id ?? sourceRepo?.id,
-            branch: group?.branch ?? sourceSession.branch ?? undefined,
-            sessionGroupId,
-            sourceSessionId,
-            prompt,
-          },
+      .mutation<{ startSession: { id: string; sessionGroupId: string } }>(START_SESSION_MUTATION, {
+        input: {
+          tool: sourceSession.tool as CodingTool,
+          model: sourceSession.model ?? undefined,
+          hosting: sourceSession.hosting,
+          channelId,
+          repoId: groupRepo?.id ?? sourceRepo?.id,
+          branch: group?.branch ?? sourceSession.branch ?? undefined,
+          sessionGroupId,
+          sourceSessionId,
+          prompt,
         },
-      )
+      })
       .toPromise();
 
     if (result.error) throw result.error;

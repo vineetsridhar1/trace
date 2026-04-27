@@ -32,17 +32,14 @@ export function ToolCallRow({ name, input, output, timestamp }: ToolCallRowProps
   const normalizedName = name.toLowerCase();
   const isCommand = normalizedName === "bash" || normalizedName === "command";
   const isEdit = normalizedName === "edit";
-  const command = isCommand && typeof input?.command === "string"
-    ? formatCommandLabel(input.command)
-    : null;
+  const command =
+    isCommand && typeof input?.command === "string" ? formatCommandLabel(input.command) : null;
 
-  const hasEditDiff = isEdit
-    && typeof input?.old_string === "string"
-    && typeof input?.new_string === "string";
+  const hasEditDiff =
+    isEdit && typeof input?.old_string === "string" && typeof input?.new_string === "string";
 
-  const editFilePath = isEdit && typeof input?.file_path === "string"
-    ? input.file_path as string
-    : undefined;
+  const editFilePath =
+    isEdit && typeof input?.file_path === "string" ? (input.file_path as string) : undefined;
 
   const label = command ?? `${name} executed`;
 
@@ -72,16 +69,17 @@ export function ToolCallRow({ name, input, output, timestamp }: ToolCallRowProps
         <span className="tool-cmd-time">{formatTime(timestamp)}</span>
       </button>
       {hasBodyContent && (
-        <div
-          className="tool-cmd-body"
-          style={{ maxHeight: open ? `${bodyHeight}px` : "0px" }}
-        >
+        <div className="tool-cmd-body" style={{ maxHeight: open ? `${bodyHeight}px` : "0px" }}>
           <div ref={bodyRef}>
             {showTabs ? (
               <>
                 <div className="flex gap-0 border-b border-border/40 mb-1">
-                  <TabButton active={tab === "output"} onClick={() => setTab("output")}>Output</TabButton>
-                  <TabButton active={tab === "input"} onClick={() => setTab("input")}>Input</TabButton>
+                  <TabButton active={tab === "output"} onClick={() => setTab("output")}>
+                    Output
+                  </TabButton>
+                  <TabButton active={tab === "input"} onClick={() => setTab("input")}>
+                    Input
+                  </TabButton>
                 </div>
                 {tab === "input" ? (
                   <pre className="tool-cmd-output">{serializeUnknown(input)}</pre>
@@ -98,9 +96,7 @@ export function ToolCallRow({ name, input, output, timestamp }: ToolCallRowProps
                     filePath={editFilePath}
                   />
                 ) : (
-                  showInput && (
-                    <pre className="tool-cmd-output">{serializeUnknown(input)}</pre>
-                  )
+                  showInput && <pre className="tool-cmd-output">{serializeUnknown(input)}</pre>
                 )}
                 {!showTabs && output != null && (
                   <pre className="tool-cmd-output">{serializeUnknown(output)}</pre>
@@ -114,11 +110,22 @@ export function ToolCallRow({ name, input, output, timestamp }: ToolCallRowProps
   );
 }
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
       className={cn(
         "px-3 py-1.5 text-xs font-medium transition-colors border-b-2 -mb-px",
         active

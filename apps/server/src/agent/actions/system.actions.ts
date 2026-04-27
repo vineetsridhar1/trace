@@ -16,7 +16,8 @@ export const systemActions: AgentActionRegistration[] = [
     method: "upsert",
     description:
       "Update or create a rolling summary for an entity. Used for silent enrichment — keeping entity summaries up to date as new events occur. This action is never surfaced as a suggestion.",
-    catalogDescription: "Update/refresh an entity's rolling summary (entityType, entityId, summary)",
+    catalogDescription:
+      "Update/refresh an entity's rolling summary (entityType, entityId, summary)",
     risk: "low",
     suggestable: false,
     tier: "core",
@@ -28,7 +29,11 @@ export const systemActions: AgentActionRegistration[] = [
           required: true,
           enum: ["chat", "channel", "ticket", "session"],
         },
-        entityId: { type: "string", description: "The ID of the entity to summarize", required: true },
+        entityId: {
+          type: "string",
+          description: "The ID of the entity to summarize",
+          required: true,
+        },
         summary: { type: "string", description: "The updated summary text", required: true },
       },
     },
@@ -70,5 +75,5 @@ export const systemDispatchers: Record<string, ActionDispatcher> = {
   },
 
   // no_op is handled directly in the executor (short-circuit before dispatch)
-  "no_op": async () => undefined,
+  no_op: async () => undefined,
 };

@@ -119,10 +119,14 @@ async function hasTrackedChanges(repoPath: string): Promise<boolean> {
 }
 
 async function listUntrackedPaths(repoPath: string): Promise<string[]> {
-  const { stdout } = await execFileAsync("git", ["ls-files", "--others", "--exclude-standard", "-z"], {
-    cwd: repoPath,
-    maxBuffer: GIT_MAX_BUFFER,
-  });
+  const { stdout } = await execFileAsync(
+    "git",
+    ["ls-files", "--others", "--exclude-standard", "-z"],
+    {
+      cwd: repoPath,
+      maxBuffer: GIT_MAX_BUFFER,
+    },
+  );
   return parseNullSeparated(stdout);
 }
 
@@ -239,7 +243,10 @@ async function listTreePaths(repoPath: string, ref: string): Promise<string[]> {
   return parseNullSeparated(stdout);
 }
 
-async function hasConflictingUntrackedPaths(repoPath: string, targetCommitSha: string): Promise<boolean> {
+async function hasConflictingUntrackedPaths(
+  repoPath: string,
+  targetCommitSha: string,
+): Promise<boolean> {
   const untrackedPaths = await listUntrackedPaths(repoPath);
   if (untrackedPaths.length === 0) return false;
 

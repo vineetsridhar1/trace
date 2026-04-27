@@ -11,7 +11,7 @@ Replace the `FakeSessionAccessory` stub wired in ticket 15 with a real, data-dri
   - When `activeSessions.length === 0`, the accessory component returns `null`. Keep `renderBottomAccessoryView` **always passed** (and identity-stable) on `NativeTabs` — toggling the prop on/off crashes with `UIViewControllerHierarchyInconsistency` because `react-native-bottom-tabs` rebuilds the native `TabHostingController` while a child `RNSNavigationController` is still attached. Library limitation: when JS returns `null`, the native slot still reserves its default height; with the broader filter above, the empty case is rare enough to live with in V1.
 - **Shared pager index** (Zustand UI store):
   - Add `activeAccessoryIndex: number` to `useMobileUIStore` with `setActiveAccessoryIndex(i)` action.
-  - This is the single source of truth for which session is shown in the accessory *and* in the expanded player (ticket 15b) — pulling in the player must not reset or fork pager position.
+  - This is the single source of truth for which session is shown in the accessory _and_ in the expanded player (ticket 15b) — pulling in the player must not reset or fork pager position.
 - **`ActiveSessionsAccessory` component** (`src/components/navigation/ActiveSessionsAccessory.tsx`, <200 lines):
   - Horizontal `FlatList` / `ScrollView` (paginated, snap-to-item) over active sessions
   - Per-session row: SF Symbol + session name + 1-line subtitle ("Agent · N steps · status") + up-chevron hint

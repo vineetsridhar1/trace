@@ -90,9 +90,7 @@ function buildSessionEntity(params: {
  * UI can render the new session before the create mutation resolves.
  * Platform-specific navigation/overlay logic lives outside this module.
  */
-export function insertOptimisticSessionPair(
-  params: InsertOptimisticSessionPairParams,
-): void {
+export function insertOptimisticSessionPair(params: InsertOptimisticSessionPairParams): void {
   const name = params.name ?? "New session";
   const repoId = params.repoId ?? null;
   const store = useEntityStore.getState();
@@ -133,9 +131,7 @@ export function insertOptimisticSessionPair(
  * any navigation state (router URL, Player overlay id, active tab) that still
  * points at the temp ids.
  */
-export function reconcileOptimisticSessionPair(
-  params: ReconcileOptimisticSessionPairParams,
-): void {
+export function reconcileOptimisticSessionPair(params: ReconcileOptimisticSessionPairParams): void {
   const name = params.name ?? "New session";
   const repoId = params.repoId ?? null;
   const realGroup = buildSessionGroupEntity({
@@ -187,9 +183,7 @@ export function reconcileOptimisticSessionPair(
  * Platform-specific callers must separately roll back any navigation state
  * that was seeded alongside the insert.
  */
-export function rollbackOptimisticSessionPair(
-  params: RollbackOptimisticSessionPairParams,
-): void {
+export function rollbackOptimisticSessionPair(params: RollbackOptimisticSessionPairParams): void {
   useEntityStore.setState((state: EntityState) => {
     const sessions = { ...state.sessions };
     delete sessions[params.tempSessionId];

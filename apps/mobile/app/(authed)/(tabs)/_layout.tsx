@@ -4,10 +4,7 @@ import {
   type NativeBottomTabNavigationEventMap,
   type NativeBottomTabNavigationOptions,
 } from "@bottom-tabs/react-navigation";
-import type {
-  ParamListBase,
-  TabNavigationState,
-} from "@react-navigation/native";
+import type { ParamListBase, TabNavigationState } from "@react-navigation/native";
 import { useEntityStore, type EntityState } from "@trace/client-core";
 import { ActiveSessionsAccessory } from "@/components/navigation/ActiveSessionsAccessory";
 

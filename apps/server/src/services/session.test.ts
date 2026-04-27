@@ -3159,12 +3159,14 @@ describe("SessionService", () => {
           ...makeSessionGroup({ prUrl, workdir: null, worktreeDeleted: true }),
           sessions: [{ agentStatus: "done", sessionStatus: "merged" }],
         });
-      prismaMock.session.updateMany.mockImplementation(async (args?: { data?: { workdir?: string | null } }) => {
-        if (args?.data && Object.prototype.hasOwnProperty.call(args.data, "workdir")) {
-          currentWorkdir = args.data.workdir ?? null;
-        }
-        return { count: 1 };
-      });
+      prismaMock.session.updateMany.mockImplementation(
+        async (args?: { data?: { workdir?: string | null } }) => {
+          if (args?.data && Object.prototype.hasOwnProperty.call(args.data, "workdir")) {
+            currentWorkdir = args.data.workdir ?? null;
+          }
+          return { count: 1 };
+        },
+      );
       prismaMock.sessionGroup.update.mockResolvedValue(makeSessionGroup());
       prismaMock.session.findUnique.mockImplementation(async () => ({
         hosting: "local",
@@ -3240,18 +3242,18 @@ describe("SessionService", () => {
       const prUrl = "https://github.com/trace/trace/pull/100";
       let currentWorkdir: string | null = "/tmp/trace/cobra";
 
-      prismaMock.sessionGroup.findUnique
-        .mockResolvedValueOnce({ prUrl })
-        .mockResolvedValueOnce({
-          ...makeSessionGroup({ prUrl, workdir: currentWorkdir, worktreeDeleted: false }),
-          sessions: [{ agentStatus: "done", sessionStatus: "merged" }],
-        });
-      prismaMock.session.updateMany.mockImplementation(async (args?: { data?: { workdir?: string | null } }) => {
-        if (args?.data && Object.prototype.hasOwnProperty.call(args.data, "workdir")) {
-          currentWorkdir = args.data.workdir ?? null;
-        }
-        return { count: 1 };
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({ prUrl }).mockResolvedValueOnce({
+        ...makeSessionGroup({ prUrl, workdir: currentWorkdir, worktreeDeleted: false }),
+        sessions: [{ agentStatus: "done", sessionStatus: "merged" }],
       });
+      prismaMock.session.updateMany.mockImplementation(
+        async (args?: { data?: { workdir?: string | null } }) => {
+          if (args?.data && Object.prototype.hasOwnProperty.call(args.data, "workdir")) {
+            currentWorkdir = args.data.workdir ?? null;
+          }
+          return { count: 1 };
+        },
+      );
       prismaMock.sessionGroup.update.mockResolvedValue(makeSessionGroup());
       prismaMock.session.findUnique.mockImplementation(async () => ({
         hosting: "local",

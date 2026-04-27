@@ -6,11 +6,7 @@ import {
   UPDATE_SESSION_CONFIG_MUTATION,
   useEntityField,
 } from "@trace/client-core";
-import type {
-  CodingTool,
-  SessionConnection,
-  SessionRuntimeInstance,
-} from "@trace/gql";
+import type { CodingTool, SessionConnection, SessionRuntimeInstance } from "@trace/gql";
 import { ListRow, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { applyOptimisticPatch } from "@/lib/optimisticEntity";
@@ -49,11 +45,11 @@ export function SessionRuntimePickerSheetContent({
     | string
     | null
     | undefined;
-  const repo = useEntityField("sessions", sessionId, "repo") as
-    | { id: string }
+  const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
+  const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as
+    | string
     | null
     | undefined;
-  const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | null | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic");
 
   const currentTool: CodingTool = tool === "codex" ? "codex" : "claude_code";
@@ -74,9 +70,7 @@ export function SessionRuntimePickerSheetContent({
       .toPromise()
       .then((result) => {
         if (cancelled) return;
-        const data = result.data?.availableRuntimes as
-          | SessionRuntimeInstance[]
-          | undefined;
+        const data = result.data?.availableRuntimes as SessionRuntimeInstance[] | undefined;
         setRuntimes(data ?? []);
       })
       .catch((err) => {
@@ -194,26 +188,14 @@ export function SessionRuntimePickerSheetContent({
             title={row.title}
             subtitle={row.subtitle}
             leading={
-              <SymbolView
-                name={row.icon}
-                size={16}
-                tintColor={theme.colors.mutedForeground}
-              />
+              <SymbolView name={row.icon} size={16} tintColor={theme.colors.mutedForeground} />
             }
             trailing={
               row.selected ? (
-                <SymbolView
-                  name="checkmark"
-                  size={16}
-                  tintColor={theme.colors.accent}
-                />
+                <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
               ) : undefined
             }
-            onPress={
-              !row.disabled
-                ? () => void handleSelect(row.value)
-                : undefined
-            }
+            onPress={!row.disabled ? () => void handleSelect(row.value) : undefined}
             haptic="selection"
             separator={index < rows.length - 1}
             style={row.disabled && !row.selected ? styles.disabledRow : undefined}

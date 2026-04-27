@@ -20,11 +20,7 @@ export function FileTreeItem({
   onFileClick,
 }: FileTreeItemProps) {
   const isExpanded = expandedPaths.has(node.path);
-  const Icon = node.isDirectory
-    ? isExpanded
-      ? FolderOpen
-      : FolderClosed
-    : getFileIcon(node.name);
+  const Icon = node.isDirectory ? (isExpanded ? FolderOpen : FolderClosed) : getFileIcon(node.name);
   const iconColor = node.isDirectory ? "text-blue-400/80" : getFileColor(node.name);
 
   return (

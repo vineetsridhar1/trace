@@ -58,7 +58,6 @@ const CHANNEL_EVENTS_SUBSCRIPTION = gql`
   }
 `;
 
-
 export function useChannelMessages(channelId: string) {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const getQueryVariables = useCallback(
@@ -70,13 +69,14 @@ export function useChannelMessages(channelId: string) {
     [channelId],
   );
   const subscriptionVariables = useMemo(
-    () => activeOrgId
-      ? {
-          channelId,
-          organizationId: activeOrgId,
-          types: ["message_sent", "message_edited", "message_deleted"],
-        }
-      : null,
+    () =>
+      activeOrgId
+        ? {
+            channelId,
+            organizationId: activeOrgId,
+            types: ["message_sent", "message_edited", "message_deleted"],
+          }
+        : null,
     [activeOrgId, channelId],
   );
   const handleEvent = useCallback(
@@ -86,21 +86,22 @@ export function useChannelMessages(channelId: string) {
     [channelId],
   );
   const subscription = useMemo(
-    () => subscriptionVariables
-      ? {
-          enabled: true,
-          query: CHANNEL_EVENTS_SUBSCRIPTION,
-          resultField: "channelEvents" as const,
-          variables: subscriptionVariables,
-          onEvent: handleEvent,
-        }
-      : {
-          enabled: false,
-          query: CHANNEL_EVENTS_SUBSCRIPTION,
-          resultField: "channelEvents" as const,
-          variables: { channelId },
-          onEvent: handleEvent,
-        },
+    () =>
+      subscriptionVariables
+        ? {
+            enabled: true,
+            query: CHANNEL_EVENTS_SUBSCRIPTION,
+            resultField: "channelEvents" as const,
+            variables: subscriptionVariables,
+            onEvent: handleEvent,
+          }
+        : {
+            enabled: false,
+            query: CHANNEL_EVENTS_SUBSCRIPTION,
+            resultField: "channelEvents" as const,
+            variables: { channelId },
+            onEvent: handleEvent,
+          },
     [channelId, handleEvent, subscriptionVariables],
   );
 

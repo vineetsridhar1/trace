@@ -80,10 +80,7 @@ async function checkHealth(): Promise<void> {
     consecutiveFailures++;
     if (healthy && consecutiveFailures >= UNHEALTHY_THRESHOLD) {
       healthy = false;
-      logger.logError(
-        `Redis degraded after ${consecutiveFailures} consecutive failures`,
-        err,
-      );
+      logger.logError(`Redis degraded after ${consecutiveFailures} consecutive failures`, err);
     }
   }
 }

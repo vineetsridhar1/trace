@@ -1,5 +1,11 @@
 import type { Context } from "../context.js";
-import type { CreateChannelGroupInput, UpdateChannelGroupInput, MoveChannelInput, ReorderChannelGroupsInput, ReorderChannelsInput } from "@trace/gql";
+import type {
+  CreateChannelGroupInput,
+  UpdateChannelGroupInput,
+  MoveChannelInput,
+  ReorderChannelGroupsInput,
+  ReorderChannelsInput,
+} from "@trace/gql";
 import { channelGroupService } from "../services/channelGroup.js";
 import { assertOrgAccess } from "../lib/require-org.js";
 
@@ -15,7 +21,11 @@ export const channelGroupMutations = {
     assertOrgAccess(ctx, args.input.organizationId);
     return channelGroupService.create(args.input, ctx.actorType, ctx.userId);
   },
-  updateChannelGroup: (_: unknown, args: { id: string; input: UpdateChannelGroupInput }, ctx: Context) => {
+  updateChannelGroup: (
+    _: unknown,
+    args: { id: string; input: UpdateChannelGroupInput },
+    ctx: Context,
+  ) => {
     return channelGroupService.update(args.id, args.input, ctx.actorType, ctx.userId);
   },
   deleteChannelGroup: (_: unknown, args: { id: string }, ctx: Context) => {
@@ -26,9 +36,19 @@ export const channelGroupMutations = {
   },
   reorderChannelGroups: (_: unknown, args: { input: ReorderChannelGroupsInput }, ctx: Context) => {
     assertOrgAccess(ctx, args.input.organizationId);
-    return channelGroupService.reorderGroups(args.input.organizationId, args.input.groupIds, ctx.actorType, ctx.userId);
+    return channelGroupService.reorderGroups(
+      args.input.organizationId,
+      args.input.groupIds,
+      ctx.actorType,
+      ctx.userId,
+    );
   },
   reorderChannels: (_: unknown, args: { input: ReorderChannelsInput }, ctx: Context) => {
-    return channelGroupService.reorderChannels(args.input.groupId ?? null, args.input.channelIds, ctx.actorType, ctx.userId);
+    return channelGroupService.reorderChannels(
+      args.input.groupId ?? null,
+      args.input.channelIds,
+      ctx.actorType,
+      ctx.userId,
+    );
   },
 };

@@ -47,16 +47,16 @@ const TICKETS_QUERY = gql`
 
 export function TicketsView() {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
-  const upsertMany = useEntityStore((s: { upsertMany: ReturnType<typeof useEntityStore.getState>["upsertMany"] }) => s.upsertMany);
+  const upsertMany = useEntityStore(
+    (s: { upsertMany: ReturnType<typeof useEntityStore.getState>["upsertMany"] }) => s.upsertMany,
+  );
   const refreshTick = useUIStore((s: { refreshTick: number }) => s.refreshTick);
   const [loading, setLoading] = useState(true);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
 
   const fetchTickets = useCallback(async () => {
     if (!activeOrgId) return;
-    const result = await client
-      .query(TICKETS_QUERY, { organizationId: activeOrgId })
-      .toPromise();
+    const result = await client.query(TICKETS_QUERY, { organizationId: activeOrgId }).toPromise();
 
     if (result.data?.tickets) {
       const fetched = result.data.tickets as Array<Ticket & { id: string }>;
@@ -81,7 +81,7 @@ export function TicketsView() {
   const handleRowClick = useCallback((event: RowClickedEvent<TicketRow>) => {
     const id = event.data?.id;
     if (id) {
-      setSelectedTicketId((prev: string | null) => prev === id ? null : id);
+      setSelectedTicketId((prev: string | null) => (prev === id ? null : id));
     }
   }, []);
 
@@ -89,30 +89,33 @@ export function TicketsView() {
     setSelectedTicketId(null);
   }, []);
 
-  const agGridOptions = useMemo(() => ({
-    rowHeight: 40,
-    headerHeight: 32,
-    suppressCellFocus: true,
-    onRowClicked: handleRowClick,
-    onGridReady: (event: GridReadyEvent<TicketRow>) => {
-      try {
-        const saved = localStorage.getItem(TICKET_FILTER_STORAGE_KEY);
-        if (saved) {
-          event.api.setFilterModel(JSON.parse(saved));
+  const agGridOptions = useMemo(
+    () => ({
+      rowHeight: 40,
+      headerHeight: 32,
+      suppressCellFocus: true,
+      onRowClicked: handleRowClick,
+      onGridReady: (event: GridReadyEvent<TicketRow>) => {
+        try {
+          const saved = localStorage.getItem(TICKET_FILTER_STORAGE_KEY);
+          if (saved) {
+            event.api.setFilterModel(JSON.parse(saved));
+          }
+        } catch {
+          // ignore corrupt data
         }
-      } catch {
-        // ignore corrupt data
-      }
-    },
-    onFilterChanged: (event: FilterChangedEvent<TicketRow>) => {
-      const model = event.api.getFilterModel();
-      if (Object.keys(model).length === 0) {
-        localStorage.removeItem(TICKET_FILTER_STORAGE_KEY);
-      } else {
-        localStorage.setItem(TICKET_FILTER_STORAGE_KEY, JSON.stringify(model));
-      }
-    },
-  }), [handleRowClick]);
+      },
+      onFilterChanged: (event: FilterChangedEvent<TicketRow>) => {
+        const model = event.api.getFilterModel();
+        if (Object.keys(model).length === 0) {
+          localStorage.removeItem(TICKET_FILTER_STORAGE_KEY);
+        } else {
+          localStorage.setItem(TICKET_FILTER_STORAGE_KEY, JSON.stringify(model));
+        }
+      },
+    }),
+    [handleRowClick],
+  );
 
   return (
     <div className="flex h-full flex-col">

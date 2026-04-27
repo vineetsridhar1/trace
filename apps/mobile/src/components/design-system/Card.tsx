@@ -1,18 +1,9 @@
 import type { ReactNode } from "react";
 import { Pressable, View, type ViewStyle } from "react-native";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
-import {
-  useTheme,
-  type ShadowLevel,
-  type Theme,
-  type ThemeSpacing,
-} from "@/theme";
+import { useTheme, type ShadowLevel, type Theme, type ThemeSpacing } from "@/theme";
 import { Glass } from "./Glass";
 
 export type CardElevation = "low" | "medium" | "high";
@@ -130,11 +121,7 @@ export function Card({
         onPressOut={handlePressOut}
         onPress={handlePress}
       >
-        <CardSurface
-          containerStyle={containerStyle}
-          glass={glass}
-          theme={theme}
-        >
+        <CardSurface containerStyle={containerStyle} glass={glass} theme={theme}>
           {children}
         </CardSurface>
       </Pressable>

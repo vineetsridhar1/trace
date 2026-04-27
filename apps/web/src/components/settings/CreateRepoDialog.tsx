@@ -166,7 +166,9 @@ export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
                 </label>
                 <Input
                   value={manualName}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setManualName(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setManualName(e.target.value)
+                  }
                   placeholder="e.g. api-server"
                   autoFocus={!isMobile}
                 />
@@ -175,7 +177,9 @@ export function CreateRepoDialog({ onCreated }: { onCreated?: () => void }) {
                 <label className="mb-1.5 block text-sm text-muted-foreground">Remote URL</label>
                 <Input
                   value={manualRemoteUrl}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setManualRemoteUrl(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setManualRemoteUrl(e.target.value)
+                  }
                   placeholder="e.g. git@github.com:org/repo.git"
                 />
               </div>

@@ -1,9 +1,5 @@
 import { Pencil, Map, HelpCircle, type LucideIcon } from "lucide-react";
-import {
-  stripPromptWrapping,
-  wrapPrompt,
-  type InteractionMode,
-} from "@trace/client-core";
+import { stripPromptWrapping, wrapPrompt, type InteractionMode } from "@trace/client-core";
 
 export { stripPromptWrapping, wrapPrompt };
 export type { InteractionMode };
@@ -53,4 +49,3 @@ export const MODE_CONFIG: Record<InteractionMode, ModeConfig> = {
     containerBorder: "border-orange-600/50",
   },
 };
-

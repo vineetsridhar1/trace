@@ -31,16 +31,21 @@ function CompactSessionRow({
         navigateToSessionGroup(channelId, row.id, latestSessionId);
       }}
     >
-      <span className={cn("relative shrink-0 inline-flex items-center justify-center", rowColor)} style={{ width: 8, height: 8 }}>
-        <AgentStatusIcon
-          agentStatus={row.displayAgentStatus}
-          size={8}
-        />
+      <span
+        className={cn("relative shrink-0 inline-flex items-center justify-center", rowColor)}
+        style={{ width: 8, height: 8 }}
+      >
+        <AgentStatusIcon agentStatus={row.displayAgentStatus} size={8} />
         {hasDoneBadge && (
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75" />
         )}
       </span>
-      <span className={cn("min-w-0 flex-1 truncate text-sm text-foreground", hasDoneBadge && "font-semibold")}>
+      <span
+        className={cn(
+          "min-w-0 flex-1 truncate text-sm text-foreground",
+          hasDoneBadge && "font-semibold",
+        )}
+      >
         {row.name}
       </span>
       <span className="shrink-0 text-xs text-muted-foreground">
@@ -79,18 +84,11 @@ export function CompactSessionsList({
             <div className={`flex items-center gap-2 px-3 py-2 ${color}`}>
               <Circle size={6} className="shrink-0 fill-current" />
               <span className="text-xs font-semibold">{label}</span>
-              <span className="text-xs text-muted-foreground">
-                {items.length}
-              </span>
+              <span className="text-xs text-muted-foreground">{items.length}</span>
             </div>
             {!collapsedByDefault.has(status) &&
               items.map((row: SessionGroupRow) => (
-                <CompactSessionRow
-                  key={row.id}
-                  row={row}
-                  channelId={channelId}
-                  status={status}
-                />
+                <CompactSessionRow key={row.id} row={row} channelId={channelId} status={status} />
               ))}
           </div>
         );

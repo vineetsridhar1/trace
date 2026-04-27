@@ -6,13 +6,7 @@ import { features } from "../../lib/features";
 import { gql } from "@urql/core";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 function Label({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }) {
   return (
@@ -174,7 +168,11 @@ export function AgentSettingsSection() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="agent-status">Status</Label>
-                <Select value={status} onValueChange={handleStatusChange} disabled={!features.agent}>
+                <Select
+                  value={status}
+                  onValueChange={handleStatusChange}
+                  disabled={!features.agent}
+                >
                   <SelectTrigger id="agent-status">
                     <SelectValue />
                   </SelectTrigger>
@@ -187,7 +185,11 @@ export function AgentSettingsSection() {
 
               <div className="space-y-2">
                 <Label htmlFor="agent-autonomy">Autonomy Mode</Label>
-                <Select value={autonomyMode} onValueChange={handleAutonomyChange} disabled={!features.agent}>
+                <Select
+                  value={autonomyMode}
+                  onValueChange={handleAutonomyChange}
+                  disabled={!features.agent}
+                >
                   <SelectTrigger id="agent-autonomy">
                     <SelectValue />
                   </SelectTrigger>
@@ -210,7 +212,9 @@ export function AgentSettingsSection() {
                 id="soul-file"
                 placeholder="Leave empty to use the platform default soul file..."
                 value={soulFile}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleSoulFileChange(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                  handleSoulFileChange(e.target.value)
+                }
                 className="font-mono text-xs min-h-[200px]"
                 disabled={!features.agent}
               />

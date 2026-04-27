@@ -125,13 +125,14 @@ export class MemoryService {
       candidateLimit: Math.max(limit * 4, 50),
     });
 
-    const visible = input.scopeType && input.scopeId
-      ? await this.filterVisibleMemories(candidates, {
-          scopeType: input.scopeType,
-          scopeId: input.scopeId,
-          isDm: input.isDm ?? false,
-        })
-      : this.filterSafeOrgWideMemories(candidates);
+    const visible =
+      input.scopeType && input.scopeId
+        ? await this.filterVisibleMemories(candidates, {
+            scopeType: input.scopeType,
+            scopeId: input.scopeId,
+            isDm: input.isDm ?? false,
+          })
+        : this.filterSafeOrgWideMemories(candidates);
 
     return visible.slice(0, limit);
   }
@@ -316,10 +317,7 @@ export class MemoryService {
 
     return prisma.derivedMemory.findMany({
       where,
-      orderBy: [
-        { confidence: "desc" },
-        { createdAt: "desc" },
-      ],
+      orderBy: [{ confidence: "desc" }, { createdAt: "desc" }],
       take: input.candidateLimit,
     });
   }
@@ -354,10 +352,11 @@ export class MemoryService {
   }
 
   private filterSafeOrgWideMemories(memories: DerivedMemory[]): DerivedMemory[] {
-    return memories.filter((memory) =>
-      !memory.sourceIsDm &&
-      memory.sourceScopeType !== "chat" &&
-      ORG_SHARED_SUBJECT_TYPES.has(memory.subjectType),
+    return memories.filter(
+      (memory) =>
+        !memory.sourceIsDm &&
+        memory.sourceScopeType !== "chat" &&
+        ORG_SHARED_SUBJECT_TYPES.has(memory.subjectType),
     );
   }
 
@@ -379,12 +378,7 @@ export class MemoryService {
     const ticketIds = [...(idsByType.get("ticket") ?? new Set<string>())];
     const systemIds = [...(idsByType.get("system") ?? new Set<string>())];
 
-    const [
-      chats,
-      channels,
-      sessions,
-      tickets,
-    ] = await Promise.all([
+    const [chats, channels, sessions, tickets] = await Promise.all([
       chatIds.length > 0
         ? prisma.chat.findMany({
             where: { id: { in: chatIds } },
@@ -479,13 +473,15 @@ export class MemoryService {
       ? `AND "sourceScopeType" = '${scopeType}' AND "sourceScopeId" = '${scopeId}'`
       : `AND (("sourceScopeType" = '${scopeType}' AND "sourceScopeId" = '${scopeId}') OR "sourceIsDm" = false)`;
 
-    const subjectClause = input.relevantSubjects.length > 0
-      ? `AND (${input.relevantSubjects
-          .map((subject) =>
-            `("subjectType" = '${escapeSqlLiteral(subject.type)}' AND "subjectId" = '${escapeSqlLiteral(subject.id)}')`,
-          )
-          .join(" OR ")})`
-      : "";
+    const subjectClause =
+      input.relevantSubjects.length > 0
+        ? `AND (${input.relevantSubjects
+            .map(
+              (subject) =>
+                `("subjectType" = '${escapeSqlLiteral(subject.type)}' AND "subjectId" = '${escapeSqlLiteral(subject.id)}')`,
+            )
+            .join(" OR ")})`
+        : "";
 
     return `
       SELECT id, 1 - (embedding <=> '${escapeSqlLiteral(vectorStr)}'::vector) AS similarity
@@ -516,10 +512,7 @@ function isMemoryVisibleInContext(
   currentScope: ScopeMetadata,
   sourceScope?: ScopeMetadata,
 ): boolean {
-  if (
-    memory.sourceScopeType === currentScope.type &&
-    memory.sourceScopeId === currentScope.id
-  ) {
+  if (memory.sourceScopeType === currentScope.type && memory.sourceScopeId === currentScope.id) {
     return true;
   }
 
@@ -540,10 +533,7 @@ function isMemoryVisibleInContext(
   return ORG_SHARED_SUBJECT_TYPES.has(memory.subjectType);
 }
 
-function truncateMemoriesToBudget(
-  memories: DerivedMemory[],
-  tokenBudget: number,
-): DerivedMemory[] {
+function truncateMemoriesToBudget(memories: DerivedMemory[], tokenBudget: number): DerivedMemory[] {
   const result: DerivedMemory[] = [];
   let estimatedTokens = 0;
 

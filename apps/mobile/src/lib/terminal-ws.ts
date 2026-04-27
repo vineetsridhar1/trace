@@ -18,9 +18,7 @@ function getToken(): string | null {
 
 function getTerminalWsBaseUrl(): string {
   const apiUrl = getActiveApiUrl();
-  return apiUrl
-    ? apiUrl.replace(/^https?:/, apiUrl.startsWith("https://") ? "wss:" : "ws:")
-    : "";
+  return apiUrl ? apiUrl.replace(/^https?:/, apiUrl.startsWith("https://") ? "wss:" : "ws:") : "";
 }
 
 export type TerminalSocketEvent =
@@ -125,10 +123,7 @@ export class TerminalSocket {
     };
 
     this.ws.onclose = (event) => {
-      if (
-        FATAL_TERMINAL_CLOSE_CODES.has(event.code)
-        || FATAL_TERMINAL_ERRORS.has(event.reason)
-      ) {
+      if (FATAL_TERMINAL_CLOSE_CODES.has(event.code) || FATAL_TERMINAL_ERRORS.has(event.reason)) {
         this.closed = true;
       }
       if (this.closed) {

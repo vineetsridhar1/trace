@@ -82,12 +82,7 @@ export function PRCard({ kind, prUrl }: PRCardProps) {
         {labelFor(kind)}
       </Text>
       {prUrl ? (
-        <Text
-          variant="caption1"
-          color="mutedForeground"
-          numberOfLines={1}
-          style={styles.url}
-        >
+        <Text variant="caption1" color="mutedForeground" numberOfLines={1} style={styles.url}>
           {prUrl}
         </Text>
       ) : null}

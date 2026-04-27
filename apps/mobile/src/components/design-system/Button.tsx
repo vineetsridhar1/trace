@@ -1,10 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, type ViewStyle } from "react-native";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useTheme, type Theme, type TypographyVariant } from "@/theme";
@@ -124,9 +120,7 @@ export function Button({
   };
 
   const spinnerColor: keyof Theme["colors"] =
-    variant === "primary" || variant === "destructive"
-      ? "accentForeground"
-      : "foreground";
+    variant === "primary" || variant === "destructive" ? "accentForeground" : "foreground";
 
   return (
     <Animated.View style={animatedStyle}>

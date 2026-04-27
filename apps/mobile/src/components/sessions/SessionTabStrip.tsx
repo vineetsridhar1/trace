@@ -41,7 +41,12 @@ export const SessionTabStrip = memo(function SessionTabStrip({
   if (sessionIds.length <= 1) return null;
 
   return (
-    <View style={{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.borderMuted }}>
+    <View
+      style={{
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: theme.colors.borderMuted,
+      }}
+    >
       <ScrollView
         ref={scrollRef}
         horizontal

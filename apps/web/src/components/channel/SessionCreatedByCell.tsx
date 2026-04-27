@@ -14,11 +14,7 @@ export function SessionCreatedByCell({ row }: { row?: SessionGroupRow }) {
     >
       <div className="flex h-full cursor-pointer items-center gap-1.5">
         {createdBy.avatarUrl && (
-          <img
-            src={createdBy.avatarUrl}
-            alt={createdBy.name}
-            className="h-4 w-4 rounded-full"
-          />
+          <img src={createdBy.avatarUrl} alt={createdBy.name} className="h-4 w-4 rounded-full" />
         )}
         <span className="truncate text-xs text-muted-foreground hover:underline">
           {createdBy.name}

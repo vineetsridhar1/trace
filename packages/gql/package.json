@@ -13,7 +13,7 @@
   },
   "scripts": {
     "build": "pnpm codegen && tsc -b",
-    "codegen": "graphql-codegen --config codegen.ts",
+    "codegen": "graphql-codegen --config codegen.ts && prettier --write src/generated",
     "lint": "pnpm codegen && tsc -b"
   },
   "dependencies": {

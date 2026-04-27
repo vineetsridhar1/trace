@@ -34,4 +34,3 @@ Introduce controller sessions without polluting normal product surfaces. The hid
 2. Verify session lists show only the primary one.
 3. Verify group status derives from the primary session only.
 4. Verify direct service lookup can still fetch the controller session.
-

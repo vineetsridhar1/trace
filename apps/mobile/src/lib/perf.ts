@@ -17,11 +17,7 @@ import { InteractionManager } from "react-native";
 
 const MODULE_LOAD_AT = nowMs();
 
-export type PerfMetric =
-  | "cold-start"
-  | "warm-start"
-  | "event-ingest"
-  | "input-latency";
+export type PerfMetric = "cold-start" | "warm-start" | "event-ingest" | "input-latency";
 
 interface PerfSample {
   metric: PerfMetric;

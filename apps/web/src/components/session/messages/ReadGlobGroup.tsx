@@ -19,11 +19,7 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
 
   return (
     <div className="tool-cmd-row">
-      <button
-        type="button"
-        className="tool-cmd-button"
-        onClick={() => setOpen(!open)}
-      >
+      <button type="button" className="tool-cmd-button" onClick={() => setOpen(!open)}>
         <span className={`read-group-chevron ${open ? "open" : ""}`}>
           <ChevronDown size={10} />
         </span>
@@ -40,13 +36,9 @@ export function ReadGlobGroup({ items }: ReadGlobGroupProps) {
         <div className="space-y-0.5 py-1">
           {items.map((item) => (
             <div key={item.id} className="read-group-subline">
-              <span className="font-semibold text-primary">
-                {item.toolName}
-              </span>
+              <span className="font-semibold text-primary">{item.toolName}</span>
               <span className="mx-2 text-muted-foreground">&middot;</span>
-              <span className="truncate text-muted-foreground">
-                {item.filePath}
-              </span>
+              <span className="truncate text-muted-foreground">{item.filePath}</span>
               <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/60">
                 {formatTime(item.timestamp)}
               </span>

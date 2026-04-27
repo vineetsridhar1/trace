@@ -29,27 +29,36 @@ export function AppSidebar() {
     }
   }, [isMobile, setOpenMobile]);
 
-  const handleChannelClick = useCallback((id: string) => {
-    setActiveChannelId(id);
-    closeSidebar();
-  }, [setActiveChannelId, closeSidebar]);
+  const handleChannelClick = useCallback(
+    (id: string) => {
+      setActiveChannelId(id);
+      closeSidebar();
+    },
+    [setActiveChannelId, closeSidebar],
+  );
 
-  const handleChatClick = useCallback((id: string) => {
-    setActiveChatId(id);
-    closeSidebar();
-  }, [setActiveChatId, closeSidebar]);
+  const handleChatClick = useCallback(
+    (id: string) => {
+      setActiveChatId(id);
+      closeSidebar();
+    },
+    [setActiveChatId, closeSidebar],
+  );
 
   const [peeking, setPeeking] = useState(false);
   const initialTab: SidebarTab = features.messaging && activeChatId ? "dm" : "main";
   const [currentTab, setCurrentTab] = useState<SidebarTab>(initialTab);
   const [peekTabProgress, setPeekTabProgress] = useState(getTabIndex(initialTab));
 
-  const handleTabCommit = useCallback((tab: SidebarTab) => {
-    setCurrentTab(tab);
-    if (activePage === "main") {
-      restoreLastVisited(tab);
-    }
-  }, [restoreLastVisited, activePage]);
+  const handleTabCommit = useCallback(
+    (tab: SidebarTab) => {
+      setCurrentTab(tab);
+      if (activePage === "main") {
+        restoreLastVisited(tab);
+      }
+    },
+    [restoreLastVisited, activePage],
+  );
 
   const expandedTabs = useSidebarTabScroll({
     currentTab,
@@ -61,7 +70,9 @@ export function AppSidebar() {
   }, [state]);
 
   useEffect(() => {
-    setCurrentTab((previousTab: SidebarTab) => getPreferredSidebarTab(activeChatId, activeChannelId, activePage, previousTab));
+    setCurrentTab((previousTab: SidebarTab) =>
+      getPreferredSidebarTab(activeChatId, activeChannelId, activePage, previousTab),
+    );
   }, [activeChannelId, activeChatId, activePage]);
 
   const tabProgress = !features.messaging

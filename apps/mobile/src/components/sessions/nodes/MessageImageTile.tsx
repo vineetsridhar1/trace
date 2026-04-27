@@ -31,11 +31,7 @@ export function MessageImageTile({ item, single, onOpen }: MessageImageTileProps
       ]}
     >
       {uri ? (
-        <Image
-          source={{ uri }}
-          resizeMode="cover"
-          style={styles.tileImage}
-        />
+        <Image source={{ uri }} resizeMode="cover" style={styles.tileImage} />
       ) : (
         <View style={styles.placeholder}>
           {loading ? (

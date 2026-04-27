@@ -4,7 +4,10 @@ import { ScrollView, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { useEntityField } from "@trace/client-core";
 import { EmptyState, ListRow, Spinner, Text } from "@/components/design-system";
-import { useEnsureSessionGroupDetail, useSessionGroupSessionIds } from "@/hooks/useSessionGroupDetail";
+import {
+  useEnsureSessionGroupDetail,
+  useSessionGroupSessionIds,
+} from "@/hooks/useSessionGroupDetail";
 import { createAgentTab } from "@/lib/createQuickSession";
 import { useMobileUIStore } from "@/stores/ui";
 import { useTheme } from "@/theme";
@@ -32,11 +35,9 @@ export function SessionTabSwitcherContent({
   const theme = useTheme();
   const { loading, error } = useEnsureSessionGroupDetail(groupId);
   const groupName = useEntityField("sessionGroups", groupId, "name") as string | null | undefined;
-  const activeSessionOptimistic = useEntityField(
-    "sessions",
-    activeSessionId,
-    "_optimistic",
-  ) as boolean | undefined;
+  const activeSessionOptimistic = useEntityField("sessions", activeSessionId, "_optimistic") as
+    | boolean
+    | undefined;
   const sessionIds = useSessionGroupSessionIds(groupId);
   const [creating, setCreating] = useState(false);
   const navigationDelayMs = closeDelayMs ?? (onClose ? theme.motion.durations.fast : 0);
@@ -77,9 +78,7 @@ export function SessionTabSwitcherContent({
   const headerSubtitle = useMemo(() => {
     const count = sessionIds.length;
     if (count === 0) return "No agent tabs loaded yet.";
-    return count === 1
-      ? "1 open tab in this workspace."
-      : `${count} open tabs in this workspace.`;
+    return count === 1 ? "1 open tab in this workspace." : `${count} open tabs in this workspace.`;
   }, [sessionIds.length]);
 
   if (loading && !groupName) {

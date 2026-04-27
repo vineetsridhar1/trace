@@ -91,9 +91,7 @@ function pendingMeta(state: EntityState, sessionId: string, fallbackTs: number):
     }
   }
 
-  return bestRank === 2
-    ? { rank: 2, ts: fallbackTs }
-    : { rank: bestRank, ts: bestTs };
+  return bestRank === 2 ? { rank: 2, ts: fallbackTs } : { rank: bestRank, ts: bestTs };
 }
 
 function areSectionsEqual(a: HomeSection[], b: HomeSection[]): boolean {
@@ -171,7 +169,11 @@ export function buildHomeSections(
     if (session.sessionStatus === "needs_input") {
       const meta = pendingMeta(state, session.id, sortTs);
       const existing = groupNeedsInput.get(groupId);
-      if (!existing || meta.rank < existing.rank || (meta.rank === existing.rank && meta.ts > existing.ts)) {
+      if (
+        !existing ||
+        meta.rank < existing.rank ||
+        (meta.rank === existing.rank && meta.ts > existing.ts)
+      ) {
         groupNeedsInput.set(groupId, { rank: meta.rank, ts: meta.ts });
       }
       continue;

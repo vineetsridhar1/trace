@@ -27,10 +27,7 @@ function parseCapabilityArray(value: unknown): BridgeAccessCapability[] {
  * Show a notification via toast (foreground) or native OS notification (background).
  * When the app is hidden, native notification is shown and the toast is skipped.
  */
-function notify(
-  title: string,
-  options?: { tag?: string; onClick?: () => void },
-): void {
+function notify(title: string, options?: { tag?: string; onClick?: () => void }): void {
   const shown = showNativeNotification(title, {
     tag: options?.tag,
     onClick: options?.onClick,
@@ -39,9 +36,7 @@ function notify(
   if (shown) return;
 
   toast(title, {
-    action: options?.onClick
-      ? { label: "View", onClick: options.onClick }
-      : undefined,
+    action: options?.onClick ? { label: "View", onClick: options.onClick } : undefined,
   });
 }
 
@@ -194,8 +189,7 @@ function handleBridgeAccessRequested(event: Event): void {
     return;
   }
 
-  const requesterName =
-    request.requesterUser.name?.trim() || event.actor.name || "A teammate";
+  const requesterName = request.requesterUser.name?.trim() || event.actor.name || "A teammate";
   const runtimeLabel = request.runtimeLabel.trim() || "your bridge";
   const toastId = getBridgeAccessRequestToastId(request.requestId);
 

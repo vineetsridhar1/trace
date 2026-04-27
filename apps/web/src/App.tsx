@@ -137,7 +137,8 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
 
   const hasSession = !!activeSessionGroupId;
   const isMainContentCollapsed = hasSession && isFullscreen && !isMobile;
-  const detailPanelMaxRatio = activePage === "settings" ? SETTINGS_DETAIL_PANEL_MAX_RATIO : undefined;
+  const detailPanelMaxRatio =
+    activePage === "settings" ? SETTINGS_DETAIL_PANEL_MAX_RATIO : undefined;
   const shouldRenderChatView = features.messaging && !!activeChatId;
   const shouldRenderChannelView =
     !!activeChannelId &&

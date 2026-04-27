@@ -6,12 +6,7 @@ import {
   setRepoLinkedCheckout,
   type LinkedCheckoutConfig,
 } from "./config.js";
-import {
-  formatGitError,
-  getCurrentBranch,
-  isSafeGitRef,
-  runGit,
-} from "./git-utils.js";
+import { formatGitError, getCurrentBranch, isSafeGitRef, runGit } from "./git-utils.js";
 import {
   pauseExistingAttachment,
   resolveTargetCommitSha,

@@ -53,7 +53,9 @@ Every planner decision and action execution must be logged for observability, de
 - [x] Cost tracker correctly aggregates across multiple planner calls in a day
 
 ## Implementation notes
+
 <!-- Added after implementation -->
+
 - Three Prisma models added: `AgentExecutionLog`, `ProcessedAgentEvent`, `AgentCostTracker` with migrations `20260321203642` and `20260321204650`
 - Three service classes in `apps/server/src/services/`:
   - `ExecutionLoggingService` (`execution-logging.ts`) — `write(input)`, `query(input)`, `getByTriggerEvent({ organizationId, triggerEventId })`

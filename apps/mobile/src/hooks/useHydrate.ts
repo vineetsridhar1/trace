@@ -31,7 +31,10 @@ const ORGANIZATION_QUERY = gql`
         position
         groupId
         baseBranch
-        repo { id name }
+        repo {
+          id
+          name
+        }
       }
     }
   }
@@ -49,11 +52,7 @@ const CHANNEL_GROUPS_QUERY = gql`
 `;
 
 const MY_SESSIONS_QUERY = gql`
-  query MobileMySessions(
-    $organizationId: ID!
-    $includeMerged: Boolean
-    $includeArchived: Boolean
-  ) {
+  query MobileMySessions($organizationId: ID!, $includeMerged: Boolean, $includeArchived: Boolean) {
     mySessions(
       organizationId: $organizationId
       includeMerged: $includeMerged
@@ -66,8 +65,16 @@ const MY_SESSIONS_QUERY = gql`
       tool
       model
       hosting
-      createdBy { id name avatarUrl }
-      repo { id name remoteUrl }
+      createdBy {
+        id
+        name
+        avatarUrl
+      }
+      repo {
+        id
+        name
+        remoteUrl
+      }
       sessionGroupId
       sessionGroup {
         id
@@ -82,17 +89,33 @@ const MY_SESSIONS_QUERY = gql`
         setupError
         createdAt
         updatedAt
-        channel { id }
-        repo { id name remoteUrl defaultBranch }
+        channel {
+          id
+        }
+        repo {
+          id
+          name
+          remoteUrl
+          defaultBranch
+        }
       }
-      channel { id name }
+      channel {
+        id
+        name
+      }
       branch
       workdir
       prUrl
       worktreeDeleted
       lastUserMessageAt
       lastMessageAt
-      queuedMessages { id sessionId text position createdAt }
+      queuedMessages {
+        id
+        sessionId
+        text
+        position
+        createdAt
+      }
       createdAt
       updatedAt
     }
@@ -107,7 +130,12 @@ const ORG_EVENTS_SUBSCRIPTION = gql`
       scopeId
       eventType
       payload
-      actor { type id name avatarUrl }
+      actor {
+        type
+        id
+        name
+        avatarUrl
+      }
       parentId
       timestamp
       metadata
@@ -162,10 +190,16 @@ async function doRefreshOrgData(activeOrgId: string): Promise<RefreshOrgDataResu
   const upsertMany = useEntityStore.getState().upsertMany;
   const setOrgStatus = useRefreshStatusStore.getState().setOrgStatus;
 
-  const channels = (orgResult.data?.organization?.channels ?? []) as Array<Channel & { id: string }>;
+  const channels = (orgResult.data?.organization?.channels ?? []) as Array<
+    Channel & { id: string }
+  >;
   if (orgResult.data?.organization) {
     if (channels.length > 0) upsertMany("channels", channels);
-    reconcileEntitySnapshot("channels", `org:${activeOrgId}`, channels.map((channel) => channel.id));
+    reconcileEntitySnapshot(
+      "channels",
+      `org:${activeOrgId}`,
+      channels.map((channel) => channel.id),
+    );
   }
 
   const channelGroups = (groupsResult.data?.channelGroups ?? []) as Array<
@@ -190,7 +224,11 @@ async function doRefreshOrgData(activeOrgId: string): Promise<RefreshOrgDataResu
       `home:${activeOrgId}`,
       sessionGroups.map((group) => group.id),
     );
-    reconcileEntitySnapshot("sessions", `home:${activeOrgId}`, sessions.map((session) => session.id));
+    reconcileEntitySnapshot(
+      "sessions",
+      `home:${activeOrgId}`,
+      sessions.map((session) => session.id),
+    );
   }
 
   void getPlatform().storage.setItem(ME_REFRESH_KEY, String(Date.now()));
@@ -198,10 +236,7 @@ async function doRefreshOrgData(activeOrgId: string): Promise<RefreshOrgDataResu
   const status = {
     channelsError:
       orgResult.error || groupsResult.error
-        ? userFacingError(
-            orgResult.error ?? groupsResult.error,
-            "Couldn't refresh channels.",
-          )
+        ? userFacingError(orgResult.error ?? groupsResult.error, "Couldn't refresh channels.")
         : null,
     homeError: sessionsResult.error
       ? userFacingError(sessionsResult.error, "Couldn't refresh your home feed.")
@@ -311,9 +346,7 @@ export function useHydrate(activeOrgId: string | null): void {
   // Catch up list-level state (sessions, channels, unread counts) after a WS
   // reconnect: the server's in-memory pubsub has no replay, so events emitted
   // while the socket was down are lost to the live subscription.
-  const reconnectCounter = useConnectionStore(
-    (s: ConnectionState) => s.reconnectCounter,
-  );
+  const reconnectCounter = useConnectionStore((s: ConnectionState) => s.reconnectCounter);
   const baselineReconnectCounter = useRef(reconnectCounter);
   useEffect(() => {
     if (!activeOrgId) return;

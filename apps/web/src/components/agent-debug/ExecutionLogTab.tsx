@@ -4,13 +4,7 @@ import { useAuthStore, type AuthState } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { Button } from "../ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { ExecutionDetailView } from "./ExecutionDetailView";
 
 const EXECUTION_LOGS_QUERY = gql`
@@ -110,12 +104,7 @@ export function ExecutionLogTab() {
   }, [fetchLogs]);
 
   if (selectedLogId) {
-    return (
-      <ExecutionDetailView
-        logId={selectedLogId}
-        onBack={() => setSelectedLogId(null)}
-      />
-    );
+    return <ExecutionDetailView logId={selectedLogId} onBack={() => setSelectedLogId(null)} />;
   }
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
@@ -128,7 +117,15 @@ export function ExecutionLogTab() {
           <span className="text-xs text-muted-foreground">{totalCount} total</span>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={statusFilter} onValueChange={(v: string | null) => { if (v) { setStatusFilter(v); setPage(0); } }}>
+          <Select
+            value={statusFilter}
+            onValueChange={(v: string | null) => {
+              if (v) {
+                setStatusFilter(v);
+                setPage(0);
+              }
+            }}
+          >
             <SelectTrigger className="h-8 w-[140px] text-xs">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
@@ -155,8 +152,12 @@ export function ExecutionLogTab() {
                 <th className="px-3 py-2 text-left font-medium text-muted-foreground">Time</th>
                 <th className="px-3 py-2 text-left font-medium text-muted-foreground">Trigger</th>
                 <th className="px-3 py-2 text-left font-medium text-muted-foreground">Tier</th>
-                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Disposition</th>
-                <th className="px-3 py-2 text-right font-medium text-muted-foreground">Confidence</th>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">
+                  Disposition
+                </th>
+                <th className="px-3 py-2 text-right font-medium text-muted-foreground">
+                  Confidence
+                </th>
                 <th className="px-3 py-2 text-left font-medium text-muted-foreground">Status</th>
                 <th className="px-3 py-2 text-right font-medium text-muted-foreground">Cost</th>
                 <th className="px-3 py-2 text-right font-medium text-muted-foreground">Latency</th>
@@ -178,46 +179,49 @@ export function ExecutionLogTab() {
                   </td>
                 </tr>
               )}
-              {!loading && logs.map((log: ExecutionLogItem) => (
-                <tr
-                  key={log.id}
-                  onClick={() => setSelectedLogId(log.id)}
-                  className="border-b border-border last:border-0 cursor-pointer transition-colors hover:bg-surface-deep"
-                >
-                  <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
-                    {new Date(log.createdAt).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 font-mono whitespace-nowrap max-w-[120px] truncate">
-                    {log.triggerEventId.slice(0, 8)}...
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={`inline-flex items-center gap-1 ${log.promoted ? "text-orange-400" : "text-foreground"}`}>
-                      {log.modelTier === "tier3" ? "T3" : "T2"}
-                      {log.promoted && <span className="text-[10px]">P</span>}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-foreground">
-                    {DISPOSITION_LABELS[log.disposition] ?? log.disposition}
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono text-foreground">
-                    {(log.confidence * 100).toFixed(0)}%
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={STATUS_COLORS[log.status] ?? "text-foreground"}>
-                      {log.status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono text-foreground">
-                    {log.estimatedCostCents.toFixed(2)}c
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono text-muted-foreground">
-                    {log.latencyMs}ms
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono text-muted-foreground">
-                    {log.inputTokens + log.outputTokens}
-                  </td>
-                </tr>
-              ))}
+              {!loading &&
+                logs.map((log: ExecutionLogItem) => (
+                  <tr
+                    key={log.id}
+                    onClick={() => setSelectedLogId(log.id)}
+                    className="border-b border-border last:border-0 cursor-pointer transition-colors hover:bg-surface-deep"
+                  >
+                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
+                      {new Date(log.createdAt).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 font-mono whitespace-nowrap max-w-[120px] truncate">
+                      {log.triggerEventId.slice(0, 8)}...
+                    </td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={`inline-flex items-center gap-1 ${log.promoted ? "text-orange-400" : "text-foreground"}`}
+                      >
+                        {log.modelTier === "tier3" ? "T3" : "T2"}
+                        {log.promoted && <span className="text-[10px]">P</span>}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-foreground">
+                      {DISPOSITION_LABELS[log.disposition] ?? log.disposition}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-foreground">
+                      {(log.confidence * 100).toFixed(0)}%
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className={STATUS_COLORS[log.status] ?? "text-foreground"}>
+                        {log.status}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-foreground">
+                      {log.estimatedCostCents.toFixed(2)}c
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-muted-foreground">
+                      {log.latencyMs}ms
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-muted-foreground">
+                      {log.inputTokens + log.outputTokens}
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>

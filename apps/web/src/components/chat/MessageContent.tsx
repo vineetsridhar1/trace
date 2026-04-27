@@ -5,11 +5,14 @@ import { SessionLinkCard } from "./SessionLinkCard";
 
 // Allow mention data attributes through DOMPurify
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-(DOMPurify as any).addHook("uponSanitizeAttribute", (_node: unknown, data: { attrName: string; forceKeepAttr?: boolean }) => {
-  if (data.attrName.startsWith("data-mention-")) {
-    data.forceKeepAttr = true;
-  }
-});
+(DOMPurify as any).addHook(
+  "uponSanitizeAttribute",
+  (_node: unknown, data: { attrName: string; forceKeepAttr?: boolean }) => {
+    if (data.attrName.startsWith("data-mention-")) {
+      data.forceKeepAttr = true;
+    }
+  },
+);
 
 /** Match internal session URLs: /c/{channelId}/g/{groupId}/s/{sessionId} or /g/{groupId}/s/{sessionId} */
 const SESSION_URL_RE = /(?:\/c\/([a-f0-9-]+))?\/g\/([a-f0-9-]+)\/s\/([a-f0-9-]+)\/?$/;
@@ -44,10 +47,7 @@ const parserOptions: HTMLReactParserOptions = {
     if (!(domNode instanceof Element)) return undefined;
 
     // Mention spans
-    if (
-      domNode.name === "span" &&
-      domNode.attribs?.["data-mention-type"]
-    ) {
+    if (domNode.name === "span" && domNode.attribs?.["data-mention-type"]) {
       const id = domNode.attribs["data-mention-id"];
       const name = domNode.attribs["data-mention-value"];
 
@@ -85,10 +85,7 @@ function linkifySessionUrls(html: string): string {
     .map((part, i) => {
       // Odd indices are the <a>...</a> segments — leave them alone
       if (i % 2 === 1) return part;
-      return part.replace(
-        SESSION_URL_LINKIFY_RE,
-        (url) => `<a href="${url}">${url}</a>`,
-      );
+      return part.replace(SESSION_URL_LINKIFY_RE, (url) => `<a href="${url}">${url}</a>`);
     })
     .join("");
 }

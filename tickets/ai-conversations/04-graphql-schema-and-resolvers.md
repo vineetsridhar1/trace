@@ -7,9 +7,16 @@ Add the GraphQL types, queries, mutations, and subscriptions for AI Conversation
 ## What needs to happen
 
 - Add types to `packages/gql/src/schema.graphql`:
+
   ```graphql
-  enum AiConversationVisibility { PRIVATE ORG }
-  enum TurnRole { USER ASSISTANT }
+  enum AiConversationVisibility {
+    PRIVATE
+    ORG
+  }
+  enum TurnRole {
+    USER
+    ASSISTANT
+  }
 
   type AiConversation {
     id: ID!
@@ -48,6 +55,7 @@ Add the GraphQL types, queries, mutations, and subscriptions for AI Conversation
     createdAt: DateTime!
   }
   ```
+
 - Add input types:
   ```graphql
   input CreateAiConversationInput {

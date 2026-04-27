@@ -12,13 +12,17 @@ Move the auth store (`apps/web/src/stores/auth.ts`) into `@trace/client-core` an
 - Keep `fetchMe`, `signOut`, `setActiveOrg`, `getAuthHeaders` in client-core (all platform-free).
 - Create `apps/web/src/lib/platform-web.ts`:
   ```ts
-  import { setPlatform } from '@trace/client-core';
+  import { setPlatform } from "@trace/client-core";
   setPlatform({
-    storage: { getItem: k => localStorage.getItem(k), setItem: (k,v) => localStorage.setItem(k,v), removeItem: k => localStorage.removeItem(k) },
+    storage: {
+      getItem: (k) => localStorage.getItem(k),
+      setItem: (k, v) => localStorage.setItem(k, v),
+      removeItem: (k) => localStorage.removeItem(k),
+    },
     secureStorage: {
-      getToken: async () => localStorage.getItem('trace_token'),
-      setToken: async t => localStorage.setItem('trace_token', t),
-      clearToken: async () => localStorage.removeItem('trace_token'),
+      getToken: async () => localStorage.getItem("trace_token"),
+      setToken: async (t) => localStorage.setItem("trace_token", t),
+      clearToken: async () => localStorage.removeItem("trace_token"),
     },
     fetch: window.fetch.bind(window),
     createWebSocket: (url, protocols) => new WebSocket(url, protocols),

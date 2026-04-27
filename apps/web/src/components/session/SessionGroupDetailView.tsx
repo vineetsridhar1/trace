@@ -325,9 +325,11 @@ export function SessionGroupDetailView({
     null;
   const groupRuntimeLabel =
     (typeof groupConnection?.runtimeLabel === "string" && groupConnection.runtimeLabel.trim()) ||
-    (((selectedSession?.connection as { runtimeLabel?: string } | null | undefined)?.runtimeLabel
-      ?? "")
-      .trim() || null);
+    (
+      (selectedSession?.connection as { runtimeLabel?: string } | null | undefined)?.runtimeLabel ??
+      ""
+    ).trim() ||
+    null;
   const selectedSessionRuntimeInstanceId =
     getLinkedCheckoutRuntimeInstanceId(selectedSession?.connection) ??
     getLinkedCheckoutRuntimeInstanceId(groupConnection) ??

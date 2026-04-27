@@ -113,10 +113,7 @@ export async function assertScopeAccess(
   }
 }
 
-export async function assertThreadAccess(
-  rootMessageId: string,
-  userId: string,
-) {
+export async function assertThreadAccess(rootMessageId: string, userId: string) {
   const rootMessage = await prisma.message.findUniqueOrThrow({
     where: { id: rootMessageId },
     select: {

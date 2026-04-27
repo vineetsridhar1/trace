@@ -1,10 +1,7 @@
 import { useCallback, useMemo } from "react";
 import type { SFSymbol } from "expo-symbols";
 import { UPDATE_SESSION_CONFIG_MUTATION } from "@trace/client-core";
-import type {
-  CodingTool,
-  SessionConnection,
-} from "@trace/gql";
+import type { CodingTool, SessionConnection } from "@trace/gql";
 import { getDefaultModel, getModelLabel, getModelsForTool } from "@trace/shared";
 import { haptic } from "@/lib/haptics";
 import { applyOptimisticPatch } from "@/lib/optimisticEntity";
@@ -92,8 +89,7 @@ export function useSessionComposerConfig({
   );
 
   const bridgeIcon: SFSymbol = hosting === "cloud" ? "cloud" : "laptopcomputer";
-  const bridgeLabel =
-    hosting === "cloud" ? "Cloud" : (connection?.runtimeLabel ?? "Local");
+  const bridgeLabel = hosting === "cloud" ? "Cloud" : (connection?.runtimeLabel ?? "Local");
 
   return {
     bridgeIcon,

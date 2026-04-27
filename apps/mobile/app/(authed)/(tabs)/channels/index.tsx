@@ -21,7 +21,9 @@ export default function ChannelsIndex() {
   const logout = useAuthStore((s: AuthState) => s.logout);
 
   const [refreshing, setRefreshing] = useState(false);
-  const loadError = useRefreshStatusStore((s) => orgRefreshStatus(s.byOrg, activeOrgId).channelsError);
+  const loadError = useRefreshStatusStore(
+    (s) => orgRefreshStatus(s.byOrg, activeOrgId).channelsError,
+  );
 
   const keys = useCodingChannelKeys({ search: "" });
   const activeCounts = useChannelActiveSessionCounts();
@@ -75,22 +77,12 @@ function getItemType(item: ChannelListItemKey): string {
   return item.startsWith("group:") ? "group" : "channel";
 }
 
-function ChannelsEmpty({
-  error,
-  onRetry,
-}: {
-  error: string | null;
-  onRetry: () => void;
-}) {
+function ChannelsEmpty({ error, onRetry }: { error: string | null; onRetry: () => void }) {
   return (
     <EmptyState
       icon={error ? "exclamationmark.triangle" : "tray"}
       title={error ? "Couldn't load channels" : "No coding channels yet"}
-      subtitle={
-        error
-          ? error
-          : "Channels appear here as they're created in the web app."
-      }
+      subtitle={error ? error : "Channels appear here as they're created in the web app."}
       action={error ? { label: "Retry", onPress: onRetry } : undefined}
     />
   );

@@ -54,13 +54,11 @@ export function DeleteSessionDialog({
         <DialogHeader>
           <DialogTitle>Delete session</DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete <strong>{sessionName}</strong>? This will
-            terminate the session, remove its worktree, and cannot be undone.
+            Are you sure you want to delete <strong>{sessionName}</strong>? This will terminate the
+            session, remove its worktree, and cannot be undone.
           </DialogDescription>
         </DialogHeader>
-        {error && (
-          <p className="text-sm text-destructive">{error}</p>
-        )}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
           <Button variant="destructive" disabled={deleting} onClick={handleDelete}>

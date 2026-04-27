@@ -19,10 +19,7 @@ interface ComposerConnectionNoticeProps {
  * so the message is adjacent to the (disabled) input. When `canRetry` is
  * false the Retry button is disabled and tinted with the destructive color.
  */
-export function ComposerConnectionNotice({
-  sessionId,
-  canRetry,
-}: ComposerConnectionNoticeProps) {
+export function ComposerConnectionNotice({ sessionId, canRetry }: ComposerConnectionNoticeProps) {
   const theme = useTheme();
   const [pending, setPending] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
@@ -69,12 +66,7 @@ export function ComposerConnectionNotice({
         },
       ]}
     >
-      <Text
-        variant="caption1"
-        color="mutedForeground"
-        style={styles.caption}
-        numberOfLines={1}
-      >
+      <Text variant="caption1" color="mutedForeground" style={styles.caption} numberOfLines={1}>
         {retryError ?? "Session offline — retry to reconnect"}
       </Text>
       <Pressable
@@ -88,9 +80,7 @@ export function ComposerConnectionNotice({
             borderColor: canRetry
               ? alpha(theme.colors.foreground, 0.16)
               : alpha(theme.colors.destructive, 0.3),
-            backgroundColor: canRetry
-              ? "transparent"
-              : alpha(theme.colors.destructive, 0.08),
+            backgroundColor: canRetry ? "transparent" : alpha(theme.colors.destructive, 0.08),
             opacity: retryActive ? (pressed ? 0.7 : 1) : 0.5,
           },
         ]}

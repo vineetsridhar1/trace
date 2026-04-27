@@ -173,9 +173,7 @@ export function useScopedMessages({
 
   const messageIds = useMessageIdsForScope(
     scopeKey,
-    (message) =>
-      !message.parentMessageId &&
-      (!message.deletedAt || (message.replyCount ?? 0) > 0),
+    (message) => !message.parentMessageId && (!message.deletedAt || (message.replyCount ?? 0) > 0),
     (a, b) => a.createdAt.localeCompare(b.createdAt),
   );
 

@@ -29,7 +29,11 @@ export const sessionQueries = {
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.getGroup(args.id, requireOrgContext(ctx));
   },
-  sessions: (_: unknown, args: { organizationId: string; filters?: SessionFilters }, ctx: Context) => {
+  sessions: (
+    _: unknown,
+    args: { organizationId: string; filters?: SessionFilters },
+    ctx: Context,
+  ) => {
     assertOrgAccess(ctx, args.organizationId);
     const filters = args.filters ? { ...args.filters } : undefined;
     return sessionService.list(args.organizationId, filters);

@@ -26,15 +26,16 @@ The AI agent needs a concrete identity within each organization. Every action th
 - [x] Agent identity is automatically created for each org
 - [x] Existing orgs get agent identities via migration
 - [x] Org agent settings exist with `aiEnabled`, `autonomyMode`, `soulFile`, `costBudget`
-  <!-- Implementation note: `aiEnabled` was collapsed into `status` (enabled/disabled) on AgentIdentity. Downstream tickets (04 router) should use `status === "enabled"` instead of a separate `aiEnabled` boolean. -->
+<!-- Implementation note: `aiEnabled` was collapsed into `status` (enabled/disabled) on AgentIdentity. Downstream tickets (04 router) should use `status === "enabled"` instead of a separate `aiEnabled` boolean. -->
 - [x] Service method exists to fetch agent identity and settings by org
 - [x] Agent worker uses the correct agent identity per org when processing events
 - [ ] Events created by the agent show `actorType: "agent"` and the correct `actorId`
-  <!-- Deferred: no actions are taken yet. The plumbing is in place (agentId available in worker context). Will be verified when ticket 07 (Action Executor) is implemented. -->
+<!-- Deferred: no actions are taken yet. The plumbing is in place (agentId available in worker context). Will be verified when ticket 07 (Action Executor) is implemented. -->
 
 ## Implementation notes
 
 <!-- Added after PR #84 -->
+
 - **Model choice**: `AgentIdentity` is a dedicated Prisma model (1:1 with Organization), not a JSON field. This gives proper typing, migrations, and indexing.
 - **`aiEnabled` collapsed into `status`**: Rather than a separate `aiEnabled` boolean, the `status` field (enabled/disabled) serves double duty. Ticket 04 should check `status === "enabled"` for the "is AI active" gate.
 - **GraphQL API**: Added `agentIdentity(organizationId)` query and `updateAgentSettings` mutation (not originally in ticket spec, but needed for the soul file editor in ticket 13).

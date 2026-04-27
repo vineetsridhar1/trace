@@ -83,11 +83,7 @@ export function ChannelGroupSection({
   const sortableIds = groupSortableIds(channelIds);
 
   return (
-    <div
-      ref={setSortableRef}
-      style={style}
-      className="rounded-md transition-colors"
-    >
+    <div ref={setSortableRef} style={style} className="rounded-md transition-colors">
       <div
         className="flex items-center justify-between pr-1 group/group-header"
         {...attributes}
@@ -100,10 +96,7 @@ export function ChannelGroupSection({
         >
           <ChevronRight
             size={14}
-            className={cn(
-              "shrink-0 transition-transform duration-200",
-              !collapsed && "rotate-90"
-            )}
+            className={cn("shrink-0 transition-transform duration-200", !collapsed && "rotate-90")}
           />
           <span className="truncate">{name}</span>
           <span className="ml-1 text-[10px] text-muted-foreground/60">{channelIds.length}</span>
@@ -133,7 +126,7 @@ export function ChannelGroupSection({
           ref={setDropRef}
           className={cn(
             "ml-3 border-l border-border/60 pl-2 rounded-md transition-colors",
-            isOver && !isThisDragging && "bg-blue-500/10 ring-1 ring-blue-500/50"
+            isOver && !isThisDragging && "bg-blue-500/10 ring-1 ring-blue-500/50",
           )}
         >
           <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>

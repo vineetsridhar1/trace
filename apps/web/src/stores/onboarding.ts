@@ -57,7 +57,10 @@ export const useOnboardingStore = create<OnboardingState>((set: Setter, get: Get
         .toPromise(),
     ]);
     if (reposResult.error || sessionsResult.error) {
-      console.error("[onboarding] org setup query failed", reposResult.error ?? sessionsResult.error);
+      console.error(
+        "[onboarding] org setup query failed",
+        reposResult.error ?? sessionsResult.error,
+      );
       set({ reposLoading: false });
       return;
     }

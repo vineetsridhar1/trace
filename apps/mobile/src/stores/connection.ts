@@ -1,8 +1,6 @@
 import { create } from "zustand";
 
-type SetState<T> = (
-  partial: Partial<T> | ((state: T) => Partial<T>),
-) => void;
+type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
 
 export interface ConnectionState {
   connected: boolean;
@@ -18,36 +16,33 @@ export interface ConnectionState {
   setConnected: (connected: boolean) => void;
 }
 
-export const useConnectionStore = create<ConnectionState>(
-  (set: SetState<ConnectionState>) => ({
-    connected: false,
-    disconnectedAt: null,
-    reconnectCounter: 0,
-    hasConnectedBefore: false,
-    setConnected: (connected: boolean) =>
-      set((state: ConnectionState) => {
-        if (!connected) {
-          return {
-            connected: false,
-            disconnectedAt:
-              state.disconnectedAt ?? (state.hasConnectedBefore ? Date.now() : null),
-          };
-        }
-        if (!state.hasConnectedBefore) {
-          return {
-            connected: true,
-            disconnectedAt: null,
-            hasConnectedBefore: true,
-          };
-        }
-        if (!state.connected) {
-          return {
-            connected: true,
-            disconnectedAt: null,
-            reconnectCounter: state.reconnectCounter + 1,
-          };
-        }
-        return { connected: true, disconnectedAt: null };
-      }),
-  }),
-);
+export const useConnectionStore = create<ConnectionState>((set: SetState<ConnectionState>) => ({
+  connected: false,
+  disconnectedAt: null,
+  reconnectCounter: 0,
+  hasConnectedBefore: false,
+  setConnected: (connected: boolean) =>
+    set((state: ConnectionState) => {
+      if (!connected) {
+        return {
+          connected: false,
+          disconnectedAt: state.disconnectedAt ?? (state.hasConnectedBefore ? Date.now() : null),
+        };
+      }
+      if (!state.hasConnectedBefore) {
+        return {
+          connected: true,
+          disconnectedAt: null,
+          hasConnectedBefore: true,
+        };
+      }
+      if (!state.connected) {
+        return {
+          connected: true,
+          disconnectedAt: null,
+          reconnectCounter: state.reconnectCounter + 1,
+        };
+      }
+      return { connected: true, disconnectedAt: null };
+    }),
+}));

@@ -6,13 +6,7 @@ import { gql } from "@urql/core";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { Input } from "../ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 
 const AGENT_IDENTITY_QUERY = gql`
   query AgentIdentityDebug($organizationId: ID!) {
@@ -161,13 +155,24 @@ export function AgentSettingsTab() {
               <Label>Agent Name</Label>
               <Input
                 value={name}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setName(e.target.value); markDirty(); }}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setName(e.target.value);
+                  markDirty();
+                }}
                 className="h-8 text-xs"
               />
             </div>
             <div className="space-y-1.5">
               <Label>Status</Label>
-              <Select value={status} onValueChange={(v: string | null) => { if (v) { setStatus(v); markDirty(); } }}>
+              <Select
+                value={status}
+                onValueChange={(v: string | null) => {
+                  if (v) {
+                    setStatus(v);
+                    markDirty();
+                  }
+                }}
+              >
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
@@ -182,7 +187,15 @@ export function AgentSettingsTab() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Autonomy Mode</Label>
-              <Select value={autonomyMode} onValueChange={(v: string | null) => { if (v) { setAutonomyMode(v); markDirty(); } }}>
+              <Select
+                value={autonomyMode}
+                onValueChange={(v: string | null) => {
+                  if (v) {
+                    setAutonomyMode(v);
+                    markDirty();
+                  }
+                }}
+              >
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
@@ -198,7 +211,10 @@ export function AgentSettingsTab() {
               <Input
                 type="number"
                 value={dailyLimitCents}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setDailyLimitCents(Number(e.target.value)); markDirty(); }}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setDailyLimitCents(Number(e.target.value));
+                  markDirty();
+                }}
                 min={0}
                 className="h-8 text-xs"
               />
@@ -215,7 +231,10 @@ export function AgentSettingsTab() {
           </p>
           <Textarea
             value={soulFile}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => { setSoulFile(e.target.value); markDirty(); }}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+              setSoulFile(e.target.value);
+              markDirty();
+            }}
             placeholder="Leave empty to use the platform default soul file..."
             className="font-mono text-xs min-h-[250px]"
           />

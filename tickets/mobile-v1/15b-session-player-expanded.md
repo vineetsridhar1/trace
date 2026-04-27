@@ -58,4 +58,4 @@ The Session Player is the primary session surface for V1 — a dedicated routed 
 3. Tap a card in the bottom accessory — Player opens to that session.
 4. With the Player open, tap the back/close affordance — Player dismisses.
 5. Confirm the `sessionEvents` WebSocket has exactly one active subscription at any moment as sessions switch.
-6. Open a *done* / *merged* session via the row tap — Player still opens (the active-only gate is gone in V1).
+6. Open a _done_ / _merged_ session via the row tap — Player still opens (the active-only gate is gone in V1).

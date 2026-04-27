@@ -1,4 +1,10 @@
-import type { ColDef, ColumnState, GridApi, ICellRendererParams, ValueGetterParams } from "ag-grid-community";
+import type {
+  ColDef,
+  ColumnState,
+  GridApi,
+  ICellRendererParams,
+  ValueGetterParams,
+} from "ag-grid-community";
 import { SessionCompactSummaryCell } from "./SessionCompactSummaryCell";
 import { SessionCreatedByCell } from "./SessionCreatedByCell";
 import { SessionLastActivityCell } from "./SessionLastActivityCell";
@@ -6,11 +12,7 @@ import { SessionNameCell } from "./SessionNameCell";
 import { SessionRepoCell } from "./SessionRepoCell";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { bucketize } from "./sessions-table-types";
-import {
-  getSessionCreatedBy,
-  getSessionLastActivityAt,
-  getSessionRepo,
-} from "./session-cell-data";
+import { getSessionCreatedBy, getSessionLastActivityAt, getSessionRepo } from "./session-cell-data";
 
 export const SESSION_COLUMN_IDS = {
   compactSummary: "compactSummary",
@@ -35,7 +37,8 @@ const repoColumn: ColDef<SessionGroupRow> = {
   field: "repo" as keyof SessionGroupRow,
   width: 140,
   filter: true,
-  valueGetter: (params: ValueGetterParams<SessionGroupRow>) => getSessionRepo(params.data)?.name ?? "",
+  valueGetter: (params: ValueGetterParams<SessionGroupRow>) =>
+    getSessionRepo(params.data)?.name ?? "",
   cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => (
     <SessionRepoCell row={params.data} />
   ),
@@ -46,7 +49,8 @@ const createdByColumn: ColDef<SessionGroupRow> = {
   colId: SESSION_COLUMN_IDS.createdBy,
   width: 150,
   filter: true,
-  filterValueGetter: (params: ValueGetterParams<SessionGroupRow>) => getSessionCreatedBy(params.data)?.name ?? "",
+  filterValueGetter: (params: ValueGetterParams<SessionGroupRow>) =>
+    getSessionCreatedBy(params.data)?.name ?? "",
   cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => (
     <SessionCreatedByCell row={params.data} />
   ),
@@ -57,7 +61,8 @@ const lastMessageColumn: ColDef<SessionGroupRow> = {
   colId: SESSION_COLUMN_IDS.lastActivityAt,
   width: 120,
   filter: true,
-  valueGetter: (params: ValueGetterParams<SessionGroupRow>) => getSessionLastActivityAt(params.data),
+  valueGetter: (params: ValueGetterParams<SessionGroupRow>) =>
+    getSessionLastActivityAt(params.data),
   cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => (
     <SessionLastActivityCell value={(params.value as string | undefined) ?? undefined} />
   ),

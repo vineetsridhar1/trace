@@ -1,11 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { Bell, BellOff, Check, X } from "lucide-react";
 import { Button } from "../ui/button";
-import {
-  isSupported,
-  getPermission,
-  requestPermission,
-} from "../../notifications/native";
+import { isSupported, getPermission, requestPermission } from "../../notifications/native";
 
 const PERMISSION_LABELS: Record<string, { text: string; className: string }> = {
   granted: { text: "Enabled", className: "text-emerald-500" },
@@ -56,9 +52,7 @@ export function NotificationsSection() {
               <BellOff size={16} className="text-muted-foreground" />
             )}
             <div>
-              <p className="text-sm font-medium text-foreground">
-                Push notifications
-              </p>
+              <p className="text-sm font-medium text-foreground">Push notifications</p>
               <p className="text-xs text-muted-foreground">
                 Session updates, mentions, and inbox items
               </p>
@@ -73,12 +67,7 @@ export function NotificationsSection() {
             </span>
 
             {supported && permission === "default" && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRequest}
-                disabled={requesting}
-              >
+              <Button variant="outline" size="sm" onClick={handleRequest} disabled={requesting}>
                 {requesting ? "Requesting..." : "Enable"}
               </Button>
             )}
@@ -87,31 +76,31 @@ export function NotificationsSection() {
 
         {permission === "denied" && (
           <p className="mt-3 text-xs text-muted-foreground">
-            Notifications were blocked. To re-enable, click the lock icon in your
-            browser&apos;s address bar and allow notifications for this site.
+            Notifications were blocked. To re-enable, click the lock icon in your browser&apos;s
+            address bar and allow notifications for this site.
           </p>
         )}
 
         {permission === "granted" && (
           <p className="mt-3 text-xs text-muted-foreground">
-            You&apos;ll receive native notifications when the app isn&apos;t focused — for
-            session status changes, mentions, inbox items, and PR updates.
+            You&apos;ll receive native notifications when the app isn&apos;t focused — for session
+            status changes, mentions, inbox items, and PR updates.
           </p>
         )}
 
         {!supported && (
           <p className="mt-3 text-xs text-muted-foreground">
-            On mobile, notifications require installing Trace as an app. Tap the share
-            button in your browser and select &quot;Add to Home Screen&quot;, then open
-            Trace from your home screen to enable notifications.
+            On mobile, notifications require installing Trace as an app. Tap the share button in
+            your browser and select &quot;Add to Home Screen&quot;, then open Trace from your home
+            screen to enable notifications.
           </p>
         )}
       </div>
 
       {supported && (
         <p className="mt-2 text-xs text-muted-foreground">
-          Install Trace as a PWA (Add to Home Screen) for the best notification
-          experience on mobile devices.
+          Install Trace as a PWA (Add to Home Screen) for the best notification experience on mobile
+          devices.
         </p>
       )}
     </div>

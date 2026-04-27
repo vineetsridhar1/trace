@@ -41,21 +41,23 @@ function persist(prefs: Preferences) {
 type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
 type GetState<T> = () => T;
 
-export const usePreferencesStore = create<PreferencesState>((set: SetState<PreferencesState>, get: GetState<PreferencesState>) => ({
-  ...load(),
+export const usePreferencesStore = create<PreferencesState>(
+  (set: SetState<PreferencesState>, get: GetState<PreferencesState>) => ({
+    ...load(),
 
-  setDefaultTool: (tool: string | null) => {
-    set({ defaultTool: tool });
-    persist({ ...get(), defaultTool: tool });
-  },
+    setDefaultTool: (tool: string | null) => {
+      set({ defaultTool: tool });
+      persist({ ...get(), defaultTool: tool });
+    },
 
-  setDefaultModel: (model: string | null) => {
-    set({ defaultModel: model });
-    persist({ ...get(), defaultModel: model });
-  },
+    setDefaultModel: (model: string | null) => {
+      set({ defaultModel: model });
+      persist({ ...get(), defaultModel: model });
+    },
 
-  setDefaultHosting: (hosting: DefaultHosting) => {
-    set({ defaultHosting: hosting });
-    persist({ ...get(), defaultHosting: hosting });
-  },
-}));
+    setDefaultHosting: (hosting: DefaultHosting) => {
+      set({ defaultHosting: hosting });
+      persist({ ...get(), defaultHosting: hosting });
+    },
+  }),
+);

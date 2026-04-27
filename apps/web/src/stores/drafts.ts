@@ -22,11 +22,7 @@ function isEmpty(draft: SessionDraft): boolean {
   return !draft.text && draft.images.length === 0;
 }
 
-function upsert(
-  drafts: Record<string, SessionDraft>,
-  sessionId: string,
-  next: SessionDraft,
-) {
+function upsert(drafts: Record<string, SessionDraft>, sessionId: string, next: SessionDraft) {
   if (isEmpty(next)) {
     if (!drafts[sessionId]) return { drafts };
     const { [sessionId]: _, ...rest } = drafts;

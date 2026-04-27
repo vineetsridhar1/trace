@@ -154,7 +154,10 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       return update;
     }),
 
-  upsertMany: <T extends EntityType>(entityType: T, items: Array<EntityTableMap[T] & { id: string }>) =>
+  upsertMany: <T extends EntityType>(
+    entityType: T,
+    items: Array<EntityTableMap[T] & { id: string }>,
+  ) =>
     set((state: EntityState) => {
       const table = { ...(state[entityType] as Record<string, unknown>) };
       for (const item of items) {
@@ -188,9 +191,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
           nextIndex = updateMessageIdsByScope(
             nextIndex,
             item.id,
-            getMessageEntityScopeKey(
-              (state.messages[item.id] as Message | undefined) ?? undefined,
-            ),
+            getMessageEntityScopeKey((state.messages[item.id] as Message | undefined) ?? undefined),
             getMessageEntityScopeKey(item as unknown as Message),
           );
         }
@@ -288,7 +289,9 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       const parentIdx = updateParentIdIndex(state._eventIdsByParentId, id, event.parentId);
       return {
         eventsByScope: { ...state.eventsByScope, [scopeKey]: updated },
-        ...(eventIdsByScope !== state._eventIdsByScope ? { _eventIdsByScope: eventIdsByScope } : {}),
+        ...(eventIdsByScope !== state._eventIdsByScope
+          ? { _eventIdsByScope: eventIdsByScope }
+          : {}),
         ...(parentIdx !== state._eventIdsByParentId ? { _eventIdsByParentId: parentIdx } : {}),
       };
     }),
@@ -312,7 +315,9 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       }
       return {
         eventsByScope: { ...state.eventsByScope, [scopeKey]: bucket },
-        ...(eventIdsByScope !== state._eventIdsByScope ? { _eventIdsByScope: eventIdsByScope } : {}),
+        ...(eventIdsByScope !== state._eventIdsByScope
+          ? { _eventIdsByScope: eventIdsByScope }
+          : {}),
         ...(parentIdx !== state._eventIdsByParentId ? { _eventIdsByParentId: parentIdx } : {}),
       };
     }),
@@ -643,10 +648,7 @@ export class StoreBatchWriter {
     }
   }
 
-  private updateParentIdIndex(
-    eventId: string,
-    parentId: string | null | undefined,
-  ): void {
+  private updateParentIdIndex(eventId: string, parentId: string | null | undefined): void {
     if (!parentId) return;
     const arr = this._eventIdsByParentId[parentId];
     if (arr?.includes(eventId)) return;
@@ -737,11 +739,7 @@ export function upsertEventIdByScope(
   const existingIds = index[scopeKey] ?? EMPTY_IDS;
   const alreadyPresent = existingIds.includes(eventId);
 
-  if (
-    previous &&
-    alreadyPresent &&
-    compareEventsByTimestampAndId(previous, event) === 0
-  ) {
+  if (previous && alreadyPresent && compareEventsByTimestampAndId(previous, event) === 0) {
     return index;
   }
 
@@ -862,7 +860,8 @@ export function useEntitiesByIds<T extends EntityType>(
 ): Array<EntityTableMap[T] | null> {
   return useEntityStore(
     useShallow(
-      (state: EntityState) => ids.map((id) => state[type][id] ?? null) as Array<EntityTableMap[T] | null>,
+      (state: EntityState) =>
+        ids.map((id) => state[type][id] ?? null) as Array<EntityTableMap[T] | null>,
     ),
   );
 }
@@ -917,14 +916,19 @@ export function useMessageIdsForScope(
           const message = state.messages[id];
           return message ? ([id, message] as const) : null;
         })
-        .filter((entry: readonly [string, Message] | null): entry is readonly [string, Message] => entry !== null);
+        .filter(
+          (entry: readonly [string, Message] | null): entry is readonly [string, Message] =>
+            entry !== null,
+        );
 
       let filtered = messages;
       if (filter) {
         filtered = filtered.filter(([, message]: readonly [string, Message]) => filter(message));
       }
       if (sort) {
-        filtered = [...filtered].sort(([, a]: readonly [string, Message], [, b]: readonly [string, Message]) => sort(a, b));
+        filtered = [...filtered].sort(
+          ([, a]: readonly [string, Message], [, b]: readonly [string, Message]) => sort(a, b),
+        );
       }
 
       return filtered.map(([id]: readonly [string, Message]) => id);

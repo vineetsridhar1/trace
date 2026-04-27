@@ -1,9 +1,5 @@
 import { useCallback, useState, type ReactNode } from "react";
-import {
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { useEntityField } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
@@ -17,13 +13,7 @@ interface SessionModelPickerSheetContentProps {
   onSelectModel?: () => void;
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   const theme = useTheme();
   return (
     <View style={styles.section}>
@@ -56,8 +46,14 @@ export function SessionModelPickerSheetContent({
 
   const tool = useEntityField("sessions", sessionId, "tool") as string | null | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | null | undefined;
-  const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | null | undefined;
-  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as string | null | undefined;
+  const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as
+    | string
+    | null
+    | undefined;
+  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
+    | string
+    | null
+    | undefined;
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as
     | boolean
     | undefined;
@@ -134,11 +130,7 @@ export function SessionModelPickerSheetContent({
             title={option.label}
             trailing={
               selectedTool === option.value ? (
-                <SymbolView
-                  name="checkmark"
-                  size={16}
-                  tintColor={theme.colors.accent}
-                />
+                <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
               ) : undefined
             }
             onPress={
@@ -160,11 +152,7 @@ export function SessionModelPickerSheetContent({
             title={option.label}
             trailing={
               displayedModel === option.value ? (
-                <SymbolView
-                  name="checkmark"
-                  size={16}
-                  tintColor={theme.colors.accent}
-                />
+                <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
               ) : undefined
             }
             separator={index < modelOptions.length - 1}

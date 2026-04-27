@@ -5,4 +5,3 @@ function isTruthyFlag(value: string | undefined): boolean {
 export function isLocalMode(): boolean {
   return isTruthyFlag(process.env.TRACE_LOCAL_MODE);
 }
-

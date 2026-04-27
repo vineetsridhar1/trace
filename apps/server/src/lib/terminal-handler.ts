@@ -1,9 +1,5 @@
 import type { WebSocket } from "ws";
-import {
-  authenticateAccessToken,
-  isExternalLocalModeRequest,
-  parseCookieToken,
-} from "./auth.js";
+import { authenticateAccessToken, isExternalLocalModeRequest, parseCookieToken } from "./auth.js";
 import { terminalRelay } from "./terminal-relay.js";
 import { prisma } from "./db.js";
 import { runtimeAccessService } from "../services/runtime-access.js";

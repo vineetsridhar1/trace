@@ -34,9 +34,12 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     useSessionsGridTable.getState().setRows(filteredGroups);
   }, [filteredGroups]);
 
-  const applyColumnMode = useCallback((api: GridApi<SessionGroupRow>) => {
-    applySessionsColumnMode(api, isCompact);
-  }, [isCompact]);
+  const applyColumnMode = useCallback(
+    (api: GridApi<SessionGroupRow>) => {
+      applySessionsColumnMode(api, isCompact);
+    },
+    [isCompact],
+  );
 
   useEffect(() => {
     const api = gridApiRef.current;
@@ -45,7 +48,9 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   }, [applyColumnMode]);
 
   const getContextMenuItems = useCallback(
-    (params: GetContextMenuItemsParams<SessionGroupRow>): (DefaultMenuItem | MenuItemDef<SessionGroupRow>)[] => {
+    (
+      params: GetContextMenuItemsParams<SessionGroupRow>,
+    ): (DefaultMenuItem | MenuItemDef<SessionGroupRow>)[] => {
       if (!params.node?.data) return [];
       const group = params.node.data;
       const sessionId = group.latestSession?.id;

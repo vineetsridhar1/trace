@@ -11,9 +11,7 @@ export const BRIDGE_ACCESS_APPROVAL_OPTIONS: Array<{
   { id: "1d", label: "1 day" },
 ];
 
-export function getBridgeAccessApprovalExpiresAt(
-  duration: BridgeAccessApprovalDuration,
-): string {
+export function getBridgeAccessApprovalExpiresAt(duration: BridgeAccessApprovalDuration): string {
   const now = Date.now();
   const ms =
     duration === "1h"
@@ -58,9 +56,7 @@ export function formatCapabilities(caps: BridgeAccessCapability[]): string {
   return labels.join(", ");
 }
 
-export function ensureSessionCapability(
-  caps: BridgeAccessCapability[],
-): BridgeAccessCapability[] {
+export function ensureSessionCapability(caps: BridgeAccessCapability[]): BridgeAccessCapability[] {
   const set = new Set<BridgeAccessCapability>(caps);
   set.add("session");
   return Array.from(set);

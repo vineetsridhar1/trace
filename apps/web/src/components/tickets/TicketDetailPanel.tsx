@@ -37,9 +37,7 @@ export function TicketDetailPanel({ ticketId, onClose }: TicketDetailPanelProps)
       {ticketId && (
         <div className="flex h-full flex-col">
           <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
-            <h3 className="truncate text-sm font-semibold text-foreground">
-              {title}
-            </h3>
+            <h3 className="truncate text-sm font-semibold text-foreground">{title}</h3>
             <button
               type="button"
               onClick={onClose}

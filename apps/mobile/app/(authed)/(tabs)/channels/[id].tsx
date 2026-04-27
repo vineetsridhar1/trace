@@ -185,7 +185,9 @@ export default function ChannelDetail() {
         onRefresh={handleRefresh}
         refreshing={refreshing}
         ListHeaderComponent={<SessionGroupsHeader segment={scope} onSegmentChange={setScope} />}
-        ListEmptyComponent={<ActiveEmpty scope={scope} error={loadError} onRetry={() => void handleRefresh()} />}
+        ListEmptyComponent={
+          <ActiveEmpty scope={scope} error={loadError} onRetry={() => void handleRefresh()} />
+        }
       />
     </>
   );

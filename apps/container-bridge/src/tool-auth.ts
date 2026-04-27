@@ -26,8 +26,10 @@ async function loginCodex(): Promise<void> {
     child.stderr?.on("data", (d: Buffer) => errLines.push(d.toString().trim()));
 
     child.on("close", (code) => {
-      if (outLines.length) console.log("[container-bridge] codex login stdout:", outLines.join("\n"));
-      if (errLines.length) console.log("[container-bridge] codex login stderr:", errLines.join("\n"));
+      if (outLines.length)
+        console.log("[container-bridge] codex login stdout:", outLines.join("\n"));
+      if (errLines.length)
+        console.log("[container-bridge] codex login stderr:", errLines.join("\n"));
       if (code === 0) {
         codexLoggedIn = true;
         console.log("[container-bridge] codex login complete");
@@ -50,7 +52,9 @@ export async function ensureToolReady(tool: string): Promise<void> {
   // Fail fast with a clear message if the required API key is missing
   const requiredEnv = TOOL_ENV_VARS[tool];
   if (requiredEnv && !process.env[requiredEnv]) {
-    throw new Error(`Cannot run ${tool}: ${requiredEnv} is not set. Add your API key in Settings → API Tokens.`);
+    throw new Error(
+      `Cannot run ${tool}: ${requiredEnv} is not set. Add your API key in Settings → API Tokens.`,
+    );
   }
 
   if (tool === "codex") {

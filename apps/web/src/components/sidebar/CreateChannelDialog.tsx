@@ -13,13 +13,7 @@ import {
   ResponsiveDialogHeader as DialogHeader,
   ResponsiveDialogTitle as DialogTitle,
 } from "../ui/responsive-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { client } from "../../lib/urql";
 import { features } from "../../lib/features";
@@ -277,32 +271,32 @@ export function CreateChannelDialog({
                   <label className="mb-1.5 block text-sm text-muted-foreground">Channel type</label>
                   <div className="grid grid-cols-2 gap-2">
                     {TYPE_OPTIONS.map((opt) => {
-                    const Icon = opt.icon;
-                    const selected = channelType === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => {
-                          setChannelType(opt.value);
-                          setError(null);
-                          if (opt.value === "text") {
-                            setRepoId(undefined);
-                            setBaseBranch("");
-                          }
-                        }}
-                        className={`flex flex-col items-center gap-1 rounded-lg border p-3 text-sm transition-colors ${
-                          selected
-                            ? "border-primary bg-primary/5 text-foreground"
-                            : "border-border text-muted-foreground hover:border-primary/50"
-                        }`}
-                      >
-                        <Icon size={20} />
-                        <span className="font-medium">{opt.label}</span>
-                        <span className="text-xs text-muted-foreground">{opt.description}</span>
-                      </button>
-                    );
-                  })}
+                      const Icon = opt.icon;
+                      const selected = channelType === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => {
+                            setChannelType(opt.value);
+                            setError(null);
+                            if (opt.value === "text") {
+                              setRepoId(undefined);
+                              setBaseBranch("");
+                            }
+                          }}
+                          className={`flex flex-col items-center gap-1 rounded-lg border p-3 text-sm transition-colors ${
+                            selected
+                              ? "border-primary bg-primary/5 text-foreground"
+                              : "border-border text-muted-foreground hover:border-primary/50"
+                          }`}
+                        >
+                          <Icon size={20} />
+                          <span className="font-medium">{opt.label}</span>
+                          <span className="text-xs text-muted-foreground">{opt.description}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -395,7 +389,7 @@ export function CreateChannelDialog({
 
 function SelectedRepoValue({ id }: { id: string | undefined }) {
   const name = useEntityField("repos", id ?? "", "name");
-  return <>{id ? name ?? id : "Select a repo..."}</>;
+  return <>{id ? (name ?? id) : "Select a repo..."}</>;
 }
 
 function RepoOptionItem({ id, disabled }: { id: string; disabled?: boolean }) {

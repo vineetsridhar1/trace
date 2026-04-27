@@ -41,4 +41,3 @@ Expose Session Autopilot through GraphQL so web clients and services have a type
 1. Run `pnpm gql:codegen`.
 2. Verify generated types include `SessionAutopilot`.
 3. Typecheck the repo and confirm no GraphQL-generated type errors remain.
-

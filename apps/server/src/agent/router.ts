@@ -58,7 +58,10 @@ const DIRECT_RULES: Record<string, (event: AgentEvent, agentId: string) => boole
     const mentions = event.payload.mentions;
     return (
       Array.isArray(mentions) &&
-      mentions.some((m) => typeof m === "object" && m !== null && (m as Record<string, unknown>).userId === agentId)
+      mentions.some(
+        (m) =>
+          typeof m === "object" && m !== null && (m as Record<string, unknown>).userId === agentId,
+      )
     );
   },
 };
@@ -164,9 +167,7 @@ export function updateChatMembership(event: AgentEvent, agentId: string): void {
     if (!chat) return;
     const members = chat.members as Array<{ user?: { id?: string } }> | undefined;
     if (!Array.isArray(members)) return;
-    const isAgentMember = members.some(
-      (m) => m?.user?.id === agentId,
-    );
+    const isAgentMember = members.some((m) => m?.user?.id === agentId);
     if (isAgentMember) {
       let chats = chatMemberships.get(event.organizationId);
       if (!chats) {
@@ -330,10 +331,7 @@ function getMaxTier(remaining: number): number | undefined {
 // Main routing function
 // ---------------------------------------------------------------------------
 
-export function routeEvent(
-  event: AgentEvent,
-  settings: OrgAgentSettings,
-): RoutingResult {
+export function routeEvent(event: AgentEvent, settings: OrgAgentSettings): RoutingResult {
   const agentId = settings.agentId;
 
   // 1. Org AI disabled
@@ -390,7 +388,9 @@ export function routeEvent(
   // Determine Tier 3 promotion — overrides budget-based maxTier only upward
   const tier3Promoted = shouldPromoteToTier3(event, agentId);
   const maxTier = tier3Promoted
-    ? (budgetMaxTier === 2 ? 2 : 3) // respect budget suppression
+    ? budgetMaxTier === 2
+      ? 2
+      : 3 // respect budget suppression
     : budgetMaxTier;
 
   // 7a. DM direct routing — all messages in DMs bypass aggregation

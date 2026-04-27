@@ -19,7 +19,8 @@ export const memoryActions: AgentActionRegistration[] = [
     description:
       "Search the agent's long-term memory for past facts, decisions, preferences, patterns, and relationships. " +
       "Use this to recall information from previous conversations or events.",
-    catalogDescription: "Search/recall past facts, decisions, preferences from memory (query, subjectType?, kind?)",
+    catalogDescription:
+      "Search/recall past facts, decisions, preferences from memory (query, subjectType?, kind?)",
     risk: "low",
     suggestable: false,
     tier: "extended",

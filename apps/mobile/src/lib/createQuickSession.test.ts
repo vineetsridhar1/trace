@@ -180,7 +180,9 @@ describe("createQuickSession", () => {
   });
 
   it("ignores duplicate starts while one is already pending for the channel", async () => {
-    let resolveStart: ((value: { data: { startSession: { id: string; sessionGroupId: string } } }) => void) | undefined;
+    let resolveStart:
+      | ((value: { data: { startSession: { id: string; sessionGroupId: string } } }) => void)
+      | undefined;
     mutationMock.mockImplementation((document: string) => {
       if (document === START_SESSION_MUTATION) {
         return {
@@ -238,7 +240,9 @@ describe("startPlanImplementationSession", () => {
         return { toPromise: async () => ({ data: { runSession: { id: "session_new" } } }) };
       }
       if (document === TERMINATE_SESSION_MUTATION) {
-        return { toPromise: async () => ({ data: { terminateSession: { id: "source_session" } } }) };
+        return {
+          toPromise: async () => ({ data: { terminateSession: { id: "source_session" } } }),
+        };
       }
       throw new Error(`Unexpected mutation ${document}`);
     });
@@ -252,11 +256,9 @@ describe("startPlanImplementationSession", () => {
     expect(setOverlaySessionIdMock).toHaveBeenCalledWith("session_new");
     expect(replaceMock).toHaveBeenCalledWith("/sessions/group_1/session_new");
     expect(mutationMock).toHaveBeenCalledTimes(3);
-    expect(mutationMock).toHaveBeenNthCalledWith(
-      3,
-      TERMINATE_SESSION_MUTATION,
-      { id: "source_session" },
-    );
+    expect(mutationMock).toHaveBeenNthCalledWith(3, TERMINATE_SESSION_MUTATION, {
+      id: "source_session",
+    });
   });
 
   it("returns false and does not navigate when the run step fails", async () => {

@@ -27,11 +27,7 @@ interface BrowserPanelProps {
  * in the Session Player. Renders a simple URL bar + back/forward/reload
  * controls on top of a full-screen WebView.
  */
-export function BrowserPanel({
-  url: nextUrl,
-  onUrlChange,
-  topInset = 0,
-}: BrowserPanelProps) {
+export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: BrowserPanelProps) {
   const theme = useTheme();
   const resolvedUrl = nextUrl;
 
@@ -68,15 +64,12 @@ export function BrowserPanel({
     };
   }, []);
 
-  const handleNavStateChange = useCallback(
-    (state: WebViewNavigation) => {
-      setCanGoBack(state.canGoBack);
-      setCanGoForward(state.canGoForward);
-      setInputText(state.url);
-      setUrl(state.url);
-    },
-    [],
-  );
+  const handleNavStateChange = useCallback((state: WebViewNavigation) => {
+    setCanGoBack(state.canGoBack);
+    setCanGoForward(state.canGoForward);
+    setInputText(state.url);
+    setUrl(state.url);
+  }, []);
 
   const handleSubmit = useCallback(
     (e: NativeSyntheticEvent<TextInputSubmitEditingEventData>) => {
@@ -104,12 +97,7 @@ export function BrowserPanel({
   }, [loading]);
 
   return (
-    <View
-      style={[
-        styles.root,
-        { backgroundColor: theme.colors.background },
-      ]}
-    >
+    <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
       <View style={{ height: topInset }} />
 
       <View
@@ -212,12 +200,7 @@ export function BrowserPanel({
           sharedCookiesEnabled
         />
       ) : (
-        <View
-          style={[
-            styles.empty,
-            { backgroundColor: theme.colors.surfaceDeep },
-          ]}
-        >
+        <View style={[styles.empty, { backgroundColor: theme.colors.surfaceDeep }]}>
           <Text variant="body" color="mutedForeground">
             Enter a URL above to get started
           </Text>

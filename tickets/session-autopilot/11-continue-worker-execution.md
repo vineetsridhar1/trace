@@ -38,4 +38,3 @@ Take a parsed `continue_worker` decision and apply it to the primary worker sess
 1. Force a `continue_worker` decision and verify the worker session receives one follow-up.
 2. Repeat the same decision on the same checkpoint and verify it is ignored.
 3. Simulate delivery failure and verify Autopilot enters a visible error state.
-

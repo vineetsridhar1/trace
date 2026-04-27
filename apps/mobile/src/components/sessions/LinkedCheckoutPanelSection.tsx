@@ -197,13 +197,14 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
     );
   }
 
-  const subtitle = isAttachedToThisGroup && branch
-    ? `Main worktree following ${branch}${
-        syncedCommitSha ? ` at ${syncedCommitSha.slice(0, 7)}` : ""
-      }${status?.autoSyncEnabled ? "" : " (auto-sync paused)"}${
-        hasUncommittedChanges ? " (has live changes)" : ""
-      }`
-    : "Sync this workspace into your main worktree.";
+  const subtitle =
+    isAttachedToThisGroup && branch
+      ? `Main worktree following ${branch}${
+          syncedCommitSha ? ` at ${syncedCommitSha.slice(0, 7)}` : ""
+        }${status?.autoSyncEnabled ? "" : " (auto-sync paused)"}${
+          hasUncommittedChanges ? " (has live changes)" : ""
+        }`
+      : "Sync this workspace into your main worktree.";
 
   return (
     <View style={styles.container}>

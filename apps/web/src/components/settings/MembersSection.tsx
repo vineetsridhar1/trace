@@ -81,7 +81,9 @@ const ROLE_LABELS: Record<string, { label: string; icon: typeof Shield }> = {
 export function MembersSection() {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const currentUserId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
-  const orgMemberships = useAuthStore((s: { orgMemberships: Array<{ organizationId: string; role: string }> }) => s.orgMemberships);
+  const orgMemberships = useAuthStore(
+    (s: { orgMemberships: Array<{ organizationId: string; role: string }> }) => s.orgMemberships,
+  );
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -95,7 +97,8 @@ export function MembersSection() {
   const [searchDone, setSearchDone] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const activeMembership = orgMemberships.find(
-    (membership: { organizationId: string; role: string }) => membership.organizationId === activeOrgId,
+    (membership: { organizationId: string; role: string }) =>
+      membership.organizationId === activeOrgId,
   );
   const canManageMembers = activeMembership?.role === "admin";
 
@@ -253,7 +256,9 @@ export function MembersSection() {
               <Input
                 placeholder="Search by name or email..."
                 value={searchQuery}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setSearchQuery(e.target.value)
+                }
               />
               {searchQuery.trim().length >= 2 && (searching || searchDone) && (
                 <div className="absolute top-full left-0 right-0 z-10 mt-1 rounded-lg border border-border bg-surface-elevated shadow-lg">
@@ -294,7 +299,12 @@ export function MembersSection() {
                 </div>
               )}
             </div>
-            <Select value={addRole} onValueChange={(value: string | null) => { if (value) setAddRole(value as UserRole); }}>
+            <Select
+              value={addRole}
+              onValueChange={(value: string | null) => {
+                if (value) setAddRole(value as UserRole);
+              }}
+            >
               <SelectTrigger className="w-32">
                 <SelectValue />
               </SelectTrigger>
@@ -379,7 +389,9 @@ export function MembersSection() {
                   ) : (
                     <Select
                       value={member.role}
-                      onValueChange={(v: string | null) => { if (v) handleRoleChange(member.user.id, v as UserRole); }}
+                      onValueChange={(v: string | null) => {
+                        if (v) handleRoleChange(member.user.id, v as UserRole);
+                      }}
                     >
                       <SelectTrigger className="h-8 w-full text-sm">
                         <SelectValue />

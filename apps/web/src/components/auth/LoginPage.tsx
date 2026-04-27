@@ -43,46 +43,46 @@ export function LoginPage() {
     };
   }, [fetchMe]);
 
-  const loginWithLocalName = useCallback(async (
-    rawName: string,
-    options?: { allowEmpty?: boolean; silent?: boolean },
-  ) => {
-    const trimmedName = rawName.trim();
-    if ((!options?.allowEmpty && trimmedName.length < 2) || submitting) return false;
-    setSubmitting(true);
-    if (!options?.silent) {
-      setError(null);
-    }
-    try {
-      const apiUrl = import.meta.env.VITE_API_URL ?? "";
-      const response = await fetch(`${apiUrl}/auth/local/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(trimmedName ? { name: trimmedName } : {}),
-      });
-      const payload = await response.json().catch(
-        () => ({} as { error?: string; user?: { name?: string } }),
-      );
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Failed to sign in");
-      }
-      const persistedName =
-        typeof payload.user?.name === "string" ? payload.user.name.trim() : trimmedName;
-      if (persistedName.length >= 2) {
-        localStorage.setItem(LOCAL_LOGIN_NAME_KEY, persistedName);
-      }
-      await fetchMe();
-      return true;
-    } catch (loginError) {
+  const loginWithLocalName = useCallback(
+    async (rawName: string, options?: { allowEmpty?: boolean; silent?: boolean }) => {
+      const trimmedName = rawName.trim();
+      if ((!options?.allowEmpty && trimmedName.length < 2) || submitting) return false;
+      setSubmitting(true);
       if (!options?.silent) {
-        setError(loginError instanceof Error ? loginError.message : "Failed to sign in");
+        setError(null);
       }
-      return false;
-    } finally {
-      setSubmitting(false);
-    }
-  }, [fetchMe, submitting]);
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL ?? "";
+        const response = await fetch(`${apiUrl}/auth/local/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(trimmedName ? { name: trimmedName } : {}),
+        });
+        const payload = await response
+          .json()
+          .catch(() => ({}) as { error?: string; user?: { name?: string } });
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Failed to sign in");
+        }
+        const persistedName =
+          typeof payload.user?.name === "string" ? payload.user.name.trim() : trimmedName;
+        if (persistedName.length >= 2) {
+          localStorage.setItem(LOCAL_LOGIN_NAME_KEY, persistedName);
+        }
+        await fetchMe();
+        return true;
+      } catch (loginError) {
+        if (!options?.silent) {
+          setError(loginError instanceof Error ? loginError.message : "Failed to sign in");
+        }
+        return false;
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [fetchMe, submitting],
+  );
 
   useEffect(() => {
     if (!isLocalMode || autoLoginAttempted) return;

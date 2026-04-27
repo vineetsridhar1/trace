@@ -6,60 +6,60 @@ Tickets for building Session Autopilot in Trace. Work through milestones in orde
 
 Define the schema, events, and visibility boundaries before wiring any orchestration.
 
-| # | Ticket | What it does |
-|---|--------|-------------|
-| 01 | [Database Schema and Event Types](01-database-schema-and-event-types.md) | Adds Prisma enums/models for Autopilot, inbox type, and event types |
-| 02 | [GraphQL Schema and Client Types](02-graphql-schema-and-client-types.md) | Adds GraphQL types, queries, mutations, and codegen output |
-| 03 | [Session Role and Visible Filtering](03-session-role-and-visible-filtering.md) | Adds `Session.role` behavior so controller sessions stay out of normal product surfaces |
+| #   | Ticket                                                                         | What it does                                                                            |
+| --- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| 01  | [Database Schema and Event Types](01-database-schema-and-event-types.md)       | Adds Prisma enums/models for Autopilot, inbox type, and event types                     |
+| 02  | [GraphQL Schema and Client Types](02-graphql-schema-and-client-types.md)       | Adds GraphQL types, queries, mutations, and codegen output                              |
+| 03  | [Session Role and Visible Filtering](03-session-role-and-visible-filtering.md) | Adds `Session.role` behavior so controller sessions stay out of normal product surfaces |
 
 ## M1 — Product Surface and Persistence
 
 Get Autopilot into the UI and service layer as a first-class product capability.
 
-| # | Ticket | What it does |
-|---|--------|-------------|
-| 04 | [Autopilot Service CRUD and State](04-autopilot-service-crud-and-state.md) | New `sessionAutopilotService` for enable/update/disable/get plus state transitions |
-| 05 | [Header Controls and Settings UI](05-header-controls-and-settings-ui.md) | Session header button, status chip, and settings popover |
-| 06 | [Client Store and Event Handling](06-client-store-and-event-handling.md) | Zustand/client-core support for Autopilot entities and events |
+| #   | Ticket                                                                     | What it does                                                                       |
+| --- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 04  | [Autopilot Service CRUD and State](04-autopilot-service-crud-and-state.md) | New `sessionAutopilotService` for enable/update/disable/get plus state transitions |
+| 05  | [Header Controls and Settings UI](05-header-controls-and-settings-ui.md)   | Session header button, status chip, and settings popover                           |
+| 06  | [Client Store and Event Handling](06-client-store-and-event-handling.md)   | Zustand/client-core support for Autopilot entities and events                      |
 
 ## M2 — Review Context
 
 Build the input packet the controller needs to make good decisions.
 
-| # | Ticket | What it does |
-|---|--------|-------------|
-| 07 | [Commit Diff Bridge Command](07-commit-diff-bridge-command.md) | Adds runtime support for latest commit patch retrieval |
-| 08 | [Autopilot Context Packet Builder](08-autopilot-context-packet-builder.md) | Builds transcript, checkpoint, diff, PR, and queue context for reviews |
-| 09 | [Controller Prompt and Decision Parser](09-controller-prompt-and-decision-parser.md) | Stable controller contract plus XML parser and validation |
+| #   | Ticket                                                                               | What it does                                                           |
+| --- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| 07  | [Commit Diff Bridge Command](07-commit-diff-bridge-command.md)                       | Adds runtime support for latest commit patch retrieval                 |
+| 08  | [Autopilot Context Packet Builder](08-autopilot-context-packet-builder.md)           | Builds transcript, checkpoint, diff, PR, and queue context for reviews |
+| 09  | [Controller Prompt and Decision Parser](09-controller-prompt-and-decision-parser.md) | Stable controller contract plus XML parser and validation              |
 
 ## M3 — Review Loop
 
 Wake the controller, apply decisions, and keep the loop safe.
 
-| # | Ticket | What it does |
-|---|--------|-------------|
-| 10 | [Autopilot Orchestrator](10-autopilot-orchestrator.md) | Background worker/subscriber that triggers review runs at the right times |
-| 11 | [Continue-Worker Execution](11-continue-worker-execution.md) | Applies `continue_worker` decisions back onto the primary session |
-| 12 | [Human Validation Handoff (Server)](12-human-validation-handoff-server.md) | Creates and resolves Autopilot validation inbox items |
-| 14 | [Guardrails, Pause, and Cooldowns](14-guardrails-pause-and-cooldowns.md) | Loop protection, pause/resume semantics, dismissal cooldowns |
+| #   | Ticket                                                                     | What it does                                                              |
+| --- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| 10  | [Autopilot Orchestrator](10-autopilot-orchestrator.md)                     | Background worker/subscriber that triggers review runs at the right times |
+| 11  | [Continue-Worker Execution](11-continue-worker-execution.md)               | Applies `continue_worker` decisions back onto the primary session         |
+| 12  | [Human Validation Handoff (Server)](12-human-validation-handoff-server.md) | Creates and resolves Autopilot validation inbox items                     |
+| 14  | [Guardrails, Pause, and Cooldowns](14-guardrails-pause-and-cooldowns.md)   | Loop protection, pause/resume semantics, dismissal cooldowns              |
 
 ## M4 — Human UX
 
 Make the handoff understandable and actionable for real users.
 
-| # | Ticket | What it does |
-|---|--------|-------------|
-| 13 | [Human Validation Inbox UI](13-human-validation-inbox-web-ui.md) | Dedicated inbox card/body for Autopilot review requests |
-| 15 | [Telemetry, Error States, and Polish](15-telemetry-error-states-and-polish.md) | Error surfacing, timeline entries, metrics, and rollout polish |
+| #   | Ticket                                                                         | What it does                                                   |
+| --- | ------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| 13  | [Human Validation Inbox UI](13-human-validation-inbox-web-ui.md)               | Dedicated inbox card/body for Autopilot review requests        |
+| 15  | [Telemetry, Error States, and Polish](15-telemetry-error-states-and-polish.md) | Error surfacing, timeline entries, metrics, and rollout polish |
 
 ## Post-V1 Follow-ups
 
 Explicitly useful, but intentionally outside the smallest coherent v1.
 
-| # | Ticket | What it does |
-|---|--------|-------------|
-| 16 | [Playbook Expansion and Debug Follow-ups](16-playbook-expansion-and-debug-followups.md) | Additional playbooks, full controller-log inspector, and mobile follow-on surfaces |
-| 17 | [Runtime Action Wrapper and Auth Plumbing](17-runtime-action-wrapper-and-auth-plumbing.md) | Bundled wrapper/CLI plus short-lived runtime-token plumbing for direct bounded Trace actions from Codex/Claude |
+| #   | Ticket                                                                                     | What it does                                                                                                   |
+| --- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| 16  | [Playbook Expansion and Debug Follow-ups](16-playbook-expansion-and-debug-followups.md)    | Additional playbooks, full controller-log inspector, and mobile follow-on surfaces                             |
+| 17  | [Runtime Action Wrapper and Auth Plumbing](17-runtime-action-wrapper-and-auth-plumbing.md) | Bundled wrapper/CLI plus short-lived runtime-token plumbing for direct bounded Trace actions from Codex/Claude |
 
 ## Dependency graph
 

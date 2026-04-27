@@ -9,15 +9,15 @@ export function OrgSwitcher({ large }: { large?: boolean }) {
   const orgMemberships = useAuthStore((s: { orgMemberships: OrgMembership[] }) => s.orgMemberships);
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
 
-  const activeOrg = orgMemberships.find((m: OrgMembership) => m.organizationId === activeOrgId)?.organization;
+  const activeOrg = orgMemberships.find(
+    (m: OrgMembership) => m.organizationId === activeOrgId,
+  )?.organization;
   const orgList = orgMemberships.map((m: OrgMembership) => m.organization);
   const triggerClassName = `flex h-full w-full cursor-pointer items-center gap-2 px-3 transition-colors hover:bg-surface-elevated ${large ? "py-2.5" : ""}`;
 
   return (
     <Popover>
-      <PopoverTrigger
-        className={triggerClassName}
-      >
+      <PopoverTrigger className={triggerClassName}>
         <div
           className={`flex shrink-0 items-center justify-center rounded-lg bg-accent font-bold text-accent-foreground ${large ? "h-7.5 w-7.5 text-xs" : "h-7 w-7 text-xs"}`}
         >
@@ -37,9 +37,7 @@ export function OrgSwitcher({ large }: { large?: boolean }) {
         className="!w-64 gap-0 overflow-hidden rounded-lg border border-border bg-surface-elevated p-1.5 shadow-lg"
       >
         <div className="px-2.5 pb-1.5 pt-1">
-          <p className="text-[11px] font-medium uppercase text-muted-foreground">
-            Organizations
-          </p>
+          <p className="text-[11px] font-medium uppercase text-muted-foreground">Organizations</p>
         </div>
         {orgList.map((org: { id: string; name: string }) => (
           <button

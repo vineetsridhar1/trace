@@ -59,7 +59,12 @@ export const scopeAutonomyQueries = {
 export const scopeAutonomyMutations = {
   updateScopeAiMode: async (
     _: unknown,
-    args: { organizationId: string; scopeType: string; scopeId: string; aiMode: AutonomyMode | null },
+    args: {
+      organizationId: string;
+      scopeType: string;
+      scopeId: string;
+      aiMode: AutonomyMode | null;
+    },
     ctx: Context,
   ) => {
     assertOrgAccess(ctx, args.organizationId);

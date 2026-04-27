@@ -29,9 +29,7 @@ export function ChatMessageList({
 
   // Subscribe to only the messages we need for grouping decisions.
   const messages = useEntityStore(
-    useShallow((state: EntityState) =>
-      messageIds.map((id: string) => state.messages[id] ?? null),
-    ),
+    useShallow((state: EntityState) => messageIds.map((id: string) => state.messages[id] ?? null)),
   );
 
   // Group consecutive top-level messages from the same actor when they are
@@ -93,11 +91,7 @@ export function ChatMessageList({
   }
 
   return (
-    <div
-      ref={containerRef}
-      onScroll={handleScroll}
-      className="flex-1 overflow-y-auto"
-    >
+    <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
       {messageIds.length === 0 ? (
         <div className="flex h-full flex-col">
           <div className="flex-1" />

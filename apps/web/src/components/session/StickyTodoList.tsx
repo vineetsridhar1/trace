@@ -91,9 +91,7 @@ export function StickyTodoList({ todos }: { todos: TodoItem[] }) {
                     : "text-foreground"
               }
             >
-              {t.status === "in_progress" && t.activeForm
-                ? t.activeForm
-                : t.content}
+              {t.status === "in_progress" && t.activeForm ? t.activeForm : t.content}
             </span>
           </li>
         ))}

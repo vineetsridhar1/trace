@@ -7,7 +7,11 @@ import { requireOrgContext } from "../lib/require-org.js";
 import { organizationService } from "../services/organization.js";
 
 export const channelQueries = {
-  channels: (_: unknown, args: { organizationId: string; projectId?: string; memberOnly?: boolean }, ctx: Context) => {
+  channels: (
+    _: unknown,
+    args: { organizationId: string; projectId?: string; memberOnly?: boolean },
+    ctx: Context,
+  ) => {
     const orgId = requireOrgContext(ctx);
     if (orgId !== args.organizationId) {
       throw new Error("Not authorized for this organization");
@@ -41,7 +45,11 @@ export const channelMutations = {
     }
     return channelService.create(args.input, ctx.actorType, ctx.userId);
   },
-  updateChannel: async (_: unknown, args: { id: string; input: UpdateChannelInput }, ctx: Context) => {
+  updateChannel: async (
+    _: unknown,
+    args: { id: string; input: UpdateChannelInput },
+    ctx: Context,
+  ) => {
     await assertChannelAccess(args.id, ctx.userId);
     return channelService.update(args.id, args.input, ctx.actorType, ctx.userId);
   },
@@ -55,8 +63,18 @@ export const channelMutations = {
   leaveChannel: (_: unknown, args: { channelId: string }, ctx: Context) => {
     return channelService.leave(args.channelId, ctx.actorType, ctx.userId);
   },
-  sendMessage: (_: unknown, args: { channelId: string; text: string; parentId?: string }, ctx: Context) => {
-    return channelService.sendMessage(args.channelId, args.text, args.parentId ?? null, ctx.actorType, ctx.userId);
+  sendMessage: (
+    _: unknown,
+    args: { channelId: string; text: string; parentId?: string },
+    ctx: Context,
+  ) => {
+    return channelService.sendMessage(
+      args.channelId,
+      args.text,
+      args.parentId ?? null,
+      ctx.actorType,
+      ctx.userId,
+    );
   },
   sendChannelMessage: (
     _: unknown,
@@ -91,7 +109,11 @@ export const channelMutations = {
 
 export const channelSubscriptions = {
   channelEvents: {
-    subscribe: async (_: unknown, args: { channelId: string; organizationId: string }, ctx: Context) => {
+    subscribe: async (
+      _: unknown,
+      args: { channelId: string; organizationId: string },
+      ctx: Context,
+    ) => {
       const orgId = requireOrgContext(ctx);
       if (orgId !== args.organizationId) {
         throw new Error("Not authorized for this organization");

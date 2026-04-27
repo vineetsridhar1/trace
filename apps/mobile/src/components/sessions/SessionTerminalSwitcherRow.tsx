@@ -32,20 +32,14 @@ export function SessionTerminalSwitcherRow({
       }
       trailing={
         active ? (
-          <SymbolView
-            name="checkmark"
-            size={16}
-            tintColor={theme.colors.accent}
-          />
+          <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
         ) : undefined
       }
       onPress={onPress}
       haptic={active ? "none" : "selection"}
       separator={separator}
       accessibilityLabel={
-        active
-          ? `${name ?? "Session"}, current terminal`
-          : `Open terminal for ${name ?? "session"}`
+        active ? `${name ?? "Session"}, current terminal` : `Open terminal for ${name ?? "session"}`
       }
       style={active ? { backgroundColor: alpha(theme.colors.accent, 0.12) } : undefined}
     />

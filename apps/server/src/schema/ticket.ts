@@ -1,17 +1,16 @@
 import type { Context } from "../context.js";
-import type {
-  CreateTicketInput,
-  EntityType,
-  TicketFilters,
-  UpdateTicketInput,
-} from "@trace/gql";
+import type { CreateTicketInput, EntityType, TicketFilters, UpdateTicketInput } from "@trace/gql";
 import { ticketService } from "../services/ticket.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
 import { assertScopeAccess } from "../services/access.js";
 
 export const ticketQueries = {
-  tickets: (_: unknown, args: { organizationId: string; filters?: TicketFilters }, ctx: Context) => {
+  tickets: (
+    _: unknown,
+    args: { organizationId: string; filters?: TicketFilters },
+    ctx: Context,
+  ) => {
     assertOrgAccess(ctx, args.organizationId);
     return ticketService.list(args.organizationId, args.filters);
   },
@@ -51,7 +50,11 @@ export const ticketMutations = {
       actorId: ctx.userId,
     });
   },
-  linkTicket: (_: unknown, args: { ticketId: string; entityType: EntityType; entityId: string }, ctx: Context) => {
+  linkTicket: (
+    _: unknown,
+    args: { ticketId: string; entityType: EntityType; entityId: string },
+    ctx: Context,
+  ) => {
     return ticketService.link({
       ticketId: args.ticketId,
       entityType: args.entityType,
@@ -60,7 +63,11 @@ export const ticketMutations = {
       actorId: ctx.userId,
     });
   },
-  unlinkTicket: (_: unknown, args: { ticketId: string; entityType: EntityType; entityId: string }, ctx: Context) => {
+  unlinkTicket: (
+    _: unknown,
+    args: { ticketId: string; entityType: EntityType; entityId: string },
+    ctx: Context,
+  ) => {
     return ticketService.unlink({
       ticketId: args.ticketId,
       entityType: args.entityType,
@@ -112,7 +119,8 @@ export const ticketTypeResolvers = {
         }),
       );
       return sessions.filter(
-        (session: LoadedSession): session is Exclude<LoadedSession, Error | null> => session != null,
+        (session: LoadedSession): session is Exclude<LoadedSession, Error | null> =>
+          session != null,
       );
     },
   },

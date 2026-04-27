@@ -114,17 +114,16 @@ export function SessionRuntimePicker({
     }
   }, [onClose, sessionId]);
 
-  const localRuntimes = runtimes.filter((rt: RuntimeInstance) => rt.id !== currentRuntimeInstanceId);
+  const localRuntimes = runtimes.filter(
+    (rt: RuntimeInstance) => rt.id !== currentRuntimeInstanceId,
+  );
   const canMoveToCloud = !isLocalMode && hosting !== "cloud";
 
   return (
     <div className={cn("mt-2 rounded-lg border border-border bg-surface p-3", className)}>
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-xs font-semibold text-foreground">Move to another instance</h3>
-        <button
-          onClick={onClose}
-          className="text-xs text-muted-foreground hover:text-foreground"
-        >
+        <button onClick={onClose} className="text-xs text-muted-foreground hover:text-foreground">
           Cancel
         </button>
       </div>
@@ -154,9 +153,7 @@ export function SessionRuntimePicker({
           {/* Local bridges */}
           {localRuntimes.map((rt: RuntimeInstance) => {
             const lacksRepo =
-              !!repoId &&
-              rt.hostingMode === "local" &&
-              !rt.registeredRepoIds.includes(repoId);
+              !!repoId && rt.hostingMode === "local" && !rt.registeredRepoIds.includes(repoId);
 
             return (
               <button
@@ -189,14 +186,10 @@ export function SessionRuntimePicker({
           })}
 
           {localRuntimes.length === 0 && !canMoveToCloud && (
-            <p className="py-1 text-xs text-muted-foreground">
-              No other runtimes available.
-            </p>
+            <p className="py-1 text-xs text-muted-foreground">No other runtimes available.</p>
           )}
           {localRuntimes.length === 0 && canMoveToCloud && (
-            <p className="py-1 text-xs text-muted-foreground">
-              No other local bridges connected.
-            </p>
+            <p className="py-1 text-xs text-muted-foreground">No other local bridges connected.</p>
           )}
         </div>
       )}

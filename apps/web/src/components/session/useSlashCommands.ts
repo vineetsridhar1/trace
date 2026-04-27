@@ -5,16 +5,21 @@ import { client } from "../../lib/urql";
 import { SESSION_SLASH_COMMANDS_QUERY } from "@trace/client-core";
 import type { SlashCommandItem } from "../chat/ChatEditor";
 
-const BUILTIN_FALLBACK: SlashCommandItem[] = BUILTIN_SLASH_COMMANDS.map((cmd: { name: string; description: string; category: string }) => ({
-  id: cmd.name,
-  value: cmd.name,
-  description: cmd.description,
-  source: "builtin",
-  category: cmd.category,
-  type: "slash_command" as const,
-}));
+const BUILTIN_FALLBACK: SlashCommandItem[] = BUILTIN_SLASH_COMMANDS.map(
+  (cmd: { name: string; description: string; category: string }) => ({
+    id: cmd.name,
+    value: cmd.name,
+    description: cmd.description,
+    source: "builtin",
+    category: cmd.category,
+    type: "slash_command" as const,
+  }),
+);
 
-export function useSlashCommands(sessionId: string): { commands: SlashCommandItem[]; loading: boolean } {
+export function useSlashCommands(sessionId: string): {
+  commands: SlashCommandItem[];
+  loading: boolean;
+} {
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const [commands, setCommands] = useState<SlashCommandItem[]>(() =>
     tool === "claude_code" ? BUILTIN_FALLBACK : [],

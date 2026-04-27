@@ -32,7 +32,8 @@ function normalizeThreadRepliers(
   return [
     nextActor,
     ...(existing ?? []).filter(
-      (replier: { type: string; id: string }) => `${replier.type}:${replier.id}` !== `${nextActor.type}:${nextActor.id}`,
+      (replier: { type: string; id: string }) =>
+        `${replier.type}:${replier.id}` !== `${nextActor.type}:${nextActor.id}`,
     ),
   ].slice(0, 3);
 }

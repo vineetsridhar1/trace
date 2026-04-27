@@ -32,15 +32,16 @@ describe("action registry", () => {
       errors: [],
     });
 
-    expect(validateActionParams(action!, { priority: "invalid", labels: "oops" as unknown as string[] }))
-      .toEqual({
-        valid: false,
-        errors: [
-          "Missing required field: title",
-          "Field priority must be one of: low, medium, high, urgent",
-          "Field labels must be an array",
-        ],
-      });
+    expect(
+      validateActionParams(action!, { priority: "invalid", labels: "oops" as unknown as string[] }),
+    ).toEqual({
+      valid: false,
+      errors: [
+        "Missing required field: title",
+        "Field priority must be one of: low, medium, high, urgent",
+        "Field labels must be an array",
+      ],
+    });
   });
 
   it("does not expose removed channel lifecycle actions", () => {
@@ -56,11 +57,13 @@ describe("action registry", () => {
     expect(projectLink).toBeDefined();
     expect(sessionList).toBeDefined();
 
-    expect(validateActionParams(projectLink!, {
-      entityType: "repo",
-      entityId: "repo-1",
-      projectId: "proj-1",
-    })).toEqual({
+    expect(
+      validateActionParams(projectLink!, {
+        entityType: "repo",
+        entityId: "repo-1",
+        projectId: "proj-1",
+      }),
+    ).toEqual({
       valid: false,
       errors: ["Field entityType must be one of: channel, ticket, session"],
     });

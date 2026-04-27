@@ -39,7 +39,9 @@ export function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEnti
     return {
       ...(typeof payload.tool === "string" ? { tool: payload.tool as SessionEntity["tool"] } : {}),
       ...(typeof payload.model === "string" ? { model: payload.model } : {}),
-      ...(typeof payload.hosting === "string" ? { hosting: payload.hosting as SessionEntity["hosting"] } : {}),
+      ...(typeof payload.hosting === "string"
+        ? { hosting: payload.hosting as SessionEntity["hosting"] }
+        : {}),
       ...(connection ? { connection: connection as SessionEntity["connection"] } : {}),
     };
   }
@@ -190,10 +192,7 @@ interface RouteSessionOutputParams {
  * skip duplicate work).
  */
 export function routeSessionOutput({ event, payload, batch, ui }: RouteSessionOutputParams): void {
-  if (
-    event.eventType !== "session_output" ||
-    event.scopeType !== ("session" satisfies ScopeType)
-  ) {
+  if (event.eventType !== "session_output" || event.scopeType !== ("session" satisfies ScopeType)) {
     return;
   }
 

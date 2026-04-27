@@ -28,9 +28,15 @@
   },
   "typesVersions": {
     "*": {
-      "animal-names": ["dist/animal-names.d.ts"],
-      "git-hooks": ["dist/git-hooks.d.ts"],
-      "adapters": ["dist/adapters.d.ts"]
+      "animal-names": [
+        "dist/animal-names.d.ts"
+      ],
+      "git-hooks": [
+        "dist/git-hooks.d.ts"
+      ],
+      "adapters": [
+        "dist/adapters.d.ts"
+      ]
     }
   },
   "scripts": {

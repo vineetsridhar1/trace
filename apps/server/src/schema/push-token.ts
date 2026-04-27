@@ -3,11 +3,7 @@ import type { PushPlatform } from "@trace/gql";
 import { pushTokenService } from "../services/pushTokenService.js";
 
 export const pushTokenMutations = {
-  registerPushToken: (
-    _: unknown,
-    args: { token: string; platform: PushPlatform },
-    ctx: Context,
-  ) =>
+  registerPushToken: (_: unknown, args: { token: string; platform: PushPlatform }, ctx: Context) =>
     pushTokenService.register({
       userId: ctx.userId,
       organizationId: ctx.organizationId,

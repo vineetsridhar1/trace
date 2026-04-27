@@ -9,6 +9,7 @@ Channel messages aren't built yet, but the agent pipeline should be ready for th
 ### What should already work (from prior tickets)
 
 If the prior tickets were implemented correctly, the following should already be in place:
+
 - `ScopeType` enum includes `channel`
 - Router handles `channel` scope type (currently drops unknown event types — just needs entries added)
 - Aggregator builds scope keys for channels: `channel:{channelId}:thread:{threadId}`
@@ -37,6 +38,7 @@ If the prior tickets were implemented correctly, the following should already be
 ### Adapter pattern
 
 Create a lightweight `ScopeAdapter` interface that encapsulates scope-specific behavior:
+
 - `fetchEntity(scopeId)` — get the scope entity
 - `fetchParticipants(scopeId)` — get relevant actors
 - `getDefaultAutonomyMode()` — scope type default
@@ -44,6 +46,7 @@ Create a lightweight `ScopeAdapter` interface that encapsulates scope-specific b
 - `buildScopeKey(event)` — construct the aggregation key
 
 Implement adapters for `chat`, `ticket`, `session`, and `channel`. The context builder and policy engine use these adapters instead of hardcoded switches.
+
 <!-- Ticket 17 created: The chat scope adapter must handle DM vs group chat distinction. Use `ChatType` from `router.ts` and `AgentContextPacket.isDm`. Chat adapter's `getDefaultAutonomyMode()` should return `observe` for DMs and `suggest` for group chats. Chat adapter's `getRateLimit()` should return 0 for DMs (no unsolicited suggestions) and 1 for group chats. Privacy: the chat adapter should indicate DMs have restricted context sharing (no auto-summaries, no linked entity exposure). -->
 
 ## Dependencies
@@ -62,6 +65,7 @@ Implement adapters for `chat`, `ticket`, `session`, and `channel`. The context b
 ## Implementation notes
 
 <!-- Added after implementation -->
+
 - **ScopeAdapter interface** is lighter than the spec: includes `buildScopeKey`, `getDefaultAutonomyMode`, `getRateLimit` but omits `fetchEntity` and `fetchParticipants`. Entity fetching remains in the context builder's `scopeFetchers` map to avoid coupling the adapter to Prisma/database concerns. This keeps adapters pure-logic and easy to test.
 - **Aggregator refactored** to delegate scope key construction to adapters via `getScopeAdapter()` instead of hardcoded switch.
 - **Policy engine** updated: channel suggestion rate limit set to 2/thread/hour; rate limiter now uses `scopeKey` for per-thread granularity.

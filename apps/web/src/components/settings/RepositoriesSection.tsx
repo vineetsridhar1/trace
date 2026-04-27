@@ -23,7 +23,9 @@ const REPOS_QUERY = gql`
 
 export function RepositoriesSection() {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
-  const upsertMany = useEntityStore((s: { upsertMany: ReturnType<typeof useEntityStore.getState>["upsertMany"] }) => s.upsertMany);
+  const upsertMany = useEntityStore(
+    (s: { upsertMany: ReturnType<typeof useEntityStore.getState>["upsertMany"] }) => s.upsertMany,
+  );
   const [desktopRefreshKey, setDesktopRefreshKey] = useState(0);
 
   const fetchRepos = useCallback(async () => {
@@ -38,13 +40,10 @@ export function RepositoriesSection() {
     fetchRepos();
   }, [fetchRepos]);
 
-  const sortedRepoIds = useEntityIds(
-    "repos",
-    undefined,
-    (a, b) =>
-      ((a as EntityTableMap["repos"]).name ?? "").localeCompare(
-        (b as EntityTableMap["repos"]).name ?? "",
-      ),
+  const sortedRepoIds = useEntityIds("repos", undefined, (a, b) =>
+    ((a as EntityTableMap["repos"]).name ?? "").localeCompare(
+      (b as EntityTableMap["repos"]).name ?? "",
+    ),
   );
 
   return (
@@ -52,14 +51,14 @@ export function RepositoriesSection() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-base font-semibold text-foreground">Repositories</h2>
-          <p className="text-sm text-muted-foreground">
-            Codebases linked to your organization.
-          </p>
+          <p className="text-sm text-muted-foreground">Codebases linked to your organization.</p>
         </div>
-        <CreateRepoDialog onCreated={() => {
-          setDesktopRefreshKey((k: number) => k + 1);
-          useOnboardingStore.getState().invalidateRepos();
-        }} />
+        <CreateRepoDialog
+          onCreated={() => {
+            setDesktopRefreshKey((k: number) => k + 1);
+            useOnboardingStore.getState().invalidateRepos();
+          }}
+        />
       </div>
 
       {sortedRepoIds.length === 0 ? (

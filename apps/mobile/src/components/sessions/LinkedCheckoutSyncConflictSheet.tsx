@@ -137,11 +137,7 @@ export function LinkedCheckoutSyncConflictSheet({
         <View style={styles.optionColumn}>
           <View style={[styles.card, cardBorder]}>
             <View style={styles.cardHeader}>
-              <SymbolView
-                name="trash"
-                size={16}
-                tintColor={theme.colors.mutedForeground}
-              />
+              <SymbolView name="trash" size={16} tintColor={theme.colors.mutedForeground} />
               <Text variant="subheadline">Discard all changes</Text>
             </View>
             <Text variant="footnote" color="mutedForeground">
@@ -185,13 +181,7 @@ export function LinkedCheckoutSyncConflictSheet({
           </View>
         </View>
 
-        <Button
-          title="Cancel"
-          variant="ghost"
-          size="sm"
-          disabled={pending}
-          onPress={onClose}
-        />
+        <Button title="Cancel" variant="ghost" size="sm" disabled={pending} onPress={onClose} />
       </ScrollView>
     </SessionComposerBottomSheet>
   );

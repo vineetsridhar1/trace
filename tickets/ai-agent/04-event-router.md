@@ -43,7 +43,9 @@ The event router is the first stage of the agent pipeline. It processes every ev
 - [x] Adding a new event type to routing is a one-line change
 
 ## Implementation notes
+
 <!-- Added after implementation review -->
+
 - Router lives at `apps/server/src/agent/router.ts`, integrated in `agent-worker.ts:processEvents()`
 - `routeEvent(event, settings)` is the main entry point — pure function, no side effects except rate limit counter
 - `AgentEvent` type is the canonical shape for deserialized events in the agent pipeline — downstream tickets should use this type

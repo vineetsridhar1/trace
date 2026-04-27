@@ -57,9 +57,8 @@ export async function resolveAutonomyMode(input: ResolveAutonomyInput): Promise<
   const { scopeType, scopeId, organizationId, isDm, orgDefault, prefetchedAiMode } = input;
 
   // 1. Scope-level override
-  const scopeOverride = prefetchedAiMode !== undefined
-    ? prefetchedAiMode
-    : await getScopeAiMode(scopeType, scopeId);
+  const scopeOverride =
+    prefetchedAiMode !== undefined ? prefetchedAiMode : await getScopeAiMode(scopeType, scopeId);
   if (scopeOverride) return scopeOverride;
 
   // 2. Project-level override (if scope belongs to a project)
@@ -79,7 +78,10 @@ export async function resolveAutonomyMode(input: ResolveAutonomyInput): Promise<
  * Read the aiMode directly set on a scope entity.
  * Returns null if the scope type doesn't support aiMode or if it's not set.
  */
-async function getScopeAiMode(scopeType: AutonomyScopeType, scopeId: string): Promise<AutonomyMode | null> {
+async function getScopeAiMode(
+  scopeType: AutonomyScopeType,
+  scopeId: string,
+): Promise<AutonomyMode | null> {
   switch (scopeType) {
     case "chat": {
       const chat = await prisma.chat.findUnique({

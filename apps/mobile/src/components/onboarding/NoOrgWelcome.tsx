@@ -58,13 +58,9 @@ export function NoOrgWelcome() {
         <Text variant="title2" color="foreground">
           Welcome to Trace
         </Text>
-        <Text
-          variant="footnote"
-          color="mutedForeground"
-          style={styles.message}
-        >
-          Create an organization to start your own workspace, or ask an admin
-          to invite you and share the email below.
+        <Text variant="footnote" color="mutedForeground" style={styles.message}>
+          Create an organization to start your own workspace, or ask an admin to invite you and
+          share the email below.
         </Text>
 
         <View style={styles.createBlock}>
@@ -72,11 +68,7 @@ export function NoOrgWelcome() {
         </View>
 
         <View style={styles.emailBlock}>
-          <Text
-            variant="caption1"
-            color="dimForeground"
-            style={styles.emailLabel}
-          >
+          <Text variant="caption1" color="dimForeground" style={styles.emailLabel}>
             YOUR EMAIL
           </Text>
           <View
@@ -89,12 +81,7 @@ export function NoOrgWelcome() {
               },
             ]}
           >
-            <Text
-              variant="callout"
-              color="foreground"
-              numberOfLines={1}
-              style={styles.emailValue}
-            >
+            <Text variant="callout" color="foreground" numberOfLines={1} style={styles.emailValue}>
               {email}
             </Text>
             <Button

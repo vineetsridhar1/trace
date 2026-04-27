@@ -39,7 +39,11 @@ export function ConnectionStatus() {
   }
 
   const indicatorClass =
-    health === "healthy" ? "text-green-500" : health === "down" ? "text-red-500" : "text-yellow-500";
+    health === "healthy"
+      ? "text-green-500"
+      : health === "down"
+        ? "text-red-500"
+        : "text-yellow-500";
 
   const summaryLabel = !isElectron
     ? connected

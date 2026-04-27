@@ -13,7 +13,14 @@ import { RepoDesktopSection } from "./RepoDesktopSection";
 
 const isElectron = typeof window.trace?.getRepoConfig === "function";
 
-export function RepoCard({ id, desktopRefreshKey }: { key?: React.Key; id: string; desktopRefreshKey?: number }) {
+export function RepoCard({
+  id,
+  desktopRefreshKey,
+}: {
+  key?: React.Key;
+  id: string;
+  desktopRefreshKey?: number;
+}) {
   const name = useEntityField("repos", id, "name");
   const remoteUrl = useEntityField("repos", id, "remoteUrl");
   const defaultBranch = useEntityField("repos", id, "defaultBranch");
@@ -42,10 +49,12 @@ export function RepoCard({ id, desktopRefreshKey }: { key?: React.Key; id: strin
     }
     setSaving(true);
     try {
-      await client.mutation(UPDATE_REPO_MUTATION, {
-        id,
-        input: { defaultBranch: trimmed },
-      }).toPromise();
+      await client
+        .mutation(UPDATE_REPO_MUTATION, {
+          id,
+          input: { defaultBranch: trimmed },
+        })
+        .toPromise();
       setEditing(false);
     } finally {
       setSaving(false);
@@ -88,11 +97,7 @@ export function RepoCard({ id, desktopRefreshKey }: { key?: React.Key; id: strin
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-muted-foreground">Default branch:</span>
                 <div className="w-48">
-                  <BranchCombobox
-                    repoId={id}
-                    value={editBranch}
-                    onChange={setEditBranch}
-                  />
+                  <BranchCombobox repoId={id} value={editBranch} onChange={setEditBranch} />
                 </div>
                 <Button
                   variant="ghost"
@@ -103,12 +108,7 @@ export function RepoCard({ id, desktopRefreshKey }: { key?: React.Key; id: strin
                 >
                   <Check size={12} />
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-5 w-5"
-                  onClick={cancelEditing}
-                >
+                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={cancelEditing}>
                   <X size={12} />
                 </Button>
               </div>
@@ -128,7 +128,9 @@ export function RepoCard({ id, desktopRefreshKey }: { key?: React.Key; id: strin
             )}
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <p className={`text-xs ${webhookActive ? "text-emerald-500" : "text-muted-foreground"}`}>
+            <p
+              className={`text-xs ${webhookActive ? "text-emerald-500" : "text-muted-foreground"}`}
+            >
               {webhookActive ? "GitHub webhook connected" : "GitHub webhook not connected"}
             </p>
             <Button
@@ -146,13 +148,9 @@ export function RepoCard({ id, desktopRefreshKey }: { key?: React.Key; id: strin
                   : "Connect Webhook"}
             </Button>
           </div>
-          {webhookError && (
-            <p className="mt-2 text-xs text-destructive">{webhookError}</p>
-          )}
+          {webhookError && <p className="mt-2 text-xs text-destructive">{webhookError}</p>}
 
-          {isElectron && (
-            <RepoDesktopSection repoId={id} desktopRefreshKey={desktopRefreshKey} />
-          )}
+          {isElectron && <RepoDesktopSection repoId={id} desktopRefreshKey={desktopRefreshKey} />}
         </div>
       </div>
     </div>

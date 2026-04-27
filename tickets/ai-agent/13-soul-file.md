@@ -22,6 +22,7 @@ The soul file is a structured markdown document that defines the agent's persona
 ### Default soul file content
 
 Should include:
+
 - Generic identity statement
 - Conservative behavioral defaults (prefer suggesting over acting, be concise, default to no_op when uncertain)
 - Instruction to respect the autonomy mode

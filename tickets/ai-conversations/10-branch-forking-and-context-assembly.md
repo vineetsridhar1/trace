@@ -21,6 +21,7 @@ Implement the core branching logic: creating a new branch from any turn and asse
   - `forkBranch(turnId: ID!, label: String): Branch!`
   - Resolver stays thin and delegates to the service method above
 - Implement `buildContext(branchId)` — the recursive context assembly algorithm:
+
   ```typescript
   function buildContext(branch: AiBranch, upToTurn?: AiTurn): AiTurn[] {
     const turns = getTurnsInBranch(branch, upToTurn);
@@ -33,9 +34,11 @@ Implement the core branching logic: creating a new branch from any turn and asse
     return [...parentContext, ...turns];
   }
   ```
+
   - Returns a flat, linear sequence of turns — the full conversation history as the AI sees it
   - Handles arbitrary depth (branch of a branch of a branch)
   - Efficient: only loads turns that are in the ancestor chain, not all turns in the conversation
+
 - Update `sendTurn` to use `buildContext` instead of just fetching the current branch's turns:
   - Before calling the LLM, call `buildContext(branchId)` to get the full inherited context
   - Pass the full context to the LLM

@@ -21,7 +21,12 @@ export const ACTION_META: Record<string, ActionMeta> = {
     icon: Ticket,
     titleFn: (args) => `Update ticket${args.title ? `: ${args.title}` : ""}`,
     editableFields: ["title", "description", "status", "priority"],
-    fieldLabels: { title: "Title", description: "Description", status: "Status", priority: "Priority" },
+    fieldLabels: {
+      title: "Title",
+      description: "Description",
+      status: "Status",
+      priority: "Priority",
+    },
   },
   "ticket.addComment": {
     verb: "Comment",
@@ -42,7 +47,9 @@ export const ACTION_META: Record<string, ActionMeta> = {
     icon: Play,
     titleFn: (args) => {
       const prompt = args.prompt as string | undefined;
-      return prompt ? `Start session: ${prompt.slice(0, 60)}${prompt.length > 60 ? "…" : ""}` : "Start coding session";
+      return prompt
+        ? `Start session: ${prompt.slice(0, 60)}${prompt.length > 60 ? "…" : ""}`
+        : "Start coding session";
     },
     editableFields: ["prompt"],
     fieldLabels: { prompt: "Task" },

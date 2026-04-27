@@ -127,7 +127,10 @@ export class InboxService {
    * List suggestions created by the agent. Filters by sourceType="agent_suggestion"
    * so the agent can query its own past suggestions to avoid duplicates or check status.
    */
-  async listAgentSuggestions(orgId: string, options?: { status?: InboxItemStatus; limit?: number }) {
+  async listAgentSuggestions(
+    orgId: string,
+    options?: { status?: InboxItemStatus; limit?: number },
+  ) {
     return prisma.inboxItem.findMany({
       where: {
         organizationId: orgId,

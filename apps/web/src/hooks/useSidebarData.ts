@@ -20,7 +20,10 @@ const CHANNELS_QUERY = gql`
       baseBranch
       setupScript
       runScripts
-      repo { id name }
+      repo {
+        id
+        name
+      }
     }
   }
 `;
@@ -92,14 +95,23 @@ export type TopLevelItem =
 
 export function useSidebarData() {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
-  const upsertMany = useEntityStore((s: { upsertMany: <T extends keyof EntityTableMap>(entityType: T, items: Array<EntityTableMap[T] & { id: string }>) => void }) => s.upsertMany);
+  const upsertMany = useEntityStore(
+    (s: {
+      upsertMany: <T extends keyof EntityTableMap>(
+        entityType: T,
+        items: Array<EntityTableMap[T] & { id: string }>,
+      ) => void;
+    }) => s.upsertMany,
+  );
   const refreshTick = useUIStore((s: { refreshTick: number }) => s.refreshTick);
   const [channelsLoading, setChannelsLoading] = useState(true);
   const [chatsLoading, setChatsLoading] = useState(features.messaging);
 
   const fetchChannels = useCallback(async () => {
     if (!activeOrgId) return;
-    const result = await client.query(CHANNELS_QUERY, { organizationId: activeOrgId, memberOnly: true }).toPromise();
+    const result = await client
+      .query(CHANNELS_QUERY, { organizationId: activeOrgId, memberOnly: true })
+      .toPromise();
     if (result.data?.channels) {
       upsertMany("channels", result.data.channels as Array<Channel & { id: string }>);
     }
@@ -108,9 +120,14 @@ export function useSidebarData() {
 
   const fetchChannelGroups = useCallback(async () => {
     if (!activeOrgId) return;
-    const result = await client.query(CHANNEL_GROUPS_QUERY, { organizationId: activeOrgId }).toPromise();
+    const result = await client
+      .query(CHANNEL_GROUPS_QUERY, { organizationId: activeOrgId })
+      .toPromise();
     if (result.data?.channelGroups) {
-      upsertMany("channelGroups", result.data.channelGroups as Array<ChannelGroup & { id: string }>);
+      upsertMany(
+        "channelGroups",
+        result.data.channelGroups as Array<ChannelGroup & { id: string }>,
+      );
     }
   }, [activeOrgId, upsertMany]);
 
@@ -132,7 +149,9 @@ export function useSidebarData() {
 
   const fetchInboxItems = useCallback(async () => {
     if (!activeOrgId) return;
-    const result = await client.query(INBOX_ITEMS_QUERY, { organizationId: activeOrgId }).toPromise();
+    const result = await client
+      .query(INBOX_ITEMS_QUERY, { organizationId: activeOrgId })
+      .toPromise();
     if (result.data?.inboxItems) {
       upsertMany("inboxItems", result.data.inboxItems as Array<InboxItem & { id: string }>);
     }
@@ -192,15 +211,11 @@ export function useSidebarData() {
     }
   }, [channelsLoading, allChannelIds]);
 
-  const groupIds = useEntityIds(
-    "channelGroups",
-    undefined,
-    (a, b) => {
-      const ag = a as EntityTableMap["channelGroups"];
-      const bg = b as EntityTableMap["channelGroups"];
-      return (ag.position ?? 0) - (bg.position ?? 0);
-    },
-  );
+  const groupIds = useEntityIds("channelGroups", undefined, (a, b) => {
+    const ag = a as EntityTableMap["channelGroups"];
+    const bg = b as EntityTableMap["channelGroups"];
+    return (ag.position ?? 0) - (bg.position ?? 0);
+  });
 
   // Narrow selectors: only re-render when groupId or position fields change,
   // not when any channel/group field updates (e.g. name, members, etc.)
@@ -254,7 +269,9 @@ export function useSidebarData() {
   // Full maps returned for DnD consumers — these subscribe broadly but only
   // child components that destructure them will re-render.
   const channelsById = useEntityStore((s: { channels: Record<string, Channel> }) => s.channels);
-  const channelGroupsById = useEntityStore((s: { channelGroups: Record<string, ChannelGroup> }) => s.channelGroups);
+  const channelGroupsById = useEntityStore(
+    (s: { channelGroups: Record<string, ChannelGroup> }) => s.channelGroups,
+  );
 
   return {
     activeOrgId,

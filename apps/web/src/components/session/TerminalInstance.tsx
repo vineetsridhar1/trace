@@ -5,7 +5,13 @@ import "@xterm/xterm/css/xterm.css";
 import { TerminalSocket } from "../../lib/terminal-ws";
 import { useTerminalStore } from "../../stores/terminal";
 
-export function TerminalInstance({ terminalId, visible }: { terminalId: string; visible: boolean }) {
+export function TerminalInstance({
+  terminalId,
+  visible,
+}: {
+  terminalId: string;
+  visible: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const socketRef = useRef<TerminalSocket | null>(null);

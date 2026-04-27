@@ -8,8 +8,20 @@ export interface ExtractedMention {
 
 const SANITIZE_OPTIONS: sanitize.IOptions = {
   allowedTags: [
-    "p", "br", "strong", "em", "u", "s", "a",
-    "ul", "ol", "li", "blockquote", "code", "pre", "span",
+    "p",
+    "br",
+    "strong",
+    "em",
+    "u",
+    "s",
+    "a",
+    "ul",
+    "ol",
+    "li",
+    "blockquote",
+    "code",
+    "pre",
+    "span",
   ],
   allowedAttributes: {
     a: ["href", "target", "rel"],
@@ -59,5 +71,7 @@ export function stripHtml(html: string): string {
   $("p").each((_i, el) => {
     $(el).append("\n");
   });
-  return $.text().replace(/\n{3,}/g, "\n\n").trim();
+  return $.text()
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }

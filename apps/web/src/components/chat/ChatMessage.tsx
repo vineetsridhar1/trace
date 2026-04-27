@@ -84,9 +84,18 @@ export function ChatMessage({
   const editorHtml = html && html.trim() ? html : textToEditorHtml(messageText);
 
   const bodyProps = {
-    html, text: messageText, editing, editedAt, deletedAt, editorHtml,
-    replyCount, latestReplyAt, repliers,
-    onSaveEdit: handleSaveEdit, onCancelEdit: stopEditing, onOpenThread: openThread,
+    html,
+    text: messageText,
+    editing,
+    editedAt,
+    deletedAt,
+    editorHtml,
+    replyCount,
+    latestReplyAt,
+    repliers,
+    onSaveEdit: handleSaveEdit,
+    onCancelEdit: stopEditing,
+    onOpenThread: openThread,
   };
 
   return (
@@ -116,13 +125,19 @@ export function ChatMessage({
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline gap-2">
                 {actor?.id ? (
-                  <UserProfileChatCard userId={actor.id} fallbackName={actorName} fallbackAvatarUrl={avatarUrl}>
+                  <UserProfileChatCard
+                    userId={actor.id}
+                    fallbackName={actorName}
+                    fallbackAvatarUrl={avatarUrl}
+                  >
                     <span className="cursor-pointer text-[15px] font-bold text-foreground leading-snug hover:underline">
                       {actorName}
                     </span>
                   </UserProfileChatCard>
                 ) : (
-                  <span className="text-[15px] font-bold text-foreground leading-snug">{actorName}</span>
+                  <span className="text-[15px] font-bold text-foreground leading-snug">
+                    {actorName}
+                  </span>
                 )}
                 <span className="text-xs text-muted-foreground">{headerTime}</span>
               </div>

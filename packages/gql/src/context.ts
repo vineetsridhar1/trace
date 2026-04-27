@@ -8,7 +8,10 @@ export interface Context {
   /** Role in the active organization. Null when organizationId is null. */
   role: UserRole | null;
   actorType: ActorType;
-  userLoader: DataLoader<string, { id: string; name: string | null; avatarUrl: string | null } | null>;
+  userLoader: DataLoader<
+    string,
+    { id: string; name: string | null; avatarUrl: string | null } | null
+  >;
   sessionLoader: DataLoader<string, unknown | null>;
   sessionGroupLoader: DataLoader<string, unknown | null>;
   repoLoader: DataLoader<string, unknown | null>;

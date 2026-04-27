@@ -59,7 +59,7 @@
   --th-accent: #3b82f6;
   --th-accent-light: #60a5fa;
   --th-accent-tint: #3b82f622;
-  --th-hover-rgb: 38,38,38;
+  --th-hover-rgb: 38, 38, 38;
   --th-code-bg: #0a0a0a;
 }
 
@@ -121,7 +121,9 @@
   html {
     @apply font-sans;
   }
-  html, body, #root {
+  html,
+  body,
+  #root {
     height: 100%;
   }
 }
@@ -137,7 +139,10 @@
   box-shadow:
     inset 0 1px 0 0 color-mix(in srgb, white 18%, transparent),
     0 1px 3px 0 rgb(0 0 0 / 0.4) !important;
-  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s,
+    transform 0.1s;
 }
 .btn-primary:hover {
   background: linear-gradient(
@@ -165,7 +170,11 @@
 
 .btn-secondary {
   box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.15) !important;
-  transition: background 0.15s, box-shadow 0.15s, border-color 0.15s, transform 0.1s;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s,
+    border-color 0.15s,
+    transform 0.1s;
 }
 .btn-secondary:hover {
   border-color: var(--th-edge-hover);
@@ -184,7 +193,9 @@
 
 .btn-ghost {
   background: transparent;
-  transition: background 0.15s, transform 0.1s;
+  transition:
+    background 0.15s,
+    transform 0.1s;
 }
 .btn-ghost:hover {
   background: var(--th-surface-elevated);
@@ -401,7 +412,9 @@
   max-height: 0;
   opacity: 0;
   overflow: hidden;
-  transition: max-height 0.24s ease, opacity 0.24s ease;
+  transition:
+    max-height 0.24s ease,
+    opacity 0.24s ease;
 }
 
 .read-group-body.open {
@@ -474,9 +487,15 @@
   line-height: 1.3;
 }
 
-.markdown-body h1 { font-size: 1.4em; }
-.markdown-body h2 { font-size: 1.2em; }
-.markdown-body h3 { font-size: 1.1em; }
+.markdown-body h1 {
+  font-size: 1.4em;
+}
+.markdown-body h2 {
+  font-size: 1.2em;
+}
+.markdown-body h3 {
+  font-size: 1.1em;
+}
 
 .markdown-body strong {
   font-weight: 600;

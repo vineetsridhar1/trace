@@ -40,7 +40,9 @@ function ChannelRow({ channelId, onClick }: { channelId: string; onClick: () => 
 function ChannelDetail({ channelId, onBack }: { channelId: string; onBack: () => void }) {
   const name = useEntityField("channels", channelId, "name") as string;
   const existingSetupScript = useEntityField("channels", channelId, "setupScript") as string | null;
-  const existingRunScripts = useEntityField("channels", channelId, "runScripts") as RunScript[] | null;
+  const existingRunScripts = useEntityField("channels", channelId, "runScripts") as
+    | RunScript[]
+    | null;
 
   const [setupScript, setSetupScript] = useState(existingSetupScript ?? "");
   const [runScripts, setRunScripts] = useState<RunScript[]>(

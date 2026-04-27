@@ -19,20 +19,22 @@ const EMPTY_STATUS: OrgRefreshStatus = {
 
 type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
 
-export const useRefreshStatusStore = create<RefreshStatusState>((set: SetState<RefreshStatusState>) => ({
-  byOrg: {},
-  setOrgStatus: (orgId, status) =>
-    set((state) => ({
-      byOrg: { ...state.byOrg, [orgId]: status },
-    })),
-  clearOrgStatus: (orgId) =>
-    set((state) => {
-      const next = { ...state.byOrg };
-      delete next[orgId];
-      return { byOrg: next };
-    }),
-  reset: () => set({ byOrg: {} }),
-}));
+export const useRefreshStatusStore = create<RefreshStatusState>(
+  (set: SetState<RefreshStatusState>) => ({
+    byOrg: {},
+    setOrgStatus: (orgId, status) =>
+      set((state) => ({
+        byOrg: { ...state.byOrg, [orgId]: status },
+      })),
+    clearOrgStatus: (orgId) =>
+      set((state) => {
+        const next = { ...state.byOrg };
+        delete next[orgId];
+        return { byOrg: next };
+      }),
+    reset: () => set({ byOrg: {} }),
+  }),
+);
 
 export function orgRefreshStatus(
   byOrg: Record<string, OrgRefreshStatus>,

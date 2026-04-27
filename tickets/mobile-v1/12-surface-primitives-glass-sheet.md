@@ -20,7 +20,7 @@ Build the surface primitives that establish depth and hierarchy: elevated cards,
   - Props: `detents?: ('small' | 'medium' | 'large')[]` (mapped to fractional heights: small=0.35, medium=0.5, large=1.0 via `sheetAllowedDetents`), `showGrabber?`, `swipeToDismiss?`, `padding?: keyof ThemeSpacing`.
   - Dynamically sets `sheetAllowedDetents`, `sheetGrabberVisible`, `sheetCornerRadius`, and `gestureEnabled` via an inline `<Stack.Screen>`.
   - Wraps content with the theme surface color, horizontal/top padding from the theme scale, and a safe-area-aware bottom inset.
-  - **Presentation note**: `presentation: 'formSheet'` must be declared by the *parent layout* (e.g. `app/(authed)/sheets/_layout.tsx`) when the sheet route is registered — expo-router applies options via `setOptions` in a post-mount `useEffect`, which is too late for `presentation` to take effect if declared from inside the screen body. iOS backdrop-tap dismissal on dimmed detents is always on and is not toggleable; `swipeToDismiss` only controls the native swipe-down gesture.
+  - **Presentation note**: `presentation: 'formSheet'` must be declared by the _parent layout_ (e.g. `app/(authed)/sheets/_layout.tsx`) when the sheet route is registered — expo-router applies options via `setOptions` in a post-mount `useEffect`, which is too late for `presentation` to take effect if declared from inside the screen body. iOS backdrop-tap dismissal on dimmed detents is always on and is not toggleable; `swipeToDismiss` only controls the native swipe-down gesture.
 
 ## Dependencies
 

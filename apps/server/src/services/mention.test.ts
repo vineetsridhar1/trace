@@ -3,7 +3,7 @@ import { extractMentions, sanitizeHtml, stripHtml } from "./mention.js";
 
 describe("mention helpers", () => {
   it("sanitizes unsafe html and trims quill trailing paragraphs", () => {
-    const html = '<p>Hello<script>alert(1)</script></p><p><br></p>';
+    const html = "<p>Hello<script>alert(1)</script></p><p><br></p>";
 
     expect(sanitizeHtml(html)).toBe("<p>Hello</p>");
   });

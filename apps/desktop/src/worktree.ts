@@ -2,18 +2,31 @@ import path from "path";
 import os from "os";
 import fs from "fs";
 import { execFile } from "child_process";
-import { promisify } from "util";
 import { generateAnimalSlug, getUsedSlugs } from "@trace/shared/animal-names";
 import { assertValidCommitSha } from "@trace/shared";
 import { installOrRepairRepoHooks } from "./repo-hooks.js";
 
-const execFileAsync = promisify(execFile);
+function execFileAsync(
+  command: string,
+  args: string[],
+  options: { cwd: string },
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, options, (error, stdout, stderr) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
 
 async function refExists(repoPath: string, ref: string): Promise<boolean> {
-  return execFileAsync(
-    "git", ["rev-parse", "--verify", ref],
-    { cwd: repoPath },
-  ).then(() => true, () => false);
+  return execFileAsync("git", ["rev-parse", "--verify", ref], { cwd: repoPath }).then(
+    () => true,
+    () => false,
+  );
 }
 
 async function resolveBaseBranch(
@@ -108,7 +121,9 @@ export async function createWorktree({
     await execFileAsync("git", ["fetch", "origin"], { cwd: repoPath });
   } else {
     // Verify the checkpoint SHA is reachable locally; fetch if not
-    const reachable = await execFileAsync("git", ["cat-file", "-t", checkpointSha], { cwd: repoPath })
+    const reachable = await execFileAsync("git", ["cat-file", "-t", checkpointSha], {
+      cwd: repoPath,
+    })
       .then(() => true)
       .catch(() => false);
     if (!reachable) {
@@ -117,25 +132,18 @@ export async function createWorktree({
   }
 
   // Resolve base branch with fallback chain (remote → local → default)
-  const baseRef = checkpointSha
-    ?? await resolveBaseBranch(repoPath, startBranch, defaultBranch);
+  const baseRef = checkpointSha ?? (await resolveBaseBranch(repoPath, startBranch, defaultBranch));
 
   // Check if the branch already exists (e.g. worktree was removed but branch remains)
   const branchExists = await refExists(repoPath, branch);
 
   if (branchExists) {
     // Reuse existing branch without -b
-    await execFileAsync(
-      "git",
-      ["worktree", "add", targetPath, branch],
-      { cwd: repoPath },
-    );
+    await execFileAsync("git", ["worktree", "add", targetPath, branch], { cwd: repoPath });
   } else {
-    await execFileAsync(
-      "git",
-      ["worktree", "add", "-b", branch, targetPath, baseRef],
-      { cwd: repoPath },
-    );
+    await execFileAsync("git", ["worktree", "add", "-b", branch, targetPath, baseRef], {
+      cwd: repoPath,
+    });
   }
 
   if (gitHooksEnabled) {

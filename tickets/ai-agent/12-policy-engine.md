@@ -17,11 +17,11 @@ The policy engine sits between the planner and the executor. It takes the planne
 
 Use configurable thresholds based on risk × autonomy mode:
 
-| Risk | Mode: suggest | Mode: act |
-|------|--------------|-----------|
-| low | suggest ≥ 0.3, act ≥ 0.6 | suggest ≥ 0.2, act ≥ 0.4 |
-| medium | suggest ≥ 0.5, act ≥ 0.9 | suggest ≥ 0.3, act ≥ 0.7 |
-| high | suggest ≥ 0.6, act ≥ 0.95 | suggest ≥ 0.5, act ≥ 0.85 |
+| Risk   | Mode: suggest             | Mode: act                 |
+| ------ | ------------------------- | ------------------------- |
+| low    | suggest ≥ 0.3, act ≥ 0.6  | suggest ≥ 0.2, act ≥ 0.4  |
+| medium | suggest ≥ 0.5, act ≥ 0.9  | suggest ≥ 0.3, act ≥ 0.7  |
+| high   | suggest ≥ 0.6, act ≥ 0.95 | suggest ≥ 0.5, act ≥ 0.85 |
 
 ### Hard rules
 

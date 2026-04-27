@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildSessionRowAccessibilityLabel,
-  describeSessionStatus,
-} from "./accessibility";
+import { buildSessionRowAccessibilityLabel, describeSessionStatus } from "./accessibility";
 
 describe("describeSessionStatus", () => {
   it("maps server statuses to spoken labels", () => {

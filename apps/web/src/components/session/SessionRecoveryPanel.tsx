@@ -3,9 +3,7 @@ import { RefreshCw, ArrowRightLeft, WifiOff, Loader2 } from "lucide-react";
 import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
-import {
-  RETRY_SESSION_CONNECTION_MUTATION,
-} from "@trace/client-core";
+import { RETRY_SESSION_CONNECTION_MUTATION } from "@trace/client-core";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
@@ -99,17 +97,18 @@ export function SessionRecoveryPanel({
   }, [doRetry]);
 
   const autoRetrying = canRetry && autoRetryable && autoRetryCount < MAX_AUTO_RETRIES;
-  const autoRetriesExhausted =
-    canRetry && autoRetryable && autoRetryCount >= MAX_AUTO_RETRIES;
+  const autoRetriesExhausted = canRetry && autoRetryable && autoRetryCount >= MAX_AUTO_RETRIES;
 
   return (
     <div className="shrink-0 border-t border-border px-4 py-3">
-      <div className={cn(
-        "flex items-center gap-2 rounded-lg border px-3 py-2.5",
-        autoRetrying
-          ? "border-yellow-500/30 bg-yellow-500/5"
-          : "border-destructive/30 bg-destructive/5",
-      )}>
+      <div
+        className={cn(
+          "flex items-center gap-2 rounded-lg border px-3 py-2.5",
+          autoRetrying
+            ? "border-yellow-500/30 bg-yellow-500/5"
+            : "border-destructive/30 bg-destructive/5",
+        )}
+      >
         {autoRetrying ? (
           <Loader2 size={16} className="shrink-0 text-yellow-500 animate-spin" />
         ) : (
@@ -157,10 +156,7 @@ export function SessionRecoveryPanel({
       </div>
 
       {showPicker && (
-        <SessionRuntimePicker
-          sessionId={sessionId}
-          onClose={() => setShowPicker(false)}
-        />
+        <SessionRuntimePicker sessionId={sessionId} onClose={() => setShowPicker(false)} />
       )}
     </div>
   );

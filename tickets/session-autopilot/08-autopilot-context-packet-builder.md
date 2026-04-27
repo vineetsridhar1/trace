@@ -43,4 +43,3 @@ Build the context packet the controller reviews. This is where transcript, check
 1. Build context for a session with a checkpoint and PR url.
 2. Build context for a session with no checkpoint and verify branch-diff fallback.
 3. Build context for a large transcript and verify truncation behavior.
-

@@ -75,10 +75,7 @@ const STATUS_POLL_INTERVAL_MS = 10_000;
  */
 export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
   const repo = useEntityField("sessionGroups", groupId, "repo") as Repo | null | undefined;
-  const branch = useEntityField("sessionGroups", groupId, "branch") as
-    | string
-    | null
-    | undefined;
+  const branch = useEntityField("sessionGroups", groupId, "branch") as string | null | undefined;
   const connection = useEntityField("sessionGroups", groupId, "connection") as
     | SessionConnection
     | null
@@ -101,10 +98,7 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
     let cancelled = false;
     setAccessLoaded(false);
     void getClient()
-      .query(
-        BRIDGE_RUNTIME_ACCESS_QUERY,
-        { runtimeInstanceId, sessionGroupId: groupId },
-      )
+      .query(BRIDGE_RUNTIME_ACCESS_QUERY, { runtimeInstanceId, sessionGroupId: groupId })
       .toPromise()
       .then((result) => {
         if (cancelled) return;
@@ -130,8 +124,7 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
   const [status, setStatus] = useState<LinkedCheckoutStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [pendingAction, setPendingAction] =
-    useState<LinkedCheckoutAction | null>(null);
+  const [pendingAction, setPendingAction] = useState<LinkedCheckoutAction | null>(null);
   const pendingRef = useRef<LinkedCheckoutAction | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
 
@@ -241,23 +234,26 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
     [],
   );
 
-  const sync = useCallback(async (input?: SyncConflictResolutionInput): Promise<ActionOutcome> => {
-    if (!repoId || !branch) return { ok: false, error: "Missing repo or branch." };
-    return runAction("sync", async () => {
-      const result = await getClient()
-        .mutation(SYNC_LINKED_CHECKOUT_MUTATION, {
-          sessionGroupId: groupId,
-          repoId,
-          branch,
-          autoSyncEnabled: true,
-          conflictStrategy: input?.conflictStrategy,
-          commitMessage: input?.commitMessage,
-        })
-        .toPromise();
-      if (result.error) throw result.error;
-      return (result.data as SyncMutationData | undefined)?.syncLinkedCheckout ?? null;
-    });
-  }, [branch, groupId, repoId, runAction]);
+  const sync = useCallback(
+    async (input?: SyncConflictResolutionInput): Promise<ActionOutcome> => {
+      if (!repoId || !branch) return { ok: false, error: "Missing repo or branch." };
+      return runAction("sync", async () => {
+        const result = await getClient()
+          .mutation(SYNC_LINKED_CHECKOUT_MUTATION, {
+            sessionGroupId: groupId,
+            repoId,
+            branch,
+            autoSyncEnabled: true,
+            conflictStrategy: input?.conflictStrategy,
+            commitMessage: input?.commitMessage,
+          })
+          .toPromise();
+        if (result.error) throw result.error;
+        return (result.data as SyncMutationData | undefined)?.syncLinkedCheckout ?? null;
+      });
+    },
+    [branch, groupId, repoId, runAction],
+  );
 
   const restore = useCallback(async (): Promise<ActionOutcome> => {
     if (!repoId) return { ok: false, error: "Missing repo." };
@@ -283,9 +279,7 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
         })
         .toPromise();
       if (result.error) throw result.error;
-      return (
-        (result.data as CommitMutationData | undefined)?.commitLinkedCheckoutChanges ?? null
-      );
+      return (result.data as CommitMutationData | undefined)?.commitLinkedCheckoutChanges ?? null;
     });
   }, [groupId, repoId, runAction]);
 
@@ -301,9 +295,7 @@ export function useLinkedCheckout(groupId: string): UseLinkedCheckoutResult {
         })
         .toPromise();
       if (result.error) throw result.error;
-      return (
-        (result.data as AutoSyncMutationData | undefined)?.setLinkedCheckoutAutoSync ?? null
-      );
+      return (result.data as AutoSyncMutationData | undefined)?.setLinkedCheckoutAutoSync ?? null;
     });
   }, [groupId, repoId, runAction, status]);
 

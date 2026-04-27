@@ -21,9 +21,7 @@ export function applyOptimisticPatch<T extends EntityType>(
   return applyOptimisticPatches([{ type, id, data }]);
 }
 
-export function applyOptimisticPatches(
-  patches: PatchSpec<EntityType>[],
-): () => void {
+export function applyOptimisticPatches(patches: PatchSpec<EntityType>[]): () => void {
   const store = useEntityStore.getState();
   const snapshots: Snapshot<EntityType>[] = patches.map(({ type, id }) => ({
     type,
@@ -32,11 +30,7 @@ export function applyOptimisticPatches(
   }));
 
   for (const patch of patches) {
-    store.patch(
-      patch.type,
-      patch.id,
-      patch.data as Partial<EntityTableMap[typeof patch.type]>,
-    );
+    store.patch(patch.type, patch.id, patch.data as Partial<EntityTableMap[typeof patch.type]>);
   }
 
   return () => {

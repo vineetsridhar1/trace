@@ -1,11 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Circle, FileCode, GitCompareArrows, MessageSquarePlus, Plus, TerminalSquare, X } from "lucide-react";
+import {
+  Circle,
+  FileCode,
+  GitCompareArrows,
+  MessageSquarePlus,
+  Plus,
+  TerminalSquare,
+  X,
+} from "lucide-react";
 import type { SessionEntity } from "@trace/client-core";
 import type { TerminalEntry } from "../../stores/terminal";
 import { cn } from "../../lib/utils";
 import { useUIStore } from "../../stores/ui";
 import { ScrambleText } from "../ui/ScrambleText";
-import { agentStatusColor, getDisplayAgentStatus, terminalStatusColor, terminalStatusLabel } from "./sessionStatus";
+import {
+  agentStatusColor,
+  getDisplayAgentStatus,
+  terminalStatusColor,
+  terminalStatusLabel,
+} from "./sessionStatus";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,8 +62,7 @@ const tabBase =
 
 const tabActive = "bg-surface-elevated text-foreground";
 
-const tabInactive =
-  "bg-surface-deep text-muted-foreground hover:text-foreground";
+const tabInactive = "bg-surface-deep text-muted-foreground hover:text-foreground";
 
 export function GroupTabStrip({
   sessionTabs,
@@ -73,7 +85,9 @@ export function GroupTabStrip({
   canNewChat,
   canOpenTerminal,
 }: GroupTabStripProps) {
-  const sessionDoneBadges = useUIStore((s: { sessionDoneBadges: Record<string, boolean> }) => s.sessionDoneBadges);
+  const sessionDoneBadges = useUIStore(
+    (s: { sessionDoneBadges: Record<string, boolean> }) => s.sessionDoneBadges,
+  );
   const sessionById = new Map(groupSessions.map((s) => [s.id, s]));
   const tabRefs = useRef<Map<string, HTMLElement>>(new Map());
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -128,191 +142,198 @@ export function GroupTabStrip({
       <div className="shrink-0 bg-surface-deep">
         <div className="native-scrollbar overflow-x-auto">
           <div className="flex min-w-max">
-          {sessionTabs.map((session) => {
-            const displayAgentStatus = getDisplayAgentStatus(
-              session.agentStatus,
-              session.sessionStatus,
-            );
-            const color = agentStatusColor[displayAgentStatus] ?? "text-muted-foreground";
-            const isActive = !activeTerminalId && !activeFilePath && selectedSessionId === session.id;
-            const hasDoneBadge = !!sessionDoneBadges[session.id];
-            return (
-              <div
-                key={session.id}
-                ref={(el: HTMLElement | null) => setTabRef(session.id, el)}
-                className={cn(
-                  tabBase,
-                  "max-w-[260px] gap-0 p-0",
-                  isActive ? tabActive : tabInactive,
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => onSelectSession(session.id)}
-                  className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
+            {sessionTabs.map((session) => {
+              const displayAgentStatus = getDisplayAgentStatus(
+                session.agentStatus,
+                session.sessionStatus,
+              );
+              const color = agentStatusColor[displayAgentStatus] ?? "text-muted-foreground";
+              const isActive =
+                !activeTerminalId && !activeFilePath && selectedSessionId === session.id;
+              const hasDoneBadge = !!sessionDoneBadges[session.id];
+              return (
+                <div
+                  key={session.id}
+                  ref={(el: HTMLElement | null) => setTabRef(session.id, el)}
+                  className={cn(
+                    tabBase,
+                    "max-w-[260px] gap-0 p-0",
+                    isActive ? tabActive : tabInactive,
+                  )}
                 >
-                  <span className={cn("relative shrink-0 flex h-2.5 w-2.5 items-center justify-center", color)}>
-                    <Circle size={6} className="fill-current" />
-                    {hasDoneBadge && (
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75" />
-                    )}
-                  </span>
-                  <span className={cn("truncate", hasDoneBadge ? "font-semibold" : undefined)}>
-                    <ScrambleText text={session.name} />
-                  </span>
-                </button>
-                {canCloseSessions && onCloseSession && (
                   <button
                     type="button"
-                    onClick={() => onCloseSession(session.id)}
+                    onClick={() => onSelectSession(session.id)}
+                    className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
+                  >
+                    <span
+                      className={cn(
+                        "relative shrink-0 flex h-2.5 w-2.5 items-center justify-center",
+                        color,
+                      )}
+                    >
+                      <Circle size={6} className="fill-current" />
+                      {hasDoneBadge && (
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75" />
+                      )}
+                    </span>
+                    <span className={cn("truncate", hasDoneBadge ? "font-semibold" : undefined)}>
+                      <ScrambleText text={session.name} />
+                    </span>
+                  </button>
+                  {canCloseSessions && onCloseSession && (
+                    <button
+                      type="button"
+                      onClick={() => onCloseSession(session.id)}
+                      className="mr-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:bg-surface-hover hover:opacity-100"
+                      title="Close session tab"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+
+            {terminals.map((terminal, index) => {
+              const session = sessionById.get(terminal.sessionId);
+              const defaultLabel = session
+                ? `Terminal ${index + 1} · ${session.name}`
+                : `Terminal ${index + 1}`;
+              const label = terminal.customName || defaultLabel;
+              const isActive = activeTerminalId === terminal.id;
+              const isEditing = editingTerminalId === terminal.id;
+              const statusColor = terminalStatusColor[terminal.status] ?? "text-muted-foreground";
+              const statusLabel = terminalStatusLabel[terminal.status] ?? terminal.status;
+              return (
+                <div
+                  key={terminal.id}
+                  ref={(el: HTMLElement | null) => setTabRef(terminal.id, el)}
+                  className={cn(
+                    tabBase,
+                    "max-w-[260px] gap-0 p-0",
+                    isActive ? tabActive : tabInactive,
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onSelectTerminal(session?.id ?? null, terminal.id)}
+                    onDoubleClick={() => {
+                      setEditingTerminalId(terminal.id);
+                      setEditValue(terminal.customName || "");
+                    }}
+                    className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
+                  >
+                    <Tooltip>
+                      <TooltipTrigger
+                        className={cn(
+                          "shrink-0 flex h-2.5 w-2.5 items-center justify-center",
+                          statusColor,
+                        )}
+                        render={<span />}
+                      >
+                        <Circle size={6} className="fill-current" />
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-xs">
+                        {statusLabel}
+                      </TooltipContent>
+                    </Tooltip>
+                    {isEditing ? (
+                      <input
+                        autoFocus
+                        className="min-w-24 max-w-[180px] bg-transparent text-xs outline-none border-b border-foreground/30"
+                        value={editValue}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setEditValue(e.target.value)
+                        }
+                        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                          if (e.key === "Enter") {
+                            onRenameTerminal(terminal.id, editValue);
+                            setEditingTerminalId(null);
+                          } else if (e.key === "Escape") {
+                            setEditingTerminalId(null);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (editingTerminalId === terminal.id) {
+                            onRenameTerminal(terminal.id, editValue);
+                            setEditingTerminalId(null);
+                          }
+                        }}
+                        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span className="truncate">{label}</span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onCloseTerminal(terminal.id)}
                     className="mr-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:bg-surface-hover hover:opacity-100"
-                    title="Close session tab"
+                    title="Close terminal tab"
                   >
                     <X size={12} />
                   </button>
-                )}
-              </div>
-            );
-          })}
+                </div>
+              );
+            })}
 
-          {terminals.map((terminal, index) => {
-            const session = sessionById.get(terminal.sessionId);
-            const defaultLabel = session ? `Terminal ${index + 1} · ${session.name}` : `Terminal ${index + 1}`;
-            const label = terminal.customName || defaultLabel;
-            const isActive = activeTerminalId === terminal.id;
-            const isEditing = editingTerminalId === terminal.id;
-            const statusColor = terminalStatusColor[terminal.status] ?? "text-muted-foreground";
-            const statusLabel = terminalStatusLabel[terminal.status] ?? terminal.status;
-            return (
-              <div
-                key={terminal.id}
-                ref={(el: HTMLElement | null) => setTabRef(terminal.id, el)}
-                className={cn(
-                  tabBase,
-                  "max-w-[260px] gap-0 p-0",
-                  isActive ? tabActive : tabInactive,
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => onSelectTerminal(session?.id ?? null, terminal.id)}
-                  onDoubleClick={() => {
-                    setEditingTerminalId(terminal.id);
-                    setEditValue(terminal.customName || "");
-                  }}
-                  className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
-                >
-                  <Tooltip>
-                    <TooltipTrigger
-                      className={cn("shrink-0 flex h-2.5 w-2.5 items-center justify-center", statusColor)}
-                      render={<span />}
-                    >
-                      <Circle size={6} className="fill-current" />
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-xs">
-                      {statusLabel}
-                    </TooltipContent>
-                  </Tooltip>
-                  {isEditing ? (
-                    <input
-                      autoFocus
-                      className="min-w-24 max-w-[180px] bg-transparent text-xs outline-none border-b border-foreground/30"
-                      value={editValue}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditValue(e.target.value)}
-                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                        if (e.key === "Enter") {
-                          onRenameTerminal(terminal.id, editValue);
-                          setEditingTerminalId(null);
-                        } else if (e.key === "Escape") {
-                          setEditingTerminalId(null);
-                        }
-                      }}
-                      onBlur={() => {
-                        if (editingTerminalId === terminal.id) {
-                          onRenameTerminal(terminal.id, editValue);
-                          setEditingTerminalId(null);
-                        }
-                      }}
-                      onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                    />
-                  ) : (
-                    <span className="truncate">{label}</span>
+            {openFiles.map((file) => {
+              const isActive = activeFilePath === file.filePath;
+              return (
+                <div
+                  key={file.filePath}
+                  ref={(el: HTMLElement | null) => setTabRef(file.filePath, el)}
+                  className={cn(
+                    tabBase,
+                    "max-w-[260px] gap-0 p-0",
+                    isActive ? tabActive : tabInactive,
                   )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onCloseTerminal(terminal.id)}
-                  className="mr-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:bg-surface-hover hover:opacity-100"
-                  title="Close terminal tab"
                 >
-                  <X size={12} />
-                </button>
-              </div>
-            );
-          })}
+                  <button
+                    type="button"
+                    onClick={() => onSelectFile(file.filePath)}
+                    className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
+                  >
+                    {file.isDiff ? (
+                      <GitCompareArrows size={12} className="shrink-0" />
+                    ) : (
+                      <FileCode size={12} className="shrink-0" />
+                    )}
+                    <span className="truncate">{file.fileName}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onCloseFile(file.filePath)}
+                    className="mr-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:bg-surface-hover hover:opacity-100"
+                    title="Close file tab"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              );
+            })}
 
-          {openFiles.map((file) => {
-            const isActive = activeFilePath === file.filePath;
-            return (
-              <div
-                key={file.filePath}
-                ref={(el: HTMLElement | null) => setTabRef(file.filePath, el)}
-                className={cn(
-                  tabBase,
-                  "max-w-[260px] gap-0 p-0",
-                  isActive ? tabActive : tabInactive,
-                )}
+            <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+              <DropdownMenuTrigger
+                className="inline-flex shrink-0 items-center justify-center px-2.5 py-2 text-muted-foreground transition-colors hover:text-foreground"
+                title="New tab (⌘T)"
               >
-                <button
-                  type="button"
-                  onClick={() => onSelectFile(file.filePath)}
-                  className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
-                >
-                  {file.isDiff ? (
-                    <GitCompareArrows size={12} className="shrink-0" />
-                  ) : (
-                    <FileCode size={12} className="shrink-0" />
-                  )}
-                  <span className="truncate">{file.fileName}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onCloseFile(file.filePath)}
-                  className="mr-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:bg-surface-hover hover:opacity-100"
-                  title="Close file tab"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            );
-          })}
-
-          <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
-            <DropdownMenuTrigger
-              className="inline-flex shrink-0 items-center justify-center px-2.5 py-2 text-muted-foreground transition-colors hover:text-foreground"
-              title="New tab (⌘T)"
-            >
-              <Plus size={14} />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem
-                disabled={!canNewChat}
-                onClick={onNewChat}
-              >
-                <MessageSquarePlus size={14} />
-                Agent
-                <DropdownMenuShortcut>1</DropdownMenuShortcut>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={!canOpenTerminal}
-                onClick={onOpenTerminal}
-              >
-                <TerminalSquare size={14} />
-                Terminal
-                <DropdownMenuShortcut>2</DropdownMenuShortcut>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <Plus size={14} />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem disabled={!canNewChat} onClick={onNewChat}>
+                  <MessageSquarePlus size={14} />
+                  Agent
+                  <DropdownMenuShortcut>1</DropdownMenuShortcut>
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={!canOpenTerminal} onClick={onOpenTerminal}>
+                  <TerminalSquare size={14} />
+                  Terminal
+                  <DropdownMenuShortcut>2</DropdownMenuShortcut>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>

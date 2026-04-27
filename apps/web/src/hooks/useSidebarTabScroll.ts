@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { clamp } from "../lib/utils";
-import { getTabFromProgress, getTabIndex, type SidebarTab } from "../components/sidebar/sidebarTabs";
+import {
+  getTabFromProgress,
+  getTabIndex,
+  type SidebarTab,
+} from "../components/sidebar/sidebarTabs";
 
 /**
  * Scroll-end detection timeout for browsers that don't support the `scrollend`
@@ -23,12 +27,15 @@ export function useSidebarTabScroll({
   const hasInitRef = useRef(false);
   const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const setProgress = useCallback((p: number) => {
-    const clamped = clamp(p, 0, 1);
-    progressRef.current = clamped;
-    setTabProgressState(clamped);
-    onProgressChange?.(clamped);
-  }, [onProgressChange]);
+  const setProgress = useCallback(
+    (p: number) => {
+      const clamped = clamp(p, 0, 1);
+      progressRef.current = clamped;
+      setTabProgressState(clamped);
+      onProgressChange?.(clamped);
+    },
+    [onProgressChange],
+  );
 
   // Called when scrolling settles — commit to nearest tab
   const commitPosition = useCallback(() => {
@@ -63,12 +70,15 @@ export function useSidebarTabScroll({
   }, [commitPosition]);
 
   // Instant jump — used for init, resize, and external tab changes
-  const jumpToTab = useCallback((tab: SidebarTab) => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    viewport.scrollLeft = getTabIndex(tab) * viewport.clientWidth;
-    setProgress(getTabIndex(tab));
-  }, [setProgress]);
+  const jumpToTab = useCallback(
+    (tab: SidebarTab) => {
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      viewport.scrollLeft = getTabIndex(tab) * viewport.clientWidth;
+      setProgress(getTabIndex(tab));
+    },
+    [setProgress],
+  );
 
   // Animated switch — used when user clicks the tab switcher
   const selectTab = useCallback((tab: SidebarTab) => {

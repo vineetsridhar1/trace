@@ -1,8 +1,4 @@
-import {
-  postCommitHook,
-  postRewriteHook,
-  prepareCommitMessageHook,
-} from "./hook-runtime.js";
+import { postCommitHook, postRewriteHook, prepareCommitMessageHook } from "./hook-runtime.js";
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];

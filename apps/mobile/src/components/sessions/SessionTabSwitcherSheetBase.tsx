@@ -74,14 +74,7 @@ export function SessionTabSwitcherSheetBase({
       );
       backdropOpacity.value = withTiming(0, { duration: theme.motion.durations.fast });
     },
-    [
-      backdropOpacity,
-      dragY,
-      finishClose,
-      theme.motion.durations.fast,
-      translateY,
-      windowHeight,
-    ],
+    [backdropOpacity, dragY, finishClose, theme.motion.durations.fast, translateY, windowHeight],
   );
 
   useEffect(() => {
@@ -113,8 +106,7 @@ export function SessionTabSwitcherSheetBase({
           dragY.value = Math.max(event.translationY, 0);
         })
         .onEnd((event) => {
-          const shouldClose =
-            dragY.value > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY;
+          const shouldClose = dragY.value > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY;
           if (shouldClose) {
             runOnJS(handlePanEnd)();
             return;
@@ -148,11 +140,7 @@ export function SessionTabSwitcherSheetBase({
     >
       <View style={styles.root}>
         <Animated.View
-          style={[
-            styles.backdrop,
-            { backgroundColor: alpha("#000000", 0.32) },
-            backdropStyle,
-          ]}
+          style={[styles.backdrop, { backgroundColor: alpha("#000000", 0.32) }, backdropStyle]}
         >
           <Pressable
             accessibilityLabel="Dismiss tab switcher"
@@ -175,20 +163,10 @@ export function SessionTabSwitcherSheetBase({
         >
           <GestureDetector gesture={sheetGesture}>
             <View style={styles.grabberSlot}>
-              <View
-                style={[
-                  styles.grabber,
-                  { backgroundColor: theme.colors.borderMuted },
-                ]}
-              />
+              <View style={[styles.grabber, { backgroundColor: theme.colors.borderMuted }]} />
             </View>
           </GestureDetector>
-          <View
-            style={[
-              styles.content,
-              { paddingHorizontal: theme.spacing.lg },
-            ]}
-          >
+          <View style={[styles.content, { paddingHorizontal: theme.spacing.lg }]}>
             <SessionTabSwitcherContent
               groupId={groupId}
               activeSessionId={activeSessionId}

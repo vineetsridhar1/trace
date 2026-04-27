@@ -16,9 +16,13 @@ describe("actor service helpers", () => {
   });
 
   it("resolves users via the provided loader when available", async () => {
-    const loader = { load: vi.fn().mockResolvedValue({ id: "u1", name: "Alice", avatarUrl: "a.png" }) };
+    const loader = {
+      load: vi.fn().mockResolvedValue({ id: "u1", name: "Alice", avatarUrl: "a.png" }),
+    };
 
-    await expect(resolveActor({ actorType: "user", actorId: "u1" }, loader as any)).resolves.toEqual({
+    await expect(
+      resolveActor({ actorType: "user", actorId: "u1" }, loader as any),
+    ).resolves.toEqual({
       type: "user",
       id: "u1",
       name: "Alice",

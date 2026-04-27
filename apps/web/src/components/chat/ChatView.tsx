@@ -35,7 +35,8 @@ export function ChatView({ chatId }: { chatId: string }) {
 
         {isMobile ? (
           /* Mobile: full-width overlay */
-          rendered && threadId && (
+          rendered &&
+          threadId && (
             <div
               className="absolute inset-0 z-10 bg-background transition-transform duration-200 ease-in-out"
               style={{ transform: slideIn ? "translateX(0)" : "translateX(100%)" }}

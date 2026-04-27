@@ -36,7 +36,9 @@ export type BridgeAccessRequestToastData = {
 
 function formatRequestedScope(data: BridgeAccessRequestToastData): string {
   if (data.scopeType === "session_group") {
-    return data.sessionGroup?.name ? `This workspace (${data.sessionGroup.name})` : "This workspace";
+    return data.sessionGroup?.name
+      ? `This workspace (${data.sessionGroup.name})`
+      : "This workspace";
   }
   return "All sessions on this bridge";
 }
@@ -129,12 +131,7 @@ export function BridgeAccessRequestToast({
         <Button size="sm" disabled={!!pendingAction} onClick={runReview}>
           Review in settings
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={!!pendingAction}
-          onClick={() => void runDeny()}
-        >
+        <Button variant="ghost" size="sm" disabled={!!pendingAction} onClick={() => void runDeny()}>
           Deny
         </Button>
       </div>

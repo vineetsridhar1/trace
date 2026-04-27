@@ -14,13 +14,7 @@ import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { alpha, useTheme, type Theme } from "@/theme";
 import { Text } from "./Text";
 
-export type ChipVariant =
-  | "inProgress"
-  | "needsInput"
-  | "done"
-  | "failed"
-  | "merged"
-  | "inReview";
+export type ChipVariant = "inProgress" | "needsInput" | "done" | "failed" | "merged" | "inReview";
 
 export interface ChipProps {
   label: string;

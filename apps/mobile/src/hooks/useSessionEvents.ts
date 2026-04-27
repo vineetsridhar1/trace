@@ -224,9 +224,7 @@ export function useSessionEvents(
   // Catch up missed events after a WS reconnect: the server's pubsub has no
   // replay, so anything the agent emitted while we were disconnected is lost
   // to the live subscription and must be re-queried over HTTP.
-  const reconnectCounter = useConnectionStore(
-    (s: ConnectionState) => s.reconnectCounter,
-  );
+  const reconnectCounter = useConnectionStore((s: ConnectionState) => s.reconnectCounter);
   const baselineReconnectCounter = useRef(reconnectCounter);
   useEffect(() => {
     if (!fetchEnabled) return;

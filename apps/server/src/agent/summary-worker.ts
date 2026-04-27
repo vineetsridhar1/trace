@@ -12,10 +12,7 @@ import type { Event, EntitySummary } from "@prisma/client";
 import { redis } from "../lib/redis.js";
 import { summaryService } from "../services/summary.js";
 import { costTrackingService } from "../services/cost-tracking.js";
-import {
-  generateSummary,
-  type SummaryEvent,
-} from "./summary-generator.js";
+import { generateSummary, type SummaryEvent } from "./summary-generator.js";
 import { estimateCostCents } from "./cost-utils.js";
 import { createAgentLogger } from "./logger.js";
 
@@ -198,11 +195,7 @@ async function refreshSummaryInner(
   await getAndResetScopeEventCount(organizationId, entityType, entityId);
 
   // Estimate cost using model-aware lookup
-  const costCents = estimateCostCents(
-    SUMMARY_MODEL,
-    result.inputTokens,
-    result.outputTokens,
-  );
+  const costCents = estimateCostCents(SUMMARY_MODEL, result.inputTokens, result.outputTokens);
 
   // Record cost
   await costTrackingService.recordCost({
@@ -438,9 +431,7 @@ async function refreshCycleInner(activeOrgIds: Iterable<string>): Promise<void> 
  * Start the background summary refresh loop.
  * @param getActiveOrgs - function that returns currently active org IDs
  */
-export function startSummaryWorker(
-  getActiveOrgs: () => Iterable<string>,
-): void {
+export function startSummaryWorker(getActiveOrgs: () => Iterable<string>): void {
   if (running) return;
   running = true;
 

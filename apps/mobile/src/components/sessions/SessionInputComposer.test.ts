@@ -18,6 +18,10 @@ let latestComposerProps: MockComposerProps | null = null;
 let latestOnSuccess: (() => void) | null = null;
 
 vi.mock("react-native", () => ({
+  AccessibilityInfo: {
+    addEventListener: vi.fn(() => ({ remove: vi.fn() })),
+    isReduceMotionEnabled: vi.fn(async () => false),
+  },
   Keyboard: { dismiss: vi.fn() },
   View: "View",
 }));

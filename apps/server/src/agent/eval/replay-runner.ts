@@ -85,11 +85,16 @@ function rebuildContextPacket(replayPacket: Record<string, unknown>): AgentConte
     eventBatch: (replayPacket.eventBatch as AgentContextPacket["eventBatch"]) ?? [],
     soulFile: (replayPacket.soulFile as string) ?? resolveSoulFile({ orgSoulFile: "" }),
     scopeEntity: (replayPacket.scopeEntity as AgentContextPacket["scopeEntity"]) ?? null,
-    relevantEntities: (replayPacket.relevantEntities as AgentContextPacket["relevantEntities"]) ?? [],
+    relevantEntities:
+      (replayPacket.relevantEntities as AgentContextPacket["relevantEntities"]) ?? [],
     decisionContext: (replayPacket.decisionContext as AgentContextPacket["decisionContext"]) ?? {
-      triggerType: ((replayPacket.triggerEvent as Record<string, unknown> | undefined)?.eventType as string) ?? "unknown",
+      triggerType:
+        ((replayPacket.triggerEvent as Record<string, unknown> | undefined)?.eventType as string) ??
+        "unknown",
       scopeType,
-      autonomyMode: ((replayPacket.permissions as Record<string, unknown> | undefined)?.autonomyMode as string) ?? "observe",
+      autonomyMode:
+        ((replayPacket.permissions as Record<string, unknown> | undefined)
+          ?.autonomyMode as string) ?? "observe",
       isMention: (replayPacket.isMention as boolean) ?? false,
       canonicalState: [],
       constraints: [],
@@ -101,7 +106,9 @@ function rebuildContextPacket(replayPacket: Record<string, unknown>): AgentConte
     recentSignals: (replayPacket.recentSignals as AgentContextPacket["recentSignals"]) ?? [],
     actors: (replayPacket.actors as AgentContextPacket["actors"]) ?? [],
     permissions: {
-      autonomyMode: ((replayPacket.permissions as Record<string, unknown>)?.autonomyMode as string) ?? "observe",
+      autonomyMode:
+        ((replayPacket.permissions as Record<string, unknown>)?.autonomyMode as string) ??
+        "observe",
       actions,
     },
     tokenBudget: { total: 0, used: 0, sections: {} },
@@ -117,7 +124,8 @@ export async function runEvalCase(evalCase: EvalCase): Promise<EvalResult> {
   const packet = rebuildContextPacket(evalCase.replayPacket);
   const { text: systemPrompt, blockVersions } = buildSystemPrompt(packet);
 
-  const initialMessage = "Analyze the context above and make your decision. Call the planner_decision tool with your response. You have up to 10 turns. This is turn 1 of 10.";
+  const initialMessage =
+    "Analyze the context above and make your decision. Call the planner_decision tool with your response. You have up to 10 turns. This is turn 1 of 10.";
 
   const turnResult = await runPlannerTurn(
     systemPrompt,
@@ -167,15 +175,14 @@ export async function runEvalSuite(cases: EvalCase[]): Promise<EvalRunSummary> {
 
   const totalCases = results.length;
   const dispositionMatchCount = results.filter((r) => r.scores.dispositionMatch).length;
-  const avgConfidenceDelta = totalCases > 0
-    ? results.reduce((sum, r) => sum + r.scores.confidenceDelta, 0) / totalCases
-    : 0;
-  const avgActionSetOverlap = totalCases > 0
-    ? results.reduce((sum, r) => sum + r.scores.actionSetOverlap, 0) / totalCases
-    : 0;
-  const avgComposite = totalCases > 0
-    ? results.reduce((sum, r) => sum + r.scores.composite, 0) / totalCases
-    : 0;
+  const avgConfidenceDelta =
+    totalCases > 0 ? results.reduce((sum, r) => sum + r.scores.confidenceDelta, 0) / totalCases : 0;
+  const avgActionSetOverlap =
+    totalCases > 0
+      ? results.reduce((sum, r) => sum + r.scores.actionSetOverlap, 0) / totalCases
+      : 0;
+  const avgComposite =
+    totalCases > 0 ? results.reduce((sum, r) => sum + r.scores.composite, 0) / totalCases : 0;
 
   return {
     totalCases,
