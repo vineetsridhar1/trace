@@ -209,7 +209,9 @@ export function SessionStream({
   if (!loading && nodes.length === 0 && error && agentStatus !== "not_started") {
     return <SessionStreamError error={error} onRetry={() => void fetchEvents()} />;
   }
-  if (!loading && nodes.length === 0) return <SessionStreamEmpty agentStatus={agentStatus} />;
+  if (!loading && nodes.length === 0) {
+    return <SessionStreamEmpty agentStatus={agentStatus} bottomInset={bottomInset} />;
+  }
 
   const disconnected = connection?.state === "disconnected";
 
