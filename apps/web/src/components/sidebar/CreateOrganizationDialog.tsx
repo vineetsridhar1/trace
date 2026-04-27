@@ -19,9 +19,6 @@ import { Input } from "../ui/input";
 const CREATE_ORGANIZATION = `
   mutation CreateOrganization($input: CreateOrganizationInput!) {
     createOrganization(input: $input) {
-      organizationId
-      role
-      joinedAt
       organization {
         id
         name
@@ -31,7 +28,9 @@ const CREATE_ORGANIZATION = `
 `;
 
 type CreatedOrgMembership = {
-  organizationId: string;
+  organization: {
+    id: string;
+  };
 };
 
 export function CreateOrganizationDialog({ trigger }: { trigger?: ReactElement }) {
@@ -66,8 +65,8 @@ export function CreateOrganizationDialog({ trigger }: { trigger?: ReactElement }
 
       const membership = result.data?.createOrganization as CreatedOrgMembership | undefined;
       await fetchMe();
-      if (membership?.organizationId) {
-        setActiveOrg(membership.organizationId);
+      if (membership?.organization.id) {
+        setActiveOrg(membership.organization.id);
       }
 
       setName("");

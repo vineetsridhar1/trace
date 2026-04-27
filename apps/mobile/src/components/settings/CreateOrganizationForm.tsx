@@ -10,7 +10,6 @@ import { useTheme } from "@/theme";
 const CREATE_ORGANIZATION = `
   mutation MobileCreateOrganization($input: CreateOrganizationInput!) {
     createOrganization(input: $input) {
-      organizationId
       organization {
         id
         name
@@ -20,7 +19,9 @@ const CREATE_ORGANIZATION = `
 `;
 
 type CreatedOrgMembership = {
-  organizationId: string;
+  organization: {
+    id: string;
+  };
 };
 
 interface CreateOrganizationFormProps {
@@ -59,8 +60,8 @@ export function CreateOrganizationForm({ onCreated }: CreateOrganizationFormProp
 
       const membership = result.data?.createOrganization as CreatedOrgMembership | undefined;
       await fetchMe();
-      if (membership?.organizationId) {
-        setActiveOrg(membership.organizationId);
+      if (membership?.organization.id) {
+        setActiveOrg(membership.organization.id);
         recreateClient();
         useEntityStore.getState().reset();
         useMobileUIStore.getState().reset();
