@@ -1,13 +1,13 @@
 import type { SessionGroupRow } from "./sessions-table-types";
-import { getSessionRepo } from "./session-cell-data";
+import { getSessionBranch, getSessionRepo } from "./session-cell-data";
 
 export function SessionRepoCell({ row }: { row?: SessionGroupRow }) {
   const repo = getSessionRepo(row);
-  const slug = row?.slug;
+  const branch = getSessionBranch(row);
 
-  if (!repo && !slug) return null;
+  if (!repo && !branch) return null;
 
-  const text = repo && slug ? `${repo.name} / ${slug}` : repo ? repo.name : slug;
+  const text = repo && branch ? `${repo.name} / ${branch}` : repo ? repo.name : branch;
 
   return <span className="truncate text-xs text-muted-foreground">{text}</span>;
 }

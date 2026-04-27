@@ -10,6 +10,7 @@ import { sessionService } from "../services/session.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { terminalRelay } from "./terminal-relay.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
+import { prisma } from "./db.js";
 
 /** Grace period before marking sessions disconnected — allows fast reconnects */
 const DISCONNECT_GRACE_MS = 10_000;
@@ -24,7 +25,14 @@ type LocalBridgeAuth = {
   instanceId: string;
 };
 
-type BridgeAuth = { kind: "cloud" } | LocalBridgeAuth;
+type CloudBridgeAuth = {
+  kind: "cloud";
+  userId: string;
+  organizationId: string;
+  instanceId: string;
+};
+
+type BridgeAuth = CloudBridgeAuth | LocalBridgeAuth;
 
 export type BridgeConnectionRequest = {
   bridgeAuth?: BridgeAuth;
@@ -67,6 +75,53 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
     queues.set(sessionId, next);
   }
 
+  async function resolveSessionBoundToThisRuntime(sessionId: unknown): Promise<string | null> {
+    if (typeof sessionId !== "string" || !sessionId) return null;
+    const runtime = sessionRouter.getRuntimeForSession(sessionId);
+    if (runtime) {
+      const allowed = runtime.id === runtimeId && runtime.ws === ws;
+      if (!allowed) {
+        runtimeDebug("bridge ignored message for session bound to another runtime", {
+          runtimeId,
+          sessionId,
+          boundRuntimeId: runtime.id,
+        });
+      }
+      return allowed ? sessionId : null;
+    }
+
+    const persisted = await prisma.session.findFirst({
+      where: {
+        id: sessionId,
+        connection: { path: ["runtimeInstanceId"], equals: runtimeId },
+      },
+      select: { id: true },
+    });
+    if (!persisted) {
+      runtimeDebug("bridge ignored message for unbound session", {
+        runtimeId,
+        sessionId,
+      });
+      return null;
+    }
+
+    sessionRouter.bindSession(sessionId, runtimeId);
+    return sessionId;
+  }
+
+  function enqueueForBoundSession(
+    sessionId: unknown,
+    fn: (boundSessionId: string) => Promise<void>,
+  ): void {
+    void (async () => {
+      const boundSessionId = await resolveSessionBoundToThisRuntime(sessionId);
+      if (!boundSessionId) return;
+      enqueueEvent(boundSessionId, () => fn(boundSessionId));
+    })().catch((err: unknown) => {
+      console.error("[bridge] error authorizing session-scoped message:", err);
+    });
+  }
+
   ws.on("message", (raw: Buffer | string) => {
     try {
       const msg = JSON.parse(raw.toString());
@@ -93,7 +148,15 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             authKind: bridgeAuth?.kind ?? "unknown",
           });
 
-          if (bridgeAuth?.kind === "local") {
+          if (!bridgeAuth) {
+            runtimeDebug("bridge auth rejected runtime_hello without auth", {
+              receivedInstanceId: newId,
+            });
+            ws.close(1008, "Bridge auth required");
+            return;
+          }
+
+          if (bridgeAuth.kind === "local") {
             if (newId !== bridgeAuth.instanceId) {
               runtimeDebug("bridge auth rejected runtime_hello instance mismatch", {
                 expectedInstanceId: bridgeAuth.instanceId,
@@ -141,7 +204,17 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               });
               existingRuntime.ws.close();
             }
-          } else {
+          } else if (bridgeAuth.kind === "cloud") {
+            if (newId !== bridgeAuth.instanceId || hostingMode !== "cloud") {
+              runtimeDebug("cloud bridge auth rejected runtime_hello mismatch", {
+                expectedInstanceId: bridgeAuth.instanceId,
+                receivedInstanceId: newId,
+                receivedHostingMode: hostingMode,
+              });
+              ws.close(1008, "Bridge auth mismatch");
+              return;
+            }
+
             if (registered && oldId !== newId) {
               sessionRouter.unregisterRuntime(oldId, ws);
             }
@@ -152,7 +225,9 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               id: runtimeId,
               label: (msg.label as string) ?? runtimeId,
               ws,
-              hostingMode,
+              hostingMode: "cloud",
+              organizationId: bridgeAuth.organizationId,
+              ownerUserId: bridgeAuth.userId,
               supportedTools,
               registeredRepoIds,
             });
@@ -215,7 +290,16 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       }
 
       if (msg.type === "runtime_heartbeat") {
+        if (!registered) return;
         sessionRouter.recordHeartbeat(runtimeId, ws);
+        return;
+      }
+
+      if (!registered) {
+        runtimeDebug("bridge ignored message before runtime registration", {
+          provisionalRuntimeId: runtimeId,
+          messageType: typeof msg.type === "string" ? msg.type : "unknown",
+        });
         return;
       }
 
@@ -232,6 +316,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         sessionRouter.resolveLinkedCheckoutStatusRequest(
           msg.requestId,
           msg.status as BridgeLinkedCheckoutStatus,
+          runtimeId,
         );
         return;
       }
@@ -240,6 +325,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         sessionRouter.resolveLinkedCheckoutActionRequest(
           msg.requestId,
           msg.result as BridgeLinkedCheckoutActionResultPayload,
+          runtimeId,
         );
         return;
       }
@@ -259,6 +345,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               })
             : undefined,
           typeof msg.error === "string" ? msg.error : undefined,
+          runtimeId,
         );
         return;
       }
@@ -275,6 +362,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           msg.requestId,
           branches,
           typeof msg.error === "string" ? msg.error : undefined,
+          runtimeId,
         );
         return;
       }
@@ -289,6 +377,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           msg.requestId,
           files,
           typeof msg.error === "string" ? msg.error : undefined,
+          runtimeId,
         );
         return;
       }
@@ -298,6 +387,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           msg.requestId,
           typeof msg.content === "string" ? msg.content : "",
           typeof msg.error === "string" ? msg.error : undefined,
+          runtimeId,
         );
         return;
       }
@@ -315,6 +405,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           msg.requestId,
           files,
           typeof msg.error === "string" ? msg.error : undefined,
+          runtimeId,
         );
         return;
       }
@@ -324,6 +415,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           msg.requestId,
           typeof msg.content === "string" ? msg.content : "",
           typeof msg.error === "string" ? msg.error : undefined,
+          runtimeId,
         );
         return;
       }
@@ -339,6 +431,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               }>)
             : [],
           typeof msg.error === "string" ? msg.error : undefined,
+          runtimeId,
         );
         return;
       }
@@ -352,54 +445,59 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       ) {
         terminalRelay.relayFromBridge(
           msg as { type: string; terminalId: string; [key: string]: unknown },
+          runtimeId,
         );
         return;
       }
 
       if (msg.type === "session_output" && msg.sessionId) {
-        const sessionId = msg.sessionId as string;
         const data = (msg.data ?? {}) as Record<string, unknown>;
 
-        enqueueEvent(sessionId, async () => {
+        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
           await sessionService.recordOutput(sessionId, data);
         });
       } else if (msg.type === "session_complete" && msg.sessionId) {
-        enqueueEvent(msg.sessionId, async () => {
-          await sessionService.complete(msg.sessionId);
+        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
+          await sessionService.complete(sessionId);
         });
       } else if (msg.type === "workspace_ready" && msg.sessionId) {
-        enqueueEvent(msg.sessionId, async () => {
+        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
           await sessionService.workspaceReady(
-            msg.sessionId,
+            sessionId,
             msg.workdir as string,
             msg.branch as string | undefined,
             msg.slug as string | undefined,
           );
         });
       } else if (msg.type === "workspace_failed" && msg.sessionId) {
-        enqueueEvent(msg.sessionId, async () => {
+        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
           await sessionService.workspaceFailed(
-            msg.sessionId,
+            sessionId,
             (msg.error as string) ?? "Unknown error",
           );
         });
       } else if (msg.type === "register_session" && msg.sessionId) {
-        runtimeDebug("received register_session", { runtimeId, sessionId: msg.sessionId });
-        sessionRouter.bindSession(msg.sessionId, runtimeId);
+        void (async () => {
+          const sessionId = await resolveSessionBoundToThisRuntime(msg.sessionId);
+          if (!sessionId) return;
+          runtimeDebug("received register_session", { runtimeId, sessionId });
+          sessionRouter.bindSession(sessionId, runtimeId);
+        })().catch((err: unknown) => {
+          console.error("[bridge] error authorizing register_session:", err);
+        });
       } else if (msg.type === "tool_session_id" && msg.sessionId && msg.toolSessionId) {
-        enqueueEvent(msg.sessionId, async () => {
-          await sessionService.storeToolSessionId(
-            msg.sessionId as string,
-            msg.toolSessionId as string,
-          );
+        const toolSessionId = msg.toolSessionId as string;
+        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
+          await sessionService.storeToolSessionId(sessionId, toolSessionId);
         });
       } else if (msg.type === "tool_session_missing" && msg.sessionId && msg.toolSessionId) {
         const imageUrls = Array.isArray(msg.imageUrls)
           ? (msg.imageUrls as unknown[]).filter((url): url is string => typeof url === "string")
           : undefined;
-        enqueueEvent(msg.sessionId, async () => {
-          await sessionService.recoverMissingToolSession(msg.sessionId as string, {
-            toolSessionId: msg.toolSessionId as string,
+        const toolSessionId = msg.toolSessionId as string;
+        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
+          await sessionService.recoverMissingToolSession(sessionId, {
+            toolSessionId,
             message: typeof msg.message === "string" ? msg.message : undefined,
             interactionMode:
               typeof msg.interactionMode === "string" ? msg.interactionMode : undefined,
@@ -413,8 +511,9 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           });
         });
       } else if (msg.type === "git_checkpoint" && msg.sessionId && msg.checkpoint) {
-        enqueueEvent(msg.sessionId, async () => {
-          await sessionService.recordGitCheckpoint(msg.sessionId as string, msg.checkpoint);
+        const checkpoint = msg.checkpoint;
+        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
+          await sessionService.recordGitCheckpoint(sessionId, checkpoint);
         });
       }
     } catch (err) {

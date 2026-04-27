@@ -52,7 +52,7 @@ export function UserMenu() {
           </button>
         )}
         <button
-          onClick={logout}
+          onClick={() => void logout()}
           className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive transition-colors hover:bg-surface-hover"
         >
           <LogOut size={16} />

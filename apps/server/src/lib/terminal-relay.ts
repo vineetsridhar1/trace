@@ -508,9 +508,13 @@ class TerminalRelay {
   }
 
   /** Forward a message from the bridge to the attached frontend WebSocket. */
-  relayFromBridge(msg: { type: string; terminalId: string; [key: string]: unknown }): void {
+  relayFromBridge(
+    msg: { type: string; terminalId: string; [key: string]: unknown },
+    sourceRuntimeInstanceId?: string,
+  ): void {
     const entry = this.terminals.get(msg.terminalId);
     if (!entry) return;
+    if (sourceRuntimeInstanceId && entry.runtimeInstanceId !== sourceRuntimeInstanceId) return;
 
     // Accumulate output into the scrollback ring buffer
     if (msg.type === "terminal_output") {

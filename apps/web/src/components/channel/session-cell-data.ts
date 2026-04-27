@@ -17,6 +17,11 @@ export function getSessionCreatedBy(data: SessionGroupRow | undefined): CreatedB
   return (data.createdBySession?.createdBy as CreatedByRef | undefined) ?? null;
 }
 
+export function getSessionBranch(data: SessionGroupRow | undefined): string | null {
+  if (!data) return null;
+  return data.latestSession?.branch ?? data.branch ?? data.slug ?? null;
+}
+
 export function getSessionLastActivityAt(data: SessionGroupRow | undefined): string | undefined {
   return data?._groupLastMessageAt ?? data?.updatedAt ?? data?.createdAt;
 }

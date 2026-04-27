@@ -12,6 +12,7 @@ export function sessionIdFromNotificationLink(deepLink: string): string | null {
 }
 
 export function routePathFromNotificationLink(deepLink: string): string | null {
+  if (deepLink.startsWith("/m/")) return notificationRoute(deepLink.slice(2));
   if (deepLink.startsWith("/")) return notificationRoute(deepLink);
 
   try {

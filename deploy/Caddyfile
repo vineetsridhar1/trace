@@ -2,8 +2,12 @@ gettrace.org, www.gettrace.org {
 	encode zstd gzip
 
 	@backend path /auth* /graphql* /uploads* /webhooks/github* /ws* /bridge* /terminal* /health
+	@apple_app_site_association path /.well-known/apple-app-site-association /apple-app-site-association
 
 	handle @backend {
+		reverse_proxy backend:4000
+	}
+	handle @apple_app_site_association {
 		reverse_proxy backend:4000
 	}
 	handle {

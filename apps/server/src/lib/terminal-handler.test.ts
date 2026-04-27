@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   getTerminalAuthContext: vi.fn(() => null),
   attachFrontend: vi.fn(() => true),
   detachAllForFrontend: vi.fn(),
+  relayFromFrontend: vi.fn(),
+  assertAccess: vi.fn(),
 }));
 
 vi.mock("./auth.js", () => ({
@@ -20,6 +22,7 @@ vi.mock("./terminal-relay.js", () => ({
     getTerminalAuthContext: mocks.getTerminalAuthContext,
     attachFrontend: mocks.attachFrontend,
     detachAllForFrontend: mocks.detachAllForFrontend,
+    relayFromFrontend: mocks.relayFromFrontend,
   },
 }));
 
@@ -39,12 +42,13 @@ vi.mock("./db.js", () => ({
 
 vi.mock("../services/runtime-access.js", () => ({
   runtimeAccessService: {
-    assertAccess: vi.fn(),
+    assertAccess: mocks.assertAccess,
   },
 }));
 
 import { handleTerminalConnection } from "./terminal-handler.js";
 import { prisma } from "./db.js";
+import { AuthorizationError } from "./errors.js";
 
 const prismaMock = prisma as unknown as {
   user: { findUnique: ReturnType<typeof vi.fn> };
@@ -77,6 +81,7 @@ describe("terminal handler auth", () => {
     mocks.parseCookieToken.mockReturnValue(undefined);
     mocks.authenticateAccessToken.mockResolvedValue({ kind: "session", userId: "user-1" });
     mocks.attachFrontend.mockReturnValue(true);
+    mocks.assertAccess.mockResolvedValue(undefined);
     prismaMock.user.findUnique.mockResolvedValue({ id: "user-1" });
   });
 
@@ -135,5 +140,43 @@ describe("terminal handler auth", () => {
     );
     expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
     expect(mocks.attachFrontend).not.toHaveBeenCalled();
+  });
+
+  it("revalidates terminal capability before forwarding input after attach", async () => {
+    mocks.getTerminalAuthContext.mockReturnValue({
+      kind: "session",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      runtimeInstanceId: "runtime-1",
+      ownerUserId: "user-1",
+    });
+    prismaMock.session.findFirst.mockResolvedValue({
+      id: "session-1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+    });
+    mocks.assertAccess
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new AuthorizationError("revoked"));
+    const ws = createMockWs();
+
+    handleTerminalConnection(ws as never, {
+      headers: {},
+      url: "/terminal?token=session-token",
+      socket: { remoteAddress: "127.0.0.1" },
+    });
+    await Promise.resolve();
+    ws.emitMessage({ type: "attach", terminalId: "term-1" });
+    await Promise.resolve();
+    await Promise.resolve();
+    ws.emitMessage({ type: "input", data: "whoami\n" });
+
+    await vi.waitFor(() => {
+      expect(ws.send).toHaveBeenCalledWith(
+        JSON.stringify({ type: "error", message: "Access denied" }),
+      );
+    });
+    expect(mocks.relayFromFrontend).not.toHaveBeenCalled();
+    expect(ws.close).toHaveBeenCalledWith(1008, "Access denied");
   });
 });

@@ -295,19 +295,42 @@ export class CloudMachineService {
    * Validate a bridge token for WebSocket auth.
    */
   async isValidBridgeToken(token: string): Promise<boolean> {
-    if (this.validBridgeTokens.has(token)) return true;
+    return (await this.authenticateBridgeToken(token)) !== null;
+  }
 
+  /**
+   * Authenticate a cloud bridge token and return the runtime identity it is
+   * allowed to announce. The /bridge handshake must bind runtime_hello to this
+   * value; otherwise any valid cloud bridge token could claim another cloud
+   * machine runtime ID.
+   */
+  async authenticateBridgeToken(token: string): Promise<{
+    runtimeInstanceId: string;
+    organizationId: string;
+    userId: string;
+  } | null> {
     // DB fallback for server restarts
     const machine = await prisma.cloudMachine.findUnique({
       where: { bridgeToken: token },
+      select: {
+        status: true,
+        bridgeToken: true,
+        runtimeInstanceId: true,
+        organizationId: true,
+        userId: true,
+      },
     });
 
     if (machine && machine.status !== "destroyed") {
       this.validBridgeTokens.add(token);
-      return true;
+      return {
+        runtimeInstanceId: machine.runtimeInstanceId,
+        organizationId: machine.organizationId,
+        userId: machine.userId,
+      };
     }
 
-    return false;
+    return null;
   }
 
   /**

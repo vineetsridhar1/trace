@@ -36,6 +36,7 @@ import {
   isCorsOriginAllowed,
   readHeaderValue,
 } from "./lib/cors.js";
+import { buildAppleAppSiteAssociation } from "./lib/apple-app-site-association.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -67,6 +68,19 @@ async function main() {
   app.get("/health", (_req: express.Request, res: express.Response) => {
     res.json({ status: "ok", ready: startupReady });
   });
+
+  const appleTeamId = process.env.APPLE_TEAM_ID?.trim();
+  const sendAppleAppSiteAssociation = (_req: express.Request, res: express.Response) => {
+    if (!appleTeamId) {
+      res.status(404).json({ error: "APPLE_TEAM_ID is not configured" });
+      return;
+    }
+    res.type("application/json");
+    res.set("Cache-Control", "public, max-age=300");
+    res.send(buildAppleAppSiteAssociation(appleTeamId));
+  };
+  app.get("/.well-known/apple-app-site-association", sendAppleAppSiteAssociation);
+  app.get("/apple-app-site-association", sendAppleAppSiteAssociation);
 
   // Initialize cloud machine service and inject into session router
   const cloudMachineService = localMode ? null : new CloudMachineService(flyProvider, "fly");
@@ -214,11 +228,17 @@ async function main() {
             rejectUpgrade(401, "Unauthorized");
             return;
           }
-          if (!(await cloudMachineService.isValidBridgeToken(cloudToken))) {
+          const cloudBridge = await cloudMachineService.authenticateBridgeToken(cloudToken);
+          if (!cloudBridge) {
             rejectUpgrade(401, "Unauthorized");
             return;
           }
-          bridgeReq.bridgeAuth = { kind: "cloud" };
+          bridgeReq.bridgeAuth = {
+            kind: "cloud",
+            instanceId: cloudBridge.runtimeInstanceId,
+            organizationId: cloudBridge.organizationId,
+            userId: cloudBridge.userId,
+          };
         } else if (bridgeAuthToken) {
           const payload = verifyBridgeAuthToken(bridgeAuthToken);
           if (!payload) {

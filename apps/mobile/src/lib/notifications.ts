@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import { AppState, Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
-import { type Href, useRouter } from "expo-router";
 import {
   REGISTER_PUSH_TOKEN_MUTATION,
   UNREGISTER_PUSH_TOKEN_MUTATION,
@@ -13,7 +12,6 @@ import {
 } from "@trace/client-core";
 import {
   deepLinkFromNotificationData,
-  routePathFromNotificationLink,
   sessionIdFromNotificationLink,
 } from "@/lib/notification-deeplink";
 import {
@@ -43,7 +41,10 @@ function selectNeedsInputCount(state: EntityState): number {
 
 function projectId(): string | null {
   const extra = Constants.expoConfig?.extra as { eas?: { projectId?: unknown } } | undefined;
-  const configured = extra?.eas?.projectId ?? Constants.easConfig?.projectId ?? process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
+  const configured =
+    extra?.eas?.projectId ??
+    Constants.easConfig?.projectId ??
+    process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
   return typeof configured === "string" && configured.length > 0 ? configured : null;
 }
 
@@ -70,7 +71,11 @@ export async function ensureRegistered(): Promise<void> {
 
   const token = (await Notifications.getExpoPushTokenAsync({ projectId: id })).data;
   const previous = await readPushRegistration();
-  if (previous?.token === token && previous.userId === user?.id && previous.organizationId === activeOrgId) {
+  if (
+    previous?.token === token &&
+    previous.userId === user?.id &&
+    previous.organizationId === activeOrgId
+  ) {
     return;
   }
   if (previous?.token && previous.token !== token) {
@@ -114,21 +119,11 @@ export async function dismissNotificationsForSession(sessionId: string): Promise
 }
 
 export function useRegisterPushToken(): void {
-  const router = useRouter();
   const user = useAuthStore((s: AuthState) => s.user);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const needsInputCount = useEntityStore(selectNeedsInputCount);
   const previousAuthed = useRef(false);
   const previousOrgId = useRef<string | null>(null);
-
-  useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const deepLink = deepLinkFromNotificationData(response.notification.request.content.data);
-      const path = deepLink ? routePathFromNotificationLink(deepLink) : null;
-      if (path) router.push(path as Href);
-    });
-    return () => sub.remove();
-  }, [router]);
 
   useEffect(() => {
     const authed = Boolean(user && activeOrgId);

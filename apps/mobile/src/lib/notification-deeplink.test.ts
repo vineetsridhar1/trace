@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { routePathFromNotificationLink, sessionIdFromNotificationLink } from "./notification-deeplink";
+import {
+  routePathFromNotificationLink,
+  sessionIdFromNotificationLink,
+} from "./notification-deeplink";
 
 describe("routePathFromNotificationLink", () => {
   it("normalizes Trace custom-scheme session links", () => {
@@ -17,6 +20,10 @@ describe("routePathFromNotificationLink", () => {
     expect(routePathFromNotificationLink("https://gettrace.org/m/connections")).toBe(
       "/(connections)",
     );
+  });
+
+  it("normalizes native app-link paths", () => {
+    expect(routePathFromNotificationLink("/m/sessions/g1/s1")).toBe("/sessions/g1/s1");
   });
 
   it("rejects unsupported external links", () => {
