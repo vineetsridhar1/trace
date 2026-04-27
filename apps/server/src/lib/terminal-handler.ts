@@ -42,6 +42,7 @@ export function handleTerminalConnection(
   let attachPending = false;
   let authReady = false;
   let userId: string | null = null;
+  let commandQueue = Promise.resolve();
 
   // Authenticate from query param (preferred) or cookie fallback
   const url = new URL(req.url ?? "", "http://localhost");
@@ -78,20 +79,98 @@ export function handleTerminalConnection(
     while (pendingMessages.length > 0 && authReady && !attachPending) {
       const msg = pendingMessages.shift();
       if (!msg) return;
-      handleMessage(msg);
+      enqueueMessage(msg);
     }
   }
 
-  function handleMessage(msg: { type: string; [key: string]: unknown }): void {
+  function enqueueMessage(msg: { type: string; [key: string]: unknown }): void {
+    commandQueue = commandQueue
+      .then(() => handleMessage(msg))
+      .catch((err: unknown) => {
+        console.error("[terminal-handler] error handling queued terminal message:", err);
+      });
+  }
+
+  async function assertCurrentTerminalAccess(terminalId: string): Promise<boolean> {
+    const denyCurrentCommand = (): false => {
+      ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
+      ws.close(1008, "Access denied");
+      return false;
+    };
+
+    const authContext = terminalRelay.getTerminalAuthContext(terminalId);
+    if (!authContext || !userId || authContext.ownerUserId !== userId) {
+      return denyCurrentCommand();
+    }
+
+    if (authContext.kind === "session") {
+      const session = await prisma.session.findFirst({
+        where: {
+          id: authContext.sessionId,
+          organization: { orgMembers: { some: { userId } } },
+        },
+        select: {
+          organizationId: true,
+          sessionGroupId: true,
+        },
+      });
+      if (!session) {
+        return denyCurrentCommand();
+      }
+      try {
+        await runtimeAccessService.assertAccess({
+          userId,
+          organizationId: session.organizationId,
+          runtimeInstanceId: authContext.runtimeInstanceId,
+          sessionGroupId: session.sessionGroupId,
+          capability: "terminal",
+        });
+      } catch (err) {
+        if (!(err instanceof AuthorizationError)) throw err;
+        return denyCurrentCommand();
+      }
+      return true;
+    }
+
+    const channel = await prisma.channel.findFirst({
+      where: {
+        id: authContext.channelId,
+        organizationId: authContext.organizationId,
+        members: { some: { userId } },
+      },
+      select: { organizationId: true },
+    });
+    if (!channel) {
+      return denyCurrentCommand();
+    }
+    try {
+      await runtimeAccessService.assertAccess({
+        userId,
+        organizationId: channel.organizationId,
+        runtimeInstanceId: authContext.runtimeInstanceId,
+        capability: "terminal",
+      });
+    } catch (err) {
+      if (!(err instanceof AuthorizationError)) throw err;
+      return denyCurrentCommand();
+    }
+    return true;
+  }
+
+  async function handleMessage(msg: { type: string; [key: string]: unknown }): Promise<void> {
     switch (msg.type) {
       case "input": {
-        if (!attachedTerminalId) return;
-        terminalRelay.relayFromFrontend(attachedTerminalId, "input", { data: msg.data as string });
+        const terminalId = attachedTerminalId;
+        if (!terminalId) return;
+        if (!(await assertCurrentTerminalAccess(terminalId))) return;
+        terminalRelay.relayFromFrontend(terminalId, "input", { data: msg.data as string });
         break;
       }
       case "resize": {
-        if (!attachedTerminalId) return;
-        terminalRelay.relayFromFrontend(attachedTerminalId, "resize", {
+        const terminalId = attachedTerminalId;
+        if (!terminalId) return;
+        if (!(await assertCurrentTerminalAccess(terminalId))) return;
+        terminalRelay.relayFromFrontend(terminalId, "resize", {
           cols: msg.cols as number,
           rows: msg.rows as number,
         });
@@ -224,7 +303,7 @@ export function handleTerminalConnection(
         return;
       }
 
-      handleMessage(msg);
+      enqueueMessage(msg);
     } catch (err) {
       console.error("[terminal-handler] error handling message:", err);
     }
