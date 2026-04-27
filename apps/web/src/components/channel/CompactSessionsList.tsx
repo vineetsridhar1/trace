@@ -5,7 +5,7 @@ import { sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus
 import { AgentStatusIcon } from "../session/AgentStatusIcon";
 import { timeAgo, cn } from "../../lib/utils";
 import type { SessionGroupRow } from "./sessions-table-types";
-import { collapsedByDefault, sessionStatusGroupOrder } from "./sessions-table-types";
+import { sessionStatusGroupOrder } from "./sessions-table-types";
 import { getSessionLastActivityAt } from "./session-cell-data";
 
 function CompactSessionRow({
@@ -86,10 +86,9 @@ export function CompactSessionsList({
               <span className="text-xs font-semibold">{label}</span>
               <span className="text-xs text-muted-foreground">{items.length}</span>
             </div>
-            {!collapsedByDefault.has(status) &&
-              items.map((row: SessionGroupRow) => (
-                <CompactSessionRow key={row.id} row={row} channelId={channelId} status={status} />
-              ))}
+            {items.map((row: SessionGroupRow) => (
+              <CompactSessionRow key={row.id} row={row} channelId={channelId} status={status} />
+            ))}
           </div>
         );
       })}
