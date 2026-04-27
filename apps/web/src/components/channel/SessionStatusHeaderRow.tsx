@@ -10,7 +10,7 @@ export function SessionStatusHeaderRow({
   const Icon = row._expanded ? ChevronDown : ChevronRight;
 
   return (
-    <div className="flex h-full w-full items-center gap-2 bg-surface-mid px-3">
+    <div className="flex h-full w-full cursor-pointer items-center gap-2 bg-surface-mid px-3">
       <Icon size={14} className="text-muted-foreground" />
       <SessionStatusGroupLabel count={row._count} status={row._status} />
     </div>
