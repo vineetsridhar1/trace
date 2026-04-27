@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import {
+  Keyboard,
+  Platform,
+  StyleSheet,
+  View,
+  type KeyboardEvent,
+  type LayoutChangeEvent,
+} from "react-native";
 import { Asset } from "expo-asset";
 import { File } from "expo-file-system";
 import {
@@ -83,6 +90,7 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
   const [terminalId, setTerminalId] = useState<string | null>(null);
   const [status, setStatus] = useState<TerminalViewStatus>("loading");
   const [message, setMessage] = useState<string | null>(null);
+  const [keyboardInset, setKeyboardInset] = useState(0);
 
   const terminalHtml = useMemo(
     () =>
@@ -246,6 +254,32 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
   }, [webReady]);
 
   useEffect(() => {
+    const getKeyboardInset = (event: KeyboardEvent) => Math.max(0, event.endCoordinates.height);
+    const handleShow = (event: KeyboardEvent) => {
+      setKeyboardInset(getKeyboardInset(event));
+    };
+    const handleHide = () => {
+      setKeyboardInset(0);
+    };
+    const handleChangeFrame = (event: KeyboardEvent) => {
+      setKeyboardInset(getKeyboardInset(event));
+    };
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const show = Keyboard.addListener(showEvent, handleShow);
+    const hide = Keyboard.addListener(hideEvent, handleHide);
+    const changeFrame =
+      Platform.OS === "ios"
+        ? Keyboard.addListener("keyboardWillChangeFrame", handleChangeFrame)
+        : null;
+    return () => {
+      show.remove();
+      hide.remove();
+      changeFrame?.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     if (bridgeLocked) return;
     mountedRef.current = true;
     setWebReady(false);
@@ -353,7 +387,12 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
+    <View
+      style={[
+        styles.root,
+        { backgroundColor: theme.colors.background, paddingBottom: keyboardInset },
+      ]}
+    >
       <View
         style={[
           styles.toolbar,
