@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { Check, ChevronRight, Circle, GitBranch, Github, Hash, Key } from "lucide-react";
+import { Check, ChevronRight, Circle, GitBranch, Hash, Play } from "lucide-react";
 import { motion } from "framer-motion";
 import { useUIStore, type UIState } from "../../stores/ui";
 import type { OnboardingStatus } from "../../hooks/useOnboardingStatus";
 import { BrowseChannelsDialog } from "../sidebar/BrowseChannelsDialog";
 import { CreateChannelDialog } from "../sidebar/CreateChannelDialog";
-import { isLocalMode } from "../../lib/runtime-mode";
+import { createQuickSession } from "../../lib/create-quick-session";
 
-type IconComponent = typeof Key;
+type IconComponent = typeof GitBranch;
 
 interface Props {
   status: OnboardingStatus;
@@ -34,24 +34,6 @@ export function OnboardingChecklist({ status }: Props) {
       </div>
 
       <div className="space-y-2">
-        {!isLocalMode && (
-          <SimpleRow
-            done={status.anthropicSet}
-            icon={Key}
-            title="Add your Anthropic API key"
-            description="Required to power Claude Code sessions."
-            onClick={() => openSettings("api-keys")}
-          />
-        )}
-        {!isLocalMode && (
-          <SimpleRow
-            done={status.githubSet}
-            icon={Github}
-            title="Add a GitHub token"
-            description="Used for repository access in cloud sessions."
-            onClick={() => openSettings("api-keys")}
-          />
-        )}
         <SimpleRow
           done={status.hasRepo}
           icon={GitBranch}
@@ -64,6 +46,20 @@ export function OnboardingChecklist({ status }: Props) {
           done={status.hasChannel}
           onBrowseClick={() => setBrowseOpen(true)}
           onCreateClick={() => setCreateOpen(true)}
+        />
+
+        <SimpleRow
+          done={status.hasSession}
+          icon={Play}
+          title="Create your first session"
+          description="Start a local coding session from a channel."
+          onClick={() => {
+            if (status.firstCodingChannelId) {
+              void createQuickSession(status.firstCodingChannelId);
+              return;
+            }
+            setCreateOpen(true);
+          }}
         />
       </div>
 

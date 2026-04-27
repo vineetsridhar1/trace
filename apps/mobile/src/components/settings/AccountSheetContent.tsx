@@ -23,10 +23,7 @@ export function AccountSheetContent() {
   const activeOrg = memberships.find((m) => m.organizationId === activeOrgId);
   const userName = user?.name ?? user?.email ?? "Trace user";
   const userEmail = user?.email ?? "Signed in";
-  const canSwitchOrganizations = memberships.length > 1;
-
   function openOrgSwitcher() {
-    if (!canSwitchOrganizations) return;
     router.push("/sheets/org-switcher");
   }
 
@@ -85,8 +82,8 @@ export function AccountSheetContent() {
         <ListRow
           title="Active organization"
           subtitle={activeOrg?.organization.name ?? "No active organization"}
-          disclosureIndicator={canSwitchOrganizations}
-          onPress={canSwitchOrganizations ? openOrgSwitcher : undefined}
+          disclosureIndicator
+          onPress={openOrgSwitcher}
           separator={__DEV__}
         />
         {__DEV__ ? (

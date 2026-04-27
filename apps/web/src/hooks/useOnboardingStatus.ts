@@ -2,14 +2,13 @@ import { useEffect } from "react";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { useEntityStore } from "@trace/client-core";
 import { useOnboardingStore } from "../stores/onboarding";
-import { isLocalMode } from "../lib/runtime-mode";
 
 export interface OnboardingStatus {
   loading: boolean;
-  anthropicSet: boolean;
-  githubSet: boolean;
   hasRepo: boolean;
   hasChannel: boolean;
+  hasSession: boolean;
+  firstCodingChannelId: string | null;
   allDone: boolean;
   completedCount: number;
   totalCount: number;
@@ -17,23 +16,19 @@ export interface OnboardingStatus {
 
 export function useOnboardingStatus(): OnboardingStatus {
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
-  const anthropicSet = useOnboardingStore((s) => s.anthropicSet);
-  const githubSet = useOnboardingStore((s) => s.githubSet);
-  const tokensLoaded = useOnboardingStore((s) => s.tokensLoaded);
-  const tokensLoading = useOnboardingStore((s) => s.tokensLoading);
   const reposLoadedForOrg = useOnboardingStore((s) => s.reposLoadedForOrg);
   const repoCount = useOnboardingStore((s) => s.repoCount);
-  const fetchApiTokens = useOnboardingStore((s) => s.fetchApiTokens);
+  const sessionCount = useOnboardingStore((s) => s.sessionCount);
   const ensureReposLoaded = useOnboardingStore((s) => s.ensureReposLoaded);
 
   // Channels are populated by the org subscription (useOrgEvents) which is org-scoped,
   // so entity store channels reliably reflect the active org.
   const channelCount = useEntityStore((s) => Object.keys(s.channels).length);
-
-  useEffect(() => {
-    if (isLocalMode) return;
-    if (!tokensLoaded) void fetchApiTokens();
-  }, [tokensLoaded, fetchApiTokens]);
+  const firstCodingChannelId = useEntityStore((s) => {
+    const channel = Object.values(s.channels).find((item) => item.type === "coding");
+    return channel?.id ?? null;
+  });
+  const entitySessionCount = useEntityStore((s) => Object.keys(s.sessions).length);
 
   useEffect(() => {
     if (activeOrgId && reposLoadedForOrg !== activeOrgId) {
@@ -43,20 +38,17 @@ export function useOnboardingStatus(): OnboardingStatus {
 
   const hasRepo = repoCount > 0;
   const hasChannel = channelCount > 0;
-  const effectiveAnthropicSet = isLocalMode ? true : anthropicSet;
-  const effectiveGithubSet = isLocalMode ? true : githubSet;
-  const completedCount = isLocalMode
-    ? [hasRepo, hasChannel].filter(Boolean).length
-    : [effectiveAnthropicSet, effectiveGithubSet, hasRepo, hasChannel].filter(Boolean).length;
-  const totalCount = isLocalMode ? 2 : 4;
+  const hasSession = sessionCount > 0 || entitySessionCount > 0;
+  const completedCount = [hasRepo, hasChannel, hasSession].filter(Boolean).length;
+  const totalCount = 3;
   const allDone = completedCount === totalCount;
 
   return {
-    loading: isLocalMode ? false : tokensLoading && !tokensLoaded,
-    anthropicSet: effectiveAnthropicSet,
-    githubSet: effectiveGithubSet,
+    loading: false,
     hasRepo,
     hasChannel,
+    hasSession,
+    firstCodingChannelId,
     allDone,
     completedCount,
     totalCount,

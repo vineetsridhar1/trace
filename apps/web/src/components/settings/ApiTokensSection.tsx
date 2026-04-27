@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Key, Trash2, Check, Eye, EyeOff } from "lucide-react";
 import { useAuthStore } from "@trace/client-core";
-import { useOnboardingStore } from "../../stores/onboarding";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { Button } from "../ui/button";
@@ -41,25 +40,10 @@ interface TokenStatus {
 }
 
 const PROVIDER_META: Record<string, { label: string; placeholder: string; description: string }> = {
-  anthropic: {
-    label: "Anthropic (Claude)",
-    placeholder: "sk-ant-...",
-    description: "Used for Claude Code sessions",
-  },
-  openai: {
-    label: "OpenAI (Codex)",
-    placeholder: "sk-...",
-    description: "Used for Codex sessions",
-  },
   github: {
     label: "GitHub",
     placeholder: "ghp_...",
-    description: "Used for repository access in cloud sessions",
-  },
-  ssh_key: {
-    label: "SSH Key",
-    placeholder: "-----BEGIN OPENSSH PRIVATE KEY-----",
-    description: "Used for SSH-based repository access in cloud sessions",
+    description: "Used to register and remove repository webhooks",
   },
 };
 
@@ -95,14 +79,12 @@ export function ApiTokensSection() {
     setShowInput(false);
     // Refetch to get the updated state from the server
     fetchTokens();
-    void useOnboardingStore.getState().fetchApiTokens();
   }
 
   async function handleDelete(provider: string) {
     await client.mutation(DELETE_API_TOKEN, { provider }).toPromise();
     // Refetch to get the updated state from the server
     fetchTokens();
-    void useOnboardingStore.getState().fetchApiTokens();
   }
 
   return (
@@ -110,7 +92,7 @@ export function ApiTokensSection() {
       <div className="mb-4">
         <h2 className="text-base font-semibold text-foreground">API Keys</h2>
         <p className="text-sm text-muted-foreground">
-          Tokens are encrypted and injected into cloud sessions at startup.
+          Tokens are encrypted and used only for integrations that need them.
         </p>
       </div>
 

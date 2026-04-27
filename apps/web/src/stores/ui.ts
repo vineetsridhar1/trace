@@ -68,6 +68,7 @@ export interface UIState {
   markSessionDone: (sessionId: string) => void;
   sessionGroupDoneBadges: Record<string, boolean>;
   markSessionGroupDone: (sessionGroupId: string) => void;
+  resetForOrgSwitch: () => void;
   _restoreNav: (
     channelId: string | null,
     sessionGroupId: string | null,
@@ -91,21 +92,29 @@ export function buildPath(
 type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
 type GetState<T> = () => T;
 
-export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState<UIState>) => ({
-  activePage: "main",
-  activeChannelId: null,
-  activeChatId: null,
-  activeSessionGroupId: null,
-  activeSessionId: null,
-  activeTerminalId: null,
-  activeThreadId: null,
-  refreshTick: 0,
-  lastSelectedSessionIdsByGroup: {},
-  openSessionTabsByGroup: {},
-  channelSubPage: null,
-  settingsInitialTab: null,
-  setSettingsInitialTab: (tab: string | null) => set({ settingsInitialTab: tab }),
+const initialNavigationState = {
+  activePage: "main" as ActivePage,
+  activeChannelId: null as string | null,
+  activeChatId: null as string | null,
+  activeSessionGroupId: null as string | null,
+  activeSessionId: null as string | null,
+  activeTerminalId: null as string | null,
+  activeThreadId: null as string | null,
+  lastSelectedSessionIdsByGroup: {} as Record<string, string>,
+  openSessionTabsByGroup: {} as Record<string, string[]>,
+  channelSubPage: null as ChannelSubPage,
+  settingsInitialTab: null as string | null,
   showTerminalPanel: false,
+  unreadChatIds: {} as Record<string, boolean>,
+  channelDoneBadges: {} as Record<string, boolean>,
+  sessionDoneBadges: {} as Record<string, boolean>,
+  sessionGroupDoneBadges: {} as Record<string, boolean>,
+};
+
+export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState<UIState>) => ({
+  ...initialNavigationState,
+  refreshTick: 0,
+  setSettingsInitialTab: (tab: string | null) => set({ settingsInitialTab: tab }),
   setShowTerminalPanel: (show: boolean) => set({ showTerminalPanel: show }),
   setChannelSubPage: (subPage: ChannelSubPage) => {
     set({ channelSubPage: subPage });
@@ -119,11 +128,18 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
       subPage,
     );
   },
-  unreadChatIds: {},
-  channelDoneBadges: {},
-  sessionDoneBadges: {},
-  sessionGroupDoneBadges: {},
   triggerRefresh: () => set((s: UIState) => ({ refreshTick: s.refreshTick + 1 })),
+  resetForOrgSwitch: () => {
+    optimisticSessionRedirects.clear();
+    persistActiveChannelId(null);
+    persistActiveChatId(null);
+    persistActiveSessionNav(null, null);
+    replaceNav(null, null, null, "main");
+    set((s: UIState) => ({
+      ...initialNavigationState,
+      refreshTick: s.refreshTick + 1,
+    }));
+  },
 
   openSessionTab: (groupId: string, sessionId: string) => {
     set((s: UIState) => {

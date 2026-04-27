@@ -220,6 +220,7 @@ enum EventType {
   ticket_updated
   ticket_commented
   entity_linked
+  organization_created
   repo_created
   repo_updated
   channel_created
