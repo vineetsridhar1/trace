@@ -230,6 +230,8 @@ export function SessionRuntimePickerSheetContent({
       <Glass
         preset="card"
         interactive
+        glassStyleEffect="clear"
+        tint={theme.colors.glassTintLight}
         style={[styles.card, { borderColor: theme.colors.borderMuted }]}
       >
         {rows.map((row, index) => (
