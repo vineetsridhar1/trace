@@ -42,6 +42,8 @@
       ],
       "expo-secure-store",
       "expo-notifications",
+      "expo-asset",
+      "expo-web-browser",
       "react-native-bottom-tabs",
       [
         "expo-image-picker",
