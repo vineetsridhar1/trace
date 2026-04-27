@@ -10,6 +10,9 @@ import { prisma } from "../lib/db.js";
 import { PushNotificationService } from "./pushNotificationService.js";
 
 const prismaMock = prisma as unknown as {
+  event: {
+    findMany: ReturnType<typeof vi.fn>;
+  };
   session: {
     findUnique: ReturnType<typeof vi.fn>;
   };
@@ -58,6 +61,7 @@ describe("PushNotificationService", () => {
         platform: "ios",
       },
     ]);
+    prismaMock.event.findMany.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -69,7 +73,17 @@ describe("PushNotificationService", () => {
       createdById: "user-1",
       name: "Fix flaky CI",
       sessionGroupId: "group-1",
+      channel: { name: "mobile" },
     });
+    prismaMock.event.findMany.mockResolvedValue([
+      {
+        eventType: "session_output",
+        payload: {
+          type: "assistant",
+          message: { content: [{ type: "text", text: "Done. I updated the flaky CI check." }] },
+        },
+      },
+    ]);
 
     await new PushNotificationService().notifyForEvent(
       event({ payload: { agentStatus: "done", sessionStatus: "in_progress" } }),
@@ -86,8 +100,8 @@ describe("PushNotificationService", () => {
         {
           to: "ExponentPushToken[token-1]",
           title: "Fix flaky CI",
-          subtitle: "AI completed this session",
-          body: "Open Trace to review the latest response",
+          subtitle: "mobile",
+          body: "Done. I updated the flaky CI check.",
           data: { deepLink: "trace://sessions/group-1/session-1" },
         },
       ]),
@@ -99,6 +113,7 @@ describe("PushNotificationService", () => {
       createdById: "user-1",
       name: "Fix flaky CI",
       sessionGroupId: "group-1",
+      channel: { name: "mobile" },
     });
 
     await new PushNotificationService().notifyForEvent(
@@ -135,7 +150,19 @@ describe("PushNotificationService", () => {
       createdById: "user-1",
       name: "Fix flaky CI",
       sessionGroupId: "group-1",
+      channel: { name: "mobile" },
     });
+    prismaMock.event.findMany.mockResolvedValue([
+      {
+        eventType: "session_output",
+        payload: {
+          type: "assistant",
+          message: {
+            content: [{ type: "text", text: "I need clarification on which auth flow to keep." }],
+          },
+        },
+      },
+    ]);
 
     await new PushNotificationService().notifyForEvent(
       event({
@@ -151,8 +178,8 @@ describe("PushNotificationService", () => {
         {
           to: "ExponentPushToken[token-1]",
           title: "Fix flaky CI",
-          subtitle: "AI is awaiting your input",
-          body: "Open Trace to respond",
+          subtitle: "mobile",
+          body: "I need clarification on which auth flow to keep.",
           data: { deepLink: "trace://sessions/group-1/session-1" },
         },
       ]),

@@ -62,6 +62,36 @@ function bridgeAccessNotification(payload: unknown): {
   };
 }
 
+function truncatePreview(text: string, max = 140): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, max - 1).trimEnd()}…`;
+}
+
+function extractAssistantPreview(eventType: EventType, payload: unknown): string | null {
+  const data = asJsonObject(payload);
+  if (!data) return null;
+
+  if (eventType === "message_sent") {
+    return typeof data.text === "string" && data.text.trim() ? data.text : null;
+  }
+
+  if (eventType !== "session_output" || data.type !== "assistant") return null;
+
+  const message = asJsonObject(data.message);
+  const content = message?.content;
+  if (!Array.isArray(content)) return null;
+
+  for (const block of content) {
+    const candidate = asJsonObject(block);
+    if (candidate?.type === "text" && typeof candidate.text === "string" && candidate.text.trim()) {
+      return candidate.text;
+    }
+  }
+
+  return null;
+}
+
 function isNeedsInputOutput(eventType: EventType, payload: unknown): boolean {
   const data = asJsonObject(payload);
   if (eventType !== "session_output") return false;
@@ -78,8 +108,8 @@ function isCompletedTermination(payload: unknown): boolean {
 function completionNotification(sessionName: string, sessionGroupId: string, sessionId: string) {
   return {
     title: sessionName,
-    subtitle: "AI completed this session",
-    body: "Open Trace to review the latest response",
+    subtitle: "",
+    body: "AI completed this session",
     deepLink: `trace://sessions/${sessionGroupId}/${sessionId}`,
   } satisfies NotificationContent;
 }
@@ -87,8 +117,8 @@ function completionNotification(sessionName: string, sessionGroupId: string, ses
 function needsInputNotification(sessionName: string, sessionGroupId: string, sessionId: string) {
   return {
     title: sessionName,
-    subtitle: "AI is awaiting your input",
-    body: "Open Trace to respond",
+    subtitle: "",
+    body: "AI is awaiting your input",
     deepLink: `trace://sessions/${sessionGroupId}/${sessionId}`,
   } satisfies NotificationContent;
 }
@@ -96,6 +126,7 @@ function needsInputNotification(sessionName: string, sessionGroupId: string, ses
 interface SessionNotificationContext {
   createdById: string;
   name: string;
+  channelName: string;
   sessionGroupId: string;
 }
 
@@ -108,14 +139,39 @@ async function loadSessionNotificationContext(
       createdById: true,
       name: true,
       sessionGroupId: true,
+      channel: { select: { name: true } },
     },
   });
   if (!session?.createdById || !session.sessionGroupId) return null;
   return {
     createdById: session.createdById,
     name: session.name?.trim() || "Untitled session",
+    channelName: session.channel?.name?.trim() || "Unknown channel",
     sessionGroupId: session.sessionGroupId,
   };
+}
+
+async function loadLatestAssistantPreview(
+  sessionId: string,
+  before: Date,
+): Promise<string | null> {
+  const events = await prisma.event.findMany({
+    where: {
+      scopeType: "session",
+      scopeId: sessionId,
+      timestamp: { lt: before },
+      eventType: { in: ["session_output", "message_sent"] },
+    },
+    orderBy: { timestamp: "desc" },
+    take: 20,
+  });
+
+  for (const candidate of events) {
+    const preview = extractAssistantPreview(candidate.eventType, candidate.payload);
+    if (preview) return truncatePreview(preview);
+  }
+
+  return null;
 }
 
 export class PushNotificationService {
@@ -143,26 +199,42 @@ export class PushNotificationService {
   }
 
   private async notifyCompleted(event: PrismaEvent): Promise<void> {
-    const session = await loadSessionNotificationContext(event.scopeId);
+    const [session, preview] = await Promise.all([
+      loadSessionNotificationContext(event.scopeId),
+      loadLatestAssistantPreview(event.scopeId, event.timestamp),
+    ]);
     if (!session) return;
     if (event.actorType === "user" && event.actorId === session.createdById) return;
 
+    const content = completionNotification(session.name, session.sessionGroupId, event.scopeId);
     await this.sendToUser(
       session.createdById,
       event.organizationId,
-      completionNotification(session.name, session.sessionGroupId, event.scopeId),
+      {
+        ...content,
+        subtitle: session.channelName,
+        body: preview ?? content.body,
+      },
     );
   }
 
   private async notifyNeedsInput(event: PrismaEvent): Promise<void> {
-    const session = await loadSessionNotificationContext(event.scopeId);
+    const [session, preview] = await Promise.all([
+      loadSessionNotificationContext(event.scopeId),
+      loadLatestAssistantPreview(event.scopeId, event.timestamp),
+    ]);
     if (!session) return;
     if (event.actorType === "user" && event.actorId === session.createdById) return;
 
+    const content = needsInputNotification(session.name, session.sessionGroupId, event.scopeId);
     await this.sendToUser(
       session.createdById,
       event.organizationId,
-      needsInputNotification(session.name, session.sessionGroupId, event.scopeId),
+      {
+        ...content,
+        subtitle: session.channelName,
+        body: preview ?? content.body,
+      },
     );
   }
 
