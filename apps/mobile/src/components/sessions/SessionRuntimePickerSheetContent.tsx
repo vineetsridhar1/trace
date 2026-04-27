@@ -227,42 +227,44 @@ export function SessionRuntimePickerSheetContent({
         </Text>
       </View>
 
-      <Glass
-        preset="card"
-        interactive
-        glassStyleEffect="clear"
-        tint={theme.colors.glassTintLight}
-        style={[styles.card, { borderColor: theme.colors.borderMuted }]}
-      >
-        {rows.map((row, index) => (
-          <ListRow
-            key={row.key}
-            title={row.title}
-            subtitle={row.subtitle}
-            leading={
-              <SymbolView name={row.icon} size={16} tintColor={theme.colors.mutedForeground} />
-            }
-            trailing={
-              row.selected ? (
-                <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
-              ) : row.canRequestAccess ? (
-                <Button
-                  title={row.requestPending ? "Pending" : "Request"}
-                  size="sm"
-                  variant="secondary"
-                  disabled={row.requestPending}
-                  loading={requestingRuntimeId === row.runtime.id}
-                  onPress={() => void handleRequestAccess(row.runtime)}
-                />
-              ) : undefined
-            }
-            onPress={!row.disabled ? () => void handleSelect(row.value) : undefined}
-            haptic="selection"
-            separator={index < rows.length - 1}
-            style={row.disabled && !row.selected ? styles.disabledRow : undefined}
-          />
-        ))}
-      </Glass>
+      <View style={[styles.menuContainer, theme.shadows.lg]}>
+        <Glass preset="card" interactive style={styles.menuSurface}>
+          <View style={styles.menuContent}>
+            {rows.map((row, index) => (
+              <ListRow
+                key={row.key}
+                title={row.title}
+                subtitle={row.subtitle}
+                leading={
+                  <SymbolView name={row.icon} size={16} tintColor={theme.colors.mutedForeground} />
+                }
+                trailing={
+                  row.selected ? (
+                    <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
+                  ) : row.canRequestAccess ? (
+                    <Button
+                      title={row.requestPending ? "Pending" : "Request"}
+                      size="sm"
+                      variant="secondary"
+                      disabled={row.requestPending}
+                      loading={requestingRuntimeId === row.runtime.id}
+                      onPress={() => void handleRequestAccess(row.runtime)}
+                    />
+                  ) : undefined
+                }
+                onPress={!row.disabled ? () => void handleSelect(row.value) : undefined}
+                haptic="selection"
+                separator={false}
+                style={{
+                  ...styles.menuRow,
+                  marginBottom: index < rows.length - 1 ? 2 : 0,
+                  ...(row.disabled && !row.selected ? styles.disabledRow : null),
+                }}
+              />
+            ))}
+          </View>
+        </Glass>
+      </View>
 
       {rows.length === 0 ? (
         <Text variant="footnote" color="mutedForeground">
@@ -280,9 +282,19 @@ const styles = StyleSheet.create({
   header: {
     gap: 4,
   },
-  card: {
+  menuContainer: {
+    marginTop: 10,
+  },
+  menuSurface: {
+    borderRadius: 20,
     overflow: "hidden",
-    borderWidth: StyleSheet.hairlineWidth,
+  },
+  menuContent: {
+    padding: 6,
+  },
+  menuRow: {
+    minHeight: 56,
+    borderRadius: 8,
   },
   disabledRow: {
     opacity: 0.5,
