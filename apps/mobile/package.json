@@ -45,6 +45,7 @@
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
     "expo-symbols": "^1.0.8",
+    "expo-updates": "~29.0.17",
     "expo-web-browser": "~15.0.11",
     "graphql": "^16.10.0",
     "graphql-ws": "^5.16.2",

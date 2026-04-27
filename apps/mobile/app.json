@@ -17,7 +17,14 @@
     "ios": {
       "bundleIdentifier": "org.gettrace",
       "supportsTablet": false,
-      "associatedDomains": ["applinks:gettrace.org"]
+      "associatedDomains": [
+        "applinks:gettrace.org",
+        "applinks:gettrace.org",
+        "applinks:gettrace.org"
+      ],
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "org.gettrace",
@@ -26,7 +33,11 @@
         "backgroundColor": "#010312"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
@@ -60,6 +71,12 @@
         "projectId": "fe5684ac-1711-4b45-b3e6-40a9b8d63c16"
       },
       "router": {}
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/fe5684ac-1711-4b45-b3e6-40a9b8d63c16"
     }
   }
 }
