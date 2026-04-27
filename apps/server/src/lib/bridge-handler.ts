@@ -290,7 +290,16 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       }
 
       if (msg.type === "runtime_heartbeat") {
+        if (!registered) return;
         sessionRouter.recordHeartbeat(runtimeId, ws);
+        return;
+      }
+
+      if (!registered) {
+        runtimeDebug("bridge ignored message before runtime registration", {
+          provisionalRuntimeId: runtimeId,
+          messageType: typeof msg.type === "string" ? msg.type : "unknown",
+        });
         return;
       }
 
@@ -307,6 +316,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         sessionRouter.resolveLinkedCheckoutStatusRequest(
           msg.requestId,
           msg.status as BridgeLinkedCheckoutStatus,
+          runtimeId,
         );
         return;
       }
@@ -315,6 +325,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         sessionRouter.resolveLinkedCheckoutActionRequest(
           msg.requestId,
           msg.result as BridgeLinkedCheckoutActionResultPayload,
+          runtimeId,
         );
         return;
       }
@@ -334,6 +345,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               })
             : undefined,
           typeof msg.error === "string" ? msg.error : undefined,
+          runtimeId,
         );
         return;
       }
@@ -350,6 +362,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           msg.requestId,
           branches,
           typeof msg.error === "string" ? msg.error : undefined,
+          runtimeId,
         );
         return;
       }
@@ -364,6 +377,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           msg.requestId,
           files,
           typeof msg.error === "string" ? msg.error : undefined,
+          runtimeId,
         );
         return;
       }
@@ -373,6 +387,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           msg.requestId,
           typeof msg.content === "string" ? msg.content : "",
           typeof msg.error === "string" ? msg.error : undefined,
+          runtimeId,
         );
         return;
       }
@@ -390,6 +405,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           msg.requestId,
           files,
           typeof msg.error === "string" ? msg.error : undefined,
+          runtimeId,
         );
         return;
       }
@@ -399,6 +415,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           msg.requestId,
           typeof msg.content === "string" ? msg.content : "",
           typeof msg.error === "string" ? msg.error : undefined,
+          runtimeId,
         );
         return;
       }
@@ -414,6 +431,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               }>)
             : [],
           typeof msg.error === "string" ? msg.error : undefined,
+          runtimeId,
         );
         return;
       }
@@ -427,6 +445,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       ) {
         terminalRelay.relayFromBridge(
           msg as { type: string; terminalId: string; [key: string]: unknown },
+          runtimeId,
         );
         return;
       }
