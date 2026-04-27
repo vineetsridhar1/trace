@@ -45,7 +45,6 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
     pendingAction,
     refresh,
     sync,
-    commitChanges,
     restore,
     toggleAutoSync,
   } = checkout;
@@ -108,10 +107,6 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
       void haptic.success();
     },
     [sync],
-  );
-  const onCommitChanges = useCallback(
-    () => void handle("commit", commitChanges),
-    [commitChanges, handle],
   );
   const onRestore = useCallback(() => void handle("restore", restore), [handle, restore]);
   const onTogglePause = useCallback(
@@ -193,10 +188,8 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
           theme={theme}
           pendingAction={pendingAction}
           autoSyncEnabled={status?.autoSyncEnabled ?? false}
-          hasUncommittedChanges={false}
           isAttachedToThisGroup={false}
           onSync={onSync}
-          onCommitChanges={onCommitChanges}
           onTogglePause={onTogglePause}
           onRestore={onRestore}
         />
@@ -228,10 +221,8 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
         theme={theme}
         pendingAction={pendingAction}
         autoSyncEnabled={status?.autoSyncEnabled ?? false}
-        hasUncommittedChanges={hasUncommittedChanges}
         isAttachedToThisGroup={isAttachedToThisGroup}
         onSync={() => void onSync()}
-        onCommitChanges={onCommitChanges}
         onTogglePause={onTogglePause}
         onRestore={onRestore}
       />
@@ -251,10 +242,8 @@ interface ActionRowProps {
   theme: Theme;
   pendingAction: LinkedCheckoutAction | null;
   autoSyncEnabled: boolean;
-  hasUncommittedChanges: boolean;
   isAttachedToThisGroup: boolean;
   onSync: () => void;
-  onCommitChanges: () => void;
   onTogglePause: () => void;
   onRestore: () => void;
 }
@@ -263,10 +252,8 @@ function ActionRow({
   theme,
   pendingAction,
   autoSyncEnabled,
-  hasUncommittedChanges,
   isAttachedToThisGroup,
   onSync,
-  onCommitChanges,
   onTogglePause,
   onRestore,
 }: ActionRowProps) {
@@ -284,16 +271,6 @@ function ActionRow({
       />
       {isAttachedToThisGroup ? (
         <>
-          {hasUncommittedChanges ? (
-            <ActionButton
-              theme={theme}
-              label="Commit"
-              symbol="checkmark.circle"
-              loading={pendingAction === "commit"}
-              disabled={busy}
-              onPress={onCommitChanges}
-            />
-          ) : null}
           <ActionButton
             theme={theme}
             label={autoSyncEnabled ? "Pause" : "Resume"}
