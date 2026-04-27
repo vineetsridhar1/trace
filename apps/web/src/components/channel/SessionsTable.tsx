@@ -1,16 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type {
-  DefaultMenuItem,
-  GetContextMenuItemsParams,
-  GridApi,
-  MenuItemDef,
-} from "ag-grid-community";
+import type { CellContextMenuEvent, GridApi } from "ag-grid-community";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { ArchiveSessionGroupDialog } from "../session/ArchiveSessionGroupDialog";
 import { motion } from "framer-motion";
-import type { SessionGridRow } from "./sessions-table-types";
-import { FILTER_STORAGE_KEY_PREFIX } from "./sessions-table-types";
+import type { SessionGridRow, SessionGroupRow } from "./sessions-table-types";
+import { FILTER_STORAGE_KEY_PREFIX, isSessionStatusHeaderRow } from "./sessions-table-types";
 import { applySessionsColumnMode } from "./sessions-table-columns";
+import { SessionRowContextMenu, type SessionRowContextMenuState } from "./SessionRowContextMenu";
 import { SessionsGridTable } from "./SessionsGridTable";
 import { useCompactTableMode } from "./useCompactTableMode";
 import { useSessionsGridOptions } from "./useSessionsGridOptions";
@@ -28,6 +24,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     name: string;
     sessionCount: number;
   } | null>(null);
+  const [contextMenu, setContextMenu] = useState<SessionRowContextMenuState | null>(null);
 
   const filteredGroups = useSessionGroupRows(channelId);
   const { gridRows, onFilterModelChanged, onToggleStatusGroup } =
@@ -50,46 +47,46 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     applyColumnMode(api);
   }, [applyColumnMode]);
 
-  const getContextMenuItems = useCallback(
-    (
-      params: GetContextMenuItemsParams<SessionGridRow>,
-    ): (DefaultMenuItem | MenuItemDef<SessionGridRow>)[] => {
-      if (!params.node?.data || "_isStatusHeader" in params.node.data) return [];
-      const group = params.node.data;
+  const handleCopyLink = useCallback(
+    (group: SessionGroupRow) => {
       const sessionId = group.latestSession?.id;
-      return [
-        {
-          name: "Copy Workspace Link",
-          action: () => {
-            const path = sessionId
-              ? `/c/${channelId}/g/${group.id}/s/${sessionId}`
-              : `/c/${channelId}/g/${group.id}`;
-            navigator.clipboard.writeText(`${window.location.origin}${path}`);
-          },
-        },
-        "separator",
-        {
-          name: "Archive Workspace",
-          action: () => {
-            setArchiveTarget({
-              id: group.id,
-              name: group.name,
-              sessionCount: group._sessionCount,
-            });
-          },
-        },
-      ];
+      const path = sessionId
+        ? `/c/${channelId}/g/${group.id}/s/${sessionId}`
+        : `/c/${channelId}/g/${group.id}`;
+      void navigator.clipboard.writeText(`${window.location.origin}${path}`);
     },
     [channelId],
   );
+
+  const handleArchive = useCallback((group: SessionGroupRow) => {
+    setArchiveTarget({
+      id: group.id,
+      name: group.name,
+      sessionCount: group._sessionCount,
+    });
+  }, []);
+
+  const handleCellContextMenu = useCallback((event: CellContextMenuEvent<SessionGridRow>) => {
+    const row = event.data;
+    if (!row || isSessionStatusHeaderRow(row)) return;
+
+    if (event.event instanceof MouseEvent) {
+      event.event.preventDefault();
+      setContextMenu({
+        row,
+        x: Math.max(8, Math.min(event.event.clientX, window.innerWidth - 184)),
+        y: Math.max(8, Math.min(event.event.clientY, window.innerHeight - 148)),
+      });
+    }
+  }, []);
 
   const filterStorageKey = `${FILTER_STORAGE_KEY_PREFIX}${channelId}`;
 
   const agGridOptions = useSessionsGridOptions({
     channelId,
     filterStorageKey,
-    getContextMenuItems,
     isCompact,
+    onCellContextMenu: handleCellContextMenu,
     onFilterModelChanged,
     onGridReady: (event) => {
       gridApiRef.current = event.api;
@@ -122,6 +119,14 @@ export function SessionsTable({ channelId }: { channelId: string }) {
           onOpenChange={(open) => {
             if (!open) setArchiveTarget(null);
           }}
+        />
+      )}
+      {contextMenu && (
+        <SessionRowContextMenu
+          menu={contextMenu}
+          onArchive={handleArchive}
+          onClose={() => setContextMenu(null)}
+          onCopyLink={handleCopyLink}
         />
       )}
     </div>
