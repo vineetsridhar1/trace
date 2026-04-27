@@ -137,7 +137,7 @@ export class LinkedCheckoutAutoSyncManager {
       return this.tickInFlight;
     }
 
-    const run = (async () => {
+    const run = Promise.resolve().then(async () => {
       try {
         const config = readConfig();
         const activeRepoIds = Object.entries(config.repos)
@@ -156,7 +156,7 @@ export class LinkedCheckoutAutoSyncManager {
       } finally {
         this.tickInFlight = null;
       }
-    })();
+    });
 
     this.tickInFlight = run;
     return run;
