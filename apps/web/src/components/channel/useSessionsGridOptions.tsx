@@ -21,7 +21,9 @@ export function useSessionsGridOptions({
 }: {
   channelId: string;
   filterStorageKey: string;
-  getContextMenuItems: (params: GetContextMenuItemsParams<SessionGridRow>) => (DefaultMenuItem | MenuItemDef<SessionGridRow>)[];
+  getContextMenuItems: (
+    params: GetContextMenuItemsParams<SessionGridRow>,
+  ) => (DefaultMenuItem | MenuItemDef<SessionGridRow>)[];
   isCompact: boolean;
   onGridReady?: (event: GridReadyEvent<SessionGridRow>) => void;
   onFilterModelChanged: (model: Record<string, unknown> | null) => void;

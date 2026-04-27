@@ -1,4 +1,10 @@
-import type { ColDef, ColumnState, GridApi, ICellRendererParams, ValueGetterParams } from "ag-grid-community";
+import type {
+  ColDef,
+  ColumnState,
+  GridApi,
+  ICellRendererParams,
+  ValueGetterParams,
+} from "ag-grid-community";
 import { SessionCompactSummaryCell } from "./SessionCompactSummaryCell";
 import { SessionCreatedByCell } from "./SessionCreatedByCell";
 import { SessionLastActivityCell } from "./SessionLastActivityCell";
@@ -6,11 +12,7 @@ import { SessionNameCell } from "./SessionNameCell";
 import { SessionRepoCell } from "./SessionRepoCell";
 import type { SessionGridRow, SessionGroupRow } from "./sessions-table-types";
 import { bucketize, isSessionStatusHeaderRow } from "./sessions-table-types";
-import {
-  getSessionCreatedBy,
-  getSessionLastActivityAt,
-  getSessionRepo,
-} from "./session-cell-data";
+import { getSessionCreatedBy, getSessionLastActivityAt, getSessionRepo } from "./session-cell-data";
 
 export const SESSION_COLUMN_IDS = {
   compactSummary: "compactSummary",
@@ -35,7 +37,9 @@ const statusColumn: ColDef<SessionGridRow> = {
   field: "displaySessionStatus",
   hide: true,
   filterValueGetter: (params: ValueGetterParams<SessionGridRow>) =>
-    headerFilterText(params.data, SESSION_COLUMN_IDS.status) ?? params.data?.displaySessionStatus ?? "",
+    headerFilterText(params.data, SESSION_COLUMN_IDS.status) ??
+    params.data?.displaySessionStatus ??
+    "",
 };
 
 const repoColumn: ColDef<SessionGridRow> = {
@@ -44,7 +48,9 @@ const repoColumn: ColDef<SessionGridRow> = {
   width: 140,
   filter: true,
   valueGetter: (params: ValueGetterParams<SessionGridRow>) =>
-    headerFilterText(params.data, SESSION_COLUMN_IDS.repo) ?? getSessionRepo(params.data as SessionGroupRow | undefined)?.name ?? "",
+    headerFilterText(params.data, SESSION_COLUMN_IDS.repo) ??
+    getSessionRepo(params.data as SessionGroupRow | undefined)?.name ??
+    "",
   cellRenderer: (params: ICellRendererParams<SessionGridRow>) => (
     <SessionRepoCell row={params.data as SessionGroupRow | undefined} />
   ),
@@ -56,7 +62,9 @@ const createdByColumn: ColDef<SessionGridRow> = {
   width: 150,
   filter: true,
   filterValueGetter: (params: ValueGetterParams<SessionGridRow>) =>
-    headerFilterText(params.data, SESSION_COLUMN_IDS.createdBy) ?? getSessionCreatedBy(params.data as SessionGroupRow | undefined)?.name ?? "",
+    headerFilterText(params.data, SESSION_COLUMN_IDS.createdBy) ??
+    getSessionCreatedBy(params.data as SessionGroupRow | undefined)?.name ??
+    "",
   cellRenderer: (params: ICellRendererParams<SessionGridRow>) => (
     <SessionCreatedByCell row={params.data as SessionGroupRow | undefined} />
   ),
@@ -68,7 +76,8 @@ const lastMessageColumn: ColDef<SessionGridRow> = {
   width: 120,
   filter: true,
   valueGetter: (params: ValueGetterParams<SessionGridRow>) =>
-    headerFilterText(params.data, SESSION_COLUMN_IDS.lastActivityAt) ?? getSessionLastActivityAt(params.data as SessionGroupRow | undefined),
+    headerFilterText(params.data, SESSION_COLUMN_IDS.lastActivityAt) ??
+    getSessionLastActivityAt(params.data as SessionGroupRow | undefined),
   cellRenderer: (params: ICellRendererParams<SessionGridRow>) => (
     <SessionLastActivityCell value={(params.value as string | undefined) ?? undefined} />
   ),

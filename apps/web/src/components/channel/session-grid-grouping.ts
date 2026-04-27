@@ -1,11 +1,11 @@
 import { SESSION_COLUMN_IDS } from "./sessions-table-columns";
-import type { SessionGridRow, SessionGroupRow, SessionStatusHeaderRow } from "./sessions-table-types";
+import type {
+  SessionGridRow,
+  SessionGroupRow,
+  SessionStatusHeaderRow,
+} from "./sessions-table-types";
 import { collapsedByDefault, sessionStatusGroupOrder } from "./sessions-table-types";
-import {
-  getSessionCreatedBy,
-  getSessionLastActivityAt,
-  getSessionRepo,
-} from "./session-cell-data";
+import { getSessionCreatedBy, getSessionLastActivityAt, getSessionRepo } from "./session-cell-data";
 
 type TextFilterCondition = {
   filter?: unknown;
@@ -19,7 +19,8 @@ type TextFilterModel = TextFilterCondition & {
 };
 
 function getRowSortTimestamp(row: SessionGroupRow | undefined): number {
-  const timestamp = row?._groupLastMessageAt ?? row?._sortTimestamp ?? row?.updatedAt ?? row?.createdAt;
+  const timestamp =
+    row?._groupLastMessageAt ?? row?._sortTimestamp ?? row?.updatedAt ?? row?.createdAt;
   return timestamp ? new Date(timestamp).getTime() : 0;
 }
 
@@ -94,7 +95,10 @@ function matchesFilterEntry(value: string, entry: unknown): boolean {
   return matchesTextCondition(value, model);
 }
 
-function rowMatchesFilterModel(row: SessionGroupRow, filterModel: Record<string, unknown> | null): boolean {
+function rowMatchesFilterModel(
+  row: SessionGroupRow,
+  filterModel: Record<string, unknown> | null,
+): boolean {
   if (!filterModel) return true;
 
   return Object.entries(filterModel).every(([columnId, entry]) => {
@@ -153,9 +157,13 @@ export function buildSessionGridRows({
 
   return [...groups.entries()]
     .sort(([statusA, rowsA], [statusB, rowsB]) => {
-      const statusDiff = (sessionStatusGroupOrder[statusA] ?? 99) - (sessionStatusGroupOrder[statusB] ?? 99);
+      const statusDiff =
+        (sessionStatusGroupOrder[statusA] ?? 99) - (sessionStatusGroupOrder[statusB] ?? 99);
       if (statusDiff !== 0) return statusDiff;
-      return Math.max(...rowsB.map(getRowSortTimestamp), 0) - Math.max(...rowsA.map(getRowSortTimestamp), 0);
+      return (
+        Math.max(...rowsB.map(getRowSortTimestamp), 0) -
+        Math.max(...rowsA.map(getRowSortTimestamp), 0)
+      );
     })
     .flatMap(([status, statusRows]) => {
       const sortedRows = [...statusRows].sort((a, b) => {
@@ -170,8 +178,6 @@ export function buildSessionGridRows({
 
 export function getDefaultExpandedStatuses(rows: SessionGroupRow[]): Set<string> {
   return new Set(
-    rows
-      .map((row) => row.displaySessionStatus)
-      .filter((status) => !collapsedByDefault.has(status)),
+    rows.map((row) => row.displaySessionStatus).filter((status) => !collapsedByDefault.has(status)),
   );
 }
