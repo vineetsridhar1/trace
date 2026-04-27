@@ -20,7 +20,7 @@
       "associatedDomains": ["applinks:gettrace.org"]
     },
     "android": {
-      "package": "org.gettrace.mobile",
+      "package": "org.gettrace",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#010312"
