@@ -11,7 +11,11 @@ import {
   type AuthState,
   type EntityState,
 } from "@trace/client-core";
-import { deepLinkFromNotificationData, routePathFromNotificationLink } from "@/lib/notification-deeplink";
+import {
+  deepLinkFromNotificationData,
+  routePathFromNotificationLink,
+  sessionIdFromNotificationLink,
+} from "@/lib/notification-deeplink";
 import {
   clearPushRegistration,
   readPushRegistration,
@@ -94,6 +98,21 @@ export async function unregister(): Promise<void> {
 export async function clearLocalNotificationState(): Promise<void> {
   await Promise.all([clearPushRegistration(), Notifications.setBadgeCountAsync(0)]);
 }
+
+export async function dismissNotificationsForSession(sessionId: string): Promise<void> {
+  if (!sessionId) return;
+  const delivered = await Notifications.getPresentedNotificationsAsync();
+  const matches = delivered.filter((notification) => {
+    const deepLink = deepLinkFromNotificationData(notification.request.content.data);
+    return deepLink ? sessionIdFromNotificationLink(deepLink) === sessionId : false;
+  });
+  await Promise.all(
+    matches.map((notification) =>
+      Notifications.dismissNotificationAsync(notification.request.identifier),
+    ),
+  );
+}
+
 export function useRegisterPushToken(): void {
   const router = useRouter();
   const user = useAuthStore((s: AuthState) => s.user);

@@ -13,6 +13,7 @@ import { SessionPageHeader } from "@/components/sessions/SessionPageHeader";
 import { SessionSurface } from "@/components/sessions/SessionSurface";
 import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel";
 import { resolveBrowserUrl } from "@/lib/browser";
+import { dismissNotificationsForSession } from "@/lib/notifications";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { useMobileUIStore } from "@/stores/ui";
 import { alpha, useTheme } from "@/theme";
@@ -126,6 +127,13 @@ export default function SessionStreamScreen() {
   const showLoading = loadingGroup || handoffPending;
   const missingGroup = !showLoading && !groupName;
   const browserEnabled = !sessionOptimistic && !handoffPending && !showLoading;
+
+  useEffect(() => {
+    if (!sessionId) return;
+    void dismissNotificationsForSession(sessionId).catch((error) => {
+      console.warn("[notifications] failed to dismiss session notification", error);
+    });
+  }, [sessionId]);
 
   return (
     <Screen edges={["left", "right"]} background="background" style={styles.root}>
