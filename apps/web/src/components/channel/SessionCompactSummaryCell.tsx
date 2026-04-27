@@ -3,7 +3,7 @@ import { timeAgo } from "../../lib/utils";
 import { useAttachedCheckoutForGroup } from "../../stores/bridges";
 import { useSessionGroupTerminals } from "../../stores/terminal";
 import type { SessionGroupRow } from "./sessions-table-types";
-import { getSessionLastActivityAt, getSessionRepo } from "./session-cell-data";
+import { getSessionBranch, getSessionLastActivityAt, getSessionRepo } from "./session-cell-data";
 import { SessionStatusIndicator } from "./SessionStatusIndicator";
 
 export function SessionCompactSummaryCell({ row }: { row?: SessionGroupRow }) {
@@ -11,12 +11,12 @@ export function SessionCompactSummaryCell({ row }: { row?: SessionGroupRow }) {
 
   const repo = getSessionRepo(row);
   const lastActivityAt = getSessionLastActivityAt(row);
-  const slug = row.slug;
+  const branch = getSessionBranch(row);
   const terminals = useSessionGroupTerminals(row.id);
   const hasActiveTerminal = terminals.some((t) => t.status === "active");
   const attached = useAttachedCheckoutForGroup(row.id);
 
-  const subtext = repo && slug ? `${repo.name} / ${slug}` : repo ? repo.name : (slug ?? null);
+  const subtext = repo && branch ? `${repo.name} / ${branch}` : repo ? repo.name : branch;
 
   return (
     <div className="flex h-full w-full min-w-0 flex-1 flex-col justify-center py-2">

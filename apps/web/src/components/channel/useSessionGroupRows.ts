@@ -46,6 +46,7 @@ function buildRowSignature(row: SessionGroupRow): string {
     groupRepo?.name ?? "",
     latestSession?.id ?? "",
     latestSession?.name ?? "",
+    latestSession?.branch ?? "",
     latestSession?.updatedAt ?? "",
     latestSession?._sortTimestamp ?? "",
     latestSession?.lastMessageAt ?? "",
