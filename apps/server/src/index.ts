@@ -214,11 +214,17 @@ async function main() {
             rejectUpgrade(401, "Unauthorized");
             return;
           }
-          if (!(await cloudMachineService.isValidBridgeToken(cloudToken))) {
+          const cloudBridge = await cloudMachineService.authenticateBridgeToken(cloudToken);
+          if (!cloudBridge) {
             rejectUpgrade(401, "Unauthorized");
             return;
           }
-          bridgeReq.bridgeAuth = { kind: "cloud" };
+          bridgeReq.bridgeAuth = {
+            kind: "cloud",
+            instanceId: cloudBridge.runtimeInstanceId,
+            organizationId: cloudBridge.organizationId,
+            userId: cloudBridge.userId,
+          };
         } else if (bridgeAuthToken) {
           const payload = verifyBridgeAuthToken(bridgeAuthToken);
           if (!payload) {

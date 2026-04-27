@@ -24,7 +24,14 @@ type LocalBridgeAuth = {
   instanceId: string;
 };
 
-type BridgeAuth = { kind: "cloud" } | LocalBridgeAuth;
+type CloudBridgeAuth = {
+  kind: "cloud";
+  userId: string;
+  organizationId: string;
+  instanceId: string;
+};
+
+type BridgeAuth = CloudBridgeAuth | LocalBridgeAuth;
 
 export type BridgeConnectionRequest = {
   bridgeAuth?: BridgeAuth;
@@ -93,7 +100,15 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             authKind: bridgeAuth?.kind ?? "unknown",
           });
 
-          if (bridgeAuth?.kind === "local") {
+          if (!bridgeAuth) {
+            runtimeDebug("bridge auth rejected runtime_hello without auth", {
+              receivedInstanceId: newId,
+            });
+            ws.close(1008, "Bridge auth required");
+            return;
+          }
+
+          if (bridgeAuth.kind === "local") {
             if (newId !== bridgeAuth.instanceId) {
               runtimeDebug("bridge auth rejected runtime_hello instance mismatch", {
                 expectedInstanceId: bridgeAuth.instanceId,
@@ -141,7 +156,17 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               });
               existingRuntime.ws.close();
             }
-          } else {
+          } else if (bridgeAuth.kind === "cloud") {
+            if (newId !== bridgeAuth.instanceId || hostingMode !== "cloud") {
+              runtimeDebug("cloud bridge auth rejected runtime_hello mismatch", {
+                expectedInstanceId: bridgeAuth.instanceId,
+                receivedInstanceId: newId,
+                receivedHostingMode: hostingMode,
+              });
+              ws.close(1008, "Bridge auth mismatch");
+              return;
+            }
+
             if (registered && oldId !== newId) {
               sessionRouter.unregisterRuntime(oldId, ws);
             }
@@ -152,7 +177,9 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               id: runtimeId,
               label: (msg.label as string) ?? runtimeId,
               ws,
-              hostingMode,
+              hostingMode: "cloud",
+              organizationId: bridgeAuth.organizationId,
+              ownerUserId: bridgeAuth.userId,
               supportedTools,
               registeredRepoIds,
             });
