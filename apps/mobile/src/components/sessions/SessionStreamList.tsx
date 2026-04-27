@@ -128,7 +128,6 @@ export function SessionStreamList({
       keyExtractor={keyExtractor}
       getItemType={getItemType}
       maxItemsInRecyclePool={24}
-      inverted={false}
       onScroll={onScroll}
       onScrollBeginDrag={onScrollBeginDrag}
       onScrollEndDrag={onScrollEndDrag}
