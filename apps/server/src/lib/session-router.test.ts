@@ -97,3 +97,41 @@ describe("SessionRouter stale runtime eviction", () => {
     expect(router.getRuntime("runtime-1")).toBeUndefined();
   });
 });
+
+describe("SessionRouter runtime-pinned bridge responses", () => {
+  it("ignores branch responses from a runtime that did not receive the request", async () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+
+    router.registerRuntime({
+      id: "runtime-1",
+      label: "Laptop",
+      ws,
+      hostingMode: "local",
+      supportedTools: ["codex"],
+    });
+    router.registerRuntime({
+      id: "runtime-2",
+      label: "Other laptop",
+      ws: makeWs(),
+      hostingMode: "local",
+      supportedTools: ["codex"],
+    });
+
+    const promise = router.listBranches("runtime-1", "repo-1");
+    const send = ws.send as unknown as ReturnType<typeof vi.fn>;
+    const command = JSON.parse(send.mock.calls[0]?.[0] as string) as { requestId: string };
+
+    let settled = false;
+    promise.then(() => {
+      settled = true;
+    });
+
+    router.resolveBranchRequest(command.requestId, ["spoofed"], undefined, "runtime-2");
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    router.resolveBranchRequest(command.requestId, ["main"], undefined, "runtime-1");
+    await expect(promise).resolves.toEqual(["main"]);
+  });
+});

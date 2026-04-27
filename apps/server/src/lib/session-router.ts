@@ -329,32 +329,36 @@ export class SessionRouter {
   /** Pending branch list requests: requestId → resolve/reject */
   private pendingBranchRequests = new Map<
     string,
-    { resolve: (branches: string[]) => void; reject: (err: Error) => void }
+    { runtimeId: string; resolve: (branches: string[]) => void; reject: (err: Error) => void }
   >();
   /** Pending file list requests: requestId → resolve/reject */
   private pendingFileRequests = new Map<
     string,
-    { resolve: (files: string[]) => void; reject: (err: Error) => void }
+    { runtimeId: string; resolve: (files: string[]) => void; reject: (err: Error) => void }
   >();
   /** Pending file content requests: requestId → resolve/reject */
   private pendingFileContentRequests = new Map<
     string,
-    { resolve: (content: string) => void; reject: (err: Error) => void }
+    { runtimeId: string; resolve: (content: string) => void; reject: (err: Error) => void }
   >();
   /** Pending branch diff requests: requestId → resolve/reject */
   private pendingBranchDiffRequests = new Map<
     string,
-    { resolve: (files: BridgeBranchDiffFile[]) => void; reject: (err: Error) => void }
+    {
+      runtimeId: string;
+      resolve: (files: BridgeBranchDiffFile[]) => void;
+      reject: (err: Error) => void;
+    }
   >();
   /** Pending file-at-ref requests: requestId → resolve/reject */
   private pendingFileAtRefRequests = new Map<
     string,
-    { resolve: (content: string) => void; reject: (err: Error) => void }
+    { runtimeId: string; resolve: (content: string) => void; reject: (err: Error) => void }
   >();
   /** Pending skills list requests: requestId → resolve/reject */
   private pendingSkillsRequests = new Map<
     string,
-    { resolve: (skills: BridgeSkillInfo[]) => void; reject: (err: Error) => void }
+    { runtimeId: string; resolve: (skills: BridgeSkillInfo[]) => void; reject: (err: Error) => void }
   >();
   /** Pending linked-checkout status requests: requestId → resolve/reject */
   private pendingLinkedCheckoutStatusRequests = new Map<
@@ -378,6 +382,7 @@ export class SessionRouter {
   private pendingSessionGitSyncStatusRequests = new Map<
     string,
     {
+      runtimeId: string;
       resolve: (status: BridgeSessionGitSyncStatus) => void;
       reject: (err: Error) => void;
     }
@@ -785,6 +790,7 @@ export class SessionRouter {
       }, timeoutMs);
 
       this.pendingBranchRequests.set(requestId, {
+        runtimeId,
         resolve: (branches) => {
           clearTimeout(timer);
           resolve(branches);
@@ -798,9 +804,15 @@ export class SessionRouter {
   }
 
   /** Resolve a pending branch list request (called from bridge handler). */
-  resolveBranchRequest(requestId: string, branches: string[], error?: string): void {
+  resolveBranchRequest(
+    requestId: string,
+    branches: string[],
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
     const pending = this.pendingBranchRequests.get(requestId);
     if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingBranchRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -837,6 +849,7 @@ export class SessionRouter {
       }, timeoutMs);
 
       this.pendingFileRequests.set(requestId, {
+        runtimeId,
         resolve: (files) => {
           clearTimeout(timer);
           resolve(files);
@@ -850,9 +863,15 @@ export class SessionRouter {
   }
 
   /** Resolve a pending file list request (called from bridge handler). */
-  resolveFileRequest(requestId: string, files: string[], error?: string): void {
+  resolveFileRequest(
+    requestId: string,
+    files: string[],
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
     const pending = this.pendingFileRequests.get(requestId);
     if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingFileRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -891,6 +910,7 @@ export class SessionRouter {
       }, timeoutMs);
 
       this.pendingFileContentRequests.set(requestId, {
+        runtimeId,
         resolve: (content) => {
           clearTimeout(timer);
           resolve(content);
@@ -904,9 +924,15 @@ export class SessionRouter {
   }
 
   /** Resolve a pending file content request (called from bridge handler). */
-  resolveFileContentRequest(requestId: string, content: string, error?: string): void {
+  resolveFileContentRequest(
+    requestId: string,
+    content: string,
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
     const pending = this.pendingFileContentRequests.get(requestId);
     if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingFileContentRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -944,6 +970,7 @@ export class SessionRouter {
       }, timeoutMs);
 
       this.pendingBranchDiffRequests.set(requestId, {
+        runtimeId,
         resolve: (files) => {
           clearTimeout(timer);
           resolve(files);
@@ -957,9 +984,15 @@ export class SessionRouter {
   }
 
   /** Resolve a pending branch diff request (called from bridge handler). */
-  resolveBranchDiffRequest(requestId: string, files: BridgeBranchDiffFile[], error?: string): void {
+  resolveBranchDiffRequest(
+    requestId: string,
+    files: BridgeBranchDiffFile[],
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
     const pending = this.pendingBranchDiffRequests.get(requestId);
     if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingBranchDiffRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -999,6 +1032,7 @@ export class SessionRouter {
       }, timeoutMs);
 
       this.pendingFileAtRefRequests.set(requestId, {
+        runtimeId,
         resolve: (content) => {
           clearTimeout(timer);
           resolve(content);
@@ -1012,9 +1046,15 @@ export class SessionRouter {
   }
 
   /** Resolve a pending file-at-ref request (called from bridge handler). */
-  resolveFileAtRefRequest(requestId: string, content: string, error?: string): void {
+  resolveFileAtRefRequest(
+    requestId: string,
+    content: string,
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
     const pending = this.pendingFileAtRefRequests.get(requestId);
     if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingFileAtRefRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -1062,6 +1102,7 @@ export class SessionRouter {
       }, timeoutMs);
 
       this.pendingSkillsRequests.set(requestId, {
+        runtimeId,
         resolve: (skills) => {
           clearTimeout(timer);
           resolve(skills);
@@ -1075,9 +1116,15 @@ export class SessionRouter {
   }
 
   /** Resolve a pending skills list request (called from bridge handler). */
-  resolveSkillsRequest(requestId: string, skills: BridgeSkillInfo[], error?: string): void {
+  resolveSkillsRequest(
+    requestId: string,
+    skills: BridgeSkillInfo[],
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
     const pending = this.pendingSkillsRequests.get(requestId);
     if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingSkillsRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -1121,9 +1168,14 @@ export class SessionRouter {
     });
   }
 
-  resolveLinkedCheckoutStatusRequest(requestId: string, status: BridgeLinkedCheckoutStatus): void {
+  resolveLinkedCheckoutStatusRequest(
+    requestId: string,
+    status: BridgeLinkedCheckoutStatus,
+    sourceRuntimeId?: string,
+  ): void {
     const pending = this.pendingLinkedCheckoutStatusRequests.get(requestId);
     if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingLinkedCheckoutStatusRequests.delete(requestId);
     this.cacheLinkedCheckoutStatus(pending.runtimeId, status);
     pending.resolve(status);
@@ -1276,9 +1328,11 @@ export class SessionRouter {
   resolveLinkedCheckoutActionRequest(
     requestId: string,
     result: BridgeLinkedCheckoutActionResultPayload,
+    sourceRuntimeId?: string,
   ): void {
     const pending = this.pendingLinkedCheckoutActionRequests.get(requestId);
     if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingLinkedCheckoutActionRequests.delete(requestId);
     if (result.status) this.cacheLinkedCheckoutStatus(pending.runtimeId, result.status);
     pending.resolve(result);
@@ -1310,6 +1364,7 @@ export class SessionRouter {
       }, timeoutMs);
 
       this.pendingSessionGitSyncStatusRequests.set(requestId, {
+        runtimeId,
         resolve: (status) => {
           clearTimeout(timer);
           resolve(status);
@@ -1326,9 +1381,11 @@ export class SessionRouter {
     requestId: string,
     status?: BridgeSessionGitSyncStatus,
     error?: string,
+    sourceRuntimeId?: string,
   ): void {
     const pending = this.pendingSessionGitSyncStatusRequests.get(requestId);
     if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
     this.pendingSessionGitSyncStatusRequests.delete(requestId);
     if (error || !status) {
       pending.reject(new Error(error ?? "Missing session git sync status"));
