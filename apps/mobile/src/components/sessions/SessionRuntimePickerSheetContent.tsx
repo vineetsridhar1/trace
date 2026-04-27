@@ -13,12 +13,11 @@ import type {
   SessionConnection,
   SessionRuntimeInstance,
 } from "@trace/gql";
-import { Button, Glass, ListRow, Text } from "@/components/design-system";
+import { Button, ListRow, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { applyOptimisticPatch } from "@/lib/optimisticEntity";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
-import { styles as composerStyles } from "./session-input-composer/styles";
 
 interface SessionRuntimePickerSheetContentProps {
   sessionId: string;
@@ -228,13 +227,14 @@ export function SessionRuntimePickerSheetContent({
         </Text>
       </View>
 
-      <Glass
-        preset="input"
-        interactive
+      <View
         style={[
-          composerStyles.inputCard,
-          styles.runtimeInputSurface,
-          { borderColor: theme.colors.border },
+          styles.card,
+          {
+            backgroundColor: theme.colors.surfaceElevated,
+            borderColor: theme.colors.borderMuted,
+            borderRadius: theme.radius.lg,
+          },
         ]}
       >
         {rows.map((row, index) => (
@@ -261,15 +261,11 @@ export function SessionRuntimePickerSheetContent({
             }
             onPress={!row.disabled ? () => void handleSelect(row.value) : undefined}
             haptic="selection"
-            separator={false}
-            style={{
-              ...styles.runtimeInputRow,
-              marginBottom: index < rows.length - 1 ? 2 : 0,
-              ...(row.disabled && !row.selected ? styles.disabledRow : null),
-            }}
+            separator={index < rows.length - 1}
+            style={row.disabled && !row.selected ? styles.disabledRow : undefined}
           />
         ))}
-      </Glass>
+      </View>
 
       {rows.length === 0 ? (
         <Text variant="footnote" color="mutedForeground">
@@ -287,14 +283,9 @@ const styles = StyleSheet.create({
   header: {
     gap: 4,
   },
-  runtimeInputSurface: {
-    paddingHorizontal: 6,
-    paddingVertical: 6,
+  card: {
     overflow: "hidden",
-  },
-  runtimeInputRow: {
-    minHeight: 56,
-    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   disabledRow: {
     opacity: 0.5,

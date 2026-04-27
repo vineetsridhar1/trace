@@ -3,7 +3,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from "react-na
 import { SymbolView } from "expo-symbols";
 import { REQUEST_BRIDGE_ACCESS_MUTATION } from "@trace/client-core";
 import type { BridgeAccessCapability } from "@trace/gql";
-import { Button, Text } from "@/components/design-system";
+import { Button, Glass, Text } from "@/components/design-system";
 import { SessionComposerBottomSheet } from "@/components/sessions/session-input-composer/SessionComposerBottomSheet";
 import {
   isBridgeInteractionAllowed,
@@ -175,19 +175,22 @@ export function BridgeAccessNotice({
 
   return (
     <>
-      <View
+      <Glass
+        preset="input"
+        interactive
         style={[
           styles.notice,
           {
-            borderColor: alpha(theme.colors.warning, 0.32),
-            backgroundColor: alpha(theme.colors.warning, compact ? 0.08 : 0.12),
+            borderColor: theme.colors.border,
             padding: compact ? theme.spacing.md : theme.spacing.lg,
           },
         ]}
       >
         <View style={styles.noticeRow}>
-          <View style={[styles.iconWrap, { backgroundColor: alpha(theme.colors.warning, 0.18) }]}>
-            <SymbolView name="lock.fill" size={16} tintColor={theme.colors.warning} />
+          <View
+            style={[styles.iconWrap, { backgroundColor: alpha(theme.colors.foreground, 0.08) }]}
+          >
+            <SymbolView name="lock.fill" size={16} tintColor={theme.colors.mutedForeground} />
           </View>
           <View style={styles.noticeCopy}>
             <Text variant="subheadline" color="foreground">
@@ -229,7 +232,7 @@ export function BridgeAccessNotice({
             onPress={() => setOpen(true)}
           />
         </View>
-      </View>
+      </Glass>
 
       <SessionComposerBottomSheet visible={open} onClose={() => setOpen(false)}>
         <ScrollView
