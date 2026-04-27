@@ -15,7 +15,7 @@
       "backgroundColor": "#000000"
     },
     "ios": {
-      "bundleIdentifier": "org.gettrace.mobile",
+      "bundleIdentifier": "org.gettrace",
       "supportsTablet": false,
       "associatedDomains": ["applinks:gettrace.org"]
     },
