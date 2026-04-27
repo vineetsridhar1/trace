@@ -4,7 +4,7 @@ import type {
   SessionGroupRow,
   SessionStatusHeaderRow,
 } from "./sessions-table-types";
-import { collapsedByDefault, sessionStatusGroupOrder } from "./sessions-table-types";
+import { sessionStatusGroupOrder } from "./sessions-table-types";
 import { getSessionCreatedBy, getSessionLastActivityAt, getSessionRepo } from "./session-cell-data";
 
 type TextFilterCondition = {
@@ -107,11 +107,11 @@ function rowMatchesFilterModel(
 }
 
 function buildHeaderRow({
-  expandedStatuses,
+  collapsedStatuses,
   rows,
   status,
 }: {
-  expandedStatuses: ReadonlySet<string>;
+  collapsedStatuses: ReadonlySet<string>;
   rows: SessionGroupRow[];
   status: string;
 }): SessionStatusHeaderRow {
@@ -132,17 +132,17 @@ function buildHeaderRow({
     _isStatusHeader: true,
     _status: status,
     _count: rows.length,
-    _expanded: expandedStatuses.has(status),
+    _expanded: !collapsedStatuses.has(status),
     _filterTextByColumn: filterTextByColumn,
   };
 }
 
 export function buildSessionGridRows({
-  expandedStatuses,
+  collapsedStatuses,
   filterModel,
   rows,
 }: {
-  expandedStatuses: ReadonlySet<string>;
+  collapsedStatuses: ReadonlySet<string>;
   filterModel: Record<string, unknown> | null;
   rows: SessionGroupRow[];
 }): SessionGridRow[] {
@@ -171,13 +171,7 @@ export function buildSessionGridRows({
         if (diff !== 0) return diff;
         return a.id.localeCompare(b.id);
       });
-      const header = buildHeaderRow({ expandedStatuses, rows: sortedRows, status });
+      const header = buildHeaderRow({ collapsedStatuses, rows: sortedRows, status });
       return header._expanded ? [header, ...sortedRows] : [header];
     });
-}
-
-export function getDefaultExpandedStatuses(rows: SessionGroupRow[]): Set<string> {
-  return new Set(
-    rows.map((row) => row.displaySessionStatus).filter((status) => !collapsedByDefault.has(status)),
-  );
 }

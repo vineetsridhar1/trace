@@ -1,9 +1,7 @@
 import type {
-  DefaultMenuItem,
+  CellContextMenuEvent,
   FilterChangedEvent,
-  GetContextMenuItemsParams,
   GridReadyEvent,
-  MenuItemDef,
 } from "ag-grid-community";
 import { navigateToSessionGroup } from "../../stores/ui";
 import { SessionStatusHeaderRow } from "./SessionStatusHeaderRow";
@@ -13,18 +11,16 @@ import { isSessionStatusHeaderRow } from "./sessions-table-types";
 export function useSessionsGridOptions({
   channelId,
   filterStorageKey,
-  getContextMenuItems,
   isCompact,
+  onCellContextMenu,
   onGridReady,
   onFilterModelChanged,
   onToggleStatusGroup,
 }: {
   channelId: string;
   filterStorageKey: string;
-  getContextMenuItems: (
-    params: GetContextMenuItemsParams<SessionGridRow>,
-  ) => (DefaultMenuItem | MenuItemDef<SessionGridRow>)[];
   isCompact: boolean;
+  onCellContextMenu?: (event: CellContextMenuEvent<SessionGridRow>) => void;
   onGridReady?: (event: GridReadyEvent<SessionGridRow>) => void;
   onFilterModelChanged: (model: Record<string, unknown> | null) => void;
   onToggleStatusGroup: (status: string) => void;
@@ -66,7 +62,7 @@ export function useSessionsGridOptions({
     rowHeight: isCompact ? 68 : 40,
     headerHeight: isCompact ? 36 : 32,
     suppressCellFocus: true,
-    getContextMenuItems,
+    onCellContextMenu,
     isFullWidthRow: (params: { rowNode: { data?: SessionGridRow } }) =>
       isSessionStatusHeaderRow(params.rowNode.data),
     fullWidthCellRenderer: (params: { data?: SessionGridRow }) => {

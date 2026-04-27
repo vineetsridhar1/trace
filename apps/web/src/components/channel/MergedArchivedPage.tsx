@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { ArrowLeft } from "lucide-react";
 import { gql } from "@urql/core";
-import type { DefaultMenuItem, GetContextMenuItemsParams, MenuItemDef } from "ag-grid-community";
+import type { CellContextMenuEvent } from "ag-grid-community";
 import type { SessionGroup } from "@trace/gql";
 import { client } from "../../lib/urql";
 import { useEntityStore, type EntityState } from "@trace/client-core";
@@ -12,8 +12,12 @@ import { Skeleton } from "../ui/skeleton";
 import { DeleteSessionGroupDialog } from "../session/DeleteSessionGroupDialog";
 import { createTable, type TableState } from "../ui/table";
 import { sessionColumns, applySessionsColumnMode } from "./sessions-table-columns";
-import type { SessionGridRow } from "./sessions-table-types";
-import { FILTER_STORAGE_KEY_PREFIX } from "./sessions-table-types";
+import type { SessionGridRow, SessionGroupRow } from "./sessions-table-types";
+import { FILTER_STORAGE_KEY_PREFIX, isSessionStatusHeaderRow } from "./sessions-table-types";
+import {
+  SessionRowDeleteContextMenu,
+  type SessionRowDeleteContextMenuState,
+} from "./SessionRowDeleteContextMenu";
 import { useSessionGroupRows } from "./useSessionGroupRows";
 import { useSessionsGridOptions } from "./useSessionsGridOptions";
 import { useSessionStatusGrouping } from "./useSessionStatusGrouping";
@@ -108,6 +112,7 @@ function TabTable({ channelId, tab, active }: { channelId: string; tab: Tab; act
     name: string;
     sessionCount: number;
   } | null>(null);
+  const [contextMenu, setContextMenu] = useState<SessionRowDeleteContextMenuState | null>(null);
   const setMergedRows = useMergedTable((s: TableState<SessionGridRow>) => s.setRows);
   const setArchivedRows = useArchivedTable((s: TableState<SessionGridRow>) => s.setRows);
   const setRows = tab === "merged" ? setMergedRows : setArchivedRows;
@@ -148,35 +153,34 @@ function TabTable({ channelId, tab, active }: { channelId: string; tab: Tab; act
     }
   }, [active, fetchData, loadedKey, queryKey]);
 
-  const getContextMenuItems = useCallback(
-    (
-      params: GetContextMenuItemsParams<SessionGridRow>,
-    ): (DefaultMenuItem | MenuItemDef<SessionGridRow>)[] => {
-      if (!params.node?.data || "_isStatusHeader" in params.node.data) return [];
-      const group = params.node.data;
-      return [
-        {
-          name: "Delete Workspace",
-          cssClasses: ["text-destructive"],
-          action: () => {
-            setDeleteTarget({
-              id: group.id,
-              name: group.name,
-              sessionCount: group._sessionCount,
-            });
-          },
-        },
-      ];
-    },
-    [],
-  );
+  const handleDelete = useCallback((group: SessionGroupRow) => {
+    setDeleteTarget({
+      id: group.id,
+      name: group.name,
+      sessionCount: group._sessionCount,
+    });
+  }, []);
+
+  const handleCellContextMenu = useCallback((event: CellContextMenuEvent<SessionGridRow>) => {
+    const row = event.data;
+    if (!row || isSessionStatusHeaderRow(row)) return;
+
+    if (event.event instanceof MouseEvent) {
+      event.event.preventDefault();
+      setContextMenu({
+        row,
+        x: Math.max(8, Math.min(event.event.clientX, window.innerWidth - 184)),
+        y: Math.max(8, Math.min(event.event.clientY, window.innerHeight - 72)),
+      });
+    }
+  }, []);
 
   const filterStorageKey = `${FILTER_STORAGE_KEY_PREFIX}${channelId}:${tab}`;
   const agGridOptions = useSessionsGridOptions({
     channelId,
     filterStorageKey,
-    getContextMenuItems,
     isCompact: false,
+    onCellContextMenu: handleCellContextMenu,
     onFilterModelChanged,
     onGridReady: (event) => {
       applySessionsColumnMode(event.api, false);
@@ -213,6 +217,13 @@ function TabTable({ channelId, tab, active }: { channelId: string; tab: Tab; act
           onOpenChange={(open) => {
             if (!open) setDeleteTarget(null);
           }}
+        />
+      )}
+      {contextMenu && (
+        <SessionRowDeleteContextMenu
+          menu={contextMenu}
+          onClose={() => setContextMenu(null)}
+          onDelete={handleDelete}
         />
       )}
     </>
