@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   registerRuntime: vi.fn(),
   unregisterRuntime: vi.fn(),
+  bindSession: vi.fn(),
   getRuntime: vi.fn(() => undefined),
   getRuntimeForSession: vi.fn(() => undefined),
   getLinkedCheckoutStatus: vi.fn(() => Promise.resolve()),
@@ -10,12 +11,14 @@ const mocks = vi.hoisted(() => ({
   recordOutput: vi.fn(() => Promise.resolve()),
   registerLocalRuntimeConnection: vi.fn(),
   restoreTerminals: vi.fn(() => Promise.resolve()),
+  sessionFindFirst: vi.fn(() => Promise.resolve(null)),
 }));
 
 vi.mock("./session-router.js", () => ({
   sessionRouter: {
     registerRuntime: mocks.registerRuntime,
     unregisterRuntime: mocks.unregisterRuntime,
+    bindSession: mocks.bindSession,
     getRuntime: mocks.getRuntime,
     getRuntimeForSession: mocks.getRuntimeForSession,
     getLinkedCheckoutStatus: mocks.getLinkedCheckoutStatus,
@@ -47,6 +50,14 @@ vi.mock("../services/runtime-access.js", () => ({
   },
 }));
 
+vi.mock("./db.js", () => ({
+  prisma: {
+    session: {
+      findFirst: mocks.sessionFindFirst,
+    },
+  },
+}));
+
 import { handleBridgeConnection } from "./bridge-handler.js";
 
 type Handler = (payload?: unknown) => void;
@@ -72,6 +83,8 @@ function createMockWs() {
 describe("bridge handler auth", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getRuntimeForSession.mockReturnValue(undefined);
+    mocks.sessionFindFirst.mockResolvedValue(null);
   });
 
   it("rejects a local bridge token that announces another runtime instance", async () => {
@@ -182,5 +195,38 @@ describe("bridge handler auth", () => {
     await Promise.resolve();
 
     expect(mocks.recordOutput).not.toHaveBeenCalled();
+  });
+
+  it("accepts session output when persisted session ownership matches this runtime", async () => {
+    const ws = createMockWs();
+    mocks.sessionFindFirst.mockResolvedValue({ id: "session-1" });
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "cloud",
+        instanceId: "cloud-machine-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "cloud-machine-owned",
+      hostingMode: "cloud",
+    });
+    await Promise.resolve();
+    ws.emitMessage({
+      type: "session_output",
+      sessionId: "session-1",
+      data: { type: "assistant", message: "owned" },
+    });
+
+    await vi.waitFor(() => {
+      expect(mocks.recordOutput).toHaveBeenCalledWith("session-1", {
+        type: "assistant",
+        message: "owned",
+      });
+    });
+    expect(mocks.registerRuntime).toHaveBeenCalled();
   });
 });

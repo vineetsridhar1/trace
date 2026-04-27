@@ -10,6 +10,7 @@ import { sessionService } from "../services/session.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { terminalRelay } from "./terminal-relay.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
+import { prisma } from "./db.js";
 
 /** Grace period before marking sessions disconnected — allows fast reconnects */
 const DISCONNECT_GRACE_MS = 10_000;
@@ -74,18 +75,51 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
     queues.set(sessionId, next);
   }
 
-  function isSessionBoundToThisRuntime(sessionId: unknown): sessionId is string {
-    if (typeof sessionId !== "string" || !sessionId) return false;
+  async function resolveSessionBoundToThisRuntime(sessionId: unknown): Promise<string | null> {
+    if (typeof sessionId !== "string" || !sessionId) return null;
     const runtime = sessionRouter.getRuntimeForSession(sessionId);
-    const allowed = runtime?.id === runtimeId && runtime.ws === ws;
-    if (!allowed) {
+    if (runtime) {
+      const allowed = runtime.id === runtimeId && runtime.ws === ws;
+      if (!allowed) {
+        runtimeDebug("bridge ignored message for session bound to another runtime", {
+          runtimeId,
+          sessionId,
+          boundRuntimeId: runtime.id,
+        });
+      }
+      return allowed ? sessionId : null;
+    }
+
+    const persisted = await prisma.session.findFirst({
+      where: {
+        id: sessionId,
+        connection: { path: ["runtimeInstanceId"], equals: runtimeId },
+      },
+      select: { id: true },
+    });
+    if (!persisted) {
       runtimeDebug("bridge ignored message for unbound session", {
         runtimeId,
         sessionId,
-        boundRuntimeId: runtime?.id ?? null,
       });
+      return null;
     }
-    return allowed;
+
+    sessionRouter.bindSession(sessionId, runtimeId);
+    return sessionId;
+  }
+
+  function enqueueForBoundSession(
+    sessionId: unknown,
+    fn: (boundSessionId: string) => Promise<void>,
+  ): void {
+    void (async () => {
+      const boundSessionId = await resolveSessionBoundToThisRuntime(sessionId);
+      if (!boundSessionId) return;
+      enqueueEvent(boundSessionId, () => fn(boundSessionId));
+    })().catch((err: unknown) => {
+      console.error("[bridge] error authorizing session-scoped message:", err);
+    });
   }
 
   ws.on("message", (raw: Buffer | string) => {
@@ -397,58 +431,54 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         return;
       }
 
-      if (msg.type === "session_output" && isSessionBoundToThisRuntime(msg.sessionId)) {
-        const sessionId = msg.sessionId;
+      if (msg.type === "session_output" && msg.sessionId) {
         const data = (msg.data ?? {}) as Record<string, unknown>;
 
-        enqueueEvent(sessionId, async () => {
+        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
           await sessionService.recordOutput(sessionId, data);
         });
-      } else if (msg.type === "session_complete" && isSessionBoundToThisRuntime(msg.sessionId)) {
-        enqueueEvent(msg.sessionId, async () => {
-          await sessionService.complete(msg.sessionId);
+      } else if (msg.type === "session_complete" && msg.sessionId) {
+        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
+          await sessionService.complete(sessionId);
         });
-      } else if (msg.type === "workspace_ready" && isSessionBoundToThisRuntime(msg.sessionId)) {
-        enqueueEvent(msg.sessionId, async () => {
+      } else if (msg.type === "workspace_ready" && msg.sessionId) {
+        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
           await sessionService.workspaceReady(
-            msg.sessionId,
+            sessionId,
             msg.workdir as string,
             msg.branch as string | undefined,
             msg.slug as string | undefined,
           );
         });
-      } else if (msg.type === "workspace_failed" && isSessionBoundToThisRuntime(msg.sessionId)) {
-        enqueueEvent(msg.sessionId, async () => {
+      } else if (msg.type === "workspace_failed" && msg.sessionId) {
+        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
           await sessionService.workspaceFailed(
-            msg.sessionId,
+            sessionId,
             (msg.error as string) ?? "Unknown error",
           );
         });
-      } else if (msg.type === "register_session" && isSessionBoundToThisRuntime(msg.sessionId)) {
-        runtimeDebug("received register_session", { runtimeId, sessionId: msg.sessionId });
-        sessionRouter.bindSession(msg.sessionId, runtimeId);
-      } else if (
-        msg.type === "tool_session_id" &&
-        isSessionBoundToThisRuntime(msg.sessionId) &&
-        msg.toolSessionId
-      ) {
-        enqueueEvent(msg.sessionId, async () => {
-          await sessionService.storeToolSessionId(
-            msg.sessionId as string,
-            msg.toolSessionId as string,
-          );
+      } else if (msg.type === "register_session" && msg.sessionId) {
+        void (async () => {
+          const sessionId = await resolveSessionBoundToThisRuntime(msg.sessionId);
+          if (!sessionId) return;
+          runtimeDebug("received register_session", { runtimeId, sessionId });
+          sessionRouter.bindSession(sessionId, runtimeId);
+        })().catch((err: unknown) => {
+          console.error("[bridge] error authorizing register_session:", err);
         });
-      } else if (
-        msg.type === "tool_session_missing" &&
-        isSessionBoundToThisRuntime(msg.sessionId) &&
-        msg.toolSessionId
-      ) {
+      } else if (msg.type === "tool_session_id" && msg.sessionId && msg.toolSessionId) {
+        const toolSessionId = msg.toolSessionId as string;
+        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
+          await sessionService.storeToolSessionId(sessionId, toolSessionId);
+        });
+      } else if (msg.type === "tool_session_missing" && msg.sessionId && msg.toolSessionId) {
         const imageUrls = Array.isArray(msg.imageUrls)
           ? (msg.imageUrls as unknown[]).filter((url): url is string => typeof url === "string")
           : undefined;
-        enqueueEvent(msg.sessionId, async () => {
-          await sessionService.recoverMissingToolSession(msg.sessionId as string, {
-            toolSessionId: msg.toolSessionId as string,
+        const toolSessionId = msg.toolSessionId as string;
+        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
+          await sessionService.recoverMissingToolSession(sessionId, {
+            toolSessionId,
             message: typeof msg.message === "string" ? msg.message : undefined,
             interactionMode:
               typeof msg.interactionMode === "string" ? msg.interactionMode : undefined,
@@ -461,13 +491,10 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             imageUrls,
           });
         });
-      } else if (
-        msg.type === "git_checkpoint" &&
-        isSessionBoundToThisRuntime(msg.sessionId) &&
-        msg.checkpoint
-      ) {
-        enqueueEvent(msg.sessionId, async () => {
-          await sessionService.recordGitCheckpoint(msg.sessionId as string, msg.checkpoint);
+      } else if (msg.type === "git_checkpoint" && msg.sessionId && msg.checkpoint) {
+        const checkpoint = msg.checkpoint;
+        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
+          await sessionService.recordGitCheckpoint(sessionId, checkpoint);
         });
       }
     } catch (err) {
