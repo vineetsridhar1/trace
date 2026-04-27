@@ -86,7 +86,8 @@ describe("PushNotificationService", () => {
         {
           to: "ExponentPushToken[token-1]",
           title: "Fix flaky CI",
-          body: "AI completed this session",
+          subtitle: "AI completed this session",
+          body: "Open Trace to review the latest response",
           data: { deepLink: "trace://sessions/group-1/session-1" },
         },
       ]),
@@ -150,7 +151,8 @@ describe("PushNotificationService", () => {
         {
           to: "ExponentPushToken[token-1]",
           title: "Fix flaky CI",
-          body: "AI is awaiting your input",
+          subtitle: "AI is awaiting your input",
+          body: "Open Trace to respond",
           data: { deepLink: "trace://sessions/group-1/session-1" },
         },
       ]),

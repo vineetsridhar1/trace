@@ -9,12 +9,14 @@ const EXPO_CHUNK_SIZE = 100;
 interface PushMessage {
   to: string;
   title: string;
+  subtitle?: string;
   body?: string;
   data: { deepLink: string };
 }
 
 interface NotificationContent {
   title: string;
+  subtitle?: string;
   body?: string;
   deepLink: string;
 }
@@ -76,7 +78,8 @@ function isCompletedTermination(payload: unknown): boolean {
 function completionNotification(sessionName: string, sessionGroupId: string, sessionId: string) {
   return {
     title: sessionName,
-    body: "AI completed this session",
+    subtitle: "AI completed this session",
+    body: "Open Trace to review the latest response",
     deepLink: `trace://sessions/${sessionGroupId}/${sessionId}`,
   } satisfies NotificationContent;
 }
@@ -84,7 +87,8 @@ function completionNotification(sessionName: string, sessionGroupId: string, ses
 function needsInputNotification(sessionName: string, sessionGroupId: string, sessionId: string) {
   return {
     title: sessionName,
-    body: "AI is awaiting your input",
+    subtitle: "AI is awaiting your input",
+    body: "Open Trace to respond",
     deepLink: `trace://sessions/${sessionGroupId}/${sessionId}`,
   } satisfies NotificationContent;
 }
@@ -182,6 +186,7 @@ export class PushNotificationService {
       .map((token) => ({
         to: token,
         title: content.title,
+        subtitle: content.subtitle,
         body: content.body,
         data: { deepLink: content.deepLink },
       }));
