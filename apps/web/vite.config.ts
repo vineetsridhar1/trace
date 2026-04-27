@@ -80,6 +80,8 @@ export default defineConfig({
     host: true,
     port: 3000 + offset,
     proxy: {
+      "/.well-known/apple-app-site-association": api,
+      "/apple-app-site-association": api,
       "/auth": api,
       "/graphql": api,
       "/uploads": api,

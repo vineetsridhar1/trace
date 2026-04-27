@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import { AppState, Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
-import { type Href, useRouter } from "expo-router";
 import {
   REGISTER_PUSH_TOKEN_MUTATION,
   UNREGISTER_PUSH_TOKEN_MUTATION,
@@ -11,7 +10,6 @@ import {
   type AuthState,
   type EntityState,
 } from "@trace/client-core";
-import { deepLinkFromNotificationData, routePathFromNotificationLink } from "@/lib/notification-deeplink";
 import {
   clearPushRegistration,
   readPushRegistration,
@@ -95,41 +93,11 @@ export async function clearLocalNotificationState(): Promise<void> {
   await Promise.all([clearPushRegistration(), Notifications.setBadgeCountAsync(0)]);
 }
 export function useRegisterPushToken(): void {
-  const router = useRouter();
   const user = useAuthStore((s: AuthState) => s.user);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const needsInputCount = useEntityStore(selectNeedsInputCount);
   const previousAuthed = useRef(false);
   const previousOrgId = useRef<string | null>(null);
-  const lastHandledNotificationId = useRef<string | null>(null);
-
-  useEffect(() => {
-    void Notifications.getLastNotificationResponseAsync()
-      .then((response) => {
-        if (!response) return;
-        const requestId = response.notification.request.identifier;
-        if (lastHandledNotificationId.current === requestId) return;
-        const deepLink = deepLinkFromNotificationData(response.notification.request.content.data);
-        const path = deepLink ? routePathFromNotificationLink(deepLink) : null;
-        if (!path) return;
-        lastHandledNotificationId.current = requestId;
-        router.push(path as Href);
-      })
-      .catch((err: unknown) => {
-        console.warn("[notifications] last response lookup failed", err);
-      });
-
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const requestId = response.notification.request.identifier;
-      if (lastHandledNotificationId.current === requestId) return;
-      const deepLink = deepLinkFromNotificationData(response.notification.request.content.data);
-      const path = deepLink ? routePathFromNotificationLink(deepLink) : null;
-      if (!path) return;
-      lastHandledNotificationId.current = requestId;
-      router.push(path as Href);
-    });
-    return () => sub.remove();
-  }, [router]);
 
   useEffect(() => {
     const authed = Boolean(user && activeOrgId);
