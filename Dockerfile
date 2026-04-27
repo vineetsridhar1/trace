@@ -29,9 +29,7 @@ RUN pnpm --filter @trace/gql build
 RUN pnpm --filter @trace/client-core build
 RUN pnpm --filter @trace/server build
 ARG VITE_API_URL=""
-ARG VITE_AG_GRID_LICENSE_KEY=""
 ENV VITE_API_URL=${VITE_API_URL}
-ENV VITE_AG_GRID_LICENSE_KEY=${VITE_AG_GRID_LICENSE_KEY}
 RUN pnpm --filter @trace/web build
 
 FROM base AS production

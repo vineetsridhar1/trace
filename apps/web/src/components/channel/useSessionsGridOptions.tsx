@@ -3,21 +3,12 @@ import type {
   FilterChangedEvent,
   GetContextMenuItemsParams,
   GridReadyEvent,
-  ICellRendererParams,
-  InitialGroupOrderComparatorParams,
-  IsGroupOpenByDefaultParams,
   MenuItemDef,
 } from "ag-grid-community";
 import { navigateToSessionGroup } from "../../stores/ui";
-import { SessionStatusGroupLabel } from "./SessionStatusGroupLabel";
-import type { SessionGroupRow } from "./sessions-table-types";
-import { collapsedByDefault, sessionStatusGroupOrder } from "./sessions-table-types";
-
-function getRowSortTimestamp(row: SessionGroupRow | undefined): number {
-  const timestamp =
-    row?._groupLastMessageAt ?? row?._sortTimestamp ?? row?.updatedAt ?? row?.createdAt;
-  return timestamp ? new Date(timestamp).getTime() : 0;
-}
+import { SessionStatusHeaderRow } from "./SessionStatusHeaderRow";
+import type { SessionGridRow } from "./sessions-table-types";
+import { isSessionStatusHeaderRow } from "./sessions-table-types";
 
 export function useSessionsGridOptions({
   channelId,
@@ -25,22 +16,21 @@ export function useSessionsGridOptions({
   getContextMenuItems,
   isCompact,
   onGridReady,
+  onFilterModelChanged,
+  onToggleStatusGroup,
 }: {
   channelId: string;
   filterStorageKey: string;
-  getContextMenuItems: (
-    params: GetContextMenuItemsParams<SessionGroupRow>,
-  ) => (DefaultMenuItem | MenuItemDef<SessionGroupRow>)[];
+  getContextMenuItems: (params: GetContextMenuItemsParams<SessionGridRow>) => (DefaultMenuItem | MenuItemDef<SessionGridRow>)[];
   isCompact: boolean;
-  onGridReady?: (event: GridReadyEvent<SessionGroupRow>) => void;
+  onGridReady?: (event: GridReadyEvent<SessionGridRow>) => void;
+  onFilterModelChanged: (model: Record<string, unknown> | null) => void;
+  onToggleStatusGroup: (status: string) => void;
 }) {
   return {
-    onRowClicked: (event: {
-      node: { group?: boolean; expanded?: boolean; setExpanded: (v: boolean) => void };
-      data?: SessionGroupRow;
-    }) => {
-      if (event.node.group) {
-        event.node.setExpanded(!event.node.expanded);
+    onRowClicked: (event: { data?: SessionGridRow }) => {
+      if (isSessionStatusHeaderRow(event.data)) {
+        onToggleStatusGroup(event.data._status);
         return;
       }
       const latestSessionId = event.data?.latestSession?.id ?? null;
@@ -48,67 +38,42 @@ export function useSessionsGridOptions({
         navigateToSessionGroup(channelId, event.data.id, latestSessionId);
       }
     },
-    onGridReady: (event: GridReadyEvent<SessionGroupRow>) => {
+    onGridReady: (event: GridReadyEvent<SessionGridRow>) => {
       try {
         const saved = localStorage.getItem(filterStorageKey);
         if (saved) {
-          event.api.setFilterModel(JSON.parse(saved));
+          const model = JSON.parse(saved) as Record<string, unknown>;
+          event.api.setFilterModel(model);
+          onFilterModelChanged(model);
         }
       } catch {
         // ignore corrupt data
       }
       onGridReady?.(event);
     },
-    onFilterChanged: (event: FilterChangedEvent<SessionGroupRow>) => {
+    onFilterChanged: (event: FilterChangedEvent<SessionGridRow>) => {
       const model = event.api.getFilterModel();
       if (Object.keys(model).length === 0) {
         localStorage.removeItem(filterStorageKey);
+        onFilterModelChanged(null);
       } else {
         localStorage.setItem(filterStorageKey, JSON.stringify(model));
+        onFilterModelChanged(model);
       }
     },
     rowHeight: isCompact ? 68 : 40,
     headerHeight: isCompact ? 36 : 32,
     suppressCellFocus: true,
     getContextMenuItems,
-    getRowHeight: (params: { node: { group?: boolean } }) => {
-      if (params.node.group) return isCompact ? 36 : 40;
+    isFullWidthRow: (params: { rowNode: { data?: SessionGridRow } }) =>
+      isSessionStatusHeaderRow(params.rowNode.data),
+    fullWidthCellRenderer: (params: { data?: SessionGridRow }) => {
+      if (!isSessionStatusHeaderRow(params.data)) return null;
+      return <SessionStatusHeaderRow row={params.data} />;
+    },
+    getRowHeight: (params: { data?: SessionGridRow }) => {
+      if (isSessionStatusHeaderRow(params.data)) return isCompact ? 36 : 40;
       return undefined;
-    },
-    groupDisplayType: "groupRows" as const,
-    isGroupOpenByDefault: (params: IsGroupOpenByDefaultParams<SessionGroupRow>) => {
-      return !collapsedByDefault.has(params.key ?? "");
-    },
-    groupRowRendererParams: {
-      suppressCount: true,
-      innerRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
-        const status = params.value as string;
-        const count = params.node.allChildrenCount ?? 0;
-        return <SessionStatusGroupLabel count={count} status={status} />;
-      },
-    },
-    initialGroupOrderComparator: (params: InitialGroupOrderComparatorParams<SessionGroupRow>) => {
-      const a = sessionStatusGroupOrder[params.nodeA.key ?? ""] ?? 99;
-      const b = sessionStatusGroupOrder[params.nodeB.key ?? ""] ?? 99;
-      const statusDiff = a - b;
-      if (statusDiff !== 0) {
-        return statusDiff;
-      }
-
-      const aLatest = Math.max(
-        ...(params.nodeA.allLeafChildren ?? []).map((child) => getRowSortTimestamp(child.data)),
-        0,
-      );
-      const bLatest = Math.max(
-        ...(params.nodeB.allLeafChildren ?? []).map((child) => getRowSortTimestamp(child.data)),
-        0,
-      );
-      const recencyDiff = bLatest - aLatest;
-      if (recencyDiff !== 0) {
-        return recencyDiff;
-      }
-
-      return 0;
     },
   };
 }
