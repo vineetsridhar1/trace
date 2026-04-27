@@ -17,6 +17,7 @@ setPlatform({
   get apiUrl() {
     return getActiveApiUrl();
   },
+  clientSource: "mobile",
   authMode: "bearer",
   storage: {
     getItem: (k) => storage.getString(k) ?? null,

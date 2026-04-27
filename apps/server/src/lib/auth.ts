@@ -116,6 +116,10 @@ function readHeaderValue(headers: IncomingHttpHeaders, key: string): string | nu
   return trimmed || null;
 }
 
+function readClientSource(headers: IncomingHttpHeaders): string | null {
+  return readHeaderValue(headers, "x-trace-client-source");
+}
+
 function readForwardedHost(headers: IncomingHttpHeaders): string | null {
   const value = readHeaderValue(headers, "x-forwarded-host");
   const candidate = value ?? readForwardedToken(headers, "host");
@@ -358,6 +362,7 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
   return {
     userId: user.id,
     organizationId,
+    clientSource: readClientSource(req.headers),
     role,
     actorType: "user",
     userLoader: createUserLoader(),
@@ -438,6 +443,10 @@ export async function buildWsContext(
   return {
     userId: user.id,
     organizationId,
+    clientSource:
+      typeof connectionParams?.clientSource === "string" && connectionParams.clientSource.trim()
+        ? connectionParams.clientSource.trim()
+        : null,
     role,
     actorType: "user",
     userLoader: createUserLoader(),

@@ -77,6 +77,10 @@ describe("PushNotificationService", () => {
     });
     prismaMock.event.findMany.mockResolvedValue([
       {
+        eventType: "session_resumed",
+        payload: { clientSource: "mobile" },
+      },
+      {
         eventType: "session_output",
         payload: {
           type: "assistant",
@@ -154,6 +158,10 @@ describe("PushNotificationService", () => {
     });
     prismaMock.event.findMany.mockResolvedValue([
       {
+        eventType: "session_resumed",
+        payload: { clientSource: "mobile" },
+      },
+      {
         eventType: "session_output",
         payload: {
           type: "assistant",
@@ -194,6 +202,34 @@ describe("PushNotificationService", () => {
     );
 
     expect(prismaMock.session.findUnique).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not send session pushes for web-originated runs", async () => {
+    prismaMock.session.findUnique.mockResolvedValue({
+      createdById: "user-1",
+      name: "Fix flaky CI",
+      sessionGroupId: "group-1",
+      channel: { name: "mobile" },
+    });
+    prismaMock.event.findMany.mockResolvedValue([
+      {
+        eventType: "session_resumed",
+        payload: { clientSource: "web" },
+      },
+      {
+        eventType: "session_output",
+        payload: {
+          type: "assistant",
+          message: { content: [{ type: "text", text: "Done. I updated the flaky CI check." }] },
+        },
+      },
+    ]);
+
+    await new PushNotificationService().notifyForEvent(
+      event({ payload: { agentStatus: "done", sessionStatus: "in_progress" } }),
+    );
+
     expect(fetch).not.toHaveBeenCalled();
   });
 

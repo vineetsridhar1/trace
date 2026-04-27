@@ -130,6 +130,28 @@ interface SessionNotificationContext {
   sessionGroupId: string;
 }
 
+async function loadLatestRunClientSource(sessionId: string, before: Date): Promise<string | null> {
+  const events = await prisma.event.findMany({
+    where: {
+      scopeType: "session",
+      scopeId: sessionId,
+      timestamp: { lt: before },
+      eventType: { in: ["session_started", "session_resumed"] },
+    },
+    orderBy: { timestamp: "desc" },
+    take: 10,
+  });
+
+  for (const event of events) {
+    const data = asJsonObject(event.payload);
+    if (typeof data?.clientSource === "string" && data.clientSource.trim()) {
+      return data.clientSource.trim();
+    }
+  }
+
+  return null;
+}
+
 async function loadSessionNotificationContext(
   sessionId: string,
 ): Promise<SessionNotificationContext | null> {
@@ -146,15 +168,14 @@ async function loadSessionNotificationContext(
   return {
     createdById: session.createdById,
     name: session.name?.trim() || "Untitled session",
-    channelName: session.channel?.name?.trim() ? `#${session.channel.name.trim()}` : "#unknown-channel",
+    channelName: session.channel?.name?.trim()
+      ? `#${session.channel.name.trim()}`
+      : "#unknown-channel",
     sessionGroupId: session.sessionGroupId,
   };
 }
 
-async function loadLatestAssistantPreview(
-  sessionId: string,
-  before: Date,
-): Promise<string | null> {
+async function loadLatestAssistantPreview(sessionId: string, before: Date): Promise<string | null> {
   const events = await prisma.event.findMany({
     where: {
       scopeType: "session",
@@ -183,7 +204,10 @@ export class PushNotificationService {
 
     if (event.scopeType !== "session") return;
 
-    if (event.eventType === "session_output" && isNeedsInputOutput(event.eventType, event.payload)) {
+    if (
+      event.eventType === "session_output" &&
+      isNeedsInputOutput(event.eventType, event.payload)
+    ) {
       await this.notifyNeedsInput(event);
       return;
     }
@@ -199,43 +223,39 @@ export class PushNotificationService {
   }
 
   private async notifyCompleted(event: PrismaEvent): Promise<void> {
-    const [session, preview] = await Promise.all([
+    const [session, preview, clientSource] = await Promise.all([
       loadSessionNotificationContext(event.scopeId),
       loadLatestAssistantPreview(event.scopeId, event.timestamp),
+      loadLatestRunClientSource(event.scopeId, event.timestamp),
     ]);
     if (!session) return;
+    if (clientSource !== "mobile") return;
     if (event.actorType === "user" && event.actorId === session.createdById) return;
 
     const content = completionNotification(session.name, session.sessionGroupId, event.scopeId);
-    await this.sendToUser(
-      session.createdById,
-      event.organizationId,
-      {
-        ...content,
-        subtitle: session.channelName,
-        body: preview ?? content.body,
-      },
-    );
+    await this.sendToUser(session.createdById, event.organizationId, {
+      ...content,
+      subtitle: session.channelName,
+      body: preview ?? content.body,
+    });
   }
 
   private async notifyNeedsInput(event: PrismaEvent): Promise<void> {
-    const [session, preview] = await Promise.all([
+    const [session, preview, clientSource] = await Promise.all([
       loadSessionNotificationContext(event.scopeId),
       loadLatestAssistantPreview(event.scopeId, event.timestamp),
+      loadLatestRunClientSource(event.scopeId, event.timestamp),
     ]);
     if (!session) return;
+    if (clientSource !== "mobile") return;
     if (event.actorType === "user" && event.actorId === session.createdById) return;
 
     const content = needsInputNotification(session.name, session.sessionGroupId, event.scopeId);
-    await this.sendToUser(
-      session.createdById,
-      event.organizationId,
-      {
-        ...content,
-        subtitle: session.channelName,
-        body: preview ?? content.body,
-      },
-    );
+    await this.sendToUser(session.createdById, event.organizationId, {
+      ...content,
+      subtitle: session.channelName,
+      body: preview ?? content.body,
+    });
   }
 
   private async notifyBridgeAccessRequested(event: PrismaEvent): Promise<void> {

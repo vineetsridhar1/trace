@@ -1,1 +1,5 @@
-export type { Context } from "@trace/gql";
+import type { Context as GqlContext } from "@trace/gql";
+
+export interface Context extends GqlContext {
+  clientSource: string | null;
+}
