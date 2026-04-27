@@ -108,6 +108,25 @@ describe("PushNotificationService", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("does not send pushes for pause or resume events", async () => {
+    prismaMock.session.findUnique.mockResolvedValue({
+      createdById: "user-1",
+      name: "Fix flaky CI",
+      sessionGroupId: "group-1",
+      agentStatus: "done",
+    });
+
+    await new PushNotificationService().notifyForEvent(
+      event({ eventType: "session_paused", actorType: "user", actorId: "user-2" }),
+    );
+    await new PushNotificationService().notifyForEvent(
+      event({ eventType: "session_resumed", actorType: "user", actorId: "user-2" }),
+    );
+
+    expect(prismaMock.session.findUnique).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("sends bridge access request pushes to the owner", async () => {
     await new PushNotificationService().notifyForEvent(
       event({

@@ -7,8 +7,6 @@ const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_CHUNK_SIZE = 100;
 
 const SESSION_STATUS_EVENTS = new Set<EventType>([
-  "session_paused",
-  "session_resumed",
   "session_terminated",
   "session_pr_merged",
 ]);
