@@ -4,6 +4,9 @@ const resetUi = vi.fn();
 const recreateClient = vi.fn();
 const logout = vi.fn();
 const resetEntities = vi.fn();
+const unregister = vi.fn();
+const clearLocalNotificationState = vi.fn();
+const readPushRegistration = vi.fn();
 
 vi.mock("@trace/client-core", () => ({
   useAuthStore: {
@@ -22,6 +25,15 @@ vi.mock("@/lib/urql", () => ({
   recreateClient,
 }));
 
+vi.mock("@/lib/notifications", () => ({
+  clearLocalNotificationState,
+  unregister,
+}));
+
+vi.mock("@/lib/notification-registration", () => ({
+  readPushRegistration,
+}));
+
 vi.mock("@/stores/ui", () => ({
   useMobileUIStore: {
     getState: () => ({
@@ -36,6 +48,16 @@ describe("handleMobileSignOut", () => {
     recreateClient.mockReset();
     logout.mockReset();
     resetEntities.mockReset();
+    unregister.mockReset();
+    clearLocalNotificationState.mockReset();
+    readPushRegistration.mockReset();
+    unregister.mockResolvedValue(undefined);
+    clearLocalNotificationState.mockResolvedValue(undefined);
+    readPushRegistration.mockResolvedValue({
+      token: "ExponentPushToken[current-device]",
+      userId: "user-1",
+      organizationId: "org-1",
+    });
   });
 
   it("resets UI state, recreates the client, and logs out", async () => {
@@ -43,11 +65,17 @@ describe("handleMobileSignOut", () => {
     resetUi.mockImplementation(() => {
       order.push("reset-ui");
     });
+    unregister.mockImplementation(async () => {
+      order.push("unregister");
+    });
     recreateClient.mockImplementation(() => {
       order.push("recreate-client");
     });
     logout.mockImplementation(async () => {
       order.push("logout");
+    });
+    clearLocalNotificationState.mockImplementation(async () => {
+      order.push("clear-notifications");
     });
 
     const { handleMobileSignOut } = await import("./auth");
@@ -56,7 +84,40 @@ describe("handleMobileSignOut", () => {
 
     expect(resetUi).toHaveBeenCalledTimes(1);
     expect(recreateClient).toHaveBeenCalledTimes(1);
+    expect(logout).toHaveBeenCalledWith({ pushToken: "ExponentPushToken[current-device]" });
+    expect(unregister).toHaveBeenCalledTimes(1);
+    expect(clearLocalNotificationState).toHaveBeenCalledTimes(1);
+    expect(order).toEqual([
+      "unregister",
+      "reset-ui",
+      "recreate-client",
+      "logout",
+      "clear-notifications",
+    ]);
+  });
+
+  it("continues sign-out when direct push unregister fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    unregister.mockRejectedValueOnce(new Error("network"));
+
+    const { handleMobileSignOut } = await import("./auth");
+
+    await handleMobileSignOut();
+
+    expect(resetUi).toHaveBeenCalledTimes(1);
+    expect(recreateClient).toHaveBeenCalledTimes(1);
     expect(logout).toHaveBeenCalledTimes(1);
-    expect(order).toEqual(["reset-ui", "recreate-client", "logout"]);
+    expect(clearLocalNotificationState).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it("clears local notification state on unauthorized logout", async () => {
+    const { handleUnauthorized } = await import("./auth");
+
+    await handleUnauthorized();
+
+    expect(resetEntities).toHaveBeenCalledTimes(1);
+    expect(logout).toHaveBeenCalledTimes(1);
+    expect(clearLocalNotificationState).toHaveBeenCalledTimes(1);
   });
 });

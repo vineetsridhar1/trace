@@ -1,4 +1,6 @@
 import { useAuthStore, useEntityStore } from "@trace/client-core";
+import { clearLocalNotificationState, unregister } from "@/lib/notifications";
+import { readPushRegistration } from "@/lib/notification-registration";
 import { recreateClient } from "@/lib/urql";
 import { useMobileUIStore } from "@/stores/ui";
 
@@ -44,6 +46,7 @@ export function isUnauthorized(error: unknown): boolean {
 export async function handleUnauthorized(): Promise<void> {
   useEntityStore.getState().reset();
   await useAuthStore.getState().logout();
+  await clearLocalNotificationState();
 }
 
 /**
@@ -51,7 +54,12 @@ export async function handleUnauthorized(): Promise<void> {
  * UI state and the current GraphQL client in sync across every sign-out entry point.
  */
 export async function handleMobileSignOut(): Promise<void> {
+  const registration = await readPushRegistration();
+  await unregister().catch((err: unknown) => {
+    console.warn("[auth] push unregister failed; relying on server logout cleanup", err);
+  });
   useMobileUIStore.getState().reset();
   recreateClient();
-  await useAuthStore.getState().logout();
+  await useAuthStore.getState().logout({ pushToken: registration?.token });
+  await clearLocalNotificationState();
 }

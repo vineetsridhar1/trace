@@ -13,6 +13,10 @@ export interface OrgMembership {
   organization: { id: string; name: string };
 }
 
+export interface LogoutOptions {
+  pushToken?: string | null;
+}
+
 export interface AuthState {
   user: User | null;
   activeOrgId: string | null;
@@ -22,7 +26,7 @@ export interface AuthState {
   token: string | null;
   signInWithToken: (token: string) => Promise<void>;
   fetchMe: () => Promise<void>;
-  logout: () => Promise<void>;
+  logout: (options?: LogoutOptions) => Promise<void>;
   setActiveOrg: (orgId: string) => void;
 }
 
@@ -118,13 +122,15 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
     }
   },
 
-  logout: async () => {
+  logout: async (options?: LogoutOptions) => {
     const platform = getPlatform();
     const headers: Record<string, string> = {};
     if (platform.authMode === "bearer") {
       const token = useAuthStore.getState().token;
       if (token) headers.Authorization = `Bearer ${token}`;
     }
+    const body = options?.pushToken ? JSON.stringify({ pushToken: options.pushToken }) : undefined;
+    if (body) headers["Content-Type"] = "application/json";
     try {
       await platform.secureStorage.clearToken();
       await platform.storage.removeItem(ACTIVE_ORG_KEY);
@@ -136,6 +142,7 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
         method: "POST",
         credentials: "include",
         headers,
+        body,
         signal: AbortSignal.timeout(5000),
       });
     } catch (err) {

@@ -722,6 +722,32 @@ describe("local mobile pairing", () => {
       revokedAt: null,
     });
     prismaMock.localMobileDevice.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.pushToken.deleteMany.mockResolvedValue({ count: 1 });
+
+    const res = await fetch(`${baseUrl}/auth/logout`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer opaque-device-secret",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ pushToken: "ExponentPushToken[current-device]" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.localMobileDevice.updateMany).toHaveBeenCalledTimes(2);
+    expect(prismaMock.pushToken.deleteMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", token: "ExponentPushToken[current-device]" },
+    });
+  });
+
+  it("does not remove every push token when logout omits a current push token", async () => {
+    prismaMock.localMobileDevice.findUnique.mockResolvedValue({
+      id: "device-1",
+      ownerUserId: "user-1",
+      organizationId: "org-1",
+      revokedAt: null,
+    });
+    prismaMock.localMobileDevice.updateMany.mockResolvedValue({ count: 1 });
 
     const res = await fetch(`${baseUrl}/auth/logout`, {
       method: "POST",
@@ -729,7 +755,7 @@ describe("local mobile pairing", () => {
     });
 
     expect(res.status).toBe(200);
-    expect(prismaMock.localMobileDevice.updateMany).toHaveBeenCalledTimes(2);
+    expect(prismaMock.pushToken.deleteMany).not.toHaveBeenCalled();
   });
 });
 

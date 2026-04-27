@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useAuthStore, useEntityField, useEntityStore, type AuthState } from "@trace/client-core";
+import { useAuthStore, useEntityField, type AuthState } from "@trace/client-core";
 import {
   LayoutAnimation,
   Platform,
@@ -20,6 +20,7 @@ import {
 } from "@/hooks/useChannelSessionGroups";
 import { fetchChannelSessionGroups } from "@/hooks/useChannelSessionGroupsQuery";
 import { refreshOrgData } from "@/hooks/useHydrate";
+import { handleUnauthorized } from "@/lib/auth";
 import { createQuickSession } from "@/lib/createQuickSession";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
@@ -56,7 +57,6 @@ export default function ChannelDetail() {
   );
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
-  const logout = useAuthStore((s: AuthState) => s.logout);
   const channelName = useEntityField("channels", channelId, "name");
   const sections = useChannelSessionGroupSections(channelId, scope, userId);
 
@@ -77,8 +77,7 @@ export default function ChannelDetail() {
         tasks.push(
           refreshOrgData(activeOrgId).then((result) => {
             if (!result.authorized) {
-              useEntityStore.getState().reset();
-              return logout();
+              return handleUnauthorized();
             }
             return undefined;
           }),
@@ -88,7 +87,7 @@ export default function ChannelDetail() {
     } finally {
       setRefreshing(false);
     }
-  }, [channelId, activeOrgId, logout]);
+  }, [channelId, activeOrgId]);
 
   const handleOpenArchive = useCallback(() => {
     void haptic.light();

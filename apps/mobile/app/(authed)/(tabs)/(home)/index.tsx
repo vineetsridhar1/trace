@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
-import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
+import { useAuthStore, type AuthState } from "@trace/client-core";
 import { EmptyState } from "@/components/design-system";
 import { useTheme } from "@/theme";
 import { HomeRepoFilter } from "@/components/home/HomeRepoFilter";
@@ -9,6 +9,7 @@ import { HomeSectionHeader } from "@/components/home/HomeSectionHeader";
 import { SessionGroupRow } from "@/components/channels/SessionGroupRow";
 import { useHomeSections, type HomeSectionKind } from "@/hooks/useHomeSections";
 import { refreshOrgData } from "@/hooks/useHydrate";
+import { handleUnauthorized } from "@/lib/auth";
 import { haptic } from "@/lib/haptics";
 import { orgRefreshStatus, useRefreshStatusStore } from "@/stores/refresh-status";
 import { useMobileUIStore, type MobileUIState } from "@/stores/ui";
@@ -21,7 +22,6 @@ export default function AuthedHome() {
   const theme = useTheme();
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
-  const logout = useAuthStore((s: AuthState) => s.logout);
   const repoFilter = useMobileUIStore((s: MobileUIState) => s.homeRepoFilter);
   const loadError = useRefreshStatusStore((s) => orgRefreshStatus(s.byOrg, activeOrgId).homeError);
   const sections = useHomeSections(userId, repoFilter);
@@ -45,14 +45,12 @@ export default function AuthedHome() {
     try {
       const result = await refreshOrgData(activeOrgId);
       if (!result.authorized) {
-        useEntityStore.getState().reset();
-        await logout();
-        return;
+        await handleUnauthorized();
       }
     } finally {
       setRefreshing(false);
     }
-  }, [activeOrgId, logout]);
+  }, [activeOrgId]);
 
   const ListHeader = useMemo(() => <HomeRepoFilter userId={userId} />, [userId]);
 

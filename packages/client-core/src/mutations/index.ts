@@ -178,6 +178,18 @@ export const DISMISS_AGENT_SUGGESTION_MUTATION = gql`
   }
 `;
 
+export const REGISTER_PUSH_TOKEN_MUTATION = gql`
+  mutation RegisterPushToken($token: String!, $platform: PushPlatform!) {
+    registerPushToken(token: $token, platform: $platform)
+  }
+`;
+
+export const UNREGISTER_PUSH_TOKEN_MUTATION = gql`
+  mutation UnregisterPushToken($token: String!) {
+    unregisterPushToken(token: $token)
+  }
+`;
+
 export const AVAILABLE_RUNTIMES_QUERY = gql`
   query AvailableRuntimes($tool: CodingTool!, $sessionGroupId: ID) {
     availableRuntimes(tool: $tool, sessionGroupId: $sessionGroupId) {

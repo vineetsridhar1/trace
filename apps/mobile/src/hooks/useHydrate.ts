@@ -6,11 +6,10 @@ import {
   handleOrgEvent,
   useAuthStore,
   useEntityStore,
-  type AuthState,
   type SessionGroupEntity,
 } from "@trace/client-core";
 import type { Channel, ChannelGroup, Event, Session, SessionGroup } from "@trace/gql";
-import { isUnauthorized } from "@/lib/auth";
+import { handleUnauthorized, isUnauthorized } from "@/lib/auth";
 import { reconcileEntitySnapshot, resetEntitySnapshots } from "@/lib/entitySnapshots";
 import { latestTimestamp, mergeSessionGroupEntity } from "@/lib/session-group";
 import { userFacingError } from "@/lib/requestError";
@@ -296,9 +295,7 @@ function sessionGroupsFromSessions(
 }
 
 export function useHydrate(activeOrgId: string | null): void {
-  const logout = useAuthStore((s: AuthState) => s.logout);
   const previousOrgIdRef = useRef<string | null>(activeOrgId);
-
   useEffect(() => {
     if (previousOrgIdRef.current !== activeOrgId) {
       resetEntitySnapshots();
@@ -309,22 +306,17 @@ export function useHydrate(activeOrgId: string | null): void {
     let cancelled = false;
     const client = getClient();
 
-    async function handle401() {
-      useEntityStore.getState().reset();
-      await logout();
-    }
-
     void (async () => {
       const result = await refreshOrgData(activeOrgId);
       if (cancelled) return;
-      if (!result.authorized) await handle401();
+      if (!result.authorized) await handleUnauthorized();
     })();
 
     const subscription = client
       .subscription(ORG_EVENTS_SUBSCRIPTION, { organizationId: activeOrgId })
       .subscribe((result: { error?: unknown; data?: { orgEvents?: Event } }) => {
         if (isUnauthorized(result.error)) {
-          void handle401();
+          void handleUnauthorized();
           return;
         }
         if (result.error) {
@@ -341,7 +333,7 @@ export function useHydrate(activeOrgId: string | null): void {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [activeOrgId, logout]);
+  }, [activeOrgId]);
 
   // Catch up list-level state (sessions, channels, unread counts) after a WS
   // reconnect: the server's in-memory pubsub has no replay, so events emitted
@@ -355,13 +347,12 @@ export function useHydrate(activeOrgId: string | null): void {
     void (async () => {
       const result = await refreshOrgData(activeOrgId);
       if (!result.authorized) {
-        useEntityStore.getState().reset();
-        await logout();
+        await handleUnauthorized();
       }
     })().catch((err: unknown) => {
       console.warn("[hydrate] reconnect refresh failed", err);
     });
-  }, [activeOrgId, logout, reconnectCounter]);
+  }, [activeOrgId, reconnectCounter]);
 
   // Re-fetch /auth/me on app foreground if it's been more than 24h since any
   // successful request. Unrelated to WS state — this is a periodic auth-staleness

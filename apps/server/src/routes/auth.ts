@@ -24,6 +24,7 @@ import {
   revokeLocalMobileDevice,
   revokeLocalMobileDeviceByToken,
 } from "../services/local-mobile-auth.js";
+import { pushTokenService } from "../services/pushTokenService.js";
 import { resolveJwtSecret } from "../lib/jwt-secret.js";
 
 const router: RouterType = Router();
@@ -64,6 +65,13 @@ export function getAllowedOAuthOrigins(): Set<string> {
 
 function isAllowedOrigin(origin: string): boolean {
   return getAllowedOAuthOrigins().has(origin);
+}
+
+function logoutPushToken(req: Request): string | null {
+  const body = req.body as unknown;
+  if (!body || typeof body !== "object") return null;
+  const token = (body as { pushToken?: unknown }).pushToken;
+  return typeof token === "string" && token.length > 0 ? token : null;
 }
 
 export function createOAuthStateToken(origin: string): string {
@@ -622,11 +630,15 @@ router.get("/auth/bridge-token", async (req: Request, res: Response) => {
 // Logout
 router.post("/auth/logout", async (req: Request, res: Response) => {
   const authenticated = await resolveAuthenticatedUser(req);
+  const pushToken = logoutPushToken(req);
   if (rejectExternalLocalModeRequest(req, res, authenticated)) {
     return;
   }
   if (authenticated?.auth.kind === "local_mobile") {
     await revokeLocalMobileDeviceByToken(authenticated.token);
+  }
+  if (authenticated && pushToken) {
+    await pushTokenService.unregister({ userId: authenticated.auth.userId, token: pushToken });
   }
   const { maxAge: _maxAge, ...cookieOptions } = getSessionCookieOptions();
   res.clearCookie("trace_token", cookieOptions);
