@@ -4007,13 +4007,18 @@ export class SessionService {
       actorType,
       actorId,
     } = params;
-    const sourceRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
+    const sourceRuntimeId =
+      this.getConnectionRuntimeInstanceId(session.connection) ??
+      sessionRouter.getRuntimeForSession(session.id)?.id ??
+      null;
+    const inspectableSourceRuntimeId =
+      sourceRuntimeId && sessionRouter.isRuntimeAvailable(sourceRuntimeId) ? sourceRuntimeId : null;
 
     const sourceGitStatus = await this.inspectSessionMoveSource({
       sessionId: session.id,
       repoId: session.repoId,
       workdir: session.workdir,
-      runtimeInstanceId: sourceRuntimeId,
+      runtimeInstanceId: inspectableSourceRuntimeId,
     });
 
     terminalRelay.destroyAllForSession(session.id);

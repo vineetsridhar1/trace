@@ -2593,6 +2593,61 @@ describe("SessionService", () => {
       expect(prismaMock.session.update).not.toHaveBeenCalled();
     });
 
+    it("allows moving from a stale source runtime for recovery", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          workdir: "/tmp/trace/worktrees/session-1",
+          connection: {
+            state: "disconnected",
+            runtimeInstanceId: "runtime-source",
+            runtimeLabel: "Laptop A",
+            retryCount: 1,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          hosting: "local",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            runtimeLabel: "Laptop B",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Laptop B",
+        hostingMode: "local",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: ["repo-1"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      sessionRouterMock.isRuntimeAvailable.mockReturnValueOnce(false);
+
+      const result = await service.moveToRuntime(
+        "session-1",
+        "runtime-1",
+        "org-1",
+        "user",
+        "user-1",
+      );
+
+      expect(result.id).toBe("session-1");
+      expect(sessionRouterMock.inspectSessionGitSyncStatus).not.toHaveBeenCalled();
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "runtime-1");
+    });
+
     it("allows moving a detached repo session by restoring from the current commit", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({
