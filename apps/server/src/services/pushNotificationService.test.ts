@@ -1,0 +1,141 @@
+import type { Event as PrismaEvent } from "@prisma/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../lib/db.js", async () => {
+  const { createPrismaMock } = await import("../../test/helpers.js");
+  return { prisma: createPrismaMock() };
+});
+
+import { prisma } from "../lib/db.js";
+import { PushNotificationService } from "./pushNotificationService.js";
+
+const prismaMock = prisma as unknown as {
+  session: {
+    findUnique: ReturnType<typeof vi.fn>;
+  };
+  pushToken: {
+    findMany: ReturnType<typeof vi.fn>;
+  };
+};
+
+function event(overrides: Partial<PrismaEvent>): PrismaEvent {
+  return {
+    id: "event-1",
+    organizationId: "org-1",
+    scopeType: "session",
+    scopeId: "session-1",
+    eventType: "session_terminated",
+    payload: {},
+    actorType: "system",
+    actorId: "system",
+    parentId: null,
+    metadata: {},
+    timestamp: new Date("2026-04-27T00:00:00.000Z"),
+    ...overrides,
+  } as PrismaEvent;
+}
+
+describe("PushNotificationService", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, status: 200 })),
+    );
+    prismaMock.pushToken.findMany.mockResolvedValue([
+      {
+        id: "push-1",
+        userId: "user-1",
+        organizationId: "org-1",
+        token: "ExponentPushToken[token-1]",
+        platform: "ios",
+      },
+      {
+        id: "push-2",
+        userId: "user-1",
+        organizationId: "org-1",
+        token: "not-an-expo-token",
+        platform: "ios",
+      },
+    ]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("sends session status pushes to the session owner", async () => {
+    prismaMock.session.findUnique.mockResolvedValue({
+      createdById: "user-1",
+      name: "Fix flaky CI",
+      sessionGroupId: "group-1",
+      agentStatus: "failed",
+    });
+
+    await new PushNotificationService().notifyForEvent(
+      event({ payload: { agentStatus: "failed" } }),
+    );
+
+    expect(prismaMock.pushToken.findMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", organizationId: "org-1" },
+      orderBy: { lastSeenAt: "desc" },
+    });
+    expect(fetch).toHaveBeenCalledWith("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        {
+          to: "ExponentPushToken[token-1]",
+          title: '"Fix flaky CI" is now Failed',
+          data: { deepLink: "trace://sessions/group-1/session-1" },
+        },
+      ]),
+    });
+  });
+
+  it("does not send a session push for the owner's own action", async () => {
+    prismaMock.session.findUnique.mockResolvedValue({
+      createdById: "user-1",
+      name: "Fix flaky CI",
+      sessionGroupId: "group-1",
+      agentStatus: "done",
+    });
+
+    await new PushNotificationService().notifyForEvent(
+      event({ actorType: "user", actorId: "user-1" }),
+    );
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("sends bridge access request pushes to the owner", async () => {
+    await new PushNotificationService().notifyForEvent(
+      event({
+        scopeType: "system",
+        scopeId: "org-1",
+        eventType: "bridge_access_requested",
+        actorType: "user",
+        actorId: "user-2",
+        payload: {
+          ownerUserId: "user-1",
+          runtimeLabel: "Studio Mac",
+          requesterUser: { name: "Casey" },
+          status: "pending",
+        },
+      }),
+    );
+
+    expect(fetch).toHaveBeenCalledWith("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        {
+          to: "ExponentPushToken[token-1]",
+          title: "Casey requested bridge access",
+          body: "Review access for Studio Mac",
+          data: { deepLink: "trace://connections" },
+        },
+      ]),
+    });
+  });
+});

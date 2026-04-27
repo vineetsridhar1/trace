@@ -1,6 +1,11 @@
 import { AppState } from "react-native";
 import * as Notifications from "expo-notifications";
-import { registerHandler, useAuthStore, useEntityStore, type SessionEntity } from "@trace/client-core";
+import {
+  registerHandler,
+  useAuthStore,
+  useEntityStore,
+  type SessionEntity,
+} from "@trace/client-core";
 import type { Event, EventType } from "@trace/gql";
 import {
   buildBridgeAccessRequestedNotification,
@@ -18,12 +23,26 @@ const SESSION_STATUS_EVENT_TYPES: EventType[] = [
 
 const recentNotifications = new Map<string, number>();
 const DEBOUNCE_MS = 5000;
+const MAX_RECENT_NOTIFICATIONS = 200;
 
-function shouldDebounce(key: string): boolean {
-  const now = Date.now();
+export function resetNotificationDebounceForTest(): void {
+  recentNotifications.clear();
+}
+
+export function shouldDebounceNotification(key: string, now = Date.now()): boolean {
   const previous = recentNotifications.get(key);
   if (previous && now - previous < DEBOUNCE_MS) {
     return true;
+  }
+  for (const [entryKey, timestamp] of recentNotifications) {
+    if (now - timestamp >= DEBOUNCE_MS) {
+      recentNotifications.delete(entryKey);
+    }
+  }
+  while (recentNotifications.size >= MAX_RECENT_NOTIFICATIONS) {
+    const oldest = recentNotifications.keys().next().value;
+    if (!oldest) break;
+    recentNotifications.delete(oldest);
   }
   recentNotifications.set(key, now);
   return false;
@@ -45,7 +64,7 @@ async function presentLocalNotification(content: LocalNotificationContent): Prom
   });
 }
 
-function handleSessionAgentStatusChange(event: Event): void {
+export function handleSessionAgentStatusChange(event: Event): void {
   const currentUserId = useAuthStore.getState().user?.id;
   if (!currentUserId || event.actor.id === currentUserId) return;
 
@@ -54,7 +73,7 @@ function handleSessionAgentStatusChange(event: Event): void {
   if (!session.sessionGroupId) return;
 
   const dedupeKey = `session:${event.scopeId}:${session.agentStatus}`;
-  if (shouldDebounce(dedupeKey)) return;
+  if (shouldDebounceNotification(dedupeKey)) return;
 
   void presentLocalNotification(
     buildSessionAgentStatusNotification({
@@ -68,13 +87,13 @@ function handleSessionAgentStatusChange(event: Event): void {
   });
 }
 
-function handleBridgeAccessRequested(event: Event): void {
+export function handleBridgeAccessRequested(event: Event): void {
   const currentUserId = useAuthStore.getState().user?.id;
   if (!currentUserId) return;
 
   const request = parseBridgeAccessNotificationPayload(event.payload, event.actor.name);
   if (!request || request.ownerUserId !== currentUserId || request.status !== "pending") return;
-  if (shouldDebounce(`bridge:${request.requestId}`)) return;
+  if (shouldDebounceNotification(`bridge:${request.requestId}`)) return;
 
   void presentLocalNotification(
     buildBridgeAccessRequestedNotification({

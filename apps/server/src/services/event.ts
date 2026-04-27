@@ -4,6 +4,7 @@ import { prisma } from "../lib/db.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { redis } from "../lib/redis.js";
 import { isLocalMode } from "../lib/mode.js";
+import { pushNotificationService } from "./pushNotificationService.js";
 
 export interface CreateEventInput {
   organizationId: string;
@@ -136,6 +137,9 @@ export class EventService {
 
     // Append to org-scoped Redis Stream for durable consumption by the agent worker
     this.appendToStream(input.organizationId, event);
+    void pushNotificationService.notifyForEvent(event).catch((err: Error) => {
+      console.error("[push-notifications] event notification failed:", err.message);
+    });
 
     return event;
   }
