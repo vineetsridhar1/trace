@@ -47,10 +47,7 @@ describe("SessionRouter stale runtime eviction", () => {
       supportedTools: ["codex"],
     });
 
-    const eviction = router.evictRuntimeIfStale(
-      stale.runtimeId,
-      stale.lastHeartbeat,
-    );
+    const eviction = router.evictRuntimeIfStale(stale.runtimeId, stale.lastHeartbeat);
     expect(eviction).toEqual({ evicted: false, affectedSessions: [] });
     expect(router.getRuntime("runtime-1")?.ws).toBe(reconnectedWs);
     expect(router.getRuntimeForSession("session-1")?.id).toBe("runtime-1");
@@ -72,10 +69,7 @@ describe("SessionRouter stale runtime eviction", () => {
 
     now.mockReturnValue(SessionRouter.HEARTBEAT_TIMEOUT_MS + 1);
     const [stale] = router.checkStaleRuntimes();
-    const eviction = router.evictRuntimeIfStale(
-      stale.runtimeId,
-      stale.lastHeartbeat,
-    );
+    const eviction = router.evictRuntimeIfStale(stale.runtimeId, stale.lastHeartbeat);
 
     expect(eviction).toEqual({ evicted: true, affectedSessions: ["session-1"] });
     expect(router.getRuntime("runtime-1")).toBeUndefined();
@@ -97,10 +91,7 @@ describe("SessionRouter stale runtime eviction", () => {
 
     now.mockReturnValue(SessionRouter.HEARTBEAT_TIMEOUT_MS + 1);
     const [stale] = router.checkStaleRuntimes();
-    const eviction = router.evictRuntimeIfStale(
-      stale.runtimeId,
-      stale.lastHeartbeat,
-    );
+    const eviction = router.evictRuntimeIfStale(stale.runtimeId, stale.lastHeartbeat);
 
     expect(eviction).toEqual({ evicted: true, affectedSessions: [] });
     expect(router.getRuntime("runtime-1")).toBeUndefined();

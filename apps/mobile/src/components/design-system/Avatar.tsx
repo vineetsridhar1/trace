@@ -1,11 +1,5 @@
 import { useState } from "react";
-import {
-  Image,
-  StyleSheet,
-  View,
-  type ImageStyle,
-  type ViewStyle,
-} from "react-native";
+import { Image, StyleSheet, View, type ImageStyle, type ViewStyle } from "react-native";
 import { useTheme } from "@/theme";
 import { Text } from "./Text";
 
@@ -81,12 +75,7 @@ export function Avatar({ name, uri, size = "md", style }: AvatarProps) {
 
   return (
     <View
-      style={[
-        styles.fallback,
-        viewStyle,
-        { backgroundColor: bg },
-        style,
-      ]}
+      style={[styles.fallback, viewStyle, { backgroundColor: bg }, style]}
       accessible
       accessibilityLabel={name}
     >

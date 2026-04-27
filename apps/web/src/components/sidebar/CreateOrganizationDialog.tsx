@@ -114,9 +114,7 @@ export function CreateOrganizationDialog({ trigger }: { trigger?: ReactElement }
           </div>
 
           <DialogFooter className="flex-row justify-end gap-2 border-t bg-transparent pt-4">
-            <DialogClose render={<Button type="button" variant="ghost" />}>
-              Cancel
-            </DialogClose>
+            <DialogClose render={<Button type="button" variant="ghost" />}>Cancel</DialogClose>
             <Button type="submit" disabled={!canSubmit}>
               {submitting ? "Creating..." : "Create organization"}
             </Button>

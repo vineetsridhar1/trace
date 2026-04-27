@@ -22,8 +22,16 @@ import {
 } from "./agent/router.js";
 import { EventAggregator, type AggregatedBatch } from "./agent/aggregator.js";
 import { costTrackingService } from "./services/cost-tracking.js";
-import { startSummaryWorker, stopSummaryWorker, trackEventForSummary } from "./agent/summary-worker.js";
-import { startMemoryExtractorWorker, stopMemoryExtractorWorker, trackEventForMemoryExtraction } from "./agent/memory-extractor-worker.js";
+import {
+  startSummaryWorker,
+  stopSummaryWorker,
+  trackEventForSummary,
+} from "./agent/summary-worker.js";
+import {
+  startMemoryExtractorWorker,
+  stopMemoryExtractorWorker,
+  trackEventForMemoryExtraction,
+} from "./agent/memory-extractor-worker.js";
 import { startEmbeddingWorker, stopEmbeddingWorker } from "./agent/embedding-worker.js";
 import { ActionExecutor } from "./agent/executor.js";
 import { runPipeline } from "./agent/pipeline.js";
@@ -34,7 +42,10 @@ import { inboxService } from "./services/inbox.js";
 import { channelService } from "./services/channel.js";
 import { organizationService } from "./services/organization.js";
 import { eventService } from "./services/event.js";
-import { startSuggestionExpiryWorker, stopSuggestionExpiryWorker } from "./agent/suggestion-expiry.js";
+import {
+  startSuggestionExpiryWorker,
+  stopSuggestionExpiryWorker,
+} from "./agent/suggestion-expiry.js";
 import { memoryService } from "./services/memory.js";
 import { setPolicyCostTracker } from "./agent/policy-engine.js";
 import { publishWorkerStatus, publishAggregationWindows } from "./services/agent-worker-status.js";
@@ -465,7 +476,9 @@ async function processEvents(orgId: string, entries: StreamEntry[]): Promise<voi
       trackEventForSummary(orgId, event.scopeType, event.scopeId).catch(() => {});
 
       // Track event for memory extraction (non-blocking)
-      trackEventForMemoryExtraction(orgId, event.scopeType, event.scopeId, event.eventType).catch(() => {});
+      trackEventForMemoryExtraction(orgId, event.scopeType, event.scopeId, event.eventType).catch(
+        () => {},
+      );
 
       // Route the event
       const result = routeEvent(event, agentContext);
@@ -508,7 +521,10 @@ async function consumeLoop(): Promise<void> {
 
       for (const [orgId, entries] of batches) {
         await processEvents(orgId, entries);
-        await ackEvents(orgId, entries.map((e) => e.id));
+        await ackEvents(
+          orgId,
+          entries.map((e) => e.id),
+        );
       }
     } catch (err) {
       if (!shuttingDown) {
@@ -614,10 +630,7 @@ async function shutdown(signal: string): Promise<void> {
   if (pendingPipelines.size > 0) {
     log(`draining ${pendingPipelines.size} pending pipeline(s)...`);
     const drainTimeout = new Promise<void>((resolve) => setTimeout(resolve, 30_000));
-    await Promise.race([
-      Promise.allSettled([...pendingPipelines]),
-      drainTimeout,
-    ]);
+    await Promise.race([Promise.allSettled([...pendingPipelines]), drainTimeout]);
     log("pipeline drain complete", { remaining: pendingPipelines.size });
   }
 

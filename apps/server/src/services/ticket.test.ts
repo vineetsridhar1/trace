@@ -59,19 +59,22 @@ describe("TicketService", () => {
       },
       include: expect.any(Object),
     });
-    expect(eventServiceMock.create).toHaveBeenCalledWith({
-      organizationId: "org-1",
-      scopeType: "ticket",
-      scopeId: "ticket-1",
-      eventType: "ticket_created",
-      payload: {
-        ticketId: "ticket-1",
-        title: "Fix auth",
-        priority: "medium",
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      {
+        organizationId: "org-1",
+        scopeType: "ticket",
+        scopeId: "ticket-1",
+        eventType: "ticket_created",
+        payload: {
+          ticketId: "ticket-1",
+          title: "Fix auth",
+          priority: "medium",
+        },
+        actorType: "user",
+        actorId: "user-1",
       },
-      actorType: "user",
-      actorId: "user-1",
-    }, prismaMock);
+      prismaMock,
+    );
   });
 
   it("updates tickets and records prior status in the event payload", async () => {

@@ -1,11 +1,5 @@
 import { AlertTriangle } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { useEntityIds, useEntityField } from "@trace/client-core";
 import type { RuntimeInfo } from "../session/RuntimeSelector";
 import { BranchCombobox } from "./BranchCombobox";
@@ -44,9 +38,7 @@ export function RepoSection({
   return (
     <>
       <div>
-        <label className="mb-1.5 block text-sm text-muted-foreground">
-          Repository
-        </label>
+        <label className="mb-1.5 block text-sm text-muted-foreground">Repository</label>
         {lockedRepoId ? (
           <div className="flex h-9 items-center rounded-md border border-border bg-muted px-3 text-sm text-muted-foreground">
             {triggerLabel}
@@ -81,9 +73,7 @@ export function RepoSection({
 
       {effectiveRepoId && (
         <div className="col-span-2">
-          <label className="mb-1.5 block text-sm text-muted-foreground">
-            Branch
-          </label>
+          <label className="mb-1.5 block text-sm text-muted-foreground">Branch</label>
           <BranchCombobox
             repoId={effectiveRepoId}
             runtimeInstanceId={runtimeInstanceId}
@@ -98,7 +88,11 @@ export function RepoSection({
 }
 
 /** Select option for a single repo — disabled when not linked to the device bridge */
-function RepoOption({ id, isDeviceBridge, registeredRepoIds }: {
+function RepoOption({
+  id,
+  isDeviceBridge,
+  registeredRepoIds,
+}: {
   key?: string | number;
   id: string;
   isDeviceBridge: boolean;

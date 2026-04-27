@@ -23,7 +23,11 @@ const executor = new ActionExecutor({
 });
 
 export const inboxQueries = {
-  inboxItems: (_: unknown, args: { organizationId: string; status?: InboxItemStatus }, ctx: Context) => {
+  inboxItems: (
+    _: unknown,
+    args: { organizationId: string; status?: InboxItemStatus },
+    ctx: Context,
+  ) => {
     assertOrgAccess(ctx, args.organizationId);
     return inboxService.listForUser(args.organizationId, ctx.userId, args.status ?? undefined);
   },
@@ -50,9 +54,7 @@ export const inboxMutations = {
     const storedArgs = payload.args as Record<string, unknown> | undefined;
 
     if (actionType && storedArgs) {
-      const finalArgs = args.edits
-        ? { ...storedArgs, ...args.edits }
-        : storedArgs;
+      const finalArgs = args.edits ? { ...storedArgs, ...args.edits } : storedArgs;
 
       const action: PlannedAction = { actionType, args: finalArgs };
       // Use the accepting user's ID — they're the one approving this action
@@ -72,11 +74,7 @@ export const inboxMutations = {
     return inboxService.acceptSuggestion(args.inboxItemId, ctx.userId, orgId);
   },
 
-  dismissAgentSuggestion: async (
-    _: unknown,
-    args: { inboxItemId: string },
-    ctx: Context,
-  ) => {
+  dismissAgentSuggestion: async (_: unknown, args: { inboxItemId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     const item = await inboxService.dismissSuggestion(args.inboxItemId, ctx.userId, orgId);
 

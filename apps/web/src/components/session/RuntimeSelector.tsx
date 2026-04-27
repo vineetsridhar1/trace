@@ -1,13 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Monitor, Loader2 } from "lucide-react";
 import type { SessionRuntimeInstance } from "@trace/gql";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { client } from "../../lib/urql";
 import { AVAILABLE_RUNTIMES_QUERY } from "@trace/client-core";
 
@@ -28,7 +22,13 @@ interface RuntimeSelectorProps {
   channelRepoId?: string;
 }
 
-export function RuntimeSelector({ tool, open, value, onChange, channelRepoId }: RuntimeSelectorProps) {
+export function RuntimeSelector({
+  tool,
+  open,
+  value,
+  onChange,
+  channelRepoId,
+}: RuntimeSelectorProps) {
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -45,8 +45,8 @@ export function RuntimeSelector({ tool, open, value, onChange, channelRepoId }: 
           (r: SessionRuntimeInstance) => r.connected && r.hostingMode === "local",
         );
         const eligible = channelRepoId
-          ? connected.filter(
-              (r: SessionRuntimeInstance) => r.registeredRepoIds.includes(channelRepoId),
+          ? connected.filter((r: SessionRuntimeInstance) =>
+              r.registeredRepoIds.includes(channelRepoId),
             )
           : connected;
         if (eligible.length === 1 && !value) {
@@ -66,7 +66,10 @@ export function RuntimeSelector({ tool, open, value, onChange, channelRepoId }: 
   const connectedRuntimes = runtimes.filter(
     (r: SessionRuntimeInstance) => r.connected && r.hostingMode === "local",
   );
-  const selectedRuntime = value === CLOUD_RUNTIME_ID ? null : runtimes.find((r: SessionRuntimeInstance) => r.id === value);
+  const selectedRuntime =
+    value === CLOUD_RUNTIME_ID
+      ? null
+      : runtimes.find((r: SessionRuntimeInstance) => r.id === value);
 
   if (loading) {
     return (
@@ -83,19 +86,23 @@ export function RuntimeSelector({ tool, open, value, onChange, channelRepoId }: 
       onValueChange={(v: string | null) => {
         if (!v) return;
         const rt = runtimes.find((r: SessionRuntimeInstance) => r.id === v);
-        onChange(v, rt ? { hostingMode: rt.hostingMode, registeredRepoIds: rt.registeredRepoIds } : null);
+        onChange(
+          v,
+          rt ? { hostingMode: rt.hostingMode, registeredRepoIds: rt.registeredRepoIds } : null,
+        );
       }}
     >
       <SelectTrigger className="w-full">
         <SelectValue placeholder="Select runtime...">
-          {selectedRuntime ? (
-            <RuntimeLabel runtime={selectedRuntime} />
-          ) : null}
+          {selectedRuntime ? <RuntimeLabel runtime={selectedRuntime} /> : null}
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
         {connectedRuntimes.map((rt: SessionRuntimeInstance) => {
-          const lacksRepo = !!channelRepoId && rt.hostingMode === "local" && !rt.registeredRepoIds.includes(channelRepoId);
+          const lacksRepo =
+            !!channelRepoId &&
+            rt.hostingMode === "local" &&
+            !rt.registeredRepoIds.includes(channelRepoId);
           return (
             <SelectItem key={rt.id} value={rt.id} disabled={lacksRepo}>
               <span className="flex items-center gap-1.5">
@@ -127,7 +134,7 @@ export function RuntimeSelector({ tool, open, value, onChange, channelRepoId }: 
   );
 }
 
-function RuntimeIcon({ hostingMode }: { hostingMode: string }) {
+function RuntimeIcon({ hostingMode: _hostingMode }: { hostingMode: string }) {
   return <Monitor size={12} className="shrink-0 text-green-400" />;
 }
 

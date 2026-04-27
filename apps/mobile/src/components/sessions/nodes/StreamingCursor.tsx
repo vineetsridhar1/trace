@@ -40,11 +40,7 @@ export function StreamingCursor() {
 
   return (
     <Animated.View
-      style={[
-        styles.cursor,
-        { backgroundColor: theme.colors.foreground },
-        animatedStyle,
-      ]}
+      style={[styles.cursor, { backgroundColor: theme.colors.foreground }, animatedStyle]}
     />
   );
 }

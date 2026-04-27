@@ -255,10 +255,10 @@ End the review with a clear list of every file you modified or created:
 
 ### Project File Updates
 
-| File | Action | What Changed |
-|------|--------|-------------|
-| `<plan file>` | Updated / No change | Brief description |
-| `<project folder>/XX-name.md` | Updated / Created | Brief description |
-| `<project folder>/README.md` | Updated / No change | Brief description |
+| File                          | Action              | What Changed      |
+| ----------------------------- | ------------------- | ----------------- |
+| `<plan file>`                 | Updated / No change | Brief description |
+| `<project folder>/XX-name.md` | Updated / Created   | Brief description |
+| `<project folder>/README.md`  | Updated / No change | Brief description |
 
 If no changes were needed, explicitly state: "No plan or ticket updates required — implementation is fully aligned."

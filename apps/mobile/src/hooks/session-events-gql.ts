@@ -20,7 +20,12 @@ export const SESSION_EVENTS_QUERY = gql`
       scopeId
       eventType
       payload
-      actor { type id name avatarUrl }
+      actor {
+        type
+        id
+        name
+        avatarUrl
+      }
       parentId
       timestamp
       metadata
@@ -36,7 +41,12 @@ export const SESSION_EVENTS_SUBSCRIPTION = gql`
       scopeId
       eventType
       payload
-      actor { type id name avatarUrl }
+      actor {
+        type
+        id
+        name
+        avatarUrl
+      }
       parentId
       timestamp
       metadata

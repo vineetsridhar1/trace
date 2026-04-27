@@ -457,8 +457,8 @@ The router maintains an in-memory set of chat IDs the agent is a member of, upda
 
 ```ts
 // In the event router
-if (event.scopeType === 'chat') {
-  if (!agentChatMemberships.has(event.scopeId)) return 'drop';
+if (event.scopeType === "chat") {
+  if (!agentChatMemberships.has(event.scopeId)) return "drop";
 }
 ```
 
@@ -533,13 +533,9 @@ function buildScopeKey(event: DomainEvent): string {
 
   switch (event.scopeType) {
     case "channel":
-      return threadId
-        ? `channel:${event.scopeId}:thread:${threadId}`
-        : `channel:${event.scopeId}`;
+      return threadId ? `channel:${event.scopeId}:thread:${threadId}` : `channel:${event.scopeId}`;
     case "chat":
-      return threadId
-        ? `chat:${event.scopeId}:thread:${threadId}`
-        : `chat:${event.scopeId}`;
+      return threadId ? `chat:${event.scopeId}:thread:${threadId}` : `chat:${event.scopeId}`;
     case "ticket":
       return `ticket:${event.scopeId}`;
     case "session":
@@ -861,6 +857,7 @@ The pipeline operates in an **iterative loop of up to 10 turns**, not a single-s
 4. Loop ends when: planner sets `done=true`, returns `ignore`, disposition is `escalate` on turn >1, or hard cap is hit
 
 Key properties:
+
 - **Context built once** — no DB re-queries mid-loop. Fresh info comes via tool_result observations.
 - **Cost aggregated** — single cost entry at end, not per-iteration.
 - **Tier 3 promotion only on turn 1** — if the planner escalates on a later turn, the loop terminates.
@@ -954,24 +951,29 @@ This ordering ensures the planner knows its capabilities (actions) and identity 
 # Agent Soul — Acme Payments
 
 ## Identity
+
 You are the ambient AI assistant for Acme Payments. You are a member of the engineering team.
 
 ## Personality & Tone
+
 - Be direct and concise. No filler.
 - Use technical language appropriate for senior engineers.
 - When uncertain, say so explicitly.
 
 ## Domain Context
+
 - We build a fintech payments platform processing real money.
 - Correctness > speed. When in doubt, suggest rather than act.
 - Stack: Go backend, React frontend, PostgreSQL, AWS EKS.
 
 ## Priorities
+
 1. Production incidents — always urgent, always immediate.
 2. Security discussions — flag and suggest tickets immediately.
 3. Performance regressions — investigate and link to sessions.
 
 ## Behavioral Rules
+
 - Never auto-assign tickets. Always suggest.
 - Never post in #announcements without approval.
 - For bug reports, default to "high" priority.
@@ -984,7 +986,7 @@ You are the ambient AI assistant for Acme Payments. You are a member of the engi
 interface OrgAgentSettings {
   aiEnabled: boolean;
   autonomyMode: "observe" | "suggest" | "act";
-  soulFile: string;         // markdown content
+  soulFile: string; // markdown content
   modelTier: "default" | "custom";
   costBudget: {
     dailyLimitCents: number;
@@ -1500,10 +1502,10 @@ Uses the existing `ChatMember` model — the agent is added like any other user:
 ```ts
 // User adds the AI to a group chat or starts a DM
 await chatService.addMember({
-  chatId: 'chat_xyz',
-  userId: agentId,            // per-org agent identity
+  chatId: "chat_xyz",
+  userId: agentId, // per-org agent identity
   organizationId: orgId,
-  actorType: 'user',
+  actorType: "user",
   actorId: invitingUserId,
 });
 // Emits: chat.member_added event
@@ -1521,11 +1523,11 @@ function getEffectiveAutonomyMode(scope: Scope, orgDefault: string): string {
   // Explicit scope override always takes precedence
   if (scope.aiMode) return scope.aiMode;
 
-  if (scope.type === 'chat') {
+  if (scope.type === "chat") {
     // DMs: respond when asked, don't volunteer
-    if (scope.entity.chatType === 'dm') return 'observe';
+    if (scope.entity.chatType === "dm") return "observe";
     // Group chats: can suggest, similar to channels but less aggressive
-    if (scope.entity.chatType === 'group') return 'suggest';
+    if (scope.entity.chatType === "group") return "suggest";
   }
 
   return orgDefault;
@@ -1534,14 +1536,14 @@ function getEffectiveAutonomyMode(scope: Scope, orgDefault: string): string {
 
 ### AI behavior by chat type
 
-| Behavior | Channel | Group Chat | DM |
-|---|---|---|---|
-| Observe silently | Always | If member | If member |
-| Suggest tickets (InboxItem) | Yes | Yes | Only if asked |
-| Post messages | Via suggestion or @mention | Via suggestion or @mention | Only when @mentioned or directly asked |
-| Summarize | Rolling summaries | Rolling summaries | Only on explicit request |
-| Proactive suggestions | Normal | Reduced — suggest mode | Minimal — observe mode by default |
-| Link entities | Autonomous (low risk) | Via suggestion | Only if asked |
+| Behavior                    | Channel                    | Group Chat                 | DM                                     |
+| --------------------------- | -------------------------- | -------------------------- | -------------------------------------- |
+| Observe silently            | Always                     | If member                  | If member                              |
+| Suggest tickets (InboxItem) | Yes                        | Yes                        | Only if asked                          |
+| Post messages               | Via suggestion or @mention | Via suggestion or @mention | Only when @mentioned or directly asked |
+| Summarize                   | Rolling summaries          | Rolling summaries          | Only on explicit request               |
+| Proactive suggestions       | Normal                     | Reduced — suggest mode     | Minimal — observe mode by default      |
+| Link entities               | Autonomous (low risk)      | Via suggestion             | Only if asked                          |
 
 ### AI responsibilities in DMs
 
@@ -1580,9 +1582,9 @@ const members = await services.chat.getMembers(event.scopeId);
 
 const scopeEntity = {
   ...chat,
-  chatType: chat.type,       // 'dm' or 'group'
+  chatType: chat.type, // 'dm' or 'group'
   memberCount: members.length,
-  members: members.map(m => ({ id: m.userId, name: m.user.name })),
+  members: members.map((m) => ({ id: m.userId, name: m.user.name })),
 };
 ```
 

@@ -18,20 +18,25 @@ export function SuggestionExpandedDetails({
   return (
     <div className="space-y-2.5 border-t border-border/50 pt-2.5">
       {meta.editableFields.map((field) => {
-        const value = editedArgs[field] ?? ((args[field] as string) ?? "");
+        const value = editedArgs[field] ?? (args[field] as string) ?? "";
         const label = meta.fieldLabels[field] ?? field;
         const isLong = field === "description" || field === "prompt" || field === "text";
 
         if (field === "priority") {
           return (
             <div key={field}>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</label>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+                {label}
+              </label>
               <div className="flex gap-1">
                 {["low", "medium", "high", "urgent"].map((p) => (
                   <button
                     key={p}
                     type="button"
-                    onClick={(e: React.MouseEvent) => { e.stopPropagation(); onEdit("priority", p); }}
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      onEdit("priority", p);
+                    }}
                     className={cn(
                       "rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize transition-colors",
                       (editedArgs.priority ?? args.priority) === p
@@ -50,13 +55,18 @@ export function SuggestionExpandedDetails({
         if (field === "status") {
           return (
             <div key={field}>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</label>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+                {label}
+              </label>
               <div className="flex flex-wrap gap-1">
                 {["backlog", "todo", "in_progress", "in_review", "done"].map((s) => (
                   <button
                     key={s}
                     type="button"
-                    onClick={(e: React.MouseEvent) => { e.stopPropagation(); onEdit("status", s); }}
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      onEdit("status", s);
+                    }}
                     className={cn(
                       "rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize transition-colors",
                       (editedArgs.status ?? args.status) === s
@@ -74,11 +84,15 @@ export function SuggestionExpandedDetails({
 
         return (
           <div key={field}>
-            <label className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</label>
+            <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+              {label}
+            </label>
             {isLong ? (
               <textarea
                 value={value}
-                onChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onEdit(field, e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+                  onEdit(field, e.target.value)
+                }
                 onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 rows={2}
                 className="w-full rounded-md border border-border bg-surface-deep px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
@@ -87,7 +101,9 @@ export function SuggestionExpandedDetails({
               <input
                 type="text"
                 value={value}
-                onChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onEdit(field, e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+                  onEdit(field, e.target.value)
+                }
                 onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 className="w-full rounded-md border border-border bg-surface-deep px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
               />

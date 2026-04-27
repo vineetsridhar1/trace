@@ -5,14 +5,16 @@ import { shortSha } from "@trace/shared";
 import { GitCommitHorizontal, RotateCcw } from "lucide-react";
 import { client } from "../../lib/urql";
 import { START_SESSION_MUTATION } from "@trace/client-core";
-import { useEntityField, useEntityStore, type SessionGroupEntity, type SessionEntity } from "@trace/client-core";
+import {
+  useEntityField,
+  useEntityStore,
+  type SessionGroupEntity,
+  type SessionEntity,
+} from "@trace/client-core";
 import { navigateToSession } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { getSessionGroupChannelId } from "@trace/client-core";
-import {
-  RestoreCheckpointDialog,
-  shouldShowRestoreDialog,
-} from "./RestoreCheckpointDialog";
+import { RestoreCheckpointDialog, shouldShowRestoreDialog } from "./RestoreCheckpointDialog";
 
 function formatCheckpointTime(committedAt: string): string {
   return new Date(committedAt).toLocaleString([], {
@@ -180,17 +182,11 @@ export function CheckpointPanel({
                   </span>
                 )}
               </div>
-              <p className="mt-0.5 truncate text-xs text-foreground/80">
-                {checkpoint.subject}
-              </p>
+              <p className="mt-0.5 truncate text-xs text-foreground/80">{checkpoint.subject}</p>
               <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <span className="truncate">
-                  {sessionName}
-                </span>
+                <span className="truncate">{sessionName}</span>
                 <span>·</span>
-                <span className="shrink-0">
-                  {formatCheckpointTime(checkpoint.committedAt)}
-                </span>
+                <span className="shrink-0">{formatCheckpointTime(checkpoint.committedAt)}</span>
                 {checkpoint.filesChanged > 0 && (
                   <>
                     <span>·</span>
@@ -205,7 +201,10 @@ export function CheckpointPanel({
             {!isCurrent && (
               <button
                 type="button"
-                onClick={(e: React.MouseEvent) => { e.stopPropagation(); requestRestore(checkpoint); }}
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  requestRestore(checkpoint);
+                }}
                 disabled={restoringId !== null}
                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-deep hover:text-foreground disabled:opacity-50"
                 title="Restore as new session"

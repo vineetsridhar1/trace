@@ -54,13 +54,11 @@ export function DeleteChannelDialog({
         <DialogHeader>
           <DialogTitle>Delete channel</DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete <strong>{channelName}</strong>? This will
-            permanently delete the channel and all its sessions, and cannot be undone.
+            Are you sure you want to delete <strong>{channelName}</strong>? This will permanently
+            delete the channel and all its sessions, and cannot be undone.
           </DialogDescription>
         </DialogHeader>
-        {error && (
-          <p className="text-sm text-destructive">{error}</p>
-        )}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
           <Button variant="destructive" disabled={deleting} onClick={handleDelete}>

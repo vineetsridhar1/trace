@@ -149,8 +149,14 @@ export function TicketDetailsSection({ ticketId }: { ticketId: string }) {
   const priority = useEntityField("tickets", ticketId, "priority");
   const assignees = useEntityField("tickets", ticketId, "assignees");
   const labels = useEntityField("tickets", ticketId, "labels");
-  const channel = useEntityField("tickets", ticketId, "channel") as { id: string } | null | undefined;
-  const createdBy = useEntityField("tickets", ticketId, "createdBy") as { name: string; avatarUrl?: string | null } | null | undefined;
+  const channel = useEntityField("tickets", ticketId, "channel") as
+    | { id: string }
+    | null
+    | undefined;
+  const createdBy = useEntityField("tickets", ticketId, "createdBy") as
+    | { name: string; avatarUrl?: string | null }
+    | null
+    | undefined;
   const createdAt = useEntityField("tickets", ticketId, "createdAt");
   const updatedAt = useEntityField("tickets", ticketId, "updatedAt");
 
@@ -158,21 +164,9 @@ export function TicketDetailsSection({ ticketId }: { ticketId: string }) {
 
   return (
     <div className="grid grid-cols-[20px_80px_1fr] gap-x-3 gap-y-4 items-start">
-      <DetailItem
-        icon={Pencil}
-        label="Title"
-        value={title}
-      />
-      <DetailItem
-        icon={FileText}
-        label="Description"
-        value={description || "No description"}
-      />
-      <DetailItem
-        icon={Circle}
-        label="Status"
-        value={<StatusValue status={status!} />}
-      />
+      <DetailItem icon={Pencil} label="Title" value={title} />
+      <DetailItem icon={FileText} label="Description" value={description || "No description"} />
+      <DetailItem icon={Circle} label="Status" value={<StatusValue status={status!} />} />
       <DetailItem
         icon={AlertTriangle}
         label="Priority"
@@ -183,37 +177,15 @@ export function TicketDetailsSection({ ticketId }: { ticketId: string }) {
         label="Assignees"
         value={<AssigneesValue assignees={assignees ?? ([] as User[])} />}
       />
-      <DetailItem
-        icon={Tag}
-        label="Labels"
-        value={<LabelsValue labels={labels ?? []} />}
-      />
-      <DetailItem
-        icon={Hash}
-        label="Channel"
-        value={<ChannelValue channelId={channel?.id} />}
-      />
+      <DetailItem icon={Tag} label="Labels" value={<LabelsValue labels={labels ?? []} />} />
+      <DetailItem icon={Hash} label="Channel" value={<ChannelValue channelId={channel?.id} />} />
       <DetailItem
         icon={UserIcon}
         label="Created by"
-        value={
-          createdBy ? (
-            <UserValue user={createdBy} />
-          ) : (
-            "Unknown"
-          )
-        }
+        value={createdBy ? <UserValue user={createdBy} /> : "Unknown"}
       />
-      <DetailItem
-        icon={Calendar}
-        label="Created"
-        value={timeAgo(createdAt!)}
-      />
-      <DetailItem
-        icon={Calendar}
-        label="Updated"
-        value={timeAgo(updatedAt!)}
-      />
+      <DetailItem icon={Calendar} label="Created" value={timeAgo(createdAt!)} />
+      <DetailItem icon={Calendar} label="Updated" value={timeAgo(updatedAt!)} />
     </div>
   );
 }

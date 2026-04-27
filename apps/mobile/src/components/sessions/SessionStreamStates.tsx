@@ -13,13 +13,7 @@ export function SessionStreamSkeleton() {
 }
 
 /** Retry-capable error state when the initial events query fails. */
-export function SessionStreamError({
-  error,
-  onRetry,
-}: {
-  error: string;
-  onRetry: () => void;
-}) {
+export function SessionStreamError({ error, onRetry }: { error: string; onRetry: () => void }) {
   const theme = useTheme();
   return (
     <View style={[styles.errorState, { paddingHorizontal: theme.spacing.lg }]}>

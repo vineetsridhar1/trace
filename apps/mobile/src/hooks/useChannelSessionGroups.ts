@@ -95,9 +95,7 @@ export function useActiveSessionGroupIds(
   );
 }
 
-function sectionForStatus(
-  status: string | null | undefined,
-): SessionGroupSectionStatus {
+function sectionForStatus(status: string | null | undefined): SessionGroupSectionStatus {
   if (status === "needs_input") return "needs_input";
   if (status === "in_review") return "in_review";
   if (status === "failed") return "failed";
@@ -105,10 +103,7 @@ function sectionForStatus(
   return "in_progress";
 }
 
-function areSectionsEqual(
-  a: SessionGroupSection[],
-  b: SessionGroupSection[],
-): boolean {
+function areSectionsEqual(a: SessionGroupSection[], b: SessionGroupSection[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
     const sa = a[i]!;
@@ -159,9 +154,7 @@ export function useChannelSessionGroupSections(
       for (const status of SECTION_ORDER) {
         const groups = buckets[status];
         if (groups.length === 0) continue;
-        groups.sort(
-          (a, b) => sortTimestamp(b) - sortTimestamp(a) || a.id.localeCompare(b.id),
-        );
+        groups.sort((a, b) => sortTimestamp(b) - sortTimestamp(a) || a.id.localeCompare(b.id));
         sections.push({ status, ids: groups.map((g) => g.id) });
       }
 
@@ -209,10 +202,7 @@ export function useLatestSessionIdForGroup(groupId: string): string | null {
       const session = state.sessions[id] as SessionEntity | undefined;
       if (!session) continue;
       const tsRaw =
-        session._sortTimestamp
-        ?? session.lastMessageAt
-        ?? session.updatedAt
-        ?? session.createdAt;
+        session._sortTimestamp ?? session.lastMessageAt ?? session.updatedAt ?? session.createdAt;
       const ts = tsRaw ? new Date(tsRaw).getTime() : 0;
       if (ts > bestTs) {
         bestTs = ts;

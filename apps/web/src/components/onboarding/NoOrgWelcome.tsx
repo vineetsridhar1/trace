@@ -14,7 +14,9 @@ export function NoOrgWelcome() {
   const email = user?.email ?? "";
 
   useEffect(() => {
-    return () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); };
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
   }, []);
 
   async function handleCheckAgain() {
@@ -43,14 +45,12 @@ export function NoOrgWelcome() {
         </div>
         <h1 className="mt-5 text-2xl font-semibold text-foreground">Welcome to Trace</h1>
         <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-          Create an organization to start your own workspace, or ask an admin to invite
-          you and share the email below.
+          Create an organization to start your own workspace, or ask an admin to invite you and
+          share the email below.
         </p>
 
         <div className="mt-6">
-          <label className="text-xs font-medium uppercase text-muted-foreground">
-            Your email
-          </label>
+          <label className="text-xs font-medium uppercase text-muted-foreground">Your email</label>
           <div className="mt-2 flex min-h-10 items-center gap-2 rounded-md border border-border bg-surface-deep px-3 py-2">
             <span className="flex-1 truncate text-sm text-foreground">{email}</span>
             <button

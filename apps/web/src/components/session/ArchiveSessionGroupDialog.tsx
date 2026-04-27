@@ -35,7 +35,9 @@ export function ArchiveSessionGroupDialog({
     setArchiving(true);
     setError(null);
     try {
-      const result = await client.mutation(ARCHIVE_SESSION_GROUP_MUTATION, { id: groupId }).toPromise();
+      const result = await client
+        .mutation(ARCHIVE_SESSION_GROUP_MUTATION, { id: groupId })
+        .toPromise();
       if (result.error) {
         setError(result.error.message);
         return;
@@ -54,14 +56,11 @@ export function ArchiveSessionGroupDialog({
         <DialogHeader>
           <DialogTitle>Archive workspace</DialogTitle>
           <DialogDescription>
-            Archive <strong>{groupName}</strong>? This will stop all agents and
-            unload the worktree. Empty workspaces are deleted instead of moved
-            to Merged & Archived.
+            Archive <strong>{groupName}</strong>? This will stop all agents and unload the worktree.
+            Empty workspaces are deleted instead of moved to Merged & Archived.
           </DialogDescription>
         </DialogHeader>
-        {error && (
-          <p className="text-sm text-destructive">{error}</p>
-        )}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
           <Button disabled={archiving} onClick={handleArchive}>

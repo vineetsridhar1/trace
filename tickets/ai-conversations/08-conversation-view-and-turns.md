@@ -61,7 +61,7 @@ Build the main conversation view — the screen where users see turns and intera
 
 1. Navigate to a conversation — turns load and display
 2. Type a message, press Enter — user turn appears immediately, AI response follows
-3. Verify markdown renders: send "```js\nconsole.log('hi')\n```" — code block appears
+3. Verify markdown renders: send "`js\nconsole.log('hi')\n`" — code block appears
 4. Scroll up in a long conversation — "scroll to bottom" button appears
 5. Open the same conversation in two tabs — sending a turn in one shows it in the other (subscription)
 6. Verify the turn list handles 100+ turns without performance degradation

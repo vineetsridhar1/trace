@@ -3,7 +3,9 @@ import { useUIStore } from "../../stores/ui";
 import type { OpenFileTab } from "./GroupTabStrip";
 
 export function useFileActions() {
-  const setActiveTerminalId = useUIStore((s: { setActiveTerminalId: (id: string | null) => void }) => s.setActiveTerminalId);
+  const setActiveTerminalId = useUIStore(
+    (s: { setActiveTerminalId: (id: string | null) => void }) => s.setActiveTerminalId,
+  );
   const [openFiles, setOpenFiles] = useState<OpenFileTab[]>([]);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
 

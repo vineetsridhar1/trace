@@ -48,7 +48,15 @@ const THREAD_REPLIES_QUERY = gql`
   }
 `;
 
-export function ThreadPanel({ chatId, channelId, rootMessageId }: { chatId?: string; channelId?: string; rootMessageId: string }) {
+export function ThreadPanel({
+  chatId,
+  channelId,
+  rootMessageId,
+}: {
+  chatId?: string;
+  channelId?: string;
+  rootMessageId: string;
+}) {
   const setActiveThreadId = useUIStore((s: UIState) => s.setActiveThreadId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,9 +112,7 @@ export function ThreadPanel({ chatId, channelId, rootMessageId }: { chatId?: str
       : null;
   const replyIds = useMessageIdsForScope(
     scopeKey ?? "__missing__",
-    (message) =>
-      message.parentMessageId === rootMessageId &&
-      !message.deletedAt,
+    (message) => message.parentMessageId === rootMessageId && !message.deletedAt,
     (a, b) => a.createdAt.localeCompare(b.createdAt),
   );
 

@@ -74,7 +74,10 @@ export function AppConnectivityBanner() {
       return;
     }
     pulse.value = withRepeat(
-      withTiming(0.45, { duration: theme.motion.durations.slow, easing: Easing.inOut(Easing.ease) }),
+      withTiming(0.45, {
+        duration: theme.motion.durations.slow,
+        easing: Easing.inOut(Easing.ease),
+      }),
       -1,
       true,
     );

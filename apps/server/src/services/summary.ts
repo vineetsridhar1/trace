@@ -155,12 +155,10 @@ export class SummaryService {
     }
 
     const newEventCount = currentEventCount - summary.eventCount;
-    const minutesSinceUpdate =
-      (Date.now() - summary.updatedAt.getTime()) / 60_000;
+    const minutesSinceUpdate = (Date.now() - summary.updatedAt.getTime()) / 60_000;
 
     const fresh =
-      newEventCount < STALE_EVENT_THRESHOLD &&
-      minutesSinceUpdate < STALE_MINUTES_THRESHOLD;
+      newEventCount < STALE_EVENT_THRESHOLD && minutesSinceUpdate < STALE_MINUTES_THRESHOLD;
 
     return { fresh, newEventCount, minutesSinceUpdate };
   }
@@ -169,10 +167,7 @@ export class SummaryService {
    * Find all summaries that are stale by time across all orgs.
    * Event-count staleness is tracked via Redis counters in the summary worker.
    */
-  async findStale(input: {
-    minutesThreshold?: number;
-    limit?: number;
-  }) {
+  async findStale(input: { minutesThreshold?: number; limit?: number }) {
     const minutesThreshold = input.minutesThreshold ?? STALE_MINUTES_THRESHOLD;
     const limit = input.limit ?? 50;
     const cutoff = new Date(Date.now() - minutesThreshold * 60_000);
@@ -242,10 +237,7 @@ export class SummaryService {
 
     return prisma.event.findMany({
       where,
-      orderBy: [
-        { timestamp: "asc" },
-        { id: "asc" },
-      ],
+      orderBy: [{ timestamp: "asc" }, { id: "asc" }],
       take: limit,
     });
   }

@@ -14,7 +14,8 @@ import type { SessionGroupRow } from "./sessions-table-types";
 import { collapsedByDefault, sessionStatusGroupOrder } from "./sessions-table-types";
 
 function getRowSortTimestamp(row: SessionGroupRow | undefined): number {
-  const timestamp = row?._groupLastMessageAt ?? row?._sortTimestamp ?? row?.updatedAt ?? row?.createdAt;
+  const timestamp =
+    row?._groupLastMessageAt ?? row?._sortTimestamp ?? row?.updatedAt ?? row?.createdAt;
   return timestamp ? new Date(timestamp).getTime() : 0;
 }
 
@@ -27,7 +28,9 @@ export function useSessionsGridOptions({
 }: {
   channelId: string;
   filterStorageKey: string;
-  getContextMenuItems: (params: GetContextMenuItemsParams<SessionGroupRow>) => (DefaultMenuItem | MenuItemDef<SessionGroupRow>)[];
+  getContextMenuItems: (
+    params: GetContextMenuItemsParams<SessionGroupRow>,
+  ) => (DefaultMenuItem | MenuItemDef<SessionGroupRow>)[];
   isCompact: boolean;
   onGridReady?: (event: GridReadyEvent<SessionGroupRow>) => void;
 }) {
@@ -81,12 +84,7 @@ export function useSessionsGridOptions({
       innerRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
         const status = params.value as string;
         const count = params.node.allChildrenCount ?? 0;
-        return (
-          <SessionStatusGroupLabel
-            count={count}
-            status={status}
-          />
-        );
+        return <SessionStatusGroupLabel count={count} status={status} />;
       },
     },
     initialGroupOrderComparator: (params: InitialGroupOrderComparatorParams<SessionGroupRow>) => {
@@ -98,11 +96,11 @@ export function useSessionsGridOptions({
       }
 
       const aLatest = Math.max(
-        ...((params.nodeA.allLeafChildren ?? []).map((child) => getRowSortTimestamp(child.data))),
+        ...(params.nodeA.allLeafChildren ?? []).map((child) => getRowSortTimestamp(child.data)),
         0,
       );
       const bLatest = Math.max(
-        ...((params.nodeB.allLeafChildren ?? []).map((child) => getRowSortTimestamp(child.data))),
+        ...(params.nodeB.allLeafChildren ?? []).map((child) => getRowSortTimestamp(child.data)),
         0,
       );
       const recencyDiff = bLatest - aLatest;

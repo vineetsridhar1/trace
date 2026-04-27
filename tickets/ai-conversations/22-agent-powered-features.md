@@ -7,6 +7,7 @@ Implement the ambient agent's AI-powered features for conversations: auto-titlin
 ## What needs to happen
 
 ### Auto-Titling
+
 - Register a new agent action: `ai_conversation.set_title`
 - When observability is `SUGGEST` or `PARTICIPATE` and a conversation has no title after 2-3 exchanges:
   - The agent generates a concise title from the conversation content
@@ -15,6 +16,7 @@ Implement the ambient agent's AI-powered features for conversations: auto-titlin
 - The title generation prompt should produce short, descriptive titles (not questions or sentences)
 
 ### Branch Label Suggestions
+
 - Register a new agent action: `branch.suggest_label`
 - When a branch is created without a label and the branch gets its first turn:
   - The agent observes the first turn content
@@ -24,6 +26,7 @@ Implement the ambient agent's AI-powered features for conversations: auto-titlin
 - The user can always override or dismiss
 
 ### Ticket Creation from Conversations
+
 - Register a new agent action: `ticket.create_from_conversation`
 - When observability is `SUGGEST` or `PARTICIPATE`:
   - The agent monitors for decisions, bug reports, or actionable insights in the conversation
@@ -37,6 +40,7 @@ Implement the ambient agent's AI-powered features for conversations: auto-titlin
 - In `PARTICIPATE` mode: posts a turn with an inline "Create ticket" action
 
 ### Cross-Entity Linking
+
 - Register a new agent action: `ai_conversation.link_entity`
 - The agent monitors conversation content for references to existing tickets or sessions
 - When a match is found: "This sounds related to TRACE-142 — want to link it?"
@@ -47,6 +51,7 @@ Implement the ambient agent's AI-powered features for conversations: auto-titlin
   - Expose the relation in GraphQL and update the AI Conversations store/event pipeline so linked-entity chips update without a manual refetch
 
 ### Suggested Branches
+
 - Register a new agent action: `branch.suggest`
 - In `PARTICIPATE` mode only:
   - The agent can proactively suggest branching when the conversation touches on a tangent

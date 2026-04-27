@@ -13,7 +13,13 @@ import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
 import { parseRunScripts, type ConnectionRepoEntry } from "../../hooks/useConnections";
 import { useTerminalStore, type TerminalEntry } from "../../stores/terminal";
-export function ConnectionsRepoTerminals({ bridgeRuntimeId, entry }: { bridgeRuntimeId: string; entry: ConnectionRepoEntry }) {
+export function ConnectionsRepoTerminals({
+  bridgeRuntimeId,
+  entry,
+}: {
+  bridgeRuntimeId: string;
+  entry: ConnectionRepoEntry;
+}) {
   const scopeKey = `connection:${bridgeRuntimeId}:${entry.repo.id}`;
   const scripts = useMemo(() => parseRunScripts(entry.runScripts), [entry.runScripts]);
   const addTerminal = useTerminalStore((s) => s.addTerminal);

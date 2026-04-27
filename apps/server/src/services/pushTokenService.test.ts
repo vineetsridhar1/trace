@@ -17,10 +17,12 @@ describe("PushTokenService", () => {
   });
 
   it("upserts on (userId, token) and bumps lastSeenAt on re-register", async () => {
-    prismaMock.pushToken.upsert.mockImplementation(async ({ create }: { create: Record<string, unknown> }) => ({
-      id: "pt-1",
-      ...create,
-    }));
+    prismaMock.pushToken.upsert.mockImplementation(
+      async ({ create }: { create: Record<string, unknown> }) => ({
+        id: "pt-1",
+        ...create,
+      }),
+    );
 
     const service = new PushTokenService();
     await expect(
@@ -50,7 +52,12 @@ describe("PushTokenService", () => {
     prismaMock.pushToken.upsert.mockResolvedValue({ id: "pt-2" });
     const service = new PushTokenService();
 
-    await service.register({ userId: "u-1", organizationId: null, token: "tok-b", platform: "android" });
+    await service.register({
+      userId: "u-1",
+      organizationId: null,
+      token: "tok-b",
+      platform: "android",
+    });
 
     const call = prismaMock.pushToken.upsert.mock.calls[0][0];
     expect(call.create.organizationId).toBeNull();

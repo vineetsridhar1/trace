@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
 import { FolderOpen } from "lucide-react";
 import { Button } from "../ui/button";
-import {
-  getHookStatusTone,
-  getHookStatusLabel,
-  getHookStatusDetail,
-} from "./repo-hook-utils";
+import { getHookStatusTone, getHookStatusLabel, getHookStatusDetail } from "./repo-hook-utils";
 
 interface RepoDesktopSectionProps {
   repoId: string;

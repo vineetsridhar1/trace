@@ -37,7 +37,9 @@ export function CreateChatDialog() {
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const userId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
-  const setActiveChatId = useUIStore((s: { setActiveChatId: (id: string | null) => void }) => s.setActiveChatId);
+  const setActiveChatId = useUIStore(
+    (s: { setActiveChatId: (id: string | null) => void }) => s.setActiveChatId,
+  );
 
   const fetchMembers = useCallback(async () => {
     if (!activeOrgId) return;
@@ -110,7 +112,8 @@ export function CreateChatDialog() {
           </DialogHeader>
           <div className="py-4">
             <label className="mb-1.5 block text-sm text-muted-foreground">
-              Select members ({selectedIds.size === 1 ? "DM" : selectedIds.size > 1 ? "Group" : "none selected"})
+              Select members (
+              {selectedIds.size === 1 ? "DM" : selectedIds.size > 1 ? "Group" : "none selected"})
             </label>
             <div className="max-h-60 space-y-1 overflow-y-auto">
               {otherMembers.map((member: OrgMember) => (

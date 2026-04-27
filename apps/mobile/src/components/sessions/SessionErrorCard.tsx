@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { SymbolView } from "expo-symbols";
-import {
-  RETRY_SESSION_CONNECTION_MUTATION,
-  useEntityField,
-} from "@trace/client-core";
+import { RETRY_SESSION_CONNECTION_MUTATION, useEntityField } from "@trace/client-core";
 import { Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { userFacingError } from "@/lib/requestError";
@@ -129,10 +126,7 @@ export function SessionErrorCard({ sessionId }: SessionErrorCardProps) {
             },
           ]}
         >
-          <Text
-            variant="caption1"
-            style={{ color: theme.colors.foreground, fontWeight: "600" }}
-          >
+          <Text variant="caption1" style={{ color: theme.colors.foreground, fontWeight: "600" }}>
             Retry
           </Text>
         </Pressable>

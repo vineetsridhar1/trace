@@ -22,27 +22,30 @@ export function MonacoFileViewer({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchContent = useCallback(async (silent = false) => {
-    if (!silent) {
-      setLoading(true);
-      setError(null);
-    }
-    try {
-      const result = await client
-        .query(SESSION_GROUP_FILE_CONTENT_QUERY, { sessionGroupId, filePath })
-        .toPromise();
-      if (result.error) {
-        if (!silent) setError(result.error.message);
-      } else {
-        setContent(result.data?.sessionGroupFileContent ?? "");
-        if (!silent) setError(null);
+  const fetchContent = useCallback(
+    async (silent = false) => {
+      if (!silent) {
+        setLoading(true);
+        setError(null);
       }
-    } catch (err) {
-      if (!silent) setError(err instanceof Error ? err.message : "Failed to load file");
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, [sessionGroupId, filePath]);
+      try {
+        const result = await client
+          .query(SESSION_GROUP_FILE_CONTENT_QUERY, { sessionGroupId, filePath })
+          .toPromise();
+        if (result.error) {
+          if (!silent) setError(result.error.message);
+        } else {
+          setContent(result.data?.sessionGroupFileContent ?? "");
+          if (!silent) setError(null);
+        }
+      } catch (err) {
+        if (!silent) setError(err instanceof Error ? err.message : "Failed to load file");
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [sessionGroupId, filePath],
+  );
 
   // Initial fetch
   useEffect(() => {

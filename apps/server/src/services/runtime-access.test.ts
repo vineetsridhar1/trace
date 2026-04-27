@@ -328,10 +328,7 @@ describe("runtimeAccessService", () => {
     const eventTypes = eventServiceMock.create.mock.calls.map(
       (call) => (call[0] as { eventType: string }).eventType,
     );
-    expect(eventTypes).toEqual([
-      "bridge_access_request_resolved",
-      "bridge_access_requested",
-    ]);
+    expect(eventTypes).toEqual(["bridge_access_request_resolved", "bridge_access_requested"]);
   });
 
   it("revokeGrant tells the terminal relay to sever the grantee's terminals", async () => {
@@ -661,9 +658,7 @@ describe("runtimeAccessService", () => {
     const createCall = prismaMock.bridgeAccessGrant.create.mock.calls[0]?.[0] as
       | { data: { capabilities: string[] } }
       | undefined;
-    expect(createCall?.data.capabilities).toEqual(
-      expect.arrayContaining(["session", "terminal"]),
-    );
+    expect(createCall?.data.capabilities).toEqual(expect.arrayContaining(["session", "terminal"]));
   });
 
   it("updateGrant stripping terminal severs the grantee's live terminals", async () => {

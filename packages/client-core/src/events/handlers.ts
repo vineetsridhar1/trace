@@ -21,7 +21,10 @@ import {
 } from "../stores/entity.js";
 import { useAuthStore } from "../stores/auth.js";
 import { getSessionChannelId } from "../lib/session-group.js";
-import { takePendingOptimisticSession, upsertSessionEventWithOptimisticResolution } from "../mutations/optimistic-message.js";
+import {
+  takePendingOptimisticSession,
+  upsertSessionEventWithOptimisticResolution,
+} from "../mutations/optimistic-message.js";
 import { notifyForEvent } from "../notifications/registry.js";
 import { getOrgEventUIBindings } from "./ui-bindings.js";
 import {
@@ -98,10 +101,7 @@ export function handleOrgEvent(event: Event): void {
   batch.upsertScopedEvent(scopeKey, event.id, event);
 
   // Clean up optimistic session events to prevent brief duplicates
-  if (
-    event.eventType === "message_sent" &&
-    event.scopeType === ("session" satisfies ScopeType)
-  ) {
+  if (event.eventType === "message_sent" && event.scopeType === ("session" satisfies ScopeType)) {
     const pending = takePendingOptimisticSession(event.scopeId, event);
     if (pending) {
       batch.removeScopedEvent(scopeKey, pending.tempEventId);
@@ -146,11 +146,7 @@ export function handleOrgEvent(event: Event): void {
   if (event.eventType === "queued_message_added") {
     const qm = asJsonObject(payload.queuedMessage);
     if (qm && typeof qm.id === "string" && typeof qm.sessionId === "string") {
-      batch.upsertQueuedMessage(
-        qm.sessionId,
-        qm.id,
-        qm as unknown as QueuedMessage,
-      );
+      batch.upsertQueuedMessage(qm.sessionId, qm.id, qm as unknown as QueuedMessage);
     }
   }
   if (event.eventType === "queued_message_removed") {
@@ -200,10 +196,7 @@ export function handleOrgEvent(event: Event): void {
   }
 
   // Channel membership events
-  if (
-    event.eventType === "channel_member_added" ||
-    event.eventType === "channel_member_removed"
-  ) {
+  if (event.eventType === "channel_member_added" || event.eventType === "channel_member_removed") {
     const userId = payload.userId as string | undefined;
     const currentUserId = useAuthStore.getState().user?.id;
     const channel = asJsonObject(payload.channel);
@@ -295,9 +288,9 @@ export function handleOrgEvent(event: Event): void {
       batch.upsert("sessions", session.id, {
         ...(existingSession ? { ...existingSession, ...session } : session),
         _sortTimestamp:
-          (session.lastMessageAt as string | undefined)
-          ?? (session.updatedAt as string | undefined)
-          ?? event.timestamp,
+          (session.lastMessageAt as string | undefined) ??
+          (session.updatedAt as string | undefined) ??
+          event.timestamp,
       } as unknown as SessionEntity);
 
       // Auto-navigate to continuation sessions
@@ -357,9 +350,7 @@ export function handleOrgEvent(event: Event): void {
       const sessionGroup = asJsonObject(payload.sessionGroup);
       batch.patch("sessionGroups", sessionGroupId, {
         archivedAt:
-          typeof sessionGroup?.archivedAt === "string"
-            ? sessionGroup.archivedAt
-            : event.timestamp,
+          typeof sessionGroup?.archivedAt === "string" ? sessionGroup.archivedAt : event.timestamp,
         status: "archived",
         worktreeDeleted: true,
         updatedAt: event.timestamp,
@@ -453,10 +444,7 @@ export function handleOrgEvent(event: Event): void {
   }
 
   // Handle session_output subtypes that update session fields
-  if (
-    event.eventType === "session_output" &&
-    event.scopeType === ("session" satisfies ScopeType)
-  ) {
+  if (event.eventType === "session_output" && event.scopeType === ("session" satisfies ScopeType)) {
     routeSessionOutput({ event, payload, batch, ui });
   }
 

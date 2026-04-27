@@ -39,7 +39,9 @@ The aggregator batches related events into coherent units before they reach the 
 - [x] Scope key construction is generic enough that adding channels later is trivial
 
 ## Implementation notes
+
 <!-- Added after implementation review -->
+
 - Aggregator lives at `apps/server/src/agent/aggregator.ts`, wired into `agent-worker.ts`
 - `EventAggregator` class manages windows with `start()` / `stop()` lifecycle and `ingest(event, routing)` entry point
 - `buildScopeKey(event)` constructs scope keys: `chat:{id}:thread:{parentId}`, `chat:{id}`, `ticket:{id}`, `session:{id}`, generic `{type}:{id}` fallback

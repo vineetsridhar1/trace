@@ -102,8 +102,7 @@ export class CostTrackingService {
 
     const spentCents = tracker?.totalCostCents ?? 0;
     const remainingCents = Math.max(0, dailyLimitCents - spentCents);
-    const remainingPercent =
-      dailyLimitCents > 0 ? (remainingCents / dailyLimitCents) * 100 : 0;
+    const remainingPercent = dailyLimitCents > 0 ? (remainingCents / dailyLimitCents) * 100 : 0;
 
     return {
       dailyLimitCents,
@@ -116,11 +115,7 @@ export class CostTrackingService {
   /**
    * Get cost tracker for a specific org and date range.
    */
-  async getByDateRange(input: {
-    organizationId: string;
-    startDate: string;
-    endDate: string;
-  }) {
+  async getByDateRange(input: { organizationId: string; startDate: string; endDate: string }) {
     return prisma.agentCostTracker.findMany({
       where: {
         organizationId: input.organizationId,

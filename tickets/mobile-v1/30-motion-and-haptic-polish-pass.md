@@ -126,7 +126,7 @@ the original gap and where the fix lives.
       then springs back to 1 whenever its `variant` changes. Skipped on the
       first render so chips don't pop unsolicited when a list mounts.
 - [x] **Message arrival entrance animation**. `SessionStreamList` now
-      wraps the *newest* row in a `FadeInDown` entering animation, gated on
+      wraps the _newest_ row in a `FadeInDown` entering animation, gated on
       both `isNearBottomRef.current` (the user is following the bottom) and
       `lastSeenKeyRef !== currentKey` (this is a brand-new last row, not
       a re-render of the same one). A one-frame `acceptEntering` flag also

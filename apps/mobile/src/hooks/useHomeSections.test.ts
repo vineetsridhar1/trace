@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EntityState, SessionEntity } from "@trace/client-core";
 import { buildHomeSections } from "./useHomeSections";
 
-function session(fields: Partial<SessionEntity> & { id: string; sessionGroupId: string }): SessionEntity {
+function session(
+  fields: Partial<SessionEntity> & { id: string; sessionGroupId: string },
+): SessionEntity {
   const { id, sessionGroupId, ...rest } = fields;
   return {
     id,

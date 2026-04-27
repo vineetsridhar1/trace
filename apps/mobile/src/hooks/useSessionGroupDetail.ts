@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
 import { gql } from "@urql/core";
 import { useStoreWithEqualityFn } from "zustand/traditional";
-import {
-  type EntityState,
-  useEntityStore,
-  type SessionEntity,
-} from "@trace/client-core";
+import { type EntityState, useEntityStore, type SessionEntity } from "@trace/client-core";
 import type { Session, SessionGroup } from "@trace/gql";
 import { userFacingError } from "@/lib/requestError";
 import { mergeSessionGroupEntity } from "@/lib/session-group";
@@ -180,19 +176,22 @@ export function fetchSessionGroupDetail(groupId: string): Promise<SessionGroupDe
   if (lastAt && Date.now() - lastAt < FETCH_TTL_MS) {
     return Promise.resolve({ ok: true, error: null });
   }
-  const promise = doFetchSessionGroupDetail(groupId).then((result) => {
-    if (result.ok) lastGroupFetchAt.set(groupId, Date.now());
-    return result;
-  }).finally(() => {
-    inflightGroupFetches.delete(groupId);
-  });
+  const promise = doFetchSessionGroupDetail(groupId)
+    .then((result) => {
+      if (result.ok) lastGroupFetchAt.set(groupId, Date.now());
+      return result;
+    })
+    .finally(() => {
+      inflightGroupFetches.delete(groupId);
+    });
   inflightGroupFetches.set(groupId, promise);
   return promise;
 }
 
-export function useEnsureSessionGroupDetail(
-  groupId: string | undefined,
-): { loading: boolean; error: string | null } {
+export function useEnsureSessionGroupDetail(groupId: string | undefined): {
+  loading: boolean;
+  error: string | null;
+} {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

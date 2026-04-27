@@ -82,14 +82,7 @@ export function SessionComposerBottomSheetBase({
       );
       backdropOpacity.value = withTiming(0, { duration: theme.motion.durations.fast });
     },
-    [
-      backdropOpacity,
-      dragY,
-      finishClose,
-      theme.motion.durations.fast,
-      translateY,
-      windowHeight,
-    ],
+    [backdropOpacity, dragY, finishClose, theme.motion.durations.fast, translateY, windowHeight],
   );
 
   useEffect(() => {
@@ -121,8 +114,7 @@ export function SessionComposerBottomSheetBase({
           dragY.value = Math.max(event.translationY, 0);
         })
         .onEnd((event) => {
-          const shouldClose =
-            dragY.value > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY;
+          const shouldClose = dragY.value > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY;
           if (shouldClose) {
             runOnJS(handlePanEnd)();
             return;
@@ -160,11 +152,7 @@ export function SessionComposerBottomSheetBase({
     >
       <View style={styles.root}>
         <Animated.View
-          style={[
-            styles.backdrop,
-            { backgroundColor: alpha("#000000", 0.32) },
-            backdropStyle,
-          ]}
+          style={[styles.backdrop, { backgroundColor: alpha("#000000", 0.32) }, backdropStyle]}
         >
           <Pressable
             accessibilityLabel="Dismiss composer picker"
@@ -188,22 +176,10 @@ export function SessionComposerBottomSheetBase({
         >
           <GestureDetector gesture={sheetGesture}>
             <View style={styles.grabberSlot}>
-              <View
-                style={[
-                  styles.grabber,
-                  { backgroundColor: theme.colors.borderMuted },
-                ]}
-              />
+              <View style={[styles.grabber, { backgroundColor: theme.colors.borderMuted }]} />
             </View>
           </GestureDetector>
-          <View
-            style={[
-              styles.content,
-              { paddingHorizontal: theme.spacing.lg },
-            ]}
-          >
-            {content}
-          </View>
+          <View style={[styles.content, { paddingHorizontal: theme.spacing.lg }]}>{content}</View>
         </Animated.View>
       </View>
     </Modal>

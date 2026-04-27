@@ -40,7 +40,11 @@ export function BranchCombobox({
   }, []);
 
   useEffect(() => {
-    if (!open) { setSearch(""); setError(null); return; }
+    if (!open) {
+      setSearch("");
+      setError(null);
+      return;
+    }
     setLoading(true);
     setError(null);
     client
@@ -50,14 +54,16 @@ export function BranchCombobox({
         sessionGroupId: sessionGroupId ?? null,
       })
       .toPromise()
-      .then((result: { error?: { message?: string } | null; data?: { repoBranches?: string[] } }) => {
-        if (result.error) {
-          setBranches([]);
-          setError(describeBranchError(result.error.message));
-        } else {
-          setBranches(result.data?.repoBranches ?? []);
-        }
-      })
+      .then(
+        (result: { error?: { message?: string } | null; data?: { repoBranches?: string[] } }) => {
+          if (result.error) {
+            setBranches([]);
+            setError(describeBranchError(result.error.message));
+          } else {
+            setBranches(result.data?.repoBranches ?? []);
+          }
+        },
+      )
       .catch(() => {
         setBranches([]);
         setError("Could not load branches");
@@ -95,9 +101,7 @@ export function BranchCombobox({
           {loading && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
         </div>
         <div className="max-h-48 overflow-y-auto p-1">
-          {!loading && error && (
-            <p className="px-2 py-1.5 text-xs text-destructive">{error}</p>
-          )}
+          {!loading && error && <p className="px-2 py-1.5 text-xs text-destructive">{error}</p>}
           {!loading && !error && filtered.length === 0 && (
             <p className="px-2 py-1.5 text-xs text-muted-foreground">
               {branches.length === 0 ? "No branches found" : "No matches"}

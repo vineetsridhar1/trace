@@ -41,4 +41,3 @@ Create the server-side handoff path for `request_human_validation`. This ticket 
 2. Force the same decision again and verify no duplicate active item is created.
 3. Resolve the inbox item and verify Autopilot state updates.
 4. Dismiss the inbox item and verify cooldown/pause hooks are possible.
-

@@ -34,4 +34,3 @@ Extend the shared client store and event-handling pipeline so Autopilot is event
 1. Hydrate a session group with Autopilot enabled.
 2. Emit `session_autopilot_updated` and verify the UI updates from the store.
 3. Emit a validation inbox item and verify it appears in inbox state.
-

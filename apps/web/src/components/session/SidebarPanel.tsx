@@ -21,11 +21,9 @@ interface SidebarPanelProps {
   onBridgeAccessRequested?: () => void | Promise<void>;
 }
 
-const tabClass =
-  "flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium transition-colors";
+const tabClass = "flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium transition-colors";
 const tabActive = "text-foreground border-b-2 border-foreground";
-const tabInactive =
-  "text-muted-foreground hover:text-foreground border-b-2 border-transparent";
+const tabInactive = "text-muted-foreground hover:text-foreground border-b-2 border-transparent";
 
 export function SidebarPanel({
   sessionGroupId,
@@ -80,10 +78,7 @@ export function SidebarPanel({
             />
           </div>
         ) : activeTab === "files" ? (
-          <FileExplorer
-            sessionGroupId={sessionGroupId}
-            onFileClick={onFileClick}
-          />
+          <FileExplorer sessionGroupId={sessionGroupId} onFileClick={onFileClick} />
         ) : activeTab === "changes" ? (
           <BranchChangesPanel
             sessionGroupId={sessionGroupId}

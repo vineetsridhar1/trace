@@ -5,13 +5,9 @@ import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
 
-export const TRACE_GIT_HOOKS = [
-  "prepare-commit-msg",
-  "post-commit",
-  "post-rewrite",
-] as const;
+export const TRACE_GIT_HOOKS = ["prepare-commit-msg", "post-commit", "post-rewrite"] as const;
 
-export type TraceGitHookName = typeof TRACE_GIT_HOOKS[number];
+export type TraceGitHookName = (typeof TRACE_GIT_HOOKS)[number];
 export type TraceGitHookState =
   | "not_installed"
   | "trace_managed"
@@ -81,8 +77,8 @@ function summarizeHookStates(hooks: TraceGitHookInspection[]): TraceGitHookState
   if (hooks.some((hook) => hook.state === "custom_present")) return "custom_present";
   if (hooks.every((hook) => hook.state === "not_installed")) return "not_installed";
 
-  const allManaged = hooks.every((hook) =>
-    hook.state === "trace_managed" || hook.state === "chained",
+  const allManaged = hooks.every(
+    (hook) => hook.state === "trace_managed" || hook.state === "chained",
   );
   if (allManaged && hooks.some((hook) => hook.state === "chained")) return "chained";
   if (allManaged) return "trace_managed";
@@ -244,30 +240,26 @@ export function buildTraceGitHookScript({
     `TRACE_RUNNER_PATH=${shellQuote(runnerPath)}`,
     `TRACE_CHAINED_HOOK=${shellQuote(resolvedChainedHookPath)}`,
     "",
-    "if [ -n \"$TRACE_CHAINED_HOOK\" ] && [ -x \"$TRACE_CHAINED_HOOK\" ]; then",
-    "  \"$TRACE_CHAINED_HOOK\" \"$@\" || exit $?",
+    'if [ -n "$TRACE_CHAINED_HOOK" ] && [ -x "$TRACE_CHAINED_HOOK" ]; then',
+    '  "$TRACE_CHAINED_HOOK" "$@" || exit $?',
     "fi",
     "",
-    "exec \"$TRACE_RUNNER_PATH\" \"$TRACE_HOOK_NAME\" \"$@\"",
+    'exec "$TRACE_RUNNER_PATH" "$TRACE_HOOK_NAME" "$@"',
     "",
   ].join("\n");
 }
 
 export async function resolveGitPath(repoPath: string, gitRelativePath: string): Promise<string> {
-  const { stdout } = await execFileAsync(
-    "git",
-    ["rev-parse", "--git-path", gitRelativePath],
-    { cwd: repoPath },
-  );
+  const { stdout } = await execFileAsync("git", ["rev-parse", "--git-path", gitRelativePath], {
+    cwd: repoPath,
+  });
   const resolvedPath = stdout.trim();
 
   if (!resolvedPath) {
     throw new Error(`Unable to resolve git path for ${gitRelativePath}`);
   }
 
-  return path.isAbsolute(resolvedPath)
-    ? resolvedPath
-    : path.resolve(repoPath, resolvedPath);
+  return path.isAbsolute(resolvedPath) ? resolvedPath : path.resolve(repoPath, resolvedPath);
 }
 
 export function getTraceGitHooks(): readonly TraceGitHookName[] {

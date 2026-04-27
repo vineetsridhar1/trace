@@ -35,7 +35,10 @@ export async function ensureRepo(repoId: string, remoteUrl: string): Promise<str
   let authUrl = remoteUrl;
   const githubToken = process.env.GITHUB_TOKEN;
   if (githubToken && remoteUrl.startsWith("https://github.com")) {
-    authUrl = remoteUrl.replace("https://github.com", `https://x-access-token:${githubToken}@github.com`);
+    authUrl = remoteUrl.replace(
+      "https://github.com",
+      `https://x-access-token:${githubToken}@github.com`,
+    );
   }
 
   if (fs.existsSync(repoPath)) {
@@ -94,7 +97,9 @@ export async function createWorktree({
 
   // When restoring a checkpoint, verify the SHA is locally reachable; fetch if not
   if (checkpointSha) {
-    const reachable = await execFileAsync("git", ["cat-file", "-t", checkpointSha], { cwd: repoPath })
+    const reachable = await execFileAsync("git", ["cat-file", "-t", checkpointSha], {
+      cwd: repoPath,
+    })
       .then(() => true)
       .catch(() => false);
     if (!reachable) {
@@ -103,15 +108,19 @@ export async function createWorktree({
   }
 
   // Check if the branch already exists
-  const branchExists = await execFileAsync(
-    "git", ["rev-parse", "--verify", branchName],
-    { cwd: repoPath },
-  ).then(() => true, () => false);
+  const branchExists = await execFileAsync("git", ["rev-parse", "--verify", branchName], {
+    cwd: repoPath,
+  }).then(
+    () => true,
+    () => false,
+  );
 
   if (branchExists) {
     await execFileAsync("git", ["worktree", "add", worktreePath, branchName], { cwd: repoPath });
   } else {
-    await execFileAsync("git", ["worktree", "add", "-b", branchName, worktreePath, baseRef], { cwd: repoPath });
+    await execFileAsync("git", ["worktree", "add", "-b", branchName, worktreePath, baseRef], {
+      cwd: repoPath,
+    });
   }
 
   return { workdir: worktreePath, slug: worktreeSlug };

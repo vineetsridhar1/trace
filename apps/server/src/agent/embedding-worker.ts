@@ -94,7 +94,9 @@ async function checkPgvectorAvailable(): Promise<boolean> {
     `;
     pgvectorAvailable = result.length === 2;
     if (!pgvectorAvailable) {
-      log("pgvector embedding columns not found — embedding worker will be idle until migration is applied");
+      log(
+        "pgvector embedding columns not found — embedding worker will be idle until migration is applied",
+      );
     }
     return pgvectorAvailable;
   } catch {

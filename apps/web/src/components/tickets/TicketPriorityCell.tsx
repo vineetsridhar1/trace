@@ -1,10 +1,4 @@
-import {
-  AlertTriangle,
-  ArrowUp,
-  Minus,
-  ArrowDown,
-  type LucideIcon,
-} from "lucide-react";
+import { AlertTriangle, ArrowUp, Minus, ArrowDown, type LucideIcon } from "lucide-react";
 import type { Priority } from "@trace/gql";
 import type { TicketRow } from "./tickets-table-types";
 import { ticketPriorityLabel, ticketPriorityColor } from "./tickets-table-types";

@@ -1,10 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  StyleSheet,
-  View,
-  type LayoutChangeEvent,
-  type ViewStyle,
-} from "react-native";
+import { StyleSheet, View, type LayoutChangeEvent, type ViewStyle } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -24,12 +19,7 @@ export interface SkeletonProps {
 const SWEEP_WIDTH = 120;
 const SWEEP_DURATION_MS = 1400;
 
-export function Skeleton({
-  width = "100%",
-  height = 16,
-  radius,
-  style,
-}: SkeletonProps) {
+export function Skeleton({ width = "100%", height = 16, radius, style }: SkeletonProps) {
   const theme = useTheme();
   const [trackWidth, setTrackWidth] = useState(0);
   const progress = useSharedValue(0);

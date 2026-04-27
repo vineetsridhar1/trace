@@ -17,14 +17,7 @@ const SIZE = 46;
 export function ComposerAttachButton({ enabled, onPress }: Props) {
   const theme = useTheme();
   return (
-    <Glass
-      preset="input"
-      interactive
-      style={[
-        styles.glass,
-        { borderColor: theme.colors.border },
-      ]}
-    >
+    <Glass preset="input" interactive style={[styles.glass, { borderColor: theme.colors.border }]}>
       <Pressable
         onPress={onPress}
         disabled={!enabled}

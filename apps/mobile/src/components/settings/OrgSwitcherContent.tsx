@@ -35,10 +35,7 @@ export function OrgSwitcherContent() {
   }
 
   return (
-    <ScrollView
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.content}
-    >
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Text variant="headline">Switch organization</Text>
         <Text variant="footnote" color="mutedForeground">
@@ -65,11 +62,7 @@ export function OrgSwitcherContent() {
               subtitle={formatRole(membership.role)}
               trailing={
                 active ? (
-                  <SymbolView
-                    name="checkmark"
-                    size={16}
-                    tintColor={theme.colors.accent}
-                  />
+                  <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
                 ) : undefined
               }
               onPress={() => handleSelect(membership.organizationId)}

@@ -56,7 +56,8 @@ export const ticketActions: AgentActionRegistration[] = [
     method: "update",
     description:
       "Update an existing ticket's fields such as status, priority, labels, or assignees. Use when new information changes the state of a tracked issue.",
-    catalogDescription: "Edit/modify/change a ticket's fields (id, status, priority, title, labels)",
+    catalogDescription:
+      "Edit/modify/change a ticket's fields (id, status, priority, title, labels)",
     risk: "medium",
     suggestable: true,
     tier: "core",
@@ -157,7 +158,11 @@ export const ticketActions: AgentActionRegistration[] = [
           required: true,
           enum: ["session", "channel", "chat", "ticket", "project"],
         },
-        entityId: { type: "string", description: "The ID of the entity to link to", required: true },
+        entityId: {
+          type: "string",
+          description: "The ID of the entity to link to",
+          required: true,
+        },
       },
     },
     scopes: ["ticket", "chat", "channel", "session", "project"],
@@ -168,7 +173,8 @@ export const ticketActions: AgentActionRegistration[] = [
     method: "unlink",
     description:
       "Remove a link between a ticket and another entity. Use to disconnect items that are no longer related.",
-    catalogDescription: "Unlink/disconnect a ticket from another entity (ticketId, entityType, entityId)",
+    catalogDescription:
+      "Unlink/disconnect a ticket from another entity (ticketId, entityType, entityId)",
     risk: "low",
     suggestable: true,
     tier: "extended",
@@ -199,8 +205,15 @@ export const ticketActions: AgentActionRegistration[] = [
     tier: "extended",
     parameters: {
       fields: {
-        query: { type: "string", description: "Search keywords to match against ticket titles and descriptions", required: true },
-        limit: { type: "number", description: "Maximum number of results to return (default 5, max 10)" },
+        query: {
+          type: "string",
+          description: "Search keywords to match against ticket titles and descriptions",
+          required: true,
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of results to return (default 5, max 10)",
+        },
       },
     },
     scopes: ["chat", "channel", "ticket", "session", "project"],

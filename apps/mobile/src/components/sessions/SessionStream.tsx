@@ -12,10 +12,7 @@ import { useEntityField } from "@trace/client-core";
 import { useNewActivityTracker } from "@/hooks/useNewActivityTracker";
 import { useSessionEvents } from "@/hooks/useSessionEvents";
 import { useSessionNodes } from "@/hooks/useSessionNodes";
-import {
-  calculateTimestampRevealX,
-  TIMESTAMP_REVEAL_ACTIVATION,
-} from "@/lib/timestampReveal";
+import { calculateTimestampRevealX, TIMESTAMP_REVEAL_ACTIVATION } from "@/lib/timestampReveal";
 import { useTheme } from "@/theme";
 import { NewActivityPill } from "./NewActivityPill";
 import { SessionStreamList } from "./SessionStreamList";
@@ -118,11 +115,7 @@ export function SessionStream({
   );
   const streamItemCacheRef = useRef<SessionStreamItemCache | undefined>(undefined);
   const streamItems = useMemo(() => {
-    const result = buildSessionStreamItems(
-      nodes,
-      scopedEvents,
-      streamItemCacheRef.current,
-    );
+    const result = buildSessionStreamItems(nodes, scopedEvents, streamItemCacheRef.current);
     streamItemCacheRef.current = result.cache;
     return result.items;
   }, [nodes, scopedEvents]);

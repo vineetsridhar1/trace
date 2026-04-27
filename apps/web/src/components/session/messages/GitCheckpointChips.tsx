@@ -3,11 +3,7 @@ import { GitCommitHorizontal } from "lucide-react";
 import { shortSha } from "@trace/shared";
 import { useCheckpointOpen } from "../CheckpointOpenContext";
 
-export function GitCheckpointChips({
-  checkpoints,
-}: {
-  checkpoints: GitCheckpoint[];
-}) {
+export function GitCheckpointChips({ checkpoints }: { checkpoints: GitCheckpoint[] }) {
   const openCheckpointPanel = useCheckpointOpen();
 
   if (checkpoints.length === 0) return null;

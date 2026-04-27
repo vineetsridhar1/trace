@@ -30,21 +30,12 @@ export function renderNode(props: RenderNodeProps): ReactNode {
   switch (node.kind) {
     case "command-execution":
       return (
-        <CommandExecutionRow
-          command={node.command}
-          output={node.output}
-          exitCode={node.exitCode}
-        />
+        <CommandExecutionRow command={node.command} output={node.output} exitCode={node.exitCode} />
       );
     case "readglob-group":
       return <ReadGlobGroup items={node.items} />;
     case "plan-review":
-      return (
-        <PlanReviewCard
-          planContent={node.planContent}
-          planFilePath={node.planFilePath}
-        />
-      );
+      return <PlanReviewCard planContent={node.planContent} planFilePath={node.planFilePath} />;
     case "ask-user-question":
       return <AskUserQuestionCard questions={node.questions} />;
     case "event":

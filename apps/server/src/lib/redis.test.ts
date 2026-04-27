@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 const hoisted = vi.hoisted(() => {
-  const instances: Array<{ url: string; options: Record<string, unknown>; client: Record<string, unknown> }> = [];
+  const instances: Array<{
+    url: string;
+    options: Record<string, unknown>;
+    client: Record<string, unknown>;
+  }> = [];
 
   class RedisMock {
     on = vi.fn();

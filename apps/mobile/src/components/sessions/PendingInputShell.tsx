@@ -32,8 +32,7 @@ export function PendingInputShell({
       style={[
         styles.container,
         {
-          backgroundColor:
-            background === "transparent" ? "transparent" : theme.colors.surface,
+          backgroundColor: background === "transparent" ? "transparent" : theme.colors.surface,
           borderTopColor: alpha(theme.colors.accent, 0.3),
           borderTopWidth: showTopBorder ? StyleSheet.hairlineWidth : 0,
           paddingHorizontal: theme.spacing.md,

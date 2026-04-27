@@ -47,9 +47,7 @@ const ACTION_ALIASES: Record<string, string> = {
 // Indexed lookups — O(1) by name, pre-computed by scope
 // ---------------------------------------------------------------------------
 
-const actionsByName = new Map<string, AgentActionRegistration>(
-  allActions.map((a) => [a.name, a]),
-);
+const actionsByName = new Map<string, AgentActionRegistration>(allActions.map((a) => [a.name, a]));
 
 const ALL_SCOPES: ScopeType[] = ["chat", "channel", "ticket", "session", "project", "system"];
 
@@ -60,8 +58,14 @@ const extendedByScopeCache = new Map<ScopeType, AgentActionRegistration[]>();
 for (const scope of ALL_SCOPES) {
   const scoped = allActions.filter((a) => a.scopes.includes(scope));
   actionsByScopeCache.set(scope, scoped);
-  coreByScopeCache.set(scope, scoped.filter((a) => a.tier === "core"));
-  extendedByScopeCache.set(scope, scoped.filter((a) => a.tier === "extended"));
+  coreByScopeCache.set(
+    scope,
+    scoped.filter((a) => a.tier === "core"),
+  );
+  extendedByScopeCache.set(
+    scope,
+    scoped.filter((a) => a.tier === "extended"),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -88,7 +92,7 @@ for (const action of allActions) {
   if (!dispatchRegistry.has(action.name)) {
     throw new Error(
       `Action "${action.name}" is registered but has no dispatcher. ` +
-      `Add a dispatcher in the corresponding domain file.`,
+        `Add a dispatcher in the corresponding domain file.`,
     );
   }
 }
@@ -177,5 +181,12 @@ export function validateActionParams(
 }
 
 // Re-export types for consumers
-export type { AgentActionRegistration, ActionDispatcher, ScopeType, RiskLevel, ParameterField, ParameterSchema } from "./types.js";
+export type {
+  AgentActionRegistration,
+  ActionDispatcher,
+  ScopeType,
+  RiskLevel,
+  ParameterField,
+  ParameterSchema,
+} from "./types.js";
 export type { ServiceContainer, AgentContext } from "./types.js";

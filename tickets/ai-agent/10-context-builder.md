@@ -12,6 +12,7 @@ The context builder converts a raw event batch into a compact, relevant context 
 ### Context packet structure
 
 The packet should include:
+
 - **Trigger event** — the most recent event in the batch
 - **Event batch** — all events in the window
 - **Soul file** — resolved from org agent settings (empty string is fine for now until ticket 13)
@@ -27,7 +28,7 @@ The packet should include:
 - Define a token budget config with per-section allocations (trigger event, batch, soul file, scope entity, relevant entities, recent events, summaries, actors, action schema)
 - Fill the packet greedily by priority — trigger event and action schema first, then scope entity, then batch, then relevant entities, summaries, recent events
 - If a section exceeds its budget, truncate: events from oldest, entities from least relevant, summaries from least related scope
-- Use a simple token estimation function (words * 1.3 or similar) — exact tokenization isn't necessary
+- Use a simple token estimation function (words \* 1.3 or similar) — exact tokenization isn't necessary
 
 ### Relevant entity search
 

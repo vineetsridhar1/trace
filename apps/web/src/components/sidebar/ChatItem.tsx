@@ -20,10 +20,13 @@ export const ChatItem = memo(function ChatItem({
     | Array<{ user: { id: string; name: string } }>
     | undefined;
   const currentUserId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
-  const isUnread = useUIStore((s: { unreadChatIds: Record<string, boolean> }) => !!s.unreadChatIds[id]);
+  const isUnread = useUIStore(
+    (s: { unreadChatIds: Record<string, boolean> }) => !!s.unreadChatIds[id],
+  );
 
   const otherMember = members?.find((member) => member.user.id !== currentUserId);
-  const displayName = name ?? (type === "dm" ? (otherMember?.user.name ?? "Direct Message") : "Group Chat");
+  const displayName =
+    name ?? (type === "dm" ? (otherMember?.user.name ?? "Direct Message") : "Group Chat");
 
   return (
     <SidebarMenuItem>

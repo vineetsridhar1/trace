@@ -45,9 +45,7 @@ export function ConnectionLostBanner({ sessionId, reason }: ConnectionLostBanner
     if (pending) return;
     setPending(true);
     void haptic.light();
-    await getClient()
-      .mutation(RETRY_SESSION_CONNECTION_MUTATION, { sessionId })
-      .toPromise();
+    await getClient().mutation(RETRY_SESSION_CONNECTION_MUTATION, { sessionId }).toPromise();
     if (mountedRef.current) setPending(false);
   }
 

@@ -23,7 +23,11 @@ export const channelActions: AgentActionRegistration[] = [
     tier: "core",
     parameters: {
       fields: {
-        channelId: { type: "string", description: "The channel to send the message in", required: true },
+        channelId: {
+          type: "string",
+          description: "The channel to send the message in",
+          required: true,
+        },
         text: { type: "string", description: "Plain text message content" },
         html: { type: "string", description: "HTML-formatted message content" },
         threadId: { type: "string", description: "Thread ID for threaded replies" },
@@ -35,8 +39,7 @@ export const channelActions: AgentActionRegistration[] = [
     name: "channel.update",
     service: "channelService",
     method: "update",
-    description:
-      "Update a channel's settings such as name or base branch.",
+    description: "Update a channel's settings such as name or base branch.",
     catalogDescription: "Edit/modify a channel's settings (channelId, name, baseBranch)",
     risk: "medium",
     suggestable: true,
@@ -54,8 +57,7 @@ export const channelActions: AgentActionRegistration[] = [
     name: "channel.editMessage",
     service: "channelService",
     method: "editChannelMessage",
-    description:
-      "Edit a previously sent message in a channel.",
+    description: "Edit a previously sent message in a channel.",
     catalogDescription: "Edit/modify a channel message (messageId, html)",
     risk: "medium",
     suggestable: true,
@@ -72,8 +74,7 @@ export const channelActions: AgentActionRegistration[] = [
     name: "channel.deleteMessage",
     service: "channelService",
     method: "deleteChannelMessage",
-    description:
-      "Delete a message from a channel. This is a destructive action.",
+    description: "Delete a message from a channel. This is a destructive action.",
     catalogDescription: "Delete/remove a message from a channel (messageId)",
     risk: "high",
     suggestable: true,
@@ -89,8 +90,7 @@ export const channelActions: AgentActionRegistration[] = [
     name: "channel.get",
     service: "channelService",
     method: "getChannel",
-    description:
-      "Get details about a specific channel including name, description, and members.",
+    description: "Get details about a specific channel including name, description, and members.",
     catalogDescription: "Fetch/read/view channel details (channelId)",
     risk: "low",
     suggestable: false,
@@ -106,8 +106,7 @@ export const channelActions: AgentActionRegistration[] = [
     name: "channel.list",
     service: "channelService",
     method: "listChannels",
-    description:
-      "List channels in the organization. Optionally filter by project.",
+    description: "List channels in the organization. Optionally filter by project.",
     catalogDescription: "List/browse all channels in the org (projectId)",
     risk: "low",
     suggestable: false,
@@ -131,8 +130,15 @@ export const channelActions: AgentActionRegistration[] = [
     tier: "extended",
     parameters: {
       fields: {
-        channelId: { type: "string", description: "The channel to read messages from", required: true },
-        limit: { type: "number", description: "Maximum number of messages to return (default 20, max 50)" },
+        channelId: {
+          type: "string",
+          description: "The channel to read messages from",
+          required: true,
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of messages to return (default 20, max 50)",
+        },
       },
     },
     scopes: ["channel"],
@@ -149,7 +155,11 @@ export const channelActions: AgentActionRegistration[] = [
     tier: "extended",
     parameters: {
       fields: {
-        channelId: { type: "string", description: "The channel to list members for", required: true },
+        channelId: {
+          type: "string",
+          description: "The channel to list members for",
+          required: true,
+        },
       },
     },
     scopes: ["channel"],
@@ -209,20 +219,16 @@ export const channelDispatchers: Record<string, ActionDispatcher> = {
   },
 
   "channel.list": (services, args, ctx) => {
-    return services.channelService.listChannels(
-      ctx.organizationId,
-      ctx.agentId,
-      { projectId: args.projectId as string | undefined },
-    );
+    return services.channelService.listChannels(ctx.organizationId, ctx.agentId, {
+      projectId: args.projectId as string | undefined,
+    });
   },
 
   "channel.listMessages": (services, args, ctx) => {
     const limit = Math.min(typeof args.limit === "number" ? args.limit : 20, 50);
-    return services.channelService.getChannelMessages(
-      args.channelId as string,
-      ctx.agentId,
-      { limit },
-    );
+    return services.channelService.getChannelMessages(args.channelId as string, ctx.agentId, {
+      limit,
+    });
   },
 
   "channel.getMembers": (services, args) => {

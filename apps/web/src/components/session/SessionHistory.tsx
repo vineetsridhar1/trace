@@ -18,10 +18,14 @@ interface SessionHistoryProps {
 }
 
 export function SessionHistory({ sessionId }: SessionHistoryProps) {
-  const openSessionTab = useUIStore((s: { openSessionTab: (groupId: string, sessionId: string) => void }) => s.openSessionTab);
+  const openSessionTab = useUIStore(
+    (s: { openSessionTab: (groupId: string, sessionId: string) => void }) => s.openSessionTab,
+  );
   const [creatingFromId, setCreatingFromId] = useState<string | null>(null);
 
-  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
+  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
+    | string
+    | undefined;
   const sessionGroupChannel = useEntityField("sessionGroups", sessionGroupId ?? "", "channel") as
     | { id: string }
     | null
@@ -33,7 +37,9 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
   const groupSessions = useMemo(() => {
     if (!sessionGroupId) return [];
     return groupSessionEntities
-      .filter((session): session is NonNullable<(typeof groupSessionEntities)[number]> => session != null)
+      .filter(
+        (session): session is NonNullable<(typeof groupSessionEntities)[number]> => session != null,
+      )
       .sort((a, b) => {
         const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
         if (diff !== 0) return diff;
@@ -126,14 +132,13 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
               }}
               className="flex min-w-0 flex-1 items-center gap-2 text-left"
             >
-              <Circle
-                size={6}
-                className={cn("shrink-0 fill-current", color)}
-              />
+              <Circle size={6} className={cn("shrink-0 fill-current", color)} />
               <span
                 className={cn(
                   "min-w-0 flex-1 truncate",
-                  entry.id === sessionId ? "font-semibold text-foreground" : "text-muted-foreground",
+                  entry.id === sessionId
+                    ? "font-semibold text-foreground"
+                    : "text-muted-foreground",
                 )}
               >
                 {entry.name}

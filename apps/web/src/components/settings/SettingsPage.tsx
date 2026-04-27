@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, GitBranch, Bot, SlidersHorizontal, Bell, Key, Users, Code, MonitorCog } from "lucide-react";
+import {
+  ArrowLeft,
+  GitBranch,
+  Bot,
+  SlidersHorizontal,
+  Bell,
+  Key,
+  Users,
+  Code,
+  MonitorCog,
+} from "lucide-react";
 import { useUIStore } from "../../stores/ui";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";

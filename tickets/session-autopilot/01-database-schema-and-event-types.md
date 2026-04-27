@@ -52,4 +52,3 @@ Add the durable database shape for Session Autopilot: new enums, the new `Sessio
 2. Run `pnpm db:generate`.
 3. Inspect the generated Prisma client for the new enums and model.
 4. Create a session manually and verify `role` defaults to `primary`.
-

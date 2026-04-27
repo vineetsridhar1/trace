@@ -55,7 +55,8 @@ interface BrowseChannel {
 }
 
 function ChannelTypeIcon({ type }: { type: ChannelType }) {
-  if (type === "text") return <MessageSquare size={16} className="shrink-0 text-muted-foreground" />;
+  if (type === "text")
+    return <MessageSquare size={16} className="shrink-0 text-muted-foreground" />;
   return <Code size={16} className="shrink-0 text-muted-foreground" />;
 }
 
@@ -84,7 +85,9 @@ export function BrowseChannelsDialog({
   const fetchChannels = useCallback(async () => {
     if (!activeOrgId) return;
     setLoading(true);
-    const result = await client.query(ALL_CHANNELS_QUERY, { organizationId: activeOrgId }).toPromise();
+    const result = await client
+      .query(ALL_CHANNELS_QUERY, { organizationId: activeOrgId })
+      .toPromise();
     if (result.data?.channels) {
       const all = result.data.channels as BrowseChannel[];
       setChannels(features.messaging ? all : all.filter((c) => c.type !== "text"));
@@ -158,7 +161,9 @@ export function BrowseChannelsDialog({
             )}
             {!loading &&
               filtered.map((ch: BrowseChannel) => {
-                const isMember = ch.members.some((m: { user: { id: string } }) => m.user.id === userId);
+                const isMember = ch.members.some(
+                  (m: { user: { id: string } }) => m.user.id === userId,
+                );
                 const isPending = pendingAction === ch.id;
                 return (
                   <div

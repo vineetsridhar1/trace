@@ -29,7 +29,10 @@ export const readActions: AgentActionRegistration[] = [
           enum: ["chat", "channel", "ticket", "session"],
         },
         scopeId: { type: "string", description: "ID of the scope", required: true },
-        limit: { type: "number", description: "Maximum number of events to return (default 20, max 50)" },
+        limit: {
+          type: "number",
+          description: "Maximum number of events to return (default 20, max 50)",
+        },
       },
     },
     scopes: ["chat", "channel", "ticket", "session", "project"],
@@ -46,7 +49,11 @@ export const readActions: AgentActionRegistration[] = [
     tier: "extended",
     parameters: {
       fields: {
-        query: { type: "string", description: "Search query to match against user names and emails", required: true },
+        query: {
+          type: "string",
+          description: "Search query to match against user names and emails",
+          required: true,
+        },
       },
     },
     scopes: ["chat", "channel", "ticket", "session", "project"],
@@ -55,8 +62,7 @@ export const readActions: AgentActionRegistration[] = [
     name: "users.getProfile",
     service: "organizationService",
     method: "getUserProfile",
-    description:
-      "Get a user's profile by ID including name, email, and avatar.",
+    description: "Get a user's profile by ID including name, email, and avatar.",
     catalogDescription: "Fetch/view a user's profile by ID (userId)",
     risk: "low",
     suggestable: false,
@@ -72,8 +78,7 @@ export const readActions: AgentActionRegistration[] = [
     name: "org.listProjects",
     service: "organizationService",
     method: "listProjects",
-    description:
-      "List all projects in the organization. Optionally filter by repo.",
+    description: "List all projects in the organization. Optionally filter by repo.",
     catalogDescription: "List/browse all projects in the org (repoId)",
     risk: "low",
     suggestable: false,
@@ -89,8 +94,7 @@ export const readActions: AgentActionRegistration[] = [
     name: "org.listRepos",
     service: "organizationService",
     method: "listRepos",
-    description:
-      "List all repositories connected to the organization.",
+    description: "List all repositories connected to the organization.",
     catalogDescription: "List/browse all repos in the org",
     risk: "low",
     suggestable: false,
@@ -108,7 +112,6 @@ export const readActions: AgentActionRegistration[] = [
 
 export const readDispatchers: Record<string, ActionDispatcher> = {
   "events.query": (services, args, ctx) => {
-
     const limit = Math.min(typeof args.limit === "number" ? args.limit : 20, 50);
     return services.eventService.query(ctx.organizationId, {
       scopeType: args.scopeType as ScopeType | undefined,
@@ -118,20 +121,14 @@ export const readDispatchers: Record<string, ActionDispatcher> = {
   },
 
   "users.search": (services, args, ctx) => {
-
-    return services.organizationService.searchUsers(
-      args.query as string,
-      ctx.organizationId,
-    );
+    return services.organizationService.searchUsers(args.query as string, ctx.organizationId);
   },
 
   "users.getProfile": (services, args) => {
-
     return services.organizationService.getUserProfile(args.userId as string);
   },
 
   "org.listProjects": (services, args, ctx) => {
-
     return services.organizationService.listProjects(
       ctx.organizationId,
       args.repoId as string | undefined,
@@ -139,7 +136,6 @@ export const readDispatchers: Record<string, ActionDispatcher> = {
   },
 
   "org.listRepos": (services, _args, ctx) => {
-
     return services.organizationService.listRepos(ctx.organizationId);
   },
 };

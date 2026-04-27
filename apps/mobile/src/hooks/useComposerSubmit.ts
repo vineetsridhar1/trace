@@ -41,8 +41,7 @@ export function useComposerSubmit({
       if ((!draft && images.length === 0) || sending) return;
       void haptic.light();
       setSending(true);
-      const wrapped =
-        !draft ? "" : draft.startsWith("/") ? draft : wrapPrompt(mode, draft);
+      const wrapped = !draft ? "" : draft.startsWith("/") ? draft : wrapPrompt(mode, draft);
       const interactionMode = mode === "code" ? undefined : mode;
       // Clear the draft the same frame the message visibly leaves the input —
       // either as it lands in the queue, or as the optimistic bubble appears.
@@ -91,9 +90,7 @@ export function useComposerSubmit({
             useDraftsStore
               .getState()
               .setImages(sessionId, (prev) =>
-                prev.map((img) =>
-                  savedIds.has(img.id) ? { ...img, uploading: false } : img,
-                ),
+                prev.map((img) => (savedIds.has(img.id) ? { ...img, uploading: false } : img)),
               );
             throw err;
           }
@@ -102,9 +99,7 @@ export function useComposerSubmit({
         const { eventId, clientMutationId } = optimisticallyInsertSessionMessage(
           sessionId,
           wrapped,
-          imageKeys.length > 0
-            ? { imageKeys, imagePreviewUrls: previewUris }
-            : undefined,
+          imageKeys.length > 0 ? { imageKeys, imagePreviewUrls: previewUris } : undefined,
         );
         useDraftsStore
           .getState()
@@ -112,16 +107,13 @@ export function useComposerSubmit({
         onSuccess();
         try {
           const result = await getClient()
-            .mutation<{ sendSessionMessage: { id: string } }>(
-              SEND_SESSION_MESSAGE_MUTATION,
-              {
-                sessionId,
-                text: wrapped,
-                imageKeys: imageKeys.length > 0 ? imageKeys : undefined,
-                interactionMode,
-                clientMutationId,
-              },
-            )
+            .mutation<{ sendSessionMessage: { id: string } }>(SEND_SESSION_MESSAGE_MUTATION, {
+              sessionId,
+              text: wrapped,
+              imageKeys: imageKeys.length > 0 ? imageKeys : undefined,
+              interactionMode,
+              clientMutationId,
+            })
             .toPromise();
           if (result.error) throw result.error;
           const realId = result.data?.sendSessionMessage?.id;
@@ -131,10 +123,12 @@ export function useComposerSubmit({
           removeOptimisticSessionMessage(sessionId, eventId);
           // Restore the failed images at the end of the draft, so anything the
           // user added during the in-flight send keeps its original position.
-          useDraftsStore.getState().setImages(sessionId, (prev) => [
-            ...prev,
-            ...savedImages.map((img) => ({ ...img, uploading: false })),
-          ]);
+          useDraftsStore
+            .getState()
+            .setImages(sessionId, (prev) => [
+              ...prev,
+              ...savedImages.map((img) => ({ ...img, uploading: false })),
+            ]);
           throw err;
         }
       } catch (err) {

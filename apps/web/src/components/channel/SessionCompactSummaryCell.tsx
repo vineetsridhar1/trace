@@ -16,11 +16,7 @@ export function SessionCompactSummaryCell({ row }: { row?: SessionGroupRow }) {
   const hasActiveTerminal = terminals.some((t) => t.status === "active");
   const attached = useAttachedCheckoutForGroup(row.id);
 
-  const subtext = repo && slug
-    ? `${repo.name} / ${slug}`
-    : repo
-      ? repo.name
-      : slug ?? null;
+  const subtext = repo && slug ? `${repo.name} / ${slug}` : repo ? repo.name : (slug ?? null);
 
   return (
     <div className="flex h-full w-full min-w-0 flex-1 flex-col justify-center py-2">
@@ -48,9 +44,7 @@ export function SessionCompactSummaryCell({ row }: { row?: SessionGroupRow }) {
             </span>
           )}
         </div>
-        <span className="shrink-0 text-right">
-          {lastActivityAt ? timeAgo(lastActivityAt) : ""}
-        </span>
+        <span className="shrink-0 text-right">{lastActivityAt ? timeAgo(lastActivityAt) : ""}</span>
       </div>
     </div>
   );

@@ -240,7 +240,11 @@ export function optimisticallyInsertSessionMessage(
 
   useEntityStore.getState().upsertScopedEvent(scopeKey, tempId, event);
 
-  enqueue(pendingSessionOptimistic, sessionId, { tempEventId: tempId, clientMutationId, createdAt: Date.now() });
+  enqueue(pendingSessionOptimistic, sessionId, {
+    tempEventId: tempId,
+    clientMutationId,
+    createdAt: Date.now(),
+  });
 
   return { eventId: tempId, clientMutationId };
 }
@@ -289,7 +293,11 @@ export function upsertSessionEventWithOptimisticResolution(
 
   useEntityStore.setState((state: EntityStoreState) => {
     const bucket = { ...(state.eventsByScope[scopeKey] ?? {}) };
-    let eventIdsByScope = removeEventIdByScope(state._eventIdsByScope, scopeKey, pending.tempEventId);
+    let eventIdsByScope = removeEventIdByScope(
+      state._eventIdsByScope,
+      scopeKey,
+      pending.tempEventId,
+    );
     eventIdsByScope = upsertEventIdByScope(
       eventIdsByScope,
       scopeKey,
@@ -532,7 +540,11 @@ export function upsertFetchedChatMessagesWithOptimisticResolution(
           bucketChanged = true;
         }
         delete bucket[entry.tempEventId];
-        nextEventIdsByScope = removeEventIdByScope(nextEventIdsByScope, scopeKey, entry.tempEventId);
+        nextEventIdsByScope = removeEventIdByScope(
+          nextEventIdsByScope,
+          scopeKey,
+          entry.tempEventId,
+        );
       }
     }
 

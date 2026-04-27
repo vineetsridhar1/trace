@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
-import { Platform, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import {
+  Platform,
+  StyleSheet,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import Animated, { Keyframe, type SharedValue } from "react-native-reanimated";
 import { Text } from "@/components/design-system";
@@ -107,13 +113,7 @@ export function SessionStreamList({
       if (!isFreshLast) return body;
       return <Animated.View entering={messageEnter}>{body}</Animated.View>;
     },
-    [
-      acceptEntering,
-      horizontalPadding,
-      isNearBottomRef,
-      renderContext,
-      revealX,
-    ],
+    [acceptEntering, horizontalPadding, isNearBottomRef, renderContext, revealX],
   );
 
   const keyExtractor = useCallback((item: SessionStreamListItem) => item.key, []);

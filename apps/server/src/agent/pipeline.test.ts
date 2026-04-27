@@ -33,7 +33,9 @@ vi.mock("./planner.js", () => ({
   DEFAULT_SONNET_MODEL: "claude-sonnet-4-20250514",
   DEFAULT_OPUS_MODEL: "claude-opus-4-20250514",
   PLANNER_TOOL: { name: "planner_decision" },
-  buildSystemPrompt: vi.fn().mockReturnValue({ text: "system prompt", blockVersions: { "system-preamble": 1 } }),
+  buildSystemPrompt: vi
+    .fn()
+    .mockReturnValue({ text: "system prompt", blockVersions: { "system-preamble": 1 } }),
   runPlannerTurn: vi.fn(),
 }));
 
@@ -197,7 +199,8 @@ function makeTurnResult(
     model?: string;
   },
 ): PlannerTurnResult {
-  const actions = overrides?.proposedActions ??
+  const actions =
+    overrides?.proposedActions ??
     (disposition === "ignore" ? [] : [{ actionType: "ticket.create", args: { title: "Bug" } }]);
   return {
     output: {
@@ -364,7 +367,7 @@ describe("runPipeline", () => {
     await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
 
     // Executor called twice: once for ticket.create, once for sendActionConfirmation auto-reply
-    expect((mockExecutor.execute as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2);
+    expect(mockExecutor.execute as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(2);
     expect(mockCreateSuggestions).not.toHaveBeenCalled();
     expect(mockLogWrite.mock.calls[0][0].status).toBe("succeeded");
   });
@@ -386,7 +389,7 @@ describe("runPipeline", () => {
     await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
 
     expect(mockCreateSuggestions).not.toHaveBeenCalled();
-    expect((mockExecutor.execute as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+    expect(mockExecutor.execute as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
     expect(mockLogWrite.mock.calls[0][0].status).toBe("dropped");
   });
 
@@ -452,17 +455,21 @@ describe("runPipeline", () => {
 
   it("promotes to Opus when planner escalates with promotionTarget opus", async () => {
     const packet = makePacket();
-    const tier3Packet = makePacket({ tokenBudget: { total: 100000, used: 8000, sections: { trigger: 300 } } });
-    mockBuildContext
-      .mockResolvedValueOnce(packet)
-      .mockResolvedValueOnce(tier3Packet);
+    const tier3Packet = makePacket({
+      tokenBudget: { total: 100000, used: 8000, sections: { trigger: 300 } },
+    });
+    mockBuildContext.mockResolvedValueOnce(packet).mockResolvedValueOnce(tier3Packet);
 
     mockRunPlannerTurn
-      .mockResolvedValueOnce(makeTurnResult("escalate", {
-        promotionReason: "complex task",
-        promotionTarget: "opus",
-      }))
-      .mockResolvedValueOnce(makeTurnResult("act", { done: true, model: "claude-opus-4-20250514" }));
+      .mockResolvedValueOnce(
+        makeTurnResult("escalate", {
+          promotionReason: "complex task",
+          promotionTarget: "opus",
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeTurnResult("act", { done: true, model: "claude-opus-4-20250514" }),
+      );
 
     mockEvaluatePolicy.mockResolvedValue({
       actions: [
@@ -490,7 +497,9 @@ describe("runPipeline", () => {
 
     mockRunPlannerTurn
       .mockResolvedValueOnce(makeTurnResult("escalate", { promotionReason: "needs reasoning" }))
-      .mockResolvedValueOnce(makeTurnResult("act", { done: true, model: "claude-sonnet-4-20250514" }));
+      .mockResolvedValueOnce(
+        makeTurnResult("act", { done: true, model: "claude-sonnet-4-20250514" }),
+      );
 
     mockEvaluatePolicy.mockResolvedValue({
       actions: [
@@ -511,10 +520,12 @@ describe("runPipeline", () => {
 
   it("suppresses Opus promotion when budget is below 50%", async () => {
     mockBuildContext.mockResolvedValue(makePacket());
-    mockRunPlannerTurn.mockResolvedValue(makeTurnResult("escalate", {
-      promotionReason: "complex task",
-      promotionTarget: "opus",
-    }));
+    mockRunPlannerTurn.mockResolvedValue(
+      makeTurnResult("escalate", {
+        promotionReason: "complex task",
+        promotionTarget: "opus",
+      }),
+    );
     mockCheckBudget.mockResolvedValue({
       dailyLimitCents: 1000,
       spentCents: 600,
@@ -531,7 +542,9 @@ describe("runPipeline", () => {
 
   it("runs Tier 3 directly when batch.maxTier is 3", async () => {
     mockBuildContext.mockResolvedValue(makePacket());
-    mockRunPlannerTurn.mockResolvedValue(makeTurnResult("act", { done: true, model: "claude-opus-4-20250514" }));
+    mockRunPlannerTurn.mockResolvedValue(
+      makeTurnResult("act", { done: true, model: "claude-opus-4-20250514" }),
+    );
     mockEvaluatePolicy.mockResolvedValue({
       actions: [
         {
@@ -584,7 +597,10 @@ describe("runPipeline", () => {
     mockEvaluatePolicy.mockResolvedValue({
       actions: [
         {
-          action: { actionType: "message.send", args: { chatId: "chat-1", text: "test rationale", parentId: "msg-1" } },
+          action: {
+            actionType: "message.send",
+            args: { chatId: "chat-1", text: "test rationale", parentId: "msg-1" },
+          },
           decision: "execute",
           reason: "forced mention reply",
         },
@@ -616,12 +632,14 @@ describe("runPipeline", () => {
       },
     });
     mockBuildContext.mockResolvedValue(packet);
-    mockRunPlannerTurn.mockResolvedValue(makeTurnResult("act", {
-      done: true,
-      proposedActions: [
-        { actionType: "channel.sendMessage", args: { channelId: "ch-1", text: "On it." } },
-      ],
-    }));
+    mockRunPlannerTurn.mockResolvedValue(
+      makeTurnResult("act", {
+        done: true,
+        proposedActions: [
+          { actionType: "channel.sendMessage", args: { channelId: "ch-1", text: "On it." } },
+        ],
+      }),
+    );
     mockEvaluatePolicy.mockImplementation(async ({ plannerOutput }) => ({
       actions: plannerOutput.proposedActions.map((action) => ({
         action,
@@ -631,7 +649,10 @@ describe("runPipeline", () => {
       plannerOutput,
     }));
     (mockExecutor.execute as ReturnType<typeof vi.fn>).mockImplementation(
-      async (action: { actionType: string }) => ({ status: "success", actionType: action.actionType }),
+      async (action: { actionType: string }) => ({
+        status: "success",
+        actionType: action.actionType,
+      }),
     );
 
     await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });

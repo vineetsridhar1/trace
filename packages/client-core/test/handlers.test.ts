@@ -3,10 +3,7 @@ import type { Event, EventType, ScopeType } from "@trace/gql";
 import { handleOrgEvent } from "../src/events/handlers.js";
 import { useEntityStore } from "../src/stores/entity.js";
 import { useAuthStore } from "../src/stores/auth.js";
-import {
-  setOrgEventUIBindings,
-  type OrgEventUIBindings,
-} from "../src/events/ui-bindings.js";
+import { setOrgEventUIBindings, type OrgEventUIBindings } from "../src/events/ui-bindings.js";
 
 function resetStores() {
   useEntityStore.setState({
@@ -211,11 +208,7 @@ describe("handleOrgEvent", () => {
     });
     handleOrgEvent(event);
     expect(harness.openSessionTab).toHaveBeenCalledWith("group-1", "session-new");
-    expect(harness.navigateToSession).toHaveBeenCalledWith(
-      "channel-7",
-      "group-1",
-      "session-new",
-    );
+    expect(harness.navigateToSession).toHaveBeenCalledWith("channel-7", "group-1", "session-new");
   });
 
   it("marks badges when an off-screen session reaches a terminal state", () => {
@@ -430,9 +423,7 @@ describe("handleOrgEvent", () => {
     );
 
     expect(useEntityStore.getState().queuedMessages["qm-1"]).toBeDefined();
-    expect(
-      useEntityStore.getState()._queuedMessageIdsBySession["session-1"],
-    ).toContain("qm-1");
+    expect(useEntityStore.getState()._queuedMessageIdsBySession["session-1"]).toContain("qm-1");
 
     handleOrgEvent(
       makeEvent({

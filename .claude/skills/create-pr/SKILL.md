@@ -24,6 +24,7 @@ You are committing all changes, pushing, and creating (or updating) a GitHub pul
    - Analyze the diff (`git diff --cached`) to understand what changed
    - Write a clear, concise commit message summarizing the changes
    - Commit using a HEREDOC:
+
      ```bash
      git commit -m "$(cat <<'EOF'
      Commit message here
@@ -32,6 +33,7 @@ You are committing all changes, pushing, and creating (or updating) a GitHub pul
      EOF
      )"
      ```
+
    - If there are multiple logical groups of changes, create multiple commits instead of one big one
 
 5. **Understand all changes on the branch**: Run these in parallel:
@@ -48,15 +50,16 @@ You are committing all changes, pushing, and creating (or updating) a GitHub pul
    - Under 70 characters
    - Captures the core intent of the changes, not just file names
    - Uses action verbs: "Add", "Fix", "Refactor", "Replace", etc.
-   - Focuses on *what the PR achieves*, not implementation details
+   - Focuses on _what the PR achieves_, not implementation details
 
    **Body guidelines:**
-   - Summary bullets should explain *why* these changes were made, not just *what* files changed
+   - Summary bullets should explain _why_ these changes were made, not just _what_ files changed
    - Describe the user-facing or developer-facing impact
    - Mention architectural decisions if relevant (e.g., "Uses async request-response pattern over bridge WebSocket")
    - Test plan should be specific and actionable — describe concrete scenarios to verify, not generic checklists
 
    Format:
+
    ```
    ## Summary
    <2-4 bullet points — what changed and why, focusing on impact>
@@ -70,6 +73,7 @@ You are committing all changes, pushing, and creating (or updating) a GitHub pul
 9. **Create or update the PR**:
 
    **If no PR exists** — create one:
+
    ```bash
    gh pr create --base <base> --title "the title" --body "$(cat <<'EOF'
    ## Summary
@@ -89,6 +93,7 @@ You are committing all changes, pushing, and creating (or updating) a GitHub pul
    - New commits have been added that aren't reflected in the description
 
    To update:
+
    ```bash
    gh pr edit --title "updated title" --body "$(cat <<'EOF'
    ## Summary
@@ -107,8 +112,9 @@ You are committing all changes, pushing, and creating (or updating) a GitHub pul
 10. **Return the PR URL** so the user can click it.
 
 ## Important
+
 - Do NOT use the Agent tool or TodoWrite tool
 - Read the FULL diff — do not summarize from commit messages or `--stat` alone. The diff is the source of truth for what changed.
 - Keep the title short and meaningful
-- The body should focus on *why* and *impact*, not just *what files changed*
+- The body should focus on _why_ and _impact_, not just _what files changed_
 - Do not commit files that likely contain secrets (.env, credentials.json, etc) — warn the user instead

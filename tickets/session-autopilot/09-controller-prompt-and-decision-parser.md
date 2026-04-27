@@ -40,4 +40,3 @@ Define the controller contract and make it parseable. The controller needs a sta
 2. Parse a valid `request_human_validation` sample.
 3. Parse a valid `stop` sample.
 4. Verify malformed XML and unknown actions fail safely.
-

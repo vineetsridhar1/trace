@@ -76,10 +76,7 @@ async function main() {
 
   app.use(
     cors({
-      origin(
-        origin: string | undefined,
-        callback: (error: Error | null, allow?: boolean) => void,
-      ) {
+      origin(origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) {
         if (isCorsOriginAllowed(allowedCorsOrigins, origin)) {
           callback(null, true);
           return;
@@ -162,10 +159,7 @@ async function main() {
         sessionIds: stale.sessionIds,
         lastHeartbeat: stale.lastHeartbeat,
       });
-      const eviction = sessionRouter.evictRuntimeIfStale(
-        stale.runtimeId,
-        stale.lastHeartbeat,
-      );
+      const eviction = sessionRouter.evictRuntimeIfStale(stale.runtimeId, stale.lastHeartbeat);
       if (!eviction.evicted) {
         continue;
       }

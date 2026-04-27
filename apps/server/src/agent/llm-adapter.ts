@@ -81,10 +81,7 @@ const DEFAULT_RETRY: Required<RetryOptions> = {
  * Execute an LLM call with exponential backoff retry on transient errors.
  * Non-retryable errors are thrown immediately.
  */
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  options?: RetryOptions,
-): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, options?: RetryOptions): Promise<T> {
   const opts = { ...DEFAULT_RETRY, ...options };
   let lastError: unknown;
 
@@ -102,10 +99,7 @@ export async function withRetry<T>(
 
       incrementMetric("llmRetriesTotal");
 
-      const baseDelay = Math.min(
-        opts.initialDelayMs * Math.pow(2, attempt),
-        opts.maxDelayMs,
-      );
+      const baseDelay = Math.min(opts.initialDelayMs * Math.pow(2, attempt), opts.maxDelayMs);
       const jitter = baseDelay * opts.jitter * (Math.random() * 2 - 1);
       const delay = Math.max(0, Math.round(baseDelay + jitter));
 

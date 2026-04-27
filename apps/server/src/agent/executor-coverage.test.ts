@@ -230,7 +230,9 @@ function getExpectedMock(services: MockedServices, actionType: string): MockFn |
   if (!registration?.service || !registration.method) {
     return undefined;
   }
-  return (services as Record<string, Record<string, MockFn>>)[registration.service]?.[registration.method];
+  return (services as Record<string, Record<string, MockFn>>)[registration.service]?.[
+    registration.method
+  ];
 }
 
 function expectOnlyMockCalled(services: MockedServices, expectedMock: MockFn): void {
@@ -309,22 +311,18 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
     actionType: "channel.list",
     args: { projectId: "proj-1" },
     assertCall: (services) => {
-      expect(services.channelService.listChannels).toHaveBeenCalledWith(
-        "org-1",
-        "agent-1",
-        { projectId: "proj-1" },
-      );
+      expect(services.channelService.listChannels).toHaveBeenCalledWith("org-1", "agent-1", {
+        projectId: "proj-1",
+      });
     },
   },
   {
     actionType: "channel.listMessages",
     args: { channelId: "chan-1", limit: 99 },
     assertCall: (services) => {
-      expect(services.channelService.getChannelMessages).toHaveBeenCalledWith(
-        "chan-1",
-        "agent-1",
-        { limit: 50 },
-      );
+      expect(services.channelService.getChannelMessages).toHaveBeenCalledWith("chan-1", "agent-1", {
+        limit: 50,
+      });
     },
   },
   {
@@ -427,11 +425,9 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
     actionType: "chat.listMessages",
     args: { chatId: "chat-1", limit: 99 },
     assertCall: (services) => {
-      expect(services.chatService.getMessages).toHaveBeenCalledWith(
-        "chat-1",
-        "agent-1",
-        { limit: 50 },
-      );
+      expect(services.chatService.getMessages).toHaveBeenCalledWith("chat-1", "agent-1", {
+        limit: 50,
+      });
     },
   },
   {
@@ -473,10 +469,10 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
     actionType: "suggestion.query",
     args: { status: "active", limit: 40 },
     assertCall: (services) => {
-      expect(services.inboxService.listAgentSuggestions).toHaveBeenCalledWith(
-        "org-1",
-        { status: "active", limit: 25 },
-      );
+      expect(services.inboxService.listAgentSuggestions).toHaveBeenCalledWith("org-1", {
+        status: "active",
+        limit: 25,
+      });
     },
   },
   {
@@ -616,22 +612,14 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
     actionType: "session.dismiss",
     args: { sessionId: "session-1" },
     assertCall: (services) => {
-      expect(services.sessionService.dismiss).toHaveBeenCalledWith(
-        "session-1",
-        "agent",
-        "agent-1",
-      );
+      expect(services.sessionService.dismiss).toHaveBeenCalledWith("session-1", "agent", "agent-1");
     },
   },
   {
     actionType: "session.delete",
     args: { sessionId: "session-1" },
     assertCall: (services) => {
-      expect(services.sessionService.delete).toHaveBeenCalledWith(
-        "session-1",
-        "agent",
-        "agent-1",
-      );
+      expect(services.sessionService.delete).toHaveBeenCalledWith("session-1", "agent", "agent-1");
     },
   },
   {
@@ -842,76 +830,85 @@ const ALIAS_EXECUTION_CASES: ExecutionCase[] = [
   },
 ];
 
-const REQUIRED_FIELD_CASES = CANONICAL_EXECUTION_CASES
-  .map((testCase) => {
-    const registration = findAction(testCase.actionType);
-    const requiredField = registration
-      ? Object.entries(registration.parameters.fields).find(([, field]) => field.required)?.[0]
-      : undefined;
-    return requiredField ? { ...testCase, requiredField } : null;
-  })
-  .filter((testCase): testCase is ExecutionCase & { requiredField: string } => testCase !== null);
+const REQUIRED_FIELD_CASES = CANONICAL_EXECUTION_CASES.map((testCase) => {
+  const registration = findAction(testCase.actionType);
+  const requiredField = registration
+    ? Object.entries(registration.parameters.fields).find(([, field]) => field.required)?.[0]
+    : undefined;
+  return requiredField ? { ...testCase, requiredField } : null;
+}).filter((testCase): testCase is ExecutionCase & { requiredField: string } => testCase !== null);
 
 describe("executor coverage", () => {
   it("defines one execution case for every registered action", () => {
-    const expectedActions = getAllActions().map((action) => action.name).sort();
+    const expectedActions = getAllActions()
+      .map((action) => action.name)
+      .sort();
     const coveredActions = CANONICAL_EXECUTION_CASES.map((testCase) => testCase.actionType).sort();
 
     expect(coveredActions).toEqual(expectedActions);
   });
 
-  it.each(CANONICAL_EXECUTION_CASES)("$actionType dispatches through the expected service method", async ({ actionType, args, assertCall }) => {
-    const services = createServices();
-    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
-    const expectedMock = getExpectedMock(services, actionType);
+  it.each(CANONICAL_EXECUTION_CASES)(
+    "$actionType dispatches through the expected service method",
+    async ({ actionType, args, assertCall }) => {
+      const services = createServices();
+      const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
+      const expectedMock = getExpectedMock(services, actionType);
 
-    const result = await executor.execute(
-      { actionType, args },
-      { ...BASE_CONTEXT, triggerEventId: `evt-${actionType}` },
-    );
+      const result = await executor.execute(
+        { actionType, args },
+        { ...BASE_CONTEXT, triggerEventId: `evt-${actionType}` },
+      );
 
-    expect(result).toMatchObject({ status: "success", actionType });
+      expect(result).toMatchObject({ status: "success", actionType });
 
-    if (actionType === "no_op") {
+      if (actionType === "no_op") {
+        expectNoMocksCalled(services);
+        return;
+      }
+
+      expect(expectedMock).toBeDefined();
+      expectOnlyMockCalled(services, expectedMock!);
+      assertCall(services);
+    },
+  );
+
+  it.each(ALIAS_EXECUTION_CASES)(
+    "$actionType alias dispatches through the canonical service method",
+    async ({ actionType, args, assertCall }) => {
+      const services = createServices();
+      const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
+      const expectedMock = getExpectedMock(services, actionType);
+
+      const result = await executor.execute(
+        { actionType, args },
+        { ...BASE_CONTEXT, triggerEventId: `evt-${actionType}` },
+      );
+
+      expect(result).toMatchObject({ status: "success", actionType });
+      expect(expectedMock).toBeDefined();
+      expectOnlyMockCalled(services, expectedMock!);
+      assertCall(services);
+    },
+  );
+
+  it.each(REQUIRED_FIELD_CASES)(
+    "$actionType rejects requests missing required field $requiredField",
+    async ({ actionType, args, requiredField }) => {
+      const services = createServices();
+      const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
+      const invalidArgs = { ...args };
+      delete invalidArgs[requiredField];
+
+      const result = await executor.execute(
+        { actionType, args: invalidArgs },
+        { ...BASE_CONTEXT, triggerEventId: `evt-missing-${actionType}` },
+      );
+
+      expect(result.status).toBe("failed");
+      expect(result.actionType).toBe(actionType);
+      expect(result.error).toContain(`Missing required field: ${requiredField}`);
       expectNoMocksCalled(services);
-      return;
-    }
-
-    expect(expectedMock).toBeDefined();
-    expectOnlyMockCalled(services, expectedMock!);
-    assertCall(services);
-  });
-
-  it.each(ALIAS_EXECUTION_CASES)("$actionType alias dispatches through the canonical service method", async ({ actionType, args, assertCall }) => {
-    const services = createServices();
-    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
-    const expectedMock = getExpectedMock(services, actionType);
-
-    const result = await executor.execute(
-      { actionType, args },
-      { ...BASE_CONTEXT, triggerEventId: `evt-${actionType}` },
-    );
-
-    expect(result).toMatchObject({ status: "success", actionType });
-    expect(expectedMock).toBeDefined();
-    expectOnlyMockCalled(services, expectedMock!);
-    assertCall(services);
-  });
-
-  it.each(REQUIRED_FIELD_CASES)("$actionType rejects requests missing required field $requiredField", async ({ actionType, args, requiredField }) => {
-    const services = createServices();
-    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
-    const invalidArgs = { ...args };
-    delete invalidArgs[requiredField];
-
-    const result = await executor.execute(
-      { actionType, args: invalidArgs },
-      { ...BASE_CONTEXT, triggerEventId: `evt-missing-${actionType}` },
-    );
-
-    expect(result.status).toBe("failed");
-    expect(result.actionType).toBe(actionType);
-    expect(result.error).toContain(`Missing required field: ${requiredField}`);
-    expectNoMocksCalled(services);
-  });
+    },
+  );
 });

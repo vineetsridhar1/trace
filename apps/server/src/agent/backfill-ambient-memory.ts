@@ -179,10 +179,7 @@ function buildScopeWhere(options: CliOptions, eventTypes?: string[]): Prisma.Sql
   return Prisma.sql`WHERE ${Prisma.join(filters, " AND ")}`;
 }
 
-async function discoverScopes(
-  options: CliOptions,
-  eventTypes?: string[],
-): Promise<ScopeRow[]> {
+async function discoverScopes(options: CliOptions, eventTypes?: string[]): Promise<ScopeRow[]> {
   const rows = await prisma.$queryRaw<ScopeRow[]>(Prisma.sql`
     SELECT
       e."organizationId",
@@ -386,10 +383,7 @@ async function backfillMemoriesForScope(
         cursor,
         since: options.since,
       }),
-      orderBy: [
-        { timestamp: "asc" },
-        { id: "asc" },
-      ],
+      orderBy: [{ timestamp: "asc" }, { id: "asc" }],
       take: EVENTS_PER_EXTRACTION,
     });
 
@@ -526,7 +520,11 @@ async function backfillSummariesForScope(
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
 
-  if ((options.memories || options.summaries) && !process.env.ANTHROPIC_API_KEY && !options.dryRun) {
+  if (
+    (options.memories || options.summaries) &&
+    !process.env.ANTHROPIC_API_KEY &&
+    !options.dryRun
+  ) {
     throw new Error("ANTHROPIC_API_KEY is required for backfill runs");
   }
 

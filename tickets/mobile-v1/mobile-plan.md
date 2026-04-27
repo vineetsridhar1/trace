@@ -38,7 +38,7 @@ The app is built on the same event-driven, service-layer-owned, event-sourced ar
 - **File tree / checkpoint diff browsing inside a session.** The mobile session view is message-stream-first; file exploration is deferred.
 - **Terminal.** No interactive terminal for V1.
 - **Local / bridge-hosted sessions.** V1 reads cloud-hosted sessions only. Local sessions are visible as read-only if present but cannot be started, resumed, or moved from mobile.
-- **Session creation (from scratch).** A user cannot *create* a new session group from mobile in V1. They can resume/continue an existing group by sending a follow-up prompt. Starting a new workspace is deferred.
+- **Session creation (from scratch).** A user cannot _create_ a new session group from mobile in V1. They can resume/continue an existing group by sending a follow-up prompt. Starting a new workspace is deferred.
 - **Org admin, billing, integrations.**
 - **Android.** iOS-first. Android should be trivially achievable later by virtue of RN but isn't a V1 target.
 
@@ -333,6 +333,7 @@ Three tabs, persistent at the bottom, rendered by the **native `UITabBarControll
 3. **Settings** — SF Symbol `gearshape`. User, org switcher, sign out.
 
 Badges:
+
 - Home tab: count of sessions in `needs_input` belonging to current user (wired via `tabBarBadge: String(count)`)
 - Channels tab: none in V1
 
@@ -349,11 +350,13 @@ The accessory tracks its own pager position in `activeAccessoryIndex`. Tapping a
 ### 9.3 Modal/sheet usage
 
 Native iOS sheets (via `react-native-screens` `formSheet`/`pageSheet` presentations) for:
+
 - Org switcher (sheet with medium detent)
 - Session action menu (stop, archive, open PR) — presented as an action sheet
 - Sign-out confirmation (alert-style sheet)
 
 Full-screen modals for:
+
 - None in V1.
 
 ### 9.4 Deep linking
@@ -377,19 +380,23 @@ Full-screen modals for:
 **Data:** none.
 
 **UI:**
+
 - Trace wordmark, tagline.
 - Single primary button: "Continue with GitHub".
 - Tiny footer: Terms, Privacy (web links).
 
 **Actions:**
+
 - Tap button → `WebBrowser.openAuthSessionAsync(...)` → completes auth flow → receives token → stores in Keychain → navigates to `/(authed)/`.
 
 **States:**
+
 - Idle
 - Authenticating (spinner on button, button disabled)
 - Error (inline error below button: "Sign-in failed. Try again.")
 
 **Polish:**
+
 - Haptic `light` on button press; `success` on successful auth.
 - Subtle animated gradient behind wordmark (Reanimated, UI thread, 60fps max).
 
@@ -397,27 +404,32 @@ Full-screen modals for:
 
 ### 10.2 Home Screen — `app/(authed)/index.tsx`
 
-**Purpose:** Single scroll showing every session that needs the user's attention *right now*, sorted by urgency.
+**Purpose:** Single scroll showing every session that needs the user's attention _right now_, sorted by urgency.
 
 **Sections (in order):**
+
 1. **Needs you** — sessions with `sessionStatus === "needs_input"` belonging to the current user. Most urgent: `question_pending` first, `plan_pending` second.
 2. **Working now** — sessions with `agentStatus === "active"` belonging to the current user, sorted by `_sortTimestamp` descending.
 3. **Recently done** — sessions with `agentStatus === "done"` or `sessionStatus === "in_review"` from the last 24h, belonging to the current user.
 
 **Data:**
+
 - Query `mySessions(organizationId)` on mount — hydrates store.
 - Reads live from `useEntityStore` with a selector that filters and sorts by section.
 - Subscribes to `orgEvents` (ambient) — list live-updates.
 
 **Actions:**
+
 - Tap a session row → navigate to `/sessions/[groupId]/[sessionId]`.
 - Pull to refresh → re-hydrate via `mySessions`.
 - Long-press a row → context menu: "Open PR" (if `prUrl`), "Stop session" (if active), "Copy link".
 
 **Empty state:**
+
 - If all three sections empty: Trace icon + "All clear" + "Sessions that need you will show up here."
 
 **Polish:**
+
 - Section headers pinned (sticky) while scrolling.
 - Section-insertion and row-reordering uses Reanimated layout animations.
 - Row on press: subtle scale + haptic `light`.
@@ -430,18 +442,22 @@ Full-screen modals for:
 **Purpose:** List all coding channels the user has access to. V1 shows coding channels only; text channels are hidden.
 
 **Data:**
+
 - Existing query: the channels list is included in the org hydration (see §14).
 - Filter client-side to `type === "coding"`.
 - Live via `orgEvents` (`channel_created`, `channel_updated`, `channel_deleted`).
 
 **UI:**
+
 - Grouped list by `channelGroup` if groups exist; flat otherwise.
 - Each row: channel name, tiny subtitle ("N active sessions"), chevron.
 
 **Actions:**
+
 - Tap → `/channels/[id]`.
 
 **Polish:**
+
 - Native iOS pull-to-reveal search bar (Mail / Settings pattern): hidden at rest, revealed when the large-title header is pulled down. Use `headerSearchBarOptions` with the default `hideWhenScrolling: true`.
 - No "All / Mine" segmented filter on channels — channels don't have ownership, and "channels I've recently worked in" is a session concern, not a channel concern. A similar filter lives on the session-level screens (home, session groups).
 
@@ -452,11 +468,13 @@ Full-screen modals for:
 **Purpose:** List session groups within a coding channel.
 
 **Data:**
+
 - Query `sessionGroups(channelId, archived: false)` on mount.
 - Live via `orgEvents`.
 - Derived: active count, needs-input count for header subtitle.
 
 **UI:**
+
 - Header: channel name, subtitle ("3 active · 1 needs input"), segmented control: "Active" / "Merged" / "Archived".
 - List of session group rows. Each row:
   - Name (bold)
@@ -467,14 +485,17 @@ Full-screen modals for:
 - `FlashList` virtualization.
 
 **Actions:**
+
 - Tap → `/sessions/[groupId]`.
 - Long-press → context menu: "Archive workspace", "Copy link".
 - No create-session button in V1.
 
 **Empty state:**
+
 - "No active sessions in this channel yet."
 
 **Polish:**
+
 - Status chips have subtle pulse animation when `in_progress`.
 - Liquid Glass header on iOS 26+.
 
@@ -485,10 +506,12 @@ Full-screen modals for:
 **Purpose:** Entry point for a session group. In V1 there is no dedicated group-detail screen — tapping a session group row opens the Session Player (§10.8) pointing at the group's most-recent session, with the group header + sibling tab strip rendered inside the Player. The stack route `app/(authed)/sessions/[groupId].tsx` remains only as a deep-link redirect: on mount it opens the Player and pops itself.
 
 **Data:**
+
 - Query `sessionGroup(id)` — full group + sibling sessions + checkpoints.
 - Live via `sessionEvents` (full payloads) once mounted.
 
 **UI:**
+
 - Header:
   - Group name + branch (monospace)
   - PR status chip (if `prUrl`): "PR open", "PR merged", "PR closed"
@@ -497,10 +520,12 @@ Full-screen modals for:
 - Session stream (see §10.6) fills remainder.
 
 **Actions:**
+
 - Tab tap → switch active session (updates URL to `/sessions/[groupId]/[sessionId]`).
 - Overflow: "Open PR" (if prUrl), "Archive workspace", "Copy link".
 
 **Polish:**
+
 - Tab strip uses Reanimated underline indicator.
 - Header collapses on scroll. The shell shipped in ticket 19 with a custom Liquid Glass header that toggles to solid on scroll; ticket 20 must either (a) replace it with native iOS large-title behavior (`headerLargeTitle: true` on `sessions/_layout.tsx`, matching `(tabs)/channels/_layout.tsx` and `(tabs)/(home)/_layout.tsx`) with the tab strip as a pinned accessory, or (b) move the custom header above the list (outside the scroll view) so `pinnedBar` glass is actually pinned and `solid` is driven by the list's scroll offset. Either way, remove the duplicate group name between the native `Stack.Screen` title and the custom header.
 
@@ -513,12 +538,14 @@ Full-screen modals for:
 **Purpose:** View the message/event stream for a specific session and interact with it.
 
 **Data:**
+
 - Query `session(id)` on mount (includes queuedMessages, gitCheckpoints).
 - Subscribe to `sessionEvents(sessionId, organizationId)` — full payloads.
 - Subscribe to `sessionStatusChanged(sessionId, organizationId)`.
 - Pagination: fetch older events on scroll-to-top.
 
 **UI structure (top-to-bottom):**
+
 1. **Header** — session name, agent status dot (active/done/failed/stopped), overflow menu.
 2. **Active todo strip** (conditional, directly below the tab strip) — if the agent is active and has a current todo list, a single-line Liquid Glass strip shows the current todo and "N of M" progress (e.g. "Refactoring auth middleware · 3 of 7").
 3. **Pending-input bar** (conditional, pinned at the bottom, replacing the composer) — appears when `sessionStatus === "needs_input"` and takes over the composer's bottom slot (same replace-not-stack model as web's `AskUserQuestionBar` / `PlanResponseBar`, not a stacked bar under the header):
@@ -542,6 +569,7 @@ Full-screen modals for:
    - When `agentStatus === "active"`: button label changes to "Queue" and queues via `queueSessionMessage`; otherwise sends via `sendSessionMessage`.
 
 **Actions:**
+
 - Send message: `sendSessionMessage` mutation with optimistic event insert (per §14.3).
 - Queue message: `queueSessionMessage` mutation (optimistic insert to `queuedMessages`).
 - Remove queued: `removeQueuedMessage`.
@@ -552,6 +580,7 @@ Full-screen modals for:
 - Retry connection: inline retry action in connection-lost banner → `retrySessionConnection`.
 
 **States:**
+
 - Loading (skeleton stream)
 - Empty (new session, no events yet) — "Waiting for agent to start..."
 - Loaded (normal)
@@ -560,7 +589,8 @@ Full-screen modals for:
 - Errored (inline error card with last-error text; retry action if `canRetry`)
 
 **Polish:**
-- Auto-scroll to bottom when new events arrive *and* user is already near the bottom. If user has scrolled up, do not yank them — instead show a "New activity" pill floating above the input that taps to jump down.
+
+- Auto-scroll to bottom when new events arrive _and_ user is already near the bottom. If user has scrolled up, do not yank them — instead show a "New activity" pill floating above the input that taps to jump down.
 - Haptic `light` on send/queue; `medium` on stop confirmation.
 - Assistant message "typing" effect when the most recent event is streaming: subtle cursor block at end of text.
 - Keyboard-avoiding via `KeyboardStickyView` plus native `Keyboard` listeners (ticket 23) — the input rises smoothly, stream adjusts, no jank.
@@ -568,6 +598,7 @@ Full-screen modals for:
 - Long-press on a message bubble → native context menu: "Copy".
 
 **File size note:** This screen is the largest in the app. It WILL exceed 200 lines if not split. Mandatory split:
+
 - `SessionStreamScreen.tsx` — top-level screen composition (~100 lines)
 - `SessionHeader.tsx`
 - `PendingInputBar.tsx`
@@ -584,6 +615,7 @@ Full-screen modals for:
 **Purpose:** Minimal settings: user, org switcher, sign out.
 
 **UI:**
+
 - User row: avatar + name + email (tap does nothing in V1)
 - Active org row → opens org-switcher sheet
 - Sign out row → confirmation sheet → `auth.signOut()`
@@ -600,12 +632,14 @@ Full-screen modals for:
 > **Change from earlier drafts:** The Session Player was originally scoped as a "preview-only" overlay on top of currently-active sessions. V1 now unifies the Player and the Session Stream: tapping a session group row opens the Player, tapping a card in the bottom accessory opens the Player, and all downstream session surfaces (pending-input bar, active-todo strip, queued-messages strip, input composer) mount inside it. The stack route `/sessions/:groupId/:sessionId` is retained only for deep-link compatibility and renders the same composition.
 
 **Entry points:**
+
 - Tap any session-group row in Channels (§10.4) — opens the Player pointing at the group's latest session.
 - Tap a card in the bottom accessory pager (§9.2.1) — opens the Player pointing at that active session.
 - Deep link `trace://sessions/:groupId/:sessionId` (§9.4) — opens the Player pointing at that session.
 - Push notification tap (§14) — opens the Player.
 
 **UI structure (top-to-bottom, rendered inside the Player):**
+
 1. **Grabber + dismiss affordance** — pull-down-to-dismiss gesture on the top region, plus a small chevron-down close button.
 2. **Session group header** (§10.5) — group name, branch, PR chip, overflow menu. Solidifies on scroll of the inner FlashList.
 3. **Session tab strip** — sibling sessions in the group; tap switches the Player's shown session without closing.
@@ -613,11 +647,13 @@ Full-screen modals for:
 5. **Pending-input bar / active-todo strip / queued-messages strip / input composer** — all of §10.6's surfaces mount here as their tickets (22/23/24) land.
 
 **State model:**
+
 - `useMobileUIStore.overlaySessionId: string | null` — the session currently targeted by Player entry helpers and optimistic temp→real handoff logic. `null` = no routed Player page is currently being tracked.
-- `useMobileUIStore.activeAccessoryIndex: number` — purely the bottom-accessory pager's visible index; kept in sync with `overlaySessionId` when the Player is open *and* the shown session is in the active-sessions list.
+- `useMobileUIStore.activeAccessoryIndex: number` — purely the bottom-accessory pager's visible index; kept in sync with `overlaySessionId` when the Player is open _and_ the shown session is in the active-sessions list.
 - `tryOpenSessionPlayer(sessionId)` sets `overlaySessionId` and routes to `/sessions/[groupId]/[sessionId]`; `closeSessionPlayer()` clears it and pops the route.
 
 **Navigation model (V1):**
+
 - The Player is a full-screen routed surface.
 - Horizontal swipe across sessions is a V2 evolution (the tab strip handles sibling switching within a group; the bottom accessory handles scrubbing across parallel active sessions while the Player is closed).
 - The `"playerAndList"` "Up Next" detent from earlier drafts is **dropped** — the bottom accessory already provides the across-sessions scrub surface.
@@ -625,6 +661,7 @@ Full-screen modals for:
 **Single-subscription invariant:** only the session pointed to by `overlaySessionId` has an active `sessionEvents` + `sessionStatusChanged` subscription; switching sessions tears down the previous subscription before starting the new one. Same behavior as the earlier Player spec — it just now applies to every session entry point, not just active ones.
 
 **Scope guardrails (updated):**
+
 - Works for sessions of any status the user can access, not just `active`. Done / merged / failed / needs-input sessions all open the Player.
 - Composer is **in scope** (lands in ticket 23) because the Player is the session surface, not a preview.
 - New-session creation is still out of scope for V1.
@@ -692,11 +729,13 @@ Built once, used everywhere. Each is one file, <200 lines.
 ### 11.5 Liquid Glass usage
 
 System-provided (we don't wrap these in our `Glass` primitive — UIKit does it):
+
 - **Tab bar** — native `UITabBarController` via `react-native-bottom-tabs` (§9.2)
 - **Bottom accessory slot** — content passed to `renderBottomAccessoryView` is composited inside the tab bar's glass material (§9.2.1)
 - **Native-stack `headerRight`** — iOS 26 wraps trailing bar-button content in a glass pill automatically (used by `TopBarPill`)
 
 Where to use our `Glass` primitive:
+
 - Navigation bar when content scrolls beneath (custom pinned bars above the stack header)
 - Input composer container
 - Pinned pending-input bar
@@ -705,6 +744,7 @@ Where to use our `Glass` primitive:
 - Session header when `largeTitle` collapses
 
 Where NOT to use:
+
 - List row backgrounds
 - Message bubbles
 - Buttons
@@ -718,19 +758,19 @@ Theme note: `glass.ts` no longer ships a `tabBar` preset (removed in ticket 15) 
 
 ### 11.6 Haptic map
 
-| Action                              | Haptic           |
-|-------------------------------------|------------------|
-| Tab switch                          | `selection`      |
-| List row tap                        | `light`          |
-| Primary button tap                  | `medium`         |
-| Destructive confirmation            | `heavy`          |
-| Send/queue message                  | `light`          |
-| Stop session (confirm)              | `heavy`          |
-| Approve plan                        | `success`        |
-| Answer question                     | `light`          |
-| Successful OAuth                    | `success`        |
-| Error (network, mutation fail)      | `error`          |
-| Pull-to-refresh trigger             | `medium`         |
+| Action                         | Haptic      |
+| ------------------------------ | ----------- |
+| Tab switch                     | `selection` |
+| List row tap                   | `light`     |
+| Primary button tap             | `medium`    |
+| Destructive confirmation       | `heavy`     |
+| Send/queue message             | `light`     |
+| Stop session (confirm)         | `heavy`     |
+| Approve plan                   | `success`   |
+| Answer question                | `light`     |
+| Successful OAuth               | `success`   |
+| Error (network, mutation fail) | `error`     |
+| Pull-to-refresh trigger        | `medium`    |
 
 ---
 
@@ -741,21 +781,25 @@ These are on top of the principles already stated in §6.
 ### 12.1 Hydration sequence
 
 On app launch (post-auth):
+
 1. `me` query → user + org memberships (via REST `/auth/me`, handled in the auth store)
 2. In parallel: `organization(id)` → org + channels, `channelGroups(organizationId)` → channel groups, `mySessions(organizationId)` → all user's sessions (any status). `channelGroups` is its own root query because the GraphQL `Organization` type does not expose a `channelGroups` field.
 3. Subscribe to `orgEvents(organizationId)` (ambient)
 4. App is interactive.
 
 On screen focus:
+
 - Coding channel: query `sessionGroups(channelId)` for the currently-visible tab (active | merged | archived)
 - Session detail: query `session(id)` + subscribe to `sessionEvents(sessionId, organizationId)` and `sessionStatusChanged(sessionId, organizationId)`
 
 On screen blur:
+
 - Unsubscribe focused subscriptions. `orgEvents` stays subscribed.
 
 ### 12.2 Optimistic message events
 
 Mirror web's `lib/optimistic-message.ts`:
+
 - On `sendSessionMessage`, insert an optimistic event into the session's scoped event store immediately with a temporary id.
 - When the real event arrives via subscription, reconcile (replace/remove the optimistic entry).
 - On mutation error, remove the optimistic entry and surface an error toast.
@@ -763,6 +807,7 @@ Mirror web's `lib/optimistic-message.ts`:
 ### 12.3 Queued messages
 
 Mirror web's behavior exactly:
+
 - `queued_message_added` event → upsert into `queuedMessages` table, index by session
 - `queued_message_removed` → remove
 - `queued_messages_cleared` → clear session's queue
@@ -775,6 +820,7 @@ Mobile uses the same `_sortTimestamp` logic as web for session ordering. No new 
 ### 12.5 No mutation result reads
 
 A mutation's return payload is **ignored** for state purposes. It may be used only for:
+
 - Confirming HTTP-level success
 - Passing a server-assigned id back to an optimistic entry's reconciliation logic (via clientMutationId)
 
@@ -791,9 +837,11 @@ Mobile subscribes to exactly the same events as web and handles them with the sa
 From `EventType` enum in `schema.graphql`:
 
 **Session lifecycle (all handled):**
+
 - `session_started`, `session_paused`, `session_resumed`, `session_terminated`, `session_deleted`
 
 **Session output (handled, same subtype routing as web):**
+
 - `assistant` → append to stream
 - `question_pending` → set `sessionStatus = "needs_input"`; populate pending question
 - `plan_pending` → set `sessionStatus = "needs_input"`; populate pending plan
@@ -804,15 +852,19 @@ From `EventType` enum in `schema.graphql`:
 - `connection_lost`, `connection_restored`, `recovery_failed` → update `session.connection`
 
 **PR events:**
-- `session_pr_opened`, `session_pr_merged`, `session_pr_closed` → update `session.prUrl`, bump _sortTimestamp, trigger notification
+
+- `session_pr_opened`, `session_pr_merged`, `session_pr_closed` → update `session.prUrl`, bump \_sortTimestamp, trigger notification
 
 **Session group:**
+
 - `session_group_archived` → update status
 
 **Queued messages:**
+
 - `queued_message_added`, `queued_message_removed`, `queued_messages_cleared`, `queued_messages_drained` — all handled
 
 **Ignored in V1 (not rendered, still consumed so store stays consistent):**
+
 - All `message_sent` events (messaging is out of scope for rendering but must still update counters for notifications if the event mentions the user — see §14)
 - `inbox_item_created`, `inbox_item_resolved`
 - `ticket_*`
@@ -824,6 +876,7 @@ From `EventType` enum in `schema.graphql`:
 The shared handlers in `client-core/events/handlers.ts` perform store mutations purely, but a few branches need to call into UI state (mark a session/channel/group as "done", redirect away from a deleted session, follow a continuation session into a new tab). They reach this via the `OrgEventUIBindings` interface from `client-core/events/ui-bindings.ts`. **Each app must call `setOrgEventUIBindings(...)` at boot — before the first `orgEvents` subscription opens** — or the handler will silently no-op those side effects.
 
 Mobile bindings:
+
 - `getActive*Id`/`setActive*Id` — read/write the mobile UI store (Zustand) keys for active session, session group, and channel.
 - `markChannelDone` / `markSessionDone` / `markSessionGroupDone` — push into the badge state used by the Home tab.
 - `openSessionTab` — no-op on mobile (no tab strip).
@@ -836,6 +889,7 @@ Mobile bindings:
 ### 14.1 Registration
 
 On first authenticated app launch:
+
 1. Call `Notifications.requestPermissionsAsync()`.
 2. If granted, get the Expo push token via `Notifications.getExpoPushTokenAsync()`.
 3. Send to server via a new mutation `registerPushToken(token, platform)`. **Server change required** — see §18.
@@ -845,14 +899,14 @@ On first authenticated app launch:
 
 Server sends push notifications for these events, targeted at the session owner or org members as appropriate:
 
-| Event                                   | Notify           | Title                        | Body                          |
-|-----------------------------------------|------------------|------------------------------|-------------------------------|
-| `session_output` (question_pending)     | owner            | "Session needs input"        | {sessionName}: {question}     |
-| `session_output` (plan_pending)         | owner            | "Plan ready for review"      | {sessionName}                 |
-| `session_terminated`                    | owner            | "Session stopped"            | {sessionName}                 |
-| `session_pr_opened`                     | owner            | "PR opened"                  | {sessionName}                 |
-| `session_pr_merged`                     | owner            | "PR merged"                  | {sessionName}                 |
-| `session_output` (recovery_failed)      | owner            | "Session errored"            | {sessionName}: {error}        |
+| Event                               | Notify | Title                   | Body                      |
+| ----------------------------------- | ------ | ----------------------- | ------------------------- |
+| `session_output` (question_pending) | owner  | "Session needs input"   | {sessionName}: {question} |
+| `session_output` (plan_pending)     | owner  | "Plan ready for review" | {sessionName}             |
+| `session_terminated`                | owner  | "Session stopped"       | {sessionName}             |
+| `session_pr_opened`                 | owner  | "PR opened"             | {sessionName}             |
+| `session_pr_merged`                 | owner  | "PR merged"             | {sessionName}             |
+| `session_output` (recovery_failed)  | owner  | "Session errored"       | {sessionName}: {error}    |
 
 All carry `data.deepLink = "trace://sessions/{groupId}/{sessionId}"`.
 
@@ -861,6 +915,7 @@ Debounce / coalescing: matches web behavior — 5s window per session to avoid s
 ### 14.3 Foreground notifications
 
 When app is foregrounded:
+
 - Do NOT show a system banner.
 - Do NOT haptic (event will already drive a UI update).
 - The event arrives via subscription; the UI reflects the state change inline.
@@ -985,6 +1040,7 @@ dev overlay or console. Checked on real devices in M6.
 ### 17.3 CI
 
 Extend the existing GitHub Actions pipeline:
+
 - `pnpm lint`, `pnpm typecheck`, `pnpm build` for `apps/mobile` and `packages/client-core`
 - EAS Build on PRs to `main` (preview profile) — optional but recommended.
 

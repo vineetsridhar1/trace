@@ -40,24 +40,30 @@ export function useOrgMembers(): OrgMember[] {
     void client
       .query(ORG_MEMBERS_QUERY, { id: activeOrgId })
       .toPromise()
-      .then((result: { data?: { organization?: { members?: Array<{ user: User; role: string; joinedAt: string }> } } }) => {
-        if (requestId !== requestIdRef.current) return;
+      .then(
+        (result: {
+          data?: {
+            organization?: { members?: Array<{ user: User; role: string; joinedAt: string }> };
+          };
+        }) => {
+          if (requestId !== requestIdRef.current) return;
 
-        const rawMembers = result.data?.organization?.members;
-        if (!rawMembers) return;
+          const rawMembers = result.data?.organization?.members;
+          if (!rawMembers) return;
 
-        const users = rawMembers.map((m) => m.user);
-        useEntityStore.getState().upsertMany("users", users);
+          const users = rawMembers.map((m) => m.user);
+          useEntityStore.getState().upsertMany("users", users);
 
-        const scopedMembers = users.map((user) => ({
-          id: user.id,
-          name: user.name,
-          avatarUrl: user.avatarUrl,
-        }));
+          const scopedMembers = users.map((user) => ({
+            id: user.id,
+            name: user.name,
+            avatarUrl: user.avatarUrl,
+          }));
 
-        orgMemberCache.set(activeOrgId, scopedMembers);
-        setMembers(scopedMembers);
-      })
+          orgMemberCache.set(activeOrgId, scopedMembers);
+          setMembers(scopedMembers);
+        },
+      )
       .catch(() => {
         if (requestId !== requestIdRef.current || cached) return;
         setMembers([]);

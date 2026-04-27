@@ -7,6 +7,7 @@ Implement the context management system to handle long conversations and deep br
 ## What needs to happen
 
 ### Rolling Summaries
+
 - Add a `BranchSummary` model to Prisma (or a `summary` field on `AiBranch`):
   - `branchId` — the branch being summarized
   - `content` — the summary text
@@ -27,6 +28,7 @@ Implement the context management system to handle long conversations and deep br
   - Update the AI Conversations event processor and `useBranchTimeline()` selector so summary nodes render through the same virtualized timeline as turns
 
 ### Token Budget Allocation
+
 - Implement the budget system from the PRD:
   - Current branch: 60% of context window
   - Parent branch: 20%
@@ -37,6 +39,7 @@ Implement the context management system to handle long conversations and deep br
 - When a level exceeds its budget, summarize the overflow
 
 ### Context Health Indicator
+
 - Add a token usage bar to the conversation header:
   - Shows current context usage as a percentage of the model's context window
   - Color changes: green (<50%), yellow (50-70%), orange (70-90%), red (>90%)
@@ -44,12 +47,14 @@ Implement the context management system to handle long conversations and deep br
 - When context usage exceeds ~70%, trigger background auto-summarization of ancestors
 
 ### Summary UI
+
 - Summarized sections appear as collapsible "Summary" nodes in the turn list
 - Shows "X turns summarized" with an expand button
 - Expanding reveals the summary text (not the raw turns — those are only in the DB)
 - Collapsed by default
 
 ### User-Triggered Summarization
+
 - Add `summarizeBranch` service method and mutation:
   - Generates a 2-3 sentence summary of a branch
   - Posts the summary as a special turn in the parent branch at the fork point

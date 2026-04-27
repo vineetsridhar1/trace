@@ -1,9 +1,5 @@
 import { gql } from "@urql/core";
-import {
-  useEntityStore,
-  type SessionEntity,
-  type SessionGroupEntity,
-} from "@trace/client-core";
+import { useEntityStore, type SessionEntity, type SessionGroupEntity } from "@trace/client-core";
 import type { Session, SessionGroup } from "@trace/gql";
 import { reconcileEntitySnapshot } from "@/lib/entitySnapshots";
 import { userFacingError } from "@/lib/requestError";
@@ -26,7 +22,9 @@ const SESSION_GROUPS_QUERY = gql`
       archivedAt
       createdAt
       updatedAt
-      channel { id }
+      channel {
+        id
+      }
       sessions {
         id
         name
@@ -41,9 +39,18 @@ const SESSION_GROUPS_QUERY = gql`
         sessionGroupId
         lastMessageAt
         lastUserMessageAt
-        createdBy { id name avatarUrl }
-        repo { id name }
-        channel { id }
+        createdBy {
+          id
+          name
+          avatarUrl
+        }
+        repo {
+          id
+          name
+        }
+        channel {
+          id
+        }
         createdAt
         updatedAt
       }
@@ -53,10 +60,7 @@ const SESSION_GROUPS_QUERY = gql`
 
 export type SessionGroupsView = "active" | "merged" | "archived";
 
-function variablesForView(
-  channelId: string,
-  view: SessionGroupsView,
-): Record<string, unknown> {
+function variablesForView(channelId: string, view: SessionGroupsView): Record<string, unknown> {
   if (view === "archived") return { channelId, archived: true };
   if (view === "merged") return { channelId, archived: false, status: "merged" };
   return { channelId, archived: false };
@@ -89,17 +93,22 @@ export async function fetchChannelSessionGroups(
     "sessionGroups",
     groups.map((g) => ({
       ...g,
-      _sortTimestamp:
-        g.sessions?.[0]?.lastMessageAt
-        ?? g.sessions?.[0]?.updatedAt
-        ?? g.updatedAt,
+      _sortTimestamp: g.sessions?.[0]?.lastMessageAt ?? g.sessions?.[0]?.updatedAt ?? g.updatedAt,
     })) as Array<SessionGroupEntity & { id: string }>,
   );
   if (sessions.length > 0) {
     upsertMany("sessions", sessions as Array<SessionEntity & { id: string }>);
   }
   const snapshotKey = `${channelId}:${view}`;
-  reconcileEntitySnapshot("sessionGroups", snapshotKey, groups.map((group) => group.id));
-  reconcileEntitySnapshot("sessions", snapshotKey, sessions.map((session) => session.id));
+  reconcileEntitySnapshot(
+    "sessionGroups",
+    snapshotKey,
+    groups.map((group) => group.id),
+  );
+  reconcileEntitySnapshot(
+    "sessions",
+    snapshotKey,
+    sessions.map((session) => session.id),
+  );
   return null;
 }

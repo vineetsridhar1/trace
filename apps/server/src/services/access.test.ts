@@ -65,7 +65,9 @@ describe("access service", () => {
   it("dispatches scope access checks by scope type", async () => {
     prismaMock.channelMember.findFirst.mockResolvedValueOnce({ channelId: "channel-1" });
 
-    await expect(assertScopeAccess("channel", "channel-1", "user-1", "org-1")).resolves.toBeUndefined();
+    await expect(
+      assertScopeAccess("channel", "channel-1", "user-1", "org-1"),
+    ).resolves.toBeUndefined();
     await expect(assertScopeAccess("unknown", "id", "user-1", "org-1")).rejects.toThrow(
       "Unsupported scope type: unknown",
     );

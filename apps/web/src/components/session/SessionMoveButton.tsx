@@ -18,7 +18,11 @@ export function SessionMoveButton({
 }) {
   const [open, setOpen] = useState(false);
   const unavailable = disabled || !sessionId;
-  const title = !sessionId ? undefined : disabledReason && unavailable ? disabledReason : "Move session";
+  const title = !sessionId
+    ? undefined
+    : disabledReason && unavailable
+      ? disabledReason
+      : "Move session";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

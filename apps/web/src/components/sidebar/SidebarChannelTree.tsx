@@ -56,7 +56,13 @@ export function SidebarChannelTree({
     handleDragOver,
     handleDragEnd,
     handleDragCancel,
-  } = useChannelDnd({ activeOrgId, topLevelItems, channelIdsByGroup, channelsById, channelGroupsById });
+  } = useChannelDnd({
+    activeOrgId,
+    topLevelItems,
+    channelIdsByGroup,
+    channelsById,
+    channelGroupsById,
+  });
 
   if (channelsLoading) {
     return (

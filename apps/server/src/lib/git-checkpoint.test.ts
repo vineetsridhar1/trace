@@ -53,9 +53,16 @@ describe("shortSha", () => {
 
 describe("parseGitShowOutput", () => {
   it("parses valid git show output", () => {
-    const show = "abc1234567890abcdef1234567890abcdef123456\nparent1 parent2\ntree123\nfeat: add feature\nTest Author <test@example.com>\n2024-01-01T00:00:00Z";
+    const show =
+      "abc1234567890abcdef1234567890abcdef123456\nparent1 parent2\ntree123\nfeat: add feature\nTest Author <test@example.com>\n2024-01-01T00:00:00Z";
     const diff = "file1.ts\nfile2.ts\n";
-    const result = parseGitShowOutput(show, diff, "commit", "git commit -m test", "2024-01-01T00:00:01Z");
+    const result = parseGitShowOutput(
+      show,
+      diff,
+      "commit",
+      "git commit -m test",
+      "2024-01-01T00:00:01Z",
+    );
 
     expect(result.commitSha).toBe("abc1234567890abcdef1234567890abcdef123456");
     expect(result.parentShas).toEqual(["parent1", "parent2"]);
@@ -100,7 +107,12 @@ describe("extractGitToolUsePending", () => {
 
   it("detects commit_and_push when both are in one command", () => {
     const output = makeToolUseOutput([
-      { type: "tool_use", name: "Bash", id: "toolu_3", input: { command: "git commit -m 'x' && git push" } },
+      {
+        type: "tool_use",
+        name: "Bash",
+        id: "toolu_3",
+        input: { command: "git commit -m 'x' && git push" },
+      },
     ]);
     const pending = extractGitToolUsePending(output);
     expect(pending.get("toolu_3")?.trigger).toBe("commit_and_push");
@@ -134,7 +146,12 @@ describe("extractGitToolResultTrigger", () => {
       ["toolu_1", { trigger: "commit" as const, command: "git commit -m 'test'" }],
     ]);
     const output = makeToolResultOutput([
-      { type: "tool_result", tool_use_id: "toolu_1", name: "Bash", content: "[main abc1234] test\n 1 file changed" },
+      {
+        type: "tool_result",
+        tool_use_id: "toolu_1",
+        name: "Bash",
+        content: "[main abc1234] test\n 1 file changed",
+      },
     ]);
     const result = extractGitToolResultTrigger(output, pending);
     expect(result).not.toBeNull();
@@ -147,7 +164,13 @@ describe("extractGitToolResultTrigger", () => {
       ["toolu_1", { trigger: "commit" as const, command: "git commit -m 'test'" }],
     ]);
     const output = makeToolResultOutput([
-      { type: "tool_result", tool_use_id: "toolu_1", name: "Bash", content: "fatal: not a git repository", is_error: true },
+      {
+        type: "tool_result",
+        tool_use_id: "toolu_1",
+        name: "Bash",
+        content: "fatal: not a git repository",
+        is_error: true,
+      },
     ]);
     const result = extractGitToolResultTrigger(output, pending);
     expect(result).toBeNull();
@@ -158,7 +181,12 @@ describe("extractGitToolResultTrigger", () => {
       ["toolu_1", { trigger: "commit" as const, command: "git commit -m 'test'" }],
     ]);
     const output = makeToolResultOutput([
-      { type: "tool_result", tool_use_id: "toolu_1", name: "Bash", content: "fatal: pathspec 'foo' did not match any files" },
+      {
+        type: "tool_result",
+        tool_use_id: "toolu_1",
+        name: "Bash",
+        content: "fatal: pathspec 'foo' did not match any files",
+      },
     ]);
     const result = extractGitToolResultTrigger(output, pending);
     expect(result).toBeNull();
@@ -169,7 +197,12 @@ describe("extractGitToolResultTrigger", () => {
       ["toolu_1", { trigger: "commit" as const, command: "git commit -m 'test'" }],
     ]);
     const output = makeToolResultOutput([
-      { type: "tool_result", tool_use_id: "toolu_1", name: "Bash", content: "On branch main\nnothing to commit, working tree clean" },
+      {
+        type: "tool_result",
+        tool_use_id: "toolu_1",
+        name: "Bash",
+        content: "On branch main\nnothing to commit, working tree clean",
+      },
     ]);
     const result = extractGitToolResultTrigger(output, pending);
     expect(result).toBeNull();

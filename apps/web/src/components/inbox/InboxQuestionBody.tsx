@@ -46,7 +46,10 @@ export function InboxQuestionBody({
         else next.add(label);
       } else {
         if (next.has(label)) next.clear();
-        else { next.clear(); next.add(label); }
+        else {
+          next.clear();
+          next.add(label);
+        }
       }
       return { ...prev, [page]: next };
     });
@@ -100,7 +103,10 @@ export function InboxQuestionBody({
             <button
               key={opt.label}
               type="button"
-              onClick={(e: React.MouseEvent) => { e.stopPropagation(); toggleOption(opt.label); }}
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                toggleOption(opt.label);
+              }}
               disabled={sending}
               title={opt.description}
               className={cn(
@@ -112,22 +118,37 @@ export function InboxQuestionBody({
               )}
             >
               {q.multiSelect ? (
-                <span className={cn(
-                  "flex h-3 w-3 shrink-0 items-center justify-center rounded border",
-                  currentSelected.has(opt.label) ? "border-accent bg-accent" : "border-muted-foreground",
-                )}>
+                <span
+                  className={cn(
+                    "flex h-3 w-3 shrink-0 items-center justify-center rounded border",
+                    currentSelected.has(opt.label)
+                      ? "border-accent bg-accent"
+                      : "border-muted-foreground",
+                  )}
+                >
                   {currentSelected.has(opt.label) && (
-                    <svg className="h-2 w-2 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true">
+                    <svg
+                      className="h-2 w-2 text-white"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      aria-hidden="true"
+                    >
                       <path d="M5 13l4 4L19 7" />
                     </svg>
                   )}
                 </span>
               ) : (
-                <span className={cn(
-                  "flex h-3 w-3 shrink-0 items-center justify-center rounded-full border",
-                  currentSelected.has(opt.label) ? "border-accent" : "border-muted-foreground",
-                )}>
-                  {currentSelected.has(opt.label) && <span className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                <span
+                  className={cn(
+                    "flex h-3 w-3 shrink-0 items-center justify-center rounded-full border",
+                    currentSelected.has(opt.label) ? "border-accent" : "border-muted-foreground",
+                  )}
+                >
+                  {currentSelected.has(opt.label) && (
+                    <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                  )}
                 </span>
               )}
               {opt.label}
@@ -158,7 +179,10 @@ export function InboxQuestionBody({
           <div className="flex items-center gap-0.5">
             <button
               type="button"
-              onClick={(e: React.MouseEvent) => { e.stopPropagation(); if (!isFirstPage) setPage((p: number) => p - 1); }}
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                if (!isFirstPage) setPage((p: number) => p - 1);
+              }}
               disabled={isFirstPage}
               className="rounded-md border border-border px-1.5 py-1.5 text-foreground disabled:opacity-50"
             >
@@ -166,7 +190,10 @@ export function InboxQuestionBody({
             </button>
             <button
               type="button"
-              onClick={(e: React.MouseEvent) => { e.stopPropagation(); if (!isLastPage) setPage((p: number) => p + 1); }}
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                if (!isLastPage) setPage((p: number) => p + 1);
+              }}
               disabled={isLastPage}
               className="rounded-md border border-border px-1.5 py-1.5 text-foreground disabled:opacity-50"
             >
@@ -178,7 +205,10 @@ export function InboxQuestionBody({
         <button
           type="button"
           disabled={!hasAllAnswers || sending}
-          onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleSubmit(); }}
+          onClick={(e: React.MouseEvent) => {
+            e.stopPropagation();
+            handleSubmit();
+          }}
           className="flex shrink-0 items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
         >
           <Send size={12} />
@@ -188,7 +218,10 @@ export function InboxQuestionBody({
         <button
           type="button"
           disabled={sending}
-          onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDismiss(); }}
+          onClick={(e: React.MouseEvent) => {
+            e.stopPropagation();
+            onDismiss();
+          }}
           className={cn(
             "flex items-center rounded-md border border-border px-1.5 py-1.5 text-xs transition-colors",
             "text-muted-foreground hover:bg-surface-elevated hover:text-red-400",

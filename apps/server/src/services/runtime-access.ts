@@ -111,15 +111,10 @@ export type BridgeRuntimeAccessState = {
   pendingRequest: BridgeAccessRequestWithRelations | null;
 };
 
-function buildGrantScopeWhere(
-  sessionGroupId?: string | null,
-): Prisma.BridgeAccessGrantWhereInput {
+function buildGrantScopeWhere(sessionGroupId?: string | null): Prisma.BridgeAccessGrantWhereInput {
   if (sessionGroupId) {
     return {
-      OR: [
-        { scopeType: "all_sessions" },
-        { scopeType: "session_group", sessionGroupId },
-      ],
+      OR: [{ scopeType: "all_sessions" }, { scopeType: "session_group", sessionGroupId }],
     };
   }
 
@@ -485,9 +480,7 @@ class RuntimeAccessService {
     requestedExpiresAt?: Date | null;
     requestedCapabilities?: BridgeAccessCapability[] | null;
   }) {
-    const normalizedCapabilities = ensureSessionCapability(
-      input.requestedCapabilities,
-    );
+    const normalizedCapabilities = ensureSessionCapability(input.requestedCapabilities);
     const runtime = await prisma.bridgeRuntime.findUnique({
       where: { instanceId: input.runtimeInstanceId },
       include: { ownerUser: true },
@@ -498,16 +491,13 @@ class RuntimeAccessService {
     if (runtime.ownerUserId === input.requesterUserId) {
       throw new Error("You already own this bridge");
     }
-    if (
-      input.requestedExpiresAt &&
-      input.requestedExpiresAt.getTime() <= Date.now()
-    ) {
+    if (input.requestedExpiresAt && input.requestedExpiresAt.getTime() <= Date.now()) {
       throw new Error("Requested expiration must be in the future");
     }
 
     const normalizedScopeType = input.scopeType;
     const normalizedSessionGroupId =
-      normalizedScopeType === "session_group" ? input.sessionGroupId ?? null : null;
+      normalizedScopeType === "session_group" ? (input.sessionGroupId ?? null) : null;
     if (normalizedScopeType === "session_group" && !normalizedSessionGroupId) {
       throw new Error("sessionGroupId is required for session group bridge access");
     }
@@ -689,14 +679,13 @@ class RuntimeAccessService {
           throw new Error("Session group not found");
         }
       }
-      const expiresAt = input.expiresAt !== undefined ? input.expiresAt : request.requestedExpiresAt;
+      const expiresAt =
+        input.expiresAt !== undefined ? input.expiresAt : request.requestedExpiresAt;
 
       // Secure default: when the owner doesn't specify capabilities, the grant
       // is session-only. Terminal requires an explicit opt-in from the owner
       // (via `input.capabilities`), regardless of what the requester asked for.
-      const resolvedCapabilities = ensureSessionCapability(
-        input.capabilities ?? [],
-      );
+      const resolvedCapabilities = ensureSessionCapability(input.capabilities ?? []);
 
       await tx.bridgeAccessGrant.updateMany({
         where: {
@@ -756,11 +745,7 @@ class RuntimeAccessService {
     });
   }
 
-  async denyRequest(input: {
-    requestId: string;
-    organizationId: string;
-    ownerUserId: string;
-  }) {
+  async denyRequest(input: { requestId: string; organizationId: string; ownerUserId: string }) {
     const request = await prisma.bridgeAccessRequest.findUnique({
       where: { id: input.requestId },
       include: {
@@ -815,11 +800,7 @@ class RuntimeAccessService {
     });
   }
 
-  async revokeGrant(input: {
-    grantId: string;
-    organizationId: string;
-    ownerUserId: string;
-  }) {
+  async revokeGrant(input: { grantId: string; organizationId: string; ownerUserId: string }) {
     const grant = await prisma.bridgeAccessGrant.findUnique({
       where: { id: input.grantId },
       include: {

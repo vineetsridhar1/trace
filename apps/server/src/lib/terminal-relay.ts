@@ -675,11 +675,7 @@ class TerminalRelay {
    * synthetic sessionId (`channel:<id>`) that is never in `sessionIds`, so
    * they must be matched separately.
    */
-  destroyTerminalsForUser(
-    userId: string,
-    sessionIds?: Set<string>,
-    organizationId?: string,
-  ): void {
+  destroyTerminalsForUser(userId: string, sessionIds?: Set<string>, organizationId?: string): void {
     for (const [terminalId, entry] of this.terminals) {
       if (entry.attachedUserId !== userId) continue;
       if (entry.kind === "channel") {

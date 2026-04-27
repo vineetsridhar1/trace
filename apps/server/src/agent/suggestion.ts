@@ -28,13 +28,13 @@ export { mapActionToItemType } from "./action-types.js";
 // ---------------------------------------------------------------------------
 
 const EXPIRY_DEFAULTS_MS: Partial<Record<InboxItemType, number>> = {
-  ticket_suggestion: 72 * 60 * 60 * 1000,       // 72h
-  field_change_suggestion: 72 * 60 * 60 * 1000,  // 72h
-  comment_suggestion: 48 * 60 * 60 * 1000,       // 48h
-  link_suggestion: 48 * 60 * 60 * 1000,          // 48h
-  session_suggestion: 24 * 60 * 60 * 1000,       // 24h
-  message_suggestion: 24 * 60 * 60 * 1000,       // 24h
-  agent_suggestion: 48 * 60 * 60 * 1000,         // 48h
+  ticket_suggestion: 72 * 60 * 60 * 1000, // 72h
+  field_change_suggestion: 72 * 60 * 60 * 1000, // 72h
+  comment_suggestion: 48 * 60 * 60 * 1000, // 48h
+  link_suggestion: 48 * 60 * 60 * 1000, // 48h
+  session_suggestion: 24 * 60 * 60 * 1000, // 24h
+  message_suggestion: 24 * 60 * 60 * 1000, // 24h
+  agent_suggestion: 48 * 60 * 60 * 1000, // 48h
 };
 
 const DEFAULT_EXPIRY_MS = 48 * 60 * 60 * 1000; // 48h
@@ -74,7 +74,7 @@ export function levenshteinDistance(a: string, b: string): number {
     for (let i = 1; i <= aLen; i++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
       curr[i] = Math.min(
-        prev[i] + 1,     // deletion
+        prev[i] + 1, // deletion
         curr[i - 1] + 1, // insertion
         prev[i - 1] + cost, // substitution
       );
@@ -150,9 +150,7 @@ export async function createSuggestion(input: CreateSuggestionInput) {
   const expiresAt = getExpiryTimestamp(itemType);
   const generatedTitle = generateTitle(action.actionType, action.args);
 
-  const title =
-    plannerOutput.userVisibleMessage ??
-    generatedTitle;
+  const title = plannerOutput.userVisibleMessage ?? generatedTitle;
 
   // ── Semantic dedup: check for existing similar suggestions ──
   const dedup = await checkDuplicate({
@@ -224,10 +222,7 @@ async function checkDuplicate(input: {
   });
 
   for (const item of existing) {
-    const similarity = titleSimilarity(
-      input.title,
-      getDedupComparisonTitle(item),
-    );
+    const similarity = titleSimilarity(input.title, getDedupComparisonTitle(item));
     if (similarity >= DEDUP_SIMILARITY_THRESHOLD) {
       return {
         isDuplicate: true,
@@ -317,7 +312,9 @@ function generateTitle(actionType: string, args: Record<string, unknown>): strin
       return `Suggested ticket: ${(args.title as string) || "New ticket"}`;
     case "ticket.update": {
       const ticketId = (args.id as string) || "";
-      const fields = Object.keys(args).filter((k) => k !== "id").join(", ");
+      const fields = Object.keys(args)
+        .filter((k) => k !== "id")
+        .join(", ");
       return `Suggested update to ticket ${ticketId}: ${fields || "fields"}`.trim();
     }
     case "ticket.addComment": {
@@ -341,18 +338,15 @@ function generateTitle(actionType: string, args: Record<string, unknown>): strin
   }
 }
 
-function getDedupComparisonTitle(item: {
-  title: string;
-  payload?: unknown;
-}): string {
+function getDedupComparisonTitle(item: { title: string; payload?: unknown }): string {
   const payload =
     item.payload && typeof item.payload === "object"
-      ? item.payload as Record<string, unknown>
+      ? (item.payload as Record<string, unknown>)
       : null;
   const actionType = typeof payload?.actionType === "string" ? payload.actionType : null;
   const args =
     payload?.args && typeof payload.args === "object"
-      ? payload.args as Record<string, unknown>
+      ? (payload.args as Record<string, unknown>)
       : null;
 
   if (actionType && args) {

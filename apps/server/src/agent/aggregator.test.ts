@@ -39,8 +39,12 @@ describe("EventAggregator", () => {
     expect(buildScopeKey(event({ payload: { parentMessageId: "msg-1" } }))).toBe(
       "chat:chat-1:thread:msg-1",
     );
-    expect(buildScopeKey(event({ scopeType: "ticket", scopeId: "ticket-1" }))).toBe("ticket:ticket-1");
-    expect(buildScopeKey(event({ scopeType: "channel", scopeId: "channel-1" }))).toBe("channel:channel-1");
+    expect(buildScopeKey(event({ scopeType: "ticket", scopeId: "ticket-1" }))).toBe(
+      "ticket:ticket-1",
+    );
+    expect(buildScopeKey(event({ scopeType: "channel", scopeId: "channel-1" }))).toBe(
+      "channel:channel-1",
+    );
   });
 
   it("emits direct-routed events immediately", async () => {

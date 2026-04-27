@@ -206,7 +206,9 @@ export function SessionMessageList({
   const [highlightEventId, setHighlightEventId] = useState<string | null>(null);
   useEffect(() => {
     if (!scrollToEventId) return;
-    const targetIndex = nodes.findIndex((n) => n.kind !== "readglob-group" && n.id === scrollToEventId);
+    const targetIndex = nodes.findIndex(
+      (n) => n.kind !== "readglob-group" && n.id === scrollToEventId,
+    );
     if (targetIndex >= 0) {
       virtualizer.scrollToIndex(targetIndex, { align: "center", behavior: "smooth" });
       setHighlightEventId(scrollToEventId);
@@ -318,7 +320,11 @@ export function SessionMessageList({
                 {node.kind === "event" ? (
                   <div
                     data-event-id={node.id}
-                    className={highlightEventId === node.id ? "rounded-lg ring-2 ring-primary/50 transition-all duration-500" : undefined}
+                    className={
+                      highlightEventId === node.id
+                        ? "rounded-lg ring-2 ring-primary/50 transition-all duration-500"
+                        : undefined
+                    }
                   >
                     <SessionMessage
                       id={node.id}
@@ -341,10 +347,7 @@ export function SessionMessageList({
                     timestamp={node.timestamp}
                   />
                 ) : node.kind === "ask-user-question" ? (
-                  <AskUserQuestionInline
-                    questions={node.questions}
-                    timestamp={node.timestamp}
-                  />
+                  <AskUserQuestionInline questions={node.questions} timestamp={node.timestamp} />
                 ) : (
                   <ReadGlobGroup items={node.items} />
                 )}

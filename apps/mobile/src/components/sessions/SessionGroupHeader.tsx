@@ -1,12 +1,8 @@
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { Alert, Linking, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import {
-  ARCHIVE_SESSION_GROUP_MUTATION,
-  useEntityField,
-} from "@trace/client-core";
+import { ARCHIVE_SESSION_GROUP_MUTATION, useEntityField } from "@trace/client-core";
 import type { SessionConnection } from "@trace/gql";
-import { useSessionGroupSessionIds } from "@/hooks/useSessionGroupDetail";
 import { createAgentTab } from "@/lib/createQuickSession";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
@@ -50,7 +46,6 @@ export function SessionGroupHeader({
     | SessionConnection
     | null
     | undefined;
-  const sessionIds = useSessionGroupSessionIds(groupId);
   const canMoveSession =
     !!sessionId &&
     !sessionOptimistic &&
@@ -146,7 +141,12 @@ export function SessionGroupHeader({
         onPress: handleOpenMoveSheet,
       });
     }
-    if (prUrl) items.push({ title: "Open PR", systemIcon: "arrow.up.forward.square", onPress: handleOpenPr });
+    if (prUrl)
+      items.push({
+        title: "Open PR",
+        systemIcon: "arrow.up.forward.square",
+        onPress: handleOpenPr,
+      });
     items.push({ title: "Copy link", systemIcon: "link", onPress: handleCopyLink });
     if (!archivedAt && status !== "archived") {
       items.push({
@@ -211,10 +211,7 @@ export function SessionGroupHeader({
         />
       ) : null}
       {sessionId ? (
-        <SessionComposerBottomSheet
-          visible={moveSheetOpen}
-          onClose={() => setMoveSheetOpen(false)}
-        >
+        <SessionComposerBottomSheet visible={moveSheetOpen} onClose={() => setMoveSheetOpen(false)}>
           <SessionMovePickerSheetContent
             sessionId={sessionId}
             onClose={() => setMoveSheetOpen(false)}

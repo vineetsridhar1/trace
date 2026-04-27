@@ -38,10 +38,7 @@ export function SessionMovePickerSheetContent({
   const theme = useTheme();
 
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | null | undefined;
-  const repo = useEntityField("sessions", sessionId, "repo") as
-    | { id: string }
-    | null
-    | undefined;
+  const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
     | null
@@ -78,9 +75,7 @@ export function SessionMovePickerSheetContent({
       .toPromise()
       .then((result) => {
         if (cancelled) return;
-        const data = result.data?.availableSessionRuntimes as
-          | SessionRuntimeInstance[]
-          | undefined;
+        const data = result.data?.availableSessionRuntimes as SessionRuntimeInstance[] | undefined;
         setRuntimes(data ?? []);
       })
       .catch((error) => {
@@ -207,35 +202,31 @@ export function SessionMovePickerSheetContent({
           <View style={styles.loadingRow}>
             <Spinner size="small" color="mutedForeground" />
           </View>
-        ) : rows.map((row, index) => (
-          <ListRow
-            key={row.key}
-            title={row.title}
-            subtitle={row.subtitle}
-            leading={
-              <SymbolView
-                name={row.icon}
-                size={16}
-                tintColor={theme.colors.mutedForeground}
-              />
-            }
-            trailing={
-              moving === row.value ? (
-                <Spinner size="small" color="mutedForeground" />
-              ) : undefined
-            }
-            onPress={
-              !row.disabled && moving === null
-                ? row.value === CLOUD_ROW_VALUE
-                  ? () => void handleMoveToCloud()
-                  : () => void handleMoveToRuntime(row.value)
-                : undefined
-            }
-            haptic="selection"
-            separator={index < rows.length - 1}
-            style={row.disabled ? styles.disabledRow : undefined}
-          />
-        ))}
+        ) : (
+          rows.map((row, index) => (
+            <ListRow
+              key={row.key}
+              title={row.title}
+              subtitle={row.subtitle}
+              leading={
+                <SymbolView name={row.icon} size={16} tintColor={theme.colors.mutedForeground} />
+              }
+              trailing={
+                moving === row.value ? <Spinner size="small" color="mutedForeground" /> : undefined
+              }
+              onPress={
+                !row.disabled && moving === null
+                  ? row.value === CLOUD_ROW_VALUE
+                    ? () => void handleMoveToCloud()
+                    : () => void handleMoveToRuntime(row.value)
+                  : undefined
+              }
+              haptic="selection"
+              separator={index < rows.length - 1}
+              style={row.disabled ? styles.disabledRow : undefined}
+            />
+          ))
+        )}
       </View>
 
       {!loading && rows.length === 0 ? (

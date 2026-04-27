@@ -39,8 +39,7 @@ export function extractLatestTodos(
         return {
           content: String(item?.content ?? ""),
           status: String(item?.status ?? "pending"),
-          activeForm:
-            typeof item?.activeForm === "string" ? item.activeForm : undefined,
+          activeForm: typeof item?.activeForm === "string" ? item.activeForm : undefined,
         };
       });
     }

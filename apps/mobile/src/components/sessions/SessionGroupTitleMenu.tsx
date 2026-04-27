@@ -102,7 +102,9 @@ function MorphingTitle({
   const [triggerWidth, setTriggerWidth] = useState(0);
   // Where the pill sits in window coordinates — captured on open so the
   // Modal glass renders at the same screen position.
-  const [triggerPos, setTriggerPos] = useState<{ x: number; y: number; width: number } | null>(null);
+  const [triggerPos, setTriggerPos] = useState<{ x: number; y: number; width: number } | null>(
+    null,
+  );
   const anchorRef = useRef<View>(null);
   const progress = useSharedValue(0);
   const window = useWindowDimensions();
@@ -158,11 +160,7 @@ function MorphingTitle({
     ),
     width: interpolate(progress.value, [0, 1], [startWidth, endWidth]),
     height: interpolate(progress.value, [0, 1], [PILL_HEIGHT, panelHeight]),
-    borderRadius: interpolate(
-      progress.value,
-      [0, 1],
-      [PILL_RADIUS, PANEL_RADIUS],
-    ),
+    borderRadius: interpolate(progress.value, [0, 1], [PILL_RADIUS, PANEL_RADIUS]),
     transform: [
       {
         translateY: interpolate(progress.value, [0, 0.5, 1], [0, 26, 0]),
@@ -226,19 +224,11 @@ function MorphingTitle({
             isInteractive
             glassEffectStyle="regular"
             colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-            style={[
-              styles.portalGlass,
-              { top: triggerPos.y },
-              glassStyle,
-            ]}
+            style={[styles.portalGlass, { top: triggerPos.y }, glassStyle]}
           >
             <Animated.View
               pointerEvents={open ? "auto" : "none"}
-              style={[
-                styles.panelLayer,
-                { width: endWidth, height: panelHeight },
-                panelStyle,
-              ]}
+              style={[styles.panelLayer, { width: endWidth, height: panelHeight }, panelStyle]}
             >
               <ScrollView
                 bounces={false}
@@ -291,19 +281,12 @@ function TitleRow({
   nameLines?: number;
 }) {
   const theme = useTheme();
-  const name = useEntityField("sessionGroups", groupId, "name") as
+  const name = useEntityField("sessionGroups", groupId, "name") as string | null | undefined;
+  const status = useEntityField("sessionGroups", groupId, "status") as string | null | undefined;
+  const agentStatus = useEntityField("sessions", sessionId ?? "", "agentStatus") as
     | string
     | null
     | undefined;
-  const status = useEntityField("sessionGroups", groupId, "status") as
-    | string
-    | null
-    | undefined;
-  const agentStatus = useEntityField(
-    "sessions",
-    sessionId ?? "",
-    "agentStatus",
-  ) as string | null | undefined;
   const hosting = useEntityField("sessions", sessionId ?? "", "hosting") as
     | string
     | null
@@ -313,8 +296,7 @@ function TitleRow({
     | null
     | undefined;
   const bridgeIcon: SFSymbol = hosting === "cloud" ? "cloud" : "laptopcomputer";
-  const bridgeLabel =
-    hosting === "cloud" ? "Cloud" : (connection?.runtimeLabel ?? "Local");
+  const bridgeLabel = hosting === "cloud" ? "Cloud" : (connection?.runtimeLabel ?? "Local");
   const showBridge = !!sessionId && !!hosting;
 
   return (
@@ -379,10 +361,7 @@ function PanelContent({
   onOpenBrowser?: () => void;
 }) {
   const theme = useTheme();
-  const branch = useEntityField("sessionGroups", groupId, "branch") as
-    | string
-    | null
-    | undefined;
+  const branch = useEntityField("sessionGroups", groupId, "branch") as string | null | undefined;
   return (
     <View style={styles.panelBody}>
       <View style={[styles.panelTitleSlot, { paddingVertical: theme.spacing.sm }]}>
@@ -393,11 +372,7 @@ function PanelContent({
           <Text variant="caption1" color="mutedForeground">
             Branch
           </Text>
-          <Text
-            variant="caption1"
-            numberOfLines={1}
-            style={styles.branchValue}
-          >
+          <Text variant="caption1" numberOfLines={1} style={styles.branchValue}>
             {branch}
           </Text>
         </View>
@@ -414,7 +389,9 @@ function PanelContent({
         >
           <ListRow
             title="Open Browser"
-            subtitle={browserEnabled ? "Preview this workspace" : "Available after the session loads"}
+            subtitle={
+              browserEnabled ? "Preview this workspace" : "Available after the session loads"
+            }
             leading={
               <SymbolView
                 name="globe"
@@ -459,10 +436,7 @@ function FallbackTitlePill({
       <BlurView
         tint={theme.scheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
         intensity={50}
-        style={[
-          styles.fallbackPill,
-          { borderRadius: PILL_RADIUS },
-        ]}
+        style={[styles.fallbackPill, { borderRadius: PILL_RADIUS }]}
       >
         {onOpenBrowser ? (
           <Pressable

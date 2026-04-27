@@ -118,10 +118,7 @@ describe("extractMessagePreview", () => {
       extractMessagePreview("session_output", {
         type: "assistant",
         message: {
-          content: [
-            { type: "tool_use" },
-            { type: "text", text: "hi there" },
-          ],
+          content: [{ type: "tool_use" }, { type: "text", text: "hi there" }],
         },
       }),
     ).toBe("hi there");

@@ -87,7 +87,10 @@ export async function hydrateMessages(messages: DbMessage[]): Promise<MessageWit
     : [];
 
   const actorMap = await resolveActors(
-    replies.map((r: { actorType: string; actorId: string }) => ({ actorType: r.actorType, actorId: r.actorId })),
+    replies.map((r: { actorType: string; actorId: string }) => ({
+      actorType: r.actorType,
+      actorId: r.actorId,
+    })),
   );
 
   const summaries = new Map<

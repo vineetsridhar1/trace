@@ -3985,9 +3985,7 @@ export class SessionService {
     }
 
     if (status.aheadCount > 0 || status.behindCount > 0) {
-      throw new Error(
-        "Cannot move session: local branch must match its upstream before moving.",
-      );
+      throw new Error("Cannot move session: local branch must match its upstream before moving.");
     }
 
     return status;
@@ -4001,8 +3999,14 @@ export class SessionService {
     actorType: ActorType;
     actorId: string;
   }) {
-    const { session, targetHosting, targetRuntimeInstanceId, targetRuntimeLabel, actorType, actorId } =
-      params;
+    const {
+      session,
+      targetHosting,
+      targetRuntimeInstanceId,
+      targetRuntimeLabel,
+      actorType,
+      actorId,
+    } = params;
     const sourceRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
 
     const sourceGitStatus = await this.inspectSessionMoveSource({
@@ -4028,7 +4032,7 @@ export class SessionService {
     sessionRouter.unbindSession(session.id);
 
     const bootstrapPrompt = buildMigrationPrompt();
-    const checkpointSha = sourceGitStatus?.branch ? null : sourceGitStatus?.headCommitSha ?? null;
+    const checkpointSha = sourceGitStatus?.branch ? null : (sourceGitStatus?.headCommitSha ?? null);
     const nextConnection = connJson(
       targetHosting === "local"
         ? defaultConnection({

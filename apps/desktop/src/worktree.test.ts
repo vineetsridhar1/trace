@@ -90,9 +90,11 @@ describe("createWorktree", () => {
         }
         if (args[0] === "rev-parse" && args[1] === "--verify") {
           const ref = args[2];
-          callback(ref === "origin/feature/reconnected" || ref === "feature/reconnected"
-            ? null
-            : new Error("missing ref"));
+          callback(
+            ref === "origin/feature/reconnected" || ref === "feature/reconnected"
+              ? null
+              : new Error("missing ref"),
+          );
           return {} as ReturnType<typeof execFileMock>;
         }
         if (args[0] === "worktree" && args[1] === "add") {
@@ -122,10 +124,8 @@ describe("createWorktree", () => {
       [
         "worktree",
         "add",
-        "-b",
-        "feature/reconnected",
         expect.stringContaining("/trace/sessions/repo-1/otter"),
-        "origin/feature/reconnected",
+        "feature/reconnected",
       ],
       expect.objectContaining({ cwd: "/tmp/repo" }),
       expect.any(Function),

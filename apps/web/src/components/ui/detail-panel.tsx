@@ -12,7 +12,12 @@ const DEFAULT_RATIO = 0.55;
 /** Default localStorage key (matches the key used by the original SessionPanel) */
 const DEFAULT_STORAGE_KEY = "trace:session-panel-width";
 
-function loadPersistedRatio(storageKey: string, minRatio: number, maxRatio: number, defaultRatio: number): number {
+function loadPersistedRatio(
+  storageKey: string,
+  minRatio: number,
+  maxRatio: number,
+  defaultRatio: number,
+): number {
   try {
     const stored = localStorage.getItem(storageKey);
     if (stored) {
@@ -61,8 +66,12 @@ export function DetailPanel({
 }: DetailPanelProps) {
   const isMobile = useIsMobile();
   const isFullscreen = useDetailPanelStore((s: { isFullscreen: boolean }) => s.isFullscreen);
-  const setFullscreen = useDetailPanelStore((s: { setFullscreen: (v: boolean) => void }) => s.setFullscreen);
-  const toggleFullscreen = useDetailPanelStore((s: { toggleFullscreen: () => void }) => s.toggleFullscreen);
+  const setFullscreen = useDetailPanelStore(
+    (s: { setFullscreen: (v: boolean) => void }) => s.setFullscreen,
+  );
+  const toggleFullscreen = useDetailPanelStore(
+    (s: { toggleFullscreen: () => void }) => s.toggleFullscreen,
+  );
 
   const resolvedMaxRatio = maxRatio ?? fullscreenSnapRatio;
 
@@ -188,7 +197,14 @@ export function DetailPanel({
       document.addEventListener("mouseup", onMouseUp);
       dragCleanupRef.current = cleanup;
     },
-    [containerRef, minRatio, resolvedMaxRatio, fullscreenSnapRatio, setFullscreen, persistOnDragEnd],
+    [
+      containerRef,
+      minRatio,
+      resolvedMaxRatio,
+      fullscreenSnapRatio,
+      setFullscreen,
+      persistOnDragEnd,
+    ],
   );
 
   // On mobile, render as a fixed overlay
@@ -241,11 +257,7 @@ export function DetailPanel({
           }
         }}
       >
-        {showContent && (
-          <div className="ml-auto h-full w-full min-w-[400px]">
-            {children}
-          </div>
-        )}
+        {showContent && <div className="ml-auto h-full w-full min-w-[400px]">{children}</div>}
       </div>
     </>
   );

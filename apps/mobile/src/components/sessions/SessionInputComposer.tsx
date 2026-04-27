@@ -137,13 +137,16 @@ export function SessionInputComposer({
   const isDisconnected = connection?.state === "disconnected";
   const canRetryConnection = connection?.canRetry === true;
 
-  const onFailure = useCallback((draft: string, message: string) => {
-    setText(draft);
-    const restoredSelection = { start: draft.length, end: draft.length };
-    applySelectionOverride(restoredSelection);
-    setErrorDraft(draft);
-    setErrorMessage(message);
-  }, [applySelectionOverride]);
+  const onFailure = useCallback(
+    (draft: string, message: string) => {
+      setText(draft);
+      const restoredSelection = { start: draft.length, end: draft.length };
+      applySelectionOverride(restoredSelection);
+      setErrorDraft(draft);
+      setErrorMessage(message);
+    },
+    [applySelectionOverride],
+  );
 
   const onSuccess = useCallback(() => {
     setText("");

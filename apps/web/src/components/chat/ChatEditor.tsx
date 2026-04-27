@@ -191,14 +191,22 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
         blotName: "mention",
         defaultMenuOrientation: "top",
         showDenotationChar: false,
-        dataAttributes: ["id", "value", "denotationChar", "link", "target", "disabled", "type", "description", "source", "category"],
+        dataAttributes: [
+          "id",
+          "value",
+          "denotationChar",
+          "link",
+          "target",
+          "disabled",
+          "type",
+          "description",
+          "source",
+          "category",
+        ],
         isolateCharacter: true,
         source: (
           searchTerm: string,
-          renderList: (
-            values: Array<Record<string, unknown>>,
-            searchTerm: string,
-          ) => void,
+          renderList: (values: Array<Record<string, unknown>>, searchTerm: string) => void,
           mentionChar: string,
         ) => {
           if (mentionChar === "/") {
@@ -209,7 +217,9 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
             renderList(matches as unknown as Array<Record<string, unknown>>, searchTerm);
           } else {
             const matches = membersRef.current
-              .filter((member: MentionableUser) => member.name.toLowerCase().includes(searchTerm.toLowerCase()))
+              .filter((member: MentionableUser) =>
+                member.name.toLowerCase().includes(searchTerm.toLowerCase()),
+              )
               .map((member: MentionableUser) => ({
                 id: member.id,
                 value: member.name,
@@ -306,17 +316,14 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     [isMentionMenuOpen, submit],
   );
 
-  const handleChange = useCallback(
-    (content: string) => {
-      setValue(content);
-      if (onChangeRef.current) {
-        const editor = quillRef.current?.getEditor();
-        const text = editor?.getText().replace(/\n$/, "") ?? "";
-        onChangeRef.current(text, content);
-      }
-    },
-    [],
-  );
+  const handleChange = useCallback((content: string) => {
+    setValue(content);
+    if (onChangeRef.current) {
+      const editor = quillRef.current?.getEditor();
+      const text = editor?.getText().replace(/\n$/, "") ?? "";
+      onChangeRef.current(text, content);
+    }
+  }, []);
 
   return (
     <div className="chat-editor" onKeyDown={handleKeyDown}>

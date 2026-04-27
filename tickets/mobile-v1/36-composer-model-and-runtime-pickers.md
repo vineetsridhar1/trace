@@ -33,7 +33,7 @@ All plumbing already exists in shared code — the work is a native picker UI an
   ```ts
   client.mutation(UPDATE_SESSION_CONFIG_MUTATION, {
     sessionId,
-    hosting: newIsCloud ? "cloud" : undefined,         // local infers hosting
+    hosting: newIsCloud ? "cloud" : undefined, // local infers hosting
     runtimeInstanceId: newIsCloud ? undefined : value,
   });
   ```

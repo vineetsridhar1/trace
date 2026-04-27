@@ -106,18 +106,12 @@ export function IconButton({
     destructive: m.destructive,
   }));
 
-  function handleMenuPress(
-    e: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>,
-  ) {
+  function handleMenuPress(e: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>) {
     menuItems?.[e.nativeEvent.index]?.onPress();
   }
 
   return (
-    <ContextMenu
-      actions={actions}
-      onPress={handleMenuPress}
-      dropdownMenuMode={dropdownMenuMode}
-    >
+    <ContextMenu actions={actions} onPress={handleMenuPress} dropdownMenuMode={dropdownMenuMode}>
       {button}
     </ContextMenu>
   );

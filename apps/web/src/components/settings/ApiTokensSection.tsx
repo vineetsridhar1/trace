@@ -71,7 +71,9 @@ export function ApiTokensSection() {
     if (!inputValue.trim()) return;
     setSaving(true);
     await client
-      .mutation(SET_API_TOKEN, { input: { provider, token: provider === "ssh_key" ? inputValue : inputValue.trim() } })
+      .mutation(SET_API_TOKEN, {
+        input: { provider, token: provider === "ssh_key" ? inputValue : inputValue.trim() },
+      })
       .toPromise();
     setSaving(false);
     setEditing(null);
@@ -167,7 +169,9 @@ export function ApiTokensSection() {
                     <Textarea
                       placeholder={meta.placeholder}
                       value={inputValue}
-                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInputValue(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                        setInputValue(e.target.value)
+                      }
                       onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
                         if (e.key === "Escape") {
                           setEditing(null);
@@ -183,7 +187,9 @@ export function ApiTokensSection() {
                         type={showInput ? "text" : "password"}
                         placeholder={meta.placeholder}
                         value={inputValue}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInputValue(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setInputValue(e.target.value)
+                        }
                         onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                           if (e.key === "Enter") handleSave(token.provider);
                           if (e.key === "Escape") {

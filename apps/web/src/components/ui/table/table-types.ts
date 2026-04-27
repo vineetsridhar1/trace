@@ -1,4 +1,4 @@
-import type { ColDef } from 'ag-grid-community';
+import type { ColDef } from "ag-grid-community";
 
 export type TableState<T> = {
   columns: ColDef<T>[];

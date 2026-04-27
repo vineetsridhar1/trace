@@ -20,18 +20,26 @@ export function useRunScripts(sessionGroupId: string, selectedSessionId: string 
     | { id: string }
     | null
     | undefined;
-  const rawChannelId = useEntityStore((s) =>
-    (s.sessionGroups[sessionGroupId] as { channelId?: string | null } | undefined)?.channelId ?? null,
+  const rawChannelId = useEntityStore(
+    (s) =>
+      (s.sessionGroups[sessionGroupId] as { channelId?: string | null } | undefined)?.channelId ??
+      null,
   );
   const channelId = sessionGroupChannel?.id ?? rawChannelId ?? null;
-  const runScripts = useEntityField("channels", channelId ?? "", "runScripts") as RunScript[] | null | undefined;
+  const runScripts = useEntityField("channels", channelId ?? "", "runScripts") as
+    | RunScript[]
+    | null
+    | undefined;
   const setupStatus = useEntityField("sessionGroups", sessionGroupId, "setupStatus") as
     | "idle"
     | "running"
     | "completed"
     | "failed"
     | undefined;
-  const setupScript = useEntityField("channels", channelId ?? "", "setupScript") as string | null | undefined;
+  const setupScript = useEntityField("channels", channelId ?? "", "setupScript") as
+    | string
+    | null
+    | undefined;
 
   const hasRunScripts = Array.isArray(runScripts) && runScripts.length > 0;
   const setupBlocking = Boolean(setupScript) && setupStatus === "running";

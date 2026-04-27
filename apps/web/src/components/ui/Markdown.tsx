@@ -59,10 +59,7 @@ export function Markdown({ children }: { children: string }) {
 
   return (
     <div className="markdown-body">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{ a: linkComponent }}
-      >
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: linkComponent }}>
         {children}
       </ReactMarkdown>
     </div>

@@ -108,9 +108,10 @@ export class EventService {
     // (assistant messages, tool output, results) are noise at the org level —
     // viewers of a specific session get full payloads via sessionEvents.
     if (input.eventType === "session_output") {
-      const p = (input.payload && typeof input.payload === "object" && !Array.isArray(input.payload))
-        ? input.payload as Record<string, unknown>
-        : {} as Record<string, unknown>;
+      const p =
+        input.payload && typeof input.payload === "object" && !Array.isArray(input.payload)
+          ? (input.payload as Record<string, unknown>)
+          : ({} as Record<string, unknown>);
       const subtype = p.type as string | undefined;
       if (subtype && ORG_RELEVANT_OUTPUT_SUBTYPES.has(subtype)) {
         const thinEnvelope = {
@@ -178,11 +179,9 @@ export class EventService {
   private appendToStream(organizationId: string, event: { id: string } & Record<string, unknown>) {
     if (isLocalMode()) return;
     const streamKey = `stream:org:${organizationId}:events`;
-    redis
-      .xadd(streamKey, "*", "event", JSON.stringify(event))
-      .catch((err: Error) => {
-        console.error(`[event-service] XADD to ${streamKey} failed:`, err.message);
-      });
+    redis.xadd(streamKey, "*", "event", JSON.stringify(event)).catch((err: Error) => {
+      console.error(`[event-service] XADD to ${streamKey} failed:`, err.message);
+    });
   }
 
   async query(organizationId: string, opts: EventQueryOpts) {

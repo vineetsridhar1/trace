@@ -47,8 +47,7 @@ export function QuestionOptionPill({
           multiSelect ? styles.indicatorBox : styles.indicatorDot,
           {
             borderColor: selected ? theme.colors.accent : theme.colors.mutedForeground,
-            backgroundColor:
-              selected && multiSelect ? theme.colors.accent : "transparent",
+            backgroundColor: selected && multiSelect ? theme.colors.accent : "transparent",
           },
         ]}
       >
@@ -62,9 +61,7 @@ export function QuestionOptionPill({
           />
         ) : null}
         {selected && !multiSelect ? (
-          <View
-            style={[styles.dotFill, { backgroundColor: theme.colors.accent }]}
-          />
+          <View style={[styles.dotFill, { backgroundColor: theme.colors.accent }]} />
         ) : null}
       </View>
       <Text

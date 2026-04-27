@@ -23,9 +23,7 @@ export function filterSlashCommands(
 ): SessionSlashCommand[] {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return commands;
-  return commands.filter((command) =>
-    command.name.toLowerCase().startsWith(normalized),
-  );
+  return commands.filter((command) => command.name.toLowerCase().startsWith(normalized));
 }
 
 export function getActiveSlashCommandQuery(
@@ -67,10 +65,7 @@ export function insertSlashCommand(
     const suffix = text.slice(activeQuery.range.end);
     const replacement = `/${commandName}${/^\s/.test(suffix) ? "" : " "}`;
     const cursorOffset = suffix.startsWith(" ") ? 1 : 0;
-    const nextText =
-      text.slice(0, activeQuery.range.start) +
-      replacement +
-      suffix;
+    const nextText = text.slice(0, activeQuery.range.start) + replacement + suffix;
     const cursor = activeQuery.range.start + replacement.length + cursorOffset;
     return {
       text: nextText,
@@ -81,8 +76,7 @@ export function insertSlashCommand(
   const suffix = text.slice(selection.end);
   const replacement = `/${commandName}${/^\s/.test(suffix) ? "" : " "}`;
   const cursorOffset = suffix.startsWith(" ") ? 1 : 0;
-  const nextText =
-    text.slice(0, selection.start) + replacement + suffix;
+  const nextText = text.slice(0, selection.start) + replacement + suffix;
   const cursor = selection.start + replacement.length + cursorOffset;
   return {
     text: nextText,

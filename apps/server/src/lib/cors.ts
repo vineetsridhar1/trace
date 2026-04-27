@@ -39,10 +39,7 @@ export function isCorsOriginAllowed(allowedOrigins: Set<string>, origin?: string
   return allowedOrigins.has(origin);
 }
 
-export function readHeaderValue(
-  headers: IncomingHttpHeaders,
-  key: string,
-): string | undefined {
+export function readHeaderValue(headers: IncomingHttpHeaders, key: string): string | undefined {
   const value = headers[key.toLowerCase()] ?? headers[key];
   const first = Array.isArray(value) ? value[0] : value;
   const trimmed = typeof first === "string" ? first.trim() : "";
@@ -60,8 +57,7 @@ export function readOriginFromReferer(referer: string | undefined): string | und
 
 export function getRequestOrigin(headers: IncomingHttpHeaders): string | undefined {
   return (
-    readHeaderValue(headers, "origin") ??
-    readOriginFromReferer(readHeaderValue(headers, "referer"))
+    readHeaderValue(headers, "origin") ?? readOriginFromReferer(readHeaderValue(headers, "referer"))
   );
 }
 

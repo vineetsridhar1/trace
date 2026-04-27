@@ -72,20 +72,18 @@ export function WorkerStatusBar() {
         <div className="flex items-center gap-1.5">
           <Circle
             size={8}
-            className={status?.running ? "fill-green-500 text-green-500" : "fill-red-500 text-red-500"}
+            className={
+              status?.running ? "fill-green-500 text-green-500" : "fill-red-500 text-red-500"
+            }
           />
           <span className="text-muted-foreground">
             Worker: {status?.running ? "Running" : "Stopped"}
           </span>
         </div>
         {status?.running && status.uptime != null && (
-          <span className="text-muted-foreground">
-            Uptime: {formatUptime(status.uptime)}
-          </span>
+          <span className="text-muted-foreground">Uptime: {formatUptime(status.uptime)}</span>
         )}
-        <span className="text-muted-foreground">
-          Orgs: {status?.activeOrganizations ?? 0}
-        </span>
+        <span className="text-muted-foreground">Orgs: {status?.activeOrganizations ?? 0}</span>
         <button
           onClick={() => setShowWindows(!showWindows)}
           className="text-muted-foreground hover:text-foreground transition-colors"

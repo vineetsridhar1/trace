@@ -2,7 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import type { GitCheckpoint, QueuedMessage } from "@trace/gql";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
-import { useEntityStore, useEntityField, useScopedEvents, eventScopeKey, type SessionEntity, type SessionGroupEntity } from "@trace/client-core";
+import {
+  useEntityStore,
+  useEntityField,
+  useScopedEvents,
+  eventScopeKey,
+  type SessionEntity,
+  type SessionGroupEntity,
+} from "@trace/client-core";
 import { EventScopeContext } from "./EventScopeContext";
 import { SessionMessageList } from "./SessionMessageList";
 import { SessionHeader } from "./SessionHeader";
@@ -146,12 +153,16 @@ export function SessionDetailView({
   onScrollComplete?: () => void;
 }) {
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
-  const { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents } =
-    useSessionEvents(sessionId, { skip: isOptimistic === true });
+  const { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents } = useSessionEvents(
+    sessionId,
+    { skip: isOptimistic === true },
+  );
   const scopeKey = eventScopeKey("session", sessionId);
   const events = useScopedEvents(scopeKey);
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
-  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as string | undefined;
+  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
+    | string
+    | undefined;
   const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
     | GitCheckpoint[]
     | undefined;
@@ -159,9 +170,13 @@ export function SessionDetailView({
     | Record<string, unknown>
     | null
     | undefined;
-  const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as boolean | undefined;
+  const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as
+    | boolean
+    | undefined;
   const isConnected = !connection || connection.state !== "disconnected";
-  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
+  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
+    | string
+    | undefined;
   const groupConnection = useEntityField("sessionGroups", sessionGroupId ?? "", "connection") as
     | Record<string, unknown>
     | null
@@ -180,25 +195,36 @@ export function SessionDetailView({
     | "completed"
     | "failed"
     | undefined;
-  const setupError = useEntityField("sessionGroups", sessionGroupId ?? "", "setupError") as string | undefined;
+  const setupError = useEntityField("sessionGroups", sessionGroupId ?? "", "setupError") as
+    | string
+    | undefined;
   const sessionGroupChannel = useEntityField("sessionGroups", sessionGroupId ?? "", "channel") as
     | { id: string }
     | null
     | undefined;
   const rawGroupChannelId = useEntityStore((s) =>
     sessionGroupId
-      ? (s.sessionGroups[sessionGroupId] as { channelId?: string | null } | undefined)?.channelId ?? null
+      ? ((s.sessionGroups[sessionGroupId] as { channelId?: string | null } | undefined)
+          ?.channelId ?? null)
       : null,
   );
   const sessionChannel = useEntityField("sessions", sessionId, "channel") as
     | { id: string }
     | null
     | undefined;
-  const rawSessionChannelId = useEntityStore((s) =>
-    (s.sessions[sessionId] as { channelId?: string | null } | undefined)?.channelId ?? null,
+  const rawSessionChannelId = useEntityStore(
+    (s) => (s.sessions[sessionId] as { channelId?: string | null } | undefined)?.channelId ?? null,
   );
-  const channelId = sessionGroupChannel?.id ?? rawGroupChannelId ?? sessionChannel?.id ?? rawSessionChannelId ?? null;
-  const channelSetupScript = useEntityField("channels", channelId ?? "", "setupScript") as string | null | undefined;
+  const channelId =
+    sessionGroupChannel?.id ??
+    rawGroupChannelId ??
+    sessionChannel?.id ??
+    rawSessionChannelId ??
+    null;
+  const channelSetupScript = useEntityField("channels", channelId ?? "", "setupScript") as
+    | string
+    | null
+    | undefined;
   const hasSetupScript = Boolean(channelSetupScript?.trim());
   const setupBlocking = hasSetupScript && setupStatus === "running";
 
@@ -232,12 +258,16 @@ export function SessionDetailView({
           const update: Record<string, unknown> = {};
 
           // Session group
-          const sessionGroup = (fetchedSession as Record<string, unknown>).sessionGroup as SessionGroupEntity | undefined;
+          const sessionGroup = (fetchedSession as Record<string, unknown>).sessionGroup as
+            | SessionGroupEntity
+            | undefined;
           if (sessionGroup?.id) {
             const existingGroup = state.sessionGroups[sessionGroup.id];
             update.sessionGroups = {
               ...state.sessionGroups,
-              [sessionGroup.id]: existingGroup ? { ...existingGroup, ...sessionGroup } : sessionGroup,
+              [sessionGroup.id]: existingGroup
+                ? { ...existingGroup, ...sessionGroup }
+                : sessionGroup,
             };
           }
 
@@ -249,7 +279,14 @@ export function SessionDetailView({
 
           // Queued messages
           const queuedMessages = (fetchedSession as Record<string, unknown>).queuedMessages as
-            | Array<{ id: string; sessionId: string; text: string; interactionMode?: string; position: number; createdAt: string }>
+            | Array<{
+                id: string;
+                sessionId: string;
+                text: string;
+                interactionMode?: string;
+                position: number;
+                createdAt: string;
+              }>
             | undefined;
           if (queuedMessages && queuedMessages.length > 0) {
             const qmTable = { ...state.queuedMessages };
@@ -304,7 +341,10 @@ export function SessionDetailView({
   })();
 
   const latestTodos = useMemo(
-    () => (agentStatus && !isTerminalStatus(agentStatus, sessionStatus) ? extractLatestTodos(eventIds, events) : null),
+    () =>
+      agentStatus && !isTerminalStatus(agentStatus, sessionStatus)
+        ? extractLatestTodos(eventIds, events)
+        : null,
     [eventIds, events, agentStatus, sessionStatus],
   );
 
@@ -331,7 +371,9 @@ export function SessionDetailView({
         {!hideHeader && (
           <SessionHeader
             sessionId={sessionId}
-            onToggleTerminal={canAccessTerminal ? () => setShowTerminal((v: boolean) => !v) : undefined}
+            onToggleTerminal={
+              canAccessTerminal ? () => setShowTerminal((v: boolean) => !v) : undefined
+            }
             terminalOpen={showTerminal}
             panelMode={panelMode}
           />
@@ -386,7 +428,9 @@ export function SessionDetailView({
           {!hideHeader && !setupBlocking && setupStatus === "failed" && (
             <div className="flex items-center gap-2 border-t border-border bg-destructive/10 px-4 py-2">
               <AlertCircle size={14} className="text-destructive" />
-              <span className="text-xs text-destructive">Setup failed{setupError ? `: ${setupError}` : ""}</span>
+              <span className="text-xs text-destructive">
+                Setup failed{setupError ? `: ${setupError}` : ""}
+              </span>
               <button
                 type="button"
                 disabled={!sessionGroupId || retryingSetup || !bridgeInteractionAllowed}
@@ -406,7 +450,13 @@ export function SessionDetailView({
           )}
 
           {!hideHeader && (showTerminal || showTerminalPanel) && canAccessTerminal && (
-            <TerminalPanel sessionId={sessionId} onClose={() => { setShowTerminal(false); setShowTerminalPanel(false); }} />
+            <TerminalPanel
+              sessionId={sessionId}
+              onClose={() => {
+                setShowTerminal(false);
+                setShowTerminalPanel(false);
+              }}
+            />
           )}
         </div>
 
@@ -442,9 +492,7 @@ export function SessionDetailView({
           />
         ) : (
           <>
-            {agentStatus === "active" && latestTodos && (
-              <StickyTodoList todos={latestTodos} />
-            )}
+            {agentStatus === "active" && latestTodos && <StickyTodoList todos={latestTodos} />}
             <QueuedMessagesList sessionId={sessionId} />
             <SessionInput
               sessionId={sessionId}

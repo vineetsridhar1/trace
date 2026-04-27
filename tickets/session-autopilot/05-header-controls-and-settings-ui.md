@@ -45,4 +45,3 @@ Add the user-facing controls for Session Autopilot in the session experience: bu
 2. Enable Autopilot and verify state changes to `waiting`.
 3. Change controller tool/model/runtime and verify the persisted state updates.
 4. Run now, pause, and disable from the UI.
-

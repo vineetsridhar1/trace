@@ -47,7 +47,7 @@ function configureApplicationIdentity() {
 
   if (process.platform !== "darwin") return;
 
-  app.dock.setIcon(appIconPath);
+  app.dock?.setIcon(appIconPath);
   const menuTemplate: MenuItemConstructorOptions[] = [
     {
       label: appName,

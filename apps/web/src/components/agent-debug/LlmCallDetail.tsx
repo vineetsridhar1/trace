@@ -50,11 +50,7 @@ function CollapsibleSection({
 function MessageCard({ message }: { key?: string | number; message: Record<string, unknown> }) {
   const role = String(message.role ?? "unknown");
   const roleColor =
-    role === "assistant"
-      ? "text-blue-400"
-      : role === "user"
-        ? "text-green-400"
-        : "text-yellow-400";
+    role === "assistant" ? "text-blue-400" : role === "user" ? "text-green-400" : "text-yellow-400";
 
   return (
     <div className="rounded border border-border bg-surface-deep p-2 space-y-1">
@@ -75,7 +71,9 @@ export function LlmCallDetail({ call }: { call: LlmCallData }) {
   return (
     <div className="space-y-3">
       {call.systemPrompt != null ? (
-        <CollapsibleSection title={`System Prompt (${call.systemPrompt.length.toLocaleString()} chars)`}>
+        <CollapsibleSection
+          title={`System Prompt (${call.systemPrompt.length.toLocaleString()} chars)`}
+        >
           <pre className="mt-2 text-xs font-mono text-foreground whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto">
             {call.systemPrompt}
           </pre>
@@ -94,7 +92,10 @@ export function LlmCallDetail({ call }: { call: LlmCallData }) {
         </div>
       </CollapsibleSection>
 
-      <CollapsibleSection title={`Response (${responseContent.length} block${responseContent.length !== 1 ? "s" : ""})`} defaultOpen>
+      <CollapsibleSection
+        title={`Response (${responseContent.length} block${responseContent.length !== 1 ? "s" : ""})`}
+        defaultOpen
+      >
         <div className="mt-2 space-y-2">
           {responseContent.map((block, i) => {
             const b = block as Record<string, unknown>;
@@ -125,7 +126,9 @@ export function LlmCallDetail({ call }: { call: LlmCallData }) {
       </CollapsibleSection>
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span>Stop reason: <span className="font-mono text-foreground">{call.stopReason}</span></span>
+        <span>
+          Stop reason: <span className="font-mono text-foreground">{call.stopReason}</span>
+        </span>
       </div>
     </div>
   );

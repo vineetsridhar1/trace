@@ -307,9 +307,10 @@ describe("LinkedCheckoutAutoSyncManager", () => {
     const manager = new LinkedCheckoutAutoSyncManager(15_000, deps);
 
     manager.start();
-    await Promise.resolve();
 
-    expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
+    });
 
     await vi.advanceTimersByTimeAsync(15_000);
     expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
@@ -335,9 +336,10 @@ describe("LinkedCheckoutAutoSyncManager", () => {
     const manager = new LinkedCheckoutAutoSyncManager(15_000, deps);
 
     manager.start();
-    await Promise.resolve();
 
-    expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledTimes(1);
+    });
 
     manager.stop();
     resolveGate.resolve("a".repeat(40));

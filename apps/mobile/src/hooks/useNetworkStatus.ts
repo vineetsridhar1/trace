@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import NetInfo, { NetInfoStateType, type NetInfoStateType as NetInfoStateTypeValue } from "@react-native-community/netinfo";
+import NetInfo, {
+  NetInfoStateType,
+  type NetInfoStateType as NetInfoStateTypeValue,
+} from "@react-native-community/netinfo";
 
 interface NetworkStatus {
   isResolved: boolean;

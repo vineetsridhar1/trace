@@ -58,11 +58,7 @@ export function EntityPreview({
 
   return (
     <HoverCard>
-      <HoverCardTrigger
-        render={trigger}
-        delay={150}
-        closeDelay={100}
-      />
+      <HoverCardTrigger render={trigger} delay={150} closeDelay={100} />
       <HoverCardContent
         side={side}
         align={align}

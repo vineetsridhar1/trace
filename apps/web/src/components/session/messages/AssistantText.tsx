@@ -1,7 +1,14 @@
 import { Markdown } from "../../ui/Markdown";
 import { formatTime } from "./utils";
 
-export function AssistantText({ text, timestamp }: { key?: React.Key; text: string; timestamp: string }) {
+export function AssistantText({
+  text,
+  timestamp,
+}: {
+  key?: React.Key;
+  text: string;
+  timestamp: string;
+}) {
   return (
     <div className="activity-row">
       <Markdown>{text}</Markdown>

@@ -27,9 +27,7 @@ export function TextChannelView({ channelId }: { channelId: string }) {
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
         <SidebarTrigger />
         <MessageSquare size={16} className="text-muted-foreground" />
-        <h2 className="text-sm font-semibold text-foreground">
-          {channelName ?? "Channel"}
-        </h2>
+        <h2 className="text-sm font-semibold text-foreground">{channelName ?? "Channel"}</h2>
         <ConnectionStatus />
       </div>
 
@@ -48,7 +46,8 @@ export function TextChannelView({ channelId }: { channelId: string }) {
         </div>
 
         {isMobile ? (
-          rendered && threadId && (
+          rendered &&
+          threadId && (
             <div
               className="absolute inset-0 z-10 bg-background transition-transform duration-200 ease-in-out"
               style={{ transform: slideIn ? "translateX(0)" : "translateX(100%)" }}

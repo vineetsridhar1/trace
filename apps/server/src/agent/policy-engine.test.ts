@@ -203,7 +203,12 @@ describe("policy-engine", () => {
         makeInput({
           plannerOutput: makePlannerOutput({
             confidence: 0.3,
-            proposedActions: [{ actionType: "escalate.toHuman", args: { userId: "u-1", title: "t", sourceType: "chat", sourceId: "c-1" } }],
+            proposedActions: [
+              {
+                actionType: "escalate.toHuman",
+                args: { userId: "u-1", title: "t", sourceType: "chat", sourceId: "c-1" },
+              },
+            ],
           }),
         }),
       );
@@ -286,7 +291,12 @@ describe("policy-engine", () => {
         makeInput({
           plannerOutput: makePlannerOutput({
             confidence: 0.5,
-            proposedActions: [{ actionType: "link.create", args: { ticketId: "t-1", entityType: "chat", entityId: "c-1" } }],
+            proposedActions: [
+              {
+                actionType: "link.create",
+                args: { ticketId: "t-1", entityType: "chat", entityId: "c-1" },
+              },
+            ],
           }),
         }),
       );
@@ -340,7 +350,9 @@ describe("policy-engine", () => {
         makeInput({
           plannerOutput: makePlannerOutput({
             confidence: 0.8,
-            proposedActions: [{ actionType: "message.send", args: { chatId: "chat-1", text: "hi" } }],
+            proposedActions: [
+              { actionType: "message.send", args: { chatId: "chat-1", text: "hi" } },
+            ],
           }),
           context: makeContext({
             scopeType: "chat",
@@ -418,7 +430,12 @@ describe("policy-engine", () => {
         makeInput({
           plannerOutput: makePlannerOutput({
             confidence: 0.5,
-            proposedActions: [{ actionType: "link.create", args: { ticketId: "t-1", entityType: "chat", entityId: "c-1" } }],
+            proposedActions: [
+              {
+                actionType: "link.create",
+                args: { ticketId: "t-1", entityType: "chat", entityId: "c-1" },
+              },
+            ],
           }),
           context: makeContext({
             permissions: { autonomyMode: "suggest", actions: [] },
@@ -492,7 +509,10 @@ describe("policy-engine", () => {
             confidence: 0.5,
             proposedActions: [
               // low risk, act mode: actMin=0.4 → 0.5 >= 0.4 → execute
-              { actionType: "link.create", args: { ticketId: "t-1", entityType: "chat", entityId: "c-1" } },
+              {
+                actionType: "link.create",
+                args: { ticketId: "t-1", entityType: "chat", entityId: "c-1" },
+              },
               // medium risk, act mode: actMin=0.7 → 0.5 < 0.7, suggestMin=0.3 → suggest
               { actionType: "ticket.create", args: { title: "Bug" } },
               // unknown → drop

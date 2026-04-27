@@ -94,37 +94,39 @@ export function InboxView() {
               position: "relative",
             }}
           >
-            {virtualizer.getVirtualItems().map((virtualRow: { key: React.Key; index: number; start: number }) => {
-              const item = items[virtualRow.index];
-              return (
-                <div
-                  key={virtualRow.key}
-                  ref={virtualizer.measureElement}
-                  data-index={virtualRow.index}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                >
-                  {item.kind === "divider" ? (
-                    <div className="px-4 py-2">
-                      <div className="border-t border-border" />
-                    </div>
-                  ) : item.kind === "resolved-header" ? (
-                    <div className="px-4 pb-1 pt-2">
-                      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                        Recent
-                      </span>
-                    </div>
-                  ) : (
-                    <InboxItemRow id={item.id} />
-                  )}
-                </div>
-              );
-            })}
+            {virtualizer
+              .getVirtualItems()
+              .map((virtualRow: { key: React.Key; index: number; start: number }) => {
+                const item = items[virtualRow.index];
+                return (
+                  <div
+                    key={virtualRow.key}
+                    ref={virtualizer.measureElement}
+                    data-index={virtualRow.index}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    {item.kind === "divider" ? (
+                      <div className="px-4 py-2">
+                        <div className="border-t border-border" />
+                      </div>
+                    ) : item.kind === "resolved-header" ? (
+                      <div className="px-4 pb-1 pt-2">
+                        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                          Recent
+                        </span>
+                      </div>
+                    ) : (
+                      <InboxItemRow id={item.id} />
+                    )}
+                  </div>
+                );
+              })}
           </div>
         )}
       </div>

@@ -44,7 +44,7 @@ packages/
 ## Prerequisites
 
 | Requirement | Version |
-|-------------|---------|
+| ----------- | ------- |
 | Node.js     | >= 22   |
 | pnpm        | >= 10   |
 | PostgreSQL  | >= 14   |
@@ -81,6 +81,7 @@ TRACE_AUTH_COOKIE_SAME_SITE="lax"      # Use "none" for cross-site web/API deplo
 ```
 
 **GitHub OAuth App setup:** Create a GitHub OAuth App at [github.com/settings/developers](https://github.com/settings/developers) with:
+
 - **Homepage URL:** `http://localhost:3000`
 - **Authorization callback URL:** `http://localhost:4000/auth/github/callback`
 
@@ -132,31 +133,35 @@ pnpm dev:desktop:prod  # Desktop → production API + local web
 
 ### Server
 
-| Layer | Technology |
-|-------|-----------|
-| API | Apollo Server 4, Express 5 |
-| Database | PostgreSQL via Prisma ORM |
+| Layer     | Technology                                              |
+| --------- | ------------------------------------------------------- |
+| API       | Apollo Server 4, Express 5                              |
+| Database  | PostgreSQL via Prisma ORM                               |
 | Real-time | WebSocket (graphql-ws for subscriptions, ws for bridge) |
-| Auth | GitHub OAuth + JWT (httpOnly cookies) |
-| Schema | Single GraphQL schema with codegen |
+| Auth      | GitHub OAuth + JWT (httpOnly cookies)                   |
+| Schema    | Single GraphQL schema with codegen                      |
 
 ### Web
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | React 19, Vite 6 |
-| State | Zustand 5 (single source of truth, no urql cache) |
-| Transport | urql 4 (GraphQL client, cache disabled) |
-| Styling | Tailwind CSS 4, shadcn/ui components |
-| Animation | framer-motion |
+| Layer     | Technology                                        |
+| --------- | ------------------------------------------------- |
+| Framework | React 19, Vite 6                                  |
+| State     | Zustand 5 (single source of truth, no urql cache) |
+| Transport | urql 4 (GraphQL client, cache disabled)           |
+| Styling   | Tailwind CSS 4, shadcn/ui components              |
+| Animation | framer-motion                                     |
+
+Trace uses AG Grid Enterprise for data-dense tables. Local development can run
+without a committed license key. Production builds should provide
+`VITE_AG_GRID_LICENSE_KEY` through CI or deployment secrets.
 
 ### Desktop
 
-| Layer | Technology |
-|-------|-----------|
-| Shell | Electron 33 (electron-forge) |
-| Bridge | WebSocket client to server for local session control |
-| Local tools | CodingToolAdapter (Claude Code, Codex) |
+| Layer       | Technology                                           |
+| ----------- | ---------------------------------------------------- |
+| Shell       | Electron 33 (electron-forge)                         |
+| Bridge      | WebSocket client to server for local session control |
+| Local tools | CodingToolAdapter (Claude Code, Codex)               |
 
 ## GraphQL API
 
@@ -203,3 +208,19 @@ GitHub Actions runs on every push and PR (`.github/workflows/ci.yml`):
 3. Typecheck all packages
 4. Validate Prisma schema
 5. ESLint + Prettier checks
+
+Production deploy workflows are manual (`workflow_dispatch`) so publishing the
+repository does not automatically deploy from public branch activity.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development and pull request
+guidelines.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for vulnerability reporting.
+
+## License
+
+Trace is released under the [MIT License](LICENSE).

@@ -120,11 +120,7 @@ describe("GraphQL authz guards", () => {
       aiConversationQueries.aiConversations({}, { organizationId: "org-2" }, ctx),
     ).toThrow("Not authorized for this organization");
     expect(() =>
-      aiConversationMutations.createAiConversation(
-        {},
-        { organizationId: "org-2", input: {} },
-        ctx,
-      ),
+      aiConversationMutations.createAiConversation({}, { organizationId: "org-2", input: {} }, ctx),
     ).toThrow("Not authorized for this organization");
     expect(aiConversationService.getConversations).not.toHaveBeenCalled();
     expect(aiConversationService.createConversation).not.toHaveBeenCalled();
@@ -134,11 +130,7 @@ describe("GraphQL authz guards", () => {
     await sessionMutations.terminateSession({}, { id: "session-1" }, ctx);
     await sessionMutations.dismissSession({}, { id: "session-1" }, ctx);
     await sessionMutations.deleteSession({}, { id: "session-1" }, ctx);
-    await sessionMutations.sendSessionMessage(
-      {},
-      { sessionId: "session-1", text: "hello" },
-      ctx,
-    );
+    await sessionMutations.sendSessionMessage({}, { sessionId: "session-1", text: "hello" }, ctx);
 
     expect(assertScopeAccess).toHaveBeenNthCalledWith(1, "session", "session-1", "user-1", "org-1");
     expect(assertScopeAccess).toHaveBeenNthCalledWith(2, "session", "session-1", "user-1", "org-1");

@@ -27,9 +27,13 @@ export function PeekOverlay({
 }: PeekOverlayProps) {
   const sidebarData = useSidebarData();
   const activeChannelId = useUIStore((s: { activeChannelId: string | null }) => s.activeChannelId);
-  const setActiveChannelId = useUIStore((s: { setActiveChannelId: (id: string | null) => void }) => s.setActiveChannelId);
+  const setActiveChannelId = useUIStore(
+    (s: { setActiveChannelId: (id: string | null) => void }) => s.setActiveChannelId,
+  );
   const activeChatId = useUIStore((s: { activeChatId: string | null }) => s.activeChatId);
-  const setActiveChatId = useUIStore((s: { setActiveChatId: (id: string | null) => void }) => s.setActiveChatId);
+  const setActiveChatId = useUIStore(
+    (s: { setActiveChatId: (id: string | null) => void }) => s.setActiveChatId,
+  );
 
   const { handleScroll, jumpToTab, selectTab, tabProgress, viewportRef } = useSidebarTabScroll({
     currentTab,
@@ -49,15 +53,21 @@ export function PeekOverlay({
     }
   }, [currentTab, jumpToTab, visible]);
 
-  const handleChannelClick = useCallback((id: string) => {
-    setActiveChannelId(id);
-    onMouseLeave();
-  }, [setActiveChannelId, onMouseLeave]);
+  const handleChannelClick = useCallback(
+    (id: string) => {
+      setActiveChannelId(id);
+      onMouseLeave();
+    },
+    [setActiveChannelId, onMouseLeave],
+  );
 
-  const handleChatClick = useCallback((id: string) => {
-    setActiveChatId(id);
-    onMouseLeave();
-  }, [setActiveChatId, onMouseLeave]);
+  const handleChatClick = useCallback(
+    (id: string) => {
+      setActiveChatId(id);
+      onMouseLeave();
+    },
+    [setActiveChatId, onMouseLeave],
+  );
 
   const handleDragActiveChange = useCallback((active: boolean) => {
     isDraggingRef.current = active;

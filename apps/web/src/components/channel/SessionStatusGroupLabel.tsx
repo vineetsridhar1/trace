@@ -1,13 +1,7 @@
 import { Circle } from "lucide-react";
 import { sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus";
 
-export function SessionStatusGroupLabel({
-  count,
-  status,
-}: {
-  count: number;
-  status: string;
-}) {
+export function SessionStatusGroupLabel({ count, status }: { count: number; status: string }) {
   const color = sessionStatusColor[status] ?? "text-muted-foreground";
   const label = sessionStatusLabel[status] ?? status;
 
