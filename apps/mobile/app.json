@@ -25,6 +25,20 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#010312"
       },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "gettrace.org",
+              "pathPrefix": "/m"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
