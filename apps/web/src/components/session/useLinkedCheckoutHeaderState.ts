@@ -172,9 +172,7 @@ export function useLinkedCheckoutHeaderState({
       if (!result) return;
 
       if (!result.ok) {
-        toast.error("Failed to sync main worktree", {
-          description: result.error ?? "Unknown error",
-        });
+        setSyncConflictError(result.error ?? "Unknown error");
         return;
       }
 
