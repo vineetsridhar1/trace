@@ -69,11 +69,21 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
 
   const onSync = useCallback(async () => {
     void haptic.light();
-    setSyncConflictError(
-      "Preview mode: this sheet is being shown directly from Sync so you can validate the mobile UI before deploying the server changes.",
-    );
-    setSyncConflictOpen(true);
-  }, []);
+    const outcome = await sync();
+    if (!outcome.ok) {
+      void haptic.error();
+      if (outcome.errorCode === "DIRTY_ROOT_CHECKOUT") {
+        setSyncConflictError(outcome.error ?? null);
+        setSyncConflictOpen(true);
+        return;
+      }
+      Alert.alert(ACTION_ALERT_TITLE.sync, outcome.error ?? "Unknown error.");
+      return;
+    }
+    setSyncConflictError(null);
+    setSyncConflictOpen(false);
+    void haptic.success();
+  }, [sync]);
 
   const onResolveSyncConflict = useCallback(
     async ({
@@ -90,7 +100,7 @@ function PanelBody({ checkout }: { checkout: UseLinkedCheckoutResult }) {
       });
       if (!outcome.ok) {
         void haptic.error();
-        Alert.alert(ACTION_ALERT_TITLE.sync, outcome.error ?? "Unknown error.");
+        setSyncConflictError(outcome.error ?? "Unknown error.");
         return;
       }
       setSyncConflictError(null);
