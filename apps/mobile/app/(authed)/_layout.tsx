@@ -1,6 +1,7 @@
 import { View } from "react-native";
 import { Redirect, Stack } from "expo-router";
 import { useAuthStore, type AuthState } from "@trace/client-core";
+import { GlobalBridgeAccessRequestPopup } from "@/components/connections/GlobalBridgeAccessRequestPopup";
 import { NoOrgWelcome } from "@/components/onboarding/NoOrgWelcome";
 import { AppConnectivityBanner } from "@/components/navigation/AppConnectivityBanner";
 import { useHydrate } from "@/hooks/useHydrate";
@@ -24,6 +25,7 @@ export default function AuthedLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="sessions" options={{ headerShown: false }} />
       </Stack>
+      <GlobalBridgeAccessRequestPopup />
       <AppConnectivityBanner />
     </View>
   );

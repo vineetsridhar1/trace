@@ -1,7 +1,7 @@
 import { StyleSheet, View } from "react-native";
-import { Button, ListRow, Text } from "@/components/design-system";
+import { Button, Glass, ListRow, Text } from "@/components/design-system";
 import { describeBridgeAccessScope, formatCapabilities } from "@/lib/bridge-access";
-import { useTheme } from "@/theme";
+import { alpha, useTheme } from "@/theme";
 import type {
   ConnectionAccessGrant,
   ConnectionAccessRequest,
@@ -34,15 +34,20 @@ export function ConnectionsBridgeAccessSections({
         <View>
           <SectionLabel text="Pending requests" />
           {requests.map((request) => (
-            <View
+            <Glass
               key={request.id}
+              preset="pinnedBar"
+              interactive
+              tint={alpha(theme.colors.warning, 0.12)}
               style={[
                 styles.itemBlock,
                 {
-                  paddingHorizontal: theme.spacing.lg,
+                  marginHorizontal: theme.spacing.md,
+                  marginBottom: theme.spacing.sm,
+                  paddingHorizontal: theme.spacing.md,
                   paddingVertical: theme.spacing.md,
-                  borderTopWidth: StyleSheet.hairlineWidth,
-                  borderTopColor: theme.colors.borderMuted,
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: alpha(theme.colors.foreground, 0.12),
                 },
               ]}
             >
@@ -70,7 +75,7 @@ export function ConnectionsBridgeAccessSections({
                   onPress={() => onDeny(request)}
                 />
               </View>
-            </View>
+            </Glass>
           ))}
         </View>
       ) : null}

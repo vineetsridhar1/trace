@@ -3,7 +3,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from "react-na
 import { SymbolView } from "expo-symbols";
 import { REQUEST_BRIDGE_ACCESS_MUTATION } from "@trace/client-core";
 import type { BridgeAccessCapability } from "@trace/gql";
-import { Button, Text } from "@/components/design-system";
+import { Button, Glass, Text } from "@/components/design-system";
 import { SessionComposerBottomSheet } from "@/components/sessions/session-input-composer/SessionComposerBottomSheet";
 import {
   isBridgeInteractionAllowed,
@@ -175,12 +175,14 @@ export function BridgeAccessNotice({
 
   return (
     <>
-      <View
+      <Glass
+        preset="pinnedBar"
+        interactive
+        tint={alpha(theme.colors.warning, compact ? 0.1 : 0.14)}
         style={[
           styles.notice,
           {
             borderColor: alpha(theme.colors.warning, 0.32),
-            backgroundColor: alpha(theme.colors.warning, compact ? 0.08 : 0.12),
             padding: compact ? theme.spacing.md : theme.spacing.lg,
           },
         ]}
@@ -229,7 +231,7 @@ export function BridgeAccessNotice({
             onPress={() => setOpen(true)}
           />
         </View>
-      </View>
+      </Glass>
 
       <SessionComposerBottomSheet visible={open} onClose={() => setOpen(false)}>
         <ScrollView

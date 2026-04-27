@@ -2,7 +2,7 @@ import type { BridgeAccessCapability } from "@trace/gql";
 import { SessionComposerBottomSheet } from "@/components/sessions/session-input-composer/SessionComposerBottomSheet";
 import type { ConnectionAccessGrant, ConnectionAccessRequest } from "@/hooks/useConnections";
 import { ConnectionsBridgeAccessGrantContent } from "./ConnectionsBridgeAccessGrantContent";
-import { ConnectionsBridgeAccessRequestContent } from "./ConnectionsBridgeAccessRequestContent";
+import { ConnectionsBridgeAccessRequestModal } from "./ConnectionsBridgeAccessRequestModal";
 
 export function ConnectionsBridgeAccessSheet({
   request,
@@ -32,23 +32,25 @@ export function ConnectionsBridgeAccessSheet({
   onUpdate: (grant: ConnectionAccessGrant, capabilities: BridgeAccessCapability[]) => void;
 }) {
   return (
-    <SessionComposerBottomSheet visible={visible} onClose={onClose}>
-      {request ? (
-        <ConnectionsBridgeAccessRequestContent
-          request={request}
-          pending={pending}
-          onApprove={onApprove}
-          onDeny={onDeny}
-        />
-      ) : null}
-      {grant ? (
-        <ConnectionsBridgeAccessGrantContent
-          grant={grant}
-          pending={pending}
-          onRevoke={onRevoke}
-          onUpdate={onUpdate}
-        />
-      ) : null}
-    </SessionComposerBottomSheet>
+    <>
+      <ConnectionsBridgeAccessRequestModal
+        request={request}
+        visible={visible && request !== null}
+        pending={pending}
+        onClose={onClose}
+        onApprove={onApprove}
+        onDeny={onDeny}
+      />
+      <SessionComposerBottomSheet visible={visible && grant !== null} onClose={onClose}>
+        {grant ? (
+          <ConnectionsBridgeAccessGrantContent
+            grant={grant}
+            pending={pending}
+            onRevoke={onRevoke}
+            onUpdate={onUpdate}
+          />
+        ) : null}
+      </SessionComposerBottomSheet>
+    </>
   );
 }
