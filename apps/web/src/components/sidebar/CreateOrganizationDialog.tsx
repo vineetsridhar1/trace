@@ -7,6 +7,7 @@ import { Button } from "../ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogClose,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -40,6 +41,7 @@ export function CreateOrganizationDialog({ trigger }: { trigger?: ReactElement }
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const canSubmit = name.trim().length > 0 && !submitting;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -52,25 +54,29 @@ export function CreateOrganizationDialog({ trigger }: { trigger?: ReactElement }
     setSubmitting(true);
     setError(null);
 
-    const result = await client
-      .mutation(CREATE_ORGANIZATION, { input: { name: trimmedName } })
-      .toPromise();
+    try {
+      const result = await client
+        .mutation(CREATE_ORGANIZATION, { input: { name: trimmedName } })
+        .toPromise();
 
-    if (result.error) {
+      if (result.error) {
+        setError(result.error.message);
+        return;
+      }
+
+      const membership = result.data?.createOrganization as CreatedOrgMembership | undefined;
+      await fetchMe();
+      if (membership?.organizationId) {
+        setActiveOrg(membership.organizationId);
+      }
+
+      setName("");
+      setOpen(false);
+    } catch {
+      setError("Could not create the organization. Please try again.");
+    } finally {
       setSubmitting(false);
-      setError(result.error.message);
-      return;
     }
-
-    const membership = result.data?.createOrganization as CreatedOrgMembership | undefined;
-    await fetchMe();
-    if (membership?.organizationId) {
-      setActiveOrg(membership.organizationId);
-    }
-
-    setSubmitting(false);
-    setName("");
-    setOpen(false);
   }
 
   return (
@@ -79,37 +85,41 @@ export function CreateOrganizationDialog({ trigger }: { trigger?: ReactElement }
         {trigger ? null : (
           <>
             <Plus size={14} />
-            New organization
+            Create organization
           </>
         )}
       </DialogTrigger>
-      <DialogContent>
-        <form onSubmit={handleSubmit} className="grid gap-4">
+      <DialogContent className="sm:max-w-md">
+        <form onSubmit={handleSubmit} className="grid gap-5">
           <DialogHeader>
-            <DialogTitle>Create organization</DialogTitle>
-            <DialogDescription>
-              Start a separate workspace for channels, sessions, tickets, and members.
+            <DialogTitle className="text-lg">Create organization</DialogTitle>
+            <DialogDescription className="max-w-sm">
+              Name the workspace where your team will share channels, sessions, and tickets.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground" htmlFor="organization-name">
-              Name
+          <div className="grid gap-2">
+            <label className="text-sm font-medium text-foreground" htmlFor="organization-name">
+              Organization name
             </label>
             <Input
               id="organization-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Acme"
+              placeholder="Acme Labs"
               disabled={submitting}
               autoFocus
+              className="h-9"
             />
             {error ? <p className="text-xs text-destructive">{error}</p> : null}
           </div>
 
-          <DialogFooter>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Creating..." : "Create"}
+          <DialogFooter className="flex-row justify-end gap-2 border-t bg-transparent pt-4">
+            <DialogClose render={<Button type="button" variant="ghost" />}>
+              Cancel
+            </DialogClose>
+            <Button type="submit" disabled={!canSubmit}>
+              {submitting ? "Creating..." : "Create organization"}
             </Button>
           </DialogFooter>
         </form>
