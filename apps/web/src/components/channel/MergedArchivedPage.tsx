@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { ArrowLeft } from "lucide-react";
 import { gql } from "@urql/core";
-import type { DefaultMenuItem, GetContextMenuItemsParams, MenuItemDef } from "ag-grid-community";
+import type {
+  DefaultMenuItem,
+  GetContextMenuItemsParams,
+  MenuItemDef,
+} from "ag-grid-community";
 import type { SessionGroup } from "@trace/gql";
 import { client } from "../../lib/urql";
 import { useEntityStore, type EntityState } from "@trace/client-core";
@@ -12,10 +16,11 @@ import { Skeleton } from "../ui/skeleton";
 import { DeleteSessionGroupDialog } from "../session/DeleteSessionGroupDialog";
 import { createTable, type TableState } from "../ui/table";
 import { sessionColumns, applySessionsColumnMode } from "./sessions-table-columns";
-import type { SessionGroupRow } from "./sessions-table-types";
+import type { SessionGridRow } from "./sessions-table-types";
 import { FILTER_STORAGE_KEY_PREFIX } from "./sessions-table-types";
 import { useSessionGroupRows } from "./useSessionGroupRows";
 import { useSessionsGridOptions } from "./useSessionsGridOptions";
+import { useSessionStatusGrouping } from "./useSessionStatusGrouping";
 import { cn } from "../../lib/utils";
 
 const FILTERED_SESSION_GROUPS_QUERY = gql`
@@ -29,9 +34,7 @@ const FILTERED_SESSION_GROUPS_QUERY = gql`
       archivedAt
       setupStatus
       setupError
-      channel {
-        id
-      }
+      channel { id }
       createdAt
       updatedAt
       sessions {
@@ -47,28 +50,10 @@ const FILTERED_SESSION_GROUPS_QUERY = gql`
         worktreeDeleted
         sessionGroupId
         lastMessageAt
-        connection {
-          state
-          runtimeInstanceId
-          runtimeLabel
-          lastError
-          retryCount
-          canRetry
-          canMove
-          autoRetryable
-        }
-        createdBy {
-          id
-          name
-          avatarUrl
-        }
-        repo {
-          id
-          name
-        }
-        channel {
-          id
-        }
+        connection { state runtimeInstanceId runtimeLabel lastError retryCount canRetry canMove autoRetryable }
+        createdBy { id name avatarUrl }
+        repo { id name }
+        channel { id }
         createdAt
         updatedAt
       }
@@ -76,14 +61,14 @@ const FILTERED_SESSION_GROUPS_QUERY = gql`
   }
 `;
 
-const mergedTableInstance = createTable<SessionGroupRow>({
+const mergedTableInstance = createTable<SessionGridRow>({
   id: "merged-sessions",
   columns: sessionColumns,
 });
 const MergedGridTable = mergedTableInstance.Table;
 const useMergedTable = mergedTableInstance.useTable;
 
-const archivedTableInstance = createTable<SessionGroupRow>({
+const archivedTableInstance = createTable<SessionGridRow>({
   id: "archived-sessions",
   columns: sessionColumns,
 });
@@ -92,13 +77,23 @@ const useArchivedTable = archivedTableInstance.useTable;
 
 type Tab = "merged" | "archived";
 
-function TabTable({ channelId, tab, active }: { channelId: string; tab: Tab; active: boolean }) {
+function TabTable({
+  channelId,
+  tab,
+  active,
+}: {
+  channelId: string;
+  tab: Tab;
+  active: boolean;
+}) {
   const upsertMany = useEntityStore((s: EntityState) => s.upsertMany);
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
   const rows = useSessionGroupRows(
     channelId,
     tab === "merged" ? { status: "merged" } : { archived: true },
   );
+  const { gridRows, onFilterModelChanged, onToggleStatusGroup } =
+    useSessionStatusGrouping(rows);
   const [loading, setLoading] = useState(true);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -106,20 +101,22 @@ function TabTable({ channelId, tab, active }: { channelId: string; tab: Tab; act
     name: string;
     sessionCount: number;
   } | null>(null);
-  const setMergedRows = useMergedTable((s: TableState<SessionGroupRow>) => s.setRows);
-  const setArchivedRows = useArchivedTable((s: TableState<SessionGroupRow>) => s.setRows);
+  const setMergedRows = useMergedTable((s: TableState<SessionGridRow>) => s.setRows);
+  const setArchivedRows = useArchivedTable((s: TableState<SessionGridRow>) => s.setRows);
   const setRows = tab === "merged" ? setMergedRows : setArchivedRows;
   const GridTable = tab === "merged" ? MergedGridTable : ArchivedGridTable;
   const queryKey = `${channelId}:${tab}`;
 
   useEffect(() => {
-    setRows(rows);
-  }, [rows, setRows]);
+    setRows(gridRows);
+  }, [gridRows, setRows]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     const variables =
-      tab === "merged" ? { channelId, status: "merged" } : { channelId, archived: true };
+      tab === "merged"
+        ? { channelId, status: "merged" }
+        : { channelId, archived: true };
 
     const result = await client.query(FILTERED_SESSION_GROUPS_QUERY, variables).toPromise();
     if (result.data?.sessionGroups) {
@@ -131,7 +128,9 @@ function TabTable({ channelId, tab, active }: { channelId: string; tab: Tab; act
         groups.map((group) => ({
           ...group,
           _sortTimestamp:
-            group.sessions?.[0]?.lastMessageAt ?? group.sessions?.[0]?.updatedAt ?? group.updatedAt,
+            group.sessions?.[0]?.lastMessageAt
+            ?? group.sessions?.[0]?.updatedAt
+            ?? group.updatedAt,
         })) as Array<SessionGroupEntity & { id: string }>,
       );
       upsertMany("sessions", flattenedSessions as Array<SessionEntity & { id: string }>);
@@ -147,10 +146,8 @@ function TabTable({ channelId, tab, active }: { channelId: string; tab: Tab; act
   }, [active, fetchData, loadedKey, queryKey]);
 
   const getContextMenuItems = useCallback(
-    (
-      params: GetContextMenuItemsParams<SessionGroupRow>,
-    ): (DefaultMenuItem | MenuItemDef<SessionGroupRow>)[] => {
-      if (!params.node?.data) return [];
+    (params: GetContextMenuItemsParams<SessionGridRow>): (DefaultMenuItem | MenuItemDef<SessionGridRow>)[] => {
+      if (!params.node?.data || "_isStatusHeader" in params.node.data) return [];
       const group = params.node.data;
       return [
         {
@@ -175,9 +172,11 @@ function TabTable({ channelId, tab, active }: { channelId: string; tab: Tab; act
     filterStorageKey,
     getContextMenuItems,
     isCompact: false,
+    onFilterModelChanged,
     onGridReady: (event) => {
       applySessionsColumnMode(event.api, false);
     },
+    onToggleStatusGroup,
   });
   const selectedRowIds = activeSessionGroupId ? [activeSessionGroupId] : undefined;
 
@@ -199,7 +198,11 @@ function TabTable({ channelId, tab, active }: { channelId: string; tab: Tab; act
 
   return (
     <>
-      <GridTable className="h-full" agGridOptions={agGridOptions} selectedRowIds={selectedRowIds} />
+      <GridTable
+        className="h-full"
+        agGridOptions={agGridOptions}
+        selectedRowIds={selectedRowIds}
+      />
       {deleteTarget && (
         <DeleteSessionGroupDialog
           groupId={deleteTarget.id}
@@ -227,10 +230,17 @@ export function MergedArchivedPage({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-border px-4 py-2">
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onBack}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={onBack}
+        >
           <ArrowLeft size={15} />
         </Button>
-        <h2 className="text-sm font-semibold text-foreground">Merged & Archived</h2>
+        <h2 className="text-sm font-semibold text-foreground">
+          Merged & Archived
+        </h2>
       </div>
       <div className="flex gap-1 border-b border-border px-4">
         <button

@@ -1,8 +1,8 @@
 import { createTable } from "../ui/table";
-import type { SessionGroupRow } from "./sessions-table-types";
+import type { SessionGridRow } from "./sessions-table-types";
 import { sessionColumns } from "./sessions-table-columns";
 
-export const sessionsGridTableInstance = createTable<SessionGroupRow>({
+export const sessionsGridTableInstance = createTable<SessionGridRow>({
   id: "sessions",
   columns: sessionColumns,
 });
