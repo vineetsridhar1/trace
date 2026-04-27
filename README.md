@@ -223,4 +223,4 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 
 ## License
 
-Trace is released under the [MIT License](LICENSE).
+Trace is released under the [GNU Affero General Public License v3.0](LICENSE).
