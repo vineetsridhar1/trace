@@ -99,6 +99,7 @@ function seedAttachment(
 function makeDeps(overrides: Partial<LinkedCheckoutAutoSyncDeps> = {}): LinkedCheckoutAutoSyncDeps {
   return {
     revParseHead: vi.fn(async () => "a".repeat(40)),
+    refreshRemoteRefs: vi.fn(async () => undefined),
     hasTrackedChanges: vi.fn(async () => false),
     switchDetached: vi.fn(async () => undefined),
     getCurrentBranch: vi.fn(async () => null),
@@ -151,6 +152,7 @@ describe("LinkedCheckoutAutoSyncManager", () => {
 
     await manager.reconcileAll();
 
+    expect(deps.refreshRemoteRefs).toHaveBeenCalledWith("/tmp/repo-repo-1");
     expect(deps.switchDetached).toHaveBeenCalledWith("/tmp/repo-repo-1", "b".repeat(40));
     expect(configMock.__state.repos["repo-1"].linkedCheckout).toMatchObject({
       lastSyncedCommitSha: "b".repeat(40),
@@ -224,12 +226,13 @@ describe("LinkedCheckoutAutoSyncManager", () => {
 
     await manager.reconcileAll();
 
+    expect(deps.refreshRemoteRefs).not.toHaveBeenCalled();
     expect(deps.switchDetached).not.toHaveBeenCalled();
     expect(linkedCheckoutMock.pauseExistingAttachment).not.toHaveBeenCalled();
     expect(configMock.setRepoLinkedCheckout).not.toHaveBeenCalled();
   });
 
-  it("follows new commits on the local target branch without waiting for origin", async () => {
+  it("refreshes origin before resolving the target branch", async () => {
     seedAttachment("repo-1", {
       targetBranch: "trace/rhino",
       lastSyncedCommitSha: "a".repeat(40),
@@ -247,6 +250,7 @@ describe("LinkedCheckoutAutoSyncManager", () => {
 
     await manager.reconcileAll();
 
+    expect(deps.refreshRemoteRefs).toHaveBeenCalledWith("/tmp/repo-repo-1");
     expect(linkedCheckoutMock.resolveTargetCommitSha).toHaveBeenCalledWith(
       "/tmp/repo-repo-1",
       "trace/rhino",
@@ -256,6 +260,25 @@ describe("LinkedCheckoutAutoSyncManager", () => {
       lastSyncedCommitSha: "b".repeat(40),
       lastSyncError: null,
       lastSyncAt: "2026-04-18T00:00:00.000Z",
+    });
+  });
+
+  it("records an error instead of resolving stale refs when refresh fails", async () => {
+    seedAttachment("repo-1");
+    const deps = makeDeps({
+      refreshRemoteRefs: vi.fn(async () => {
+        throw new Error("Could not resolve host: github.com");
+      }),
+    });
+    const manager = new LinkedCheckoutAutoSyncManager(15_000, deps);
+
+    await manager.reconcileAll();
+
+    expect(linkedCheckoutMock.resolveTargetCommitSha).not.toHaveBeenCalled();
+    expect(deps.switchDetached).not.toHaveBeenCalled();
+    expect(configMock.__state.repos["repo-1"].linkedCheckout).toMatchObject({
+      autoSyncEnabled: true,
+      lastSyncError: "Could not resolve host: github.com",
     });
   });
 
