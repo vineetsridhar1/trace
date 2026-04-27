@@ -1,6 +1,7 @@
 import { StyleSheet, View } from "react-native";
+import { SymbolView } from "expo-symbols";
 import type { AgentStatus } from "@trace/gql";
-import { Button, EmptyState, Spinner, Text } from "@/components/design-system";
+import { Button, Spinner, Text } from "@/components/design-system";
 import { useTheme } from "@/theme";
 
 /** Solid stream surface shown while initial events are loading. */
@@ -29,14 +30,25 @@ export function SessionStreamError({ error, onRetry }: { error: string; onRetry:
 }
 
 /** Solid stream surface shown once hydration completes but no events exist. */
-export function SessionStreamEmpty(_props: { agentStatus?: AgentStatus | null }) {
+export function SessionStreamEmpty({ agentStatus }: { agentStatus?: AgentStatus | null }) {
+  const theme = useTheme();
+  const notStarted = agentStatus === "not_started";
+
   return (
-    <View style={styles.emptyState}>
-      <EmptyState
-        icon="ellipsis.bubble"
-        title="Waiting for agent to start…"
-        subtitle="Events will appear here as soon as the session begins."
+    <View style={[styles.emptyState, { paddingHorizontal: theme.spacing.lg }]}>
+      <SymbolView
+        name={notStarted ? "sparkles" : "hourglass"}
+        size={28}
+        tintColor={theme.colors.mutedForeground}
       />
+      <Text variant="headline" color="foreground" align="center">
+        {notStarted ? "Ready when you are" : "Waiting for the agent…"}
+      </Text>
+      <Text variant="footnote" color="mutedForeground" align="center">
+        {notStarted
+          ? "Type a prompt below to kick off the session."
+          : "The first response should arrive shortly."}
+      </Text>
     </View>
   );
 }
@@ -46,6 +58,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 8,
     backgroundColor: "#000",
   },
   loadingState: {
