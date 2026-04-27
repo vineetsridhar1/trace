@@ -1,17 +1,14 @@
-const { expo } = require("./app.json");
-
 module.exports = ({ config }) => {
   const configuredProjectId =
     process.env.EXPO_PUBLIC_EAS_PROJECT_ID ||
-    config.extra?.eas?.projectId ||
-    expo.extra?.eas?.projectId;
+    config.extra?.eas?.projectId;
 
   return {
-    ...expo,
+    ...config,
     extra: {
-      ...expo.extra,
+      ...config.extra,
       eas: {
-        ...expo.extra?.eas,
+        ...config.extra?.eas,
         projectId: configuredProjectId,
       },
     },
