@@ -23,7 +23,9 @@ export type SessionStatusHeaderRow = {
 
 export type SessionGridRow = SessionGroupRow | SessionStatusHeaderRow;
 
-export function isSessionStatusHeaderRow(row: SessionGridRow | undefined): row is SessionStatusHeaderRow {
+export function isSessionStatusHeaderRow(
+  row: SessionGridRow | undefined,
+): row is SessionStatusHeaderRow {
   return Boolean(row && "_isStatusHeader" in row && row._isStatusHeader === true);
 }
 

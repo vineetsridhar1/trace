@@ -9,9 +9,9 @@ The distinction between chat, project management, and AI coding is artificial. T
 ## Architecture
 
 ```
-Web / Desktop / Electron  →  GraphQL  →  Service Layer  ←  Agent Runtime
-                                              ↓
-                                         Event Store (PostgreSQL)
+Web / Mobile / Desktop  →  GraphQL  →  Service Layer  ←  Agent Runtime
+                                             ↓
+                                        Event Store (PostgreSQL)
 ```
 
 - **Service layer is the product.** GraphQL resolvers are thin wrappers. The agent runtime calls services directly.
@@ -22,13 +22,16 @@ Web / Desktop / Electron  →  GraphQL  →  Service Layer  ←  Agent Runtime
 
 ```
 apps/
-├── server/        Apollo + Express, service layer, Prisma, WebSocket endpoints
-├── web/           React + Vite + urql + Zustand, Tailwind CSS, shadcn/ui
-└── desktop/       Electron shell + bridge client for local sessions
+├── server/             Apollo + Express, service layer, Prisma, WebSocket endpoints
+├── web/                React + Vite + urql + Zustand, Tailwind CSS, shadcn/ui
+├── mobile/             Expo + React Native mobile client
+├── desktop/            Electron shell + bridge client for local sessions
+└── container-bridge/   Container bridge runtime for cloud-hosted sessions
 
 packages/
-├── gql/           GraphQL schema, codegen, generated TypeScript types
-└── shared/        CodingToolAdapter interfaces (Claude Code, Codex)
+├── gql/                GraphQL schema, codegen, generated TypeScript types
+├── client-core/        Platform-agnostic client state, GraphQL operations, and event handling
+└── shared/             Shared adapter interfaces and runtime protocol types
 ```
 
 ## Key Features
@@ -155,6 +158,15 @@ Trace uses AG Grid Enterprise for data-dense tables. Local development can run
 without a committed license key. Production builds should provide
 `VITE_AG_GRID_LICENSE_KEY` through CI or deployment secrets.
 
+### Mobile
+
+| Layer      | Technology                                      |
+| ---------- | ----------------------------------------------- |
+| Framework  | Expo + React Native                             |
+| Navigation | Expo Router + React Navigation                  |
+| State      | Shared Zustand stores from `@trace/client-core` |
+| Transport  | urql + GraphQL subscriptions                    |
+
 ### Desktop
 
 | Layer       | Technology                                           |
@@ -162,6 +174,14 @@ without a committed license key. Production builds should provide
 | Shell       | Electron 33 (electron-forge)                         |
 | Bridge      | WebSocket client to server for local session control |
 | Local tools | CodingToolAdapter (Claude Code, Codex)               |
+
+### Container Bridge
+
+| Layer       | Technology                                |
+| ----------- | ----------------------------------------- |
+| Runtime     | Node.js bridge process                    |
+| Transport   | WebSocket bridge protocol                 |
+| Environment | Container image for cloud-hosted sessions |
 
 ## GraphQL API
 
@@ -191,6 +211,7 @@ pnpm dev              # Run all apps in parallel
 pnpm build            # Build all packages
 pnpm lint             # Typecheck all apps
 pnpm lint:eslint      # Run ESLint
+pnpm test             # Run package test suites
 pnpm format           # Format with Prettier
 pnpm format:check     # Check formatting
 pnpm gql:codegen      # Regenerate GraphQL types

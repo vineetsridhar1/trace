@@ -2,11 +2,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { SessionStatusGroupLabel } from "./SessionStatusGroupLabel";
 import type { SessionStatusHeaderRow as SessionStatusHeaderRowData } from "./sessions-table-types";
 
-export function SessionStatusHeaderRow({
-  row,
-}: {
-  row: SessionStatusHeaderRowData;
-}) {
+export function SessionStatusHeaderRow({ row }: { row: SessionStatusHeaderRowData }) {
   const Icon = row._expanded ? ChevronDown : ChevronRight;
 
   return (
