@@ -19,7 +19,7 @@ export function getSessionCreatedBy(data: SessionGroupRow | undefined): CreatedB
 
 export function getSessionBranch(data: SessionGroupRow | undefined): string | null {
   if (!data) return null;
-  return data.latestSession?.branch ?? data.branch ?? null;
+  return data.latestSession?.branch ?? data.branch ?? data.slug ?? null;
 }
 
 export function getSessionLastActivityAt(data: SessionGroupRow | undefined): string | undefined {
