@@ -12,6 +12,32 @@ import { getDefaultModel } from "../components/session/modelOptions";
 
 const pendingQuickSessionChannels = new Set<string>();
 
+type RuntimeUnavailableReason = "no_local_runtime" | "repo_not_linked";
+
+interface AvailableRuntimesQueryResult {
+  availableRuntimes?: SessionRuntimeInstance[];
+}
+
+export function getChannelRepoId(channelId: string): string | undefined {
+  const channel = useEntityStore.getState().channels[channelId];
+  return channel &&
+    typeof channel === "object" &&
+    "repo" in channel &&
+    channel.repo &&
+    typeof channel.repo === "object" &&
+    "id" in (channel.repo as Record<string, unknown>) &&
+    typeof (channel.repo as { id?: unknown }).id === "string"
+    ? (channel.repo as { id: string }).id
+    : undefined;
+}
+
+export function quickSessionUnavailableMessage(reason?: RuntimeUnavailableReason): string {
+  if (reason === "repo_not_linked") {
+    return "Link this repo on your desktop first.";
+  }
+  return "No connected local runtime available.";
+}
+
 /**
  * Resolve the best connected local runtime for a new session.
  */
@@ -20,10 +46,13 @@ async function resolveDefaultRuntime(
   channelRepoId: string | undefined,
 ): Promise<{
   runtimeInstanceId: string | undefined;
+  unavailableReason?: RuntimeUnavailableReason;
 }> {
   try {
-    const result = await client.query(AVAILABLE_RUNTIMES_QUERY, { tool }).toPromise();
-    const runtimes = (result.data?.availableRuntimes ?? []) as SessionRuntimeInstance[];
+    const result = await client
+      .query<AvailableRuntimesQueryResult>(AVAILABLE_RUNTIMES_QUERY, { tool })
+      .toPromise();
+    const runtimes = result.data?.availableRuntimes ?? [];
     const connected = runtimes.filter((r) => r.connected && r.hostingMode === "local");
     const eligible = channelRepoId
       ? connected.filter((r) => r.registeredRepoIds.includes(channelRepoId))
@@ -31,10 +60,15 @@ async function resolveDefaultRuntime(
     if (eligible.length > 0) {
       return { runtimeInstanceId: eligible[0].id };
     }
+    return {
+      runtimeInstanceId: undefined,
+      unavailableReason:
+        channelRepoId && connected.length > 0 ? "repo_not_linked" : "no_local_runtime",
+    };
   } catch {
     // Fall through to the explicit missing-runtime error below.
   }
-  return { runtimeInstanceId: undefined };
+  return { runtimeInstanceId: undefined, unavailableReason: "no_local_runtime" };
 }
 
 /**
@@ -50,21 +84,15 @@ export async function createQuickSession(channelId: string): Promise<void> {
   const prefTool = usePreferencesStore.getState().defaultTool ?? "claude_code";
   const prefModel = usePreferencesStore.getState().defaultModel ?? getDefaultModel(prefTool);
 
-  const channel = useEntityStore.getState().channels[channelId];
-  const channelRepoId =
-    channel &&
-    typeof channel === "object" &&
-    "repo" in channel &&
-    channel.repo &&
-    typeof channel.repo === "object" &&
-    "id" in (channel.repo as Record<string, unknown>)
-      ? (channel.repo as { id: string }).id
-      : undefined;
+  const channelRepoId = getChannelRepoId(channelId);
 
   try {
-    const { runtimeInstanceId } = await resolveDefaultRuntime(prefTool, channelRepoId);
+    const { runtimeInstanceId, unavailableReason } = await resolveDefaultRuntime(
+      prefTool,
+      channelRepoId,
+    );
     if (!runtimeInstanceId) {
-      throw new Error("No connected local runtime available");
+      throw new Error(quickSessionUnavailableMessage(unavailableReason));
     }
 
     const result = await client
