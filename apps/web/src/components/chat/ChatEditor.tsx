@@ -20,6 +20,8 @@ if (!Quill.imports["modules/mention"]) {
   Quill.register("modules/mention", Mention);
 }
 
+const EDITOR_FORMATS = ["mention"];
+
 export interface MentionableUser {
   id: string;
   name: string;
@@ -333,6 +335,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
         value={value}
         onChange={handleChange}
         modules={modules}
+        formats={EDITOR_FORMATS}
         placeholder={placeholder}
         readOnly={disabled}
       />
