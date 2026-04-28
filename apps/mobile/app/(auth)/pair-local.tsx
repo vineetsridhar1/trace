@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, StyleSheet, TextInput, View } from "react-native";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
@@ -77,13 +77,13 @@ export default function PairLocalScreen() {
   const router = useRouter();
   const theme = useTheme();
   const signInWithToken = useAuthStore((s: AuthState) => s.signInWithToken);
+  const scanningRef = useRef(false);
   const [cameraPermission, setCameraPermission] = useState<CameraPermissionStatus>(
     cameraModule ? "checking" : "unsupported",
   );
   const [manualCode, setManualCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cameraEnabled, setCameraEnabled] = useState(true);
   const cameraSupported = CameraView !== null && cameraPermission !== "unsupported";
   const cameraGranted = cameraPermission === "granted";
 
@@ -108,8 +108,23 @@ export default function PairLocalScreen() {
         }
 
         const result = await cameraModule.Camera.getCameraPermissionsAsync();
+        if (result.granted) {
+          if (!cancelled) {
+            setCameraPermission("granted");
+          }
+          return;
+        }
+
+        if (result.status === "undetermined") {
+          const requestResult = await cameraModule.Camera.requestCameraPermissionsAsync();
+          if (!cancelled) {
+            setCameraPermission(requestResult.granted ? "granted" : "denied");
+          }
+          return;
+        }
+
         if (!cancelled) {
-          setCameraPermission(result.granted ? "granted" : "denied");
+          setCameraPermission("denied");
         }
       } catch {
         if (!cancelled) {
@@ -157,7 +172,6 @@ export default function PairLocalScreen() {
       void haptic.success();
     } catch (pairError) {
       setError(pairError instanceof Error ? pairError.message : "Pairing failed");
-      setCameraEnabled(false);
       void haptic.error();
     } finally {
       setSubmitting(false);
@@ -200,10 +214,12 @@ export default function PairLocalScreen() {
   }
 
   function handleBarcodeScanned(result: BarcodeScanningResult) {
-    if (submitting || !cameraEnabled) return;
+    if (submitting || scanningRef.current) return;
+    scanningRef.current = true;
     setManualCode(result.data);
-    setCameraEnabled(false);
-    void pairFromPayload(result.data);
+    void pairFromPayload(result.data).finally(() => {
+      scanningRef.current = false;
+    });
   }
 
   return (
@@ -246,7 +262,7 @@ export default function PairLocalScreen() {
             },
           ]}
         >
-          {cameraSupported && cameraGranted && cameraEnabled ? (
+          {cameraSupported && cameraGranted ? (
             <CameraView
               style={styles.camera}
               barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
@@ -259,10 +275,6 @@ export default function PairLocalScreen() {
               ) : cameraPermission === "unsupported" ? (
                 <Text variant="callout" color="mutedForeground" align="center">
                   {CAMERA_UNAVAILABLE_MESSAGE}
-                </Text>
-              ) : cameraGranted ? (
-                <Text variant="callout" color="mutedForeground" align="center">
-                  Camera paused. Enable it again to rescan.
                 </Text>
               ) : (
                 <Text variant="callout" color="mutedForeground" align="center">
@@ -280,14 +292,6 @@ export default function PairLocalScreen() {
                 onPress={() => {
                   void handleEnableCamera();
                 }}
-                disabled={submitting}
-              />
-            ) : null}
-            {cameraSupported && cameraGranted ? (
-              <Button
-                title={cameraEnabled ? "Pause camera" : "Resume camera"}
-                variant="secondary"
-                onPress={() => setCameraEnabled((value) => !value)}
                 disabled={submitting}
               />
             ) : null}
