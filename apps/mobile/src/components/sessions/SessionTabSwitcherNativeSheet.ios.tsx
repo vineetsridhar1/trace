@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
-import { BottomSheet, Button, Group, Host, List, Section, Text, VStack } from "@expo/ui/swift-ui";
+import { BottomSheet, Button, Host, List, Section, Text, VStack } from "@expo/ui/swift-ui";
 import { createModifier } from "@expo/ui/swift-ui/modifiers";
 import { useEntityField } from "@trace/client-core";
 import type { SessionStatus } from "@trace/gql";
@@ -30,13 +30,6 @@ export function SessionTabSwitcherNativeSheet({
   const sessionIds = useSessionGroupSessionIds(groupId);
   const [creating, setCreating] = useState(false);
 
-  const sheetModifiers = useMemo(
-    () => [
-      createModifier("presentationDetents", { detents: ["large"] }),
-      createModifier("presentationDragIndicator", { visibility: "visible" }),
-    ],
-    [],
-  );
   const listModifiers = useMemo(() => [createModifier("listStyle", { style: "insetGrouped" })], []);
 
   const navigateToSession = useCallback(
@@ -71,56 +64,54 @@ export function SessionTabSwitcherNativeSheet({
 
   return (
     <Host colorScheme={theme.scheme === "dark" ? "dark" : "light"} style={{ flex: 1 }}>
-      <BottomSheet isPresented={open} onIsPresentedChange={(presented) => !presented && onClose()}>
-        <Group modifiers={sheetModifiers}>
-          <List modifiers={listModifiers}>
-            <Section
-              header={
-                <VStack alignment="leading" spacing={4}>
-                  <Text>Tabs & terminals</Text>
-                  <Text>{groupName ?? "Current workspace"}</Text>
-                  <Text>
-                    {loading && !groupName ? "Loading tabs..." : (error ?? headerSubtitle)}
-                  </Text>
-                </VStack>
-              }
+      <BottomSheet
+        isOpened={open}
+        onIsOpenedChange={(opened) => !opened && onClose()}
+        presentationDetents={["large"]}
+        presentationDragIndicator="visible"
+      >
+        <List modifiers={listModifiers}>
+          <Section title="Tabs & terminals">
+            <VStack alignment="leading" spacing={4}>
+              <Text>{groupName ?? "Current workspace"}</Text>
+              <Text>{loading && !groupName ? "Loading tabs..." : (error ?? headerSubtitle)}</Text>
+            </VStack>
+            <Button
+              systemImage="plus.rectangle.on.rectangle"
+              onPress={!creating && !activeSessionOptimistic ? handleCreateAgentTab : undefined}
             >
-              <Button
-                label={creating ? "Creating agent tab..." : "New agent tab"}
-                systemImage="plus.rectangle.on.rectangle"
-                onPress={!creating && !activeSessionOptimistic ? handleCreateAgentTab : undefined}
-              />
-            </Section>
+              {creating ? "Creating agent tab..." : "New agent tab"}
+            </Button>
+          </Section>
 
-            {sessionIds.length > 0 ? (
-              <Section title="Terminals">
-                {sessionIds.map((sessionId) => (
-                  <NativeTerminalRow
-                    key={`terminal-${sessionId}`}
-                    sessionId={sessionId}
-                    active={sessionId === activeSessionId && activePane === "terminal"}
-                    onPress={() => navigateToSession(groupId, sessionId, "terminal")}
-                  />
-                ))}
-              </Section>
-            ) : null}
-
-            <Section title="Agent tabs">
-              {sessionIds.length === 0 ? (
-                <Text>No tabs yet</Text>
-              ) : (
-                sessionIds.map((sessionId) => (
-                  <NativeSessionRow
-                    key={sessionId}
-                    sessionId={sessionId}
-                    active={sessionId === activeSessionId && activePane === "session"}
-                    onPress={() => navigateToSession(groupId, sessionId)}
-                  />
-                ))
-              )}
+          {sessionIds.length > 0 ? (
+            <Section title="Terminals">
+              {sessionIds.map((sessionId) => (
+                <NativeTerminalRow
+                  key={`terminal-${sessionId}`}
+                  sessionId={sessionId}
+                  active={sessionId === activeSessionId && activePane === "terminal"}
+                  onPress={() => navigateToSession(groupId, sessionId, "terminal")}
+                />
+              ))}
             </Section>
-          </List>
-        </Group>
+          ) : null}
+
+          <Section title="Agent tabs">
+            {sessionIds.length === 0 ? (
+              <Text>No tabs yet</Text>
+            ) : (
+              sessionIds.map((sessionId) => (
+                <NativeSessionRow
+                  key={sessionId}
+                  sessionId={sessionId}
+                  active={sessionId === activeSessionId && activePane === "session"}
+                  onPress={() => navigateToSession(groupId, sessionId)}
+                />
+              ))
+            )}
+          </Section>
+        </List>
       </BottomSheet>
     </Host>
   );
@@ -137,11 +128,9 @@ function NativeTerminalRow({
 }) {
   const name = useEntityField("sessions", sessionId, "name") as string | null | undefined;
   return (
-    <Button
-      label={`${active ? "✓ " : ""}${name ?? "Session"}${active ? " · Current terminal" : ""}`}
-      systemImage="chevron.left.forwardslash.chevron.right"
-      onPress={onPress}
-    />
+    <Button systemImage="chevron.left.forwardslash.chevron.right" onPress={onPress}>
+      {`${active ? "✓ " : ""}${name ?? "Session"}${active ? " · Current terminal" : ""}`}
+    </Button>
   );
 }
 
@@ -164,15 +153,13 @@ function NativeSessionRow({
     | null
     | undefined;
   return (
-    <Button
-      label={`${active ? "✓ " : ""}${name ?? "Session"} · ${sessionSubtitle(
+    <Button systemImage="rectangle.on.rectangle" onPress={onPress}>
+      {`${active ? "✓ " : ""}${name ?? "Session"} · ${sessionSubtitle(
         active,
         sessionStatus,
         agentStatus,
       )}`}
-      systemImage="rectangle.on.rectangle"
-      onPress={onPress}
-    />
+    </Button>
   );
 }
 
