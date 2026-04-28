@@ -110,6 +110,7 @@ export function BridgeAccessNotice({
   const ownerName = access?.ownerUser?.name?.trim() || "the bridge owner";
   const runtimeLabel = access?.label?.trim() || "this bridge";
   const requiresTerminal = requiredCapability === "terminal";
+  const terminalRequested = requiresTerminal || wantsTerminal;
   const pendingCoversRequiredCapability = pendingRequest
     ? requiresTerminal
       ? (pendingRequest.requestedCapabilities?.includes("terminal") ?? false)
@@ -150,8 +151,9 @@ export function BridgeAccessNotice({
     if (!access.runtimeInstanceId || submitting) return;
     setSubmitting(true);
     try {
-      const requestedCapabilities: BridgeAccessCapability[] =
-        requiresTerminal || wantsTerminal ? ["session", "terminal"] : ["session"];
+      const requestedCapabilities: BridgeAccessCapability[] = terminalRequested
+        ? ["session", "terminal"]
+        : ["session"];
       const result = await getClient()
         .mutation(REQUEST_BRIDGE_ACCESS_MUTATION, {
           runtimeInstanceId: access.runtimeInstanceId,
@@ -306,13 +308,13 @@ export function BridgeAccessNotice({
                 </Text>
               </View>
               <Switch
-                value={wantsTerminal}
+                value={terminalRequested}
                 onValueChange={setWantsTerminal}
                 trackColor={{
                   false: theme.colors.border,
                   true: alpha(theme.colors.accent, 0.5),
                 }}
-                thumbColor={wantsTerminal ? theme.colors.accent : theme.colors.mutedForeground}
+                thumbColor={terminalRequested ? theme.colors.accent : theme.colors.mutedForeground}
                 disabled={requiresTerminal}
               />
             </View>
