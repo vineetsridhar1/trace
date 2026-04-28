@@ -32,9 +32,11 @@ import { runtimeAccessService } from "./services/runtime-access.js";
 import { isLocalMode } from "./lib/mode.js";
 import {
   getAllowedCorsOrigins,
+  hasSessionCookie,
   isAllowedBrowserOrigin,
   isCorsOriginAllowed,
   readHeaderValue,
+  shouldRejectCredentialedBrowserUpgrade,
 } from "./lib/cors.js";
 import { buildAppleAppSiteAssociation } from "./lib/apple-app-site-association.js";
 
@@ -43,8 +45,7 @@ const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf
 const SAFE_HTTP_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 function requestHasSessionCookie(req: Pick<express.Request, "headers">): boolean {
-  const cookie = readHeaderValue(req.headers, "cookie");
-  return /(?:^|;\s*)trace_token=/.test(cookie ?? "");
+  return hasSessionCookie(req.headers);
 }
 
 function requestHasBearerToken(req: Pick<express.Request, "headers">): boolean {
@@ -201,11 +202,9 @@ async function main() {
       socket.write(`HTTP/1.1 ${statusCode} ${message}\r\n\r\n`);
       socket.destroy();
     };
-    const hasBrowserOrigin = Boolean(readHeaderValue(req.headers, "origin"));
     if (
       (pathname === "/ws" || pathname === "/terminal") &&
-      hasBrowserOrigin &&
-      !isAllowedBrowserOrigin(allowedCorsOrigins, req.headers)
+      shouldRejectCredentialedBrowserUpgrade(allowedCorsOrigins, req.headers)
     ) {
       rejectUpgrade(403, "Forbidden");
       return;
