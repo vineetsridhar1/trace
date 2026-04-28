@@ -33,7 +33,7 @@ import {
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
-import { getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
+import { getBridgeLabel, getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
 import {
   commitLinkedCheckoutChanges,
   getLinkedCheckoutStatus,
@@ -399,6 +399,20 @@ export class BridgeClient implements IBridgeClient {
     this.connect();
   }
 
+  getInfo() {
+    return {
+      instanceId: this.instanceId,
+      label: this.getLabel(),
+      status: this.status,
+    };
+  }
+
+  updateLabel() {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.sendRuntimeHello();
+    }
+  }
+
   private cancelPendingReconnect() {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -497,21 +511,26 @@ export class BridgeClient implements IBridgeClient {
     // Announce identity — the server restores session bindings from the DB
     // using our stable instanceId, so we don't need to report session lists.
     const config = readConfig();
+    const label = this.getLabel();
     runtimeDebug("desktop bridge sending runtime_hello", {
       instanceId: this.instanceId,
-      label: os.hostname(),
+      label,
       supportedTools: ["claude_code", "codex", "custom"],
       registeredRepoIds: Object.keys(config.repos),
     });
     this.send({
       type: "runtime_hello",
       instanceId: this.instanceId,
-      label: os.hostname(),
+      label,
       hostingMode: "local",
       supportedTools: ["claude_code", "codex", "custom"],
       registeredRepoIds: Object.keys(config.repos),
       activeTerminals: this.terminalManager.getActiveTerminals(),
     });
+  }
+
+  private getLabel(): string {
+    return getBridgeLabel() ?? os.hostname();
   }
 
   private startHeartbeat() {

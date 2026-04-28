@@ -12,7 +12,13 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { BridgeClient, type BridgeConnectionStatus } from "./bridge.js";
-import { getRepoConfig, getRepoPath, saveRepoPath, setRepoGitHooksEnabled } from "./config.js";
+import {
+  getRepoConfig,
+  getRepoPath,
+  saveRepoPath,
+  setBridgeLabel,
+  setRepoGitHooksEnabled,
+} from "./config.js";
 import { disableRepoHooks, getRepoHookStatus, installOrRepairRepoHooks } from "./repo-hooks.js";
 import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
 
@@ -194,6 +200,12 @@ ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: string) => {
 });
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());
+ipcMain.handle("get-bridge-info", () => bridge.getInfo());
+ipcMain.handle("set-bridge-label", async (_event, label: string) => {
+  await setBridgeLabel(label);
+  bridge.updateLabel();
+  return bridge.getInfo();
+});
 ipcMain.handle("set-bridge-auth-context", (_event, organizationId: string | null) => {
   bridge.setAuthContext(organizationId);
   return true;

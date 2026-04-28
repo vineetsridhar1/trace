@@ -24,6 +24,7 @@ export interface LinkedCheckoutConfig {
 
 export interface RepoPathConfig {
   repos: Record<string, LocalRepoConfig>; // repoId → local repo settings
+  bridgeLabel: string | null;
 }
 
 function normalizeRepoConfigEntry(entry: unknown): LocalRepoConfig | null {
@@ -104,15 +105,19 @@ export function getConfigPath(): string {
 export function readConfig(): RepoPathConfig {
   try {
     const raw = fs.readFileSync(getConfigPath(), "utf-8");
-    const parsed = JSON.parse(raw) as { repos?: Record<string, RawLocalRepoConfig> };
+    const parsed = JSON.parse(raw) as {
+      repos?: Record<string, RawLocalRepoConfig>;
+      bridgeLabel?: unknown;
+    };
     const repos = Object.fromEntries(
       Object.entries(parsed.repos ?? {})
         .map(([repoId, entry]) => [repoId, normalizeRepoConfigEntry(entry)])
         .filter((entry): entry is [string, LocalRepoConfig] => entry[1] != null),
     );
-    return { repos };
+    const bridgeLabel = typeof parsed.bridgeLabel === "string" ? parsed.bridgeLabel.trim() : "";
+    return { repos, bridgeLabel: bridgeLabel || null };
   } catch {
-    return { repos: {} };
+    return { repos: {}, bridgeLabel: null };
   }
 }
 
@@ -141,6 +146,25 @@ function mutate<T>(fn: (config: RepoPathConfig) => T): Promise<T> {
 
 export function getRepoConfig(repoId: string): LocalRepoConfig | null {
   return readConfig().repos[repoId] ?? null;
+}
+
+export function getBridgeLabel(): string | null {
+  return readConfig().bridgeLabel;
+}
+
+export function setBridgeLabel(label: string): Promise<string> {
+  const trimmed = label.trim();
+  if (!trimmed) {
+    throw new Error("Bridge name cannot be empty");
+  }
+  if (trimmed.length > 80) {
+    throw new Error("Bridge name must be 80 characters or fewer");
+  }
+
+  return mutate((config) => {
+    config.bridgeLabel = trimmed;
+    return trimmed;
+  });
 }
 
 export function getRepoPath(repoId: string): string | null {
