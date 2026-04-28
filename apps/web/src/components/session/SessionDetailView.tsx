@@ -284,6 +284,7 @@ export function SessionDetailView({
                 id: string;
                 sessionId: string;
                 text: string;
+                imageKeys: string[];
                 interactionMode?: string;
                 position: number;
                 createdAt: string;
