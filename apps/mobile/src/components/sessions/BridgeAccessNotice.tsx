@@ -218,23 +218,23 @@ export function BridgeAccessNotice({
                 .
               </Text>
             ) : null}
+            <View style={styles.noticeAction}>
+              <Button
+                title={
+                  pendingCoversRequiredCapability
+                    ? "Request pending"
+                    : requiresTerminal
+                      ? "Request terminal"
+                      : "Request access"
+                }
+                variant="secondary"
+                size="sm"
+                disabled={submitting || pendingCoversRequiredCapability}
+                loading={submitting}
+                onPress={() => setOpen(true)}
+              />
+            </View>
           </View>
-        </View>
-        <View style={styles.noticeAction}>
-          <Button
-            title={
-              pendingCoversRequiredCapability
-                ? "Request pending"
-                : requiresTerminal
-                  ? "Request terminal"
-                  : "Request access"
-            }
-            variant="secondary"
-            size="sm"
-            disabled={submitting || pendingCoversRequiredCapability}
-            loading={submitting}
-            onPress={() => setOpen(true)}
-          />
         </View>
       </Glass>
 
@@ -360,6 +360,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
     alignItems: "flex-start",
+    width: "90%",
   },
   iconWrap: {
     width: 32,
@@ -377,6 +378,7 @@ const styles = StyleSheet.create({
   },
   noticeAction: {
     alignItems: "flex-start",
+    marginTop: 12,
   },
   sheetContent: {
     gap: 20,
