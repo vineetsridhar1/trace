@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   describeBridgeAccessScope,
   formatCapabilities,
+  getBridgeAccessApprovalDurationFromRequest,
   getBridgeAccessApprovalExpiresAt,
   getBridgeAccessRequestExpiresAt,
   hasBridgeAccessCapability,
@@ -25,6 +26,18 @@ describe("bridge access date helpers", () => {
 
     expect(getBridgeAccessApprovalExpiresAt("3h")).toBe("2026-04-25T15:00:00.000Z");
     expect(getBridgeAccessApprovalExpiresAt("never")).toBeUndefined();
+  });
+
+  it("infers the approval duration requested by the user", () => {
+    expect(
+      getBridgeAccessApprovalDurationFromRequest(
+        "2026-05-02T12:00:00.000Z",
+        "2026-04-25T12:00:00.000Z",
+      ),
+    ).toBe("7d");
+    expect(getBridgeAccessApprovalDurationFromRequest(null, "2026-04-25T12:00:00.000Z")).toBe(
+      "never",
+    );
   });
 });
 

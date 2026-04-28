@@ -6,6 +6,7 @@ import type { ConnectionAccessRequest } from "@/hooks/useConnections";
 import {
   describeBridgeAccessScope,
   formatCapabilities,
+  getBridgeAccessApprovalDurationFromRequest,
   getBridgeAccessApprovalExpiresAt,
   normalizeBridgeAccessApprovalScope,
   type BridgeAccessApprovalDuration,
@@ -52,12 +53,16 @@ export function ConnectionsBridgeAccessRequestContent({
   const [scopeType, setScopeType] = useState<"all_sessions" | "session_group">(
     getInitialScopeType(request),
   );
-  const [duration, setDuration] = useState<BridgeAccessApprovalDuration>("1d");
+  const [duration, setDuration] = useState<BridgeAccessApprovalDuration>(
+    getBridgeAccessApprovalDurationFromRequest(request.requestedExpiresAt, request.createdAt),
+  );
   const [grantTerminal, setGrantTerminal] = useState(false);
 
   useEffect(() => {
     setScopeType(getInitialScopeType(request));
-    setDuration("1d");
+    setDuration(
+      getBridgeAccessApprovalDurationFromRequest(request.requestedExpiresAt, request.createdAt),
+    );
     setGrantTerminal(request.requestedCapabilities?.includes("terminal") ?? false);
   }, [request]);
 
