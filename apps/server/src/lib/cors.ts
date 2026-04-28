@@ -68,3 +68,19 @@ export function isAllowedBrowserOrigin(
   const origin = getRequestOrigin(headers);
   return Boolean(origin && allowedOrigins.has(origin));
 }
+
+export function hasSessionCookie(headers: IncomingHttpHeaders): boolean {
+  const cookie = readHeaderValue(headers, "cookie");
+  return /(?:^|;\s*)trace_token=/.test(cookie ?? "");
+}
+
+export function shouldRejectCredentialedBrowserUpgrade(
+  allowedOrigins: Set<string>,
+  headers: IncomingHttpHeaders,
+): boolean {
+  return (
+    Boolean(readHeaderValue(headers, "origin")) &&
+    hasSessionCookie(headers) &&
+    !isAllowedBrowserOrigin(allowedOrigins, headers)
+  );
+}

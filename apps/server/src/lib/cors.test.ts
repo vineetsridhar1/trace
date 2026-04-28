@@ -4,6 +4,7 @@ import {
   getRequestOrigin,
   isAllowedBrowserOrigin,
   isCorsOriginAllowed,
+  shouldRejectCredentialedBrowserUpgrade,
 } from "./cors.js";
 
 describe("cors helpers", () => {
@@ -60,5 +61,27 @@ describe("cors helpers", () => {
     );
     expect(isAllowedBrowserOrigin(allowed, { origin: "https://evil.trace.test" })).toBe(false);
     expect(isAllowedBrowserOrigin(allowed, {})).toBe(false);
+  });
+
+  it("rejects browser websocket upgrades only when session cookies are exposed cross-origin", () => {
+    const allowed = new Set(["https://app.trace.test"]);
+
+    expect(
+      shouldRejectCredentialedBrowserUpgrade(allowed, {
+        origin: "https://evil.trace.test",
+        cookie: "trace_token=session-token",
+      }),
+    ).toBe(true);
+    expect(
+      shouldRejectCredentialedBrowserUpgrade(allowed, {
+        origin: "https://app.trace.test",
+        cookie: "trace_token=session-token",
+      }),
+    ).toBe(false);
+    expect(
+      shouldRejectCredentialedBrowserUpgrade(allowed, {
+        origin: "http://localhost:8081",
+      }),
+    ).toBe(false);
   });
 });
