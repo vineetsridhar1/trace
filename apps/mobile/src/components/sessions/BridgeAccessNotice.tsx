@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { REQUEST_BRIDGE_ACCESS_MUTATION } from "@trace/client-core";
@@ -138,6 +138,10 @@ export function BridgeAccessNotice({
     ? isBridgeTerminalAllowed(access)
     : isBridgeInteractionAllowed(access);
 
+  useEffect(() => {
+    if (requiresTerminal) setWantsTerminal(true);
+  }, [requiresTerminal]);
+
   if (!access || allowed) {
     return null;
   }
@@ -146,9 +150,8 @@ export function BridgeAccessNotice({
     if (!access.runtimeInstanceId || submitting) return;
     setSubmitting(true);
     try {
-      const requestedCapabilities: BridgeAccessCapability[] = wantsTerminal
-        ? ["session", "terminal"]
-        : ["session"];
+      const requestedCapabilities: BridgeAccessCapability[] =
+        requiresTerminal || wantsTerminal ? ["session", "terminal"] : ["session"];
       const result = await getClient()
         .mutation(REQUEST_BRIDGE_ACCESS_MUTATION, {
           runtimeInstanceId: access.runtimeInstanceId,
@@ -297,7 +300,9 @@ export function BridgeAccessNotice({
                   Terminal
                 </Text>
                 <Text variant="caption1" color="mutedForeground">
-                  Optional. The owner can still deny it.
+                  {requiresTerminal
+                    ? "Required for terminal access"
+                    : "Optional. The owner can still deny it."}
                 </Text>
               </View>
               <Switch
