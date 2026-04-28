@@ -31,6 +31,8 @@ interface RuntimeRow {
   runtime: SessionRuntimeInstance;
   requestPending: boolean;
   canRequestAccess: boolean;
+  accessAllowed: boolean;
+  lacksRepo: boolean;
 }
 
 function RuntimeRequestPill({
@@ -101,6 +103,7 @@ export function SessionRuntimePickerSheetContent({
 
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const [requestingRuntimeId, setRequestingRuntimeId] = useState<string | null>(null);
+  const [showOtherRuntimes, setShowOtherRuntimes] = useState(false);
 
   const fetchRuntimes = useCallback(async (): Promise<SessionRuntimeInstance[]> => {
     if (!canChangeBridge) {
@@ -155,11 +158,23 @@ export function SessionRuntimePickerSheetContent({
         runtime,
         requestPending,
         canRequestAccess: !accessAllowed && !lacksRepo,
+        accessAllowed,
+        lacksRepo,
       });
     }
 
     return nextRows;
   }, [canChangeBridge, repo?.id, runtimeInstanceId, runtimes]);
+
+  const accessibleRows = useMemo(() => rows.filter((row) => row.accessAllowed), [rows]);
+  const requestableRows = useMemo(() => rows.filter((row) => row.canRequestAccess), [rows]);
+  const hasCompatibleAccessibleRuntime = accessibleRows.some((row) => !row.lacksRepo);
+  const shouldShowRequestableRows = !hasCompatibleAccessibleRuntime || showOtherRuntimes;
+  const visibleRows = shouldShowRequestableRows
+    ? [...accessibleRows, ...requestableRows]
+    : accessibleRows;
+  const showOtherRuntimesToggle = hasCompatibleAccessibleRuntime && requestableRows.length > 0;
+  const cardRowCount = visibleRows.length + (showOtherRuntimesToggle ? 1 : 0);
 
   const handleRequestAccess = useCallback(
     async (runtime: SessionRuntimeInstance) => {
@@ -269,7 +284,7 @@ export function SessionRuntimePickerSheetContent({
           },
         ]}
       >
-        {rows.map((row, index) => (
+        {visibleRows.map((row, index) => (
           <ListRow
             key={row.key}
             title={row.title}
@@ -291,13 +306,36 @@ export function SessionRuntimePickerSheetContent({
             }
             onPress={!row.disabled ? () => void handleSelect(row.value) : undefined}
             haptic="selection"
-            separator={index < rows.length - 1}
-            style={row.disabled && !row.selected ? styles.disabledRow : undefined}
+            separator={index < cardRowCount - 1}
+            style={
+              row.disabled && !row.selected && !row.canRequestAccess
+                ? styles.disabledRow
+                : undefined
+            }
           />
         ))}
+        {showOtherRuntimesToggle ? (
+          <ListRow
+            title={showOtherRuntimes ? "Hide other runtimes" : "See other runtimes"}
+            subtitle={`${requestableRows.length} available to request`}
+            leading={
+              <SymbolView name="person.2" size={16} tintColor={theme.colors.mutedForeground} />
+            }
+            trailing={
+              <SymbolView
+                name={showOtherRuntimes ? "chevron.up" : "chevron.down"}
+                size={14}
+                tintColor={theme.colors.dimForeground}
+              />
+            }
+            onPress={() => setShowOtherRuntimes((current) => !current)}
+            haptic="selection"
+            separator={false}
+          />
+        ) : null}
       </View>
 
-      {rows.length === 0 ? (
+      {visibleRows.length === 0 ? (
         <Text variant="footnote" color="mutedForeground">
           No compatible runtimes are available for this session.
         </Text>
