@@ -44,6 +44,7 @@ function publishBridgeStatus(status: BridgeConnectionStatus) {
 
 function configureApplicationIdentity() {
   app.setName(appName);
+  app.setAboutPanelOptions({ applicationName: appName });
 
   if (process.platform !== "darwin") return;
 

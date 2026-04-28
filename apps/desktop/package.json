@@ -35,7 +35,13 @@
     "forge": {
       "packagerConfig": {
         "asar": true,
-        "icon": "assets/icon"
+        "icon": "assets/icon",
+        "appBundleId": "app.trace.desktop",
+        "executableName": "Trace",
+        "extendInfo": {
+          "CFBundleDisplayName": "Trace",
+          "CFBundleName": "Trace"
+        }
       },
       "makers": [
         {
