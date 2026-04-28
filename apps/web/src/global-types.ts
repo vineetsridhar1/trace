@@ -37,6 +37,12 @@ declare global {
     } | null;
   };
 
+  type DesktopBridgeInfo = {
+    instanceId: string;
+    label: string;
+    status: DesktopBridgeConnectionStatus;
+  };
+
   type DesktopLinkedCheckoutStatus = {
     repoId: string;
     repoPath: string | null;
@@ -110,6 +116,8 @@ declare global {
     getRepoGitHookStatus: (repoId: string) => Promise<DesktopRepoGitHookStatus | null>;
     repairRepoGitHooks: (repoId: string) => Promise<DesktopRepoGitHookStatus | null>;
     getBridgeStatus: () => Promise<DesktopBridgeConnectionStatus>;
+    getBridgeInfo: () => Promise<DesktopBridgeInfo>;
+    setBridgeLabel: (label: string) => Promise<DesktopBridgeInfo>;
     setBridgeAuthContext: (organizationId: string | null) => Promise<boolean>;
     onBridgeStatus: (callback: (status: DesktopBridgeConnectionStatus) => void) => () => void;
   }
