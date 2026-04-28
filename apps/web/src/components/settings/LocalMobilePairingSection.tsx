@@ -206,8 +206,8 @@ export function LocalMobilePairingSection() {
         </Button>
       </div>
 
-      <div className="mt-4 grid gap-4">
-        <div className="space-y-4">
+      <div className="mt-4 grid min-w-0 gap-4">
+        <div className="min-w-0 space-y-4">
           <div className="space-y-2">
             <label
               htmlFor="local-mobile-public-url"
@@ -215,12 +215,13 @@ export function LocalMobilePairingSection() {
             >
               Public server URL
             </label>
-            <div className="flex flex-col gap-3 md:flex-row">
+            <div className="flex min-w-0 flex-col gap-3 md:flex-row">
               <Input
                 id="local-mobile-public-url"
                 value={publicUrl}
                 onChange={(event) => setPublicUrl(event.target.value)}
                 placeholder="https://your-trace.ngrok-free.app"
+                className="min-w-0 flex-1"
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
@@ -240,7 +241,7 @@ export function LocalMobilePairingSection() {
           </div>
 
           {qrPayload ? (
-            <div className="rounded-lg border border-border bg-background p-3">
+            <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-background p-3">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="text-sm font-medium text-foreground">Pairing payload</div>
@@ -252,13 +253,13 @@ export function LocalMobilePairingSection() {
                   Copy JSON
                 </Button>
               </div>
-              <pre className="max-h-40 overflow-auto rounded-md bg-surface px-3 py-2 text-xs text-muted-foreground">
+              <pre className="max-h-40 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface px-3 py-2 text-xs text-muted-foreground">
                 {qrPayload}
               </pre>
             </div>
           ) : null}
 
-          <div className="rounded-lg border border-border bg-background p-3">
+          <div className="min-w-0 rounded-lg border border-border bg-background p-3">
             <div className="mb-3 flex items-center gap-2">
               <Smartphone size={15} className="text-muted-foreground" />
               <div className="text-sm font-medium text-foreground">Paired devices</div>
@@ -305,12 +306,12 @@ export function LocalMobilePairingSection() {
           </div>
         </div>
 
-        <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-border bg-background p-4">
+        <div className="flex min-h-64 min-w-0 items-center justify-center overflow-hidden rounded-xl border border-dashed border-border bg-background p-4">
           {qrDataUrl ? (
             <img
               src={qrDataUrl}
               alt="Trace local mobile pairing QR code"
-              className="h-auto w-full max-w-72 rounded-lg bg-white p-3"
+              className="box-border h-auto w-full max-w-[min(18rem,100%)] rounded-lg bg-white p-3"
             />
           ) : (
             <div className="max-w-56 text-center text-sm text-muted-foreground">
