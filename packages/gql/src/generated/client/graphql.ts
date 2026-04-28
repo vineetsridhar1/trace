@@ -912,6 +912,7 @@ export type MutationMuteScopeArgs = {
 };
 
 export type MutationQueueSessionMessageArgs = {
+  imageKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   sessionId: Scalars["ID"]["input"];
   text: Scalars["String"]["input"];
@@ -1483,6 +1484,7 @@ export type QueuedMessage = {
   __typename?: "QueuedMessage";
   createdAt: Scalars["DateTime"]["output"];
   id: Scalars["ID"]["output"];
+  imageKeys: Array<Scalars["String"]["output"]>;
   interactionMode?: Maybe<Scalars["String"]["output"]>;
   position: Scalars["Int"]["output"];
   sessionId: Scalars["ID"]["output"];
@@ -2354,6 +2356,7 @@ export type SessionDetailQuery = {
       id: string;
       sessionId: string;
       text: string;
+      imageKeys: Array<string>;
       interactionMode?: string | null;
       position: number;
       createdAt: string;
@@ -4577,6 +4580,7 @@ export const SessionDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionId" } },
                       { kind: "Field", name: { kind: "Name", value: "text" } },
+                      { kind: "Field", name: { kind: "Name", value: "imageKeys" } },
                       { kind: "Field", name: { kind: "Name", value: "interactionMode" } },
                       { kind: "Field", name: { kind: "Name", value: "position" } },
                       { kind: "Field", name: { kind: "Name", value: "createdAt" } },

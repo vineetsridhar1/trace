@@ -2853,6 +2853,7 @@ export class SessionService {
   async queueMessage({
     sessionId,
     text,
+    imageKeys,
     actorId,
     interactionMode,
     organizationId,
@@ -2860,11 +2861,20 @@ export class SessionService {
   }: {
     sessionId: string;
     text: string;
+    imageKeys?: string[];
     actorId: string;
     interactionMode?: string;
     organizationId: string;
     clientSource?: string | null;
   }) {
+    if (imageKeys?.length) {
+      for (const key of imageKeys) {
+        if (typeof key !== "string" || !key.startsWith("uploads/") || key.includes("..")) {
+          throw new Error("Invalid image key");
+        }
+      }
+    }
+
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
       select: { worktreeDeleted: true, organizationId: true },
@@ -2874,6 +2884,14 @@ export class SessionService {
     }
     if (session.worktreeDeleted) {
       throw new Error("Cannot queue messages: session worktree has been deleted");
+    }
+    if (imageKeys?.length) {
+      for (const key of imageKeys) {
+        const orgSegment = key.split("/")[1];
+        if (orgSegment !== session.organizationId) {
+          throw new Error("Image key does not belong to this organization");
+        }
+      }
     }
 
     const orgId = session.organizationId;
@@ -2889,6 +2907,7 @@ export class SessionService {
         data: {
           sessionId,
           text,
+          imageKeys: imageKeys ?? [],
           interactionMode: interactionMode ?? null,
           position: nextPosition,
           createdById: actorId,
@@ -2909,6 +2928,7 @@ export class SessionService {
           id: queuedMessage.id,
           sessionId: queuedMessage.sessionId,
           text: queuedMessage.text,
+          imageKeys: queuedMessage.imageKeys,
           interactionMode: queuedMessage.interactionMode,
           position: queuedMessage.position,
           createdAt: queuedMessage.createdAt.toISOString(),
@@ -2999,6 +3019,7 @@ export class SessionService {
       await this.sendMessage({
         sessionId,
         text: popped.text,
+        imageKeys: popped.imageKeys,
         actorType: "user",
         actorId: popped.createdById,
         interactionMode: popped.interactionMode ?? undefined,
@@ -3011,6 +3032,7 @@ export class SessionService {
           id: popped.id,
           sessionId: popped.sessionId,
           text: popped.text,
+          imageKeys: popped.imageKeys,
           interactionMode: popped.interactionMode,
           position: popped.position,
           createdById: popped.createdById,

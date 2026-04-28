@@ -913,6 +913,7 @@ export type MutationMuteScopeArgs = {
 };
 
 export type MutationQueueSessionMessageArgs = {
+  imageKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   sessionId: Scalars["ID"]["input"];
   text: Scalars["String"]["input"];
@@ -1484,6 +1485,7 @@ export type QueuedMessage = {
   __typename?: "QueuedMessage";
   createdAt: Scalars["DateTime"]["output"];
   id: Scalars["ID"]["output"];
+  imageKeys: Array<Scalars["String"]["output"]>;
   interactionMode?: Maybe<Scalars["String"]["output"]>;
   position: Scalars["Int"]["output"];
   sessionId: Scalars["ID"]["output"];
@@ -3583,6 +3585,7 @@ export type QueuedMessageResolvers<
 > = ResolversObject<{
   createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  imageKeys?: Resolver<Array<ResolversTypes["String"]>, ParentType, ContextType>;
   interactionMode?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   position?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
   sessionId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;

@@ -647,6 +647,7 @@ model QueuedMessage {
   sessionId       String
   session         Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   text            String
+  imageKeys       String[] @default([])
   interactionMode String?
   position        Int
   createdById     String

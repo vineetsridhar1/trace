@@ -38,11 +38,22 @@ export const SEND_SESSION_MESSAGE_MUTATION = gql`
 `;
 
 export const QUEUE_SESSION_MESSAGE_MUTATION = gql`
-  mutation QueueSessionMessage($sessionId: ID!, $text: String!, $interactionMode: String) {
-    queueSessionMessage(sessionId: $sessionId, text: $text, interactionMode: $interactionMode) {
+  mutation QueueSessionMessage(
+    $sessionId: ID!
+    $text: String!
+    $imageKeys: [String!]
+    $interactionMode: String
+  ) {
+    queueSessionMessage(
+      sessionId: $sessionId
+      text: $text
+      imageKeys: $imageKeys
+      interactionMode: $interactionMode
+    ) {
       id
       sessionId
       text
+      imageKeys
       interactionMode
       position
       createdAt

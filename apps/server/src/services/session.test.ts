@@ -1876,6 +1876,131 @@ describe("SessionService", () => {
     });
   });
 
+  describe("queueMessage", () => {
+    it("persists image keys and includes them in the queued message event payload", async () => {
+      const queuedMessage = {
+        id: "queued-1",
+        sessionId: "session-1",
+        text: "inspect this",
+        imageKeys: ["uploads/org-1/image-a.png", "uploads/org-1/image-b.png"],
+        interactionMode: "ask",
+        position: 0,
+        createdById: "user-1",
+        organizationId: "org-1",
+        createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      };
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
+        makeSession({ organizationId: "org-1", worktreeDeleted: false }),
+      );
+      prismaMock.queuedMessage.aggregate.mockResolvedValueOnce({ _max: { position: null } });
+      prismaMock.queuedMessage.create.mockResolvedValueOnce(queuedMessage);
+
+      await service.queueMessage({
+        sessionId: "session-1",
+        text: "inspect this",
+        imageKeys: queuedMessage.imageKeys,
+        actorId: "user-1",
+        interactionMode: "ask",
+        organizationId: "org-1",
+        clientSource: "web",
+      });
+
+      expect(prismaMock.queuedMessage.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          sessionId: "session-1",
+          text: "inspect this",
+          imageKeys: queuedMessage.imageKeys,
+        }),
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "queued_message_added",
+          payload: expect.objectContaining({
+            queuedMessage: expect.objectContaining({
+              id: "queued-1",
+              imageKeys: queuedMessage.imageKeys,
+            }),
+          }),
+        }),
+      );
+    });
+
+    it("sends queued image keys as presigned image URLs when draining", async () => {
+      const imageKeys = ["uploads/org-1/image-a.png", "uploads/org-1/image-b.png"];
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        workdir: "/tmp/worktree",
+        toolSessionId: "tool-sess-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        organizationId: "org-1",
+      });
+      prismaMock.queuedMessage.findFirst.mockResolvedValueOnce({
+        id: "queued-1",
+        sessionId: "session-1",
+        text: "inspect this",
+        imageKeys,
+        interactionMode: "ask",
+        position: 0,
+        createdById: "user-1",
+        organizationId: "org-1",
+        createdAt: new Date("2024-01-01T00:00:00.000Z"),
+      });
+      prismaMock.queuedMessage.delete.mockResolvedValueOnce({ id: "queued-1" });
+      prismaMock.event.findMany.mockResolvedValueOnce([
+        {
+          payload: {
+            clientSource: "web",
+            queuedMessage: { id: "queued-1" },
+          },
+        },
+      ]);
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(session);
+      prismaMock.session.update.mockResolvedValueOnce(session);
+      sessionRouterMock.send.mockReturnValue("delivered");
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "runtime-a",
+        label: "Laptop A",
+      });
+
+      const drained = await (
+        service as unknown as {
+          drainOneQueuedMessage(sessionId: string): Promise<boolean>;
+        }
+      ).drainOneQueuedMessage("session-1");
+
+      expect(drained).toBe(true);
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          type: "send",
+          imageUrls: [
+            "https://example.test/uploads/org-1/image-a.png",
+            "https://example.test/uploads/org-1/image-b.png",
+          ],
+        }),
+        { expectedHomeRuntimeId: "runtime-a" },
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "queued_messages_drained",
+          payload: { sessionId: "session-1", queuedMessageId: "queued-1" },
+        }),
+      );
+    });
+  });
+
   describe("workspaceReady", () => {
     it("keeps a session in_progress while a queued command is waiting for delivery", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({

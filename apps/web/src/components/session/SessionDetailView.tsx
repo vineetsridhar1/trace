@@ -128,6 +128,7 @@ const SESSION_DETAIL_QUERY = gql`
         id
         sessionId
         text
+        imageKeys
         interactionMode
         position
         createdAt
@@ -283,6 +284,7 @@ export function SessionDetailView({
                 id: string;
                 sessionId: string;
                 text: string;
+                imageKeys: string[];
                 interactionMode?: string;
                 position: number;
                 createdAt: string;

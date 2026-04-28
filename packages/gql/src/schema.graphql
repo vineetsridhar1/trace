@@ -387,6 +387,7 @@ type QueuedMessage {
   id: ID!
   sessionId: ID!
   text: String!
+  imageKeys: [String!]!
   interactionMode: String
   position: Int!
   createdAt: DateTime!
@@ -1158,7 +1159,12 @@ type Mutation {
     interactionMode: String
     clientMutationId: String
   ): Event!
-  queueSessionMessage(sessionId: ID!, text: String!, interactionMode: String): QueuedMessage!
+  queueSessionMessage(
+    sessionId: ID!
+    text: String!
+    imageKeys: [String!]
+    interactionMode: String
+  ): QueuedMessage!
   removeQueuedMessage(id: ID!): Boolean!
   clearQueuedMessages(sessionId: ID!): Boolean!
   retrySessionConnection(sessionId: ID!): Session!
