@@ -122,9 +122,8 @@ export function BridgeAccessNotice({
         ? [
             {
               id: "session_group" as const,
-              title: pendingRequest?.sessionGroup?.name
-                ? `This workspace (${pendingRequest.sessionGroup.name})`
-                : "This workspace only",
+              title: "This workspace",
+              subtitle: pendingRequest?.sessionGroup?.name ?? "Current workspace only",
             },
             {
               id: "all_sessions" as const,
@@ -261,6 +260,7 @@ export function BridgeAccessNotice({
                 <SelectPill
                   key={option.id}
                   title={option.title}
+                  subtitle={"subtitle" in option ? option.subtitle : undefined}
                   selected={scopeType === option.id}
                   onPress={() => setScopeType(option.id)}
                 />
@@ -405,6 +405,8 @@ const styles = StyleSheet.create({
   },
   optionSubtitle: {
     marginTop: 2,
+    lineHeight: 18,
+    width: "100%",
   },
   capabilityCard: {
     borderWidth: StyleSheet.hairlineWidth,

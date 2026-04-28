@@ -71,5 +71,7 @@ const styles = StyleSheet.create({
   },
   optionSubtitle: {
     marginTop: 2,
+    lineHeight: 18,
+    width: "100%",
   },
 });
