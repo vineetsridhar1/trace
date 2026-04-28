@@ -26,7 +26,7 @@ Notifications.setNotificationHandler({
     const data = notification.request.content.data;
     const foregroundPresentation =
       data && typeof data.foregroundPresentation === "string" ? data.foregroundPresentation : null;
-    const shouldPresent = foregroundPresentation === "bridge_access_requested";
+    const shouldPresent = foregroundPresentation?.startsWith("bridge_access_") ?? false;
 
     return {
       shouldShowAlert: shouldPresent,
