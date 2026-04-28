@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import * as Notifications from "expo-notifications";
-import { type Href, useRouter } from "expo-router";
+import { type Href, usePathname, useRouter } from "expo-router";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import {
   consumePendingDeepLinkPath,
@@ -10,6 +10,7 @@ import {
 import {
   deepLinkFromNotificationData,
   routePathFromNotificationLink,
+  shouldNavigateToNotificationPath,
 } from "@/lib/notification-deeplink";
 
 function bridgeAccessRequestIdFromNotificationData(data: unknown): string | null {
@@ -24,6 +25,7 @@ async function clearLastNotificationResponse(): Promise<void> {
 
 export function useNotificationNavigation(): void {
   const router = useRouter();
+  const pathname = usePathname();
   const user = useAuthStore((s: AuthState) => s.user);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const loading = useAuthStore((s: AuthState) => s.loading);
@@ -35,6 +37,7 @@ export function useNotificationNavigation(): void {
         setPendingDeepLinkPath(path);
         return;
       }
+      if (!shouldNavigateToNotificationPath(pathname, path)) return;
       router.push(path as Href);
     };
 
@@ -75,12 +78,14 @@ export function useNotificationNavigation(): void {
       });
     });
     return () => sub.remove();
-  }, [activeOrgId, loading, router, user]);
+  }, [activeOrgId, loading, pathname, router, user]);
 
   useEffect(() => {
     if (loading || !user || !activeOrgId) return;
     const pendingPath = getPendingDeepLinkPath();
     if (!pendingPath) return;
-    router.push((consumePendingDeepLinkPath() ?? pendingPath) as Href);
-  }, [activeOrgId, loading, router, user]);
+    const path = consumePendingDeepLinkPath() ?? pendingPath;
+    if (!shouldNavigateToNotificationPath(pathname, path)) return;
+    router.push(path as Href);
+  }, [activeOrgId, loading, pathname, router, user]);
 }
