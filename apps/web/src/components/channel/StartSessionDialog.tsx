@@ -20,17 +20,21 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const channelRepoId = channelRepo?.id;
   const defaultTool = usePreferencesStore((s) => s.defaultTool ?? "claude_code");
   const [repoNotLinked, setRepoNotLinked] = useState(false);
+  const [checkingRepoLink, setCheckingRepoLink] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     if (!channelRepoId) {
       setRepoNotLinked(false);
+      setCheckingRepoLink(false);
       return () => {
         cancelled = true;
       };
     }
 
+    setRepoNotLinked(false);
+    setCheckingRepoLink(true);
     client
       .query<AvailableRuntimesQueryResult>(
         AVAILABLE_RUNTIMES_QUERY,
@@ -40,6 +44,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
       .toPromise()
       .then((result) => {
         if (cancelled) return;
+        setCheckingRepoLink(false);
         if (result.error) {
           setRepoNotLinked(false);
           return;
@@ -52,7 +57,10 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
         );
       })
       .catch(() => {
-        if (!cancelled) setRepoNotLinked(false);
+        if (!cancelled) {
+          setCheckingRepoLink(false);
+          setRepoNotLinked(false);
+        }
       });
 
     return () => {
@@ -60,21 +68,25 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
     };
   }, [channelRepoId, defaultTool]);
 
-  const handleClick = useCallback(() => {
-    if (repoNotLinked) return;
-    createQuickSession(channelId);
-  }, [channelId, repoNotLinked]);
+  const disabled = checkingRepoLink || repoNotLinked;
 
-  const tooltip = repoNotLinked
-    ? quickSessionUnavailableMessage("repo_not_linked")
-    : "New session (⌘N)";
+  const handleClick = useCallback(() => {
+    if (disabled) return;
+    createQuickSession(channelId);
+  }, [channelId, disabled]);
+
+  const tooltip = checkingRepoLink
+    ? "Checking repo link..."
+    : repoNotLinked
+      ? quickSessionUnavailableMessage("repo_not_linked")
+      : "New session (⌘N)";
 
   return (
     <Tooltip>
       <TooltipTrigger render={<span className="inline-flex" />}>
         <button
           onClick={handleClick}
-          disabled={repoNotLinked}
+          disabled={disabled}
           className={cn(
             "flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground",
             "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
