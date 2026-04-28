@@ -240,7 +240,7 @@ export function ConnectionsBridgesList({
           key={connection.bridge.id}
           connection={connection}
           pendingActionId={pendingActionId}
-          onReviewRequest={(request) => openRequestSheet(request, "configure")}
+          onReviewRequest={(request) => openRequestSheet(request, "quick")}
           onDeny={denyRequest}
           onManageGrant={setSelectedGrant}
           onRequestAccess={(connection) =>
