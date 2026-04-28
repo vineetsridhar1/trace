@@ -1,5 +1,5 @@
 import { loadNativeBottomSheet } from "@/components/design-system/loadNativeBottomSheet.ios";
-import { isIOS26OrLater } from "@/lib/ios-version";
+import { getIOSMajorVersion, isIOS26OrLater } from "@/lib/ios-version";
 import { SessionTabSwitcherContent } from "./SessionTabSwitcherContent";
 import {
   SessionTabSwitcherSheetBase,
@@ -8,6 +8,17 @@ import {
 
 export type { SessionTabSwitcherSheetProps };
 
+let loggedTabSwitcherSheetFallback = false;
+
+function logTabSwitcherSheetFallback(reason: string) {
+  if (loggedTabSwitcherSheetFallback) return;
+  loggedTabSwitcherSheetFallback = true;
+  console.info("[SessionTabSwitcherSheet] using custom fallback", {
+    reason,
+    iosMajorVersion: getIOSMajorVersion(),
+  });
+}
+
 export function SessionTabSwitcherSheet({
   open,
   groupId,
@@ -15,9 +26,11 @@ export function SessionTabSwitcherSheet({
   activePane = "session",
   onClose,
 }: SessionTabSwitcherSheetProps) {
-  const NativeBottomSheet = isIOS26OrLater() ? loadNativeBottomSheet() : null;
+  const ios26OrLater = isIOS26OrLater();
+  const NativeBottomSheet = ios26OrLater ? loadNativeBottomSheet() : null;
 
   if (!NativeBottomSheet) {
+    logTabSwitcherSheetFallback(ios26OrLater ? "native sheet unavailable" : "not ios 26 or later");
     return (
       <SessionTabSwitcherSheetBase
         open={open}

@@ -1,6 +1,6 @@
 import { Platform } from "react-native";
 
-function getIOSMajorVersion(): number | null {
+export function getIOSMajorVersion(): number | null {
   if (Platform.OS !== "ios") return null;
 
   const version = Platform.Version;

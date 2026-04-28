@@ -17,6 +17,13 @@ type ExpoUIModifiersModule = {
 };
 
 let cachedNativeBottomSheet: ComponentType<NativeBottomSheetProps> | null | undefined;
+let loggedNativeBottomSheetStatus = false;
+
+function logNativeBottomSheetStatus(reason: string, details?: Record<string, unknown>) {
+  if (loggedNativeBottomSheetStatus) return;
+  loggedNativeBottomSheetStatus = true;
+  console.info("[NativeBottomSheet] native sheet unavailable", { reason, ...details });
+}
 
 function hasRequiredExpoUIExports(): boolean {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -24,13 +31,20 @@ function hasRequiredExpoUIExports(): boolean {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const modifiers = require("@expo/ui/swift-ui/modifiers") as ExpoUIModifiersModule;
 
-  return (
-    swiftUI.BottomSheet != null &&
-    swiftUI.Group != null &&
-    swiftUI.Host != null &&
-    swiftUI.RNHostView != null &&
-    typeof modifiers.createModifier === "function"
-  );
+  const exportStatus = {
+    BottomSheet: swiftUI.BottomSheet != null,
+    Group: swiftUI.Group != null,
+    Host: swiftUI.Host != null,
+    RNHostView: swiftUI.RNHostView != null,
+    createModifier: typeof modifiers.createModifier === "function",
+  };
+  const available = Object.values(exportStatus).every(Boolean);
+
+  if (!available) {
+    logNativeBottomSheetStatus("missing expo-ui exports", exportStatus);
+  }
+
+  return available;
 }
 
 export function loadNativeBottomSheet(): ComponentType<NativeBottomSheetProps> | null {
@@ -47,7 +61,9 @@ export function loadNativeBottomSheet(): ComponentType<NativeBottomSheetProps> |
       .NativeBottomSheet;
     return cachedNativeBottomSheet;
   } catch (error) {
-    console.warn("[NativeBottomSheet] Expo UI unavailable", error);
+    logNativeBottomSheetStatus("require failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     cachedNativeBottomSheet = null;
     return null;
   }

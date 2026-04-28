@@ -1,5 +1,5 @@
 import { loadNativeBottomSheet } from "@/components/design-system/loadNativeBottomSheet.ios";
-import { isIOS26OrLater } from "@/lib/ios-version";
+import { getIOSMajorVersion, isIOS26OrLater } from "@/lib/ios-version";
 import {
   SessionComposerBottomSheetBase,
   type SessionComposerBottomSheetProps,
@@ -7,10 +7,23 @@ import {
 
 export type { SessionComposerBottomSheetProps };
 
+let loggedComposerSheetFallback = false;
+
+function logComposerSheetFallback(reason: string) {
+  if (loggedComposerSheetFallback) return;
+  loggedComposerSheetFallback = true;
+  console.info("[SessionComposerBottomSheet] using custom fallback", {
+    reason,
+    iosMajorVersion: getIOSMajorVersion(),
+  });
+}
+
 export function SessionComposerBottomSheet(props: SessionComposerBottomSheetProps) {
-  const NativeBottomSheet = isIOS26OrLater() ? loadNativeBottomSheet() : null;
+  const ios26OrLater = isIOS26OrLater();
+  const NativeBottomSheet = ios26OrLater ? loadNativeBottomSheet() : null;
 
   if (!NativeBottomSheet) {
+    logComposerSheetFallback(ios26OrLater ? "native sheet unavailable" : "not ios 26 or later");
     return <SessionComposerBottomSheetBase {...props} />;
   }
 
