@@ -11,7 +11,8 @@ export function ConnectionsBridgeAccessSectionTitle({ children }: { children: st
         color: theme.colors.dimForeground,
         fontWeight: "600",
         textTransform: "uppercase",
-        letterSpacing: 0.4,
+        letterSpacing: 0,
+        paddingHorizontal: 16,
       }}
     >
       {children}
@@ -39,7 +40,9 @@ export function ConnectionsBridgeAccessOption({
         styles.option,
         {
           borderColor: selected ? theme.colors.accent : theme.colors.border,
-          backgroundColor: selected ? alpha(theme.colors.accent, 0.16) : theme.colors.surfaceDeep,
+          backgroundColor: selected
+            ? alpha(theme.colors.accent, 0.14)
+            : theme.colors.surfaceElevated,
         },
       ]}
     >
@@ -58,7 +61,7 @@ export function ConnectionsBridgeAccessOption({
 const styles = StyleSheet.create({
   option: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 18,
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 16,
     minHeight: 64,

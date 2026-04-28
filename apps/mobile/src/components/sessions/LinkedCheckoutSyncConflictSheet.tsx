@@ -53,7 +53,7 @@ export function LinkedCheckoutSyncConflictSheet({
         contentContainerStyle={[styles.content, { paddingBottom: theme.spacing.md }]}
       >
         <View style={styles.header}>
-          <Text variant="headline">Resolve Sync Conflict</Text>
+          <Text variant="headline">Resolve sync conflict</Text>
           <Text variant="footnote" color="mutedForeground">
             Sync stopped because the main worktree has local changes. Choose how Trace should
             resolve them before syncing this workspace.
@@ -196,14 +196,14 @@ const styles = StyleSheet.create({
   },
   errorBox: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
+    borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   card: {
     gap: 10,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 18,
+    borderRadius: 14,
     padding: 14,
   },
   cardHeader: {
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
   commitInput: {
     minHeight: 44,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },

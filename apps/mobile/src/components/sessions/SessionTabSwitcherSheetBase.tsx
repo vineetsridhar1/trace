@@ -152,7 +152,7 @@ export function SessionTabSwitcherSheetBase({
           style={[
             styles.sheet,
             {
-              backgroundColor: theme.colors.surface,
+              backgroundColor: theme.colors.surfaceDeep,
               borderColor: theme.colors.borderMuted,
               height: windowHeight,
               paddingBottom: Math.max(insets.bottom, theme.spacing.lg),
@@ -193,11 +193,12 @@ const styles = StyleSheet.create({
   },
   grabberSlot: {
     alignItems: "center",
-    paddingBottom: 10,
+    paddingBottom: 8,
+    paddingTop: 2,
   },
   grabber: {
     width: 36,
-    height: 5,
+    height: 4,
     borderRadius: 999,
   },
   content: {

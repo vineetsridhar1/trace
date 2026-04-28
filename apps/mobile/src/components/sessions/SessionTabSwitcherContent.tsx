@@ -133,7 +133,7 @@ export function SessionTabSwitcherContent({
           {
             backgroundColor: theme.colors.surfaceElevated,
             borderColor: theme.colors.borderMuted,
-            borderRadius: theme.radius.lg,
+            borderRadius: 14,
           },
         ]}
       >
@@ -168,7 +168,7 @@ export function SessionTabSwitcherContent({
             {
               backgroundColor: theme.colors.surfaceElevated,
               borderColor: theme.colors.borderMuted,
-              borderRadius: theme.radius.lg,
+              borderRadius: 14,
             },
           ]}
         >
@@ -204,7 +204,7 @@ export function SessionTabSwitcherContent({
             {
               backgroundColor: theme.colors.surfaceElevated,
               borderColor: theme.colors.borderMuted,
-              borderRadius: theme.radius.lg,
+              borderRadius: 14,
             },
           ]}
         >
@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   header: {
-    gap: 4,
+    gap: 6,
   },
   section: {
     overflow: "hidden",

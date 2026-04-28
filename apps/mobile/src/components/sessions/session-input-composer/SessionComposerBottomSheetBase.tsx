@@ -164,10 +164,10 @@ export function SessionComposerBottomSheetBase({
           style={[
             styles.sheet,
             {
-              backgroundColor: theme.colors.surface,
+              backgroundColor: theme.colors.surfaceDeep,
               borderColor: theme.colors.borderMuted,
-              borderTopLeftRadius: theme.radius.xl,
-              borderTopRightRadius: theme.radius.xl,
+              borderTopLeftRadius: 26,
+              borderTopRightRadius: 26,
               paddingBottom: Math.max(insets.bottom, theme.spacing.lg),
               paddingTop: theme.spacing.sm,
             },
@@ -179,7 +179,17 @@ export function SessionComposerBottomSheetBase({
               <View style={[styles.grabber, { backgroundColor: theme.colors.borderMuted }]} />
             </View>
           </GestureDetector>
-          <View style={[styles.content, { paddingHorizontal: theme.spacing.lg }]}>{content}</View>
+          <View
+            style={[
+              styles.content,
+              {
+                paddingHorizontal: theme.spacing.lg,
+                paddingTop: theme.spacing.sm,
+              },
+            ]}
+          >
+            {content}
+          </View>
         </Animated.View>
       </View>
     </Modal>
@@ -200,11 +210,12 @@ const styles = StyleSheet.create({
   },
   grabberSlot: {
     alignItems: "center",
-    paddingBottom: 10,
+    paddingBottom: 8,
+    paddingTop: 2,
   },
   grabber: {
     width: 36,
-    height: 5,
+    height: 4,
     borderRadius: 999,
   },
   content: {

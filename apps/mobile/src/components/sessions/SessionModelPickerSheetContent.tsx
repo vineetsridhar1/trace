@@ -26,7 +26,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
           {
             backgroundColor: theme.colors.surfaceElevated,
             borderColor: theme.colors.borderMuted,
-            borderRadius: theme.radius.lg,
+            borderRadius: 14,
           },
         ]}
       >
@@ -119,7 +119,7 @@ export function SessionModelPickerSheetContent({
       <View style={styles.header}>
         <Text variant="headline">Model</Text>
         <Text variant="footnote" color="mutedForeground">
-          Pick the coding tool and model for this session before you send the next message.
+          Choose the coding tool and model for the next message.
         </Text>
       </View>
 
@@ -169,16 +169,18 @@ export function SessionModelPickerSheetContent({
 const styles = StyleSheet.create({
   content: {
     gap: 16,
+    paddingBottom: 8,
   },
   header: {
-    gap: 4,
+    gap: 6,
   },
   section: {
     gap: 8,
   },
   sectionTitle: {
     textTransform: "uppercase",
-    letterSpacing: 0.4,
+    letterSpacing: 0,
+    paddingHorizontal: 16,
   },
   card: {
     overflow: "hidden",

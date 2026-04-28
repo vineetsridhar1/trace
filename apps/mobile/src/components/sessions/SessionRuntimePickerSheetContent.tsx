@@ -299,7 +299,7 @@ export function SessionRuntimePickerSheetContent({
           {
             backgroundColor: theme.colors.surfaceElevated,
             borderColor: theme.colors.borderMuted,
-            borderRadius: theme.radius.lg,
+            borderRadius: 14,
           },
         ]}
       >
@@ -366,9 +366,10 @@ export function SessionRuntimePickerSheetContent({
 const styles = StyleSheet.create({
   content: {
     gap: 16,
+    paddingBottom: 8,
   },
   header: {
-    gap: 4,
+    gap: 6,
   },
   card: {
     overflow: "hidden",
