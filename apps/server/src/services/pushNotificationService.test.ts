@@ -261,6 +261,34 @@ describe("PushNotificationService", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("does not fall back to an older mobile run when the latest user turn has no source", async () => {
+    prismaMock.session.findUnique.mockResolvedValue({
+      createdById: "user-1",
+      name: "Fix flaky CI",
+      sessionGroupId: "group-1",
+      channel: { name: "mobile" },
+    });
+    prismaMock.event.findMany.mockResolvedValue([
+      {
+        eventType: "message_sent",
+        payload: { text: "Can you adjust this?", clientSource: null },
+      },
+      {
+        eventType: "session_resumed",
+        payload: { clientSource: "mobile" },
+      },
+    ]);
+
+    await new PushNotificationService().notifyForEvent(
+      event({
+        eventType: "session_output",
+        payload: { type: "question_pending", sessionStatus: "needs_input" },
+      }),
+    );
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("sends bridge access request pushes to the owner", async () => {
     await new PushNotificationService().notifyForEvent(
       event({

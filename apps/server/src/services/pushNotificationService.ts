@@ -162,6 +162,13 @@ async function loadLatestInteractionClientSource(
     if (typeof data?.clientSource === "string" && data.clientSource.trim()) {
       return data.clientSource.trim();
     }
+    if (
+      event.eventType === "message_sent" &&
+      data &&
+      Object.prototype.hasOwnProperty.call(data, "clientSource")
+    ) {
+      return null;
+    }
   }
 
   return null;
