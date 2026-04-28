@@ -11,6 +11,7 @@ import {
 import path from "path";
 import crypto from "crypto";
 import { setTimeout } from "node:timers";
+import { makeUserNotifier, updateElectronApp, UpdateSourceType } from "update-electron-app";
 import {
   BridgeClient,
   getGithubCliStatus,
@@ -43,6 +44,7 @@ const portOffset = Number(process.env.TRACE_PORT || 0);
 const serverUrl = process.env.TRACE_SERVER_URL ?? `http://localhost:${4000 + portOffset}`;
 const appName = "Trace";
 const appIconPath = path.join(__dirname, "../assets/icon.png");
+const macUpdateRepo = "vineetsridhar1/trace";
 
 app.setName(appName);
 
@@ -150,6 +152,24 @@ function createWindow() {
 
   mainWindow.on("closed", () => {
     mainWindow = null;
+  });
+}
+
+function configureMacAutoUpdates() {
+  if (!app.isPackaged || process.platform !== "darwin") return;
+
+  updateElectronApp({
+    updateSource: {
+      type: UpdateSourceType.ElectronPublicUpdateService,
+      repo: macUpdateRepo,
+    },
+    updateInterval: "30 minutes",
+    onNotifyUser: makeUserNotifier({
+      title: "Trace Update Ready",
+      detail: "A new version of Trace has been downloaded. Restart to apply it.",
+      restartButtonText: "Restart Trace",
+      laterButtonText: "Later",
+    }),
   });
 }
 
@@ -267,6 +287,7 @@ ipcMain.handle("set-bridge-auth-context", (_event, organizationId: string | null
 
 app.whenReady().then(() => {
   configureApplicationIdentity();
+  configureMacAutoUpdates();
 
   ensureHookRunnerEntrypoint({
     electronBinaryPath: process.execPath,
