@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EntityState, SessionEntity } from "@trace/client-core";
-import { buildHomeSections } from "./useHomeSections";
+import { buildHomeNeedsInputCount, buildHomeSections } from "./useHomeSections";
 
 function session(
   fields: Partial<SessionEntity> & { id: string; sessionGroupId: string },
@@ -66,5 +66,46 @@ describe("buildHomeSections", () => {
         ids: ["group_recent_message", "group_recent_update", "group_sort_only_recent"],
       },
     ]);
+  });
+
+  it("counts only current user's needs-input home groups for the tab badge", () => {
+    const count = buildHomeNeedsInputCount(
+      stateWithSessions([
+        session({
+          id: "owned_needs_input",
+          sessionGroupId: "owned_group",
+          sessionStatus: "needs_input",
+        }),
+        session({
+          id: "other_user_needs_input",
+          sessionGroupId: "other_user_group",
+          sessionStatus: "needs_input",
+          createdBy: { id: "user_2" },
+        }),
+      ]),
+      "user_1",
+    );
+
+    expect(count).toBe(1);
+  });
+
+  it("counts needs-input home groups instead of raw sessions", () => {
+    const count = buildHomeNeedsInputCount(
+      stateWithSessions([
+        session({
+          id: "owned_needs_input_a",
+          sessionGroupId: "owned_group",
+          sessionStatus: "needs_input",
+        }),
+        session({
+          id: "owned_needs_input_b",
+          sessionGroupId: "owned_group",
+          sessionStatus: "needs_input",
+        }),
+      ]),
+      "user_1",
+    );
+
+    expect(count).toBe(1);
   });
 });

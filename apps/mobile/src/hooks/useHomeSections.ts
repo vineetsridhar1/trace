@@ -241,6 +241,12 @@ export function buildHomeSections(
   return { sections, repos };
 }
 
+export function buildHomeNeedsInputCount(state: EntityState, userId: string): number {
+  return buildHomeSections(state, userId, null).sections.find(
+    (section) => section.kind === "needs_input",
+  )?.ids.length ?? 0;
+}
+
 /**
  * Three buckets of session groups belonging to `userId` for the Home tab:
  *  1. Needs you — any session in the group has `sessionStatus === "needs_input"`,

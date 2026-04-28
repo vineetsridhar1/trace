@@ -5,8 +5,14 @@ import {
   type NativeBottomTabNavigationOptions,
 } from "@bottom-tabs/react-navigation";
 import type { ParamListBase, TabNavigationState } from "@react-navigation/native";
-import { useEntityStore, type EntityState } from "@trace/client-core";
+import {
+  useAuthStore,
+  useEntityStore,
+  type AuthState,
+  type EntityState,
+} from "@trace/client-core";
 import { ActiveSessionsAccessory } from "@/components/navigation/ActiveSessionsAccessory";
+import { buildHomeNeedsInputCount } from "@/hooks/useHomeSections";
 
 const BottomTabNavigator = createNativeBottomTabNavigator().Navigator;
 const NativeTabs = withLayoutContext<
@@ -15,14 +21,6 @@ const NativeTabs = withLayoutContext<
   TabNavigationState<ParamListBase>,
   NativeBottomTabNavigationEventMap
 >(BottomTabNavigator);
-
-function selectNeedsInputCount(state: EntityState): number {
-  let count = 0;
-  for (const id in state.sessions) {
-    if (state.sessions[id].sessionStatus === "needs_input") count++;
-  }
-  return count;
-}
 
 const renderAccessory = () => <ActiveSessionsAccessory />;
 
@@ -41,7 +39,10 @@ const connectionsIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"
 });
 
 export default function TabsLayout() {
-  const needsInputCount = useEntityStore(selectNeedsInputCount);
+  const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
+  const needsInputCount = useEntityStore((state: EntityState) =>
+    userId ? buildHomeNeedsInputCount(state, userId) : 0,
+  );
 
   return (
     <NativeTabs
