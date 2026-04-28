@@ -22,12 +22,17 @@ function isSessionDetailPath(path: string): boolean {
   return /^\/sessions\/[^/]+\/[^/]+$/.test(pathnameOnly(path));
 }
 
+function hasRouteState(path: string): boolean {
+  return path.includes("?") || path.includes("#");
+}
+
 export function shouldNavigateToNotificationPath(
   currentPathname: string | null | undefined,
   targetPath: string,
 ): boolean {
   const targetPathname = pathnameOnly(targetPath);
   if (!isSessionDetailPath(targetPathname)) return true;
+  if (hasRouteState(targetPath)) return true;
   return pathnameOnly(currentPathname ?? "") !== targetPathname;
 }
 

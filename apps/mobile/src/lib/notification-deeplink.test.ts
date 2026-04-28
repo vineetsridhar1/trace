@@ -55,9 +55,13 @@ describe("shouldNavigateToNotificationPath", () => {
     expect(shouldNavigateToNotificationPath("/sessions/g1/s1", "/sessions/g1/s1")).toBe(false);
   });
 
-  it("ignores query strings and trailing slashes when comparing session routes", () => {
-    expect(shouldNavigateToNotificationPath("/sessions/g1/s1/", "/sessions/g1/s1?foo=bar")).toBe(
-      false,
+  it("ignores trailing slashes when comparing plain session routes", () => {
+    expect(shouldNavigateToNotificationPath("/sessions/g1/s1/", "/sessions/g1/s1")).toBe(false);
+  });
+
+  it("navigates when a same-session notification includes route state", () => {
+    expect(shouldNavigateToNotificationPath("/sessions/g1/s1", "/sessions/g1/s1?pane=browser")).toBe(
+      true,
     );
   });
 

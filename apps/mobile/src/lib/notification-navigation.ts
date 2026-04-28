@@ -30,6 +30,11 @@ export function useNotificationNavigation(): void {
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const loading = useAuthStore((s: AuthState) => s.loading);
   const lastHandledNotificationId = useRef<string | null>(null);
+  const pathnameRef = useRef(pathname);
+
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
 
   useEffect(() => {
     const handlePath = async (path: string): Promise<void> => {
@@ -37,7 +42,7 @@ export function useNotificationNavigation(): void {
         setPendingDeepLinkPath(path);
         return;
       }
-      if (!shouldNavigateToNotificationPath(pathname, path)) return;
+      if (!shouldNavigateToNotificationPath(pathnameRef.current, path)) return;
       router.push(path as Href);
     };
 
@@ -78,14 +83,14 @@ export function useNotificationNavigation(): void {
       });
     });
     return () => sub.remove();
-  }, [activeOrgId, loading, pathname, router, user]);
+  }, [activeOrgId, loading, router, user]);
 
   useEffect(() => {
     if (loading || !user || !activeOrgId) return;
     const pendingPath = getPendingDeepLinkPath();
     if (!pendingPath) return;
     const path = consumePendingDeepLinkPath() ?? pendingPath;
-    if (!shouldNavigateToNotificationPath(pathname, path)) return;
+    if (!shouldNavigateToNotificationPath(pathnameRef.current, path)) return;
     router.push(path as Href);
-  }, [activeOrgId, loading, pathname, router, user]);
+  }, [activeOrgId, loading, router, user]);
 }
