@@ -1,6 +1,5 @@
-import { loadNativeBottomSheet } from "@/components/design-system/loadNativeBottomSheet.ios";
 import { getIOSMajorVersion, isIOS26OrLater } from "@/lib/ios-version";
-import { SessionTabSwitcherContent } from "./SessionTabSwitcherContent";
+import { SessionTabSwitcherNativeSheet } from "./SessionTabSwitcherNativeSheet.ios";
 import {
   SessionTabSwitcherSheetBase,
   type SessionTabSwitcherSheetProps,
@@ -27,10 +26,9 @@ export function SessionTabSwitcherSheet({
   onClose,
 }: SessionTabSwitcherSheetProps) {
   const ios26OrLater = isIOS26OrLater();
-  const NativeBottomSheet = ios26OrLater ? loadNativeBottomSheet() : null;
 
-  if (!NativeBottomSheet) {
-    logTabSwitcherSheetFallback(ios26OrLater ? "native sheet unavailable" : "not ios 26 or later");
+  if (!ios26OrLater) {
+    logTabSwitcherSheetFallback("not ios 26 or later");
     return (
       <SessionTabSwitcherSheetBase
         open={open}
@@ -43,13 +41,12 @@ export function SessionTabSwitcherSheet({
   }
 
   return (
-    <NativeBottomSheet visible={open} onClose={onClose} detents={["large"]}>
-      <SessionTabSwitcherContent
-        groupId={groupId}
-        activeSessionId={activeSessionId}
-        activePane={activePane}
-        onClose={onClose}
-      />
-    </NativeBottomSheet>
+    <SessionTabSwitcherNativeSheet
+      open={open}
+      groupId={groupId}
+      activeSessionId={activeSessionId}
+      activePane={activePane}
+      onClose={onClose}
+    />
   );
 }
