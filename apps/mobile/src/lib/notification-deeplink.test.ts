@@ -17,6 +17,9 @@ describe("routePathFromNotificationLink", () => {
 
   it("normalizes bridge review links to the connections tab", () => {
     expect(routePathFromNotificationLink("trace://connections")).toBe("/(connections)");
+    expect(routePathFromNotificationLink("trace://connections?requestId=req-1")).toBe(
+      "/(connections)?requestId=req-1",
+    );
     expect(routePathFromNotificationLink("https://gettrace.org/m/connections")).toBe(
       "/(connections)",
     );

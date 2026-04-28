@@ -49,7 +49,7 @@ async function handleBridgeAccessRequested(event: Event): Promise<void> {
       title: notification.title,
       body: notification.body,
       data: {
-        deepLink: "trace://connections",
+        deepLink: `trace://connections?requestId=${encodeURIComponent(notification.requestId)}`,
         foregroundPresentation: FOREGROUND_BRIDGE_ACCESS_KEY,
         requestId: notification.requestId,
       },

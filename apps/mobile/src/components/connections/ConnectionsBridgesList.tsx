@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import {
   APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION,
@@ -10,7 +10,10 @@ import {
 } from "@trace/client-core";
 import type { BridgeAccessCapability } from "@trace/gql";
 import { EmptyState, Text } from "@/components/design-system";
-import { ConnectionsBridgeAccessSheet } from "@/components/connections/ConnectionsBridgeAccessSheet";
+import {
+  ConnectionsBridgeAccessSheet,
+  type ConnectionsBridgeAccessRequestMode,
+} from "@/components/connections/ConnectionsBridgeAccessSheet";
 import { ConnectionsBridgeSection } from "@/components/connections/ConnectionsBridgeSection";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
@@ -20,14 +23,23 @@ import {
   type ConnectionAccessRequest,
 } from "@/hooks/useConnections";
 
-export function ConnectionsBridgesList() {
+export function ConnectionsBridgesList({
+  initialReviewRequestId,
+}: {
+  initialReviewRequestId?: string | null;
+}) {
   const theme = useTheme();
   const { connections, loading, error, refresh } = useConnections();
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<ConnectionAccessRequest | null>(null);
+  const [selectedRequestMode, setSelectedRequestMode] =
+    useState<ConnectionsBridgeAccessRequestMode>("configure");
   const [selectedGrant, setSelectedGrant] = useState<ConnectionAccessGrant | null>(null);
+  const [handledInitialReviewRequestId, setHandledInitialReviewRequestId] = useState<string | null>(
+    null,
+  );
   const [locallyResolvedRequestIds, setLocallyResolvedRequestIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -53,6 +65,38 @@ export function ConnectionsBridgesList() {
       return next;
     });
   }, []);
+
+  const openRequestSheet = useCallback(
+    (request: ConnectionAccessRequest, mode: ConnectionsBridgeAccessRequestMode) => {
+      setSelectedGrant(null);
+      setSelectedRequestMode(mode);
+      setSelectedRequest(request);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!initialReviewRequestId) return;
+    if (handledInitialReviewRequestId === initialReviewRequestId) return;
+    if (selectedRequest || selectedGrant) return;
+
+    for (const connection of visibleConnections) {
+      const request = connection.bridge.accessRequests.find(
+        (entry) => entry.id === initialReviewRequestId,
+      );
+      if (!request) continue;
+      setHandledInitialReviewRequestId(initialReviewRequestId);
+      openRequestSheet(request, "quick");
+      return;
+    }
+  }, [
+    handledInitialReviewRequestId,
+    initialReviewRequestId,
+    openRequestSheet,
+    selectedGrant,
+    selectedRequest,
+    visibleConnections,
+  ]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -196,7 +240,7 @@ export function ConnectionsBridgesList() {
           key={connection.bridge.id}
           connection={connection}
           pendingActionId={pendingActionId}
-          onReviewRequest={setSelectedRequest}
+          onReviewRequest={(request) => openRequestSheet(request, "configure")}
           onDeny={denyRequest}
           onManageGrant={setSelectedGrant}
           onRequestAccess={(connection) =>
@@ -209,6 +253,7 @@ export function ConnectionsBridgesList() {
       <ConnectionsBridgeAccessSheet
         request={selectedRequest}
         grant={selectedGrant}
+        requestMode={selectedRequestMode}
         visible={selectedRequest !== null || selectedGrant !== null}
         pending={pendingActionId !== null}
         onClose={() => {
@@ -217,6 +262,7 @@ export function ConnectionsBridgesList() {
         }}
         onApprove={approveRequest}
         onDeny={denyRequest}
+        onConfigure={() => setSelectedRequestMode("configure")}
         onRevoke={revokeGrant}
         onUpdate={updateGrant}
       />

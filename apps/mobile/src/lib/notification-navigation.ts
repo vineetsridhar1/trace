@@ -7,7 +7,16 @@ import {
   getPendingDeepLinkPath,
   setPendingDeepLinkPath,
 } from "@/lib/deep-link-intent";
-import { deepLinkFromNotificationData, routePathFromNotificationLink } from "@/lib/notification-deeplink";
+import {
+  deepLinkFromNotificationData,
+  routePathFromNotificationLink,
+} from "@/lib/notification-deeplink";
+
+function bridgeAccessRequestIdFromNotificationData(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const requestId = (data as Record<string, unknown>).requestId;
+  return typeof requestId === "string" && requestId.length > 0 ? requestId : null;
+}
 
 async function clearLastNotificationResponse(): Promise<void> {
   await Notifications.clearLastNotificationResponseAsync?.();
@@ -41,8 +50,13 @@ export function useNotificationNavigation(): void {
       }
 
       lastHandledNotificationId.current = requestId;
-      const deepLink = deepLinkFromNotificationData(response.notification.request.content.data);
-      const path = deepLink ? routePathFromNotificationLink(deepLink) : null;
+      const data = response.notification.request.content.data;
+      const deepLink = deepLinkFromNotificationData(data);
+      let path = deepLink ? routePathFromNotificationLink(deepLink) : null;
+      const bridgeAccessRequestId = bridgeAccessRequestIdFromNotificationData(data);
+      if (path === "/(connections)" && bridgeAccessRequestId) {
+        path = `/(connections)?requestId=${encodeURIComponent(bridgeAccessRequestId)}`;
+      }
       if (path) {
         await handlePath(path);
       }
