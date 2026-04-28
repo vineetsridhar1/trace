@@ -1,11 +1,7 @@
-import { useCallback, type ReactNode } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 import { StyleSheet, useWindowDimensions, View, type ViewStyle } from "react-native";
 import { BottomSheet, Group, Host, RNHostView } from "@expo/ui/swift-ui";
-import {
-  presentationDetents,
-  presentationDragIndicator,
-  type PresentationDetent,
-} from "@expo/ui/swift-ui/modifiers";
+import { createModifier, type PresentationDetent } from "@expo/ui/swift-ui/modifiers";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme";
 
@@ -31,6 +27,13 @@ export function NativeBottomSheet({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const modifiers = useMemo(
+    () => [
+      createModifier("presentationDetents", { detents }),
+      createModifier("presentationDragIndicator", { visibility: "visible" }),
+    ],
+    [detents],
+  );
 
   const handlePresentedChange = useCallback(
     (isPresented: boolean) => {
@@ -44,7 +47,7 @@ export function NativeBottomSheet({
   return (
     <Host colorScheme={theme.scheme === "dark" ? "dark" : "light"} style={[styles.host, { width }]}>
       <BottomSheet isPresented={visible} onIsPresentedChange={handlePresentedChange}>
-        <Group modifiers={[presentationDetents(detents), presentationDragIndicator("visible")]}>
+        <Group modifiers={modifiers}>
           <RNHostView>
             <View
               style={[
