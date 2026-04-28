@@ -44,20 +44,26 @@ export function NativeBottomSheet({
         presentationDetents={detents}
         presentationDragIndicator="visible"
       >
-        <View
-          style={[
-            styles.content,
-            {
-              backgroundColor: theme.colors.surfaceDeep,
-              paddingHorizontal: theme.spacing.lg,
-              paddingTop: theme.spacing.lg,
-              paddingBottom: Math.max(insets.bottom, theme.spacing.lg),
-            },
-            contentStyle,
-          ]}
+        <Host
+          colorScheme={theme.scheme === "dark" ? "dark" : "light"}
+          useViewportSizeMeasurement
+          style={styles.sheetHost}
         >
-          {children}
-        </View>
+          <View
+            style={[
+              styles.content,
+              {
+                backgroundColor: theme.colors.surfaceDeep,
+                paddingHorizontal: theme.spacing.lg,
+                paddingTop: theme.spacing.lg,
+                paddingBottom: Math.max(insets.bottom, theme.spacing.lg),
+              },
+              contentStyle,
+            ]}
+          >
+            {children}
+          </View>
+        </Host>
       </BottomSheet>
     </Host>
   );
@@ -69,6 +75,9 @@ const styles = StyleSheet.create({
     left: 0,
     bottom: 0,
     height: 1,
+  },
+  sheetHost: {
+    flex: 1,
   },
   content: {
     flex: 1,
