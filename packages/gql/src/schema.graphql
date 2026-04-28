@@ -718,6 +718,7 @@ type SessionRuntimeInstance {
   connected: Boolean!
   sessionCount: Int!
   registeredRepoIds: [ID!]!
+  access: BridgeRuntimeAccess!
 }
 
 type BridgeAccessGrant {

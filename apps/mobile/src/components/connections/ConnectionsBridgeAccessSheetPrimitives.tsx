@@ -60,13 +60,18 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 18,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 16,
+    minHeight: 64,
     gap: 4,
   },
   optionTitle: {
     fontWeight: "600",
+    lineHeight: 20,
+    width: "100%",
   },
   optionSubtitle: {
     marginTop: 2,
+    lineHeight: 18,
+    width: "100%",
   },
 });

@@ -98,9 +98,42 @@ export function BridgeAccessSection() {
   const refreshTick = useUIStore((s: { refreshTick: number }) => s.refreshTick);
 
   const buildCapabilities = useCallback(
-    (requestId: string): BridgeAccessCapability[] =>
-      grantTerminalByRequestId[requestId] ? ["session", "terminal"] : ["session"],
+    (request: BridgeAccessRequest): BridgeAccessCapability[] => {
+      const terminal =
+        grantTerminalByRequestId[request.id] ??
+        (request.requestedCapabilities?.includes("terminal") ?? false);
+      return terminal ? ["session", "terminal"] : ["session"];
+    },
     [grantTerminalByRequestId],
+  );
+
+  const approveRequest = useCallback(
+    async (
+      request: BridgeAccessRequest,
+      input?: {
+        scopeType?: "all_sessions" | "session_group";
+        sessionGroupId?: string | null;
+        expiresAt?: string | null;
+      },
+    ) => {
+      const result = await client
+        .mutation(APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION, {
+          requestId: request.id,
+          scopeType: input?.scopeType ?? request.scopeType,
+          sessionGroupId:
+            input?.scopeType === "all_sessions"
+              ? null
+              : (input?.sessionGroupId ?? request.sessionGroup?.id ?? null),
+          expiresAt:
+            Object.prototype.hasOwnProperty.call(input ?? {}, "expiresAt")
+              ? input?.expiresAt
+              : (request.requestedExpiresAt ?? null),
+          capabilities: buildCapabilities(request),
+        })
+        .toPromise();
+      if (result.error) throw result.error;
+    },
+    [buildCapabilities],
   );
 
   const fetchRuntimes = useCallback(async () => {
@@ -219,9 +252,11 @@ export function BridgeAccessSection() {
                   ) : (
                     <div className="space-y-3">
                       {runtime.accessRequests.map((request) => {
-                        const grantTerminal = grantTerminalByRequestId[request.id] ?? false;
                         const requestedTerminal =
                           request.requestedCapabilities?.includes("terminal") ?? false;
+                        const grantTerminal =
+                          grantTerminalByRequestId[request.id] ?? requestedTerminal;
+                        const capabilities = buildCapabilities(request);
                         return (
                           <div
                             key={request.id}
@@ -276,71 +311,80 @@ export function BridgeAccessSection() {
                                   <div className="font-medium">Terminal</div>
                                   <div className="text-[11px] text-muted-foreground">
                                     {grantTerminal
-                                      ? "Will grant shell access"
+                                      ? requestedTerminal
+                                        ? "Requested by the user"
+                                        : "Will grant shell access"
                                       : requestedTerminal
-                                        ? "Requester asked — still off"
+                                        ? "Removed from approval"
                                         : "Off"}
                                   </div>
                                 </button>
                               </div>
                             </div>
                             <div className="mt-3 flex flex-wrap gap-2">
-                              {request.sessionGroup?.id && (
-                                <Button
-                                  size="sm"
-                                  disabled={pendingActionId === request.id}
-                                  onClick={() =>
-                                    void runAction(
-                                      request.id,
-                                      async () => {
-                                        const result = await client
-                                          .mutation(APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION, {
-                                            requestId: request.id,
-                                            scopeType: "session_group",
-                                            sessionGroupId: request.sessionGroup?.id,
-                                            expiresAt: null,
-                                            capabilities: buildCapabilities(request.id),
-                                          })
-                                          .toPromise();
-                                        if (result.error) throw result.error;
-                                      },
-                                      `Access granted — ${formatCapabilities(buildCapabilities(request.id))}`,
-                                    )
-                                  }
-                                >
-                                  Approve This Session
-                                </Button>
-                              )}
+                              <Button
+                                size="sm"
+                                disabled={
+                                  pendingActionId === request.id ||
+                                  (request.scopeType === "session_group" &&
+                                    !request.sessionGroup?.id)
+                                }
+                                onClick={() =>
+                                  void runAction(
+                                    request.id,
+                                    () => approveRequest(request),
+                                    `Access granted — ${formatCapabilities(capabilities)}`,
+                                  )
+                                }
+                              >
+                                Approve Request
+                              </Button>
                               <DropdownMenu>
                                 <DropdownMenuTrigger
-                                  className={cn(buttonVariants({ size: "sm" }), "gap-1")}
+                                  className={cn(
+                                    buttonVariants({ variant: "outline", size: "sm" }),
+                                    "gap-1",
+                                  )}
                                   disabled={pendingActionId === request.id}
                                 >
-                                  Approve All Sessions
+                                  Approve with changes
                                   <ChevronDown size={14} />
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start" className="w-44">
+                                  {request.sessionGroup?.id &&
+                                  request.scopeType !== "session_group" ? (
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        void runAction(
+                                          request.id,
+                                          () =>
+                                            approveRequest(request, {
+                                              scopeType: "session_group",
+                                              sessionGroupId: request.sessionGroup?.id,
+                                              expiresAt: request.requestedExpiresAt ?? null,
+                                            }),
+                                          `Access granted — ${formatCapabilities(capabilities)}`,
+                                        )
+                                      }
+                                    >
+                                      This workspace
+                                    </DropdownMenuItem>
+                                  ) : null}
                                   {BRIDGE_ACCESS_APPROVAL_OPTIONS.map((option) => (
                                     <DropdownMenuItem
                                       key={option.id}
                                       onClick={() =>
                                         void runAction(
                                           request.id,
-                                          async () => {
-                                            const result = await client
-                                              .mutation(APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION, {
-                                                requestId: request.id,
-                                                scopeType: "all_sessions",
-                                                sessionGroupId: null,
-                                                expiresAt: getBridgeAccessApprovalExpiresAt(
-                                                  option.id,
-                                                ),
-                                                capabilities: buildCapabilities(request.id),
-                                              })
-                                              .toPromise();
-                                            if (result.error) throw result.error;
-                                          },
-                                          `Access granted for ${option.label} — ${formatCapabilities(buildCapabilities(request.id))}`,
+                                          () =>
+                                            approveRequest(request, {
+                                              scopeType: "all_sessions",
+                                              sessionGroupId: null,
+                                              expiresAt: getBridgeAccessApprovalExpiresAt(
+                                                option.id,
+                                              ),
+                                            }),
+                                          `Access granted for ${option.label} — ${formatCapabilities(capabilities)}`,
                                         )
                                       }
                                     >

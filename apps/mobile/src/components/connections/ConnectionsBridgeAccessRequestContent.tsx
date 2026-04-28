@@ -66,7 +66,8 @@ export function ConnectionsBridgeAccessRequestContent({
       ? [
           {
             id: "session_group" as const,
-            title: describeBridgeAccessScope("session_group", request.sessionGroup),
+            title: "This workspace",
+            subtitle: request.sessionGroup.name ?? "Requested workspace",
           },
           {
             id: "all_sessions" as const,
@@ -112,6 +113,7 @@ export function ConnectionsBridgeAccessRequestContent({
             <ConnectionsBridgeAccessOption
               key={option.id}
               title={option.title}
+              subtitle={"subtitle" in option ? option.subtitle : undefined}
               selected={scopeType === option.id}
               onPress={() => setScopeType(option.id)}
             />

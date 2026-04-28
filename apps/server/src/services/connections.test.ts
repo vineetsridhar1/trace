@@ -27,42 +27,44 @@ describe("connectionsService", () => {
 
   it("returns connected bridge repos visible through user member channels", async () => {
     const connectedAt = new Date("2026-04-22T12:00:00.000Z");
-    prismaMock.bridgeRuntime.findMany.mockResolvedValueOnce([
-      {
-        id: "bridge-1",
-        instanceId: "runtime-1",
-        organizationId: "org-1",
-        ownerUserId: "user-1",
-        label: "Laptop",
-        hostingMode: "local",
-        connectedAt,
-        disconnectedAt: null,
-        lastSeenAt: connectedAt,
-        metadata: null,
-        createdAt: connectedAt,
-        updatedAt: connectedAt,
-        ownerUser: { id: "user-1", name: "User One" },
-        accessRequests: [],
-        accessGrants: [],
-      },
-      {
-        id: "bridge-2",
-        instanceId: "runtime-2",
-        organizationId: "org-1",
-        ownerUserId: "user-1",
-        label: "Offline Laptop",
-        hostingMode: "local",
-        connectedAt: null,
-        disconnectedAt: connectedAt,
-        lastSeenAt: connectedAt,
-        metadata: null,
-        createdAt: connectedAt,
-        updatedAt: connectedAt,
-        ownerUser: { id: "user-1", name: "User One" },
-        accessRequests: [],
-        accessGrants: [],
-      },
-    ]);
+    prismaMock.bridgeRuntime.findMany
+      .mockResolvedValueOnce([
+        {
+          id: "bridge-1",
+          instanceId: "runtime-1",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+          label: "Laptop",
+          hostingMode: "local",
+          connectedAt,
+          disconnectedAt: null,
+          lastSeenAt: connectedAt,
+          metadata: null,
+          createdAt: connectedAt,
+          updatedAt: connectedAt,
+          ownerUser: { id: "user-1", name: "User One" },
+          accessRequests: [],
+          accessGrants: [],
+        },
+        {
+          id: "bridge-2",
+          instanceId: "runtime-2",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+          label: "Offline Laptop",
+          hostingMode: "local",
+          connectedAt: null,
+          disconnectedAt: connectedAt,
+          lastSeenAt: connectedAt,
+          metadata: null,
+          createdAt: connectedAt,
+          updatedAt: connectedAt,
+          ownerUser: { id: "user-1", name: "User One" },
+          accessRequests: [],
+          accessGrants: [],
+        },
+      ])
+      .mockResolvedValueOnce([]);
 
     sessionRouterMock.listRuntimes.mockReturnValueOnce([
       {
@@ -143,24 +145,117 @@ describe("connectionsService", () => {
     );
   });
 
-  it("does not query bridges only granted to the user", async () => {
-    prismaMock.bridgeRuntime.findMany.mockResolvedValueOnce([]);
+  it("returns bridges granted to the user as work bridges", async () => {
+    const connectedAt = new Date("2026-04-22T12:00:00.000Z");
+    prismaMock.bridgeRuntime.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      {
+        id: "bridge-2",
+        instanceId: "runtime-2",
+        organizationId: "org-1",
+        ownerUserId: "owner-1",
+        label: "Owner Laptop",
+        hostingMode: "local",
+        connectedAt,
+        disconnectedAt: null,
+        lastSeenAt: connectedAt,
+        metadata: null,
+        createdAt: connectedAt,
+        updatedAt: connectedAt,
+        ownerUser: { id: "owner-1", name: "Owner One" },
+        accessRequests: [],
+        accessGrants: [
+          {
+            id: "grant-1",
+            granteeUserId: "user-1",
+            capabilities: ["session", "terminal"],
+            expiresAt: null,
+            revokedAt: null,
+          },
+        ],
+      },
+    ]);
     sessionRouterMock.listRuntimes.mockReturnValueOnce([]);
 
-    await connectionsService.listMine({
+    const result = await connectionsService.listMine({
       userId: "user-1",
       organizationId: "org-1",
     });
 
+    expect(result).toHaveLength(1);
+    expect(result[0].bridge.id).toBe("bridge-2");
+    expect(result[0].canTerminal).toBe(true);
     expect(prismaMock.bridgeRuntime.findMany.mock.calls[0]?.[0]?.where).toEqual(
       expect.objectContaining({
         organizationId: "org-1",
         ownerUserId: "user-1",
       }),
     );
-    expect(prismaMock.bridgeRuntime.findMany.mock.calls[0]?.[0]?.where).not.toHaveProperty(
-      "accessGrants",
+    expect(prismaMock.bridgeRuntime.findMany.mock.calls[1]?.[0]?.where).toEqual(
+      expect.objectContaining({
+        organizationId: "org-1",
+        ownerUserId: { not: "user-1" },
+        accessGrants: expect.objectContaining({
+          some: expect.objectContaining({ granteeUserId: "user-1" }),
+        }),
+      }),
     );
-    expect(prismaMock.bridgeRuntime.findMany.mock.calls[0]?.[0]?.where).not.toHaveProperty("OR");
+    expect(prismaMock.bridgeRuntime.findMany).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back to discoverable org bridges when the user has no work bridges", async () => {
+    const connectedAt = new Date("2026-04-22T12:00:00.000Z");
+    prismaMock.bridgeRuntime.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: "bridge-3",
+          instanceId: "runtime-3",
+          organizationId: "org-1",
+          ownerUserId: "owner-1",
+          label: "Shared Laptop",
+          hostingMode: "local",
+          connectedAt,
+          disconnectedAt: null,
+          lastSeenAt: connectedAt,
+          metadata: null,
+          createdAt: connectedAt,
+          updatedAt: connectedAt,
+          ownerUser: { id: "owner-1", name: "Owner One" },
+          accessRequests: [
+            {
+              id: "request-1",
+              requesterUserId: "user-1",
+              status: "pending",
+            },
+          ],
+          accessGrants: [],
+        },
+      ]);
+    sessionRouterMock.listRuntimes.mockReturnValueOnce([
+      {
+        id: "runtime-3",
+        organizationId: "org-1",
+        registeredRepoIds: ["repo-1"],
+        linkedCheckouts: new Map(),
+      },
+    ]);
+
+    const result = await connectionsService.listMine({
+      userId: "user-1",
+      organizationId: "org-1",
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].bridge.id).toBe("bridge-3");
+    expect(result[0].repos).toEqual([]);
+    expect(result[0].canTerminal).toBe(false);
+    expect(prismaMock.bridgeRuntime.findMany.mock.calls[2]?.[0]?.where).toEqual(
+      expect.objectContaining({
+        organizationId: "org-1",
+        ownerUserId: { not: "user-1" },
+      }),
+    );
+    expect(prismaMock.channel.findMany).not.toHaveBeenCalled();
   });
 });

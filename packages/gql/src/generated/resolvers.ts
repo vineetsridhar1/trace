@@ -1616,6 +1616,7 @@ export type SessionGroupStatus =
 
 export type SessionRuntimeInstance = {
   __typename?: "SessionRuntimeInstance";
+  access: BridgeRuntimeAccess;
   connected: Scalars["Boolean"]["output"];
   hostingMode: HostingMode;
   id: Scalars["ID"]["output"];
@@ -3695,6 +3696,7 @@ export type SessionRuntimeInstanceResolvers<
   ParentType extends ResolversParentTypes["SessionRuntimeInstance"] =
     ResolversParentTypes["SessionRuntimeInstance"],
 > = ResolversObject<{
+  access?: Resolver<ResolversTypes["BridgeRuntimeAccess"], ParentType, ContextType>;
   connected?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   hostingMode?: Resolver<ResolversTypes["HostingMode"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;

@@ -1,5 +1,6 @@
 declare global {
   interface ImportMetaEnv {
+    readonly DEV?: boolean;
     readonly VITE_API_URL?: string;
     readonly VITE_WS_URL?: string;
     readonly VITE_TRACE_LOCAL_MODE?: string;

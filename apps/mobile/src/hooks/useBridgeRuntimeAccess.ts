@@ -11,6 +11,7 @@ import {
   useBridgeAccessStore,
 } from "@/stores/bridge-access";
 import { getClient } from "@/lib/urql";
+import { subscribeBridgeAccessEvents } from "@/lib/bridge-access-events";
 
 const POLL_INTERVAL_MS = 10_000;
 const IDLE_BRIDGE_ACCESS_ENTRY: BridgeAccessEntry = {
@@ -157,6 +158,13 @@ export function useBridgeRuntimeAccess(
     if (!runtimeInstanceId || reconnectCounter === 0) return;
     void refresh();
   }, [reconnectCounter, refresh, runtimeInstanceId]);
+
+  useEffect(() => {
+    if (!runtimeInstanceId || !key) return;
+    return subscribeBridgeAccessEvents(() => {
+      if (AppState.currentState === "active") void refresh();
+    });
+  }, [key, refresh, runtimeInstanceId]);
 
   const fallbackAccess = runtimeInstanceId ? buildFallbackBridgeAccess(runtimeInstanceId) : null;
   const effectiveAccess =

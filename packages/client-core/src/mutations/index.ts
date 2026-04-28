@@ -146,6 +146,35 @@ export const AVAILABLE_SESSION_RUNTIMES_QUERY = gql`
       connected
       sessionCount
       registeredRepoIds
+      access {
+        runtimeInstanceId
+        bridgeRuntimeId
+        label
+        hostingMode
+        connected
+        allowed
+        isOwner
+        scopeType
+        sessionGroupId
+        capabilities
+        expiresAt
+        ownerUser {
+          id
+          name
+          avatarUrl
+        }
+        pendingRequest {
+          id
+          scopeType
+          requestedExpiresAt
+          requestedCapabilities
+          status
+          sessionGroup {
+            id
+            name
+          }
+        }
+      }
     }
   }
 `;

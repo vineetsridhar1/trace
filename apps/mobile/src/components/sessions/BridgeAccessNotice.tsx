@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import { REQUEST_BRIDGE_ACCESS_MUTATION } from "@trace/client-core";
 import type { BridgeAccessCapability } from "@trace/gql";
-import { Button, Text } from "@/components/design-system";
+import { Button, Glass, Text } from "@/components/design-system";
 import { SessionComposerBottomSheet } from "@/components/sessions/session-input-composer/SessionComposerBottomSheet";
 import {
   isBridgeInteractionAllowed,
@@ -110,6 +110,7 @@ export function BridgeAccessNotice({
   const ownerName = access?.ownerUser?.name?.trim() || "the bridge owner";
   const runtimeLabel = access?.label?.trim() || "this bridge";
   const requiresTerminal = requiredCapability === "terminal";
+  const terminalRequested = requiresTerminal || wantsTerminal;
   const pendingCoversRequiredCapability = pendingRequest
     ? requiresTerminal
       ? (pendingRequest.requestedCapabilities?.includes("terminal") ?? false)
@@ -121,9 +122,8 @@ export function BridgeAccessNotice({
         ? [
             {
               id: "session_group" as const,
-              title: pendingRequest?.sessionGroup?.name
-                ? `This workspace (${pendingRequest.sessionGroup.name})`
-                : "This workspace only",
+              title: "This workspace",
+              subtitle: pendingRequest?.sessionGroup?.name ?? "Current workspace only",
             },
             {
               id: "all_sessions" as const,
@@ -138,6 +138,10 @@ export function BridgeAccessNotice({
     ? isBridgeTerminalAllowed(access)
     : isBridgeInteractionAllowed(access);
 
+  useEffect(() => {
+    if (requiresTerminal) setWantsTerminal(true);
+  }, [requiresTerminal]);
+
   if (!access || allowed) {
     return null;
   }
@@ -146,7 +150,7 @@ export function BridgeAccessNotice({
     if (!access.runtimeInstanceId || submitting) return;
     setSubmitting(true);
     try {
-      const requestedCapabilities: BridgeAccessCapability[] = wantsTerminal
+      const requestedCapabilities: BridgeAccessCapability[] = terminalRequested
         ? ["session", "terminal"]
         : ["session"];
       const result = await getClient()
@@ -175,19 +179,22 @@ export function BridgeAccessNotice({
 
   return (
     <>
-      <View
+      <Glass
+        preset="input"
+        interactive
         style={[
           styles.notice,
           {
-            borderColor: alpha(theme.colors.warning, 0.32),
-            backgroundColor: alpha(theme.colors.warning, compact ? 0.08 : 0.12),
+            borderColor: theme.colors.border,
             padding: compact ? theme.spacing.md : theme.spacing.lg,
           },
         ]}
       >
         <View style={styles.noticeRow}>
-          <View style={[styles.iconWrap, { backgroundColor: alpha(theme.colors.warning, 0.18) }]}>
-            <SymbolView name="lock.fill" size={16} tintColor={theme.colors.warning} />
+          <View
+            style={[styles.iconWrap, { backgroundColor: alpha(theme.colors.foreground, 0.08) }]}
+          >
+            <SymbolView name="lock.fill" size={16} tintColor={theme.colors.mutedForeground} />
           </View>
           <View style={styles.noticeCopy}>
             <Text variant="subheadline" color="foreground">
@@ -211,25 +218,25 @@ export function BridgeAccessNotice({
                 .
               </Text>
             ) : null}
+            <View style={styles.noticeAction}>
+              <Button
+                title={
+                  pendingCoversRequiredCapability
+                    ? "Request pending"
+                    : requiresTerminal
+                      ? "Request terminal"
+                      : "Request access"
+                }
+                variant="secondary"
+                size="sm"
+                disabled={submitting || pendingCoversRequiredCapability}
+                loading={submitting}
+                onPress={() => setOpen(true)}
+              />
+            </View>
           </View>
         </View>
-        <View style={styles.noticeAction}>
-          <Button
-            title={
-              pendingCoversRequiredCapability
-                ? "Request pending"
-                : requiresTerminal
-                  ? "Request terminal"
-                  : "Request access"
-            }
-            variant="secondary"
-            size="sm"
-            disabled={submitting || pendingCoversRequiredCapability}
-            loading={submitting}
-            onPress={() => setOpen(true)}
-          />
-        </View>
-      </View>
+      </Glass>
 
       <SessionComposerBottomSheet visible={open} onClose={() => setOpen(false)}>
         <ScrollView
@@ -253,6 +260,7 @@ export function BridgeAccessNotice({
                 <SelectPill
                   key={option.id}
                   title={option.title}
+                  subtitle={"subtitle" in option ? option.subtitle : undefined}
                   selected={scopeType === option.id}
                   onPress={() => setScopeType(option.id)}
                 />
@@ -294,17 +302,19 @@ export function BridgeAccessNotice({
                   Terminal
                 </Text>
                 <Text variant="caption1" color="mutedForeground">
-                  Optional. The owner can still deny it.
+                  {requiresTerminal
+                    ? "Required for terminal access"
+                    : "Optional. The owner can still deny it."}
                 </Text>
               </View>
               <Switch
-                value={wantsTerminal}
+                value={terminalRequested}
                 onValueChange={setWantsTerminal}
                 trackColor={{
                   false: theme.colors.border,
                   true: alpha(theme.colors.accent, 0.5),
                 }}
-                thumbColor={wantsTerminal ? theme.colors.accent : theme.colors.mutedForeground}
+                thumbColor={terminalRequested ? theme.colors.accent : theme.colors.mutedForeground}
                 disabled={requiresTerminal}
               />
             </View>
@@ -350,6 +360,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
     alignItems: "flex-start",
+    width: "90%",
   },
   iconWrap: {
     width: 32,
@@ -367,6 +378,7 @@ const styles = StyleSheet.create({
   },
   noticeAction: {
     alignItems: "flex-start",
+    marginTop: 12,
   },
   sheetContent: {
     gap: 20,
@@ -384,14 +396,19 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 18,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 16,
+    minHeight: 64,
     gap: 4,
   },
   optionTitle: {
     fontWeight: "600",
+    lineHeight: 20,
+    width: "100%",
   },
   optionSubtitle: {
     marginTop: 2,
+    lineHeight: 18,
+    width: "100%",
   },
   capabilityCard: {
     borderWidth: StyleSheet.hairlineWidth,

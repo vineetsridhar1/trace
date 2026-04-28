@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SymbolView, type SFSymbol } from "expo-symbols";
 import {
-  AVAILABLE_RUNTIMES_QUERY,
+  AVAILABLE_SESSION_RUNTIMES_QUERY,
+  REQUEST_BRIDGE_ACCESS_MUTATION,
   UPDATE_SESSION_CONFIG_MUTATION,
   useEntityField,
 } from "@trace/client-core";
-import type { CodingTool, SessionConnection, SessionRuntimeInstance } from "@trace/gql";
-import { ListRow, Text } from "@/components/design-system";
+import type { BridgeAccessCapability, SessionConnection, SessionRuntimeInstance } from "@trace/gql";
+import { ListRow, Spinner, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { applyOptimisticPatch } from "@/lib/optimisticEntity";
 import { getClient } from "@/lib/urql";
-import { useTheme } from "@/theme";
+import { subscribeBridgeAccessEvents } from "@/lib/bridge-access-events";
+import { alpha, useTheme } from "@/theme";
 
 interface SessionRuntimePickerSheetContentProps {
   sessionId: string;
@@ -27,6 +29,51 @@ interface RuntimeRow {
   selected: boolean;
   disabled: boolean;
   value: string;
+  runtime: SessionRuntimeInstance;
+  requestPending: boolean;
+  canRequestAccess: boolean;
+  accessAllowed: boolean;
+  lacksRepo: boolean;
+}
+
+function RuntimeRequestPill({
+  title,
+  disabled,
+  loading,
+  onPress,
+}: {
+  title: string;
+  disabled?: boolean;
+  loading?: boolean;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  const inactive = disabled || loading;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: inactive, busy: loading }}
+      disabled={inactive}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.requestPill,
+        {
+          backgroundColor: theme.colors.surfaceElevated,
+          opacity: disabled ? 0.5 : 1,
+        },
+        pressed && !inactive ? { backgroundColor: alpha(theme.colors.foreground, 0.08) } : null,
+      ]}
+    >
+      {loading ? (
+        <Spinner size="small" color="foreground" />
+      ) : (
+        <Text variant="subheadline" color="foreground" align="center">
+          {title}
+        </Text>
+      )}
+    </Pressable>
+  );
 }
 
 export function SessionRuntimePickerSheetContent({
@@ -36,7 +83,6 @@ export function SessionRuntimePickerSheetContent({
 }: SessionRuntimePickerSheetContentProps) {
   const theme = useTheme();
 
-  const tool = useEntityField("sessions", sessionId, "tool") as string | null | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | SessionConnection
     | null
@@ -52,34 +98,58 @@ export function SessionRuntimePickerSheetContent({
     | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic");
 
-  const currentTool: CodingTool = tool === "codex" ? "codex" : "claude_code";
   const canChangeBridge = agentStatus === "not_started" && !isOptimistic;
   const runtimeInstanceId = connection?.runtimeInstanceId ?? null;
   const currentRuntimeValue = runtimeInstanceId;
 
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
+  const [requestingRuntimeId, setRequestingRuntimeId] = useState<string | null>(null);
+  const [showOtherRuntimes, setShowOtherRuntimes] = useState(false);
+
+  const fetchRuntimes = useCallback(async (): Promise<SessionRuntimeInstance[]> => {
+    if (!canChangeBridge) {
+      return [];
+    }
+    const result = await getClient()
+      .query(AVAILABLE_SESSION_RUNTIMES_QUERY, {
+        sessionId,
+      })
+      .toPromise();
+    const data = result.data?.availableSessionRuntimes as SessionRuntimeInstance[] | undefined;
+    return data ?? [];
+  }, [canChangeBridge, sessionId]);
 
   useEffect(() => {
-    if (!canChangeBridge) return;
     let cancelled = false;
-    getClient()
-      .query(AVAILABLE_RUNTIMES_QUERY, {
-        tool: currentTool,
-        sessionGroupId: sessionGroupId ?? null,
-      })
-      .toPromise()
-      .then((result) => {
-        if (cancelled) return;
-        const data = result.data?.availableRuntimes as SessionRuntimeInstance[] | undefined;
-        setRuntimes(data ?? []);
+    fetchRuntimes()
+      .then((data) => {
+        if (!cancelled) setRuntimes(data);
       })
       .catch((err) => {
-        console.warn("[availableRuntimes] failed", err);
+        if (!cancelled) console.warn("[availableRuntimes] failed", err);
       });
     return () => {
       cancelled = true;
     };
-  }, [canChangeBridge, currentTool, sessionGroupId]);
+  }, [fetchRuntimes]);
+
+  useEffect(() => {
+    if (!canChangeBridge) return;
+    let cancelled = false;
+    const unsubscribe = subscribeBridgeAccessEvents(() => {
+      void fetchRuntimes()
+        .then((data) => {
+          if (!cancelled) setRuntimes(data);
+        })
+        .catch((err) => {
+          if (!cancelled) console.warn("[availableRuntimes] refresh failed", err);
+        });
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [canChangeBridge, fetchRuntimes]);
 
   const rows = useMemo<RuntimeRow[]>(() => {
     const nextRows: RuntimeRow[] = [];
@@ -87,19 +157,70 @@ export function SessionRuntimePickerSheetContent({
     for (const runtime of runtimes) {
       if (runtime.hostingMode !== "local" || !runtime.connected) continue;
       const lacksRepo = repo?.id ? !runtime.registeredRepoIds.includes(repo.id) : false;
+      const accessAllowed = runtime.access.allowed;
+      const requestPending = !accessAllowed && runtime.access.pendingRequest?.status === "pending";
+      const ownerName = runtime.access.ownerUser?.name?.trim() || "the bridge owner";
       nextRows.push({
         key: `runtime:${runtime.id}`,
         title: runtime.label,
-        subtitle: lacksRepo ? "This runtime does not have the session repo registered." : undefined,
+        subtitle: lacksRepo
+          ? "This runtime does not have the session repo registered."
+          : accessAllowed
+            ? undefined
+            : requestPending
+              ? "Request pending."
+              : `Request access from ${ownerName}.`,
         icon: "laptopcomputer",
         selected: runtimeInstanceId === runtime.id,
-        disabled: !canChangeBridge || lacksRepo,
+        disabled: !canChangeBridge || lacksRepo || !accessAllowed,
         value: runtime.id,
+        runtime,
+        requestPending,
+        canRequestAccess: !accessAllowed && !lacksRepo,
+        accessAllowed,
+        lacksRepo,
       });
     }
 
     return nextRows;
   }, [canChangeBridge, repo?.id, runtimeInstanceId, runtimes]);
+
+  const accessibleRows = useMemo(() => rows.filter((row) => row.accessAllowed), [rows]);
+  const requestableRows = useMemo(() => rows.filter((row) => row.canRequestAccess), [rows]);
+  const hasCompatibleAccessibleRuntime = accessibleRows.some((row) => !row.lacksRepo);
+  const shouldShowRequestableRows = !hasCompatibleAccessibleRuntime || showOtherRuntimes;
+  const visibleRows = shouldShowRequestableRows
+    ? [...accessibleRows, ...requestableRows]
+    : accessibleRows;
+  const showOtherRuntimesToggle = hasCompatibleAccessibleRuntime && requestableRows.length > 0;
+  const cardRowCount = visibleRows.length + (showOtherRuntimesToggle ? 1 : 0);
+
+  const handleRequestAccess = useCallback(
+    async (runtime: SessionRuntimeInstance) => {
+      if (requestingRuntimeId || runtime.access.pendingRequest?.status === "pending") return;
+      setRequestingRuntimeId(runtime.id);
+      try {
+        const result = await getClient()
+          .mutation(REQUEST_BRIDGE_ACCESS_MUTATION, {
+            runtimeInstanceId: runtime.id,
+            scopeType: sessionGroupId ? "session_group" : "all_sessions",
+            sessionGroupId: sessionGroupId ?? undefined,
+            requestedCapabilities: ["session", "terminal"] satisfies BridgeAccessCapability[],
+          })
+          .toPromise();
+        if (result.error) throw result.error;
+        setRuntimes(await fetchRuntimes());
+      } catch (err) {
+        Alert.alert(
+          "Request failed",
+          err instanceof Error ? err.message : "Couldn't request bridge access",
+        );
+      } finally {
+        setRequestingRuntimeId(null);
+      }
+    },
+    [fetchRuntimes, requestingRuntimeId, sessionGroupId],
+  );
 
   const handleSelect = useCallback(
     async (value: string) => {
@@ -182,7 +303,7 @@ export function SessionRuntimePickerSheetContent({
           },
         ]}
       >
-        {rows.map((row, index) => (
+        {visibleRows.map((row, index) => (
           <ListRow
             key={row.key}
             title={row.title}
@@ -193,17 +314,47 @@ export function SessionRuntimePickerSheetContent({
             trailing={
               row.selected ? (
                 <SymbolView name="checkmark" size={16} tintColor={theme.colors.accent} />
+              ) : row.canRequestAccess ? (
+                <RuntimeRequestPill
+                  title={row.requestPending ? "Pending" : "Request"}
+                  disabled={row.requestPending}
+                  loading={requestingRuntimeId === row.runtime.id}
+                  onPress={() => void handleRequestAccess(row.runtime)}
+                />
               ) : undefined
             }
             onPress={!row.disabled ? () => void handleSelect(row.value) : undefined}
             haptic="selection"
-            separator={index < rows.length - 1}
-            style={row.disabled && !row.selected ? styles.disabledRow : undefined}
+            separator={index < cardRowCount - 1}
+            style={
+              row.disabled && !row.selected && !row.canRequestAccess
+                ? styles.disabledRow
+                : undefined
+            }
           />
         ))}
+        {showOtherRuntimesToggle ? (
+          <ListRow
+            title={showOtherRuntimes ? "Hide other runtimes" : "See other runtimes"}
+            subtitle={`${requestableRows.length} available to request`}
+            leading={
+              <SymbolView name="person.2" size={16} tintColor={theme.colors.mutedForeground} />
+            }
+            trailing={
+              <SymbolView
+                name={showOtherRuntimes ? "chevron.up" : "chevron.down"}
+                size={14}
+                tintColor={theme.colors.dimForeground}
+              />
+            }
+            onPress={() => setShowOtherRuntimes((current) => !current)}
+            haptic="selection"
+            separator={false}
+          />
+        ) : null}
       </View>
 
-      {rows.length === 0 ? (
+      {visibleRows.length === 0 ? (
         <Text variant="footnote" color="mutedForeground">
           No compatible runtimes are available for this session.
         </Text>
@@ -222,6 +373,15 @@ const styles = StyleSheet.create({
   card: {
     overflow: "hidden",
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  requestPill: {
+    minHeight: 36,
+    minWidth: 86,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    alignItems: "center",
+    justifyContent: "center",
   },
   disabledRow: {
     opacity: 0.5,

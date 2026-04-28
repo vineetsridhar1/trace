@@ -1,14 +1,19 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import {
   APPROVE_BRIDGE_ACCESS_REQUEST_MUTATION,
   DENY_BRIDGE_ACCESS_REQUEST_MUTATION,
+  REQUEST_BRIDGE_ACCESS_MUTATION,
   REVOKE_BRIDGE_ACCESS_GRANT_MUTATION,
   UPDATE_BRIDGE_ACCESS_GRANT_MUTATION,
+  useAuthStore,
 } from "@trace/client-core";
 import type { BridgeAccessCapability } from "@trace/gql";
 import { EmptyState, Text } from "@/components/design-system";
-import { ConnectionsBridgeAccessSheet } from "@/components/connections/ConnectionsBridgeAccessSheet";
+import {
+  ConnectionsBridgeAccessSheet,
+  type ConnectionsBridgeAccessRequestMode,
+} from "@/components/connections/ConnectionsBridgeAccessSheet";
 import { ConnectionsBridgeSection } from "@/components/connections/ConnectionsBridgeSection";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
@@ -18,13 +23,80 @@ import {
   type ConnectionAccessRequest,
 } from "@/hooks/useConnections";
 
-export function ConnectionsBridgesList() {
+export function ConnectionsBridgesList({
+  initialReviewRequestId,
+}: {
+  initialReviewRequestId?: string | null;
+}) {
   const theme = useTheme();
   const { connections, loading, error, refresh } = useConnections();
+  const userId = useAuthStore((s) => s.user?.id ?? null);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<ConnectionAccessRequest | null>(null);
+  const [selectedRequestMode, setSelectedRequestMode] =
+    useState<ConnectionsBridgeAccessRequestMode>("configure");
   const [selectedGrant, setSelectedGrant] = useState<ConnectionAccessGrant | null>(null);
+  const [handledInitialReviewRequestId, setHandledInitialReviewRequestId] = useState<string | null>(
+    null,
+  );
+  const [locallyResolvedRequestIds, setLocallyResolvedRequestIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  const visibleConnections = useMemo(() => {
+    if (locallyResolvedRequestIds.size === 0) return connections;
+    return connections.map((connection) => ({
+      ...connection,
+      bridge: {
+        ...connection.bridge,
+        accessRequests: connection.bridge.accessRequests.filter(
+          (request) => !locallyResolvedRequestIds.has(request.id),
+        ),
+      },
+    }));
+  }, [connections, locallyResolvedRequestIds]);
+
+  const markRequestResolved = useCallback((requestId: string) => {
+    setLocallyResolvedRequestIds((current) => {
+      if (current.has(requestId)) return current;
+      const next = new Set(current);
+      next.add(requestId);
+      return next;
+    });
+  }, []);
+
+  const openRequestSheet = useCallback(
+    (request: ConnectionAccessRequest, mode: ConnectionsBridgeAccessRequestMode) => {
+      setSelectedGrant(null);
+      setSelectedRequestMode(mode);
+      setSelectedRequest(request);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!initialReviewRequestId) return;
+    if (handledInitialReviewRequestId === initialReviewRequestId) return;
+    if (selectedRequest || selectedGrant) return;
+
+    for (const connection of visibleConnections) {
+      const request = connection.bridge.accessRequests.find(
+        (entry) => entry.id === initialReviewRequestId,
+      );
+      if (!request) continue;
+      setHandledInitialReviewRequestId(initialReviewRequestId);
+      openRequestSheet(request, "quick");
+      return;
+    }
+  }, [
+    handledInitialReviewRequestId,
+    initialReviewRequestId,
+    openRequestSheet,
+    selectedGrant,
+    selectedRequest,
+    visibleConnections,
+  ]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -68,6 +140,7 @@ export function ConnectionsBridgesList() {
         })
         .toPromise();
       if (result.error) throw result.error;
+      markRequestResolved(input.requestId);
       setSelectedRequest(null);
     });
   };
@@ -78,6 +151,7 @@ export function ConnectionsBridgesList() {
         .mutation(DENY_BRIDGE_ACCESS_REQUEST_MUTATION, { requestId: request.id })
         .toPromise();
       if (result.error) throw result.error;
+      markRequestResolved(request.id);
       setSelectedRequest(null);
     });
   };
@@ -115,10 +189,23 @@ export function ConnectionsBridgesList() {
     });
   };
 
-  if (loading && connections.length === 0) {
+  const requestBridgeAccess = (connectionId: string, runtimeInstanceId: string) => {
+    void runAction(connectionId, async () => {
+      const result = await getClient()
+        .mutation(REQUEST_BRIDGE_ACCESS_MUTATION, {
+          runtimeInstanceId,
+          scopeType: "all_sessions",
+          requestedCapabilities: ["session", "terminal"] satisfies BridgeAccessCapability[],
+        })
+        .toPromise();
+      if (result.error) throw result.error;
+    });
+  };
+
+  if (loading && visibleConnections.length === 0) {
     return <CenteredText text="Loading bridges..." />;
   }
-  if (error && connections.length === 0) {
+  if (error && visibleConnections.length === 0) {
     return (
       <View style={styles.center}>
         <EmptyState
@@ -130,7 +217,7 @@ export function ConnectionsBridgesList() {
       </View>
     );
   }
-  if (connections.length === 0) {
+  if (visibleConnections.length === 0) {
     return (
       <View style={styles.center}>
         <EmptyState
@@ -148,20 +235,25 @@ export function ConnectionsBridgesList() {
       contentContainerStyle={[styles.content, { padding: theme.spacing.lg }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
     >
-      {connections.map((connection) => (
+      {visibleConnections.map((connection) => (
         <ConnectionsBridgeSection
           key={connection.bridge.id}
           connection={connection}
           pendingActionId={pendingActionId}
-          onReviewRequest={setSelectedRequest}
+          onReviewRequest={(request) => openRequestSheet(request, "quick")}
           onDeny={denyRequest}
           onManageGrant={setSelectedGrant}
+          onRequestAccess={(connection) =>
+            requestBridgeAccess(connection.bridge.id, connection.bridge.instanceId)
+          }
           onRefresh={refresh}
+          currentUserId={userId}
         />
       ))}
       <ConnectionsBridgeAccessSheet
         request={selectedRequest}
         grant={selectedGrant}
+        requestMode={selectedRequestMode}
         visible={selectedRequest !== null || selectedGrant !== null}
         pending={pendingActionId !== null}
         onClose={() => {
@@ -170,6 +262,7 @@ export function ConnectionsBridgesList() {
         }}
         onApprove={approveRequest}
         onDeny={denyRequest}
+        onConfigure={() => setSelectedRequestMode("configure")}
         onRevoke={revokeGrant}
         onUpdate={updateGrant}
       />

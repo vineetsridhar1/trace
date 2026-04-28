@@ -242,6 +242,7 @@ describe("PushNotificationService", () => {
         actorType: "user",
         actorId: "user-2",
         payload: {
+          requestId: "request-1",
           ownerUserId: "user-1",
           runtimeLabel: "Studio Mac",
           requesterUser: { name: "Casey" },
@@ -258,7 +259,11 @@ describe("PushNotificationService", () => {
           to: "ExponentPushToken[token-1]",
           title: "Casey requested bridge access",
           body: "Review access for Studio Mac",
-          data: { deepLink: "trace://connections" },
+          data: {
+            deepLink: "trace://connections",
+            requestId: "request-1",
+            foregroundPresentation: "bridge_access_requested",
+          },
         },
       ]),
     });

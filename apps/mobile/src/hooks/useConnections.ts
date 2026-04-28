@@ -11,6 +11,7 @@ import type {
 } from "@trace/gql";
 import { userFacingError } from "@/lib/requestError";
 import { getClient } from "@/lib/urql";
+import { subscribeBridgeAccessEvents } from "@/lib/bridge-access-events";
 
 export interface ConnectionUser {
   id: string;
@@ -143,6 +144,13 @@ export function useConnections(): {
       clearInterval(intervalId);
       appStateSub.remove();
     };
+  }, [activeOrgId, fetchOnce, userId]);
+
+  useEffect(() => {
+    if (!userId || !activeOrgId) return;
+    return subscribeBridgeAccessEvents(() => {
+      if (AppState.currentState === "active") void fetchOnce(false);
+    });
   }, [activeOrgId, fetchOnce, userId]);
 
   return {

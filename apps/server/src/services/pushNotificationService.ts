@@ -11,14 +11,21 @@ interface PushMessage {
   title: string;
   subtitle?: string;
   body?: string;
-  data: { deepLink: string };
+  data: NotificationData;
 }
+
+type NotificationData = {
+  deepLink: string;
+  requestId?: string;
+  foregroundPresentation?: "bridge_access_requested";
+};
 
 interface NotificationContent {
   title: string;
   subtitle?: string;
   body?: string;
   deepLink: string;
+  data?: Omit<NotificationData, "deepLink">;
 }
 
 function isExpoPushToken(token: string): boolean {
@@ -41,6 +48,7 @@ function bridgeAccessNotification(payload: unknown): {
   if (!data) return null;
   if (data.status !== "pending") return null;
   if (typeof data.ownerUserId !== "string") return null;
+  if (typeof data.requestId !== "string") return null;
 
   const requesterUser = asJsonObject(data.requesterUser);
   const requesterName =
@@ -58,6 +66,10 @@ function bridgeAccessNotification(payload: unknown): {
       title: `${requesterName} requested bridge access`,
       body: `Review access for ${runtimeLabel}`,
       deepLink: "trace://connections",
+      data: {
+        requestId: data.requestId,
+        foregroundPresentation: "bridge_access_requested",
+      },
     },
   };
 }
@@ -280,7 +292,7 @@ export class PushNotificationService {
         title: content.title,
         subtitle: content.subtitle,
         body: content.body,
-        data: { deepLink: content.deepLink },
+        data: { deepLink: content.deepLink, ...content.data },
       }));
 
     for (const chunk of chunks(messages, EXPO_CHUNK_SIZE)) {

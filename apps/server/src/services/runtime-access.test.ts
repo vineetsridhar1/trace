@@ -559,6 +559,54 @@ describe("runtimeAccessService", () => {
     );
   });
 
+  it("requestAccess allows requesting terminal when an active grant only has session", async () => {
+    prismaMock.bridgeRuntime.findUnique.mockResolvedValueOnce({
+      id: "bridge-1",
+      instanceId: "runtime-1",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+      label: "Laptop",
+      ownerUser: { id: "user-1", name: "Owner" },
+    });
+    prismaMock.bridgeAccessGrant.findFirst.mockResolvedValueOnce({
+      id: "grant-1",
+      capabilities: ["session"],
+    });
+    prismaMock.bridgeAccessRequest.findMany.mockResolvedValueOnce([]);
+    prismaMock.bridgeAccessRequest.create.mockResolvedValueOnce({
+      id: "request-1",
+      bridgeRuntimeId: "bridge-1",
+      ownerUserId: "user-1",
+      scopeType: "all_sessions",
+      sessionGroupId: null,
+      requestedCapabilities: ["session", "terminal"],
+      requestedExpiresAt: null,
+      createdAt: new Date("2026-04-18T12:00:00.000Z"),
+      status: "pending",
+      bridgeRuntime: { id: "bridge-1", instanceId: "runtime-1", label: "Laptop" },
+      requesterUser: { id: "user-2", name: "Guest", email: null, avatarUrl: null },
+      ownerUser: { id: "user-1", name: "Owner" },
+      resolvedByUser: null,
+      sessionGroup: null,
+    });
+
+    await runtimeAccessService.requestAccess({
+      requesterUserId: "user-2",
+      organizationId: "org-1",
+      runtimeInstanceId: "runtime-1",
+      scopeType: "all_sessions",
+      requestedCapabilities: ["terminal"],
+    });
+
+    expect(prismaMock.bridgeAccessRequest.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          requestedCapabilities: expect.arrayContaining(["session", "terminal"]),
+        }),
+      }),
+    );
+  });
+
   it("approveRequest defaults to session-only when owner omits capabilities (even if requester asked for terminal)", async () => {
     prismaMock.bridgeAccessRequest.findUnique.mockResolvedValueOnce({
       id: "request-1",

@@ -1,6 +1,11 @@
 function notificationRoute(path: string): string | null {
-  if (path.startsWith("/sessions/")) return path;
-  if (path === "/connections" || path === "/(connections)") return "/(connections)";
+  const queryStart = path.indexOf("?");
+  const pathname = queryStart >= 0 ? path.slice(0, queryStart) : path;
+  const search = queryStart >= 0 ? path.slice(queryStart) : "";
+  if (pathname.startsWith("/sessions/")) return path;
+  if (pathname === "/connections" || pathname === "/(connections)") {
+    return `/(connections)${search}`;
+  }
   return null;
 }
 

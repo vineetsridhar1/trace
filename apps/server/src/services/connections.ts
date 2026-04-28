@@ -42,7 +42,12 @@ export interface ConnectionsBridge {
 class ConnectionsService {
   async listMine(input: { userId: string; organizationId: string }): Promise<ConnectionsBridge[]> {
     const now = new Date();
-    const bridges = await prisma.bridgeRuntime.findMany({
+    const activeGrantWhere = {
+      revokedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    };
+
+    const ownedBridges = await prisma.bridgeRuntime.findMany({
       where: {
         organizationId: input.organizationId,
         ownerUserId: input.userId,
@@ -61,9 +66,45 @@ class ConnectionsService {
           },
         },
         accessGrants: {
+          where: activeGrantWhere,
+          orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }],
+          include: {
+            granteeUser: true,
+            grantedByUser: true,
+            sessionGroup: true,
+          },
+        },
+      },
+    });
+
+    const grantedBridges = await prisma.bridgeRuntime.findMany({
+      where: {
+        organizationId: input.organizationId,
+        ownerUserId: { not: input.userId },
+        accessGrants: {
+          some: {
+            granteeUserId: input.userId,
+            ...activeGrantWhere,
+          },
+        },
+      },
+      orderBy: [{ connectedAt: "desc" }, { updatedAt: "desc" }],
+      include: {
+        ownerUser: true,
+        accessRequests: {
+          where: { requesterUserId: input.userId, status: "pending" },
+          orderBy: { createdAt: "asc" },
+          include: {
+            requesterUser: true,
+            ownerUser: true,
+            resolvedByUser: true,
+            sessionGroup: true,
+          },
+        },
+        accessGrants: {
           where: {
-            revokedAt: null,
-            OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+            granteeUserId: input.userId,
+            ...activeGrantWhere,
           },
           orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }],
           include: {
@@ -75,6 +116,43 @@ class ConnectionsService {
       },
     });
 
+    const workBridges = [...ownedBridges, ...grantedBridges];
+    const bridges =
+      workBridges.length > 0
+        ? workBridges
+        : await prisma.bridgeRuntime.findMany({
+            where: {
+              organizationId: input.organizationId,
+              ownerUserId: { not: input.userId },
+            },
+            orderBy: [{ connectedAt: "desc" }, { updatedAt: "desc" }],
+            include: {
+              ownerUser: true,
+              accessRequests: {
+                where: { requesterUserId: input.userId, status: "pending" },
+                orderBy: { createdAt: "asc" },
+                include: {
+                  requesterUser: true,
+                  ownerUser: true,
+                  resolvedByUser: true,
+                  sessionGroup: true,
+                },
+              },
+              accessGrants: {
+                where: {
+                  granteeUserId: input.userId,
+                  ...activeGrantWhere,
+                },
+                orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }],
+                include: {
+                  granteeUser: true,
+                  grantedByUser: true,
+                  sessionGroup: true,
+                },
+              },
+            },
+          });
+
     const liveById = new Map<string, RuntimeInstance>();
     for (const runtime of sessionRouter.listRuntimes({})) {
       if (runtime.organizationId !== input.organizationId) continue;
@@ -83,6 +161,7 @@ class ConnectionsService {
 
     const repoIds = new Set<string>();
     for (const bridge of bridges) {
+      if (!hasBridgeWorkAccess(bridge, input.userId)) continue;
       const runtime = liveById.get(bridge.instanceId);
       if (!runtime) continue;
       for (const repoId of runtime.registeredRepoIds) repoIds.add(repoId);
@@ -111,7 +190,7 @@ class ConnectionsService {
       const runtime = liveById.get(bridge.instanceId);
       const repos: ConnectionsRepoEntry[] = [];
 
-      if (runtime) {
+      if (runtime && hasBridgeWorkAccess(bridge, input.userId)) {
         for (const repoId of runtime.registeredRepoIds) {
           const channel = channelByRepoId.get(repoId);
           if (!channel?.repo) continue;
@@ -128,10 +207,16 @@ class ConnectionsService {
       return {
         bridge,
         repos,
-        canTerminal: true,
+        canTerminal:
+          bridge.ownerUserId === input.userId ||
+          bridge.accessGrants.some((grant) => grant.capabilities.includes("terminal")),
       };
     });
   }
+}
+
+function hasBridgeWorkAccess(bridge: BridgeWithAccess, userId: string): boolean {
+  return bridge.ownerUserId === userId || bridge.accessGrants.length > 0;
 }
 
 export const connectionsService = new ConnectionsService();

@@ -22,13 +22,20 @@ import {
 import { getClient } from "@/lib/urql";
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: false,
-    shouldShowBanner: false,
-    shouldShowList: false,
-    shouldPlaySound: false,
-    shouldSetBadge: true,
-  }),
+  handleNotification: async (notification) => {
+    const data = notification.request.content.data;
+    const foregroundPresentation =
+      data && typeof data.foregroundPresentation === "string" ? data.foregroundPresentation : null;
+    const shouldPresent = foregroundPresentation?.startsWith("bridge_access_") ?? false;
+
+    return {
+      shouldShowAlert: shouldPresent,
+      shouldShowBanner: shouldPresent,
+      shouldShowList: shouldPresent,
+      shouldPlaySound: false,
+      shouldSetBadge: true,
+    };
+  },
 });
 
 function selectNeedsInputCount(state: EntityState): number {

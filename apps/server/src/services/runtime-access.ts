@@ -95,6 +95,14 @@ function ensureSessionCapability(
   return Array.from(set);
 }
 
+function capabilitiesCover(
+  granted: BridgeAccessCapability[] | null | undefined,
+  requested: BridgeAccessCapability[],
+): boolean {
+  const grantedSet = new Set(granted ?? []);
+  return requested.every((capability) => grantedSet.has(capability));
+}
+
 export type BridgeRuntimeAccessState = {
   runtimeInstanceId: string;
   bridgeRuntimeId: string | null;
@@ -525,7 +533,7 @@ class RuntimeAccessService {
         sessionGroup: true,
       },
     });
-    if (activeGrant) {
+    if (activeGrant && capabilitiesCover(activeGrant.capabilities, normalizedCapabilities)) {
       throw new Error("Bridge access has already been granted");
     }
 
@@ -551,7 +559,13 @@ class RuntimeAccessService {
           (p: BridgeAccessRequestEventRecord) =>
             p.scopeType === normalizedScopeType && p.sessionGroupId === normalizedSessionGroupId,
         );
-        if (exactMatch) {
+        if (
+          exactMatch &&
+          capabilitiesCover(
+            ensureSessionCapability(exactMatch.requestedCapabilities),
+            normalizedCapabilities,
+          )
+        ) {
           return exactMatch;
         }
 
