@@ -1,0 +1,184 @@
+# Trace Onboarding Setup Gaps
+
+## Purpose
+
+Trace already has the core primitives for organization creation, repository linking, desktop bridge registration, channels, sessions, API tokens, and repo hooks. The missing piece is a setup path that makes the actual dependency chain clear before a user tries to start their first coding session.
+
+This document lists the current gaps and the additions that would make first-run setup reliable.
+
+## Current State
+
+- Users without an organization see a welcome screen that lets them create an organization or wait for an invite.
+- Authenticated users with an organization see a lightweight home checklist.
+- The checklist currently tracks three outcomes:
+  - at least one repository exists
+  - at least one channel exists
+  - at least one session exists
+- Repository creation can detect local git metadata in the desktop app.
+- Desktop repo path linking exists in repository settings.
+- Git hooks can be enabled or repaired per linked local repository.
+- GitHub webhook registration uses a stored GitHub API token.
+- Local session creation requires a connected local runtime and, for repo-backed channels, a runtime that has the repo linked.
+
+## Key Gaps
+
+### 1. Runtime readiness is not part of onboarding
+
+Starting a local coding session depends on a connected desktop bridge/runtime. Today this is only discovered when session creation fails.
+
+Add an onboarding step that shows:
+
+- whether the desktop app/bridge is connected
+- bridge name
+- supported coding tools
+- whether the selected repo is available on that bridge
+- a direct path to fix missing bridge setup
+
+Success criteria:
+
+- A user can tell before creating a session whether Trace can run local agents on this machine.
+- The first-session action should never fail with only `No connected local runtime available` unless the user bypassed the setup path.
+
+### 2. Repository record and local repo access are conflated
+
+Trace can create a repository record without proving the local machine can access it. For local coding, repo existence is not enough; the desktop bridge must also know the local path.
+
+Add a separate onboarding item:
+
+- `Connect a repository`
+- `Link this repository on this computer`
+
+The second step should use the existing desktop `pickFolder`, `getGitInfo`, and `saveRepoPath` APIs.
+
+Success criteria:
+
+- The user can see whether a repo exists in the organization.
+- The user can see whether that repo is linked on the current desktop bridge.
+- Coding-channel creation should warn when the chosen repo is not linked on any connected local runtime.
+
+### 3. GitHub CLI access is not checked
+
+Trace installs `gh` in the cloud/container runtime image, but there is no product-level check for GitHub CLI authentication. Local desktop agents may also depend on the user's local `gh` auth.
+
+Add a GitHub CLI setup capability:
+
+- detect whether `gh` is installed
+- run `gh auth status --hostname github.com`
+- show the authenticated GitHub login when ready
+- provide a terminal flow for `gh auth login`
+- re-check status after the terminal exits or the window regains focus
+
+Success criteria:
+
+- A user can see whether `gh` is ready before asking agents to create PRs, inspect CI, or use GitHub issue/PR commands.
+- Missing CLI auth should produce a setup action, not a late agent failure.
+
+### 4. GitHub API identity and GitHub CLI identity are separate
+
+Trace currently uses a stored GitHub API token for webhook registration. That does not imply `gh` is installed or authenticated. Conversely, `gh auth` does not automatically configure the server-side token used by Trace webhooks.
+
+Make the distinction explicit in settings and onboarding:
+
+- GitHub API token: server-side GitHub API operations such as webhook registration.
+- GitHub CLI auth: shell-level operations used by local/cloud coding agents.
+
+Success criteria:
+
+- Settings should not imply that adding a GitHub API token makes CLI operations work.
+- GitHub CLI setup should not imply that webhook registration will work.
+
+### 5. API token setup is incomplete in the web UI
+
+The server supports multiple token providers, including `anthropic`, `openai`, `github`, and `ssh_key`. The current settings UI only exposes GitHub metadata.
+
+Add UI rows for all supported token providers or intentionally hide unsupported providers behind a feature flag.
+
+Success criteria:
+
+- The visible API key settings match the providers returned by `myApiTokens`.
+- LLM provider setup has a clear path before agent features that require those keys are used.
+
+### 6. Repo hook setup is buried
+
+Repo hooks already exist, but they live inside repository settings after local path linking. They are important enough to surface during setup because they affect local repo synchronization and state tracking.
+
+Add an optional onboarding item:
+
+- enable repo hooks
+- show hook status
+- repair hooks when broken
+
+Success criteria:
+
+- Hook setup is visible immediately after local repo path linking.
+- Hook failures are recoverable from the onboarding surface.
+
+### 7. First session creation does not guide recovery
+
+The first-session checklist action currently attempts to create a session and shows a toast on failure. Setup failures should route users to the missing prerequisite.
+
+Add failure-aware routing:
+
+- no runtime connected -> runtime setup step
+- repo not linked on runtime -> local repo link step
+- missing GitHub CLI auth -> GitHub CLI setup step when the requested workflow needs GitHub
+- missing provider token -> API key setup step when cloud/LLM feature requires it
+
+Success criteria:
+
+- First-session creation errors are actionable.
+- Each blocking error has one obvious setup destination.
+
+## Recommended Onboarding Checklist
+
+Use capability-based setup rather than a one-time wizard that permanently disappears.
+
+Recommended items:
+
+1. Create or join an organization.
+2. Connect this desktop bridge.
+3. Connect a repository to the organization.
+4. Link the repository on this computer.
+5. Optional: enable repo hooks.
+6. Optional: configure GitHub API token.
+7. Optional: authenticate GitHub CLI.
+8. Optional: configure LLM/API provider keys.
+9. Create or join a coding channel.
+10. Start the first coding session.
+
+## Implementation Notes
+
+- Keep onboarding state derived from real capabilities, not a single `onboardingCompleted` flag.
+- Persist dismissals only for optional steps.
+- Treat required steps as complete only when the underlying capability is actually available.
+- Avoid duplicating types outside GraphQL codegen.
+- Keep GraphQL resolvers thin; any new setup checks should live in services or desktop bridge APIs.
+- For desktop-only checks, expose narrow IPC methods through `window.trace`.
+- For server-side checks, use service-layer methods and event payloads that can hydrate Zustand directly.
+
+## Suggested Milestones
+
+### Milestone 1: Make blockers visible
+
+- Add desktop bridge readiness to the home checklist.
+- Add local repo linked status to repository onboarding.
+- Route first-session failures to setup actions.
+
+### Milestone 2: Add GitHub capability setup
+
+- Add GitHub API token row clarity.
+- Add GitHub CLI status check.
+- Add terminal-based `gh auth login`.
+
+### Milestone 3: Complete optional developer setup
+
+- Surface repo hook setup after local path linking.
+- Add missing API token provider rows.
+- Add tests for all checklist state transitions and failure routing.
+
+## Open Questions
+
+- Should GitHub CLI auth be required only for local sessions, or also checked for cloud/container sessions?
+- Should cloud runtime GitHub auth use copied user tokens, device flow, or an injected credential strategy?
+- Should first-run onboarding remain a home checklist, or become a focused setup screen for brand-new organizations?
+- Should API keys be user-scoped, org-scoped, or both depending on provider and feature?
