@@ -5,6 +5,7 @@ import { NoOrgWelcome } from "@/components/onboarding/NoOrgWelcome";
 import { AppConnectivityBanner } from "@/components/navigation/AppConnectivityBanner";
 import { useHydrate } from "@/hooks/useHydrate";
 import { useMyBridges } from "@/hooks/useMyBridges";
+import "@/lib/bridge-access-events";
 import "@/lib/bridge-access-notifications";
 import { useRegisterPushToken } from "@/lib/notifications";
 

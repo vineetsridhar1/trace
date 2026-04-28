@@ -12,6 +12,7 @@ import { ListRow, Spinner, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { applyOptimisticPatch } from "@/lib/optimisticEntity";
 import { getClient } from "@/lib/urql";
+import { subscribeBridgeAccessEvents } from "@/lib/bridge-access-events";
 import { alpha, useTheme } from "@/theme";
 
 interface SessionRuntimePickerSheetContentProps {
@@ -131,6 +132,24 @@ export function SessionRuntimePickerSheetContent({
       cancelled = true;
     };
   }, [fetchRuntimes]);
+
+  useEffect(() => {
+    if (!canChangeBridge) return;
+    let cancelled = false;
+    const unsubscribe = subscribeBridgeAccessEvents(() => {
+      void fetchRuntimes()
+        .then((data) => {
+          if (!cancelled) setRuntimes(data);
+        })
+        .catch((err) => {
+          if (!cancelled) console.warn("[availableRuntimes] refresh failed", err);
+        });
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [canChangeBridge, fetchRuntimes]);
 
   const rows = useMemo<RuntimeRow[]>(() => {
     const nextRows: RuntimeRow[] = [];
