@@ -142,22 +142,32 @@ interface SessionNotificationContext {
   sessionGroupId: string;
 }
 
-async function loadLatestRunClientSource(sessionId: string, before: Date): Promise<string | null> {
+async function loadLatestInteractionClientSource(
+  sessionId: string,
+  before: Date,
+): Promise<string | null> {
   const events = await prisma.event.findMany({
     where: {
       scopeType: "session",
       scopeId: sessionId,
       timestamp: { lt: before },
-      eventType: { in: ["session_started", "session_resumed"] },
+      eventType: { in: ["session_started", "session_resumed", "message_sent"] },
     },
     orderBy: { timestamp: "desc" },
-    take: 10,
+    take: 20,
   });
 
   for (const event of events) {
     const data = asJsonObject(event.payload);
     if (typeof data?.clientSource === "string" && data.clientSource.trim()) {
       return data.clientSource.trim();
+    }
+    if (
+      event.eventType === "message_sent" &&
+      data &&
+      Object.prototype.hasOwnProperty.call(data, "clientSource")
+    ) {
+      return null;
     }
   }
 
@@ -238,7 +248,7 @@ export class PushNotificationService {
     const [session, preview, clientSource] = await Promise.all([
       loadSessionNotificationContext(event.scopeId),
       loadLatestAssistantPreview(event.scopeId, event.timestamp),
-      loadLatestRunClientSource(event.scopeId, event.timestamp),
+      loadLatestInteractionClientSource(event.scopeId, event.timestamp),
     ]);
     if (!session) return;
     if (clientSource !== "mobile") return;
@@ -256,7 +266,7 @@ export class PushNotificationService {
     const [session, preview, clientSource] = await Promise.all([
       loadSessionNotificationContext(event.scopeId),
       loadLatestAssistantPreview(event.scopeId, event.timestamp),
-      loadLatestRunClientSource(event.scopeId, event.timestamp),
+      loadLatestInteractionClientSource(event.scopeId, event.timestamp),
     ]);
     if (!session) return;
     if (clientSource !== "mobile") return;
