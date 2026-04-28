@@ -1,8 +1,9 @@
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, StyleSheet, TextInput, View } from "react-native";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
+import { Camera, CameraView, type BarcodeScanningResult } from "expo-camera";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Button, Screen, Text } from "@/components/design-system";
@@ -19,37 +20,11 @@ type PairingPayload = {
   expiresAt?: string;
 };
 
-type BarcodeScanningResult = {
-  data: string;
-};
-
-type CameraViewProps = {
-  style?: unknown;
-  barcodeScannerSettings?: { barcodeTypes: string[] };
-  onBarcodeScanned?: ((result: BarcodeScanningResult) => void) | undefined;
-};
-
 type CameraPermissionStatus = "checking" | "granted" | "denied" | "unsupported";
 
-type CameraModule = {
-  CameraView?: ComponentType<CameraViewProps>;
-  getCameraPermissionsAsync?: () => Promise<{ granted?: boolean }>;
-  requestCameraPermissionsAsync?: () => Promise<{ granted?: boolean }>;
-};
-
-function loadCameraModule(): CameraModule | null {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require("expo-camera") as CameraModule;
-  } catch (error) {
-    console.warn("[pair-local] expo-camera unavailable", error);
-    return null;
-  }
-}
-
 const APP_VERSION = Constants.expoConfig?.version ?? "0.0.1";
-const cameraModule = loadCameraModule();
-const CameraView = cameraModule?.CameraView ?? null;
+const CAMERA_UNAVAILABLE_MESSAGE =
+  "Camera scanning is not available in this build or on this device. Rebuild the local dev client or install the latest TestFlight build, or paste the pairing code below.";
 
 function parsePairingPayload(raw: string): PairingPayload {
   let parsed: unknown;
@@ -86,35 +61,37 @@ export default function PairLocalScreen() {
   const router = useRouter();
   const theme = useTheme();
   const signInWithToken = useAuthStore((s: AuthState) => s.signInWithToken);
-  const [cameraPermission, setCameraPermission] = useState<CameraPermissionStatus>(
-    cameraModule ? "checking" : "unsupported",
-  );
+  const [cameraPermission, setCameraPermission] = useState<CameraPermissionStatus>("checking");
   const [manualCode, setManualCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cameraEnabled, setCameraEnabled] = useState(true);
-  const cameraSupported = CameraView !== null;
+  const cameraSupported = cameraPermission !== "unsupported";
   const cameraGranted = cameraPermission === "granted";
 
   useEffect(() => {
-    if (!cameraModule?.getCameraPermissionsAsync) {
-      setCameraPermission("unsupported");
-      return;
-    }
-
     let cancelled = false;
-    void cameraModule
-      .getCameraPermissionsAsync()
-      .then((result) => {
+
+    void (async () => {
+      try {
+        const available = await CameraView.isAvailableAsync();
+        if (!available) {
+          if (!cancelled) {
+            setCameraPermission("unsupported");
+          }
+          return;
+        }
+
+        const result = await Camera.getCameraPermissionsAsync();
         if (!cancelled) {
           setCameraPermission(result.granted ? "granted" : "denied");
         }
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) {
           setCameraPermission("unsupported");
         }
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -174,17 +151,8 @@ export default function PairLocalScreen() {
   }
 
   async function handleEnableCamera() {
-    if (!cameraModule?.requestCameraPermissionsAsync) {
-      setCameraPermission("unsupported");
-      setError(
-        "Camera scanning is not available in this build. Rebuild the Expo dev client to enable QR scanning.",
-      );
-      void haptic.error();
-      return;
-    }
-
     try {
-      const result = await cameraModule.requestCameraPermissionsAsync();
+      const result = await Camera.requestCameraPermissionsAsync();
       setCameraPermission(result.granted ? "granted" : "denied");
       if (!result.granted) {
         setError(
@@ -194,9 +162,7 @@ export default function PairLocalScreen() {
       }
     } catch {
       setCameraPermission("unsupported");
-      setError(
-        "Camera scanning is not available in this build. Rebuild the Expo dev client to enable QR scanning.",
-      );
+      setError(CAMERA_UNAVAILABLE_MESSAGE);
       void haptic.error();
     }
   }
@@ -260,8 +226,7 @@ export default function PairLocalScreen() {
                 <ActivityIndicator color={theme.colors.foreground} />
               ) : cameraPermission === "unsupported" ? (
                 <Text variant="callout" color="mutedForeground" align="center">
-                  Camera scanning is not available in this build. Rebuild the Expo dev client to
-                  enable QR scanning, or paste the pairing code below.
+                  {CAMERA_UNAVAILABLE_MESSAGE}
                 </Text>
               ) : cameraGranted ? (
                 <Text variant="callout" color="mutedForeground" align="center">
