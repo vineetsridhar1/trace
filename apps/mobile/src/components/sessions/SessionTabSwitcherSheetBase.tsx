@@ -22,6 +22,13 @@ export interface SessionTabSwitcherSheetProps {
 
 const DISMISS_DISTANCE = 110;
 const DISMISS_VELOCITY = 900;
+let loggedCustomTabSwitcherSheet = false;
+
+function logCustomTabSwitcherSheet() {
+  if (loggedCustomTabSwitcherSheet) return;
+  loggedCustomTabSwitcherSheet = true;
+  console.info("[SessionTabSwitcherSheetBase] rendering custom modal sheet");
+}
 
 export function SessionTabSwitcherSheetBase({
   open,
@@ -30,6 +37,7 @@ export function SessionTabSwitcherSheetBase({
   activePane = "session",
   onClose,
 }: SessionTabSwitcherSheetProps) {
+  logCustomTabSwitcherSheet();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();

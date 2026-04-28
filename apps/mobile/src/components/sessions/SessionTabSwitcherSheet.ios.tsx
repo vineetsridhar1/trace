@@ -8,12 +8,21 @@ import {
 export type { SessionTabSwitcherSheetProps };
 
 let loggedTabSwitcherSheetFallback = false;
+let loggedTabSwitcherNativeSheet = false;
 
 function logTabSwitcherSheetFallback(reason: string) {
   if (loggedTabSwitcherSheetFallback) return;
   loggedTabSwitcherSheetFallback = true;
   console.info("[SessionTabSwitcherSheet] using custom fallback", {
     reason,
+    iosMajorVersion: getIOSMajorVersion(),
+  });
+}
+
+function logTabSwitcherNativeSheet() {
+  if (loggedTabSwitcherNativeSheet) return;
+  loggedTabSwitcherNativeSheet = true;
+  console.info("[SessionTabSwitcherSheet] using native Expo UI sheet", {
     iosMajorVersion: getIOSMajorVersion(),
   });
 }
@@ -40,6 +49,7 @@ export function SessionTabSwitcherSheet({
     );
   }
 
+  logTabSwitcherNativeSheet();
   return (
     <SessionTabSwitcherNativeSheet
       open={open}
