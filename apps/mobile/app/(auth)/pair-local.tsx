@@ -97,12 +97,14 @@ export default function PairLocalScreen() {
 
     void (async () => {
       try {
-        const available = await CameraView.isAvailableAsync();
-        if (!available) {
-          if (!cancelled) {
-            setCameraPermission("unsupported");
+        if (Platform.OS === "web") {
+          const available = await CameraView.isAvailableAsync();
+          if (!available) {
+            if (!cancelled) {
+              setCameraPermission("unsupported");
+            }
+            return;
           }
-          return;
         }
 
         const result = await cameraModule.Camera.getCameraPermissionsAsync();
