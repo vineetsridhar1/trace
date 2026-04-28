@@ -17,11 +17,7 @@
     "ios": {
       "bundleIdentifier": "org.gettrace",
       "supportsTablet": false,
-      "associatedDomains": [
-        "applinks:gettrace.org",
-        "applinks:gettrace.org",
-        "applinks:gettrace.org"
-      ],
+      "associatedDomains": ["applinks:gettrace.org"],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }

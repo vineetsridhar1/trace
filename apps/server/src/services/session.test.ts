@@ -3407,6 +3407,7 @@ describe("SessionService", () => {
 
       expect(result).toHaveLength(2);
       expect(result.map((runtime) => runtime.id)).toEqual(["runtime-owned", "runtime-requestable"]);
+      expect(result[1].registeredRepoIds).toEqual([]);
       expect(result[1].access).toEqual(
         expect.objectContaining({
           allowed: false,
@@ -3420,6 +3421,40 @@ describe("SessionService", () => {
           sessionGroupId: "group-1",
         }),
       );
+    });
+
+    it("only reveals the selected session repo on requestable runtimes", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce({
+        tool: "claude_code",
+        sessionGroupId: "group-1",
+        repoId: "repo-visible",
+      });
+      sessionRouterMock.listRuntimes.mockReturnValueOnce([
+        {
+          id: "runtime-requestable",
+          label: "Teammate laptop",
+          organizationId: "org-1",
+          hostingMode: "local",
+          supportedTools: ["claude_code"],
+          registeredRepoIds: ["repo-visible", "repo-hidden"],
+          boundSessions: new Set<string>(),
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ] as unknown as ReturnType<typeof sessionRouterMock.listRuntimes>);
+      runtimeAccessServiceMock.getAccessState.mockResolvedValueOnce({
+        runtimeInstanceId: "runtime-requestable",
+        hostingMode: "local",
+        connected: true,
+        allowed: false,
+        isOwner: false,
+        capabilities: [],
+        ownerUser: { id: "owner-1", name: "Owner One" },
+        pendingRequest: null,
+      });
+
+      const result = await service.listAvailableRuntimes("session-1", "org-1", "user-1");
+
+      expect(result[0].registeredRepoIds).toEqual(["repo-visible"]);
     });
   });
 
