@@ -38,17 +38,21 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
   const [loading, setLoading] = useState(false);
   const webViewRef = useRef<WebView>(null);
   const latestUrlRef = useRef(resolvedUrl);
+  const lastPropUrlRef = useRef(resolvedUrl);
+  const lastReportedUrlRef = useRef(resolvedUrl);
   const onUrlChangeRef = useRef(onUrlChange);
   const webSource = useMemo(() => ({ uri: url }), [url]);
 
   useEffect(() => {
-    if (resolvedUrl === url) return;
+    if (resolvedUrl === lastPropUrlRef.current) return;
+    lastPropUrlRef.current = resolvedUrl;
+    if (resolvedUrl === latestUrlRef.current) return;
     setUrl(resolvedUrl);
     setInputText(resolvedUrl);
     setCanGoBack(false);
     setCanGoForward(false);
     setLoading(false);
-  }, [resolvedUrl, url]);
+  }, [resolvedUrl]);
 
   useEffect(() => {
     latestUrlRef.current = url;
@@ -58,31 +62,44 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
     onUrlChangeRef.current = onUrlChange;
   }, [onUrlChange]);
 
+  const reportUrlChange = useCallback((next: string) => {
+    if (!next || next === lastReportedUrlRef.current) return;
+    lastReportedUrlRef.current = next;
+    onUrlChangeRef.current(next);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (latestUrlRef.current) onUrlChangeRef.current(latestUrlRef.current);
     };
   }, []);
 
-  const handleNavStateChange = useCallback((state: WebViewNavigation) => {
-    setCanGoBack(state.canGoBack);
-    setCanGoForward(state.canGoForward);
-    setInputText(state.url);
-    setUrl(state.url);
-  }, []);
+  const handleNavStateChange = useCallback(
+    (state: WebViewNavigation) => {
+      latestUrlRef.current = state.url;
+      setCanGoBack(state.canGoBack);
+      setCanGoForward(state.canGoForward);
+      setInputText(state.url);
+      setUrl(state.url);
+      reportUrlChange(state.url);
+    },
+    [reportUrlChange],
+  );
 
   const handleSubmit = useCallback(
     (e: NativeSyntheticEvent<TextInputSubmitEditingEventData>) => {
       const raw = normalizeBrowserInputUrl(e.nativeEvent.text);
       if (!raw) return;
+      latestUrlRef.current = raw;
       setUrl(raw);
       setInputText(raw);
+      reportUrlChange(raw);
       if (raw === url) {
         webViewRef.current?.reload();
         return;
       }
     },
-    [url],
+    [reportUrlChange, url],
   );
 
   const handleBack = useCallback(() => webViewRef.current?.goBack(), []);
