@@ -36,6 +36,29 @@ export function getBridgeAccessApprovalExpiresAt(
   return new Date(now + ms).toISOString();
 }
 
+export function getBridgeAccessApprovalDurationFromRequest(
+  requestedExpiresAt?: string | null,
+  requestedAt?: string | null,
+): BridgeAccessApprovalDuration {
+  if (!requestedExpiresAt) return "never";
+
+  const expiresAt = new Date(requestedExpiresAt).getTime();
+  const startsAt = requestedAt ? new Date(requestedAt).getTime() : Date.now();
+  if (Number.isNaN(expiresAt) || Number.isNaN(startsAt)) return "1d";
+
+  const requestedMs = Math.max(0, expiresAt - startsAt);
+  const options: Array<{ duration: BridgeAccessApprovalDuration; ms: number }> = [
+    { duration: "1h", ms: 60 * 60 * 1000 },
+    { duration: "3h", ms: 3 * 60 * 60 * 1000 },
+    { duration: "1d", ms: 24 * 60 * 60 * 1000 },
+    { duration: "7d", ms: 7 * 24 * 60 * 60 * 1000 },
+  ];
+
+  return options.reduce((closest, option) =>
+    Math.abs(option.ms - requestedMs) < Math.abs(closest.ms - requestedMs) ? option : closest,
+  ).duration;
+}
+
 export function formatCapabilities(caps?: BridgeAccessCapability[] | null): string {
   const values = caps ?? [];
   if (values.length === 0) return "No access";
