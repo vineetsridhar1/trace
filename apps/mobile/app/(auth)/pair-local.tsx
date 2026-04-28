@@ -3,7 +3,7 @@ import { ActivityIndicator, Platform, Pressable, StyleSheet, TextInput, View } f
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
-import { Camera, CameraView, type BarcodeScanningResult } from "expo-camera";
+import type { BarcodeScanningResult } from "expo-camera";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Button, Screen, Text } from "@/components/design-system";
@@ -21,10 +21,26 @@ type PairingPayload = {
 };
 
 type CameraPermissionStatus = "checking" | "granted" | "denied" | "unsupported";
+type CameraModule = typeof import("expo-camera");
 
 const APP_VERSION = Constants.expoConfig?.version ?? "0.0.1";
 const CAMERA_UNAVAILABLE_MESSAGE =
   "Camera scanning is not available in this build or on this device. Rebuild the local dev client or install the latest TestFlight build, or paste the pairing code below.";
+
+function loadCameraModule(): CameraModule | null {
+  try {
+    // `expo-camera` evaluates native modules at import time. Keep this guarded so stale native
+    // builds can still render the manual pairing fallback.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("expo-camera") as CameraModule;
+  } catch (error) {
+    console.warn("[pair-local] expo-camera unavailable", error);
+    return null;
+  }
+}
+
+const cameraModule = loadCameraModule();
+const CameraView = cameraModule?.CameraView ?? null;
 
 function parsePairingPayload(raw: string): PairingPayload {
   let parsed: unknown;
@@ -61,15 +77,22 @@ export default function PairLocalScreen() {
   const router = useRouter();
   const theme = useTheme();
   const signInWithToken = useAuthStore((s: AuthState) => s.signInWithToken);
-  const [cameraPermission, setCameraPermission] = useState<CameraPermissionStatus>("checking");
+  const [cameraPermission, setCameraPermission] = useState<CameraPermissionStatus>(
+    cameraModule ? "checking" : "unsupported",
+  );
   const [manualCode, setManualCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cameraEnabled, setCameraEnabled] = useState(true);
-  const cameraSupported = cameraPermission !== "unsupported";
+  const cameraSupported = CameraView !== null && cameraPermission !== "unsupported";
   const cameraGranted = cameraPermission === "granted";
 
   useEffect(() => {
+    if (!cameraModule || !CameraView) {
+      setCameraPermission("unsupported");
+      return;
+    }
+
     let cancelled = false;
 
     void (async () => {
@@ -82,7 +105,7 @@ export default function PairLocalScreen() {
           return;
         }
 
-        const result = await Camera.getCameraPermissionsAsync();
+        const result = await cameraModule.Camera.getCameraPermissionsAsync();
         if (!cancelled) {
           setCameraPermission(result.granted ? "granted" : "denied");
         }
@@ -151,8 +174,15 @@ export default function PairLocalScreen() {
   }
 
   async function handleEnableCamera() {
+    if (!cameraModule) {
+      setCameraPermission("unsupported");
+      setError(CAMERA_UNAVAILABLE_MESSAGE);
+      void haptic.error();
+      return;
+    }
+
     try {
-      const result = await Camera.requestCameraPermissionsAsync();
+      const result = await cameraModule.Camera.requestCameraPermissionsAsync();
       setCameraPermission(result.granted ? "granted" : "denied");
       if (!result.granted) {
         setError(
