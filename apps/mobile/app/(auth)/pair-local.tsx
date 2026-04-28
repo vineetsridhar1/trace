@@ -84,7 +84,6 @@ export default function PairLocalScreen() {
   const [manualCode, setManualCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cameraPaused, setCameraPaused] = useState(false);
   const cameraSupported = CameraView !== null && cameraPermission !== "unsupported";
   const cameraGranted = cameraPermission === "granted";
 
@@ -215,9 +214,8 @@ export default function PairLocalScreen() {
   }
 
   function handleBarcodeScanned(result: BarcodeScanningResult) {
-    if (submitting || scanningRef.current || cameraPaused) return;
+    if (submitting || scanningRef.current) return;
     scanningRef.current = true;
-    setCameraPaused(true);
     setManualCode(result.data);
     void pairFromPayload(result.data).finally(() => {
       scanningRef.current = false;
@@ -268,7 +266,7 @@ export default function PairLocalScreen() {
             <CameraView
               style={styles.camera}
               barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-              onBarcodeScanned={submitting || cameraPaused ? undefined : handleBarcodeScanned}
+              onBarcodeScanned={submitting ? undefined : handleBarcodeScanned}
             />
           ) : (
             <View style={[styles.cameraFallback, { backgroundColor: theme.colors.surface }]}>
@@ -293,17 +291,6 @@ export default function PairLocalScreen() {
                 variant="secondary"
                 onPress={() => {
                   void handleEnableCamera();
-                }}
-                disabled={submitting}
-              />
-            ) : null}
-            {cameraSupported && cameraGranted && cameraPaused ? (
-              <Button
-                title="Scan again"
-                variant="secondary"
-                onPress={() => {
-                  setError(null);
-                  setCameraPaused(false);
                 }}
                 disabled={submitting}
               />
