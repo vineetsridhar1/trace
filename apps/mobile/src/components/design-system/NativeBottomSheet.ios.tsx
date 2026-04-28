@@ -1,6 +1,11 @@
 import { useCallback, type ReactNode } from "react";
 import { StyleSheet, useWindowDimensions, View, type ViewStyle } from "react-native";
-import { BottomSheet, Host, type PresentationDetent } from "@expo/ui/swift-ui";
+import { BottomSheet, Group, Host, RNHostView } from "@expo/ui/swift-ui";
+import {
+  presentationDetents,
+  presentationDragIndicator,
+  type PresentationDetent,
+} from "@expo/ui/swift-ui/modifiers";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme";
 
@@ -27,9 +32,9 @@ export function NativeBottomSheet({
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  const handleOpenedChange = useCallback(
-    (isOpened: boolean) => {
-      if (isOpened) return;
+  const handlePresentedChange = useCallback(
+    (isPresented: boolean) => {
+      if (isPresented) return;
       onDismissed?.();
       onClose();
     },
@@ -38,32 +43,25 @@ export function NativeBottomSheet({
 
   return (
     <Host colorScheme={theme.scheme === "dark" ? "dark" : "light"} style={[styles.host, { width }]}>
-      <BottomSheet
-        isOpened={visible}
-        onIsOpenedChange={handleOpenedChange}
-        presentationDetents={detents}
-        presentationDragIndicator="visible"
-      >
-        <Host
-          colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-          useViewportSizeMeasurement
-          style={styles.sheetHost}
-        >
-          <View
-            style={[
-              styles.content,
-              {
-                backgroundColor: theme.colors.surfaceDeep,
-                paddingHorizontal: theme.spacing.lg,
-                paddingTop: theme.spacing.lg,
-                paddingBottom: Math.max(insets.bottom, theme.spacing.lg),
-              },
-              contentStyle,
-            ]}
-          >
-            {children}
-          </View>
-        </Host>
+      <BottomSheet isPresented={visible} onIsPresentedChange={handlePresentedChange}>
+        <Group modifiers={[presentationDetents(detents), presentationDragIndicator("visible")]}>
+          <RNHostView>
+            <View
+              style={[
+                styles.content,
+                {
+                  backgroundColor: theme.colors.surfaceDeep,
+                  paddingHorizontal: theme.spacing.lg,
+                  paddingTop: theme.spacing.lg,
+                  paddingBottom: Math.max(insets.bottom, theme.spacing.lg),
+                },
+                contentStyle,
+              ]}
+            >
+              {children}
+            </View>
+          </RNHostView>
+        </Group>
       </BottomSheet>
     </Host>
   );
@@ -75,9 +73,6 @@ const styles = StyleSheet.create({
     left: 0,
     bottom: 0,
     height: 1,
-  },
-  sheetHost: {
-    flex: 1,
   },
   content: {
     flex: 1,
