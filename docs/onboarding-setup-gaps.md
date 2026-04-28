@@ -79,13 +79,37 @@ Trace currently uses a stored GitHub API token for webhook registration. That do
 
 Make the distinction explicit in settings and onboarding:
 
-- GitHub API token: server-side GitHub API operations such as webhook registration.
+- GitHub app identity: server-side GitHub API operations such as webhook registration.
 - GitHub CLI auth: shell-level operations used by local/cloud coding agents.
+- Manual GitHub API token: fallback path if GitHub app identity is unavailable.
 
 Success criteria:
 
-- Settings should not imply that adding a GitHub API token makes CLI operations work.
+- Settings should not imply that adding a GitHub app identity or API token makes CLI operations work.
 - GitHub CLI setup should not imply that webhook registration will work.
+
+Recommended direction:
+
+- Prefer a GitHub OAuth/device-flow identity over asking users to paste a personal access token.
+- Store the OAuth token securely and use it for server-side GitHub API calls.
+- Keep `gh auth` as a separate local/runtime readiness check for agent shell workflows.
+- Keep manual API token entry only as a fallback or admin/debug escape hatch.
+
+Why `gh auth` is not enough:
+
+- `gh auth` lives on a specific machine or runtime.
+- Server-side webhooks and background jobs cannot rely on a user's local `gh` config.
+- Browser-only users may not have a local `gh` installation.
+- Cloud/container runtimes may have their own filesystem and auth state.
+- Product-owned API calls need a stable token available to the Trace service layer.
+
+Why OAuth is better than manual API keys:
+
+- Users do not need to create and paste personal access tokens.
+- Trace can request explicit scopes during login.
+- Trace can show the connected GitHub account.
+- Trace can support refresh and disconnect flows.
+- Trace can make GitHub setup feel like first-party auth instead of settings plumbing.
 
 ### 5. API token setup is incomplete in the web UI
 
@@ -140,7 +164,7 @@ Recommended items:
 3. Connect a repository to the organization.
 4. Link the repository on this computer.
 5. Optional: enable repo hooks.
-6. Optional: configure GitHub API token.
+6. Optional: connect GitHub app identity.
 7. Optional: authenticate GitHub CLI.
 8. Optional: configure LLM/API provider keys.
 9. Create or join a coding channel.
@@ -166,7 +190,8 @@ Recommended items:
 
 ### Milestone 2: Add GitHub capability setup
 
-- Add GitHub API token row clarity.
+- Add GitHub app identity using OAuth/device flow.
+- Reframe manual GitHub API tokens as a fallback path.
 - Add GitHub CLI status check.
 - Add terminal-based `gh auth login`.
 
@@ -179,6 +204,6 @@ Recommended items:
 ## Open Questions
 
 - Should GitHub CLI auth be required only for local sessions, or also checked for cloud/container sessions?
-- Should cloud runtime GitHub auth use copied user tokens, device flow, or an injected credential strategy?
+- Should cloud runtime GitHub CLI auth use copied user tokens, device flow, or an injected credential strategy?
 - Should first-run onboarding remain a home checklist, or become a focused setup screen for brand-new organizations?
 - Should API keys be user-scoped, org-scoped, or both depending on provider and feature?
