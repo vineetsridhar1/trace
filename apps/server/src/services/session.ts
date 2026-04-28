@@ -2616,6 +2616,7 @@ export class SessionService {
           eventType: "message_sent",
           payload: {
             text,
+            clientSource: normalizeClientSource(clientSource),
             ...(imageKeys?.length ? { imageKeys } : {}),
             ...(clientMutationId ? { clientMutationId } : {}),
           },
@@ -2649,6 +2650,7 @@ export class SessionService {
         eventType: "message_sent",
         payload: {
           text,
+          clientSource: normalizeClientSource(clientSource),
           ...(imageKeys?.length ? { imageKeys } : {}),
           ...(clientMutationId ? { clientMutationId } : {}),
         },
@@ -2768,6 +2770,7 @@ export class SessionService {
         eventType: "message_sent",
         payload: {
           text,
+          clientSource: normalizeClientSource(clientSource),
           ...(imageKeys?.length ? { imageKeys } : {}),
           deliveryFailed: true,
           ...(clientMutationId ? { clientMutationId } : {}),
@@ -2839,6 +2842,7 @@ export class SessionService {
       eventType: "message_sent",
       payload: {
         text,
+        clientSource: normalizeClientSource(clientSource),
         ...(imageKeys?.length ? { imageKeys } : {}),
         ...(clientMutationId ? { clientMutationId } : {}),
       },
