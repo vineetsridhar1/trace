@@ -9,6 +9,33 @@ function notificationRoute(path: string): string | null {
   return null;
 }
 
+function pathnameOnly(path: string): string {
+  const queryStart = path.indexOf("?");
+  const hashStart = path.indexOf("#");
+  let end = path.length;
+  if (queryStart >= 0) end = Math.min(end, queryStart);
+  if (hashStart >= 0) end = Math.min(end, hashStart);
+  return path.slice(0, end).replace(/\/+$/, "") || "/";
+}
+
+function isSessionDetailPath(path: string): boolean {
+  return /^\/sessions\/[^/]+\/[^/]+$/.test(pathnameOnly(path));
+}
+
+function hasRouteState(path: string): boolean {
+  return path.includes("?") || path.includes("#");
+}
+
+export function shouldNavigateToNotificationPath(
+  currentPathname: string | null | undefined,
+  targetPath: string,
+): boolean {
+  const targetPathname = pathnameOnly(targetPath);
+  if (!isSessionDetailPath(targetPathname)) return true;
+  if (hasRouteState(targetPath)) return true;
+  return pathnameOnly(currentPathname ?? "") !== targetPathname;
+}
+
 export function sessionIdFromNotificationLink(deepLink: string): string | null {
   const path = routePathFromNotificationLink(deepLink);
   if (!path?.startsWith("/sessions/")) return null;

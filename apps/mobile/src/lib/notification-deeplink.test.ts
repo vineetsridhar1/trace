@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   routePathFromNotificationLink,
   sessionIdFromNotificationLink,
+  shouldNavigateToNotificationPath,
 } from "./notification-deeplink";
 
 describe("routePathFromNotificationLink", () => {
@@ -46,5 +47,31 @@ describe("sessionIdFromNotificationLink", () => {
 
   it("returns null for non-session links", () => {
     expect(sessionIdFromNotificationLink("trace://connections")).toBeNull();
+  });
+});
+
+describe("shouldNavigateToNotificationPath", () => {
+  it("does not navigate when a session notification targets the current session", () => {
+    expect(shouldNavigateToNotificationPath("/sessions/g1/s1", "/sessions/g1/s1")).toBe(false);
+  });
+
+  it("ignores trailing slashes when comparing plain session routes", () => {
+    expect(shouldNavigateToNotificationPath("/sessions/g1/s1/", "/sessions/g1/s1")).toBe(false);
+  });
+
+  it("navigates when a same-session notification includes route state", () => {
+    expect(shouldNavigateToNotificationPath("/sessions/g1/s1", "/sessions/g1/s1?pane=browser")).toBe(
+      true,
+    );
+  });
+
+  it("navigates when a session notification targets a different session", () => {
+    expect(shouldNavigateToNotificationPath("/sessions/g1/s1", "/sessions/g1/s2")).toBe(true);
+  });
+
+  it("always navigates for non-session notification routes", () => {
+    expect(
+      shouldNavigateToNotificationPath("/(connections)", "/(connections)?requestId=req-1"),
+    ).toBe(true);
   });
 });
