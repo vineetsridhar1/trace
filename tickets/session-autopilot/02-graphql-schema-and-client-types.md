@@ -37,15 +37,15 @@ Expose Ultraplan, planned tickets, controller runs, ticket executions, session r
 
 ## Completion requirements
 
-- [ ] GraphQL schema contains all Ultraplan, ControllerRun, and TicketExecution types and enums.
-- [ ] GraphQL schema exposes planned tickets independently from executions.
-- [ ] `UltraplanTicket.status` is exposed as `UltraplanTicketStatus`.
-- [ ] GraphQL schema includes `ScopeType.ultraplan`.
-- [ ] Generated client and resolver types compile.
-- [ ] Session group detail can hydrate the active Ultraplan.
-- [ ] The schema can represent controller run summaries and full-chat links.
-- [ ] The schema can represent a v1 ordered plan and future DAG dependencies.
-- [ ] No duplicate type definitions are added outside `schema.graphql`.
+- [x] GraphQL schema contains all Ultraplan, ControllerRun, and TicketExecution types and enums.
+- [x] GraphQL schema exposes planned tickets independently from executions.
+- [x] `UltraplanTicket.status` is exposed as `UltraplanTicketStatus`.
+- [x] GraphQL schema includes `ScopeType.ultraplan`.
+- [x] Generated client and resolver types compile.
+- [x] Session group detail can hydrate the active Ultraplan.
+- [x] The schema can represent controller run summaries and full-chat links.
+- [x] The schema can represent a v1 ordered plan and future DAG dependencies.
+- [x] No duplicate type definitions are added outside `schema.graphql`.
 
 ## Implementation notes
 

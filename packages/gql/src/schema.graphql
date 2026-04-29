@@ -16,6 +16,12 @@ enum SessionStatus {
   merged
 }
 
+enum SessionRole {
+  primary
+  ticket_worker
+  ultraplan_controller_run
+}
+
 enum SessionGroupStatus {
   in_progress
   needs_input
@@ -125,6 +131,7 @@ enum ScopeType {
   session
   ticket
   system
+  ultraplan
 }
 
 enum ActorType {
@@ -175,6 +182,10 @@ enum InboxItemType {
   field_change_suggestion
   comment_suggestion
   message_suggestion
+  ultraplan_plan_approval
+  ultraplan_validation_request
+  ultraplan_conflict_resolution
+  ultraplan_final_review
 }
 
 enum InboxItemStatus {
@@ -204,6 +215,58 @@ enum AiConversationVisibility {
 enum TurnRole {
   USER
   ASSISTANT
+}
+
+enum UltraplanStatus {
+  draft
+  waiting
+  planning
+  running
+  needs_human
+  integrating
+  paused
+  completed
+  failed
+  cancelled
+}
+
+enum ControllerRunStatus {
+  queued
+  running
+  completed
+  failed
+  cancelled
+}
+
+enum TicketExecutionStatus {
+  queued
+  running
+  reviewing
+  needs_human
+  ready_to_integrate
+  integrating
+  integrated
+  blocked
+  failed
+  cancelled
+}
+
+enum UltraplanTicketStatus {
+  planned
+  ready
+  running
+  blocked
+  completed
+  skipped
+  cancelled
+}
+
+enum IntegrationStatus {
+  not_started
+  running
+  conflicted
+  completed
+  failed
 }
 
 enum EventType {
@@ -255,6 +318,26 @@ enum EventType {
   queued_message_removed
   queued_messages_cleared
   queued_messages_drained
+  ultraplan_created
+  ultraplan_updated
+  ultraplan_paused
+  ultraplan_resumed
+  ultraplan_completed
+  ultraplan_failed
+  ultraplan_controller_run_created
+  ultraplan_controller_run_started
+  ultraplan_controller_run_completed
+  ultraplan_controller_run_failed
+  ultraplan_ticket_created
+  ultraplan_ticket_updated
+  ultraplan_ticket_reordered
+  ticket_execution_created
+  ticket_execution_updated
+  ticket_execution_ready_for_review
+  ticket_execution_integration_requested
+  ticket_execution_integrated
+  ticket_execution_blocked
+  ultraplan_human_gate_requested
 }
 
 # --- Core Types ---
@@ -349,6 +432,7 @@ type SessionGroup {
   archivedAt: DateTime
   setupStatus: SetupStatus!
   setupError: String
+  ultraplan: Ultraplan
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -358,6 +442,7 @@ type Session {
   name: String!
   agentStatus: AgentStatus!
   sessionStatus: SessionStatus!
+  role: SessionRole!
   tool: CodingTool!
   model: String
   hosting: HostingMode!
@@ -424,6 +509,8 @@ type Ticket {
   description: String!
   status: TicketStatus!
   priority: Priority!
+  acceptanceCriteria: [String!]!
+  testPlan: String
   createdBy: User!
   assignees: [User!]!
   labels: [String!]!
@@ -433,8 +520,17 @@ type Ticket {
   projects: [Project!]!
   sessions: [Session!]!
   links: [TicketLink!]!
+  dependencies: [TicketDependency!]!
+  dependedOnBy: [TicketDependency!]!
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+type TicketDependency {
+  ticket: Ticket!
+  dependsOnTicket: Ticket!
+  reason: String
+  createdAt: DateTime!
 }
 
 type TicketLink {
@@ -442,6 +538,99 @@ type TicketLink {
   entityType: EntityType!
   entityId: ID!
   createdAt: DateTime!
+}
+
+type Ultraplan {
+  id: ID!
+  organizationId: ID!
+  sessionGroupId: ID!
+  sessionGroup: SessionGroup!
+  ownerUserId: ID!
+  ownerUser: User!
+  status: UltraplanStatus!
+  integrationBranch: String!
+  integrationWorkdir: String
+  playbookId: ID
+  playbookConfig: JSON
+  planSummary: String
+  customInstructions: String
+  activeInboxItemId: ID
+  activeInboxItem: InboxItem
+  lastControllerRunId: ID
+  lastControllerRun: UltraplanControllerRun
+  lastControllerSummary: String
+  tickets: [UltraplanTicket!]!
+  ticketExecutions: [TicketExecution!]!
+  controllerRuns: [UltraplanControllerRun!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type UltraplanTicket {
+  id: ID!
+  organizationId: ID!
+  ultraplanId: ID!
+  ultraplan: Ultraplan!
+  ticketId: ID!
+  ticket: Ticket!
+  position: Int!
+  status: UltraplanTicketStatus!
+  generatedByRunId: ID
+  generatedByRun: UltraplanControllerRun
+  rationale: String
+  metadata: JSON
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type UltraplanControllerRun {
+  id: ID!
+  organizationId: ID!
+  ultraplanId: ID!
+  ultraplan: Ultraplan!
+  sessionGroupId: ID!
+  sessionGroup: SessionGroup!
+  sessionId: ID
+  session: Session
+  triggerEventId: ID
+  triggerEvent: Event
+  triggerType: String!
+  status: ControllerRunStatus!
+  inputSummary: String
+  summaryTitle: String
+  summary: String
+  summaryPayload: JSON
+  error: String
+  generatedTickets: [UltraplanTicket!]!
+  createdAt: DateTime!
+  startedAt: DateTime
+  completedAt: DateTime
+}
+
+type TicketExecution {
+  id: ID!
+  organizationId: ID!
+  ultraplanId: ID!
+  ultraplan: Ultraplan!
+  ticketId: ID!
+  ticket: Ticket!
+  sessionGroupId: ID!
+  sessionGroup: SessionGroup!
+  workerSessionId: ID
+  workerSession: Session
+  branch: String!
+  workdir: String
+  status: TicketExecutionStatus!
+  integrationStatus: IntegrationStatus!
+  baseCheckpointSha: String
+  headCheckpointSha: String
+  integrationCheckpointSha: String
+  activeInboxItemId: ID
+  activeInboxItem: InboxItem
+  lastReviewSummary: String
+  attempt: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
 }
 
 type Event {
@@ -941,6 +1130,9 @@ input CreateTicketInput {
   title: String!
   description: String
   priority: Priority
+  acceptanceCriteria: [String!]
+  testPlan: String
+  dependencyTicketIds: [ID!]
   labels: [String!]
   channelId: ID
   projectId: ID
@@ -952,6 +1144,9 @@ input UpdateTicketInput {
   description: String
   status: TicketStatus
   priority: Priority
+  acceptanceCriteria: [String!]
+  testPlan: String
+  dependencyTicketIds: [ID!]
   labels: [String!]
 }
 
@@ -1016,6 +1211,17 @@ input CreateOrganizationInput {
   name: String!
 }
 
+input StartUltraplanInput {
+  sessionGroupId: ID!
+  goal: String!
+  controllerProvider: String!
+  controllerModel: String
+  controllerRuntimePolicy: JSON
+  playbookId: ID
+  playbookConfig: JSON
+  customInstructions: String
+}
+
 # --- Queries ---
 
 type Query {
@@ -1041,6 +1247,9 @@ type Query {
   searchSessions(query: String!, channelId: ID): SessionSearchResults!
   tickets(organizationId: ID!, filters: TicketFilters): [Ticket!]!
   ticket(id: ID!): Ticket
+  ultraplan(id: ID!): Ultraplan
+  ultraplanForSessionGroup(sessionGroupId: ID!): Ultraplan
+  ultraplanControllerRun(id: ID!): UltraplanControllerRun
   events(
     organizationId: ID!
     scope: ScopeInput
@@ -1223,6 +1432,11 @@ type Mutation {
   unassignTicket(ticketId: ID!, userId: ID!): Ticket!
   linkTicket(ticketId: ID!, entityType: EntityType!, entityId: ID!): Ticket!
   unlinkTicket(ticketId: ID!, entityType: EntityType!, entityId: ID!): Ticket!
+  startUltraplan(input: StartUltraplanInput!): Ultraplan!
+  pauseUltraplan(id: ID!): Ultraplan!
+  resumeUltraplan(id: ID!): Ultraplan!
+  runUltraplanControllerNow(id: ID!): UltraplanControllerRun!
+  cancelUltraplan(id: ID!): Ultraplan!
   linkEntityToProject(entityType: EntityType!, entityId: ID!, projectId: ID!): Project!
   createOrganization(input: CreateOrganizationInput!): OrgMember!
   createRepo(input: CreateRepoInput!): Repo!
