@@ -93,22 +93,30 @@ function formatTime(value?: string | null): string {
 function summaryItems(payload: unknown): string[] {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
   const record = payload as Record<string, unknown>;
-  const values = [record.actions, record.decisions].flatMap((item) => (Array.isArray(item) ? item : []));
+  const values = [record.actions, record.decisions].flatMap((item) =>
+    Array.isArray(item) ? item : [],
+  );
   return values
     .map((item) => {
       if (typeof item === "string") return item;
       if (item && typeof item === "object" && !Array.isArray(item)) {
         const objectItem = item as Record<string, unknown>;
-        return typeof objectItem.title === "string"
-          ? objectItem.title
-          : typeof objectItem.summary === "string"
-            ? objectItem.summary
-            : null;
+        return typeof objectItem.label === "string"
+          ? objectItem.label
+          : typeof objectItem.title === "string"
+            ? objectItem.title
+            : typeof objectItem.summary === "string"
+              ? objectItem.summary
+              : null;
       }
       return null;
     })
     .filter((item): item is string => !!item)
     .slice(0, 3);
+}
+
+function errorDescription(error: unknown): string {
+  return error instanceof Error ? error.message : "Unexpected client error";
 }
 
 function ActionButton({
@@ -158,10 +166,15 @@ export function UltraplanPanel({
   const runMutation = async (name: string, mutation: ReturnType<typeof gql>) => {
     if (!ultraplan) return;
     setPendingAction(name);
-    const result = await client.mutation(mutation, { id: ultraplan.id }).toPromise();
-    setPendingAction(null);
-    if (result.error) {
-      toast.error(`Failed to ${name} Ultraplan`, { description: result.error.message });
+    try {
+      const result = await client.mutation(mutation, { id: ultraplan.id }).toPromise();
+      if (result.error) {
+        toast.error(`Failed to ${name} Ultraplan`, { description: result.error.message });
+      }
+    } catch (error: unknown) {
+      toast.error(`Failed to ${name} Ultraplan`, { description: errorDescription(error) });
+    } finally {
+      setPendingAction(null);
     }
   };
 
@@ -184,10 +197,15 @@ export function UltraplanPanel({
       ...(Object.keys(runtimePolicy).length > 0 ? { controllerRuntimePolicy: runtimePolicy } : {}),
       ...(customInstructions.trim() ? { customInstructions: customInstructions.trim() } : {}),
     };
-    const result = await client.mutation(START_ULTRAPLAN_MUTATION, { input }).toPromise();
-    setPendingAction(null);
-    if (result.error) {
-      toast.error("Failed to start Ultraplan", { description: result.error.message });
+    try {
+      const result = await client.mutation(START_ULTRAPLAN_MUTATION, { input }).toPromise();
+      if (result.error) {
+        toast.error("Failed to start Ultraplan", { description: result.error.message });
+      }
+    } catch (error: unknown) {
+      toast.error("Failed to start Ultraplan", { description: errorDescription(error) });
+    } finally {
+      setPendingAction(null);
     }
   };
 
@@ -325,6 +343,7 @@ export function UltraplanPanel({
                 .map((planned) => {
                   const executions = executionsByTicketId.get(planned.ticketId) ?? [];
                   const latestExecution = executions[executions.length - 1];
+                  const dependencies = planned.ticket.dependencies ?? [];
                   return (
                     <div key={planned.id} className="rounded-md border border-border p-2">
                       <div className="flex items-start justify-between gap-2">
@@ -351,6 +370,19 @@ export function UltraplanPanel({
                           {formatStatus(planned.status)}
                         </span>
                       </div>
+                      {dependencies.length > 0 && (
+                        <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
+                          {dependencies.map((dependency) => (
+                            <div key={dependency.dependsOnTicketId} className="line-clamp-2">
+                              <span className="text-foreground/80">
+                                {planned.status === "blocked" ? "Blocked by " : "Depends on "}
+                              </span>
+                              {dependency.dependsOnTicket.title}
+                              {dependency.reason ? `: ${dependency.reason}` : ""}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       <div className="mt-1.5 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
                         {latestExecution ? (
                           <>
