@@ -436,6 +436,13 @@ type RuntimeStartResult = {
 };
 ```
 
+Stop and status inputs must also carry enough environment context for the adapter to resolve
+adapter config and launcher auth without bypassing the registry contract. For provisioned
+runtimes, that means `environment` or an equivalent validated environment/config reference plus
+the persisted provider runtime ID.
+<!-- Updated after ticket 04 review/fix: stopSession/getStatus inputs now carry environment
+context so ticket 06 can call stopUrl/statusUrl with auth through the adapter contract. -->
+
 The existing `SessionAdapter` can be evolved in place or replaced with this interface.
 
 ## Adapter Registry
