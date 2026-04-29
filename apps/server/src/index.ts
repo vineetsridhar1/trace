@@ -21,6 +21,7 @@ import webhookRouter from "./routes/webhook.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
 import { handleBridgeConnection, type BridgeConnectionRequest } from "./lib/bridge-handler.js";
 import { sessionRouter } from "./lib/session-router.js";
+import { authenticateProvisionedRuntimeToken } from "./lib/runtime-adapters.js";
 import { sessionService } from "./services/session.js";
 import { CloudMachineService } from "./lib/cloud-machine-service.js";
 import { flyProvider } from "./lib/fly-provider.js";
@@ -223,20 +224,28 @@ async function main() {
         const bridgeReq = req as IncomingMessage & BridgeConnectionRequest;
 
         if (cloudToken) {
-          if (!cloudMachineService) {
-            rejectUpgrade(401, "Unauthorized");
-            return;
-          }
-          const cloudBridge = await cloudMachineService.authenticateBridgeToken(cloudToken);
-          if (!cloudBridge) {
+          const provisionedBridge = authenticateProvisionedRuntimeToken(cloudToken);
+          const cloudBridge = provisionedBridge
+            ? null
+            : await cloudMachineService?.authenticateBridgeToken(cloudToken);
+          const bridge = provisionedBridge
+            ? provisionedBridge
+            : cloudBridge
+              ? {
+                  instanceId: cloudBridge.runtimeInstanceId,
+                  organizationId: cloudBridge.organizationId,
+                  userId: cloudBridge.userId,
+                }
+              : null;
+          if (!bridge) {
             rejectUpgrade(401, "Unauthorized");
             return;
           }
           bridgeReq.bridgeAuth = {
             kind: "cloud",
-            instanceId: cloudBridge.runtimeInstanceId,
-            organizationId: cloudBridge.organizationId,
-            userId: cloudBridge.userId,
+            instanceId: bridge.instanceId,
+            organizationId: bridge.organizationId,
+            userId: bridge.userId,
           };
         } else if (bridgeAuthToken) {
           const payload = verifyBridgeAuthToken(bridgeAuthToken);
