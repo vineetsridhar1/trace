@@ -458,6 +458,19 @@ This session is working off the base branch "${baseBranch}". All work should be 
 </system-instruction>`;
 }
 
+function shouldPreserveWorkspaceBranchName({
+  slug,
+  branch,
+  channelBaseBranch,
+}: {
+  slug?: string | null;
+  branch?: string | null;
+  channelBaseBranch?: string | null;
+}): boolean {
+  if (slug) return true;
+  return !channelBaseBranch || branch !== channelBaseBranch;
+}
+
 /** Regex to extract <trace-title>…</trace-title> from assistant output. */
 const TITLE_TAG_RE = /<trace-title>([\s\S]*?)<\/trace-title>/;
 
@@ -2032,6 +2045,7 @@ export class SessionService {
         repoId: true,
         sessionGroupId: true,
         sessionGroup: { select: { slug: true } },
+        channel: { select: { baseBranch: true } },
         connection: true,
         readOnlyWorkspace: true,
         branch: true,
@@ -2112,7 +2126,11 @@ export class SessionService {
           sessionId,
           sessionGroupId: prev.sessionGroupId,
           slug: prev.sessionGroup?.slug,
-          preserveBranchName: true,
+          preserveBranchName: shouldPreserveWorkspaceBranchName({
+            slug: prev.sessionGroup?.slug,
+            branch: prev.branch,
+            channelBaseBranch: prev.channel?.baseBranch,
+          }),
           hosting: newHosting,
           tool: nextTool,
           model: nextModel !== undefined ? nextModel : prev.model,
@@ -2524,6 +2542,7 @@ export class SessionService {
         repoId: true,
         sessionGroupId: true,
         sessionGroup: { select: { slug: true } },
+        channel: { select: { baseBranch: true } },
         connection: true,
         worktreeDeleted: true,
         readOnlyWorkspace: true,
@@ -2598,7 +2617,11 @@ export class SessionService {
           sessionId,
           sessionGroupId: session.sessionGroupId,
           slug: session.sessionGroup?.slug,
-          preserveBranchName: true,
+          preserveBranchName: shouldPreserveWorkspaceBranchName({
+            slug: session.sessionGroup?.slug,
+            branch: session.branch,
+            channelBaseBranch: session.channel?.baseBranch,
+          }),
           hosting: session.hosting,
           tool: session.tool,
           model: session.model,
@@ -3816,7 +3839,11 @@ export class SessionService {
           sessionId,
           sessionGroupId: session.sessionGroupId ?? undefined,
           slug: session.sessionGroup?.slug ?? undefined,
-          preserveBranchName: true,
+          preserveBranchName: shouldPreserveWorkspaceBranchName({
+            slug: session.sessionGroup?.slug,
+            branch: session.branch,
+            channelBaseBranch: session.channel?.baseBranch,
+          }),
           repoId: session.repo.id,
           repoName: session.repo.name,
           repoRemoteUrl: session.repo.remoteUrl,
@@ -4151,7 +4178,11 @@ export class SessionService {
         sessionId: movedSession.id,
         sessionGroupId: movedSession.sessionGroupId,
         slug: movedSession.sessionGroup?.slug,
-        preserveBranchName: true,
+        preserveBranchName: shouldPreserveWorkspaceBranchName({
+          slug: movedSession.sessionGroup?.slug,
+          branch: movedSession.branch,
+          channelBaseBranch: movedSession.channel?.baseBranch,
+        }),
         hosting: targetHosting,
         tool: movedSession.tool,
         model: movedSession.model,
@@ -5006,6 +5037,7 @@ export class SessionService {
       organizationId: string;
       sessionGroupId: string | null;
       sessionGroup?: { slug: string | null } | null;
+      channel?: { baseBranch?: string | null } | null;
       repo: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
       branch: string | null;
       connection: unknown;
@@ -5030,7 +5062,11 @@ export class SessionService {
         sessionId,
         sessionGroupId: session.sessionGroupId ?? undefined,
         slug: session.sessionGroup?.slug ?? undefined,
-        preserveBranchName: true,
+        preserveBranchName: shouldPreserveWorkspaceBranchName({
+          slug: session.sessionGroup?.slug,
+          branch: session.branch,
+          channelBaseBranch: session.channel?.baseBranch,
+        }),
         repoId: repo.id,
         repoName: repo.name,
         repoRemoteUrl: repo.remoteUrl,
