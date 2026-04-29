@@ -134,6 +134,52 @@ function makeControllerRun(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function makeTicketExecution(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "execution-1",
+    organizationId: "org-1",
+    ultraplanId: "ultra-1",
+    ticketId: "ticket-1",
+    sessionGroupId: "group-1",
+    workerSessionId: "worker-1",
+    branch: "ultraplan/ticket-1",
+    workdir: "/work/ticket-1",
+    status: "reviewing",
+    integrationStatus: "not_started",
+    baseCheckpointSha: null,
+    headCheckpointSha: null,
+    integrationCheckpointSha: null,
+    activeInboxItemId: null,
+    lastReviewSummary: null,
+    attempt: 1,
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
+function makeInboxItem(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "inbox-1",
+    organizationId: "org-1",
+    userId: "user-1",
+    itemType: "ultraplan_validation_request",
+    status: "active",
+    title: "Validate ticket",
+    summary: "Please validate the worker result",
+    payload: {
+      ultraplanId: "ultra-1",
+      sessionGroupId: "group-1",
+      ticketExecutionId: "execution-1",
+    },
+    sourceType: "ultraplan_human_gate",
+    sourceId: "ultra-1",
+    createdAt: now,
+    resolvedAt: null,
+    ...overrides,
+  };
+}
+
 function makeSession(overrides: Record<string, unknown> = {}) {
   return {
     id: "session-1",
@@ -182,10 +228,19 @@ describe("UltraplanService", () => {
     prismaMock.ultraplan.findFirst.mockResolvedValue(null);
     prismaMock.ultraplan.create.mockResolvedValue(makeUltraplan());
     prismaMock.ultraplan.update.mockResolvedValue(makeUltraplan({ lastControllerRunId: "run-1" }));
+    prismaMock.ultraplan.findFirstOrThrow.mockResolvedValue(makeUltraplan());
     prismaMock.session.create.mockResolvedValue(makeSession());
     prismaMock.ultraplanControllerRun.create.mockResolvedValue(makeControllerRun());
     prismaMock.ultraplanControllerRun.update.mockResolvedValue(makeControllerRun());
     prismaMock.ultraplanControllerRun.findUniqueOrThrow.mockResolvedValue(makeControllerRun());
+    prismaMock.inboxItem.create.mockResolvedValue(makeInboxItem());
+    prismaMock.inboxItem.findFirstOrThrow.mockResolvedValue(makeInboxItem());
+    prismaMock.inboxItem.update.mockResolvedValue(
+      makeInboxItem({ status: "resolved", payload: { resolution: "approved" } }),
+    );
+    prismaMock.ticketExecution.findFirst.mockResolvedValue(null);
+    prismaMock.ticketExecution.findFirstOrThrow.mockResolvedValue(makeTicketExecution());
+    prismaMock.ticketExecution.update.mockResolvedValue(makeTicketExecution());
     sessionServiceMock.run.mockResolvedValue(makeSession({ agentStatus: "active" }));
     isSupportedModelMock.mockReturnValue(true);
   });
@@ -517,5 +572,114 @@ describe("UltraplanService", () => {
     expect(prismaMock.ultraplanControllerRun.update).not.toHaveBeenCalled();
     expect(prismaMock.ultraplan.update).not.toHaveBeenCalled();
     expect(eventServiceMock.create).not.toHaveBeenCalled();
+  });
+
+  it("requests a human gate through inbox and marks the plan as needing input", async () => {
+    prismaMock.ultraplan.findFirstOrThrow.mockResolvedValue(makeUltraplan({ status: "running" }));
+    prismaMock.ultraplan.update.mockResolvedValue(
+      makeUltraplan({ status: "needs_human", activeInboxItemId: "inbox-1" }),
+    );
+    prismaMock.ticketExecution.findFirstOrThrow.mockResolvedValue(makeTicketExecution());
+    prismaMock.ticketExecution.update.mockResolvedValue(
+      makeTicketExecution({ status: "needs_human", activeInboxItemId: "inbox-1" }),
+    );
+
+    const result = await service.requestHumanGate({
+      organizationId: "org-1",
+      ultraplanId: "ultra-1",
+      actorType: "agent",
+      actorId: "agent-1",
+      itemType: "ultraplan_validation_request",
+      title: "Validate ticket",
+      summary: "Please validate the worker result",
+      payload: { recommendedAction: "Approve if tests pass" },
+      ticketExecutionId: "execution-1",
+    });
+
+    expect(result.id).toBe("inbox-1");
+    expect(prismaMock.inboxItem.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: "user-1",
+          sourceType: "ultraplan_human_gate",
+          sourceId: "ultra-1",
+          payload: expect.objectContaining({
+            ultraplanId: "ultra-1",
+            sessionGroupId: "group-1",
+            ticketExecutionId: "execution-1",
+            recommendedAction: "Approve if tests pass",
+          }),
+        }),
+      }),
+    );
+    expect(prismaMock.ultraplan.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { status: "needs_human", activeInboxItemId: "inbox-1" },
+      }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "ultraplan_human_gate_requested",
+        scopeType: "ultraplan",
+      }),
+      prismaMock,
+    );
+  });
+
+  it("resolves a human gate and clears active gate pointers", async () => {
+    prismaMock.ultraplan.findFirstOrThrow.mockResolvedValue(
+      makeUltraplan({ status: "needs_human", activeInboxItemId: "inbox-1" }),
+    );
+    prismaMock.ultraplan.update.mockResolvedValue(
+      makeUltraplan({ status: "waiting", activeInboxItemId: null }),
+    );
+    prismaMock.ticketExecution.findFirst.mockResolvedValue(
+      makeTicketExecution({ status: "needs_human", activeInboxItemId: "inbox-1" }),
+    );
+    prismaMock.ticketExecution.update.mockResolvedValue(
+      makeTicketExecution({ status: "reviewing", activeInboxItemId: null }),
+    );
+
+    const result = await service.resolveHumanGate({
+      organizationId: "org-1",
+      inboxItemId: "inbox-1",
+      actorType: "user",
+      actorId: "user-1",
+      resolution: "approved",
+    });
+
+    expect(result.status).toBe("resolved");
+    expect(prismaMock.inboxItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "resolved",
+          payload: expect.objectContaining({ resolution: "approved" }),
+        }),
+      }),
+    );
+    expect(prismaMock.ultraplan.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { activeInboxItemId: null, status: "waiting" },
+      }),
+    );
+    expect(prismaMock.ticketExecution.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { activeInboxItemId: null, status: "reviewing" },
+      }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "inbox_item_resolved",
+        scopeType: "system",
+      }),
+      prismaMock,
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "ultraplan_updated",
+        scopeType: "ultraplan",
+      }),
+      prismaMock,
+    );
   });
 });
