@@ -37,6 +37,8 @@ const ACTIVE_STATUSES: readonly string[] = [
   "paused",
 ] as const;
 
+const ACTIVE_CONTROLLER_RUN_STATUSES = ["queued", "running"] as const;
+
 function serializeUltraplan(ultraplan: Record<string, unknown>) {
   return {
     id: ultraplan.id,
@@ -224,6 +226,17 @@ export class UltraplanService {
     if (["completed", "failed", "cancelled"].includes(ultraplan.status)) {
       throw new Error("Cannot run controller for an inactive Ultraplan");
     }
+
+    const activeControllerRun = await prisma.ultraplanControllerRun.findFirst({
+      where: {
+        organizationId: ultraplan.organizationId,
+        ultraplanId: ultraplan.id,
+        status: { in: [...ACTIVE_CONTROLLER_RUN_STATUSES] },
+      },
+      orderBy: { createdAt: "desc" },
+      include: { session: true, generatedTickets: true },
+    });
+    if (activeControllerRun) return activeControllerRun;
 
     const lastControllerRun = ultraplan.lastControllerRunId
       ? await prisma.ultraplanControllerRun.findUnique({
