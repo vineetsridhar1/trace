@@ -3,14 +3,13 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
+import { runtimeAdapterRegistry } from "../lib/runtime-adapters.js";
+import type { RuntimeAdapterType } from "../lib/runtime-adapter-registry.js";
 
-const ADAPTER_TYPES = new Set(["local", "provisioned"]);
-const CODING_TOOLS = new Set(["claude_code", "codex", "custom"]);
 const AUTH_CONFIG_KEYS = new Set(["type", "secretId"]);
 const RAW_SECRET_KEY_PATTERNS = ["apikey", "authorization", "password", "secret", "token"];
 
 type TxClient = Prisma.TransactionClient;
-type AgentEnvironmentAdapterType = "local" | "provisioned";
 
 type AgentEnvironmentInput = {
   organizationId: string;
@@ -36,16 +35,7 @@ type AgentEnvironmentRecord = {
 };
 
 type ResolvedSessionEnvironment = AgentEnvironmentRecord & {
-  adapterType: AgentEnvironmentAdapterType;
-};
-
-type RuntimeEnvironmentAdapter = {
-  type: AgentEnvironmentAdapterType;
-  validateConfig(config: Record<string, unknown>): Promise<void>;
-  testConfig(input: {
-    organizationId: string;
-    config: Record<string, unknown>;
-  }): Promise<{ ok: boolean; message?: string | null }>;
+  adapterType: RuntimeAdapterType;
 };
 
 function normalizeName(name: string): string {
@@ -54,12 +44,8 @@ function normalizeName(name: string): string {
   return normalized;
 }
 
-function assertSupportedAdapter(
-  adapterType: string,
-): asserts adapterType is AgentEnvironmentAdapterType {
-  if (!ADAPTER_TYPES.has(adapterType)) {
-    throw new Error("Agent environment adapterType must be local or provisioned");
-  }
+function assertSupportedAdapter(adapterType: string): asserts adapterType is RuntimeAdapterType {
+  runtimeAdapterRegistry.get(adapterType);
 }
 
 function asConfigRecord(
@@ -118,33 +104,6 @@ function getCapabilities(config: Record<string, unknown>): Record<string, unknow
   return capabilities as Record<string, unknown>;
 }
 
-function assertCompatibilityConstraints(config: Record<string, unknown>): void {
-  const capabilities = getCapabilities(config);
-  const supportedTools = capabilities?.supportedTools;
-  if (supportedTools !== undefined) {
-    if (!Array.isArray(supportedTools)) {
-      throw new Error("Agent environment capabilities.supportedTools must be an array");
-    }
-    for (const tool of supportedTools) {
-      if (typeof tool !== "string" || !CODING_TOOLS.has(tool)) {
-        throw new Error(
-          "Agent environment capabilities.supportedTools contains an unsupported tool",
-        );
-      }
-    }
-  }
-
-  const startupTimeoutSeconds = config.startupTimeoutSeconds;
-  if (
-    startupTimeoutSeconds !== undefined &&
-    (typeof startupTimeoutSeconds !== "number" ||
-      !Number.isInteger(startupTimeoutSeconds) ||
-      startupTimeoutSeconds < 1)
-  ) {
-    throw new Error("Agent environment startupTimeoutSeconds must be a positive integer");
-  }
-}
-
 function assertSupportsTool(environment: AgentEnvironmentRecord, tool: CodingTool): void {
   const capabilities = getCapabilities(asConfigRecord(environment.config));
   const supportedTools = capabilities?.supportedTools;
@@ -168,46 +127,6 @@ function environmentPayload(environment: AgentEnvironmentRecord): Prisma.InputJs
   };
 }
 
-const runtimeEnvironmentAdapters: Record<AgentEnvironmentAdapterType, RuntimeEnvironmentAdapter> = {
-  local: {
-    type: "local",
-    async validateConfig(config) {
-      assertCompatibilityConstraints(config);
-    },
-    async testConfig() {
-      return { ok: true, message: "Local environment config is valid" };
-    },
-  },
-  provisioned: {
-    type: "provisioned",
-    async validateConfig(config) {
-      assertCompatibilityConstraints(config);
-      for (const key of ["startUrl", "stopUrl", "statusUrl"]) {
-        const value = config[key];
-        if (typeof value !== "string" || !value.trim()) {
-          throw new Error(`Provisioned agent environment config requires ${key}`);
-        }
-        try {
-          new URL(value);
-        } catch {
-          throw new Error(`Provisioned agent environment ${key} must be a valid URL`);
-        }
-      }
-    },
-    async testConfig() {
-      return {
-        ok: false,
-        message: "Provisioned environment testing requires runtime adapter connectivity",
-      };
-    },
-  },
-};
-
-function getRuntimeEnvironmentAdapter(adapterType: string): RuntimeEnvironmentAdapter {
-  assertSupportedAdapter(adapterType);
-  return runtimeEnvironmentAdapters[adapterType];
-}
-
 export class AgentEnvironmentService {
   async list(organizationId: string, actorType: ActorType, actorId: string) {
     return prisma.$transaction(async (tx: TxClient) => {
@@ -224,7 +143,7 @@ export class AgentEnvironmentService {
     assertSupportedAdapter(input.adapterType);
     const config = asConfigRecord(input.config);
     assertConfigStoresOnlySecretReferences(input.config);
-    await getRuntimeEnvironmentAdapter(input.adapterType).validateConfig(config);
+    await runtimeAdapterRegistry.get(input.adapterType).validateConfig(config);
 
     const environment = await prisma.$transaction(async (tx: TxClient) => {
       await assertActorOrgAccess(tx, input.organizationId, actorType, actorId);
@@ -287,7 +206,7 @@ export class AgentEnvironmentService {
       assertSupportedAdapter(adapterType);
       const config =
         input.config === undefined ? asConfigRecord(existing.config) : asConfigRecord(input.config);
-      await getRuntimeEnvironmentAdapter(adapterType).validateConfig(config);
+      await runtimeAdapterRegistry.get(adapterType).validateConfig(config);
       await this.lockOrganizationDefaults(tx, existing.organizationId);
 
       const enabled = input.enabled ?? existing.enabled;
@@ -390,7 +309,7 @@ export class AgentEnvironmentService {
       };
     }
 
-    return getRuntimeEnvironmentAdapter(environment.adapterType).testConfig({
+    return runtimeAdapterRegistry.get(environment.adapterType).testConfig({
       organizationId: environment.organizationId,
       config: asConfigRecord(environment.config),
     });
@@ -431,9 +350,9 @@ export class AgentEnvironmentService {
         throw new Error("Agent environment is disabled");
       }
       assertSupportedAdapter(environment.adapterType);
-      await getRuntimeEnvironmentAdapter(environment.adapterType).validateConfig(
-        asConfigRecord(environment.config),
-      );
+      await runtimeAdapterRegistry
+        .get(environment.adapterType)
+        .validateConfig(asConfigRecord(environment.config));
       assertSupportsTool(environment, params.tool);
       return environment as ResolvedSessionEnvironment;
     });
