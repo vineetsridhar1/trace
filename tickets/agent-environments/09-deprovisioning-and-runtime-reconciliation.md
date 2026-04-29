@@ -58,6 +58,16 @@ Owns plan lines:
 - Bridge disconnection is a signal, not the cleanup mechanism.
 - Keep provider-specific state in metadata and connection fields.
 - `after_idle` is useful for shared launcher pools, but V1 can default provisioned environments to `on_session_end`.
+- A launcher response of `status: "stopping"` indicates async cleanup is still
+  in flight — leave the connection in `deprovisioning` and rely on the
+  reconciler to re-call `stopUrl` (idempotency key
+  `session:{sessionId}:stop`). Only `status: "stopped"` or `"not_found"`
+  should emit `session_runtime_stopped` and transition to `deprovisioned`.
+- The reconciler currently has no max-attempt cap; permanent failures will be
+  noisy until ticket 13 wires telemetry/alerts and adds an "abandoned" cap.
+- Local stop returns `{ ok: true, status: "stopped" }` synchronously — the
+  desktop bridge does the work via the bridge `delete` command. The runtime
+  adapter's `stopSession` does not call back into the bridge.
 
 ## How to test
 

@@ -836,6 +836,16 @@ Provisioned cleanup:
 - poll `statusUrl` until stopped or timeout
 - retry stop if needed
 
+<!-- Clarified after ticket 09: V1 reconciliation re-issues the idempotent
+     stopUrl call instead of polling statusUrl directly. Launchers MUST
+     respect `Trace-Idempotency-Key: session:{sessionId}:stop` so a repeat
+     stop request returns the latest known state without starting new work.
+     A statusUrl poll path can be added later if a launcher cannot meet that
+     idempotency contract. -->
+<!-- Open V1 follow-up (ticket 09): the reconciler currently retries
+     indefinitely. Once telemetry exists (ticket 13) we should cap reconcile
+     attempts and surface "abandoned runtime" alerts to operators. -->
+
 ### Deprovision Policies
 
 Support environment-level policy:
