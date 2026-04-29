@@ -42,6 +42,7 @@ import {
   UltraplanControllerRunService,
   ultraplanControllerRunService,
 } from "./ultraplan-controller-run.js";
+import { ultraplanRuntimeActionService } from "./ultraplan-runtime-actions.js";
 import { isSupportedModel } from "@trace/shared";
 
 type MockedDeep<T> = {
@@ -130,6 +131,35 @@ function makeControllerRun(overrides: Record<string, unknown> = {}) {
     createdAt: now,
     startedAt: null,
     completedAt: null,
+    ...overrides,
+  };
+}
+
+function makeControllerSummaryPayload(overrides: Record<string, unknown> = {}) {
+  return {
+    schemaVersion: 1,
+    outcome: "plan_updated",
+    summary: "Finished planning",
+    actions: [
+      {
+        action: "ticket.create",
+        result: "success",
+        targetType: "ticket",
+        targetId: "ticket-1",
+      },
+    ],
+    plannedTickets: [
+      {
+        ticketId: "ticket-1",
+        title: "Build autopilot",
+        status: "planned",
+        dependsOnTicketIds: [],
+        dependencyRationale: null,
+      },
+    ],
+    workerExecutions: [],
+    humanGates: [],
+    nextSteps: ["Start the first worker."],
     ...overrides,
   };
 }
@@ -536,7 +566,7 @@ describe("UltraplanService", () => {
 
     await controllerRunService.completeRun(
       "run-1",
-      { summary: "Finished planning" },
+      { summary: "Finished planning", summaryPayload: makeControllerSummaryPayload() },
       "user",
       "user-1",
     );
@@ -575,12 +605,178 @@ describe("UltraplanService", () => {
     prismaMock.orgMember.findUniqueOrThrow.mockRejectedValue(new Error("not a member"));
 
     await expect(
-      controllerRunService.completeRun("run-1", { summary: "Finished planning" }, "user", "user-2"),
+      controllerRunService.completeRun(
+        "run-1",
+        { summary: "Finished planning", summaryPayload: makeControllerSummaryPayload() },
+        "user",
+        "user-2",
+      ),
     ).rejects.toThrow("not a member");
 
     expect(prismaMock.ultraplanControllerRun.update).not.toHaveBeenCalled();
     expect(prismaMock.ultraplan.update).not.toHaveBeenCalled();
     expect(eventServiceMock.create).not.toHaveBeenCalled();
+  });
+
+  it("does not complete controller runs without a valid structured summary", async () => {
+    const controllerRunService = new UltraplanControllerRunService();
+    prismaMock.ultraplanControllerRun.findUniqueOrThrow.mockResolvedValue(
+      makeControllerRun({ status: "running" }),
+    );
+    prismaMock.ultraplanControllerRun.update.mockResolvedValue(
+      makeControllerRun({ status: "failed", error: "Controller run summaryPayload is required" }),
+    );
+    prismaMock.ultraplan.update.mockResolvedValue(makeUltraplan({ status: "failed" }));
+
+    await expect(
+      controllerRunService.completeRun("run-1", { summary: "Finished planning" }, "user", "user-1"),
+    ).rejects.toThrow("Controller run summaryPayload is required");
+
+    await expect(
+      controllerRunService.completeRun(
+        "run-1",
+        {
+          summary: "Finished planning",
+          summaryPayload: makeControllerSummaryPayload({ actions: [{ action: "git.commit" }] }),
+        },
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("summaryPayload.actions[0].action is not supported");
+
+    expect(prismaMock.ultraplanControllerRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "failed",
+          error: "Controller run summaryPayload is required",
+        }),
+      }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "ultraplan_controller_run_failed",
+        scopeType: "ultraplan",
+      }),
+      prismaMock,
+    );
+  });
+
+  it("dispatches service-backed runtime completion actions", async () => {
+    prismaMock.ultraplanControllerRun.findUniqueOrThrow
+      .mockResolvedValueOnce({
+        id: "run-1",
+        organizationId: "org-1",
+        ultraplanId: "ultra-1",
+        sessionId: "session-1",
+        ultraplan: { sessionGroupId: "group-1" },
+      })
+      .mockResolvedValueOnce(makeControllerRun({ status: "running" }));
+    prismaMock.ultraplanControllerRun.update.mockResolvedValue(
+      makeControllerRun({
+        status: "completed",
+        summary: "Finished planning",
+        summaryPayload: makeControllerSummaryPayload(),
+      }),
+    );
+    prismaMock.ultraplan.update.mockResolvedValue(
+      makeUltraplan({
+        status: "waiting",
+        lastControllerRunId: "run-1",
+        lastControllerSummary: "Finished planning",
+      }),
+    );
+
+    const result = await ultraplanRuntimeActionService.execute({
+      organizationId: "org-1",
+      ultraplanId: "ultra-1",
+      controllerRunId: "run-1",
+      actorType: "user",
+      actorId: "user-1",
+      action: "ultraplan.completeControllerRun",
+      json: {
+        summaryTitle: "Plan ready",
+        summaryPayload: makeControllerSummaryPayload(),
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: "success",
+      action: "ultraplan.completeControllerRun",
+    });
+    expect(prismaMock.ultraplanControllerRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "completed",
+          summaryPayload: expect.objectContaining({ schemaVersion: 1 }),
+        }),
+      }),
+    );
+  });
+
+  it("returns machine-readable runtime errors and persists failed completion summaries", async () => {
+    prismaMock.ultraplanControllerRun.findUniqueOrThrow
+      .mockResolvedValueOnce({
+        id: "run-1",
+        organizationId: "org-1",
+        ultraplanId: "ultra-1",
+        sessionId: "session-1",
+        ultraplan: { sessionGroupId: "group-1" },
+      })
+      .mockResolvedValueOnce(makeControllerRun({ status: "running" }))
+      .mockResolvedValueOnce(makeControllerRun({ status: "running" }));
+    prismaMock.ultraplanControllerRun.update.mockResolvedValue(
+      makeControllerRun({
+        status: "failed",
+        error: "summaryPayload.actions[0].action is not supported",
+      }),
+    );
+    prismaMock.ultraplan.update.mockResolvedValue(makeUltraplan({ status: "failed" }));
+
+    const result = await ultraplanRuntimeActionService.execute({
+      organizationId: "org-1",
+      ultraplanId: "ultra-1",
+      controllerRunId: "run-1",
+      actorType: "user",
+      actorId: "user-1",
+      action: "ultraplan.completeControllerRun",
+      json: {
+        summaryPayload: makeControllerSummaryPayload({ actions: [{ action: "git.commit" }] }),
+      },
+    });
+
+    expect(result).toEqual({
+      status: "error",
+      action: "ultraplan.completeControllerRun",
+      error: "summaryPayload.actions[0].action is not supported",
+    });
+    expect(prismaMock.ultraplanControllerRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "failed",
+          error: "summaryPayload.actions[0].action is not supported",
+        }),
+      }),
+    );
+  });
+
+  it("returns machine-readable runtime validation errors for unsupported actions", async () => {
+    const result = await ultraplanRuntimeActionService.execute({
+      organizationId: "org-1",
+      ultraplanId: "ultra-1",
+      controllerRunId: "run-1",
+      actorType: "user",
+      actorId: "user-1",
+      action: "db.event.create",
+      json: { eventType: "ultraplan_updated" },
+    });
+
+    expect(result).toEqual({
+      status: "error",
+      action: "db.event.create",
+      error: 'Unsupported Ultraplan controller action "db.event.create"',
+    });
+    expect(prismaMock.ultraplanControllerRun.findUniqueOrThrow).not.toHaveBeenCalled();
+    expect(prismaMock.ultraplanControllerRun.update).not.toHaveBeenCalled();
   });
 
   it("requests a human gate through inbox and marks the plan as needing input", async () => {

@@ -23,6 +23,7 @@ Add the event router/worker that creates fresh controller runs when meaningful s
 - Skip duplicate or stale wakeups.
 - Emit controller-run created/started/completed/failed events.
 - Emit events with `ScopeType.ultraplan` and snapshots sufficient for client upserts.
+- Capture or receive the controller run's final structured summary and route it through `ultraplanControllerRunService.completeRun`; route missing or malformed summaries through `failRun` so they are visible as failed controller runs.
 
 ## Dependencies
 
@@ -42,6 +43,8 @@ Add the event router/worker that creates fresh controller runs when meaningful s
 - [ ] Run events carry enough payload for debugging and client state.
 - [ ] Run events are scoped to the Ultraplan.
 - [ ] Controller-run sessions launch with scoped runtime action env.
+- [ ] Controller terminal completion is parsed or received as structured summary input before `completeRun`.
+- [ ] Missing or malformed controller summaries create failed controller-run state, not stuck running sessions.
 
 ## Implementation notes
 
@@ -57,3 +60,5 @@ Add the event router/worker that creates fresh controller runs when meaningful s
 4. Emit session output and verify no controller run.
 5. Resolve an Ultraplan inbox gate and verify a controller run.
 6. Verify simultaneous triggers serialize controller runs per group.
+7. Complete a controller run with valid summary JSON and verify `ultraplan_controller_run_completed`.
+8. Complete a controller run with missing or malformed summary JSON and verify `ultraplan_controller_run_failed`.

@@ -6,6 +6,10 @@ import { sessionRouter } from "../lib/session-router.js";
 import { runtimeAccessService } from "./runtime-access.js";
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
+import {
+  controllerSummaryToJson,
+  validateControllerRunSummaryPayload,
+} from "./ultraplan-controller-contract.js";
 
 type TxClient = Prisma.TransactionClient;
 
@@ -81,7 +85,7 @@ export type CreateControllerRunInput = {
 export type CompleteControllerRunInput = {
   summaryTitle?: string | null;
   summary?: string | null;
-  summaryPayload?: Prisma.InputJsonValue | null;
+  summaryPayload?: unknown;
 };
 
 export function validateControllerConfig(input: {
@@ -372,6 +376,24 @@ export class UltraplanControllerRunService {
     actorType: ActorType,
     actorId: string,
   ) {
+    const currentRun = await prisma.$transaction((tx: TxClient) =>
+      this.getRunForMutation(tx, id, actorType, actorId),
+    );
+    if (currentRun.status === "completed") return currentRun;
+
+    let summaryPayload: ReturnType<typeof validateControllerRunSummaryPayload>;
+    try {
+      if (input.summaryPayload == null) {
+        throw new Error("Controller run summaryPayload is required");
+      }
+      summaryPayload = validateControllerRunSummaryPayload(input.summaryPayload);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Controller run summary is invalid";
+      await this.failRun(id, message, actorType, actorId);
+      throw new Error(message);
+    }
+    const summary = input.summary ?? summaryPayload.summary;
+
     return prisma.$transaction(async (tx: TxClient) => {
       const existing = await this.getRunForMutation(tx, id, actorType, actorId);
       if (existing.status === "completed") return existing;
@@ -382,8 +404,8 @@ export class UltraplanControllerRunService {
           status: "completed",
           completedAt: existing.completedAt ?? new Date(),
           summaryTitle: input.summaryTitle ?? undefined,
-          summary: input.summary ?? undefined,
-          summaryPayload: input.summaryPayload ?? undefined,
+          summary,
+          summaryPayload: controllerSummaryToJson(summaryPayload),
           error: null,
         },
         include: { session: true, generatedTickets: true },
@@ -393,7 +415,7 @@ export class UltraplanControllerRunService {
         where: { id: run.ultraplanId },
         data: {
           lastControllerRunId: run.id,
-          lastControllerSummary: run.summary ?? run.summaryTitle ?? null,
+          lastControllerSummary: run.summary ?? run.summaryTitle ?? summaryPayload.summary,
           status: "waiting",
         },
       });

@@ -7,6 +7,7 @@ Add v1 infrastructure that lets controller-run sessions perform actions through 
 ## What needs to happen
 
 - Define a narrow service-backed API surface for runtime-issued actions.
+- Reuse the action allowlist and JSON-object validation from `apps/server/src/services/ultraplan-controller-contract.ts`.
 - Mint short-lived `TRACE_RUNTIME_TOKEN` credentials with scoped claims:
   - organization id
   - Ultraplan id
@@ -23,6 +24,7 @@ Add v1 infrastructure that lets controller-run sessions perform actions through 
 - Extend local and cloud coding-tool launch paths to support per-run env injection.
 - Bundle a `trace-agent` wrapper or equivalent on `PATH` for controller-run runtimes.
 - Make the wrapper read env, attach auth headers, call the service-backed API, and print machine-readable results.
+- Ensure `ultraplan.completeControllerRun` submits the final structured summary payload to the server-side summary validator rather than trusting free-form text.
 - Add a controller-run skill/instructions file that teaches the agent:
   - available commands
   - JSON input shape
@@ -42,6 +44,9 @@ Add v1 infrastructure that lets controller-run sessions perform actions through 
 - [ ] The wrapper is available on `PATH` in supported controller-run runtimes.
 - [ ] Controller-run prompt includes the action skill/instructions.
 - [ ] At least one bounded action path works end-to-end through the wrapper.
+- [ ] Wrapper dispatch rejects action names outside `controllerRuntimeActionNames()`.
+- [ ] Wrapper dispatch validates JSON-object input with `validateControllerRuntimeActionRequest()`.
+- [ ] `ultraplan.completeControllerRun` returns machine-readable validation errors for malformed summaries.
 - [ ] Expired, wrong-org, wrong-Ultraplan, wrong-run, or wrong-scope tokens fail closed.
 - [ ] No direct event creation or direct DB writes are exposed to the wrapper.
 
@@ -61,3 +66,4 @@ Add v1 infrastructure that lets controller-run sessions perform actions through 
 4. Attempt a disallowed action and verify failure.
 5. Attempt wrong-org, wrong-Ultraplan, wrong-run, and expired-token calls and verify fail-closed behavior.
 6. Verify no wrapper path can write events directly.
+7. Call `ultraplan.completeControllerRun` with invalid summary JSON and verify a structured validation error is returned.
