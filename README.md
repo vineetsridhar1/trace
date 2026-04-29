@@ -1,7 +1,7 @@
 <h1 align="center">Trace</h1>
 
 <p align="center">
-  <strong>Open-source control plane for multiplayer AI coding sessions.</strong>
+  <strong>Open-source control plane for multiplayer AI coding sessions and reviews.</strong>
 </p>
 
 <p align="center">
