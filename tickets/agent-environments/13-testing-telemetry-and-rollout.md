@@ -44,9 +44,10 @@ Owns plan lines:
   - startup timeout
   - deprovision failure
   - reconciler iterations (per-tick reconciled count, time-to-deprovisioned)
-  - abandoned runtimes (sessions still in `deprovision_failed` /
-    `deprovisioning` after N reconcile attempts — see ticket 09 follow-up
-    about adding a per-session reconcile cap)
+  - abandoned runtimes — surface every `session_runtime_deprovision_failed`
+    event whose payload includes `abandoned: true` (ticket 09 emits this
+    after `MAX_RECONCILE_ATTEMPTS` retries). Operator alert should include
+    `sessionId`, `providerRuntimeId`, and `reconcileAttempts`.
 - Add negative assertions that launcher bearer tokens and runtime tokens are not logged.
 - Add feature flag or rollout guard if needed.
 - Add operator-facing error messages for failed provisioning and deprovisioning.
