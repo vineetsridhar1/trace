@@ -64,6 +64,19 @@ export type AgentCostSummary = {
   dailyCosts: Array<AgentCostEntry>;
 };
 
+export type AgentEnvironment = {
+  __typename?: "AgentEnvironment";
+  adapterType: Scalars["String"]["output"];
+  config: Scalars["JSON"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  enabled: Scalars["Boolean"]["output"];
+  id: Scalars["ID"]["output"];
+  isDefault: Scalars["Boolean"]["output"];
+  name: Scalars["String"]["output"];
+  organizationId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
 export type AgentExecutionLog = {
   __typename?: "AgentExecutionLog";
   agentId: Scalars["String"]["output"];
@@ -450,6 +463,9 @@ export type Event = {
 };
 
 export type EventType =
+  | "agent_environment_created"
+  | "agent_environment_deleted"
+  | "agent_environment_updated"
   | "bridge_access_request_resolved"
   | "bridge_access_requested"
   | "bridge_access_revoked"
@@ -489,6 +505,17 @@ export type EventType =
   | "session_pr_merged"
   | "session_pr_opened"
   | "session_resumed"
+  | "session_runtime_connected"
+  | "session_runtime_connecting"
+  | "session_runtime_deprovision_failed"
+  | "session_runtime_disconnected"
+  | "session_runtime_provisioning"
+  | "session_runtime_reconnected"
+  | "session_runtime_start_failed"
+  | "session_runtime_start_requested"
+  | "session_runtime_start_timed_out"
+  | "session_runtime_stopped"
+  | "session_runtime_stopping"
   | "session_started"
   | "session_terminated"
   | "ticket_assigned"
@@ -1150,6 +1177,7 @@ export type OrgMember = {
 
 export type Organization = {
   __typename?: "Organization";
+  agentEnvironments: Array<AgentEnvironment>;
   channels: Array<Channel>;
   id: Scalars["ID"]["output"];
   members: Array<OrgMember>;
@@ -1550,6 +1578,7 @@ export type Session = {
 
 export type SessionConnection = {
   __typename?: "SessionConnection";
+  adapterType?: Maybe<Scalars["String"]["output"]>;
   /**
    * When false, the frontend should not auto-retry the connection — only manual
    * Retry/Move can unblock. Used for non-transient failures like the home bridge
@@ -1558,16 +1587,36 @@ export type SessionConnection = {
   autoRetryable?: Maybe<Scalars["Boolean"]["output"]>;
   canMove: Scalars["Boolean"]["output"];
   canRetry: Scalars["Boolean"]["output"];
+  connectedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  connectingAt?: Maybe<Scalars["DateTime"]["output"]>;
+  disconnectedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  environmentId?: Maybe<Scalars["String"]["output"]>;
+  failedAt?: Maybe<Scalars["DateTime"]["output"]>;
   lastDeliveryFailureAt?: Maybe<Scalars["DateTime"]["output"]>;
   lastError?: Maybe<Scalars["String"]["output"]>;
   lastSeen?: Maybe<Scalars["DateTime"]["output"]>;
+  providerRuntimeId?: Maybe<Scalars["String"]["output"]>;
+  providerRuntimeUrl?: Maybe<Scalars["String"]["output"]>;
+  provisioningAt?: Maybe<Scalars["DateTime"]["output"]>;
+  reconnectedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  requestedAt?: Maybe<Scalars["DateTime"]["output"]>;
   retryCount: Scalars["Int"]["output"];
   runtimeInstanceId?: Maybe<Scalars["String"]["output"]>;
   runtimeLabel?: Maybe<Scalars["String"]["output"]>;
   state: SessionConnectionState;
+  stoppedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  stoppingAt?: Maybe<Scalars["DateTime"]["output"]>;
+  timedOutAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
-export type SessionConnectionState = "connected" | "degraded" | "disconnected";
+export type SessionConnectionState =
+  | "connected"
+  | "degraded"
+  | "disconnected"
+  | "failed"
+  | "pending"
+  | "stopped"
+  | "stopping";
 
 export type SessionEndpoints = {
   __typename?: "SessionEndpoints";
