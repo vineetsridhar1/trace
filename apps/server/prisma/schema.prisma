@@ -1162,7 +1162,7 @@ model LocalMobilePairingToken {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([ownerUserId, organizationId, usedAt, expiresAt])
+  @@index([ownerUserId, organizationId, usedAt, expiresAt], map: "LocalMobilePairingToken_ownerUserId_organizationId_usedAt_expir")
 }
 
 model LocalMobileDevice {
@@ -1183,7 +1183,7 @@ model LocalMobileDevice {
   updatedAt DateTime @updatedAt
 
   @@unique([ownerUserId, organizationId, installId])
-  @@index([organizationId, ownerUserId, revokedAt, lastSeenAt])
+  @@index([organizationId, ownerUserId, revokedAt, lastSeenAt], map: "LocalMobileDevice_organizationId_ownerUserId_revokedAt_lastSeen")
 }
 
 model BridgeAccessGrant {
