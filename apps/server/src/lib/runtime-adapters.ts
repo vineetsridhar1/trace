@@ -52,6 +52,10 @@ type ProvisionedRuntimeTokenAuth = {
   instanceId: string;
   organizationId: string;
   userId: string;
+  sessionId: string;
+  environmentId: string;
+  allowedScope: "session";
+  tool: string;
 };
 
 type StoredProvisionedRuntimeToken = ProvisionedRuntimeTokenAuth & {
@@ -74,6 +78,10 @@ export function authenticateProvisionedRuntimeToken(
     instanceId: stored.instanceId,
     organizationId: stored.organizationId,
     userId: stored.userId,
+    sessionId: stored.sessionId,
+    environmentId: stored.environmentId,
+    allowedScope: stored.allowedScope,
+    tool: stored.tool,
   };
 }
 
@@ -406,6 +414,10 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       instanceId: runtimeInstanceId,
       organizationId: input.organizationId,
       userId: input.actorId,
+      sessionId: input.sessionId,
+      environmentId: input.environment.id,
+      allowedScope: "session",
+      tool: input.tool,
     });
 
     const body = {
@@ -414,6 +426,8 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       orgId: input.organizationId,
       runtimeInstanceId,
       runtimeToken,
+      runtimeTokenExpiresAt: new Date(Date.now() + RUNTIME_TOKEN_TTL_MS).toISOString(),
+      runtimeTokenScope: "session",
       bridgeUrl,
       repo: input.repo
         ? {

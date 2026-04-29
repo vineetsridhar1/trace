@@ -246,6 +246,14 @@ async function main() {
             instanceId: bridge.instanceId,
             organizationId: bridge.organizationId,
             userId: bridge.userId,
+            ...(provisionedBridge
+              ? {
+                  sessionId: provisionedBridge.sessionId,
+                  environmentId: provisionedBridge.environmentId,
+                  allowedScope: provisionedBridge.allowedScope,
+                  tool: provisionedBridge.tool,
+                }
+              : {}),
           };
         } else if (bridgeAuthToken) {
           const payload = verifyBridgeAuthToken(bridgeAuthToken);

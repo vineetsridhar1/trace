@@ -117,6 +117,8 @@ describe("ProvisionedRuntimeAdapter", () => {
     expect(headers.Authorization).toBe("Bearer launcher-secret");
     expect(headers["Trace-Idempotency-Key"]).toBe("session:session-1:start");
     expect(body.runtimeToken).toBe("runtime-token");
+    expect(body.runtimeTokenScope).toBe("session");
+    expect(body.runtimeTokenExpiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(body.bootstrapEnv).toEqual(
       expect.objectContaining({
         TRACE_SESSION_ID: "session-1",
@@ -131,7 +133,38 @@ describe("ProvisionedRuntimeAdapter", () => {
       instanceId: result.runtimeInstanceId,
       organizationId: "org-1",
       userId: "user-1",
+      sessionId: "session-1",
+      environmentId: "env-1",
+      allowedScope: "session",
+      tool: "codex",
     });
+  });
+
+  it("rejects expired runtime bridge tokens", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-29T12:00:00Z"));
+    fetchMock().mockResolvedValueOnce(makeResponse({ runtimeId: "provider-runtime-1" }));
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await adapter.startSession({
+      sessionId: "session-expired",
+      organizationId: "org-1",
+      actorId: "user-1",
+      environment: {
+        id: "env-1",
+        name: "Company Launcher",
+        adapterType: "provisioned",
+        config: provisionedConfig,
+      },
+      tool: "codex",
+      runtimeToken: "runtime-token-expired",
+      bridgeUrl: "wss://trace.example/bridge",
+    });
+
+    expect(authenticateProvisionedRuntimeToken("runtime-token-expired")).not.toBeNull();
+    vi.setSystemTime(new Date("2026-04-29T12:16:00Z"));
+    expect(authenticateProvisionedRuntimeToken("runtime-token-expired")).toBeNull();
+    vi.useRealTimers();
   });
 
   it("signs HMAC lifecycle requests without bearer auth", async () => {
