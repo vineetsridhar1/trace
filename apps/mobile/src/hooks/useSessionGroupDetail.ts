@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { gql } from "@urql/core";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import {
-  isUserVisibleSession,
   type EntityState,
   useEntityStore,
   type SessionEntity,
@@ -10,6 +9,7 @@ import {
 import type { Session, SessionGroup } from "@trace/gql";
 import { userFacingError } from "@/lib/requestError";
 import { mergeSessionGroupEntity } from "@/lib/session-group";
+import { selectSessionGroupSessionIds } from "@/lib/sessionGroupSessionIds";
 import { getClient } from "@/lib/urql";
 
 const SESSION_GROUP_DETAIL_QUERY = gql`
@@ -109,8 +109,6 @@ function sessionTime(session: SessionEntity | undefined): number {
   const value = raw ? new Date(raw).getTime() : 0;
   return Number.isFinite(value) ? value : 0;
 }
-
-const EMPTY_IDS: string[] = [];
 
 function areIdsEqual(a: string[], b: string[]): boolean {
   if (a.length !== b.length) return false;
@@ -240,16 +238,7 @@ export function useEnsureSessionGroupDetail(groupId: string | undefined): {
 export function useSessionGroupSessionIds(groupId: string): string[] {
   return useStoreWithEqualityFn(
     useEntityStore,
-    (state: EntityState): string[] => {
-      const ids = state._sessionIdsByGroup[groupId];
-      if (!ids || ids.length === 0) return EMPTY_IDS;
-      return ids
-        .filter((id) => isUserVisibleSession(state.sessions[id]))
-        .sort((a, b) => {
-          const diff = sessionTime(state.sessions[b]) - sessionTime(state.sessions[a]);
-          return diff !== 0 ? diff : a.localeCompare(b);
-        });
-    },
+    (state: EntityState): string[] => selectSessionGroupSessionIds(state, groupId),
     areIdsEqual,
   );
 }
