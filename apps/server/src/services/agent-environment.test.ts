@@ -196,6 +196,19 @@ describe("AgentEnvironmentService", () => {
           organizationId: "org-1",
           name: "Local",
           adapterType: "local",
+          config: { runtimeInstanceId: " " },
+        },
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("runtimeInstanceId must be a non-empty string");
+
+    await expect(
+      service.create(
+        {
+          organizationId: "org-1",
+          name: "Local",
+          adapterType: "local",
           config: {
             runtimeInstanceId: "runtime-1",
             runtimeSelection: "any_accessible_local",
