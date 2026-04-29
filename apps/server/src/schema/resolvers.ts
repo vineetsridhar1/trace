@@ -56,6 +56,7 @@ import {
   aiConversationSubscriptions,
   aiConversationTypeResolvers,
 } from "./ai-conversation.js";
+import { ultraplanQueries, ultraplanMutations, ultraplanTypeResolvers } from "./ultraplan.js";
 import type { Context } from "../context.js";
 import { resolveActor } from "../services/actor.js";
 
@@ -74,6 +75,7 @@ export const resolvers = {
   ...agentIdentityTypeResolvers,
   ...agentDebugTypeResolvers,
   ...aiConversationTypeResolvers,
+  ...ultraplanTypeResolvers,
 
   User: {
     organizations: (user: { id: string }) => orgMemberService.getUserOrgs(user.id),
@@ -103,6 +105,7 @@ export const resolvers = {
     ...agentDebugQueries,
     ...scopeAutonomyQueries,
     ...aiConversationQueries,
+    ...ultraplanQueries,
   },
 
   Mutation: {
@@ -121,6 +124,7 @@ export const resolvers = {
     ...agentIdentityMutations,
     ...scopeAutonomyMutations,
     ...aiConversationMutations,
+    ...ultraplanMutations,
   },
 
   Subscription: {
