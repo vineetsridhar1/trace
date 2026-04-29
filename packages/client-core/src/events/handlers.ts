@@ -389,7 +389,9 @@ export function handleOrgEvent(event: Event): void {
     } else if (ui.getActiveSessionId() === deletedId) {
       const allSessions = batch.getAll("sessions");
       const remaining = Object.values(allSessions)
-        .filter((session) => session.sessionGroupId === sessionGroupId)
+        .filter(
+          (session) => session.sessionGroupId === sessionGroupId && isUserVisibleSession(session),
+        )
         .sort((a, b) => {
           const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
           if (diff !== 0) return diff;
@@ -454,13 +456,14 @@ export function handleOrgEvent(event: Event): void {
         sessionPatch.worktreeDeleted = true;
       }
       batch.patch("sessions", event.scopeId, sessionPatch);
+      const session = batch.get("sessions", event.scopeId);
 
       // Mark badges when agent reaches a terminal state
       if (
         (agentStatus === "done" || agentStatus === "failed" || agentStatus === "stopped") &&
-        isUserVisibleSession(useEntityStore.getState().sessions[event.scopeId])
+        session &&
+        isUserVisibleSession(session)
       ) {
-        const session = useEntityStore.getState().sessions[event.scopeId];
         const channelId = getSessionChannelId(session);
         if (channelId && channelId !== ui.getActiveChannelId()) {
           ui.markChannelDone(channelId);
