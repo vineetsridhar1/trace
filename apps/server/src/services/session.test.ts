@@ -3499,6 +3499,9 @@ describe("SessionService", () => {
           workdir: "/tmp/trace/cobra",
           repoId: "repo-1",
         }),
+        expect.objectContaining({
+          reason: "session_unloaded",
+        }),
       );
       expect(prismaMock.session.updateMany).toHaveBeenNthCalledWith(
         2,
@@ -3771,6 +3774,69 @@ describe("SessionService", () => {
         "Repo not cloned on any connected runtime",
       );
       expect(sessionRouterMock.listBranches).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("reconcileStuckDeprovisions", () => {
+    it("retries provisioned runtimes that have been stopping past the cutoff", async () => {
+      const now = Date.now();
+      const ancient = new Date(now - 5 * 60_000).toISOString();
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-stuck",
+          hosting: "cloud",
+          organizationId: "org-1",
+          workdir: null,
+          repoId: null,
+          connection: {
+            adapterType: "provisioned",
+            state: "deprovision_failed",
+            providerRuntimeId: "provider-1",
+            stoppingAt: ancient,
+            deprovisionFailedAt: ancient,
+            retryCount: 1,
+            canRetry: true,
+            canMove: false,
+          },
+        },
+      ] as unknown as Awaited<ReturnType<typeof prismaMock.session.findMany>>);
+
+      const result = await service.reconcileStuckDeprovisions({ now, stuckAfterMs: 60_000 });
+
+      expect(result.reconciled).toEqual(["session-stuck"]);
+      expect(sessionRouterMock.destroyRuntime).toHaveBeenCalledWith(
+        "session-stuck",
+        expect.objectContaining({ id: "session-stuck", organizationId: "org-1" }),
+        expect.objectContaining({ reason: "deprovision_reconciliation" }),
+      );
+    });
+
+    it("skips candidates whose last attempt is within the cutoff", async () => {
+      const now = Date.now();
+      const recent = new Date(now - 5_000).toISOString();
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-fresh",
+          hosting: "cloud",
+          organizationId: "org-1",
+          workdir: null,
+          repoId: null,
+          connection: {
+            adapterType: "provisioned",
+            state: "stopping",
+            providerRuntimeId: "provider-1",
+            stoppingAt: recent,
+            retryCount: 0,
+            canRetry: true,
+            canMove: false,
+          },
+        },
+      ] as unknown as Awaited<ReturnType<typeof prismaMock.session.findMany>>);
+
+      const result = await service.reconcileStuckDeprovisions({ now, stuckAfterMs: 60_000 });
+
+      expect(result.reconciled).toEqual([]);
+      expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
     });
   });
 });

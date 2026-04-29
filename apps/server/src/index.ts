@@ -196,6 +196,13 @@ async function main() {
     }
   }, 5_000);
 
+  const deprovisionReconciler = setInterval(() => {
+    void sessionService.reconcileStuckDeprovisions().catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[deprovision-reconciler] iteration failed: ${message}`);
+    });
+  }, 30_000);
+
   // Route WebSocket upgrades by path
   httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const { pathname } = new URL(req.url ?? "", "http://localhost");
@@ -297,6 +304,7 @@ async function main() {
             async drainServer() {
               await wsServerCleanup.dispose();
               clearInterval(staleRuntimeMonitor);
+              clearInterval(deprovisionReconciler);
               bridgeWss.close();
               terminalWss.close();
               await disconnectRedis();

@@ -117,7 +117,10 @@ export type SessionConnectionData = {
     | "failed"
     | "timed_out"
     | "stopping"
-    | "stopped";
+    | "stopped"
+    | "deprovisioning"
+    | "deprovisioned"
+    | "deprovision_failed";
   environmentId?: string;
   adapterType?: "local" | "provisioned";
   runtimeInstanceId?: string;
@@ -133,6 +136,10 @@ export type SessionConnectionData = {
   timedOutAt?: string;
   stoppingAt?: string;
   stoppedAt?: string;
+  deprovisioningAt?: string;
+  deprovisionedAt?: string;
+  deprovisionFailedAt?: string;
+  deprovisionAttempts?: number;
   disconnectedAt?: string;
   reconnectedAt?: string;
   lastSeen?: string;
@@ -217,7 +224,12 @@ function isRuntimeStartupState(state: SessionConnectionData["state"]): boolean {
 }
 
 function isRuntimeTerminalState(state: SessionConnectionData["state"]): boolean {
-  return state === "failed" || state === "timed_out" || state === "stopped";
+  return (
+    state === "failed" ||
+    state === "timed_out" ||
+    state === "stopped" ||
+    state === "deprovisioned"
+  );
 }
 
 function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
@@ -757,12 +769,16 @@ export class SessionService {
       isRuntimeTerminalState(conn.state) &&
       eventType !== "session_runtime_start_requested" &&
       eventType !== "session_runtime_start_failed" &&
-      eventType !== "session_runtime_start_timed_out"
+      eventType !== "session_runtime_start_timed_out" &&
+      eventType !== "session_runtime_stopping" &&
+      eventType !== "session_runtime_stopped" &&
+      eventType !== "session_runtime_deprovision_failed"
     ) {
       return;
     }
 
-    const nextState = this.lifecycleConnectionState(eventType);
+    const adapterType = this.lifecycleAdapterType(conn, update);
+    const nextState = this.lifecycleConnectionState(eventType, adapterType);
     if (conn.state === "connected" && isRuntimeStartupState(nextState)) {
       return;
     }
@@ -849,6 +865,41 @@ export class SessionService {
           autoRetryable: false,
         };
         break;
+      case "session_runtime_stopping":
+        connectionPatch = {
+          ...runtimePatch,
+          state: "stopping",
+          stoppingAt: now,
+          lastError: undefined,
+          canRetry: false,
+          canMove: false,
+          autoRetryable: false,
+        };
+        break;
+      case "session_runtime_stopped":
+        connectionPatch = {
+          ...runtimePatch,
+          state: nextState,
+          stoppedAt: now,
+          ...(adapterType === "provisioned" && { deprovisionedAt: now }),
+          lastError: undefined,
+          canRetry: false,
+          canMove: false,
+          autoRetryable: false,
+        };
+        break;
+      case "session_runtime_deprovision_failed":
+        connectionPatch = {
+          ...runtimePatch,
+          state: "deprovision_failed",
+          deprovisionFailedAt: now,
+          deprovisionAttempts: (conn.deprovisionAttempts ?? 0) + 1,
+          lastError: update.error ?? "Runtime deprovisioning failed",
+          canRetry: true,
+          canMove: false,
+          autoRetryable: true,
+        };
+        break;
     }
 
     const nextConnection = connJson({ ...conn, ...connectionPatch });
@@ -887,6 +938,7 @@ export class SessionService {
 
   private lifecycleConnectionState(
     eventType: RuntimeLifecycleEventType,
+    adapterType?: RuntimeAdapterType | null,
   ): SessionConnectionData["state"] {
     switch (eventType) {
       case "session_runtime_start_requested":
@@ -901,8 +953,147 @@ export class SessionService {
         return "failed";
       case "session_runtime_start_timed_out":
         return "timed_out";
+      case "session_runtime_stopping":
+        return "stopping";
+      case "session_runtime_stopped":
+        return adapterType === "provisioned" ? "deprovisioned" : "stopped";
+      case "session_runtime_deprovision_failed":
+        return "deprovision_failed";
     }
     return "failed";
+  }
+
+  private lifecycleAdapterType(
+    conn: SessionConnectionData,
+    update: RuntimeLifecycleUpdate,
+  ): RuntimeAdapterType | null {
+    if (conn.adapterType === "local" || conn.adapterType === "provisioned") {
+      return conn.adapterType;
+    }
+    if (update.providerRuntimeId) return "provisioned";
+    return null;
+  }
+
+  private destroyRuntimeOptions(sessionId: string, reason: string) {
+    return {
+      reason,
+      onLifecycle: (eventType: RuntimeLifecycleEventType, update?: RuntimeLifecycleUpdate) =>
+        this.recordRuntimeLifecycle(sessionId, eventType, update),
+      onMarkDeprovisioning: () => this.markRuntimeDeprovisioning(sessionId),
+    };
+  }
+
+  /**
+   * Mark a session's runtime as actively deprovisioning. Distinct from the
+   * `stopping` state which represents bridge cleanup; `deprovisioning` runs
+   * while the provisioned adapter is calling stopUrl. No event is emitted —
+   * the surrounding `session_runtime_stopping`/`session_runtime_stopped`
+   * events bracket the transition.
+   */
+  async markRuntimeDeprovisioning(sessionId: string): Promise<void> {
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { connection: true, sessionGroupId: true },
+    });
+    if (!session) return;
+    const conn = this.parseConnection(session.connection);
+    if (conn.state !== "stopping" && conn.state !== "deprovision_failed") return;
+    const updated: SessionConnectionData = {
+      ...conn,
+      state: "deprovisioning",
+      deprovisioningAt: new Date().toISOString(),
+    };
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { connection: connJson(updated) },
+    });
+    await this.syncGroupWorkspaceState(session.sessionGroupId, {
+      connection: connJson(updated),
+    });
+  }
+
+  /**
+   * Find sessions whose provisioned runtime is stuck in stopping /
+   * deprovisioning / deprovision_failed and retry the adapter stop.
+   *
+   * Bridge disconnection is only a signal; provider compute can outlive a
+   * dropped bridge. The reconciler is what eventually drives the launcher
+   * back to a stopped state without depending on the original delete request
+   * still being in flight.
+   */
+  async reconcileStuckDeprovisions(options?: {
+    now?: number;
+    stuckAfterMs?: number;
+    limit?: number;
+  }): Promise<{ reconciled: string[] }> {
+    const now = options?.now ?? Date.now();
+    const stuckAfterMs = options?.stuckAfterMs ?? 60_000;
+    const limit = options?.limit ?? 25;
+    const cutoff = new Date(now - stuckAfterMs);
+
+    const candidates = await prisma.session.findMany({
+      where: {
+        connection: {
+          path: ["adapterType"],
+          equals: "provisioned",
+        },
+        AND: [
+          {
+            OR: [
+              { connection: { path: ["state"], equals: "stopping" } },
+              { connection: { path: ["state"], equals: "deprovisioning" } },
+              { connection: { path: ["state"], equals: "deprovision_failed" } },
+            ],
+          },
+        ],
+      },
+      select: {
+        id: true,
+        hosting: true,
+        organizationId: true,
+        workdir: true,
+        repoId: true,
+        connection: true,
+      },
+      take: limit,
+    });
+
+    const reconciled: string[] = [];
+    for (const candidate of candidates) {
+      const conn = this.parseConnection(candidate.connection);
+      const lastTouchedAt = this.lastDeprovisionTouchAt(conn);
+      if (lastTouchedAt && lastTouchedAt > cutoff) continue;
+      try {
+        await sessionRouter.destroyRuntime(
+          candidate.id,
+          candidate,
+          this.destroyRuntimeOptions(candidate.id, "deprovision_reconciliation"),
+        );
+        reconciled.push(candidate.id);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(
+          `[session-service] reconcile stuck deprovision failed for ${candidate.id}: ${message}`,
+        );
+      }
+    }
+    return { reconciled };
+  }
+
+  private lastDeprovisionTouchAt(conn: SessionConnectionData): Date | null {
+    const candidates = [
+      conn.deprovisionFailedAt,
+      conn.deprovisioningAt,
+      conn.stoppingAt,
+    ].filter((value): value is string => typeof value === "string" && value.length > 0);
+    if (candidates.length === 0) return null;
+    let latest: Date | null = null;
+    for (const value of candidates) {
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) continue;
+      if (!latest || parsed > latest) latest = parsed;
+    }
+    return latest;
   }
 
   private async assertRuntimeAccess(params: {
@@ -2180,7 +2371,7 @@ export class SessionService {
       } else {
         terminalRelay.destroyAllForSession(id);
       }
-      await sessionRouter.destroyRuntime(id, session);
+      await sessionRouter.destroyRuntime(id, session, this.destroyRuntimeOptions(id, "session_deleted"));
     } else {
       terminalRelay.destroyAllForSession(id);
       try {
@@ -5700,11 +5891,13 @@ export class SessionService {
     });
     if (!session) return false;
 
+    const destroyOptions = this.destroyRuntimeOptions(sessionId, "session_unloaded");
+
     if (isGroupUnload && session.sessionGroupId) {
       // Group-level unload: destroy all terminals and the shared runtime
       terminalRelay.destroyAllForSessionGroup(session.sessionGroupId);
       try {
-        await sessionRouter.destroyRuntime(sessionId, session);
+        await sessionRouter.destroyRuntime(sessionId, session, destroyOptions);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn(
@@ -5736,7 +5929,7 @@ export class SessionService {
       if (activeSiblingCount === 0) {
         // Last session in the group — tear down the shared runtime
         try {
-          await sessionRouter.destroyRuntime(sessionId, session);
+          await sessionRouter.destroyRuntime(sessionId, session, destroyOptions);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           console.warn(`[session-service] failed to unload session ${sessionId}: ${message}`);
@@ -5752,7 +5945,7 @@ export class SessionService {
     } else {
       // No group — just destroy the runtime
       try {
-        await sessionRouter.destroyRuntime(sessionId, session);
+        await sessionRouter.destroyRuntime(sessionId, session, destroyOptions);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn(`[session-service] failed to unload session ${sessionId}: ${message}`);
