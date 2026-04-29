@@ -8,6 +8,7 @@ import {
   validateControllerConfig,
   type ControllerConfig,
 } from "./ultraplan-controller-run.js";
+import { sessionService } from "./session.js";
 
 type TxClient = Prisma.TransactionClient;
 
@@ -38,6 +39,27 @@ const ACTIVE_STATUSES: readonly string[] = [
 ] as const;
 
 const ACTIVE_CONTROLLER_RUN_STATUSES = ["queued", "running"] as const;
+
+function buildControllerRunPrompt(input: {
+  goal: string;
+  ultraplanId: string;
+  runId: string;
+  sessionGroupId: string;
+}): string {
+  return [
+    "You are the Ultraplan controller for this Trace session group.",
+    "",
+    "Goal:",
+    input.goal,
+    "",
+    "Trace context:",
+    `- Ultraplan id: ${input.ultraplanId}`,
+    `- Controller run id: ${input.runId}`,
+    `- Session group id: ${input.sessionGroupId}`,
+    "",
+    "For this controller run, inspect the current repository and session context, then produce a concise ordered plan for completing the goal. Do not mutate files, commit, push, or create tickets directly from this controller chat unless a Trace-provided controller action explicitly asks you to.",
+  ].join("\n");
+}
 
 function serializeUltraplan(ultraplan: Record<string, unknown>) {
   return {
@@ -103,7 +125,7 @@ export class UltraplanService {
   async start(input: StartUltraplanServiceInput) {
     const controller = validateControllerConfig(input);
 
-    return prisma.$transaction(async (tx: TxClient) => {
+    const result = await prisma.$transaction(async (tx: TxClient) => {
       const sessionGroup = await tx.sessionGroup.findFirst({
         where: { id: input.sessionGroupId, organizationId: input.organizationId },
         include: { repo: true },
@@ -120,7 +142,7 @@ export class UltraplanService {
       });
 
       if (existing && ACTIVE_STATUSES.includes(existing.status)) {
-        return existing;
+        return { ultraplan: existing, controllerRun: null };
       }
 
       const integrationBranch = sessionGroup.branch ?? sessionGroup.repo?.defaultBranch ?? "main";
@@ -194,8 +216,23 @@ export class UltraplanService {
         tx,
       );
 
-      return updated;
+      return { ultraplan: updated, controllerRun: run };
     });
+
+    if (result.controllerRun?.sessionId) {
+      await this.launchControllerRun({
+        runId: result.controllerRun.id,
+        sessionId: result.controllerRun.sessionId,
+        goal: input.goal,
+        ultraplanId: result.ultraplan.id,
+        sessionGroupId: input.sessionGroupId,
+        actorType: input.actorType,
+        actorId: input.actorId,
+        organizationId: input.organizationId,
+      });
+    }
+
+    return result.ultraplan;
   }
 
   async pause(id: string, actorType: ActorType, actorId: string) {
@@ -256,7 +293,7 @@ export class UltraplanService {
         : null,
     });
 
-    return prisma.$transaction(async (tx: TxClient) => {
+    const result = await prisma.$transaction(async (tx: TxClient) => {
       const run = await this.createInitialRun(tx, ultraplan, controller, {
         goal: "Manual controller run",
         actorType,
@@ -279,8 +316,23 @@ export class UltraplanService {
         },
         tx,
       );
-      return run;
+      return { run, ultraplan: updated };
     });
+
+    if (result.run.sessionId) {
+      await this.launchControllerRun({
+        runId: result.run.id,
+        sessionId: result.run.sessionId,
+        goal: "Manual controller run",
+        ultraplanId: result.ultraplan.id,
+        sessionGroupId: result.ultraplan.sessionGroupId,
+        actorType,
+        actorId,
+        organizationId: result.ultraplan.organizationId,
+      });
+    }
+
+    return result.run;
   }
 
   private async setStatus(
@@ -348,6 +400,36 @@ export class UltraplanService {
       },
       tx,
     );
+  }
+
+  private async launchControllerRun(input: {
+    runId: string;
+    sessionId: string;
+    goal: string;
+    ultraplanId: string;
+    sessionGroupId: string;
+    actorType: ActorType;
+    actorId: string;
+    organizationId: string;
+  }) {
+    const session = await sessionService.run(
+      input.sessionId,
+      buildControllerRunPrompt(input),
+      "plan",
+      {
+        userId: input.actorId,
+        organizationId: input.organizationId,
+        clientSource: "ultraplan_controller",
+      },
+    );
+
+    if (session.agentStatus === "active") {
+      await ultraplanControllerRunService.markStarted(
+        input.runId,
+        input.actorType,
+        input.actorId,
+      );
+    }
   }
 }
 
