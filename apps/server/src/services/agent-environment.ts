@@ -236,6 +236,20 @@ export class AgentEnvironmentService {
     return environment;
   }
 
+  async test(id: string, organizationId: string) {
+    const environment = await prisma.agentEnvironment.findFirstOrThrow({
+      where: { id, organizationId },
+      select: { enabled: true },
+    });
+
+    return {
+      ok: environment.enabled,
+      message: environment.enabled
+        ? "Agent environment configuration is valid"
+        : "Agent environment is disabled",
+    };
+  }
+
   private async lockOrganizationDefaults(tx: TxClient, organizationId: string): Promise<void> {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${organizationId}))`;
   }
