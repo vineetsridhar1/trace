@@ -13,6 +13,9 @@ import {
   type GitCheckpointBridgePayload,
   type GitCheckpointContext,
   type BridgeSessionGitSyncStatus,
+  type BridgeGitDiffSummary,
+  type BridgeGitIntegrationCommand,
+  type BridgeGitIntegrationResultPayload,
 } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { AuthorizationError, ValidationError } from "../lib/errors.js";
@@ -5959,6 +5962,108 @@ export class SessionService {
       baseBranch,
       runtime.workdirHint,
     );
+  }
+
+  async branchDiffSummary(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string,
+    options: {
+      baseRef?: string | null;
+      headRef?: string | null;
+      includePatch?: boolean;
+      maxPatchBytes?: number;
+      maxFiles?: number;
+    } = {},
+  ): Promise<BridgeGitDiffSummary> {
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: sessionGroupId, organizationId },
+      select: {
+        id: true,
+        worktreeDeleted: true,
+        repo: { select: { defaultBranch: true } },
+      },
+    });
+    if (!group) throw new Error("Session group not found");
+    if (group.worktreeDeleted) {
+      throw new Error("Cannot access files: session worktree has been deleted");
+    }
+    const baseRef = options.baseRef ?? "origin/" + (group.repo?.defaultBranch ?? "main");
+    if (!this.isSafeGitRef(baseRef) || (options.headRef && !this.isSafeGitRef(options.headRef))) {
+      throw new Error("Invalid git ref");
+    }
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    return sessionRouter.branchDiffSummary(runtime.runtimeId, {
+      sessionId: runtime.sessionId,
+      baseBranch: baseRef,
+      headRef: options.headRef,
+      includePatch: options.includePatch,
+      maxPatchBytes: options.maxPatchBytes,
+      maxFiles: options.maxFiles,
+      workdirHint: runtime.workdirHint,
+    });
+  }
+
+  async commitDiff(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string,
+    options: {
+      commitRef?: string | null;
+      includePatch?: boolean;
+      maxPatchBytes?: number;
+      maxFiles?: number;
+    } = {},
+  ): Promise<BridgeGitDiffSummary> {
+    if (options.commitRef && !this.isSafeGitRef(options.commitRef)) {
+      throw new Error("Invalid git ref");
+    }
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    return sessionRouter.commitDiff(runtime.runtimeId, {
+      sessionId: runtime.sessionId,
+      commitRef: options.commitRef,
+      includePatch: options.includePatch,
+      maxPatchBytes: options.maxPatchBytes,
+      maxFiles: options.maxFiles,
+      workdirHint: runtime.workdirHint,
+    });
+  }
+
+  async runServiceOwnedGitIntegration(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string,
+    input: {
+      operation: BridgeGitIntegrationCommand["operation"];
+      sourceRef?: string | null;
+      targetRef?: string | null;
+      commitRef?: string | null;
+    },
+  ): Promise<BridgeGitIntegrationResultPayload> {
+    for (const ref of [input.sourceRef, input.targetRef, input.commitRef]) {
+      if (ref && !this.isSafeGitRef(ref)) throw new Error("Invalid git ref");
+    }
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    return sessionRouter.runGitIntegration(runtime.runtimeId, {
+      sessionId: runtime.sessionId,
+      operation: input.operation,
+      sourceRef: input.sourceRef,
+      targetRef: input.targetRef,
+      commitRef: input.commitRef,
+      workdirHint: runtime.workdirHint,
+    });
   }
 
   /** Read a file's content at a specific git ref from a session group's runtime. */

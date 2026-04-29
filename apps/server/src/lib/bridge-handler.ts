@@ -548,9 +548,65 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           : [];
         sessionRouter.resolveBranchDiffRequest(
           msg.requestId,
-          files,
+          {
+            files,
+            patch: typeof msg.patch === "string" ? msg.patch : null,
+            truncated: typeof msg.truncated === "boolean" ? msg.truncated : false,
+            omittedBytes: typeof msg.omittedBytes === "number" ? msg.omittedBytes : 0,
+          },
           typeof msg.error === "string" ? msg.error : undefined,
           runtimeKey,
+        );
+        return;
+      }
+
+      if (msg.type === "commit_diff_result" && typeof msg.requestId === "string") {
+        const files = Array.isArray(msg.files)
+          ? (msg.files as Array<{
+              path: string;
+              status: string;
+              additions: number;
+              deletions: number;
+            }>)
+          : [];
+        sessionRouter.resolveCommitDiffRequest(
+          msg.requestId,
+          {
+            files,
+            patch: typeof msg.patch === "string" ? msg.patch : null,
+            truncated: typeof msg.truncated === "boolean" ? msg.truncated : false,
+            omittedBytes: typeof msg.omittedBytes === "number" ? msg.omittedBytes : 0,
+          },
+          typeof msg.error === "string" ? msg.error : undefined,
+          runtimeId,
+        );
+        return;
+      }
+
+      if (msg.type === "git_integration_result" && typeof msg.requestId === "string") {
+        const rawResult =
+          msg.result && typeof msg.result === "object" && !Array.isArray(msg.result)
+            ? (msg.result as Record<string, unknown>)
+            : {};
+        sessionRouter.resolveGitIntegrationRequest(
+          msg.requestId,
+          {
+            ok: rawResult.ok === true,
+            operation:
+              rawResult.operation === "merge" ||
+              rawResult.operation === "cherry_pick" ||
+              rawResult.operation === "rebase" ||
+              rawResult.operation === "abort"
+                ? rawResult.operation
+                : "abort",
+            headCommitSha:
+              typeof rawResult.headCommitSha === "string" ? rawResult.headCommitSha : null,
+            conflicts: Array.isArray(rawResult.conflicts)
+              ? rawResult.conflicts.filter((conflict): conflict is string => typeof conflict === "string")
+              : [],
+            error: typeof rawResult.error === "string" ? rawResult.error : null,
+          },
+          runtimeId,
         );
         return;
       }

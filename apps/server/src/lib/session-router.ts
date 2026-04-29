@@ -10,8 +10,12 @@ import type {
   BridgeListFilesCommand,
   BridgeReadFileCommand,
   BridgeBranchDiffCommand,
+  BridgeCommitDiffCommand,
+  BridgeGitIntegrationCommand,
   BridgeFileAtRefCommand,
   BridgeBranchDiffFile,
+  BridgeGitDiffSummary,
+  BridgeGitIntegrationResultPayload,
   BridgeListSkillsCommand,
   BridgeSkillInfo,
   BridgeLinkedCheckoutStatus,
@@ -50,6 +54,8 @@ export type SessionCommand =
   | BridgeListFilesCommand
   | BridgeReadFileCommand
   | BridgeBranchDiffCommand
+  | BridgeCommitDiffCommand
+  | BridgeGitIntegrationCommand
   | BridgeFileAtRefCommand
   | BridgeListSkillsCommand
   | { type: "session_git_sync_status"; requestId: string; sessionId: string; workdirHint?: string }
@@ -276,7 +282,25 @@ export class SessionRouter {
     string,
     {
       runtimeId: string;
-      resolve: (files: BridgeBranchDiffFile[]) => void;
+      resolve: (summary: BridgeGitDiffSummary) => void;
+      reject: (err: Error) => void;
+    }
+  >();
+  /** Pending commit diff requests: requestId → resolve/reject */
+  private pendingCommitDiffRequests = new Map<
+    string,
+    {
+      runtimeId: string;
+      resolve: (summary: BridgeGitDiffSummary) => void;
+      reject: (err: Error) => void;
+    }
+  >();
+  /** Pending git integration requests: requestId → resolve/reject */
+  private pendingGitIntegrationRequests = new Map<
+    string,
+    {
+      runtimeId: string;
+      resolve: (result: BridgeGitIntegrationResultPayload) => void;
       reject: (err: Error) => void;
     }
   >();
@@ -955,19 +979,41 @@ export class SessionRouter {
     workdirHint?: string,
     timeoutMs = 30_000,
   ): Promise<BridgeBranchDiffFile[]> {
+    return this.branchDiffSummary(runtimeId, { sessionId, baseBranch, workdirHint }, timeoutMs).then(
+      (summary) => summary.files,
+    );
+  }
+
+  branchDiffSummary(
+    runtimeId: string,
+    input: {
+      sessionId: string;
+      baseBranch: string;
+      headRef?: string | null;
+      includePatch?: boolean;
+      maxPatchBytes?: number;
+      maxFiles?: number;
+      workdirHint?: string | null;
+    },
+    timeoutMs = 30_000,
+  ): Promise<BridgeGitDiffSummary> {
     const requestId = randomUUID();
     const result = this.sendToRuntime(runtimeId, {
       type: "branch_diff",
       requestId,
-      sessionId,
-      baseBranch,
-      workdirHint,
+      sessionId: input.sessionId,
+      baseBranch: input.baseBranch,
+      headRef: input.headRef ?? undefined,
+      includePatch: input.includePatch,
+      maxPatchBytes: input.maxPatchBytes,
+      maxFiles: input.maxFiles,
+      workdirHint: input.workdirHint ?? undefined,
     });
     if (result !== "delivered") {
       return Promise.reject(new Error(`Runtime not available: ${result}`));
     }
 
-    return new Promise<BridgeBranchDiffFile[]>((resolve, reject) => {
+    return new Promise<BridgeGitDiffSummary>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingBranchDiffRequests.delete(requestId);
         reject(new Error("Branch diff request timed out"));
@@ -990,7 +1036,7 @@ export class SessionRouter {
   /** Resolve a pending branch diff request (called from bridge handler). */
   resolveBranchDiffRequest(
     requestId: string,
-    files: BridgeBranchDiffFile[],
+    summary: BridgeGitDiffSummary,
     error?: string,
     sourceRuntimeId?: string,
   ): void {
@@ -1001,8 +1047,131 @@ export class SessionRouter {
     if (error) {
       pending.reject(new Error(error));
     } else {
-      pending.resolve(files);
+      pending.resolve(summary);
     }
+  }
+
+  commitDiff(
+    runtimeId: string,
+    input: {
+      sessionId: string;
+      commitRef?: string | null;
+      includePatch?: boolean;
+      maxPatchBytes?: number;
+      maxFiles?: number;
+      workdirHint?: string | null;
+    },
+    timeoutMs = 30_000,
+  ): Promise<BridgeGitDiffSummary> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, {
+      type: "commit_diff",
+      requestId,
+      sessionId: input.sessionId,
+      commitRef: input.commitRef ?? undefined,
+      includePatch: input.includePatch,
+      maxPatchBytes: input.maxPatchBytes,
+      maxFiles: input.maxFiles,
+      workdirHint: input.workdirHint ?? undefined,
+    });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<BridgeGitDiffSummary>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingCommitDiffRequests.delete(requestId);
+        reject(new Error("Commit diff request timed out"));
+      }, timeoutMs);
+
+      this.pendingCommitDiffRequests.set(requestId, {
+        runtimeId,
+        resolve: (summary) => {
+          clearTimeout(timer);
+          resolve(summary);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  resolveCommitDiffRequest(
+    requestId: string,
+    summary: BridgeGitDiffSummary,
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
+    const pending = this.pendingCommitDiffRequests.get(requestId);
+    if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    this.pendingCommitDiffRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else {
+      pending.resolve(summary);
+    }
+  }
+
+  runGitIntegration(
+    runtimeId: string,
+    input: {
+      sessionId: string;
+      operation: BridgeGitIntegrationCommand["operation"];
+      sourceRef?: string | null;
+      targetRef?: string | null;
+      commitRef?: string | null;
+      workdirHint?: string | null;
+    },
+    timeoutMs = 60_000,
+  ): Promise<BridgeGitIntegrationResultPayload> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, {
+      type: "git_integration",
+      requestId,
+      sessionId: input.sessionId,
+      operation: input.operation,
+      sourceRef: input.sourceRef ?? undefined,
+      targetRef: input.targetRef ?? undefined,
+      commitRef: input.commitRef ?? undefined,
+      workdirHint: input.workdirHint ?? undefined,
+    });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<BridgeGitIntegrationResultPayload>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingGitIntegrationRequests.delete(requestId);
+        reject(new Error("Git integration request timed out"));
+      }, timeoutMs);
+
+      this.pendingGitIntegrationRequests.set(requestId, {
+        runtimeId,
+        resolve: (integrationResult) => {
+          clearTimeout(timer);
+          resolve(integrationResult);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  resolveGitIntegrationRequest(
+    requestId: string,
+    result: BridgeGitIntegrationResultPayload,
+    sourceRuntimeId?: string,
+  ): void {
+    const pending = this.pendingGitIntegrationRequests.get(requestId);
+    if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    this.pendingGitIntegrationRequests.delete(requestId);
+    pending.resolve(result);
   }
 
   /**
