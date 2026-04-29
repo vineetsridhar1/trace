@@ -411,7 +411,9 @@ describe("SessionRouter runtime adapter dispatch", () => {
         startUrl: "https://launcher.example/start",
         stopUrl: "https://launcher.example/stop",
         statusUrl: "https://launcher.example/status",
-        auth: { secretId: "secret-1" },
+        auth: { type: "bearer", secretId: "secret-1" },
+        startupTimeoutSeconds: 120,
+        deprovisionPolicy: "on_session_end",
       },
     });
     const router = new SessionRouter(
@@ -441,7 +443,9 @@ describe("SessionRouter runtime adapter dispatch", () => {
           adapterType: "provisioned",
           config: expect.objectContaining({
             stopUrl: "https://launcher.example/stop",
-            auth: { secretId: "secret-1" },
+            auth: { type: "bearer", secretId: "secret-1" },
+            startupTimeoutSeconds: 120,
+            deprovisionPolicy: "on_session_end",
           }),
         }),
       }),

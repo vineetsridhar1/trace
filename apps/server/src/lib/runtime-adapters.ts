@@ -1,3 +1,4 @@
+import { createHmac, randomUUID } from "crypto";
 import type { CloudMachineService } from "./cloud-machine-service.js";
 import {
   RuntimeAdapterRegistry,
@@ -5,12 +6,90 @@ import {
   type RuntimeStartInput,
   type RuntimeStartResult,
   type RuntimeStatusResult,
+  type RuntimeStatusInput,
   type RuntimeStopInput,
   type RuntimeStopResult,
+  type RuntimeEnvironment,
 } from "./runtime-adapter-registry.js";
-import { apiTokenService } from "../services/api-token.js";
+import { orgSecretService } from "../services/org-secret.js";
 
 const CODING_TOOLS = new Set(["claude_code", "codex", "custom"]);
+const PROVISIONED_DEPROVISION_POLICIES = new Set(["on_session_end", "manual"]);
+const PROVISIONED_STATUS_VALUES = new Set([
+  "unknown",
+  "provisioning",
+  "booting",
+  "connecting",
+  "connected",
+  "stopping",
+  "stopped",
+  "failed",
+]);
+const PROVISIONED_STOP_STATUS_VALUES = new Set([
+  "stopping",
+  "stopped",
+  "not_found",
+  "unsupported",
+]);
+const RUNTIME_TOKEN_TTL_MS = 15 * 60 * 1000;
+
+type ProvisionedAuthConfig = {
+  type: "bearer" | "hmac";
+  secretId: string;
+};
+
+type ProvisionedConfig = {
+  startUrl: string;
+  stopUrl: string;
+  statusUrl: string;
+  auth: ProvisionedAuthConfig;
+  startupTimeoutSeconds: number;
+  deprovisionPolicy: "on_session_end" | "manual";
+  launcherMetadata?: Record<string, unknown>;
+};
+
+type ProvisionedRuntimeTokenAuth = {
+  instanceId: string;
+  organizationId: string;
+  userId: string;
+};
+
+type StoredProvisionedRuntimeToken = ProvisionedRuntimeTokenAuth & {
+  expiresAt: number;
+};
+
+const provisionedRuntimeTokens = new Map<string, StoredProvisionedRuntimeToken>();
+
+export function authenticateProvisionedRuntimeToken(
+  token: string,
+): ProvisionedRuntimeTokenAuth | null {
+  const stored = provisionedRuntimeTokens.get(token);
+  if (!stored) return null;
+  if (stored.expiresAt < Date.now()) {
+    provisionedRuntimeTokens.delete(token);
+    return null;
+  }
+
+  return {
+    instanceId: stored.instanceId,
+    organizationId: stored.organizationId,
+    userId: stored.userId,
+  };
+}
+
+function registerProvisionedRuntimeToken(
+  token: string,
+  auth: ProvisionedRuntimeTokenAuth,
+): void {
+  provisionedRuntimeTokens.set(token, {
+    ...auth,
+    expiresAt: Date.now() + RUNTIME_TOKEN_TTL_MS,
+  });
+}
+
+function revokeProvisionedRuntimeToken(token: string): void {
+  provisionedRuntimeTokens.delete(token);
+}
 
 function getCapabilities(config: Record<string, unknown>): Record<string, unknown> | null {
   const capabilities = config.capabilities;
@@ -43,6 +122,196 @@ function assertCompatibilityConstraints(config: Record<string, unknown>): void {
   ) {
     throw new Error("Agent environment startupTimeoutSeconds must be a positive integer");
   }
+}
+
+function assertHttpsUrl(value: unknown, key: string): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`Provisioned agent environment config requires ${key}`);
+  }
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`Provisioned agent environment ${key} must be a valid URL`);
+  }
+  if (url.protocol !== "https:") {
+    throw new Error(`Provisioned agent environment ${key} must use HTTPS`);
+  }
+  return value;
+}
+
+function assertProvisionedAuthConfig(value: unknown): ProvisionedAuthConfig {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Provisioned agent environment config requires auth");
+  }
+  const auth = value as Record<string, unknown>;
+  if (auth.type !== "bearer" && auth.type !== "hmac") {
+    throw new Error("Provisioned agent environment auth.type must be bearer or hmac");
+  }
+  if (typeof auth.secretId !== "string" || !auth.secretId.trim()) {
+    throw new Error("Provisioned agent environment auth.secretId must be a non-empty string");
+  }
+  return { type: auth.type, secretId: auth.secretId };
+}
+
+function parseProvisionedConfig(config: Record<string, unknown>): ProvisionedConfig {
+  assertCompatibilityConstraints(config);
+
+  const startupTimeoutSeconds = config.startupTimeoutSeconds;
+  if (
+    typeof startupTimeoutSeconds !== "number" ||
+    !Number.isInteger(startupTimeoutSeconds) ||
+    startupTimeoutSeconds < 1
+  ) {
+    throw new Error("Provisioned agent environment startupTimeoutSeconds must be a positive integer");
+  }
+
+  const deprovisionPolicy = config.deprovisionPolicy;
+  if (
+    typeof deprovisionPolicy !== "string" ||
+    !PROVISIONED_DEPROVISION_POLICIES.has(deprovisionPolicy)
+  ) {
+    throw new Error(
+      "Provisioned agent environment deprovisionPolicy must be on_session_end or manual",
+    );
+  }
+
+  const launcherMetadata = config.launcherMetadata;
+  if (
+    launcherMetadata !== undefined &&
+    (!launcherMetadata || typeof launcherMetadata !== "object" || Array.isArray(launcherMetadata))
+  ) {
+    throw new Error("Provisioned agent environment launcherMetadata must be an object");
+  }
+
+  const normalizedDeprovisionPolicy = deprovisionPolicy as ProvisionedConfig["deprovisionPolicy"];
+
+  return {
+    startUrl: assertHttpsUrl(config.startUrl, "startUrl"),
+    stopUrl: assertHttpsUrl(config.stopUrl, "stopUrl"),
+    statusUrl: assertHttpsUrl(config.statusUrl, "statusUrl"),
+    auth: assertProvisionedAuthConfig(config.auth),
+    startupTimeoutSeconds,
+    deprovisionPolicy: normalizedDeprovisionPolicy,
+    ...(launcherMetadata !== undefined
+      ? { launcherMetadata: launcherMetadata as Record<string, unknown> }
+      : {}),
+  };
+}
+
+function configRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Runtime environment config must be an object");
+  }
+  return value as Record<string, unknown>;
+}
+
+function defaultBridgeUrl(): string {
+  const publicUrl = process.env.TRACE_SERVER_PUBLIC_URL?.trim();
+  if (!publicUrl) throw new Error("TRACE_SERVER_PUBLIC_URL is required for provisioned runtimes");
+  return publicUrl.replace(/^http/, "ws") + "/bridge";
+}
+
+function responseRecord(value: unknown, endpointName: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Provisioned ${endpointName} response must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function traceStatus(value: unknown): RuntimeStatusResult["status"] {
+  if (typeof value !== "string") return "unknown";
+  if (PROVISIONED_STATUS_VALUES.has(value)) return value as RuntimeStatusResult["status"];
+  if (value === "running") return "connected";
+  if (value === "pending" || value === "starting") return "provisioning";
+  if (value === "terminated" || value === "complete") return "stopped";
+  return "unknown";
+}
+
+function stopStatus(value: unknown): RuntimeStopResult["status"] {
+  if (typeof value === "string" && PROVISIONED_STOP_STATUS_VALUES.has(value)) {
+    return value as RuntimeStopResult["status"];
+  }
+  return "stopping";
+}
+
+function startStatus(value: unknown): RuntimeStartResult["status"] {
+  const status = traceStatus(value);
+  if (
+    status === "booting" ||
+    status === "connecting" ||
+    status === "connected" ||
+    status === "provisioning"
+  ) {
+    return status;
+  }
+  return "provisioning";
+}
+
+function idempotencyKey(sessionId: string, action: "start" | "stop"): string {
+  return `session:${sessionId}:${action}`;
+}
+
+async function readJsonResponse(response: Response, endpointName: string): Promise<unknown> {
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(
+      `Provisioned ${endpointName} request failed (${response.status}): ${text.slice(0, 500)}`,
+    );
+  }
+  if (!text.trim()) return {};
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new Error(`Provisioned ${endpointName} response was not valid JSON`);
+  }
+}
+
+async function authenticatedLauncherRequest(params: {
+  organizationId: string;
+  url: string;
+  auth: ProvisionedAuthConfig;
+  body: Record<string, unknown>;
+  idempotencyKey?: string;
+  endpointName: string;
+}): Promise<unknown> {
+  const secret = await orgSecretService.getDecryptedValue(
+    params.organizationId,
+    params.auth.secretId,
+  );
+  if (!secret) {
+    throw new Error("Provisioned agent environment auth secret was not found");
+  }
+
+  const rawBody = JSON.stringify(params.body);
+  const requestId = randomUUID();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Trace-Request-Id": requestId,
+    ...(params.idempotencyKey ? { "Trace-Idempotency-Key": params.idempotencyKey } : {}),
+  };
+
+  if (params.auth.type === "bearer") {
+    headers.Authorization = `Bearer ${secret}`;
+  } else {
+    const timestamp = new Date().toISOString();
+    const signature = createHmac("sha256", secret)
+      .update(`${timestamp}.${requestId}.${rawBody}`)
+      .digest("hex");
+    headers["Trace-Timestamp"] = timestamp;
+    headers["Trace-Signature"] = `v1=${signature}`;
+  }
+
+  const response = await fetch(params.url, {
+    method: "POST",
+    headers,
+    body: rawBody,
+  });
+  return readJsonResponse(response, params.endpointName);
 }
 
 class LocalRuntimeAdapter implements RuntimeAdapter {
@@ -87,87 +356,185 @@ class LocalRuntimeAdapter implements RuntimeAdapter {
   }
 }
 
-/**
- * Transitional compatibility adapter: keeps existing CloudMachine-backed cloud
- * sessions working until ticket 06 replaces this with the generic launcher
- * start/stop/status endpoint implementation.
- */
-class LegacyCloudMachineProvisionedRuntimeAdapter implements RuntimeAdapter {
+export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
   readonly type = "provisioned" as const;
 
-  constructor(private cloudMachineService: CloudMachineService | null = null) {}
-
-  setCloudMachineService(service: CloudMachineService): void {
-    this.cloudMachineService = service;
+  setCloudMachineService(_service: CloudMachineService): void {
+    // Kept for startup wiring compatibility while provisioned runtimes move to launcher endpoints.
   }
 
   async validateConfig(config: Record<string, unknown>): Promise<void> {
-    assertCompatibilityConstraints(config);
-    for (const key of ["startUrl", "stopUrl", "statusUrl"]) {
-      const value = config[key];
-      if (typeof value !== "string" || !value.trim()) {
-        throw new Error(`Provisioned agent environment config requires ${key}`);
-      }
-      try {
-        new URL(value);
-      } catch {
-        throw new Error(`Provisioned agent environment ${key} must be a valid URL`);
-      }
-    }
+    parseProvisionedConfig(config);
   }
 
-  async testConfig(): Promise<{ ok: boolean; message: string }> {
+  async testConfig(input: {
+    organizationId: string;
+    config: Record<string, unknown>;
+  }): Promise<{ ok: boolean; message: string }> {
+    const config = parseProvisionedConfig(input.config);
+    const result = await this.getStatus({
+      organizationId: input.organizationId,
+      environment: {
+        id: "config-test",
+        name: "Config test",
+        adapterType: "provisioned",
+        config: input.config as RuntimeEnvironment["config"],
+      },
+      connection: { providerRuntimeId: "config-test" },
+    }).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      return { status: "failed" as const, message };
+    });
     return {
-      ok: false,
-      message: "Provisioned environment testing requires runtime adapter connectivity",
+      ok: result.status !== "failed",
+      message:
+        result.message ??
+        `Provisioned environment ${config.statusUrl} responded with ${result.status}`,
     };
   }
 
   async startSession(input: RuntimeStartInput): Promise<RuntimeStartResult> {
-    if (!this.cloudMachineService) {
-      throw new Error("Provisioned runtime adapter is not initialized");
+    if (!input.environment) {
+      throw new Error("Provisioned runtime requires an agent environment");
     }
-    const userTokens = await apiTokenService.getDecryptedTokens(input.actorId);
-    const machine = await this.cloudMachineService.getOrCreateMachine({
+    const config = parseProvisionedConfig(configRecord(input.environment.config));
+    const runtimeInstanceId = `runtime_${randomUUID()}`;
+    const runtimeToken = input.runtimeToken ?? randomUUID();
+    const bridgeUrl = input.bridgeUrl ?? defaultBridgeUrl();
+
+    registerProvisionedRuntimeToken(runtimeToken, {
+      instanceId: runtimeInstanceId,
+      organizationId: input.organizationId,
       userId: input.actorId,
-      orgId: input.organizationId,
-      defaultTool: input.tool,
-      userTokens: userTokens as Record<string, string>,
     });
-    return {
-      runtimeInstanceId: machine.runtimeInstanceId,
-      providerRuntimeId: machine.id,
-      status: "connecting",
+
+    const body = {
+      sessionId: input.sessionId,
+      sessionGroupId: input.sessionGroupId ?? null,
+      orgId: input.organizationId,
+      runtimeInstanceId,
+      runtimeToken,
+      bridgeUrl,
+      repo: input.repo
+        ? {
+            ...input.repo,
+            branch: input.branch ?? null,
+            checkpointSha: input.checkpointSha ?? null,
+            readOnly: input.readOnly ?? false,
+          }
+        : null,
+      tool: input.tool,
+      model: input.model ?? null,
+      bootstrapEnv: {
+        TRACE_SESSION_ID: input.sessionId,
+        TRACE_ORG_ID: input.organizationId,
+        TRACE_RUNTIME_INSTANCE_ID: runtimeInstanceId,
+        TRACE_RUNTIME_TOKEN: runtimeToken,
+        TRACE_BRIDGE_URL: bridgeUrl,
+      },
+      metadata: {
+        requestedBy: input.actorId,
+        environmentId: input.environment.id,
+        launcherMetadata: config.launcherMetadata ?? null,
+      },
     };
+
+    try {
+      const json = await authenticatedLauncherRequest({
+        organizationId: input.organizationId,
+        url: config.startUrl,
+        auth: config.auth,
+        body,
+        idempotencyKey: idempotencyKey(input.sessionId, "start"),
+        endpointName: "start",
+      });
+      const record = responseRecord(json, "start");
+      const providerRuntimeId = optionalString(record.runtimeId);
+      if (!providerRuntimeId) {
+        throw new Error("Provisioned start response requires runtimeId");
+      }
+
+      return {
+        runtimeInstanceId,
+        runtimeLabel: optionalString(record.label),
+        providerRuntimeId,
+        providerRuntimeUrl: optionalString(record.runtimeUrl),
+        status: startStatus(record.status),
+      };
+    } catch (error) {
+      revokeProvisionedRuntimeToken(runtimeToken);
+      throw error;
+    }
   }
 
   async stopSession(input: RuntimeStopInput): Promise<RuntimeStopResult> {
-    if (!this.cloudMachineService) {
+    if (!input.environment || !input.organizationId) {
       return {
         ok: false,
         status: "unsupported",
-        message: "Provisioned runtime adapter is not initialized",
+        message: "Provisioned runtime environment missing",
       };
     }
-    const cloudMachineId = input.connection?.cloudMachineId;
-    if (typeof cloudMachineId !== "string" || !cloudMachineId.trim()) {
+    const config = parseProvisionedConfig(configRecord(input.environment.config));
+    const providerRuntimeId =
+      optionalString(input.connection?.providerRuntimeId) ??
+      optionalString(input.connection?.cloudMachineId);
+    if (!providerRuntimeId) {
       return { ok: true, status: "not_found" };
     }
-    await this.cloudMachineService.sessionEnded(cloudMachineId).catch((err: Error) => {
-      console.warn(
-        `[provisioned-adapter] sessionEnded failed for runtime ${cloudMachineId}:`,
-        err.message,
-      );
+    const json = await authenticatedLauncherRequest({
+      organizationId: input.organizationId,
+      url: config.stopUrl,
+      auth: config.auth,
+      body: {
+        sessionId: input.sessionId,
+        runtimeId: providerRuntimeId,
+        reason: input.reason ?? "session_stopped",
+      },
+      idempotencyKey: idempotencyKey(input.sessionId, "stop"),
+      endpointName: "stop",
     });
-    return { ok: true, status: "stopping" };
+    const record = responseRecord(json, "stop");
+    const ok = record.ok === undefined ? true : record.ok === true;
+    return {
+      ok,
+      status: stopStatus(record.status),
+      message: optionalString(record.message),
+    };
   }
 
-  async getStatus(): Promise<RuntimeStatusResult> {
-    return { status: "unknown" };
+  async getStatus(input: RuntimeStatusInput): Promise<RuntimeStatusResult> {
+    if (!input.environment) {
+      return { status: "unknown", message: "Provisioned runtime environment missing" };
+    }
+    const config = parseProvisionedConfig(configRecord(input.environment.config));
+    const providerRuntimeId =
+      optionalString(input.connection?.providerRuntimeId) ??
+      optionalString(input.connection?.cloudMachineId);
+    if (!providerRuntimeId) return { status: "unknown", message: "Provider runtime ID missing" };
+
+    const json = await authenticatedLauncherRequest({
+      organizationId: input.organizationId,
+      url: config.statusUrl,
+      auth: config.auth,
+      body: {
+        runtimeId: providerRuntimeId,
+      },
+      endpointName: "status",
+    });
+    const record = responseRecord(json, "status");
+    return {
+      status: traceStatus(record.status),
+      message: optionalString(record.message),
+      metadata:
+        record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+          ? (record.metadata as Record<string, unknown>)
+          : undefined,
+    };
   }
 }
 
-const provisionedRuntimeAdapter = new LegacyCloudMachineProvisionedRuntimeAdapter();
+const provisionedRuntimeAdapter = new ProvisionedRuntimeAdapter();
 
 export function setProvisionedRuntimeCloudMachineService(service: CloudMachineService): void {
   provisionedRuntimeAdapter.setCloudMachineService(service);
