@@ -135,3 +135,52 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
     await expect(promise).resolves.toEqual(["main"]);
   });
 });
+
+describe("SessionRouter runtime adapter dispatch", () => {
+  it("starts local sessions through the registry and keeps prepare delivery on the bridge", async () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+
+    router.registerRuntime({
+      id: "runtime-1",
+      label: "Laptop",
+      ws,
+      hostingMode: "local",
+      supportedTools: ["codex"],
+      registeredRepoIds: ["repo-1"],
+    });
+    router.bindSession("session-1", "runtime-1");
+
+    const failures: string[] = [];
+    router.createRuntime({
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      hosting: "local",
+      adapterType: "local",
+      tool: "codex",
+      repo: {
+        id: "repo-1",
+        name: "repo",
+        remoteUrl: "https://github.com/acme/repo.git",
+        defaultBranch: "main",
+      },
+      branch: "feature",
+      createdById: "user-1",
+      organizationId: "org-1",
+      onFailed: (error) => failures.push(error),
+    });
+
+    await Promise.resolve();
+
+    expect(failures).toEqual([]);
+    const send = ws.send as unknown as ReturnType<typeof vi.fn>;
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(send.mock.calls[0]?.[0] as string)).toMatchObject({
+      type: "prepare",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      repoId: "repo-1",
+      branch: "feature",
+    });
+  });
+});

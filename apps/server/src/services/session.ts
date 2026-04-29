@@ -16,6 +16,7 @@ import { prisma } from "../lib/db.js";
 import { AuthorizationError } from "../lib/errors.js";
 import { eventService } from "./event.js";
 import { sessionRouter, type DeliveryResult, type RuntimeInstance } from "../lib/session-router.js";
+import type { RuntimeAdapterType } from "../lib/runtime-adapter-registry.js";
 import { inboxService } from "./inbox.js";
 import { runtimeDebug } from "../lib/runtime-debug.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
@@ -635,6 +636,13 @@ export class SessionService {
     createdById: string;
     organizationId: string;
     readOnly?: boolean;
+    adapterType?: RuntimeAdapterType;
+    environment?: {
+      id: string;
+      name: string;
+      adapterType: RuntimeAdapterType;
+      config: Prisma.JsonValue;
+    } | null;
   }): void {
     sessionRouter.createRuntime({
       sessionId: params.sessionId,
@@ -642,6 +650,8 @@ export class SessionService {
       slug: params.slug ?? undefined,
       preserveBranchName: params.preserveBranchName,
       hosting: params.hosting as "cloud" | "local",
+      adapterType: params.adapterType,
+      environment: params.environment,
       tool: params.tool,
       model: params.model ?? undefined,
       repo: params.repo
@@ -1603,6 +1613,8 @@ export class SessionService {
         createdById: input.createdById,
         organizationId: input.organizationId,
         readOnly: readOnlyWorkspace,
+        adapterType: requestedEnvironment?.adapterType,
+        environment: requestedEnvironment,
       });
     }
 
@@ -1714,6 +1726,7 @@ export class SessionService {
           createdById: session.createdById,
           organizationId: session.organizationId,
           readOnly: session.readOnlyWorkspace,
+          adapterType: conn.adapterType,
         });
       }
 
@@ -2177,6 +2190,7 @@ export class SessionService {
           createdById: actorId,
           organizationId,
           readOnly: prev.readOnlyWorkspace,
+          adapterType: this.parseConnection(prev.connection).adapterType,
         });
       }
     }
@@ -2668,6 +2682,7 @@ export class SessionService {
           createdById: session.createdById,
           organizationId: session.organizationId,
           readOnly: session.readOnlyWorkspace,
+          adapterType: conn.adapterType,
         });
 
         const event = await eventService.create({
@@ -4230,6 +4245,7 @@ export class SessionService {
         createdById: actorId,
         organizationId: movedSession.organizationId,
         readOnly: movedSession.readOnlyWorkspace,
+        adapterType: this.parseConnection(movedSession.connection).adapterType,
       });
     } else {
       const deliveryResult = await this.deliverPendingCommand(

@@ -37,13 +37,13 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] `SessionRouter` can dispatch through the registry.
-- [ ] Adapter lookup fails clearly for unsupported adapter types.
-- [ ] Local and provisioned adapters implement the same lifecycle interface.
-- [ ] Existing bridge command sending remains centralized in `SessionRouter`.
-- [ ] Runtime adapter contracts do not expose or imply a single terminal stream per session.
-- [ ] Existing terminal commands/events remain multiplexed by `terminalId` after adapter routing.
-- [ ] No provider-specific code is added to the registry.
+- [x] `SessionRouter` can dispatch through the registry.
+- [x] Adapter lookup fails clearly for unsupported adapter types.
+- [x] Local and provisioned adapters implement the same lifecycle interface.
+- [x] Existing bridge command sending remains centralized in `SessionRouter`.
+- [x] Runtime adapter contracts do not expose or imply a single terminal stream per session.
+- [x] Existing terminal commands/events remain multiplexed by `terminalId` after adapter routing.
+- [x] No provider-specific code is added to the registry.
 
 ## Implementation notes
 
