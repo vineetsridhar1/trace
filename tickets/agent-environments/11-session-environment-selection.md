@@ -14,8 +14,10 @@ Let session creation use an explicit environment or the org default while preser
   - explicit `environmentId`
   - org default environment
   - compatibility fallback using `hosting` and `runtimeInstanceId`
+- Return a clear validation error when no environment/default/compatibility fallback can be resolved.
 - Persist `environmentId` and adapter metadata in session connection.
 - Show startup/provisioning status for provisioned sessions.
+- Show deprovision/stopping status in the session UI when a runtime is being cleaned up.
 
 ## Dependencies
 
@@ -28,9 +30,11 @@ Let session creation use an explicit environment or the org default while preser
 - [ ] Starting a session with explicit local environment works.
 - [ ] Starting a session with explicit provisioned environment works against a mock launcher.
 - [ ] Omitting environment uses org default.
+- [ ] Missing environment/default/fallback produces an actionable validation error.
 - [ ] Existing callers using `hosting` still work during migration.
 - [ ] Disabled environments cannot be selected.
 - [ ] Session UI shows startup state for provisioned sessions.
+- [ ] Session UI shows stopping/deprovision status when relevant.
 
 ## Implementation notes
 

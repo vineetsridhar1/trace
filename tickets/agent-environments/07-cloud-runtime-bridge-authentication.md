@@ -18,8 +18,12 @@ Secure cloud runtime bridge registration with short-lived runtime tokens tied to
 - Update bridge auth handling to verify cloud tokens.
 - Verify `runtime_hello.instanceId` matches token claims.
 - Verify `hostingMode` is `cloud` for provisioned runtimes.
+- Accept cloud `runtime_hello` registrations with `registeredRepoIds: []` because provisioned runtimes clone on demand.
+- Verify cloud `runtime_hello.supportedTools` is captured or validated consistently with existing bridge capability handling.
 - Reject missing, expired, or mismatched runtime tokens.
 - Preserve existing local bridge auth behavior.
+- Track runtime heartbeats for authenticated cloud runtimes.
+- Mark stale cloud runtimes disconnected when heartbeats expire.
 
 ## Dependencies
 
@@ -31,6 +35,9 @@ Secure cloud runtime bridge registration with short-lived runtime tokens tied to
 - [ ] Runtime cannot claim a different `runtimeInstanceId`.
 - [ ] Runtime cannot register for a different org/session/environment.
 - [ ] Expired tokens are rejected.
+- [ ] Cloud runtime registration supports empty registered repo IDs.
+- [ ] Cloud runtime heartbeats update runtime connection state.
+- [ ] Stale cloud runtime connections are detected.
 - [ ] Local desktop bridge auth still works unchanged.
 - [ ] Bridge registration emits or triggers runtime-connected state.
 

@@ -16,9 +16,19 @@ Add the generic provisioned adapter that calls an org-owned signed lifecycle end
   - `deprovisionPolicy`
   - optional `launcherMetadata`
 - Sign lifecycle requests with timestamp, request id, and HMAC.
+- Define launcher-side replay protection expectations:
+  - reject invalid signatures
+  - reject old timestamps
+  - reject replayed request IDs
 - Implement `startSession`:
   - create runtime token input
   - send session, org, repo, tool, model, bridge URL, and runtime token payload to `startUrl`
+  - include the runtime bootstrap values the launcher must inject into the agent host:
+    - `TRACE_SESSION_ID`
+    - `TRACE_ORG_ID`
+    - `TRACE_RUNTIME_INSTANCE_ID`
+    - `TRACE_RUNTIME_TOKEN`
+    - `TRACE_BRIDGE_URL`
   - persist returned provider runtime ID and label
 - Implement `stopSession`:
   - call `stopUrl` with `sessionId`, provider runtime ID, and reason
@@ -37,6 +47,8 @@ Add the generic provisioned adapter that calls an org-owned signed lifecycle end
 - [ ] Start request is signed.
 - [ ] Stop request is signed.
 - [ ] Status request is signed.
+- [ ] Webhook contract documents timestamp freshness and replay protection.
+- [ ] Start payload contains all values needed for the launcher to boot `trace-agent-runtime`.
 - [ ] Adapter stores provider runtime ID in session connection state.
 - [ ] Provider response parsing does not use `any`.
 - [ ] AI messages are never sent to lifecycle endpoints.

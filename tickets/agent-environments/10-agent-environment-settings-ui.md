@@ -14,6 +14,8 @@ Add org settings UI for managing local and provisioned agent environments.
   - enabled state
   - last status/error if available
 - Add create/edit flows for local environments.
+  - Show connected local bridges.
+  - Show registered repos for each local bridge where available.
 - Add create/edit flows for provisioned environments.
 - Add enable/disable.
 - Add set default.
@@ -30,6 +32,7 @@ Add org settings UI for managing local and provisioned agent environments.
 
 - [ ] Admin can list org environments.
 - [ ] Admin can create/edit local environment.
+- [ ] Local environment form shows connected local bridges and registered repos.
 - [ ] Admin can create/edit provisioned environment.
 - [ ] Admin can set an org default.
 - [ ] Admin can disable an environment.

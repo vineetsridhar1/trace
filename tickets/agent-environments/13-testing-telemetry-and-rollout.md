@@ -11,6 +11,7 @@ Add end-to-end confidence, operational visibility, and rollout controls for agen
   - default selection
   - registry lookup
   - provisioned signature generation
+  - lifecycle request replay/timestamp rejection
   - status mapping
 - Add service tests for:
   - session creation with explicit environment
@@ -18,11 +19,13 @@ Add end-to-end confidence, operational visibility, and rollout controls for agen
   - compatibility fallback
   - startup timeout
   - pending message drain
+  - fallback behavior when no environment exists
 - Add integration tests with a mock provisioned launcher.
 - Add telemetry/logging for:
   - environment create/update/test
   - provisioned start latency
   - bridge connection latency
+  - runtime heartbeat freshness
   - startup timeout
   - deprovision failure
 - Add feature flag or rollout guard if needed.

@@ -15,6 +15,7 @@ Provide optional launcher examples outside Trace core for common infrastructure 
   - `POST /trace/stop-session`
   - `GET /trace/session-status/:runtimeId`
 - Each launcher should verify Trace signatures.
+- Each launcher should reject old timestamps and replayed request IDs.
 - Each launcher should inject runtime env vars:
   - `TRACE_SESSION_ID`
   - `TRACE_ORG_ID`
