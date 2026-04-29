@@ -45,14 +45,14 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] Environment CRUD works through the service layer.
-- [ ] Unauthorized callers cannot read or mutate environments.
-- [ ] Default environment changes are transactional.
-- [ ] Invalid configs are rejected before persistence.
-- [ ] Invalid environment compatibility constraints are rejected before persistence.
-- [ ] Service emits environment lifecycle events.
-- [ ] Environment mutations cannot commit without their lifecycle event.
-- [ ] Resolvers contain no business logic.
+- [x] Environment CRUD works through the service layer.
+- [x] Unauthorized callers cannot read or mutate environments.
+- [x] Default environment changes are transactional.
+- [x] Invalid configs are rejected before persistence.
+- [x] Invalid environment compatibility constraints are rejected before persistence.
+- [x] Service emits environment lifecycle events.
+- [x] Environment mutations cannot commit without their lifecycle event.
+- [x] Resolvers contain no business logic.
 
 ## Implementation notes
 
