@@ -430,6 +430,8 @@ export class UltraplanService {
     actorId: string;
     organizationId: string;
   }) {
+    await sessionService.prepareUltraplanControllerSessionForLaunch(input.sessionId);
+
     const session = await sessionService.run(
       input.sessionId,
       buildControllerRunPrompt(input),

@@ -2804,6 +2804,38 @@ export class SessionService {
     return updated;
   }
 
+  async prepareUltraplanControllerSessionForLaunch(id: string) {
+    const session = await prisma.session.findUnique({
+      where: { id },
+      select: {
+        role: true,
+        hosting: true,
+        agentStatus: true,
+        workdir: true,
+        connection: true,
+      },
+    });
+    if (!session) return;
+    if (session.role !== "ultraplan_controller_run") return;
+    if (session.hosting !== "cloud") return;
+    if (session.agentStatus !== "not_started") return;
+    if (!session.workdir) return;
+
+    const conn = this.parseConnection(session.connection);
+    const hasLiveRuntime =
+      !!sessionRouter.getRuntimeForSession(id) ||
+      (!!conn.runtimeInstanceId && sessionRouter.isRuntimeAvailable(conn.runtimeInstanceId));
+    if (hasLiveRuntime) return;
+
+    await prisma.session.update({
+      where: { id },
+      data: {
+        workdir: null,
+        connection: connJson(defaultConnection()),
+      },
+    });
+  }
+
   async terminate(id: string, actorType: ActorType = "system", actorId: string = "system") {
     return this.terminateWithStatus(id, "stopped", "Session stopped", actorType, actorId);
   }
