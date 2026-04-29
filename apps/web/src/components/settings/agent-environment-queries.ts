@@ -20,6 +20,28 @@ export const AGENT_ENVIRONMENTS_SETTINGS_QUERY = gql`
       defaultBranch
       webhookActive
     }
+    orgSecrets(orgId: $orgId) {
+      id
+      orgId
+      name
+      createdAt
+      updatedAt
+    }
+    myConnections {
+      bridge {
+        id
+        instanceId
+        label
+        hostingMode
+        connected
+      }
+      repos {
+        repo {
+          id
+          name
+        }
+      }
+    }
   }
 `;
 

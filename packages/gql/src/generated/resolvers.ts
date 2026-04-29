@@ -1215,6 +1215,15 @@ export type OrgMember = {
   user: User;
 };
 
+export type OrgSecret = {
+  __typename?: "OrgSecret";
+  createdAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  name: Scalars["String"]["output"];
+  orgId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
 export type Organization = {
   __typename?: "Organization";
   agentEnvironments: Array<AgentEnvironment>;
@@ -1290,6 +1299,7 @@ export type Query = {
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
+  orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
   project?: Maybe<Project>;
@@ -1437,6 +1447,10 @@ export type QueryMySessionsArgs = {
   includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   includeMerged?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryOrgSecretsArgs = {
+  orgId: Scalars["ID"]["input"];
 };
 
 export type QueryOrganizationArgs = {
@@ -2124,6 +2138,7 @@ export type ResolversTypes = ResolversObject<{
   Notification: ResolverTypeWrapper<Notification>;
   OrgAgentStatus: OrgAgentStatus;
   OrgMember: ResolverTypeWrapper<OrgMember>;
+  OrgSecret: ResolverTypeWrapper<OrgSecret>;
   Organization: ResolverTypeWrapper<Organization>;
   Participant: ResolverTypeWrapper<Participant>;
   PortEndpoint: ResolverTypeWrapper<PortEndpoint>;
@@ -2232,6 +2247,7 @@ export type ResolversParentTypes = ResolversObject<{
   Mutation: {};
   Notification: Notification;
   OrgMember: OrgMember;
+  OrgSecret: OrgSecret;
   Organization: Organization;
   Participant: Participant;
   PortEndpoint: PortEndpoint;
@@ -3401,6 +3417,18 @@ export type OrgMemberResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type OrgSecretResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["OrgSecret"] = ResolversParentTypes["OrgSecret"],
+> = ResolversObject<{
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  orgId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type OrganizationResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["Organization"] = ResolversParentTypes["Organization"],
@@ -3605,6 +3633,12 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QueryMySessionsArgs, "organizationId">
+  >;
+  orgSecrets?: Resolver<
+    Array<ResolversTypes["OrgSecret"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryOrgSecretsArgs, "orgId">
   >;
   organization?: Resolver<
     Maybe<ResolversTypes["Organization"]>,
@@ -4127,6 +4161,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Mutation?: MutationResolvers<ContextType>;
   Notification?: NotificationResolvers<ContextType>;
   OrgMember?: OrgMemberResolvers<ContextType>;
+  OrgSecret?: OrgSecretResolvers<ContextType>;
   Organization?: OrganizationResolvers<ContextType>;
   Participant?: ParticipantResolvers<ContextType>;
   PortEndpoint?: PortEndpointResolvers<ContextType>;

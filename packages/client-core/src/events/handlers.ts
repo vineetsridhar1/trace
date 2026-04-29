@@ -57,6 +57,21 @@ const SESSION_PR_EVENTS: Set<EventType> = new Set(["session_pr_opened", "session
 const SESSION_ACTIVITY_EVENTS: Set<EventType> = new Set(["session_output", "message_sent"]);
 
 function upsertAgentEnvironmentFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const environments = payload.agentEnvironments;
+  if (Array.isArray(environments)) {
+    for (const item of environments) {
+      const environment = asJsonObject(item);
+      if (environment && typeof environment.id === "string") {
+        batch.upsert(
+          "agentEnvironments",
+          environment.id,
+          environment as unknown as AgentEnvironment,
+        );
+      }
+    }
+    return;
+  }
+
   const environment = asJsonObject(payload.agentEnvironment);
   if (environment && typeof environment.id === "string") {
     batch.upsert("agentEnvironments", environment.id, environment as unknown as AgentEnvironment);
