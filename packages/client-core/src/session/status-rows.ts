@@ -39,6 +39,7 @@ export function extractSessionErrorMessage(value: unknown): string | undefined {
 
   const nestedError = asJsonObject(object.error);
   return (
+    extractSessionErrorMessage(object.error) ??
     extractSessionErrorMessage(nestedError?.message) ??
     extractSessionErrorMessage(object.message) ??
     firstString(object.reason, object.status)
