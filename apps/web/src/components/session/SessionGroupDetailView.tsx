@@ -86,6 +86,8 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         updatedAt
         tickets {
           id
+          ultraplanId
+          ticketId
           status
           position
           ticket {
@@ -102,7 +104,9 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         }
         ticketExecutions {
           id
+          ultraplanId
           ticketId
+          updatedAt
           status
           integrationStatus
           branch
@@ -110,6 +114,8 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         }
         controllerRuns {
           id
+          ultraplanId
+          sessionGroupId
           status
           summaryTitle
           summary
