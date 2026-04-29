@@ -389,6 +389,8 @@ export type ConnectionsRepoEntry = {
   runScripts?: Maybe<Scalars["JSON"]["output"]>;
 };
 
+export type ControllerRunStatus = "cancelled" | "completed" | "failed" | "queued" | "running";
+
 export type CostBudget = {
   __typename?: "CostBudget";
   dailyLimitCents: Scalars["Int"]["output"];
@@ -448,13 +450,16 @@ export type CreateRepoInput = {
 };
 
 export type CreateTicketInput = {
+  acceptanceCriteria?: InputMaybe<Array<Scalars["String"]["input"]>>;
   assigneeIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
+  dependencyTicketIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   description?: InputMaybe<Scalars["String"]["input"]>;
   labels?: InputMaybe<Array<Scalars["String"]["input"]>>;
   organizationId: Scalars["ID"]["input"];
   priority?: InputMaybe<Priority>;
   projectId?: InputMaybe<Scalars["ID"]["input"]>;
+  testPlan?: InputMaybe<Scalars["String"]["input"]>;
   title: Scalars["String"]["input"];
 };
 
@@ -539,10 +544,30 @@ export type EventType =
   | "ticket_assigned"
   | "ticket_commented"
   | "ticket_created"
+  | "ticket_execution_blocked"
+  | "ticket_execution_created"
+  | "ticket_execution_integrated"
+  | "ticket_execution_integration_requested"
+  | "ticket_execution_ready_for_review"
+  | "ticket_execution_updated"
   | "ticket_linked"
   | "ticket_unassigned"
   | "ticket_unlinked"
-  | "ticket_updated";
+  | "ticket_updated"
+  | "ultraplan_completed"
+  | "ultraplan_controller_run_completed"
+  | "ultraplan_controller_run_created"
+  | "ultraplan_controller_run_failed"
+  | "ultraplan_controller_run_started"
+  | "ultraplan_created"
+  | "ultraplan_failed"
+  | "ultraplan_human_gate_requested"
+  | "ultraplan_paused"
+  | "ultraplan_resumed"
+  | "ultraplan_ticket_created"
+  | "ultraplan_ticket_reordered"
+  | "ultraplan_ticket_updated"
+  | "ultraplan_updated";
 
 export type ExecutionDisposition = "act" | "escalate" | "ignore" | "suggest" | "summarize";
 
@@ -607,7 +632,13 @@ export type InboxItemType =
   | "plan"
   | "question"
   | "session_suggestion"
-  | "ticket_suggestion";
+  | "ticket_suggestion"
+  | "ultraplan_conflict_resolution"
+  | "ultraplan_final_review"
+  | "ultraplan_plan_approval"
+  | "ultraplan_validation_request";
+
+export type IntegrationStatus = "completed" | "conflicted" | "failed" | "not_started" | "running";
 
 export type LinkedCheckoutActionResult = {
   __typename?: "LinkedCheckoutActionResult";
@@ -675,6 +706,7 @@ export type Mutation = {
   approveBridgeAccessRequest: BridgeAccessGrant;
   archiveSessionGroup?: Maybe<SessionGroup>;
   assignTicket: Ticket;
+  cancelUltraplan: Ultraplan;
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
   commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
@@ -715,6 +747,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  pauseUltraplan: Ultraplan;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
@@ -725,10 +758,12 @@ export type Mutation = {
   reorderChannels: Array<Channel>;
   requestBridgeAccess: BridgeAccessRequest;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
+  resumeUltraplan: Ultraplan;
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
   revokeBridgeAccessGrant: BridgeAccessGrant;
   runSession: Session;
+  runUltraplanControllerNow: UltraplanControllerRun;
   sendChannelMessage: Message;
   sendChatMessage: Message;
   sendMessage: Event;
@@ -738,6 +773,7 @@ export type Mutation = {
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
   startSession: Session;
+  startUltraplan: Ultraplan;
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
   terminateSession: Session;
@@ -791,6 +827,10 @@ export type MutationArchiveSessionGroupArgs = {
 export type MutationAssignTicketArgs = {
   ticketId: Scalars["ID"]["input"];
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationCancelUltraplanArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationClearQueuedMessagesArgs = {
@@ -975,6 +1015,10 @@ export type MutationMuteScopeArgs = {
   scopeType: Scalars["String"]["input"];
 };
 
+export type MutationPauseUltraplanArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationQueueSessionMessageArgs = {
   imageKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
@@ -1027,6 +1071,10 @@ export type MutationRestoreLinkedCheckoutArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationResumeUltraplanArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationRetrySessionConnectionArgs = {
   sessionId: Scalars["ID"]["input"];
 };
@@ -1043,6 +1091,10 @@ export type MutationRunSessionArgs = {
   id: Scalars["ID"]["input"];
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   prompt?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type MutationRunUltraplanControllerNowArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationSendChannelMessageArgs = {
@@ -1096,6 +1148,10 @@ export type MutationSetOrgSecretArgs = {
 
 export type MutationStartSessionArgs = {
   input: StartSessionInput;
+};
+
+export type MutationStartUltraplanArgs = {
+  input: StartUltraplanInput;
 };
 
 export type MutationSubscribeArgs = {
@@ -1339,6 +1395,9 @@ export type Query = {
   threadSummary?: Maybe<ThreadSummary>;
   ticket?: Maybe<Ticket>;
   tickets: Array<Ticket>;
+  ultraplan?: Maybe<Ultraplan>;
+  ultraplanControllerRun?: Maybe<UltraplanControllerRun>;
+  ultraplanForSessionGroup?: Maybe<Ultraplan>;
 };
 
 export type QueryAgentAggregationWindowsArgs = {
@@ -1581,6 +1640,18 @@ export type QueryTicketsArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
+export type QueryUltraplanArgs = {
+  id: Scalars["ID"]["input"];
+};
+
+export type QueryUltraplanControllerRunArgs = {
+  id: Scalars["ID"]["input"];
+};
+
+export type QueryUltraplanForSessionGroupArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type QueuedMessage = {
   __typename?: "QueuedMessage";
   createdAt: Scalars["DateTime"]["output"];
@@ -1618,7 +1689,7 @@ export type ScopeInput = {
   type: ScopeType;
 };
 
-export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
+export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket" | "ultraplan";
 
 export type Session = {
   __typename?: "Session";
@@ -1641,6 +1712,7 @@ export type Session = {
   queuedMessages: Array<QueuedMessage>;
   reasoningEffort?: Maybe<Scalars["String"]["output"]>;
   repo?: Maybe<Repo>;
+  role: SessionRole;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   sessionStatus: SessionStatus;
@@ -1731,6 +1803,7 @@ export type SessionGroup = {
   setupStatus: SetupStatus;
   slug?: Maybe<Scalars["String"]["output"]>;
   status: SessionGroupStatus;
+  ultraplan?: Maybe<Ultraplan>;
   updatedAt: Scalars["DateTime"]["output"];
   workdir?: Maybe<Scalars["String"]["output"]>;
   worktreeDeleted: Scalars["Boolean"]["output"];
@@ -1744,6 +1817,8 @@ export type SessionGroupStatus =
   | "merged"
   | "needs_input"
   | "stopped";
+
+export type SessionRole = "primary" | "ticket_worker" | "ultraplan_controller_run";
 
 export type SessionRuntimeInstance = {
   __typename?: "SessionRuntimeInstance";
@@ -1808,6 +1883,17 @@ export type StartSessionInput = {
   sourceSessionId?: InputMaybe<Scalars["ID"]["input"]>;
   ticketId?: InputMaybe<Scalars["ID"]["input"]>;
   tool: CodingTool;
+};
+
+export type StartUltraplanInput = {
+  controllerModel?: InputMaybe<Scalars["String"]["input"]>;
+  controllerProvider: Scalars["String"]["input"];
+  controllerRuntimePolicy?: InputMaybe<Scalars["JSON"]["input"]>;
+  customInstructions?: InputMaybe<Scalars["String"]["input"]>;
+  goal: Scalars["String"]["input"];
+  playbookConfig?: InputMaybe<Scalars["JSON"]["input"]>;
+  playbookId?: InputMaybe<Scalars["ID"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type Subscription = {
@@ -1895,11 +1981,14 @@ export type ThreadSummary = {
 
 export type Ticket = {
   __typename?: "Ticket";
+  acceptanceCriteria: Array<Scalars["String"]["output"]>;
   aiMode?: Maybe<AutonomyMode>;
   assignees: Array<User>;
   channel?: Maybe<Channel>;
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
+  dependedOnBy: Array<TicketDependency>;
+  dependencies: Array<TicketDependency>;
   description: Scalars["String"]["output"];
   id: Scalars["ID"]["output"];
   labels: Array<Scalars["String"]["output"]>;
@@ -1909,9 +1998,57 @@ export type Ticket = {
   projects: Array<Project>;
   sessions: Array<Session>;
   status: TicketStatus;
+  testPlan?: Maybe<Scalars["String"]["output"]>;
   title: Scalars["String"]["output"];
   updatedAt: Scalars["DateTime"]["output"];
 };
+
+export type TicketDependency = {
+  __typename?: "TicketDependency";
+  createdAt: Scalars["DateTime"]["output"];
+  dependsOnTicket: Ticket;
+  reason?: Maybe<Scalars["String"]["output"]>;
+  ticket: Ticket;
+};
+
+export type TicketExecution = {
+  __typename?: "TicketExecution";
+  activeInboxItem?: Maybe<InboxItem>;
+  activeInboxItemId?: Maybe<Scalars["ID"]["output"]>;
+  attempt: Scalars["Int"]["output"];
+  baseCheckpointSha?: Maybe<Scalars["String"]["output"]>;
+  branch: Scalars["String"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  headCheckpointSha?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  integrationCheckpointSha?: Maybe<Scalars["String"]["output"]>;
+  integrationStatus: IntegrationStatus;
+  lastReviewSummary?: Maybe<Scalars["String"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
+  sessionGroup: SessionGroup;
+  sessionGroupId: Scalars["ID"]["output"];
+  status: TicketExecutionStatus;
+  ticket: Ticket;
+  ticketId: Scalars["ID"]["output"];
+  ultraplan: Ultraplan;
+  ultraplanId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+  workdir?: Maybe<Scalars["String"]["output"]>;
+  workerSession?: Maybe<Session>;
+  workerSessionId?: Maybe<Scalars["ID"]["output"]>;
+};
+
+export type TicketExecutionStatus =
+  | "blocked"
+  | "cancelled"
+  | "failed"
+  | "integrated"
+  | "integrating"
+  | "needs_human"
+  | "queued"
+  | "ready_to_integrate"
+  | "reviewing"
+  | "running";
 
 export type TicketFilters = {
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -1952,6 +2089,97 @@ export type UpdateAgentEnvironmentInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type Ultraplan = {
+  __typename?: "Ultraplan";
+  activeInboxItem?: Maybe<InboxItem>;
+  activeInboxItemId?: Maybe<Scalars["ID"]["output"]>;
+  controllerRuns: Array<UltraplanControllerRun>;
+  createdAt: Scalars["DateTime"]["output"];
+  customInstructions?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  integrationBranch: Scalars["String"]["output"];
+  integrationWorkdir?: Maybe<Scalars["String"]["output"]>;
+  lastControllerRun?: Maybe<UltraplanControllerRun>;
+  lastControllerRunId?: Maybe<Scalars["ID"]["output"]>;
+  lastControllerSummary?: Maybe<Scalars["String"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
+  ownerUser: User;
+  ownerUserId: Scalars["ID"]["output"];
+  planSummary?: Maybe<Scalars["String"]["output"]>;
+  playbookConfig?: Maybe<Scalars["JSON"]["output"]>;
+  playbookId?: Maybe<Scalars["ID"]["output"]>;
+  sessionGroup: SessionGroup;
+  sessionGroupId: Scalars["ID"]["output"];
+  status: UltraplanStatus;
+  ticketExecutions: Array<TicketExecution>;
+  tickets: Array<UltraplanTicket>;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type UltraplanControllerRun = {
+  __typename?: "UltraplanControllerRun";
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  error?: Maybe<Scalars["String"]["output"]>;
+  generatedTickets: Array<UltraplanTicket>;
+  id: Scalars["ID"]["output"];
+  inputSummary?: Maybe<Scalars["String"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
+  session?: Maybe<Session>;
+  sessionGroup: SessionGroup;
+  sessionGroupId: Scalars["ID"]["output"];
+  sessionId?: Maybe<Scalars["ID"]["output"]>;
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: ControllerRunStatus;
+  summary?: Maybe<Scalars["String"]["output"]>;
+  summaryPayload?: Maybe<Scalars["JSON"]["output"]>;
+  summaryTitle?: Maybe<Scalars["String"]["output"]>;
+  triggerEvent?: Maybe<Event>;
+  triggerEventId?: Maybe<Scalars["ID"]["output"]>;
+  triggerType: Scalars["String"]["output"];
+  ultraplan: Ultraplan;
+  ultraplanId: Scalars["ID"]["output"];
+};
+
+export type UltraplanStatus =
+  | "cancelled"
+  | "completed"
+  | "draft"
+  | "failed"
+  | "integrating"
+  | "needs_human"
+  | "paused"
+  | "planning"
+  | "running"
+  | "waiting";
+
+export type UltraplanTicket = {
+  __typename?: "UltraplanTicket";
+  createdAt: Scalars["DateTime"]["output"];
+  generatedByRun?: Maybe<UltraplanControllerRun>;
+  generatedByRunId?: Maybe<Scalars["ID"]["output"]>;
+  id: Scalars["ID"]["output"];
+  metadata?: Maybe<Scalars["JSON"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
+  position: Scalars["Int"]["output"];
+  rationale?: Maybe<Scalars["String"]["output"]>;
+  status: UltraplanTicketStatus;
+  ticket: Ticket;
+  ticketId: Scalars["ID"]["output"];
+  ultraplan: Ultraplan;
+  ultraplanId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type UltraplanTicketStatus =
+  | "blocked"
+  | "cancelled"
+  | "completed"
+  | "planned"
+  | "ready"
+  | "running"
+  | "skipped";
+
 export type UpdateAgentSettingsInput = {
   autonomyMode?: InputMaybe<AutonomyMode>;
   dailyLimitCents?: InputMaybe<Scalars["Int"]["input"]>;
@@ -1979,10 +2207,13 @@ export type UpdateRepoInput = {
 };
 
 export type UpdateTicketInput = {
+  acceptanceCriteria?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  dependencyTicketIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   description?: InputMaybe<Scalars["String"]["input"]>;
   labels?: InputMaybe<Array<Scalars["String"]["input"]>>;
   priority?: InputMaybe<Priority>;
   status?: InputMaybe<TicketStatus>;
+  testPlan?: InputMaybe<Scalars["String"]["input"]>;
   title?: InputMaybe<Scalars["String"]["input"]>;
 };
 
