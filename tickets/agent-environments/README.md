@@ -51,6 +51,7 @@ Useful follow-ups that should not block the generic Trace-side architecture.
 | --- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
 | 14  | [Reference Launchers](14-reference-launchers.md)                                     | Adds example AWS ECS/Fly/Kubernetes launchers outside core      |
 | 15  | [Dedicated SessionRuntime Table](15-dedicated-session-runtime-table.md)              | Moves runtime lifecycle state out of `Session.connection` later |
+| 16  | [Advanced Admission Policies](16-advanced-admission-policies.md)                     | Adds repo, concurrency, duration, and quota policies after V1   |
 
 ## Dependency graph
 
@@ -79,6 +80,7 @@ M3 - Product Surface and Migration
 Post-V1
 14 Reference Launchers  (needs 06, 07)
 -- 15 Dedicated SessionRuntime Table  (needs 13)
+-- 16 Advanced Admission Policies  (needs 11, 13)
 ```
 
 ## Parallelization notes
@@ -97,7 +99,7 @@ Every line of [agent-environments-plan.md](agent-environments-plan.md) has an ow
 | --- | --- | --- |
 | 1-29 | Goal, local/provisioned/reference launcher direction, no first-class Fly core adapter | 01, 04, 05, 06, 12, 14 |
 | 30-42 | Current baseline and existing bridge/session-router shape | 04, 05, 12 |
-| 43-92 | Agent environment concept, fields, adapter types, admission constraints, provisioned endpoints, reference launchers | 01, 02, 03, 06, 14 |
+| 43-92 | Agent environment concept, fields, adapter types, compatibility constraints, advanced admission follow-up, provisioned endpoints, reference launchers | 01, 02, 03, 06, 14, 16 |
 | 93-105 | Runtime adapter responsibilities and separation from message handling | 04, 06, 08 |
 | 106-126 | Runtime bridge command traffic, heartbeats, output, workspace events, shared local/cloud protocol | 05, 07, 08, 09 |
 | 127-144 | Target architecture and adapter/bridge split | 03, 04, 05, 06, 07 |
@@ -124,7 +126,7 @@ Every line of [agent-environments-plan.md](agent-environments-plan.md) has an ow
 | 939-1001 | Migration phases from model through compatibility cleanup | 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12 |
 | 1002-1041 | Unit, service, and integration tests | 13 plus each implementation ticket's test section |
 | 1042-1051 | Open decisions | 05, 06, 07, 12, 15 |
-| 1052-1077 | Recommended V1 scope and AWS VPC shape through provisioned adapter | 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12 |
+| 1052-1079 | Recommended V1 scope and AWS VPC shape through provisioned adapter | 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12 |
 
 If the plan gains a new actionable requirement, add or update its owning ticket in the same change and keep this coverage matrix in sync.
 

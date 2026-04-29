@@ -16,7 +16,7 @@ Owns plan lines:
 - 950-956: phase 2 Fly/cloud-machine removal or isolation
 - 995-1001: phase 8 compatibility cleanup
 - 1042-1051: open decisions around runtime state, local selection, Fly compatibility, polling, token format, HMAC, and capabilities
-- 1068-1077: AWS VPC path through provisioned adapter and no first-party AWS/Fly core support
+- 1068-1079: AWS VPC path through provisioned adapter and no first-party AWS/Fly core support
 
 ## What needs to happen
 

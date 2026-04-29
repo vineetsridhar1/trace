@@ -22,7 +22,7 @@ Owns plan lines:
   - lifecycle request replay/timestamp rejection
   - lifecycle idempotency keys
   - status mapping
-  - environment admission constraints
+  - environment compatibility constraints
 - Add service tests for:
   - session creation with explicit environment
   - session creation with org default
@@ -30,7 +30,7 @@ Owns plan lines:
   - startup timeout
   - pending message drain
   - fallback behavior when no environment exists
-  - admission rejection before provisioning
+  - compatibility rejection before provisioning
 - Add integration tests with a mock provisioned launcher.
   - Include duplicate start/stop calls with the same idempotency key.
   - Include incompatible runtime protocol and unsupported tool registration.

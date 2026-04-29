@@ -11,7 +11,7 @@ Owns plan lines:
 - 11: reference launcher support for AWS, Fly, Kubernetes, and other platforms
 - 87-92: launcher examples outside Trace core
 - 613-672: launcher-side auth verification, idempotency, timestamp checks, and replay rejection where applicable
-- 1052-1077: AWS VPC usage path through the provisioned adapter
+- 1052-1079: AWS VPC usage path through the provisioned adapter
 
 ## What needs to happen
 

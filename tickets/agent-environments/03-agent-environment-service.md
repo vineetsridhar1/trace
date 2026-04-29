@@ -30,11 +30,9 @@ Owns plan lines:
 - Enforce organization authorization for all reads and writes.
 - Validate `adapterType`.
 - Validate config through the matching runtime adapter.
-- Validate lightweight admission constraints when present:
+- Validate V1 compatibility constraints when present:
   - supported tools
-  - allowed repo IDs
-  - max concurrent sessions
-  - max session duration
+  - startup timeout
 - Ensure only one default environment exists per org.
 - Emit `agent_environment.*` events from the service layer.
 - Add thin GraphQL resolvers that call this service.
@@ -50,7 +48,7 @@ Owns plan lines:
 - [ ] Unauthorized callers cannot read or mutate environments.
 - [ ] Default environment changes are transactional.
 - [ ] Invalid configs are rejected before persistence.
-- [ ] Invalid environment admission constraints are rejected before persistence.
+- [ ] Invalid environment compatibility constraints are rejected before persistence.
 - [ ] Service emits environment lifecycle events.
 - [ ] Resolvers contain no business logic.
 

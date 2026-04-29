@@ -26,7 +26,7 @@ Owns plan lines:
   - Show connected local bridges.
   - Show registered repos for each local bridge where available.
 - Add create/edit flows for provisioned environments.
-  - Show optional admission fields for supported tools, repo restrictions, max concurrency, and max session duration when available.
+  - Show supported-tool compatibility fields when available.
 - Add enable/disable.
 - Add set default.
 - Add test connection.
@@ -44,7 +44,7 @@ Owns plan lines:
 - [ ] Admin can create/edit local environment.
 - [ ] Local environment form shows connected local bridges and registered repos.
 - [ ] Admin can create/edit provisioned environment.
-- [ ] Provisioned environment form can display/edit supported admission constraints.
+- [ ] Provisioned environment form can display/edit supported-tool compatibility constraints.
 - [ ] Admin can set an org default.
 - [ ] Admin can disable an environment.
 - [ ] Test connection shows success/error clearly.

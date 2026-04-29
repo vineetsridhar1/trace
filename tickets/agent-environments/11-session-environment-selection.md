@@ -27,12 +27,9 @@ Owns plan lines:
   - org default environment
   - compatibility fallback using `hosting` and `runtimeInstanceId`
 - Return a clear validation error when no environment/default/compatibility fallback can be resolved.
-- Enforce environment admission constraints before provisioning:
+- Enforce V1 environment compatibility constraints before provisioning:
   - enabled state
   - supported tool
-  - allowed repo
-  - max concurrent sessions
-  - max session duration
 - Persist `environmentId` and adapter metadata in session connection.
 - Show startup/provisioning status for provisioned sessions.
 - Show deprovision/stopping status in the session UI when a runtime is being cleaned up.
@@ -49,7 +46,7 @@ Owns plan lines:
 - [ ] Starting a session with explicit provisioned environment works against a mock launcher.
 - [ ] Omitting environment uses org default.
 - [ ] Missing environment/default/fallback produces an actionable validation error.
-- [ ] Unsupported tool/repo/concurrency/duration requests fail before provisioning.
+- [ ] Unsupported tool requests fail before provisioning.
 - [ ] Existing callers using `hosting` still work during migration.
 - [ ] Disabled environments cannot be selected.
 - [ ] Session UI shows startup state for provisioned sessions.

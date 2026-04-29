@@ -76,13 +76,17 @@ Initial adapter types:
 Provisioned environments should use an authenticated lifecycle endpoint. The endpoint can start
 compute in AWS ECS, Fly, Kubernetes, Nomad, EC2, or any other system.
 
-Environments should also be able to declare lightweight admission constraints in config:
+Environments should declare minimal compatibility constraints in config for V1:
 
 - supported tools
+- startup timeout
+
+Advanced admission policies can be added after V1 if needed:
+
 - optional allowed repo IDs
 - max concurrent sessions
 - max session duration
-- startup timeout
+- per-environment quotas
 
 Future work can add optional reference launchers, but they should live outside Trace core:
 
@@ -352,7 +356,7 @@ else:
 ```
 
 Session creation should then pass environment details to `SessionRouter.createRuntime`.
-Before provisioning, `SessionService` should also check environment admission constraints such as enabled state, supported tool, allowed repo, max concurrency, and max session duration.
+Before provisioning, `SessionService` should also check V1 compatibility constraints such as enabled state and supported tool.
 
 Compatibility rule:
 
@@ -504,9 +508,7 @@ Kubernetes Job creation, or any internal compute API.
     "secretId": "secret_456"
   },
   "capabilities": {
-    "supportedTools": ["claude_code", "codex"],
-    "maxConcurrentSessions": 5,
-    "maxSessionMinutes": 240
+    "supportedTools": ["claude_code", "codex"]
   },
   "startupTimeoutSeconds": 180,
   "deprovisionPolicy": "on_session_end",
@@ -1013,7 +1015,7 @@ Add tests for:
 - optional provisioned signature generation
 - lifecycle idempotency behavior
 - provisioned status mapping
-- environment admission constraints
+- environment compatibility constraints
 - startup timeout behavior
 - deprovision retry behavior
 
@@ -1047,7 +1049,7 @@ Add tests for:
 - Whether provisioned status polling is required in v1 or only used for cleanup/recovery.
 - Whether runtime tokens should be JWTs or opaque DB-backed tokens.
 - Whether HMAC should be implemented in V1 or deferred behind bearer-token launcher auth.
-- Whether environment capabilities stay in config for V1 or become first-class columns later.
+- Whether advanced admission policies stay in config or become first-class columns later.
 
 ## Recommended V1 Scope
 
@@ -1059,7 +1061,7 @@ Build the smallest version that proves the architecture:
 - default environment per org
 - provisioned start/stop/status with authenticated requests
 - lifecycle idempotency for provisioned start/stop retries
-- basic environment admission constraints
+- basic environment compatibility checks
 - cloud runtime bridge token auth
 - startup timeout
 - adapter-owned deprovisioning
