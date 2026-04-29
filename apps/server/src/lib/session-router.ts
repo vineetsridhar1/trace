@@ -324,8 +324,14 @@ export class SessionRouter {
    * connected before the session's connection data was written to DB).
    */
   waitForBridge(sessionId: string, timeoutMs = 60_000, runtimeId?: string): Promise<void> {
-    // Already bound
-    if (this.sessionRuntime.has(sessionId)) return Promise.resolve();
+    // Already bound to a connected runtime.
+    const boundRuntimeId = this.sessionRuntime.get(sessionId);
+    if (boundRuntimeId) {
+      const boundRuntime = this.runtimes.get(boundRuntimeId);
+      if (boundRuntime && boundRuntime.ws.readyState === boundRuntime.ws.OPEN) {
+        return Promise.resolve();
+      }
+    }
 
     // If runtime is already connected, bind immediately (fixes race condition)
     if (runtimeId) {
