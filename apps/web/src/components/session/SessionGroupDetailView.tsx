@@ -248,14 +248,16 @@ export function SessionGroupDetailView({
   useEffect(() => {
     if (activeSessionGroupId !== sessionGroupId) return;
     if (sessionsByRecency.length === 0) return;
-    if (activeSessionId && sessionsByRecency.some((s: SessionEntity) => s.id === activeSessionId))
+    if (activeSessionId && sessionTabs.some((s: SessionEntity) => s.id === activeSessionId)) {
       return;
+    }
     setActiveSessionId(sessionsByRecency[0].id);
   }, [
     activeSessionGroupId,
     activeSessionId,
     sessionGroupId,
     sessionsByRecency,
+    sessionTabs,
     setActiveSessionId,
   ]);
 
