@@ -140,6 +140,13 @@ export type SessionConnectionData = {
   deprovisionedAt?: string;
   deprovisionFailedAt?: string;
   deprovisionAttempts?: number;
+  /**
+   * Total times the background reconciler has picked this session up. Capped
+   * at `MAX_RECONCILE_ATTEMPTS`; once reached the runtime is marked abandoned
+   * and the reconciler stops touching it.
+   */
+  reconcileAttempts?: number;
+  abandonedAt?: string;
   disconnectedAt?: string;
   reconnectedAt?: string;
   lastSeen?: string;
@@ -213,6 +220,12 @@ function pendingRunValue(
     commands,
   } satisfies PendingSessionCommandQueue as unknown as Prisma.InputJsonValue;
 }
+
+/**
+ * Cap on background reconciler retries per session. Once exceeded the runtime
+ * is marked abandoned and skipped so the launcher operator can investigate.
+ */
+const MAX_RECONCILE_ATTEMPTS = 10;
 
 function isRuntimeStartupState(state: SessionConnectionData["state"]): boolean {
   return (
@@ -997,6 +1010,32 @@ export class SessionService {
   }
 
   /**
+   * Clear reconciler bookkeeping so a user-initiated retry gets a fresh
+   * MAX_RECONCILE_ATTEMPTS budget. No-op if no prior reconciler activity.
+   */
+  private async resetReconcileState(sessionId: string): Promise<void> {
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { connection: true, sessionGroupId: true },
+    });
+    if (!session) return;
+    const conn = this.parseConnection(session.connection);
+    if (!conn.abandonedAt && (conn.reconcileAttempts ?? 0) === 0) return;
+    const updated: SessionConnectionData = {
+      ...conn,
+      reconcileAttempts: 0,
+      abandonedAt: undefined,
+    };
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { connection: connJson(updated) },
+    });
+    await this.syncGroupWorkspaceState(session.sessionGroupId, {
+      connection: connJson(updated),
+    });
+  }
+
+  /**
    * Mark a session's runtime as actively deprovisioning. Distinct from the
    * `stopping` state which represents bridge cleanup; `deprovisioning` runs
    * while the provisioned adapter is calling stopUrl. No event is emitted —
@@ -1033,12 +1072,18 @@ export class SessionService {
    * dropped bridge. The reconciler is what eventually drives the launcher
    * back to a stopped state without depending on the original delete request
    * still being in flight.
+   *
+   * Each pickup increments `connection.reconcileAttempts`. After
+   * `MAX_RECONCILE_ATTEMPTS` the runtime is marked abandoned
+   * (`autoRetryable: false`, `abandonedAt` set, terminal `deprovision_failed`
+   * event emitted) and skipped on future ticks. Recovery requires operator
+   * intervention.
    */
   async reconcileStuckDeprovisions(options?: {
     now?: number;
     stuckAfterMs?: number;
     limit?: number;
-  }): Promise<{ reconciled: string[] }> {
+  }): Promise<{ reconciled: string[]; abandoned: string[] }> {
     const now = options?.now ?? Date.now();
     const stuckAfterMs = options?.stuckAfterMs ?? 60_000;
     const limit = options?.limit ?? 25;
@@ -1072,10 +1117,26 @@ export class SessionService {
     });
 
     const reconciled: string[] = [];
+    const abandoned: string[] = [];
     for (const candidate of candidates) {
       const conn = this.parseConnection(candidate.connection);
+
+      // Skip already-abandoned sessions (autoRetryable was flipped off on a
+      // prior tick). Operator must reset the connection to retry.
+      if (conn.autoRetryable === false && conn.abandonedAt) continue;
+
       const lastTouchedAt = this.lastDeprovisionTouchAt(conn);
       if (lastTouchedAt && lastTouchedAt > cutoff) continue;
+
+      const attemptsSoFar = conn.reconcileAttempts ?? 0;
+      if (attemptsSoFar >= MAX_RECONCILE_ATTEMPTS) {
+        await this.markRuntimeAbandoned(candidate.id, attemptsSoFar);
+        abandoned.push(candidate.id);
+        continue;
+      }
+
+      await this.bumpReconcileAttempts(candidate.id, attemptsSoFar + 1);
+
       try {
         await sessionRouter.destroyRuntime(
           candidate.id,
@@ -1090,7 +1151,72 @@ export class SessionService {
         );
       }
     }
-    return { reconciled };
+    return { reconciled, abandoned };
+  }
+
+  private async bumpReconcileAttempts(sessionId: string, nextValue: number): Promise<void> {
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { connection: true, sessionGroupId: true },
+    });
+    if (!session) return;
+    const conn = this.parseConnection(session.connection);
+    const updated: SessionConnectionData = { ...conn, reconcileAttempts: nextValue };
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { connection: connJson(updated) },
+    });
+    await this.syncGroupWorkspaceState(session.sessionGroupId, {
+      connection: connJson(updated),
+    });
+  }
+
+  private async markRuntimeAbandoned(sessionId: string, attempts: number): Promise<void> {
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { organizationId: true, sessionGroupId: true, connection: true },
+    });
+    if (!session) return;
+    const conn = this.parseConnection(session.connection);
+    if (conn.autoRetryable === false && conn.abandonedAt) return;
+
+    const now = new Date().toISOString();
+    const message = `Runtime deprovision abandoned after ${attempts} reconcile attempts`;
+    const updated: SessionConnectionData = {
+      ...conn,
+      state: "deprovision_failed",
+      deprovisionFailedAt: now,
+      abandonedAt: now,
+      lastError: message,
+      canRetry: false,
+      autoRetryable: false,
+    };
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { connection: connJson(updated) },
+    });
+    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
+      connection: connJson(updated),
+    });
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_runtime_deprovision_failed",
+      payload: {
+        type: "runtime_lifecycle",
+        sessionId,
+        lifecycleState: "deprovision_failed",
+        connection: connJson(updated),
+        error: message,
+        abandoned: true,
+        reconcileAttempts: attempts,
+        ...(sessionGroup ? { sessionGroup } : {}),
+      } as Prisma.InputJsonValue,
+      actorType: "system",
+      actorId: "system",
+    });
+    console.warn(`[session-service] ${message} for ${sessionId}`);
   }
 
   private lastDeprovisionTouchAt(conn: SessionConnectionData): Date | null {
@@ -2384,6 +2510,7 @@ export class SessionService {
       } else {
         terminalRelay.destroyAllForSession(id);
       }
+      await this.resetReconcileState(id);
       await sessionRouter.destroyRuntime(id, session, this.destroyRuntimeOptions(id, "session_deleted"));
     } else {
       terminalRelay.destroyAllForSession(id);
@@ -5928,6 +6055,7 @@ export class SessionService {
     if (!session) return false;
 
     const destroyOptions = this.destroyRuntimeOptions(sessionId, "session_unloaded");
+    await this.resetReconcileState(sessionId);
 
     if (isGroupUnload && session.sessionGroupId) {
       // Group-level unload: destroy all terminals and the shared runtime

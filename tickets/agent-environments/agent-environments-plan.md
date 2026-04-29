@@ -842,9 +842,12 @@ Provisioned cleanup:
      stop request returns the latest known state without starting new work.
      A statusUrl poll path can be added later if a launcher cannot meet that
      idempotency contract. -->
-<!-- Open V1 follow-up (ticket 09): the reconciler currently retries
-     indefinitely. Once telemetry exists (ticket 13) we should cap reconcile
-     attempts and surface "abandoned runtime" alerts to operators. -->
+<!-- Capped after ticket 09: the reconciler bumps
+     `connection.reconcileAttempts` on every pickup and abandons the runtime
+     after 10 retries (`autoRetryable: false`, `abandonedAt` set, terminal
+     `session_runtime_deprovision_failed` event with `abandoned: true`). A
+     fresh user-initiated stop clears that bookkeeping. Ticket 13 owns the
+     telemetry and operator alert that surface abandoned runtimes. -->
 
 ### Deprovision Policies
 

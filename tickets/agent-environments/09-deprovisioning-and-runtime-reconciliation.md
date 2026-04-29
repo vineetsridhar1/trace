@@ -63,8 +63,15 @@ Owns plan lines:
   reconciler to re-call `stopUrl` (idempotency key
   `session:{sessionId}:stop`). Only `status: "stopped"` or `"not_found"`
   should emit `session_runtime_stopped` and transition to `deprovisioned`.
-- The reconciler currently has no max-attempt cap; permanent failures will be
-  noisy until ticket 13 wires telemetry/alerts and adds an "abandoned" cap.
+- The reconciler bumps `connection.reconcileAttempts` on every pickup and
+  abandons the runtime after `MAX_RECONCILE_ATTEMPTS` (10). Abandoned
+  runtimes get `autoRetryable: false`, `abandonedAt`, a terminal
+  `session_runtime_deprovision_failed` event with `abandoned: true`, and are
+  skipped on subsequent reconciler ticks. Ticket 13 owns the operator alert
+  that surfaces these.
+- A fresh user-initiated stop (delete / unload) calls `resetReconcileState`
+  before invoking `destroyRuntime` so the next round starts with a clean
+  budget.
 - Local stop returns `{ ok: true, status: "stopped" }` synchronously — the
   desktop bridge does the work via the bridge `delete` command. The runtime
   adapter's `stopSession` does not call back into the bridge.
