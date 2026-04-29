@@ -500,6 +500,9 @@ export const sessionTypeResolvers = {
     gitCheckpoints: async (group: { id: string }) => {
       return sessionService.listGitCheckpointsForGroup(group.id);
     },
+    ultraplan: async (group: { id: string }) => {
+      return prisma.ultraplan.findUnique({ where: { sessionGroupId: group.id } });
+    },
   },
   Session: {
     tickets: (session: { id: string }, _args: unknown, ctx: Context) =>

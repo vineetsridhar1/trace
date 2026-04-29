@@ -122,6 +122,27 @@ export function createPrismaMock() {
       deleteMany: vi.fn(),
       createMany: vi.fn(),
     },
+    ultraplan: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
+      findMany: vi.fn(),
+      update: vi.fn(),
+    },
+    ultraplanControllerRun: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      update: vi.fn(),
+    },
+    ultraplanTicket: {
+      findMany: vi.fn(),
+    },
+    ticketExecution: {
+      findMany: vi.fn(),
+    },
     chat: {
       create: vi.fn(),
       findFirst: vi.fn(),

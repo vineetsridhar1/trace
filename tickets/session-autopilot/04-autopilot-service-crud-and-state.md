@@ -38,16 +38,16 @@ Add `ultraplanService` as the service-layer owner for starting, pausing, resumin
 
 ## Completion requirements
 
-- [ ] `startUltraplan` creates or reuses the active Ultraplan for a session group.
-- [ ] `startUltraplan` enforces the v1 unique active plan rule for a session group.
-- [ ] Starting Ultraplan creates an initial controller run.
-- [ ] Controller runs create fresh sessions with `role = ultraplan_controller_run`.
-- [ ] Pause, resume, cancel, and run-now are idempotent enough for repeated UI calls.
-- [ ] Unauthorized callers cannot read or mutate Ultraplan or controller-run state.
-- [ ] Invalid or unavailable controller config is rejected before persistence.
-- [ ] Controller-run records expose the scope data ticket 17 needs to mint runtime action credentials later.
-- [ ] Emitted events use `ScopeType.ultraplan`.
-- [ ] All durable state changes emit events.
+- [x] `startUltraplan` creates or reuses the active Ultraplan for a session group.
+- [x] `startUltraplan` enforces the v1 unique active plan rule for a session group.
+- [x] Starting Ultraplan creates an initial controller run.
+- [x] Controller runs create fresh sessions with `role = ultraplan_controller_run`.
+- [x] Pause, resume, cancel, and run-now are idempotent enough for repeated UI calls.
+- [x] Unauthorized callers cannot read or mutate Ultraplan or controller-run state.
+- [x] Invalid or unavailable controller config is rejected before persistence.
+- [x] Controller-run records expose the scope data ticket 17 needs to mint runtime action credentials later.
+- [x] Emitted events use `ScopeType.ultraplan`.
+- [x] All durable state changes emit events.
 
 ## Implementation notes
 
