@@ -52,7 +52,16 @@ const START_ULTRAPLAN_MUTATION = gql`
           model
           hosting
           branch
-          connection
+          connection {
+            state
+            runtimeInstanceId
+            runtimeLabel
+            lastError
+            retryCount
+            canRetry
+            canMove
+            autoRetryable
+          }
           worktreeDeleted
           sessionGroupId
           createdAt
