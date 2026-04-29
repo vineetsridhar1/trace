@@ -17,6 +17,8 @@ const DISCONNECT_GRACE_MS = 10_000;
 
 /** Interval between server→client pings to keep the WebSocket alive through proxies (e.g. Render). */
 const PING_INTERVAL_MS = 20_000;
+const BRIDGE_PROTOCOL_VERSION = 1;
+const CODING_TOOLS = new Set(["claude_code", "codex", "custom"]);
 
 type LocalBridgeAuth = {
   kind: "local";
@@ -30,6 +32,10 @@ type CloudBridgeAuth = {
   userId: string;
   organizationId: string;
   instanceId: string;
+  sessionId?: string;
+  environmentId?: string;
+  allowedScope?: "session";
+  tool?: string;
 };
 
 type BridgeAuth = CloudBridgeAuth | LocalBridgeAuth;
@@ -37,6 +43,29 @@ type BridgeAuth = CloudBridgeAuth | LocalBridgeAuth;
 export type BridgeConnectionRequest = {
   bridgeAuth?: BridgeAuth;
 };
+
+function stringArray(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const result: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string" || !item.trim()) return null;
+    result.push(item);
+  }
+  return result;
+}
+
+function parseSupportedTools(value: unknown): string[] | null {
+  const tools = stringArray(value);
+  if (!tools) return null;
+  for (const tool of tools) {
+    if (!CODING_TOOLS.has(tool)) return null;
+  }
+  return tools;
+}
+
+function isCompatibleProtocolVersion(value: unknown): boolean {
+  return value === BRIDGE_PROTOCOL_VERSION;
+}
 
 export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequest) {
   // Default runtime ID; replaced if the bridge sends runtime_hello
@@ -131,12 +160,12 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           const oldId = runtimeId;
           const newId = (msg.instanceId as string) ?? runtimeId;
           const hostingMode = (msg.hostingMode as "cloud" | "local") ?? "local";
-          const supportedTools = (msg.supportedTools as string[]) ?? [
+          const supportedTools = parseSupportedTools(msg.supportedTools) ?? [
             "claude_code",
             "codex",
             "custom",
           ];
-          const registeredRepoIds = (msg.registeredRepoIds as string[]) ?? [];
+          const registeredRepoIds = stringArray(msg.registeredRepoIds) ?? [];
 
           runtimeDebug("received runtime_hello", {
             oldId,
@@ -214,6 +243,38 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               ws.close(1008, "Bridge auth mismatch");
               return;
             }
+            if (bridgeAuth.allowedScope === "session") {
+              if (
+                !isCompatibleProtocolVersion(msg.protocolVersion) ||
+                typeof msg.agentVersion !== "string" ||
+                !msg.agentVersion.trim()
+              ) {
+                runtimeDebug("cloud bridge auth rejected incompatible runtime metadata", {
+                  runtimeId: newId,
+                  protocolVersion: msg.protocolVersion,
+                  agentVersion: msg.agentVersion,
+                });
+                ws.close(1008, "Incompatible bridge protocol");
+                return;
+              }
+              if (!parseSupportedTools(msg.supportedTools)) {
+                runtimeDebug("cloud bridge auth rejected invalid supported tools", {
+                  runtimeId: newId,
+                  supportedTools: msg.supportedTools,
+                });
+                ws.close(1008, "Invalid bridge capabilities");
+                return;
+              }
+              if (bridgeAuth.tool && !supportedTools.includes(bridgeAuth.tool)) {
+                runtimeDebug("cloud bridge auth rejected missing requested tool", {
+                  runtimeId: newId,
+                  requestedTool: bridgeAuth.tool,
+                  supportedTools,
+                });
+                ws.close(1008, "Runtime does not support requested tool");
+                return;
+              }
+            }
 
             if (registered && oldId !== newId) {
               sessionRouter.unregisterRuntime(oldId, ws);
@@ -231,6 +292,9 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               supportedTools,
               registeredRepoIds,
             });
+            if (bridgeAuth.sessionId) {
+              sessionRouter.bindSession(bridgeAuth.sessionId, runtimeId);
+            }
 
             if (existingRuntime && existingRuntime.ws !== ws) {
               runtimeDebug("closing superseded websocket for runtime", {

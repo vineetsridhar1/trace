@@ -43,6 +43,8 @@ import { ensureToolReady } from "./tool-auth.js";
 import { TerminalManager } from "@trace/shared/adapters";
 
 const execFileAsync = promisify(execFile);
+const BRIDGE_PROTOCOL_VERSION = 1;
+const AGENT_VERSION = "0.1.0";
 
 async function inspectGitCheckpoint(
   cwd: string,
@@ -198,14 +200,20 @@ export class ContainerBridge implements IBridgeClient {
     this.ws.on("open", () => {
       console.log("[container-bridge] connected to server");
       this.consecutiveFailures = 0;
-      // Announce as a cloud runtime — machineId is the stable instanceId
+      const provisionedRuntimeInstanceId = process.env.TRACE_RUNTIME_INSTANCE_ID?.trim();
+      const instanceId = provisionedRuntimeInstanceId ?? `cloud-machine-${this.machineId}`;
+      const registeredRepoIds = provisionedRuntimeInstanceId ? [] : listClonedRepoIds();
+      // Announce as a cloud runtime. Provisioned runtimes clone on demand, so
+      // they intentionally register no pre-existing repos.
       this.send({
         type: "runtime_hello",
-        instanceId: `cloud-machine-${this.machineId}`,
-        label: `cloud-machine-${this.machineId}`,
+        instanceId,
+        label: instanceId,
         hostingMode: "cloud",
+        protocolVersion: BRIDGE_PROTOCOL_VERSION,
+        agentVersion: AGENT_VERSION,
         supportedTools: ["claude_code", "codex"],
-        registeredRepoIds: listClonedRepoIds(),
+        registeredRepoIds,
         activeTerminals: this.terminalManager.getActiveTerminals(),
       });
 
