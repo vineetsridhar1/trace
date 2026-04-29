@@ -42,7 +42,7 @@ Owns plan lines:
 
 - [x] Admin can list org environments.
 - [x] Admin can create/edit local environment.
-- [ ] Local environment form shows connected local bridges and registered repos.
+- [x] Local environment form shows connected local bridges and registered repos.
 - [x] Admin can create/edit provisioned environment.
 - [x] Provisioned environment form can display/edit supported-tool compatibility constraints.
 - [x] Admin can set an org default.
@@ -74,6 +74,6 @@ Owns plan lines:
 
 ## Review follow-ups
 
-- [ ] Use a tool-agnostic connected bridge source for the local environment form. The current UI uses `availableRuntimes(tool: claude_code)`, which can omit connected local bridges that do not advertise Claude Code.
-- [ ] Reconcile default environment changes through service-layer events instead of client-side mutation-result upserts/refetches. Setting a default can also clear a previous default, so event payloads need enough data for every client to converge without refetching.
-- [ ] Add an org secret selector/listing flow for provisioned launcher auth when the API exposes secret metadata; until then the UI accepts a secret ID reference but cannot help users discover valid secrets.
+- [x] Use a tool-agnostic connected bridge source for the local environment form. The settings UI now reads connected local bridges through `myConnections`.
+- [x] Reconcile default environment changes through service-layer events instead of client-side mutation-result upserts/refetches. Default-changing events now include all affected environments.
+- [x] Add an org secret selector/listing flow for provisioned launcher auth when the API exposes secret metadata.

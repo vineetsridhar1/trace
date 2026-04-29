@@ -54,6 +54,26 @@ describe("AgentEnvironmentService", () => {
       createdAt: now,
       updatedAt: now,
     });
+    prismaMock.agentEnvironment.findMany.mockResolvedValueOnce([
+      {
+        id: "env-1",
+        organizationId: "org-1",
+        name: "Company Launcher",
+        adapterType: "provisioned",
+        config: {
+          startUrl: "https://launcher.example/start",
+          stopUrl: "https://launcher.example/stop",
+          statusUrl: "https://launcher.example/status",
+          auth: { type: "bearer", secretId: "secret-1" },
+          startupTimeoutSeconds: 120,
+          deprovisionPolicy: "on_session_end",
+        },
+        enabled: true,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
 
     const service = new AgentEnvironmentService();
     const environment = await service.create(
@@ -123,6 +143,26 @@ describe("AgentEnvironmentService", () => {
             createdAt: now.toISOString(),
             updatedAt: now.toISOString(),
           },
+          agentEnvironments: [
+            {
+              id: "env-1",
+              organizationId: "org-1",
+              name: "Company Launcher",
+              adapterType: "provisioned",
+              config: {
+                startUrl: "https://launcher.example/start",
+                stopUrl: "https://launcher.example/stop",
+                statusUrl: "https://launcher.example/status",
+                auth: { type: "bearer", secretId: "secret-1" },
+                startupTimeoutSeconds: 120,
+                deprovisionPolicy: "on_session_end",
+              },
+              enabled: true,
+              isDefault: true,
+              createdAt: now.toISOString(),
+              updatedAt: now.toISOString(),
+            },
+          ],
         },
         actorType: "user",
         actorId: "user-1",

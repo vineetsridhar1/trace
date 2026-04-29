@@ -23,6 +23,13 @@ export type AgentEnvironmentConfig = Record<string, unknown> & {
   launcherMetadata?: Record<string, unknown>;
 };
 
+export type LocalBridgeSummary = {
+  id: string;
+  label: string;
+  connected: boolean;
+  registeredRepos: Array<{ id: string; name: string }>;
+};
+
 export function environmentConfig(environment?: AgentEnvironment | null): AgentEnvironmentConfig {
   const config = environment?.config;
   if (!config || typeof config !== "object" || Array.isArray(config)) return {};
@@ -43,11 +50,14 @@ export function formatAdapterType(adapterType: AgentEnvironment["adapterType"]):
 }
 
 export function runtimeRepoNames(
-  runtime: SessionRuntimeInstance,
-  repoNamesById: Map<string, string>,
+  runtime: SessionRuntimeInstance | LocalBridgeSummary,
+  repoNamesById?: Map<string, string>,
 ): string {
-  const names = runtime.registeredRepoIds
-    .map((id) => repoNamesById.get(id) ?? id)
-    .sort((a, b) => a.localeCompare(b));
+  const names =
+    "registeredRepos" in runtime
+      ? runtime.registeredRepos.map((repo) => repo.name).sort((a, b) => a.localeCompare(b))
+      : runtime.registeredRepoIds
+          .map((id) => repoNamesById?.get(id) ?? id)
+          .sort((a, b) => a.localeCompare(b));
   return names.length ? names.join(", ") : "No registered repos";
 }

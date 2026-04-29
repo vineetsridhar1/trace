@@ -127,6 +127,20 @@ function environmentPayload(environment: AgentEnvironmentRecord): Prisma.InputJs
   };
 }
 
+async function affectedEnvironmentPayloads(
+  tx: TxClient,
+  organizationId: string,
+  includeAll: boolean,
+  primary: AgentEnvironmentRecord,
+): Promise<Prisma.InputJsonObject[]> {
+  if (!includeAll) return [environmentPayload(primary)];
+  const environments = await tx.agentEnvironment.findMany({
+    where: { organizationId },
+    orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+  });
+  return environments.map(environmentPayload);
+}
+
 export class AgentEnvironmentService {
   async list(organizationId: string, actorType: ActorType, actorId: string) {
     return prisma.$transaction(async (tx: TxClient) => {
@@ -168,13 +182,20 @@ export class AgentEnvironmentService {
         },
       });
 
+      const payloads = await affectedEnvironmentPayloads(
+        tx,
+        created.organizationId,
+        isDefault,
+        created,
+      );
+
       await eventService.create(
         {
           organizationId: created.organizationId,
           scopeType: "system",
           scopeId: created.organizationId,
           eventType: "agent_environment_created",
-          payload: { agentEnvironment: environmentPayload(created) },
+          payload: { agentEnvironment: environmentPayload(created), agentEnvironments: payloads },
           actorType,
           actorId,
         },
@@ -235,13 +256,20 @@ export class AgentEnvironmentService {
         },
       });
 
+      const payloads = await affectedEnvironmentPayloads(
+        tx,
+        existing.organizationId,
+        isDefault,
+        updated,
+      );
+
       await eventService.create(
         {
           organizationId: existing.organizationId,
           scopeType: "system",
           scopeId: existing.organizationId,
           eventType: "agent_environment_updated",
-          payload: { agentEnvironment: environmentPayload(updated) },
+          payload: { agentEnvironment: environmentPayload(updated), agentEnvironments: payloads },
           actorType,
           actorId,
         },
