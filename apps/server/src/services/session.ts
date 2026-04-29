@@ -4777,9 +4777,17 @@ export class SessionService {
       sourceRef?: string | null;
       targetRef?: string | null;
       commitRef?: string | null;
+      branchRef?: string | null;
+      ontoRef?: string | null;
     },
   ): Promise<BridgeGitIntegrationResultPayload> {
-    for (const ref of [input.sourceRef, input.targetRef, input.commitRef]) {
+    for (const ref of [
+      input.sourceRef,
+      input.targetRef,
+      input.commitRef,
+      input.branchRef,
+      input.ontoRef,
+    ]) {
       if (ref && !this.isSafeGitRef(ref)) throw new Error("Invalid git ref");
     }
     const runtime = await this.resolveAccessibleSessionGroupRuntime(
@@ -4793,6 +4801,8 @@ export class SessionService {
       sourceRef: input.sourceRef,
       targetRef: input.targetRef,
       commitRef: input.commitRef,
+      branchRef: input.branchRef,
+      ontoRef: input.ontoRef,
       workdirHint: runtime.workdirHint,
     });
   }

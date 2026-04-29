@@ -97,6 +97,7 @@ export {
   cleanupTempImages,
 } from "./bridge.js";
 export type { GitExecFn } from "./bridge.js";
+export type { GitLimitedExecFn, GitLimitedExecResult } from "./bridge.js";
 export type { BuiltinSlashCommand } from "./slash-commands.js";
 export { BUILTIN_SLASH_COMMANDS } from "./slash-commands.js";
 export type {

@@ -182,17 +182,21 @@ export class UltraplanService {
     ultraplanId: string;
     organizationId: string;
     userId: string;
+    actorType?: ActorType;
+    actorId?: string;
     operation: BridgeGitIntegrationCommand["operation"];
     sourceRef?: string | null;
     targetRef?: string | null;
     commitRef?: string | null;
+    branchRef?: string | null;
+    ontoRef?: string | null;
   }): Promise<BridgeGitIntegrationResultPayload> {
     const ultraplan = await prisma.ultraplan.findFirst({
       where: { id: input.ultraplanId, organizationId: input.organizationId },
-      select: { sessionGroupId: true },
+      include: ULTRAPLAN_INCLUDE,
     });
     if (!ultraplan) throw new Error("Ultraplan not found");
-    return sessionService.runServiceOwnedGitIntegration(
+    const result = await sessionService.runServiceOwnedGitIntegration(
       ultraplan.sessionGroupId,
       input.organizationId,
       input.userId,
@@ -201,8 +205,34 @@ export class UltraplanService {
         sourceRef: input.sourceRef,
         targetRef: input.targetRef,
         commitRef: input.commitRef,
+        branchRef: input.branchRef,
+        ontoRef: input.ontoRef,
       },
     );
+    const basePayload = eventPayload(ultraplan as unknown as Record<string, unknown>) as unknown as Record<
+      string,
+      unknown
+    >;
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "ultraplan",
+      scopeId: ultraplan.id,
+      eventType: "ultraplan_updated",
+      payload: ({
+        ...basePayload,
+        type: "git_integration",
+        operation: input.operation,
+        sourceRef: input.sourceRef ?? null,
+        targetRef: input.targetRef ?? null,
+        commitRef: input.commitRef ?? null,
+        branchRef: input.branchRef ?? null,
+        ontoRef: input.ontoRef ?? null,
+        result,
+      } as unknown) as Prisma.InputJsonValue,
+      actorType: input.actorType ?? "user",
+      actorId: input.actorId ?? input.userId,
+    });
+    return result;
   }
 
   async start(input: StartUltraplanServiceInput) {

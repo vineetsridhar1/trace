@@ -2,7 +2,7 @@ import WebSocket from "ws";
 import os from "os";
 import fs from "fs";
 import path from "path";
-import { execFile } from "child_process";
+import { execFile, spawn } from "child_process";
 import crypto from "crypto";
 import { promisify } from "util";
 import type {
@@ -33,6 +33,7 @@ import {
   parseGitShowOutput,
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
+import type { GitLimitedExecFn } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import {
   ensureRepo,
@@ -170,6 +171,37 @@ export class ContainerBridge implements IBridgeClient {
       execFile("git", args, { cwd, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
         if (err) reject(err);
         else resolve(stdout);
+      });
+    });
+  private gitExecLimited: GitLimitedExecFn = (args, cwd, maxOutputBytes) =>
+    new Promise((resolve, reject) => {
+      const child = spawn("git", args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+      const stdoutChunks: Buffer[] = [];
+      const stderrChunks: Buffer[] = [];
+      let stdoutBytes = 0;
+
+      child.stdout.on("data", (chunk: Buffer) => {
+        stdoutBytes += chunk.length;
+        const retainedBytes = stdoutChunks.reduce((total, retained) => total + retained.length, 0);
+        const remainingBytes = maxOutputBytes - retainedBytes;
+        if (remainingBytes > 0) {
+          stdoutChunks.push(chunk.subarray(0, remainingBytes));
+        }
+      });
+      child.stderr.on("data", (chunk: Buffer) => {
+        if (Buffer.concat(stderrChunks).length < 64 * 1024) stderrChunks.push(chunk);
+      });
+      child.on("error", reject);
+      child.on("close", (code) => {
+        if (code !== 0) {
+          reject(new Error(Buffer.concat(stderrChunks).toString("utf8") || `git exited ${code}`));
+          return;
+        }
+        resolve({
+          stdout: Buffer.concat(stdoutChunks).toString("utf8"),
+          truncated: stdoutBytes > maxOutputBytes,
+          omittedBytes: Math.max(0, stdoutBytes - maxOutputBytes),
+        });
       });
     });
   private lastActivity = Date.now();
@@ -597,12 +629,24 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "branch_diff": {
-        void handleBranchDiff(cmd, this.sessionWorkdirs, (msg) => this.send(msg), this.gitExec);
+        void handleBranchDiff(
+          cmd,
+          this.sessionWorkdirs,
+          (msg) => this.send(msg),
+          this.gitExec,
+          this.gitExecLimited,
+        );
         break;
       }
 
       case "commit_diff": {
-        void handleCommitDiff(cmd, this.sessionWorkdirs, (msg) => this.send(msg), this.gitExec);
+        void handleCommitDiff(
+          cmd,
+          this.sessionWorkdirs,
+          (msg) => this.send(msg),
+          this.gitExec,
+          this.gitExecLimited,
+        );
         break;
       }
 

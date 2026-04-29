@@ -459,6 +459,8 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             conflicts: Array.isArray(rawResult.conflicts)
               ? rawResult.conflicts.filter((conflict): conflict is string => typeof conflict === "string")
               : [],
+            aborted: rawResult.aborted === true,
+            requiresAbort: rawResult.requiresAbort === true,
             error: typeof rawResult.error === "string" ? rawResult.error : null,
           },
           runtimeId,

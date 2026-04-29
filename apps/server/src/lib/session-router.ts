@@ -1119,6 +1119,8 @@ export class SessionRouter {
       sourceRef?: string | null;
       targetRef?: string | null;
       commitRef?: string | null;
+      branchRef?: string | null;
+      ontoRef?: string | null;
       workdirHint?: string | null;
     },
     timeoutMs = 60_000,
@@ -1132,6 +1134,8 @@ export class SessionRouter {
       sourceRef: input.sourceRef ?? undefined,
       targetRef: input.targetRef ?? undefined,
       commitRef: input.commitRef ?? undefined,
+      branchRef: input.branchRef ?? undefined,
+      ontoRef: input.ontoRef ?? undefined,
       workdirHint: input.workdirHint ?? undefined,
     });
     if (result !== "delivered") {

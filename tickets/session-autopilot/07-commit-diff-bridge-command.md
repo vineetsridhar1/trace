@@ -35,7 +35,7 @@ Add runtime/bridge support for reading worker branch diffs and performing servic
 - [x] Service-owned merge/rebase/cherry-pick commands exist behind authorization.
 - [x] Invalid refs fail safely.
 - [x] Merge conflicts produce structured conflict results, not silent failures.
-- [ ] Large diffs are truncated deterministically.
+- [x] Large diffs are truncated deterministically.
 
 ## Implementation notes
 
@@ -44,8 +44,6 @@ Add runtime/bridge support for reading worker branch diffs and performing servic
 - Diff-only bridge plumbing can be prototyped earlier, but merge/rebase/cherry-pick behavior should land after Ultraplan service ownership exists.
 - Do not let controller-run sessions run privileged git operations directly.
 - Controller-run context should include diffs only when useful, mainly worker review or integration decisions.
-- Review note: patch output is bounded after `git diff` returns, but the desktop/container
-  bridge `execFile` max buffer can still fail before truncation on very large diffs.
 
 ## How to test
 
