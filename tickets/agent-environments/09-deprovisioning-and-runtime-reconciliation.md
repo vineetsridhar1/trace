@@ -8,12 +8,12 @@ Make runtime cleanup adapter-owned, retryable, and resilient to provider or brid
 
 Owns plan lines:
 
-- 98-118: bridge terminate/delete traffic and heartbeat/disconnection signals
+- 106-126: bridge terminate/delete traffic and heartbeat/disconnection signals
 - 164-190: runtime state fields used by stopping/stopped/failed transitions
-- 430-473: local stop/delete cleanup without deprovisioning the host machine
-- 732-781: deprovisioning ownership, local/provisioned cleanup, and policies
-- 926-932: phase 6 explicit stop/deprovision states, retries, and reconciliation
-- 1002: V1 adapter-owned deprovisioning requirement
+- 439-482: local stop/delete cleanup without deprovisioning the host machine
+- 782-831: deprovisioning ownership, local/provisioned cleanup, and policies
+- 982-988: phase 6 explicit stop/deprovision states, retries, and reconciliation
+- 1065: V1 adapter-owned deprovisioning requirement
 
 ## What needs to happen
 

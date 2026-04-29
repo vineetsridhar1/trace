@@ -9,8 +9,8 @@ Expose agent environments through GraphQL while keeping resolvers thin wrappers 
 Owns plan lines:
 
 - 217-292: GraphQL environment types, queries, mutations, `environmentId`, compatibility inputs, and codegen
-- 887-891: phase 1 GraphQL/codegen work
-- 997: V1 `environmentId` session creation requirement
+- 941-945: phase 1 GraphQL/codegen work
+- 1058: V1 `environmentId` session creation requirement
 
 ## What needs to happen
 

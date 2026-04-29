@@ -10,10 +10,10 @@ Owns plan lines:
 
 - 119-135: service-layer position in the target architecture
 - 137-163: transactional default-environment enforcement
-- 293-332: `AgentEnvironmentService` responsibilities, methods, and thin resolvers
-- 859-883: service-layer secret resolution
-- 887-895: phase 1 service/resolver/events work
-- 995 and 998: V1 environment service and default environment requirements
+- 293-340: `AgentEnvironmentService` responsibilities, methods, and thin resolvers
+- 910-937: service-layer secret resolution
+- 941-948: phase 1 service/resolver/events work
+- 1056 and 1059: V1 environment service and default environment requirements
 
 ## What needs to happen
 
@@ -30,6 +30,11 @@ Owns plan lines:
 - Enforce organization authorization for all reads and writes.
 - Validate `adapterType`.
 - Validate config through the matching runtime adapter.
+- Validate lightweight admission constraints when present:
+  - supported tools
+  - allowed repo IDs
+  - max concurrent sessions
+  - max session duration
 - Ensure only one default environment exists per org.
 - Emit `agent_environment.*` events from the service layer.
 - Add thin GraphQL resolvers that call this service.
@@ -45,6 +50,7 @@ Owns plan lines:
 - [ ] Unauthorized callers cannot read or mutate environments.
 - [ ] Default environment changes are transactional.
 - [ ] Invalid configs are rejected before persistence.
+- [ ] Invalid environment admission constraints are rejected before persistence.
 - [ ] Service emits environment lifecycle events.
 - [ ] Resolvers contain no business logic.
 

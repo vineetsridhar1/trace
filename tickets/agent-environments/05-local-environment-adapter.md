@@ -10,12 +10,12 @@ Owns plan lines:
 
 - 7-10: connected local desktop bridge support
 - 30-42: existing local bridge/session-router baseline
-- 98-118: shared bridge protocol for local runtime traffic
-- 430-473: local adapter purpose, config, start flow, stop flow, and no host deprovisioning
-- 896-898: phase 2 local adapter extraction
-- 942: migration of existing local runtime selection
-- 986: open decision on explicit local records versus any accessible bridge
-- 996: V1 local adapter type requirement
+- 106-126: shared bridge protocol for local runtime traffic
+- 439-482: local adapter purpose, config, start flow, stop flow, and no host deprovisioning
+- 950-952: phase 2 local adapter extraction
+- 998: migration of existing local runtime selection
+- 1045: open decision on explicit local records versus any accessible bridge
+- 1057: V1 local adapter type requirement
 
 ## What needs to happen
 

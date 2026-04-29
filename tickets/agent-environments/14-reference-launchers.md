@@ -9,9 +9,9 @@ Provide optional launcher examples outside Trace core for common infrastructure 
 Owns plan lines:
 
 - 11: reference launcher support for AWS, Fly, Kubernetes, and other platforms
-- 79-84: launcher examples outside Trace core
-- 596-626: launcher-side signature verification, timestamp checks, and replay rejection
-- 991-1014: AWS VPC usage path through the provisioned adapter
+- 87-92: launcher examples outside Trace core
+- 613-672: launcher-side auth verification, idempotency, timestamp checks, and replay rejection where applicable
+- 1052-1077: AWS VPC usage path through the provisioned adapter
 
 ## What needs to happen
 
@@ -23,8 +23,13 @@ Owns plan lines:
   - `POST /trace/start-session`
   - `POST /trace/stop-session`
   - `GET /trace/session-status/:runtimeId`
-- Each launcher should verify Trace signatures.
-- Each launcher should reject old timestamps and replayed request IDs.
+- Each launcher should verify Trace authentication.
+- Each launcher should honor idempotency keys for duplicate start/stop requests.
+- Bearer launchers should:
+  - require HTTPS
+  - compare bearer tokens in constant time
+  - avoid logging tokens
+- HMAC launchers should reject old timestamps and replayed request IDs.
 - Each launcher should inject runtime env vars:
   - `TRACE_SESSION_ID`
   - `TRACE_ORG_ID`
@@ -42,9 +47,10 @@ Owns plan lines:
 ## Completion requirements
 
 - [ ] At least one reference launcher demonstrates the provisioned lifecycle contract.
-- [ ] Launcher verifies signatures.
+- [ ] Launcher verifies configured auth mode.
 - [ ] Launcher starts compute and causes runtime bridge connection.
 - [ ] Launcher stops compute.
+- [ ] Launcher handles duplicate start/stop calls idempotently.
 - [ ] Docs clearly separate launcher code from Trace core.
 
 ## Implementation notes
@@ -56,6 +62,6 @@ Owns plan lines:
 ## How to test
 
 1. Run the launcher locally against a mock Trace lifecycle request.
-2. Verify signature rejection on invalid input.
+2. Verify auth rejection on invalid input.
 3. Verify start returns provider runtime ID.
 4. Verify stop is idempotent.

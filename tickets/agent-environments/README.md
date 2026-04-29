@@ -20,7 +20,7 @@ Wrap the existing runtime paths behind a generic local/provisioned adapter model
 | --- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | 04  | [Runtime Adapter Registry](04-runtime-adapter-registry.md)                               | Replaces hosting-mode branching with an environment-aware adapter registry       |
 | 05  | [Local Environment Adapter](05-local-environment-adapter.md)                             | Keeps current desktop bridge behavior while representing local as an environment |
-| 06  | [Provisioned Lifecycle Adapter](06-provisioned-lifecycle-adapter.md)                     | Adds signed start/stop/status lifecycle endpoint support                         |
+| 06  | [Provisioned Lifecycle Adapter](06-provisioned-lifecycle-adapter.md)                     | Adds authenticated start/stop/status lifecycle endpoint support                  |
 
 ## M2 - Cloud Runtime Readiness
 
@@ -97,34 +97,34 @@ Every line of [agent-environments-plan.md](agent-environments-plan.md) has an ow
 | --- | --- | --- |
 | 1-29 | Goal, local/provisioned/reference launcher direction, no first-class Fly core adapter | 01, 04, 05, 06, 12, 14 |
 | 30-42 | Current baseline and existing bridge/session-router shape | 04, 05, 12 |
-| 43-84 | Agent environment concept, fields, adapter types, provisioned endpoints, reference launchers | 01, 02, 03, 06, 14 |
-| 85-97 | Runtime adapter responsibilities and separation from message handling | 04, 06, 08 |
-| 98-118 | Runtime bridge command traffic, heartbeats, output, workspace events, shared local/cloud protocol | 05, 07, 08, 09 |
-| 119-136 | Target architecture and adapter/bridge split | 03, 04, 05, 06, 07 |
+| 43-92 | Agent environment concept, fields, adapter types, admission constraints, provisioned endpoints, reference launchers | 01, 02, 03, 06, 14 |
+| 93-105 | Runtime adapter responsibilities and separation from message handling | 04, 06, 08 |
+| 106-126 | Runtime bridge command traffic, heartbeats, output, workspace events, shared local/cloud protocol | 05, 07, 08, 09 |
+| 127-144 | Target architecture and adapter/bridge split | 03, 04, 05, 06, 07 |
 | 137-163 | `AgentEnvironment` Prisma model, indexes, default enforcement | 01, 03 |
 | 164-190 | Normalized `Session.connection` runtime state | 01, 08, 09, 11 |
 | 191-216 | Deferred `SessionRuntime` table | 15 |
 | 217-292 | GraphQL environment types, query/mutations, `environmentId`, compatibility inputs, codegen | 02 |
-| 293-332 | `AgentEnvironmentService`, CRUD/default/validation/auth/events, thin resolvers | 03 |
-| 333-353 | `SessionService` environment resolution and `hosting` compatibility | 11, 12 |
-| 354-411 | Runtime adapter interface and start result contracts | 04 |
-| 412-429 | Runtime adapter registry and no direct cloud branching | 04, 12 |
-| 430-473 | Local adapter config, start flow, stop flow, no host deprovisioning | 05, 09 |
-| 474-547 | Provisioned adapter purpose, generic provider contract, config, start request/response, readiness | 06, 08, 12 |
-| 548-595 | Provisioned stop/status requests and provider-status mapping | 06, 09 |
-| 596-626 | Lifecycle request signing, headers, HMAC payload, replay/timestamp rejection | 06, 14 |
-| 627-655 | Cloud runtime bridge bootstrap env vars, `runtime_hello`, empty registered repos | 06, 07 |
-| 656-677 | Runtime token claims and bridge validation, preserve local auth | 07 |
-| 678-712 | Startup lifecycle states and bridge-readiness rule | 08 |
-| 713-731 | Pending message delivery, bridge-only AI message channel, provisioned adapter does not receive AI messages | 08 |
-| 732-781 | Local/provisioned deprovisioning and environment deprovision policies | 09 |
-| 782-806 | Provider-neutral runtime lifecycle events | 01, 08, 09, 12 |
-| 807-858 | Org settings UI, local/provisioned forms, session environment selector | 10, 11 |
-| 859-884 | Secret storage, encrypted values, config secret references, service-layer resolution | 01, 03, 06, 10 |
-| 885-945 | Migration phases from model through compatibility cleanup | 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12 |
-| 946-982 | Unit, service, and integration tests | 13 plus each implementation ticket's test section |
-| 983-990 | Open decisions | 05, 06, 07, 12, 15 |
-| 991-1014 | Recommended V1 scope and AWS VPC shape through provisioned adapter | 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12 |
+| 293-340 | `AgentEnvironmentService`, CRUD/default/validation/auth/events, thin resolvers | 03 |
+| 341-362 | `SessionService` environment resolution, admission checks, and `hosting` compatibility | 11, 12 |
+| 363-420 | Runtime adapter interface and start result contracts | 04 |
+| 421-438 | Runtime adapter registry and no direct cloud branching | 04, 12 |
+| 439-482 | Local adapter config, start flow, stop flow, no host deprovisioning | 05, 09 |
+| 483-564 | Provisioned adapter purpose, generic provider contract, config, start request/response, readiness | 06, 08, 12 |
+| 565-612 | Provisioned stop/status requests and provider-status mapping | 06, 09 |
+| 613-672 | Lifecycle request auth, bearer mode, idempotency, optional HMAC mode, replay/timestamp rejection | 06, 14 |
+| 673-703 | Cloud runtime bridge bootstrap env vars, `runtime_hello`, protocol metadata, empty registered repos | 06, 07 |
+| 704-727 | Runtime token claims and bridge validation, preserve local auth | 07 |
+| 728-762 | Startup lifecycle states and bridge-readiness rule | 08 |
+| 763-781 | Pending message delivery, bridge-only AI message channel, provisioned adapter does not receive AI messages | 08 |
+| 782-831 | Local/provisioned deprovisioning and environment deprovision policies | 09 |
+| 832-856 | Provider-neutral runtime lifecycle events | 01, 08, 09, 12 |
+| 857-909 | Org settings UI, local/provisioned forms, session environment selector | 10, 11 |
+| 910-938 | Secret storage, encrypted values, config secret references, service-layer resolution | 01, 03, 06, 10 |
+| 939-1001 | Migration phases from model through compatibility cleanup | 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12 |
+| 1002-1041 | Unit, service, and integration tests | 13 plus each implementation ticket's test section |
+| 1042-1051 | Open decisions | 05, 06, 07, 12, 15 |
+| 1052-1077 | Recommended V1 scope and AWS VPC shape through provisioned adapter | 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12 |
 
 If the plan gains a new actionable requirement, add or update its owning ticket in the same change and keep this coverage matrix in sync.
 
@@ -135,7 +135,7 @@ The intended V1 is:
 - org-scoped `AgentEnvironment`
 - `local` and `provisioned` adapter types only
 - no first-party AWS/Fly/Kubernetes adapter in Trace core
-- signed provisioned lifecycle endpoint for start/stop/status
+- authenticated provisioned lifecycle endpoint for start/stop/status
 - existing desktop bridge behavior preserved
 - cloud runtimes connect back through the shared runtime bridge
 - startup timeout and queued-message delivery for slow provisioned runtimes

@@ -73,8 +73,16 @@ Initial adapter types:
 - `local`
 - `provisioned`
 
-Provisioned environments should use a signed lifecycle endpoint. The endpoint can start
+Provisioned environments should use an authenticated lifecycle endpoint. The endpoint can start
 compute in AWS ECS, Fly, Kubernetes, Nomad, EC2, or any other system.
+
+Environments should also be able to declare lightweight admission constraints in config:
+
+- supported tools
+- optional allowed repo IDs
+- max concurrent sessions
+- max session duration
+- startup timeout
 
 Future work can add optional reference launchers, but they should live outside Trace core:
 
@@ -344,6 +352,7 @@ else:
 ```
 
 Session creation should then pass environment details to `SessionRouter.createRuntime`.
+Before provisioning, `SessionService` should also check environment admission constraints such as enabled state, supported tool, allowed repo, max concurrency, and max session duration.
 
 Compatibility rule:
 
@@ -479,7 +488,7 @@ Provisioned lets an org run agents in any infrastructure, including AWS inside a
 Fly, Kubernetes, Nomad, EC2, or an internal platform, without Trace having
 cloud-provider-specific code.
 
-Trace core only calls a signed lifecycle endpoint. The endpoint is the launcher.
+Trace core only calls an authenticated lifecycle endpoint. The endpoint is the launcher.
 The launcher owns provider-specific work such as `ecs.runTask`, Fly machine creation,
 Kubernetes Job creation, or any internal compute API.
 
@@ -490,7 +499,15 @@ Kubernetes Job creation, or any internal compute API.
   "startUrl": "https://infra.company.com/trace/start-session",
   "stopUrl": "https://infra.company.com/trace/stop-session",
   "statusUrl": "https://infra.company.com/trace/session-status",
-  "signingSecretId": "secret_456",
+  "auth": {
+    "type": "bearer",
+    "secretId": "secret_456"
+  },
+  "capabilities": {
+    "supportedTools": ["claude_code", "codex"],
+    "maxConcurrentSessions": 5,
+    "maxSessionMinutes": 240
+  },
   "startupTimeoutSeconds": 180,
   "deprovisionPolicy": "on_session_end",
   "launcherMetadata": {
@@ -595,9 +612,36 @@ unknown
 
 ### Lifecycle Security
 
-Requests must be signed.
+Lifecycle requests must be authenticated.
 
-Use:
+V1 should support bearer-token auth because it is simple for org-owned launchers:
+
+```txt
+Authorization: Bearer <launcher-token>
+```
+
+The bearer token is stored as an org secret and referenced by `auth.secretId`.
+Trace sends it only to the configured launcher endpoints.
+
+Lifecycle requests should also carry a stable idempotency key:
+
+```txt
+Trace-Request-Id: req_123
+Trace-Idempotency-Key: session:sess_123:start
+```
+
+Launchers should treat duplicate start/stop calls with the same idempotency key as the same operation. This keeps retries from creating duplicate compute or failing already-stopped runtimes.
+
+Bearer-token requirements:
+
+- HTTPS only
+- long random token
+- encrypted secret storage
+- no request or error logging of the token
+- constant-time comparison by the launcher
+- rotation path through org secret replacement
+
+HMAC request signing can be kept as a stronger optional auth mode for production-sensitive launchers. Use:
 
 - timestamp header
 - request ID header
@@ -618,11 +662,13 @@ Signature payload:
 timestamp + "." + requestId + "." + rawBody
 ```
 
-The customer should reject:
+For HMAC mode, the customer should reject:
 
 - invalid signatures
 - old timestamps
 - replayed request IDs
+
+Launcher auth is separate from runtime bridge auth. Do not pass the launcher bearer token into the agent container. Provisioned runtimes should still receive only a short-lived runtime token scoped to one session/runtime.
 
 ## Runtime Bridge For Cloud
 
@@ -646,6 +692,8 @@ The cloud container starts `trace-agent-runtime`, which connects to the server b
   "instanceId": "runtime_123",
   "label": "AWS ECS task abc",
   "hostingMode": "cloud",
+  "protocolVersion": 1,
+  "agentVersion": "0.1.0",
   "supportedTools": ["claude_code", "codex"],
   "registeredRepoIds": []
 }
@@ -672,6 +720,8 @@ The bridge handler should verify:
 - token has not expired
 - `runtime_hello.instanceId` matches token claims
 - `hostingMode` matches expected adapter mode
+- protocol version is compatible
+- runtime tools satisfy the selected environment/session request
 
 Local bridge auth can continue to use the existing desktop auth flow.
 
@@ -842,7 +892,8 @@ Fields:
 - start URL
 - stop URL
 - status URL
-- signing secret
+- launcher auth type
+- launcher auth secret
 - startup timeout
 - deprovision policy
 - optional launcher metadata for display/debugging
@@ -876,11 +927,14 @@ Environment config should reference secrets:
 
 ```json
 {
-  "signingSecretId": "secret_456"
+  "auth": {
+    "type": "bearer",
+    "secretId": "secret_456"
+  }
 }
 ```
 
-The service layer resolves secrets only when invoking adapters.
+The service layer resolves secrets only when invoking adapters. Launcher auth secrets are used only for Trace-to-launcher lifecycle requests. Runtime bridge tokens are created per session and should not be stored as org secrets.
 
 ## Migration Plan
 
@@ -896,7 +950,7 @@ The service layer resolves secrets only when invoking adapters.
 ### Phase 2: Adapter Registry
 
 - Extract current local adapter into `LocalRuntimeAdapter`.
-- Add `ProvisionedRuntimeAdapter` for signed lifecycle endpoints.
+- Add `ProvisionedRuntimeAdapter` for authenticated lifecycle endpoints.
 - Move or remove current Fly/cloud-machine logic so Fly is not a core adapter path.
 - Add `RuntimeAdapterRegistry`.
 - Update `SessionRouter` to dispatch by environment adapter type.
@@ -911,7 +965,8 @@ The service layer resolves secrets only when invoking adapters.
 ### Phase 4: Provisioned Adapter
 
 - Implement provisioned config validation.
-- Implement signed start/stop/status calls.
+- Implement authenticated start/stop/status calls.
+- Implement idempotency keys for start/stop retries.
 - Store provider runtime ID.
 - Wait for cloud bridge before delivering commands.
 - Add timeout behavior.
@@ -920,6 +975,7 @@ The service layer resolves secrets only when invoking adapters.
 
 - Add short-lived cloud runtime tokens.
 - Validate cloud `runtime_hello` against token claims.
+- Validate cloud runtime protocol version and tool compatibility.
 - Track heartbeats and stale runtimes.
 - Queue undelivered messages while runtime is starting.
 
@@ -953,8 +1009,11 @@ Add tests for:
 - one default environment per org
 - adapter registry lookup
 - local adapter bridge selection
-- provisioned signature generation
+- provisioned bearer auth header generation
+- optional provisioned signature generation
+- lifecycle idempotency behavior
 - provisioned status mapping
+- environment admission constraints
 - startup timeout behavior
 - deprovision retry behavior
 
@@ -987,6 +1046,8 @@ Add tests for:
 - Whether Fly support should be deleted from core immediately or kept temporarily as a compatibility shim while a reference launcher is built.
 - Whether provisioned status polling is required in v1 or only used for cleanup/recovery.
 - Whether runtime tokens should be JWTs or opaque DB-backed tokens.
+- Whether HMAC should be implemented in V1 or deferred behind bearer-token launcher auth.
+- Whether environment capabilities stay in config for V1 or become first-class columns later.
 
 ## Recommended V1 Scope
 
@@ -996,7 +1057,9 @@ Build the smallest version that proves the architecture:
 - local and provisioned adapter types
 - `environmentId` on session creation
 - default environment per org
-- provisioned start/stop/status with signed requests
+- provisioned start/stop/status with authenticated requests
+- lifecycle idempotency for provisioned start/stop retries
+- basic environment admission constraints
 - cloud runtime bridge token auth
 - startup timeout
 - adapter-owned deprovisioning

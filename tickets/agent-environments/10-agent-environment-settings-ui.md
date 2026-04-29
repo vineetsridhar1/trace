@@ -8,10 +8,10 @@ Add org settings UI for managing local and provisioned agent environments.
 
 Owns plan lines:
 
-- 807-849: org settings environment list, local form, provisioned form, connected bridges/repos, and status display
-- 859-883: secret selector/reference UI for environment config
-- 933-938: phase 7 org settings environment management and session-status display dependency
-- 1003: V1 basic org settings UI requirement
+- 857-900: org settings environment list, local form, provisioned form, connected bridges/repos, and status display
+- 910-937: secret selector/reference UI for environment config
+- 989-994: phase 7 org settings environment management and session-status display dependency
+- 1066: V1 basic org settings UI requirement
 
 ## What needs to happen
 
@@ -26,6 +26,7 @@ Owns plan lines:
   - Show connected local bridges.
   - Show registered repos for each local bridge where available.
 - Add create/edit flows for provisioned environments.
+  - Show optional admission fields for supported tools, repo restrictions, max concurrency, and max session duration when available.
 - Add enable/disable.
 - Add set default.
 - Add test connection.
@@ -43,6 +44,7 @@ Owns plan lines:
 - [ ] Admin can create/edit local environment.
 - [ ] Local environment form shows connected local bridges and registered repos.
 - [ ] Admin can create/edit provisioned environment.
+- [ ] Provisioned environment form can display/edit supported admission constraints.
 - [ ] Admin can set an org default.
 - [ ] Admin can disable an environment.
 - [ ] Test connection shows success/error clearly.
@@ -52,7 +54,8 @@ Owns plan lines:
 
 - Keep forms utilitarian and dense; this is an operational settings surface.
 - Do not expose raw secret values after save.
-- Use a secret selector/reference for signing secrets instead of plain text config where possible.
+- Use a secret selector/reference for launcher auth secrets instead of plain text config where possible.
+- Show bearer auth as the simple V1 option and HMAC only if that mode is implemented.
 
 ## How to test
 

@@ -8,7 +8,7 @@ Add end-to-end confidence, operational visibility, and rollout controls for agen
 
 Owns plan lines:
 
-- 946-984: unit, service, and integration test requirements plus open-decision handoff
+- 1002-1041: unit, service, and integration test requirements plus open-decision handoff
 - Also consolidates verification for the implementation tickets' `How to test` sections
 
 ## What needs to happen
@@ -17,9 +17,12 @@ Owns plan lines:
   - environment validation
   - default selection
   - registry lookup
-  - provisioned signature generation
+  - provisioned bearer auth header generation
+  - optional provisioned signature generation
   - lifecycle request replay/timestamp rejection
+  - lifecycle idempotency keys
   - status mapping
+  - environment admission constraints
 - Add service tests for:
   - session creation with explicit environment
   - session creation with org default
@@ -27,7 +30,10 @@ Owns plan lines:
   - startup timeout
   - pending message drain
   - fallback behavior when no environment exists
+  - admission rejection before provisioning
 - Add integration tests with a mock provisioned launcher.
+  - Include duplicate start/stop calls with the same idempotency key.
+  - Include incompatible runtime protocol and unsupported tool registration.
 - Add telemetry/logging for:
   - environment create/update/test
   - provisioned start latency
@@ -35,6 +41,7 @@ Owns plan lines:
   - runtime heartbeat freshness
   - startup timeout
   - deprovision failure
+- Add negative assertions that launcher bearer tokens and runtime tokens are not logged.
 - Add feature flag or rollout guard if needed.
 - Add operator-facing error messages for failed provisioning and deprovisioning.
 

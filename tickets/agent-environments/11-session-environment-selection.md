@@ -9,12 +9,12 @@ Let session creation use an explicit environment or the org default while preser
 Owns plan lines:
 
 - 164-190: persist environment/runtime metadata in session connection state
-- 333-353: session creation environment resolution and `hosting` compatibility
-- 850-858: session environment selector and advanced environment choice
-- 904-910: phase 3 session creation behavior
-- 936-938: phase 7 session selector and startup/deprovision status
-- 990-998: transition from open decisions into V1 `environmentId` and default environment requirements
-- 1003: session-side portion of the basic UI requirement
+- 341-362: session creation environment resolution, admission checks, and `hosting` compatibility
+- 901-909: session environment selector and advanced environment choice
+- 957-964: phase 3 session creation behavior
+- 991-994: phase 7 session selector and startup/deprovision status
+- 1052-1062: transition from open decisions into V1 `environmentId`, default environment, and admission requirements
+- 1066: session-side portion of the basic UI requirement
 
 ## What needs to happen
 
@@ -27,6 +27,12 @@ Owns plan lines:
   - org default environment
   - compatibility fallback using `hosting` and `runtimeInstanceId`
 - Return a clear validation error when no environment/default/compatibility fallback can be resolved.
+- Enforce environment admission constraints before provisioning:
+  - enabled state
+  - supported tool
+  - allowed repo
+  - max concurrent sessions
+  - max session duration
 - Persist `environmentId` and adapter metadata in session connection.
 - Show startup/provisioning status for provisioned sessions.
 - Show deprovision/stopping status in the session UI when a runtime is being cleaned up.
@@ -43,6 +49,7 @@ Owns plan lines:
 - [ ] Starting a session with explicit provisioned environment works against a mock launcher.
 - [ ] Omitting environment uses org default.
 - [ ] Missing environment/default/fallback produces an actionable validation error.
+- [ ] Unsupported tool/repo/concurrency/duration requests fail before provisioning.
 - [ ] Existing callers using `hosting` still work during migration.
 - [ ] Disabled environments cannot be selected.
 - [ ] Session UI shows startup state for provisioned sessions.

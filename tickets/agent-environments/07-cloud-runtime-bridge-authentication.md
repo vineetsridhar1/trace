@@ -8,11 +8,11 @@ Secure cloud runtime bridge registration with short-lived runtime tokens tied to
 
 Owns plan lines:
 
-- 98-118: bridge heartbeats and shared local/cloud protocol expectations
-- 627-677: cloud runtime bridge bootstrap, `runtime_hello`, empty registered repos, token claims, and validation
-- 919-925: phase 5 token validation, heartbeat/stale runtime tracking, and startup queue dependency
-- 989: open decision on JWT versus opaque runtime tokens
-- 1000: V1 cloud runtime bridge token auth requirement
+- 106-126: bridge heartbeats and shared local/cloud protocol expectations
+- 673-727: cloud runtime bridge bootstrap, `runtime_hello`, empty registered repos, token claims, and validation
+- 974-981: phase 5 token validation, protocol compatibility, heartbeat/stale runtime tracking, and startup queue dependency
+- 1048: open decision on JWT versus opaque runtime tokens
+- 1063: V1 cloud runtime bridge token auth requirement
 
 ## What needs to happen
 
@@ -29,7 +29,10 @@ Owns plan lines:
 - Verify `runtime_hello.instanceId` matches token claims.
 - Verify `hostingMode` is `cloud` for provisioned runtimes.
 - Accept cloud `runtime_hello` registrations with `registeredRepoIds: []` because provisioned runtimes clone on demand.
+- Require cloud `runtime_hello` to include protocol and agent version metadata.
+- Reject incompatible bridge protocol versions.
 - Verify cloud `runtime_hello.supportedTools` is captured or validated consistently with existing bridge capability handling.
+- Verify runtime-supported tools satisfy the selected session/environment request.
 - Reject missing, expired, or mismatched runtime tokens.
 - Preserve existing local bridge auth behavior.
 - Track runtime heartbeats for authenticated cloud runtimes.
@@ -46,6 +49,8 @@ Owns plan lines:
 - [ ] Runtime cannot register for a different org/session/environment.
 - [ ] Expired tokens are rejected.
 - [ ] Cloud runtime registration supports empty registered repo IDs.
+- [ ] Incompatible cloud runtime protocol versions are rejected clearly.
+- [ ] Runtime tool capabilities are checked before marking the runtime ready.
 - [ ] Cloud runtime heartbeats update runtime connection state.
 - [ ] Stale cloud runtime connections are detected.
 - [ ] Local desktop bridge auth still works unchanged.

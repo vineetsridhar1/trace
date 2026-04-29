@@ -8,12 +8,12 @@ Track slow provisioned runtime startup explicitly and queue user messages until 
 
 Owns plan lines:
 
-- 85-97: service layer and runtime bridge own message handling, not adapters
-- 546: provisioned runtime readiness waits for bridge connection
-- 678-731: startup lifecycle states, bridge-readiness rule, and pending message delivery
-- 911-918: phase 4 wait-for-bridge and timeout behavior
-- 924-925: phase 5 queued message delivery while starting
-- 1001: V1 startup timeout requirement
+- 93-105: service layer and runtime bridge own message handling, not adapters
+- 563: provisioned runtime readiness waits for bridge connection
+- 728-781: startup lifecycle states, bridge-readiness rule, and pending message delivery
+- 965-973: phase 4 wait-for-bridge and timeout behavior
+- 979-980: phase 5 queued message delivery while starting
+- 1064: V1 startup timeout requirement
 
 ## What needs to happen
 

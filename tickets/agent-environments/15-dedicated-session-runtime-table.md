@@ -9,7 +9,7 @@ Move runtime lifecycle state out of `Session.connection` once the environment mo
 Owns plan lines:
 
 - 191-216: deferred `SessionRuntime` model and migration guidance
-- 983-990: open decisions, including whether `SessionRuntime` is now or post-V1
+- 1042-1051: open decisions, including whether `SessionRuntime` is now or post-V1
 
 ## What needs to happen
 

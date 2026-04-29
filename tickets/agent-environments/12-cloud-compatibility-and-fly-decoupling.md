@@ -10,13 +10,13 @@ Owns plan lines:
 
 - 1-29: goal to avoid hardcoded cloud/Fly and keep Fly outside Trace core
 - 30-42: current Fly/cloud-machine baseline
-- 412-429: remove direct `"cloud"` branching from session routing
-- 474-484: generic provisioned provider contract instead of provider-specific core code
-- 782-806: provider-neutral events with provider details only in metadata
-- 896-903: phase 2 Fly/cloud-machine removal or isolation
-- 939-945: phase 8 compatibility cleanup
-- 983-990: open decisions around runtime state, local selection, Fly compatibility, polling, and token format
-- 1005-1014: AWS VPC path through provisioned adapter and no first-party AWS/Fly core support
+- 421-438: remove direct `"cloud"` branching from session routing
+- 483-493: generic provisioned provider contract instead of provider-specific core code
+- 832-856: provider-neutral events with provider details only in metadata
+- 950-956: phase 2 Fly/cloud-machine removal or isolation
+- 995-1001: phase 8 compatibility cleanup
+- 1042-1051: open decisions around runtime state, local selection, Fly compatibility, polling, token format, HMAC, and capabilities
+- 1068-1077: AWS VPC path through provisioned adapter and no first-party AWS/Fly core support
 
 ## What needs to happen
 
