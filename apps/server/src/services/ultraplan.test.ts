@@ -220,6 +220,7 @@ describe("UltraplanService", () => {
           sessionGroupId: "group-1",
           branch: "ultraplan",
           workdir: undefined,
+          readOnlyWorkspace: true,
           connection: {
             state: "connected",
             retryCount: 0,

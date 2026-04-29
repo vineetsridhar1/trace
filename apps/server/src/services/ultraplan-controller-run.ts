@@ -254,6 +254,7 @@ export class UltraplanControllerRunService {
         connection: defaultConnection(
           runtime ? { id: runtime.id, label: runtime.label } : undefined,
         ),
+        readOnlyWorkspace: true,
         worktreeDeleted: false,
       },
       include: {

@@ -2599,7 +2599,13 @@ export class SessionService {
 
     // If session has a read-only workspace and the mode explicitly switched away from ask,
     // upgrade to a full worktree before running
-    if (session.readOnlyWorkspace && interactionMode && interactionMode !== "ask" && session.repo) {
+    if (
+      session.role !== "ultraplan_controller_run" &&
+      session.readOnlyWorkspace &&
+      interactionMode &&
+      interactionMode !== "ask" &&
+      session.repo
+    ) {
       const pendingCommand: PendingSessionCommand = {
         type: "run",
         prompt: prompt ?? null,
@@ -3017,6 +3023,7 @@ export class SessionService {
       select: {
         hosting: true,
         organizationId: true,
+        role: true,
         agentStatus: true,
         sessionStatus: true,
         sessionGroupId: true,
@@ -3271,6 +3278,7 @@ export class SessionService {
       where: { id: sessionId },
       select: {
         organizationId: true,
+        role: true,
         agentStatus: true,
         sessionStatus: true,
         sessionGroupId: true,
@@ -3617,6 +3625,7 @@ export class SessionService {
       where: { id: sessionId },
       select: {
         organizationId: true,
+        role: true,
         agentStatus: true,
         sessionStatus: true,
         hosting: true,
@@ -3756,7 +3765,13 @@ export class SessionService {
 
     // If session has a read-only workspace and user explicitly switched away from ask mode,
     // trigger a workspace upgrade to create a real worktree
-    if (session.readOnlyWorkspace && interactionMode && interactionMode !== "ask" && session.repo) {
+    if (
+      session.role !== "ultraplan_controller_run" &&
+      session.readOnlyWorkspace &&
+      interactionMode &&
+      interactionMode !== "ask" &&
+      session.repo
+    ) {
       const pendingCommand: PendingSessionCommand = {
         type: "send",
         prompt: text,
