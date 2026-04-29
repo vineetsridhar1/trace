@@ -23,6 +23,7 @@ export type RuntimeStartInput = {
   branch?: string;
   checkpointSha?: string;
   readOnly?: boolean;
+  runtimeInstanceId?: string;
   runtimeToken?: string;
   bridgeUrl?: string;
 };

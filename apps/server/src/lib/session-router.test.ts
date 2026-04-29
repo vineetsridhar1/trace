@@ -21,6 +21,15 @@ function makeWs() {
   } as unknown as WebSocket;
 }
 
+async function flushPromises() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe("SessionRouter stale runtime eviction", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -173,6 +182,29 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
     await expect(promise).resolves.toBeUndefined();
     expect(settled).toBe(true);
+  });
+
+  it("keeps a stale bridge wait timeout from clearing a newer wait", async () => {
+    vi.useFakeTimers();
+    const router = new SessionRouter();
+    const staleWait = router
+      .waitForBridge("session-1", 100, "runtime-old")
+      .catch((error: unknown) => error);
+    const activeWait = router.waitForBridge("session-1", 1_000, "runtime-new");
+
+    await vi.advanceTimersByTimeAsync(100);
+    await expect(staleWait).resolves.toBeInstanceOf(Error);
+
+    router.registerRuntime({
+      id: "runtime-new",
+      label: "Provisioned runtime",
+      ws: makeWs(),
+      hostingMode: "cloud",
+      supportedTools: ["codex"],
+    });
+    router.bindSession("session-1", "runtime-new");
+
+    await expect(activeWait).resolves.toBeUndefined();
   });
 
   it("starts local sessions through the registry and keeps prepare delivery on the bridge", async () => {
@@ -335,6 +367,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
         actorId: "user-1",
         tool: "codex",
         model: "gpt-test",
+        runtimeInstanceId: expect.stringMatching(/^runtime_/),
         runtimeToken: "runtime-token",
         bridgeUrl: "wss://trace.example/bridge",
       }),
@@ -342,15 +375,17 @@ describe("SessionRouter runtime adapter dispatch", () => {
   });
 
   it("emits provisioned lifecycle events only after bridge readiness", async () => {
+    const callOrder: string[] = [];
     const provisionedAdapter: RuntimeAdapter = {
       type: "provisioned",
       async validateConfig() {},
       async testConfig() {
         return { ok: true };
       },
-      async startSession() {
+      async startSession(input) {
+        callOrder.push("adapter_start");
         return {
-          runtimeInstanceId: "runtime-1",
+          runtimeInstanceId: input.runtimeInstanceId ?? "runtime-1",
           runtimeLabel: "Provisioned runtime",
           providerRuntimeId: "provider-1",
           providerRuntimeUrl: "https://runtime.example",
@@ -383,7 +418,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
     const router = new SessionRouter(
       new RuntimeAdapterRegistry([localAdapter, provisionedAdapter]),
     );
-    const lifecycleEvents: string[] = [];
+    const lifecycleEvents: Array<{ eventType: string; runtimeInstanceId?: string }> = [];
 
     router.createRuntime({
       sessionId: "session-1",
@@ -399,38 +434,140 @@ describe("SessionRouter runtime adapter dispatch", () => {
       repo: null,
       createdById: "user-1",
       organizationId: "org-1",
-      onLifecycle: (eventType) => {
-        lifecycleEvents.push(eventType);
+      onLifecycle: (eventType, update) => {
+        callOrder.push(eventType);
+        lifecycleEvents.push({ eventType, runtimeInstanceId: update?.runtimeInstanceId });
       },
       onFailed: vi.fn(),
     });
 
     await vi.waitFor(() => {
-      expect(lifecycleEvents).toEqual([
+      expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
         "session_runtime_start_requested",
         "session_runtime_provisioning",
         "session_runtime_connecting",
       ]);
     });
+    expect(callOrder.slice(0, 2)).toEqual(["session_runtime_start_requested", "adapter_start"]);
+    const runtimeInstanceId = lifecycleEvents[0]?.runtimeInstanceId;
+    if (!runtimeInstanceId) throw new Error("Expected runtime instance ID");
+    expect(runtimeInstanceId).toMatch(/^runtime_/);
+    expect(lifecycleEvents[1]?.runtimeInstanceId).toBe(runtimeInstanceId);
+    expect(lifecycleEvents[2]?.runtimeInstanceId).toBe(runtimeInstanceId);
     expect(router.getRuntimeForSession("session-1")).toBeUndefined();
 
     router.registerRuntime({
-      id: "runtime-1",
+      id: runtimeInstanceId,
       label: "Provisioned runtime",
       ws: makeWs(),
       hostingMode: "cloud",
       supportedTools: ["codex"],
     });
-    router.bindSession("session-1", "runtime-1");
+    router.bindSession("session-1", runtimeInstanceId);
 
     await vi.waitFor(() => {
-      expect(lifecycleEvents).toEqual([
+      expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
         "session_runtime_start_requested",
         "session_runtime_provisioning",
         "session_runtime_connecting",
         "session_runtime_connected",
       ]);
     });
+  });
+
+  it("times out startup using environment config and emits timed_out", async () => {
+    vi.useFakeTimers();
+    const provisionedAdapter: RuntimeAdapter = {
+      type: "provisioned",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession(input) {
+        return {
+          runtimeInstanceId: input.runtimeInstanceId ?? "runtime-1",
+          status: "provisioning",
+        };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopping" };
+      },
+      async getStatus() {
+        return { status: "provisioning" };
+      },
+    };
+    const localAdapter: RuntimeAdapter = {
+      type: "local",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return { status: "selected" };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    const router = new SessionRouter(
+      new RuntimeAdapterRegistry([localAdapter, provisionedAdapter]),
+    );
+    const onFailed = vi.fn();
+    const lifecycleEvents: Array<{
+      eventType: string;
+      runtimeInstanceId?: string;
+      error?: string;
+    }> = [];
+
+    router.createRuntime({
+      sessionId: "session-1",
+      hosting: "cloud",
+      adapterType: "provisioned",
+      environment: {
+        id: "env-1",
+        name: "Provisioned",
+        adapterType: "provisioned",
+        config: { startupTimeoutSeconds: 1 },
+      },
+      tool: "codex",
+      repo: null,
+      createdById: "user-1",
+      organizationId: "org-1",
+      onLifecycle: (eventType, update) => {
+        lifecycleEvents.push({
+          eventType,
+          runtimeInstanceId: update?.runtimeInstanceId,
+          error: update?.error,
+        });
+      },
+      onFailed,
+    });
+
+    await flushPromises();
+    expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
+      "session_runtime_start_requested",
+      "session_runtime_provisioning",
+      "session_runtime_connecting",
+    ]);
+
+    await vi.advanceTimersByTimeAsync(999);
+    expect(onFailed).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    await flushPromises();
+
+    expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
+      "session_runtime_start_requested",
+      "session_runtime_provisioning",
+      "session_runtime_connecting",
+      "session_runtime_start_timed_out",
+    ]);
+    expect(lifecycleEvents[3]?.runtimeInstanceId).toBe(lifecycleEvents[0]?.runtimeInstanceId);
+    expect(lifecycleEvents[3]?.error).toContain("1000ms");
+    expect(onFailed).toHaveBeenCalledWith(expect.stringContaining("timed out"));
   });
 
   it("keeps multiple terminal commands multiplexed by terminalId after adapter routing", async () => {
