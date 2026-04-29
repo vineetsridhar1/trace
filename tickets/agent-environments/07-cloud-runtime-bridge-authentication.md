@@ -44,10 +44,13 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [x] Provisioned runtime cannot register without a valid token.
+- [ ] Provisioned runtime cannot register without a valid token.
+  - Review note: current implementation validates provisioned runtime tokens against an in-memory map, not a JWT or DB-backed opaque token. This is not durable across server restarts or multiple server instances.
 - [x] Runtime cannot claim a different `runtimeInstanceId`.
-- [x] Runtime cannot register for a different org/session/environment.
+- [ ] Runtime cannot register for a different org/session/environment.
+  - Review note: token claims include org/session/environment, but session/environment claims are not independently durable or recoverable because the token source of truth is process-local memory.
 - [x] Expired tokens are rejected.
+  - Review note: expiry is enforced only while the issuing server process keeps the in-memory token entry.
 - [x] Cloud runtime registration supports empty registered repo IDs.
 - [x] Incompatible cloud runtime protocol versions are rejected clearly.
 - [x] Runtime tool capabilities are checked before marking the runtime ready.
@@ -58,7 +61,7 @@ Owns plan lines:
 
 ## Implementation notes
 
-- Token can be JWT or opaque DB-backed token; decide before implementation.
+- Token can be JWT or opaque DB-backed token; decide before implementation. Process-local in-memory token storage is not sufficient for production because provisioned runtimes may connect after server restart or through another server instance.
 - Prefer short expiry plus one runtime registration scope.
 - Do not let the launcher endpoint authenticate the bridge by itself; Trace must verify the runtime when it connects back.
 
