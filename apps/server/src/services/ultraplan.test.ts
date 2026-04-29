@@ -30,6 +30,7 @@ vi.mock("@trace/shared", () => ({
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { UltraplanService } from "./ultraplan.js";
+import { UltraplanControllerRunService } from "./ultraplan-controller-run.js";
 import { isSupportedModel } from "@trace/shared";
 
 type MockedDeep<T> = {
@@ -121,6 +122,42 @@ function makeControllerRun(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function makeSession(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "session-1",
+    name: "Ultraplan controller: Build autopilot",
+    agentStatus: "not_started",
+    sessionStatus: "in_progress",
+    role: "ultraplan_controller_run",
+    tool: "claude_code",
+    model: "claude-sonnet-4-20250514",
+    hosting: "cloud",
+    organizationId: "org-1",
+    createdById: "user-1",
+    repoId: "repo-1",
+    branch: "ultraplan",
+    workdir: "/work/anchovy",
+    channelId: "channel-1",
+    sessionGroupId: "group-1",
+    connection: { state: "connected", retryCount: 0, canRetry: true, canMove: true },
+    worktreeDeleted: false,
+    lastUserMessageAt: null,
+    lastMessageAt: null,
+    createdBy: { id: "user-1", name: "Test User" },
+    repo: {
+      id: "repo-1",
+      name: "trace",
+      remoteUrl: "git@github.com:test/trace.git",
+      defaultBranch: "main",
+    },
+    channel: { id: "channel-1", name: "Coding" },
+    sessionGroup: makeSessionGroup(),
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
 describe("UltraplanService", () => {
   let service: UltraplanService;
 
@@ -133,9 +170,10 @@ describe("UltraplanService", () => {
     prismaMock.ultraplan.findFirst.mockResolvedValue(null);
     prismaMock.ultraplan.create.mockResolvedValue(makeUltraplan());
     prismaMock.ultraplan.update.mockResolvedValue(makeUltraplan({ lastControllerRunId: "run-1" }));
-    prismaMock.session.create.mockResolvedValue({ id: "session-1" });
+    prismaMock.session.create.mockResolvedValue(makeSession());
     prismaMock.ultraplanControllerRun.create.mockResolvedValue(makeControllerRun());
     prismaMock.ultraplanControllerRun.update.mockResolvedValue(makeControllerRun());
+    prismaMock.ultraplanControllerRun.findUniqueOrThrow.mockResolvedValue(makeControllerRun());
     isSupportedModelMock.mockReturnValue(true);
   });
 
@@ -182,9 +220,25 @@ describe("UltraplanService", () => {
     );
     expect(eventServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_started",
+      }),
+      prismaMock,
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
         scopeType: "ultraplan",
         scopeId: "ultra-1",
         eventType: "ultraplan_controller_run_created",
+      }),
+      prismaMock,
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scopeType: "ultraplan",
+        scopeId: "ultra-1",
+        eventType: "ultraplan_updated",
       }),
       prismaMock,
     );
@@ -266,5 +320,110 @@ describe("UltraplanService", () => {
 
     expect(prismaMock.sessionGroup.findFirst).not.toHaveBeenCalled();
     expect(prismaMock.ultraplan.create).not.toHaveBeenCalled();
+  });
+
+  it("runs the controller now with the last controller session config", async () => {
+    prismaMock.ultraplan.findUniqueOrThrow.mockResolvedValue(
+      makeUltraplan({ lastControllerRunId: "run-last" }),
+    );
+    prismaMock.ultraplanControllerRun.findUnique.mockResolvedValue({
+      ...makeControllerRun({ id: "run-last" }),
+      session: makeSession({
+        id: "session-last",
+        tool: "codex",
+        model: "gpt-5.3-codex",
+        hosting: "cloud",
+      }),
+    });
+    prismaMock.ultraplan.update.mockResolvedValue(
+      makeUltraplan({ status: "planning", lastControllerRunId: "run-1" }),
+    );
+
+    await service.runControllerNow("ultra-1", "user", "user-1");
+
+    expect(prismaMock.session.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tool: "codex",
+          model: "gpt-5.3-codex",
+        }),
+      }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "ultraplan_updated",
+        scopeType: "ultraplan",
+      }),
+      prismaMock,
+    );
+  });
+
+  it("authorizes controller-run lifecycle mutations and emits parent plan updates", async () => {
+    const controllerRunService = new UltraplanControllerRunService();
+    prismaMock.ultraplanControllerRun.findUniqueOrThrow.mockResolvedValue(
+      makeControllerRun({ status: "running" }),
+    );
+    prismaMock.ultraplanControllerRun.update.mockResolvedValue(
+      makeControllerRun({
+        status: "completed",
+        summary: "Finished planning",
+        completedAt: now,
+      }),
+    );
+    prismaMock.ultraplan.update.mockResolvedValue(
+      makeUltraplan({
+        status: "waiting",
+        lastControllerRunId: "run-1",
+        lastControllerSummary: "Finished planning",
+      }),
+    );
+
+    await controllerRunService.completeRun(
+      "run-1",
+      { summary: "Finished planning" },
+      "user",
+      "user-1",
+    );
+
+    expect(prismaMock.orgMember.findUniqueOrThrow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          userId_organizationId: {
+            userId: "user-1",
+            organizationId: "org-1",
+          },
+        },
+      }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "ultraplan_controller_run_completed",
+        scopeType: "ultraplan",
+      }),
+      prismaMock,
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "ultraplan_updated",
+        scopeType: "ultraplan",
+      }),
+      prismaMock,
+    );
+  });
+
+  it("does not mutate controller runs when authorization fails", async () => {
+    const controllerRunService = new UltraplanControllerRunService();
+    prismaMock.ultraplanControllerRun.findUniqueOrThrow.mockResolvedValue(
+      makeControllerRun({ status: "running" }),
+    );
+    prismaMock.orgMember.findUniqueOrThrow.mockRejectedValue(new Error("not a member"));
+
+    await expect(
+      controllerRunService.completeRun("run-1", { summary: "Finished planning" }, "user", "user-2"),
+    ).rejects.toThrow("not a member");
+
+    expect(prismaMock.ultraplanControllerRun.update).not.toHaveBeenCalled();
+    expect(prismaMock.ultraplan.update).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
   });
 });
