@@ -267,10 +267,20 @@ export function SessionGroupDetailView({
           sessions?: unknown[];
         };
         const existingGroup = useEntityStore.getState().sessionGroups[fetchedGroup.id];
+        const fetchedUltraplan = (fetchedGroup as { ultraplan?: unknown }).ultraplan;
+        const existingUltraplan = (existingGroup as { ultraplan?: unknown } | undefined)
+          ?.ultraplan;
+        const mergedGroup = (
+          existingGroup && (fetchedUltraplan == null || fetchedUltraplan === undefined)
+            ? { ...existingGroup, ...fetchedGroup, ultraplan: existingUltraplan }
+            : existingGroup
+              ? { ...existingGroup, ...fetchedGroup }
+              : fetchedGroup
+        ) as SessionGroupEntity;
         upsert(
           "sessionGroups",
           fetchedGroup.id,
-          existingGroup ? { ...existingGroup, ...fetchedGroup } : fetchedGroup,
+          mergedGroup,
         );
         const fetchedSessions = fetchedGroup.sessions as
           | Array<Record<string, unknown> & { id: string }>
