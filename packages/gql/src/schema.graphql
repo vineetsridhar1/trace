@@ -55,9 +55,13 @@ enum HostingMode {
 }
 
 enum SessionConnectionState {
+  pending
   connected
   degraded
   disconnected
+  failed
+  stopping
+  stopped
 }
 
 enum DeliveryResult {
@@ -255,6 +259,20 @@ enum EventType {
   queued_message_removed
   queued_messages_cleared
   queued_messages_drained
+  agent_environment_created
+  agent_environment_updated
+  agent_environment_deleted
+  session_runtime_start_requested
+  session_runtime_provisioning
+  session_runtime_connecting
+  session_runtime_connected
+  session_runtime_start_failed
+  session_runtime_start_timed_out
+  session_runtime_stopping
+  session_runtime_stopped
+  session_runtime_deprovision_failed
+  session_runtime_disconnected
+  session_runtime_reconnected
 }
 
 # --- Core Types ---
@@ -266,6 +284,19 @@ type Organization {
   repos: [Repo!]!
   projects: [Project!]!
   channels: [Channel!]!
+  agentEnvironments: [AgentEnvironment!]!
+}
+
+type AgentEnvironment {
+  id: ID!
+  organizationId: ID!
+  name: String!
+  adapterType: String!
+  config: JSON!
+  enabled: Boolean!
+  isDefault: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
 }
 
 type OrgMember {
@@ -689,8 +720,22 @@ type SessionEndpoints {
 
 type SessionConnection {
   state: SessionConnectionState!
+  environmentId: String
+  adapterType: String
   runtimeInstanceId: String
   runtimeLabel: String
+  providerRuntimeId: String
+  providerRuntimeUrl: String
+  requestedAt: DateTime
+  provisioningAt: DateTime
+  connectingAt: DateTime
+  connectedAt: DateTime
+  failedAt: DateTime
+  timedOutAt: DateTime
+  stoppingAt: DateTime
+  stoppedAt: DateTime
+  disconnectedAt: DateTime
+  reconnectedAt: DateTime
   lastSeen: DateTime
   lastError: String
   lastDeliveryFailureAt: DateTime

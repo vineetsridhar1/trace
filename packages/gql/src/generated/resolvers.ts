@@ -67,6 +67,19 @@ export type AgentCostSummary = {
   dailyCosts: Array<AgentCostEntry>;
 };
 
+export type AgentEnvironment = {
+  __typename?: "AgentEnvironment";
+  adapterType: Scalars["String"]["output"];
+  config: Scalars["JSON"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  enabled: Scalars["Boolean"]["output"];
+  id: Scalars["ID"]["output"];
+  isDefault: Scalars["Boolean"]["output"];
+  name: Scalars["String"]["output"];
+  organizationId: Scalars["ID"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
 export type AgentExecutionLog = {
   __typename?: "AgentExecutionLog";
   agentId: Scalars["String"]["output"];
@@ -453,6 +466,9 @@ export type Event = {
 };
 
 export type EventType =
+  | "agent_environment_created"
+  | "agent_environment_deleted"
+  | "agent_environment_updated"
   | "bridge_access_request_resolved"
   | "bridge_access_requested"
   | "bridge_access_revoked"
@@ -492,6 +508,17 @@ export type EventType =
   | "session_pr_merged"
   | "session_pr_opened"
   | "session_resumed"
+  | "session_runtime_connected"
+  | "session_runtime_connecting"
+  | "session_runtime_deprovision_failed"
+  | "session_runtime_disconnected"
+  | "session_runtime_provisioning"
+  | "session_runtime_reconnected"
+  | "session_runtime_start_failed"
+  | "session_runtime_start_requested"
+  | "session_runtime_start_timed_out"
+  | "session_runtime_stopped"
+  | "session_runtime_stopping"
   | "session_started"
   | "session_terminated"
   | "ticket_assigned"
@@ -1153,6 +1180,7 @@ export type OrgMember = {
 
 export type Organization = {
   __typename?: "Organization";
+  agentEnvironments: Array<AgentEnvironment>;
   channels: Array<Channel>;
   id: Scalars["ID"]["output"];
   members: Array<OrgMember>;
@@ -1553,6 +1581,7 @@ export type Session = {
 
 export type SessionConnection = {
   __typename?: "SessionConnection";
+  adapterType?: Maybe<Scalars["String"]["output"]>;
   /**
    * When false, the frontend should not auto-retry the connection — only manual
    * Retry/Move can unblock. Used for non-transient failures like the home bridge
@@ -1561,16 +1590,36 @@ export type SessionConnection = {
   autoRetryable?: Maybe<Scalars["Boolean"]["output"]>;
   canMove: Scalars["Boolean"]["output"];
   canRetry: Scalars["Boolean"]["output"];
+  connectedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  connectingAt?: Maybe<Scalars["DateTime"]["output"]>;
+  disconnectedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  environmentId?: Maybe<Scalars["String"]["output"]>;
+  failedAt?: Maybe<Scalars["DateTime"]["output"]>;
   lastDeliveryFailureAt?: Maybe<Scalars["DateTime"]["output"]>;
   lastError?: Maybe<Scalars["String"]["output"]>;
   lastSeen?: Maybe<Scalars["DateTime"]["output"]>;
+  providerRuntimeId?: Maybe<Scalars["String"]["output"]>;
+  providerRuntimeUrl?: Maybe<Scalars["String"]["output"]>;
+  provisioningAt?: Maybe<Scalars["DateTime"]["output"]>;
+  reconnectedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  requestedAt?: Maybe<Scalars["DateTime"]["output"]>;
   retryCount: Scalars["Int"]["output"];
   runtimeInstanceId?: Maybe<Scalars["String"]["output"]>;
   runtimeLabel?: Maybe<Scalars["String"]["output"]>;
   state: SessionConnectionState;
+  stoppedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  stoppingAt?: Maybe<Scalars["DateTime"]["output"]>;
+  timedOutAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
-export type SessionConnectionState = "connected" | "degraded" | "disconnected";
+export type SessionConnectionState =
+  | "connected"
+  | "degraded"
+  | "disconnected"
+  | "failed"
+  | "pending"
+  | "stopped"
+  | "stopping";
 
 export type SessionEndpoints = {
   __typename?: "SessionEndpoints";
@@ -1943,6 +1992,7 @@ export type ResolversTypes = ResolversObject<{
   AgentBudgetStatus: ResolverTypeWrapper<AgentBudgetStatus>;
   AgentCostEntry: ResolverTypeWrapper<AgentCostEntry>;
   AgentCostSummary: ResolverTypeWrapper<AgentCostSummary>;
+  AgentEnvironment: ResolverTypeWrapper<AgentEnvironment>;
   AgentExecutionLog: ResolverTypeWrapper<AgentExecutionLog>;
   AgentExecutionLogConnection: ResolverTypeWrapper<AgentExecutionLogConnection>;
   AgentIdentity: ResolverTypeWrapper<AgentIdentity>;
@@ -2070,6 +2120,7 @@ export type ResolversParentTypes = ResolversObject<{
   AgentBudgetStatus: AgentBudgetStatus;
   AgentCostEntry: AgentCostEntry;
   AgentCostSummary: AgentCostSummary;
+  AgentEnvironment: AgentEnvironment;
   AgentExecutionLog: AgentExecutionLog;
   AgentExecutionLogConnection: AgentExecutionLogConnection;
   AgentIdentity: AgentIdentity;
@@ -2203,6 +2254,23 @@ export type AgentCostSummaryResolvers<
 > = ResolversObject<{
   budget?: Resolver<ResolversTypes["AgentBudgetStatus"], ParentType, ContextType>;
   dailyCosts?: Resolver<Array<ResolversTypes["AgentCostEntry"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type AgentEnvironmentResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["AgentEnvironment"] =
+    ResolversParentTypes["AgentEnvironment"],
+> = ResolversObject<{
+  adapterType?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  config?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  enabled?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  isDefault?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3239,6 +3307,7 @@ export type OrganizationResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["Organization"] = ResolversParentTypes["Organization"],
 > = ResolversObject<{
+  agentEnvironments?: Resolver<Array<ResolversTypes["AgentEnvironment"]>, ParentType, ContextType>;
   channels?: Resolver<Array<ResolversTypes["Channel"]>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   members?: Resolver<Array<ResolversTypes["OrgMember"]>, ParentType, ContextType>;
@@ -3646,16 +3715,30 @@ export type SessionConnectionResolvers<
   ParentType extends ResolversParentTypes["SessionConnection"] =
     ResolversParentTypes["SessionConnection"],
 > = ResolversObject<{
+  adapterType?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   autoRetryable?: Resolver<Maybe<ResolversTypes["Boolean"]>, ParentType, ContextType>;
   canMove?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   canRetry?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  connectedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  connectingAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  disconnectedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  environmentId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  failedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   lastDeliveryFailureAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   lastError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   lastSeen?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  providerRuntimeId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  providerRuntimeUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  provisioningAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  reconnectedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  requestedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   retryCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
   runtimeInstanceId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   runtimeLabel?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   state?: Resolver<ResolversTypes["SessionConnectionState"], ParentType, ContextType>;
+  stoppedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  stoppingAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  timedOutAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3904,6 +3987,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   AgentBudgetStatus?: AgentBudgetStatusResolvers<ContextType>;
   AgentCostEntry?: AgentCostEntryResolvers<ContextType>;
   AgentCostSummary?: AgentCostSummaryResolvers<ContextType>;
+  AgentEnvironment?: AgentEnvironmentResolvers<ContextType>;
   AgentExecutionLog?: AgentExecutionLogResolvers<ContextType>;
   AgentExecutionLogConnection?: AgentExecutionLogConnectionResolvers<ContextType>;
   AgentIdentity?: AgentIdentityResolvers<ContextType>;
