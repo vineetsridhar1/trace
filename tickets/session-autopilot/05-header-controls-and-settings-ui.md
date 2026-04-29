@@ -44,7 +44,8 @@ Move the product surface to the session-group UI and add the first Ultraplan sta
 - [x] Session group header shows an Ultraplan affordance.
 - [x] State chip reflects live Ultraplan status.
 - [x] User can start, pause, resume, cancel, and run-now from the group surface.
-- [x] Ordered tickets and their dependency/blocking state are visible.
+- [ ] Ordered tickets and their dependency/blocking state are visible. Ticket order and
+  `UltraplanTicket.status` render, but dependency edges/blocking reasons are not yet surfaced.
 - [x] Planned tickets render before any `TicketExecution` exists.
 - [x] Ticket worker sessions are linked from the panel.
 - [x] Controller run summaries render in an activity timeline.
