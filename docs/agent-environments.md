@@ -7,8 +7,8 @@ Trace should support org-configured agent runtimes instead of hardcoding a singl
 An org should be able to run agent sessions through:
 
 - a connected local desktop bridge
-- Trace-managed Fly infrastructure
-- a customer-managed webhook that starts compute in their own cloud or VPC
+- a generic provisioned runtime started by an org-owned launcher
+- a reference launcher for AWS, Fly, Kubernetes, or any other platform
 
 The product-level model should be:
 
@@ -20,7 +20,12 @@ Session asks for an Agent Environment
 -> service-layer events remain the source of truth
 ```
 
-Trace should not treat "cloud" as synonymous with Fly. Fly is only one adapter.
+Trace should not treat "cloud" as synonymous with Fly. Fly is one possible
+launcher implementation behind the generic provisioned runtime contract.
+
+More specifically, Trace should not treat Fly as a core adapter at all in the first version.
+Trace core should only know about local runtimes and provisioned runtimes. Fly can be
+implemented as a launcher that satisfies the generic provisioned runtime contract.
 
 ## Current Baseline
 
@@ -44,8 +49,8 @@ An `AgentEnvironment` is an org-scoped runtime configuration.
 Examples:
 
 - `My MacBook`
-- `Trace Fly`
 - `Company AWS VPC`
+- `Team Fly Launcher`
 - `Private Kubernetes`
 
 Each environment chooses an adapter type and stores adapter-specific configuration.
@@ -66,15 +71,16 @@ AgentEnvironment
 Initial adapter types:
 
 - `local`
-- `fly`
-- `webhook`
+- `provisioned`
 
-Future adapter types can include:
+Provisioned environments should use a signed lifecycle endpoint. The endpoint can start
+compute in AWS ECS, Fly, Kubernetes, Nomad, EC2, or any other system.
 
-- `aws_ecs`
-- `kubernetes`
-- `gcp_cloud_run`
-- `azure_container_apps`
+Future work can add optional reference launchers, but they should live outside Trace core:
+
+- `examples/launchers/aws-ecs`
+- `examples/launchers/fly`
+- `examples/launchers/kubernetes`
 
 ### Runtime Adapter
 
@@ -120,8 +126,7 @@ Web / Desktop
         -> SessionRouter
           -> RuntimeAdapterRegistry
             -> LocalRuntimeAdapter
-            -> FlyRuntimeAdapter
-            -> WebhookRuntimeAdapter
+            -> ProvisionedRuntimeAdapter
           -> RuntimeBridge
             -> local desktop bridge
             -> cloud container bridge
@@ -166,7 +171,7 @@ For the first implementation, we can continue using `connection` but should norm
 type SessionConnection = {
   state: "pending" | "connected" | "disconnected" | "failed" | "stopping" | "stopped";
   environmentId?: string;
-  adapterType?: "local" | "fly" | "webhook";
+  adapterType?: "local" | "provisioned";
   runtimeInstanceId?: string;
   runtimeLabel?: string;
   providerRuntimeId?: string;
@@ -216,8 +221,7 @@ Add schema types in `packages/gql/src/schema.graphql`.
 ```graphql
 enum AgentEnvironmentAdapterType {
   local
-  fly
-  webhook
+  provisioned
 }
 
 type AgentEnvironment {
@@ -352,7 +356,7 @@ Compatibility rule:
 Replace the current hosting-only adapter selection with an environment-aware adapter registry.
 
 ```ts
-type RuntimeAdapterType = "local" | "fly" | "webhook";
+type RuntimeAdapterType = "local" | "provisioned";
 
 interface RuntimeAdapter {
   type: RuntimeAdapterType;
@@ -467,58 +471,17 @@ User stops/deletes session
 
 Local never deprovisions the user's computer.
 
-## Fly Adapter
+## Provisioned Adapter
 
 ### Purpose
 
-Fly remains a first-party Trace-supported cloud runtime, but it becomes one adapter.
+Provisioned lets an org run agents in any infrastructure, including AWS inside a VPC,
+Fly, Kubernetes, Nomad, EC2, or an internal platform, without Trace having
+cloud-provider-specific code.
 
-### Environment Config
-
-```json
-{
-  "appName": "trace-agents-acme",
-  "region": "iad",
-  "machineSize": "shared-cpu-2x",
-  "image": "registry.example.com/trace-agent-runtime:latest",
-  "flyApiTokenSecretId": "secret_123",
-  "startupTimeoutSeconds": 120,
-  "idleTimeoutSeconds": 600,
-  "deprovisionPolicy": "after_idle"
-}
-```
-
-Secrets must be referenced by ID, not stored directly in config.
-
-### Start Flow
-
-```txt
-SessionService requests runtime
--> FlyRuntimeAdapter creates or starts Fly machine
--> adapter injects TRACE_SESSION_ID, TRACE_RUNTIME_TOKEN, TRACE_BRIDGE_URL
--> machine starts trace-agent-runtime
--> trace-agent-runtime connects to /bridge as hostingMode=cloud
--> Trace binds session to runtimeInstanceId
--> SessionRouter sends prepare/run/send over bridge
-```
-
-### Stop Flow
-
-```txt
-Session ends
--> send terminate/delete over bridge if connected
--> mark session runtime stopping
--> if policy is after_idle, schedule idle check
--> if no sessions remain, stop/destroy Fly machine
-```
-
-The current `CloudMachineService` can be kept initially, but it should be moved behind `FlyRuntimeAdapter` so Fly details do not leak into `SessionService`.
-
-## Webhook Adapter
-
-### Purpose
-
-Webhook lets a customer run agents in any infrastructure, including AWS inside their VPC, without Trace having cloud-provider-specific code.
+Trace core only calls a signed lifecycle endpoint. The endpoint is the launcher.
+The launcher owns provider-specific work such as `ecs.runTask`, Fly machine creation,
+Kubernetes Job creation, or any internal compute API.
 
 ### Environment Config
 
@@ -529,9 +492,15 @@ Webhook lets a customer run agents in any infrastructure, including AWS inside t
   "statusUrl": "https://infra.company.com/trace/session-status",
   "signingSecretId": "secret_456",
   "startupTimeoutSeconds": 180,
-  "deprovisionPolicy": "on_session_end"
+  "deprovisionPolicy": "on_session_end",
+  "launcherMetadata": {
+    "provider": "aws-ecs",
+    "environment": "prod-vpc"
+  }
 }
 ```
+
+Secrets must be referenced by ID, not stored directly in config.
 
 ### Start Request
 
@@ -568,7 +537,7 @@ Expected response:
 }
 ```
 
-The webhook adapter stores:
+The provisioned adapter stores:
 
 - `providerRuntimeId`
 - `runtimeLabel`
@@ -624,7 +593,7 @@ failed
 unknown
 ```
 
-### Webhook Security
+### Lifecycle Security
 
 Requests must be signed.
 
@@ -758,7 +727,7 @@ The bridge should be the delivery channel for:
 - pause/resume
 - tool session continuation
 
-The provider adapter should not receive AI messages.
+The provisioned adapter should not receive AI messages.
 
 ## Deprovisioning
 
@@ -777,19 +746,9 @@ Local cleanup:
 
 Local does not deprovision the host machine.
 
-### Fly
+### Provisioned
 
-Fly cleanup:
-
-- send `terminate` or `delete` over the bridge if connected
-- mark runtime stopping
-- call Fly machine stop/destroy logic
-- support idle timeout if machines are shared
-- mark stopped/deprovisioned when confirmed
-
-### Webhook
-
-Webhook cleanup:
+Provisioned cleanup:
 
 - send `terminate` over bridge if connected
 - call `stopUrl` with `sessionId` and `providerRuntimeId`
@@ -817,8 +776,8 @@ Policies:
 Initial recommendation:
 
 - local: `manual`
-- fly: `after_idle`
-- webhook: `on_session_end`
+- provisioned: `on_session_end`
+- provisioned with a shared launcher pool: `after_idle`
 
 ## Events
 
@@ -843,7 +802,7 @@ session.runtime_disconnected
 session.runtime_reconnected
 ```
 
-Keep provider details in event payload metadata. Do not create product-level events like `fly_machine_created`.
+Keep provider details in event payload metadata. Do not create product-level events like `fly_machine_created` or `ecs_task_started`.
 
 ## UI
 
@@ -875,21 +834,7 @@ Fields:
 
 The UI should show connected local bridges and registered repos.
 
-### Fly
-
-Fields:
-
-- name
-- app name
-- region
-- machine size
-- image
-- API token secret
-- startup timeout
-- idle timeout
-- deprovision policy
-
-### Webhook
+### Provisioned
 
 Fields:
 
@@ -900,6 +845,7 @@ Fields:
 - signing secret
 - startup timeout
 - deprovision policy
+- optional launcher metadata for display/debugging
 
 Session creation UI should show:
 
@@ -950,7 +896,8 @@ The service layer resolves secrets only when invoking adapters.
 ### Phase 2: Adapter Registry
 
 - Extract current local adapter into `LocalRuntimeAdapter`.
-- Move current Fly/cloud-machine logic behind `FlyRuntimeAdapter`.
+- Add `ProvisionedRuntimeAdapter` for signed lifecycle endpoints.
+- Move or remove current Fly/cloud-machine logic so Fly is not a core adapter path.
 - Add `RuntimeAdapterRegistry`.
 - Update `SessionRouter` to dispatch by environment adapter type.
 
@@ -961,9 +908,9 @@ The service layer resolves secrets only when invoking adapters.
 - Keep existing `hosting` behavior as compatibility fallback.
 - Persist environment/runtime metadata in `connection`.
 
-### Phase 4: Webhook Adapter
+### Phase 4: Provisioned Adapter
 
-- Implement webhook config validation.
+- Implement provisioned config validation.
 - Implement signed start/stop/status calls.
 - Store provider runtime ID.
 - Wait for cloud bridge before delivering commands.
@@ -991,7 +938,7 @@ The service layer resolves secrets only when invoking adapters.
 
 ### Phase 8: Compatibility Cleanup
 
-- Migrate existing Fly/cloud settings to default `fly` environments.
+- Migrate existing Fly/cloud settings to `provisioned` environments, or move Fly support into a reference launcher.
 - Migrate existing local runtime selection into `local` environments where useful.
 - Deprecate direct `hosting` usage in new code.
 - Remove Fly assumptions from `SessionService` and `SessionRouter`.
@@ -1006,8 +953,8 @@ Add tests for:
 - one default environment per org
 - adapter registry lookup
 - local adapter bridge selection
-- webhook signature generation
-- webhook status mapping
+- provisioned signature generation
+- provisioned status mapping
 - startup timeout behavior
 - deprovision retry behavior
 
@@ -1027,18 +974,18 @@ Add tests for:
 Add tests for:
 
 - local session using connected desktop runtime
-- webhook start returning provider runtime ID
-- cloud bridge connecting after webhook start
-- stop session calling webhook stop
-- failed webhook start marking runtime failed
+- provisioned start returning provider runtime ID
+- cloud bridge connecting after provisioned start
+- stop session calling provisioned stop
+- failed provisioned start marking runtime failed
 - missing bridge connection marking runtime timed out
 
 ## Open Decisions
 
 - Whether to add `SessionRuntime` now or keep normalized runtime state in `Session.connection` for v1.
 - Whether local environments should be explicit records per bridge or a generic "any accessible local bridge" environment.
-- Whether Fly should keep shared warm machines or move to one machine per session.
-- Whether webhook status polling is required in v1 or only used for cleanup/recovery.
+- Whether Fly support should be deleted from core immediately or kept temporarily as a compatibility shim while a reference launcher is built.
+- Whether provisioned status polling is required in v1 or only used for cleanup/recovery.
 - Whether runtime tokens should be JWTs or opaque DB-backed tokens.
 
 ## Recommended V1 Scope
@@ -1046,19 +993,19 @@ Add tests for:
 Build the smallest version that proves the architecture:
 
 - `AgentEnvironment` model and service
-- local, fly, webhook adapter types
+- local and provisioned adapter types
 - `environmentId` on session creation
 - default environment per org
-- webhook start/stop/status with signed requests
+- provisioned start/stop/status with signed requests
 - cloud runtime bridge token auth
 - startup timeout
 - adapter-owned deprovisioning
 - basic org settings UI
 
-Do not add AWS-specific first-party support yet. A company AWS VPC setup should use the webhook adapter first:
+Do not add AWS-specific or Fly-specific first-party support in Trace core. A company AWS VPC setup should use the provisioned adapter first:
 
 ```txt
-Trace WebhookRuntimeAdapter
+Trace ProvisionedRuntimeAdapter
 -> company launcher service
 -> ECS RunTask inside company VPC
 -> trace-agent-runtime connects back to Trace bridge
