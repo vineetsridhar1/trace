@@ -9,6 +9,7 @@ Expose Ultraplan, planned tickets, controller runs, ticket executions, session r
 - Add GraphQL enums mirroring the new Prisma enums.
 - Add `Ultraplan` GraphQL type.
 - Add `UltraplanTicket` GraphQL type.
+- Add `UltraplanTicketStatus` GraphQL enum.
 - Add `UltraplanControllerRun` GraphQL type.
 - Add `TicketExecution` GraphQL type.
 - Add `Session.role`.
@@ -38,6 +39,7 @@ Expose Ultraplan, planned tickets, controller runs, ticket executions, session r
 
 - [ ] GraphQL schema contains all Ultraplan, ControllerRun, and TicketExecution types and enums.
 - [ ] GraphQL schema exposes planned tickets independently from executions.
+- [ ] `UltraplanTicket.status` is exposed as `UltraplanTicketStatus`.
 - [ ] GraphQL schema includes `ScopeType.ultraplan`.
 - [ ] Generated client and resolver types compile.
 - [ ] Session group detail can hydrate the active Ultraplan.

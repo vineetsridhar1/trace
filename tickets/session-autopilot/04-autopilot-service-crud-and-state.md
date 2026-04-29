@@ -27,7 +27,7 @@ Add `ultraplanService` as the service-layer owner for starting, pausing, resumin
 - Emit Ultraplan and controller-run lifecycle events through the event service.
 - Enforce service-layer authorization for read/write actions on the target session group.
 - Validate requested controller provider/model/runtime policy before creating a run.
-- Mint or request scoped runtime action credentials for controller-run launches.
+- Leave scoped runtime action token minting, env injection, and wrapper delivery to ticket 17.
 - Add GraphQL resolvers that delegate to the services.
 
 ## Dependencies
@@ -45,7 +45,7 @@ Add `ultraplanService` as the service-layer owner for starting, pausing, resumin
 - [ ] Pause, resume, cancel, and run-now are idempotent enough for repeated UI calls.
 - [ ] Unauthorized callers cannot read or mutate Ultraplan or controller-run state.
 - [ ] Invalid or unavailable controller config is rejected before persistence.
-- [ ] Controller runs receive scoped runtime action environment only after authorization passes.
+- [ ] Controller-run records expose the scope data ticket 17 needs to mint runtime action credentials later.
 - [ ] Emitted events use `ScopeType.ultraplan`.
 - [ ] All durable state changes emit events.
 
@@ -53,6 +53,7 @@ Add `ultraplanService` as the service-layer owner for starting, pausing, resumin
 
 - Keep this ticket limited to service CRUD, initial controller-run creation, and core state transitions.
 - Ordered ticket generation and worker launch can be added in later tickets.
+- Runtime action credentials and wrapper availability belong to ticket 17; this ticket should not depend on that infrastructure.
 - The service layer owns state transitions; GraphQL resolvers should parse input and delegate.
 - Every Ultraplan event should include snapshots sufficient for client upserts.
 

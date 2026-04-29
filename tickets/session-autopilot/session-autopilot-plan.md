@@ -432,6 +432,20 @@ enum TicketExecutionStatus {
 }
 ```
 
+### UltraplanTicketStatus
+
+```prisma
+enum UltraplanTicketStatus {
+  planned
+  ready
+  running
+  blocked
+  completed
+  skipped
+  cancelled
+}
+```
+
 ### IntegrationStatus
 
 ```prisma
@@ -480,7 +494,7 @@ model UltraplanTicket {
   ultraplanId    String
   ticketId       String
   position       Int
-  status         String   @default("planned")
+  status         UltraplanTicketStatus @default(planned)
   generatedByRunId String?
   rationale      String?
   metadata       Json?
@@ -605,6 +619,16 @@ enum ControllerRunStatus {
   cancelled
 }
 
+enum UltraplanTicketStatus {
+  planned
+  ready
+  running
+  blocked
+  completed
+  skipped
+  cancelled
+}
+
 type Ultraplan {
   id: ID!
   sessionGroupId: ID!
@@ -630,7 +654,7 @@ type UltraplanTicket {
   ultraplanId: ID!
   ticket: Ticket!
   position: Int!
-  status: String!
+  status: UltraplanTicketStatus!
   generatedByRun: UltraplanControllerRun
   rationale: String
   metadata: JSON
@@ -821,6 +845,9 @@ Initial tool surface:
 - `ticket.updateTestPlan`
 - `ticket.addDependency`
 - `ticket.reorder`
+- `ultraplan.addPlannedTicket`
+- `ultraplan.updatePlannedTicket`
+- `ultraplan.reorderPlannedTickets`
 - `ultraplan.createTicketExecution`
 - `ultraplan.startWorker`
 - `ultraplan.sendWorkerMessage`
@@ -1024,6 +1051,7 @@ Add:
 - `UltraplanStatus`
 - `ControllerRunStatus`
 - `TicketExecutionStatus`
+- `UltraplanTicketStatus`
 - `IntegrationStatus`
 - `Ultraplan`
 - `UltraplanTicket`

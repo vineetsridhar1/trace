@@ -77,7 +77,7 @@ M1 — Product Surface and Service Layer
 └─ 06 Client Store and Event Handling  (needs 02, 04)
 
 M2 — Worker Branches and Review Context
-07 Branch and Diff Runtime Commands
+07 Branch and Diff Runtime Commands  (needs 01, 04)
 ├─ 08 Controller Run Context Packet Builder  (needs 04, 07)
 ├─ 17 Runtime Action Wrapper and Auth Plumbing  (needs 04)
 └─ 09 Controller Tool and Summary Contract  (needs 08, 17)
@@ -98,11 +98,35 @@ Post-V1
 
 ## Implementation Parallelization Notes
 
-- `07 Branch and Diff Runtime Commands` can run in parallel with M1 once the high-level contracts are settled.
+- Diff-only parts of `07 Branch and Diff Runtime Commands` can start once contracts are settled, but service-owned integration commands should wait for ticket 04.
 - `05 Group Controls and Ultraplan UI` and `06 Client Store and Event Handling` can run in parallel after ticket 04 lands.
 - `11 Worker Execution Actions` and `12 Human Gates Server Flow` can run in parallel after ticket 10 lands.
 - Ticket 13 should wait for the server-side gate payload in ticket 12.
 - Ticket 15 should wait until branch integration behavior and gate UX are both defined.
+
+## Plan Coverage Matrix
+
+Every actionable requirement in [session-autopilot-plan.md](session-autopilot-plan.md) has an owning ticket. If the plan changes, update this matrix and the relevant ticket in the same change.
+
+| Plan area | Owning tickets |
+| --- | --- |
+| Summary, goals, non-goals, Trace-native service/event boundaries | 01, 02, 04, 10, 14 |
+| Session group as Ultraplan workspace and final integration target | 01, 04, 05, 07, 11, 15 |
+| Episodic controller runs, fresh controller-run sessions, summaries, and transcript links | 01, 02, 03, 04, 05, 08, 09, 10 |
+| Controller runtime actions, scoped executable auth, and controller skill/instructions | 04, 09, 10, 14, 17 |
+| Worker sessions, ticket branches/worktrees, sequential v1 execution | 01, 03, 07, 10, 11, 14 |
+| Tickets as planning primitives, acceptance criteria, test plans, dependencies, and `UltraplanTicket` membership | 01, 02, 06, 08, 09, 11 |
+| Ticket execution runtime state and review/integration lifecycle | 01, 02, 06, 08, 10, 11, 12, 14, 15 |
+| Workspace identity separation between group integration workspace and ticket execution workspaces | 01, 04, 07, 11, 14 |
+| Inbox gates and human handoff payloads | 01, 02, 06, 12, 13, 14, 15 |
+| GraphQL contract and generated client/server types | 02 |
+| Event scope, event types, event snapshots, and Zustand/client hydration | 01, 02, 06, 10, 12, 15 |
+| Wakeup rules, dedupe, serialization, pause/resume, and cooldown guardrails | 10, 14 |
+| Branch diff, merge/rebase/cherry-pick integration, conflict reporting | 07, 12, 15 |
+| Session-group UI, Ultraplan panel, controller timeline, worker metadata | 03, 05, 06, 13 |
+| Runtime/bridge updates for controller env, worker worktrees, diffs, and integration | 07, 11, 17 |
+| Rollout and testing strategy | 01 through 17 |
+| Post-v1 playbooks, debugging, native tool-calling revisit, mobile/future DAG surfaces | 16 |
 
 ## Scope Guardrails
 

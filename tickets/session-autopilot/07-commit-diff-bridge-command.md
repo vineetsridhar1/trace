@@ -25,7 +25,8 @@ Add runtime/bridge support for reading worker branch diffs and performing servic
 
 ## Dependencies
 
-- None
+- [01 — Database Schema and Event Types](01-database-schema-and-event-types.md)
+- [04 — Ultraplan Service CRUD and Controller Runs](04-autopilot-service-crud-and-state.md)
 
 ## Completion requirements
 
@@ -40,6 +41,7 @@ Add runtime/bridge support for reading worker branch diffs and performing servic
 
 - Keep diff commands read-only.
 - Integration commands are mutating but must remain service-owned and event-backed.
+- Diff-only bridge plumbing can be prototyped earlier, but merge/rebase/cherry-pick behavior should land after Ultraplan service ownership exists.
 - Do not let controller-run sessions run privileged git operations directly.
 - Controller-run context should include diffs only when useful, mainly worker review or integration decisions.
 

@@ -11,12 +11,13 @@ Add the durable database shape for Ultraplan: session roles, the `Ultraplan` ent
   - `UltraplanStatus`
   - `ControllerRunStatus`
   - `TicketExecutionStatus`
+  - `UltraplanTicketStatus`
   - `IntegrationStatus`
 - Add `role SessionRole @default(primary)` to `Session`.
 - Add `ScopeType.ultraplan` for canonical Ultraplan activity/timeline events.
 - Add `Ultraplan` with a unique `sessionGroupId` association for v1.
 - Add explicit group integration workspace fields on `Ultraplan`.
-- Add `UltraplanTicket` with `ultraplanId`, `ticketId`, `position`, status, generated metadata, and unique plan membership.
+- Add `UltraplanTicket` with `ultraplanId`, `ticketId`, `position`, typed status, generated metadata, and unique plan membership.
 - Add `UltraplanControllerRun` linked to organization, Ultraplan, session group, trigger event, and optional controller-run session.
 - Add `TicketExecution` linked to organization, Ultraplan, ticket, session group, and optional worker session.
 - Add ticket planning fields:
@@ -44,6 +45,7 @@ Add the durable database shape for Ultraplan: session roles, the `Ultraplan` ent
 - [ ] `Ultraplan` is linked to a `SessionGroup` with v1 uniqueness enforced.
 - [ ] `Ultraplan` distinguishes integration branch/workdir from worker execution branch/workdir.
 - [ ] `UltraplanTicket` links planned tickets before execution exists.
+- [ ] `UltraplanTicket.status` uses `UltraplanTicketStatus`, not a stringly workflow field.
 - [ ] `UltraplanControllerRun` can link to a fresh controller-run session and structured summary.
 - [ ] `TicketExecution` can represent a ticket branch and worker session.
 - [ ] Ticket dependencies, acceptance criteria, and test plans are durable.
