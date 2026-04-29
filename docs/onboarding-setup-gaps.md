@@ -78,26 +78,30 @@ Success criteria:
 
 Trace installs `gh` in the cloud/container runtime image, but there is no product-level check for GitHub CLI authentication. Local desktop agents may also depend on the user's local `gh` auth.
 
-Add a GitHub CLI setup capability:
+This is not a general login mechanism. It is an agent runtime capability. If agents are expected to create pull requests, inspect PRs, check CI, comment, or poll GitHub state from the workspace, the runtime where the agent executes must have working GitHub CLI access.
+
+Add a GitHub CLI setup capability for every runtime that can execute coding agents:
 
 - detect whether `gh` is installed
 - run `gh auth status --hostname github.com`
 - show the authenticated GitHub login when ready
-- provide a guided terminal fallback for `gh auth login` on local desktop runtimes
+- provide a guided terminal flow for `gh auth login` on local desktop runtimes
+- define a non-interactive credential provisioning path for cloud/container runtimes
 - re-check status after the terminal exits or the window regains focus
 
 Success criteria:
 
 - A user can see whether `gh` is ready before asking agents to create PRs, inspect CI, or use GitHub issue/PR commands.
 - Missing CLI auth should produce a setup action, not a late agent failure.
+- Agent PR creation and GitHub polling workflows should only be enabled on runtimes with verified `gh` access.
 
 Product guidance:
 
-- Do not make an interactive terminal the primary GitHub login path.
-- Use GitHub OAuth/device flow for Trace's first-party GitHub identity.
-- Use `gh auth status` as a readiness check for runtime shell workflows.
-- Offer `gh auth login` in a terminal only when the user needs local shell-level GitHub access and the current desktop runtime is missing it.
-- Avoid putting browser-only or cloud-only users through a local terminal flow they cannot complete.
+- Do not present `gh auth` as Trace account login.
+- Present `gh auth` as enabling agent GitHub operations on a specific runtime.
+- Use `gh auth status` as the source of truth for whether the runtime can perform CLI-backed GitHub work.
+- Use an interactive terminal for local desktop runtimes because that is the native way for users to authorize local `gh`.
+- Avoid interactive terminal auth for cloud/container runtimes; provision credentials into those runtimes explicitly.
 
 ### 5. GitHub API identity and GitHub CLI identity are separate
 
@@ -105,8 +109,8 @@ Trace currently uses a stored GitHub API token for webhook registration. That do
 
 Make the distinction explicit in settings and onboarding:
 
-- GitHub app identity: server-side GitHub API operations such as webhook registration.
-- GitHub CLI auth: shell-level operations used by local/cloud coding agents.
+- GitHub CLI auth: required runtime capability for agent PR creation, CI inspection, GitHub comments, and CLI-backed polling.
+- GitHub app identity: server-side GitHub API operations such as webhook registration and possible credential provisioning.
 - Manual GitHub API token: fallback path if GitHub app identity is unavailable.
 
 Success criteria:
@@ -116,9 +120,10 @@ Success criteria:
 
 Recommended direction:
 
-- Prefer a GitHub OAuth/device-flow identity over asking users to paste a personal access token.
-- Store the OAuth token securely and use it for server-side GitHub API calls.
-- Keep `gh auth` as a separate local/runtime readiness check for agent shell workflows.
+- Treat `gh` readiness as the hard requirement for agent GitHub operations.
+- Prefer a GitHub OAuth/device-flow identity over asking users to paste a personal access token for Trace-managed GitHub API access.
+- Store the OAuth token securely and use it for server-side GitHub API calls or controlled runtime credential provisioning.
+- Keep `gh auth` as a separate runtime readiness check for agent shell workflows.
 - Keep manual API token entry only as a fallback or admin/debug escape hatch.
 
 Why `gh auth` is not enough:
@@ -129,6 +134,12 @@ Why `gh auth` is not enough:
 - Cloud/container runtimes may have their own filesystem and auth state.
 - Product-owned API calls need a stable token available to the Trace service layer.
 - An interactive terminal flow does not map cleanly to browser-only setup or server-side background work.
+
+Why `gh` access is still required:
+
+- Agents operate through shell tools in the checked-out workspace.
+- PR creation, PR comments, CI inspection, and repo metadata workflows should use the same CLI surface agents can reason about and users can reproduce.
+- A server-side GitHub token can support product features, but it does not automatically make `gh` work inside the runtime where the agent is executing.
 
 Why OAuth is better than manual API keys:
 
