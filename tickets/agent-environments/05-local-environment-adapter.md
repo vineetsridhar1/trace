@@ -39,11 +39,11 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] Existing local sessions still work.
-- [ ] Local environments can select an explicit connected bridge.
-- [ ] Local environments can fall back to an accessible bridge when configured that way.
-- [ ] Local sessions do not try to provision or deprovision the user's machine.
-- [ ] Local stop/delete still sends bridge commands for process/worktree cleanup.
+- [x] Existing local sessions still work.
+- [x] Local environments can select an explicit connected bridge.
+- [x] Local environments can fall back to an accessible bridge when configured that way.
+- [x] Local sessions do not try to provision or deprovision the user's machine.
+- [x] Local stop/delete still sends bridge commands for process/worktree cleanup.
 
 ## Implementation notes
 

@@ -51,8 +51,20 @@ class LocalRuntimeAdapter implements RuntimeAdapter {
   async validateConfig(config: Record<string, unknown>): Promise<void> {
     assertCompatibilityConstraints(config);
     const runtimeInstanceId = config.runtimeInstanceId;
-    if (runtimeInstanceId !== undefined && typeof runtimeInstanceId !== "string") {
-      throw new Error("Local agent environment runtimeInstanceId must be a string");
+    if (
+      runtimeInstanceId !== undefined &&
+      (typeof runtimeInstanceId !== "string" || !runtimeInstanceId.trim())
+    ) {
+      throw new Error("Local agent environment runtimeInstanceId must be a non-empty string");
+    }
+    const runtimeSelection = config.runtimeSelection;
+    if (runtimeSelection !== undefined && runtimeSelection !== "any_accessible_local") {
+      throw new Error("Local agent environment runtimeSelection must be any_accessible_local");
+    }
+    if (runtimeInstanceId !== undefined && runtimeSelection !== undefined) {
+      throw new Error(
+        "Local agent environment config cannot set both runtimeInstanceId and runtimeSelection",
+      );
     }
   }
 
