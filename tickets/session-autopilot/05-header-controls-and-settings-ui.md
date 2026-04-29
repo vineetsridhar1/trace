@@ -2,7 +2,7 @@
 
 ## Summary
 
-Move the product surface from a single session header to the session-group UI and add the first Ultraplan status/control panel.
+Move the product surface to the session-group UI and add the first Ultraplan status/control panel, including the controller run summary timeline.
 
 ## What needs to happen
 
@@ -11,13 +11,19 @@ Move the product surface from a single session header to the session-group UI an
 - Build a compact group-level panel showing:
   - plan summary
   - current status
-  - controller session state
   - ordered ticket plan
   - ticket executions
   - worker sessions
   - branch names
   - active human gate
   - final branch/PR link
+  - controller run summaries
+- Add controller activity timeline rows with:
+  - summary title
+  - short summary
+  - actions/decisions when available
+  - timestamp/status
+  - link to full controller run chat
 - Add controls for:
   - start
   - pause
@@ -30,7 +36,7 @@ Move the product surface from a single session header to the session-group UI an
 ## Dependencies
 
 - [02 — GraphQL Schema and Client Types](02-graphql-schema-and-client-types.md)
-- [04 — Ultraplan Service CRUD and State](04-autopilot-service-crud-and-state.md)
+- [04 — Ultraplan Service CRUD and Controller Runs](04-autopilot-service-crud-and-state.md)
 
 ## Completion requirements
 
@@ -39,7 +45,9 @@ Move the product surface from a single session header to the session-group UI an
 - [ ] User can start, pause, resume, cancel, and run-now from the group surface.
 - [ ] Ordered tickets and their dependency/blocking state are visible.
 - [ ] Ticket worker sessions are linked from the panel.
-- [ ] Controller session is not shown in normal tabs, but can be inspected from an explicit debug entry if available.
+- [ ] Controller run summaries render in an activity timeline.
+- [ ] User can open the full chat for a controller run from the timeline.
+- [ ] Controller-run sessions are not shown in normal tabs.
 - [ ] UI survives missing Ultraplan state cleanly.
 
 ## Implementation notes
@@ -54,4 +62,5 @@ Move the product surface from a single session header to the session-group UI an
 2. Start Ultraplan and verify event-driven status updates.
 3. Pause/resume/run-now/cancel and verify the chip and panel update.
 4. Verify the ordered plan shows the active ticket and blocked future tickets.
-5. Verify the UI does not expose controller sessions in normal navigation.
+5. Verify controller run summaries appear and link to full chats.
+6. Verify the UI does not expose controller-run sessions in normal navigation.

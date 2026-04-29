@@ -2,7 +2,7 @@
 
 ## Summary
 
-Let the controller create, start, and continue ticket worker sessions through service-backed actions. V1 starts only one worker execution at a time.
+Let controller runs create, start, and continue ticket worker sessions through service-backed actions. V1 starts only one worker execution at a time.
 
 ## What needs to happen
 
@@ -26,13 +26,13 @@ Let the controller create, start, and continue ticket worker sessions through se
 
 ## Completion requirements
 
-- [ ] Controller can create a TicketExecution for a ticket.
-- [ ] Controller can start a worker session for that execution.
+- [ ] Controller run can create a TicketExecution for a ticket.
+- [ ] Controller run can start a worker session for that execution.
 - [ ] Worker session has `role = ticket_worker`.
 - [ ] Worker session uses a ticket-specific branch/worktree.
 - [ ] Scheduler starts only the next dependency-ready ticket.
 - [ ] V1 blocks parallel worker launches for one Ultraplan.
-- [ ] Controller can send a bounded follow-up to a worker.
+- [ ] Controller run can send a bounded follow-up to a worker.
 - [ ] Failures surface as execution/Ultraplan errors, not silent drops.
 
 ## Implementation notes

@@ -15,7 +15,8 @@ Complete the loop by integrating approved ticket branches into the group branch,
 - Surface the final group branch/PR as the user QA target.
 - Emit metrics for:
   - Ultraplan created/completed/failed/cancelled
-  - controller wakeups/runs
+  - controller runs created/started/completed/failed
+  - controller run summary validation failures
   - worker sessions launched
   - next-ticket scheduling decisions
   - worker done/failed/stopped outcomes
@@ -29,8 +30,8 @@ Complete the loop by integrating approved ticket branches into the group branch,
   - worker execution duration
   - integration duration
 - Surface error states clearly in the session group UI.
-- Add lightweight timeline/history entries for Ultraplan actions.
-- Verify degraded behavior when runtime, bridge, permission, or integration assumptions fail.
+- Add lightweight timeline/history entries for Ultraplan actions, primarily from controller run summaries.
+- Verify degraded behavior when runtime, bridge, permission, summary parsing, or integration assumptions fail.
 
 ## Dependencies
 
@@ -46,21 +47,21 @@ Complete the loop by integrating approved ticket branches into the group branch,
 - [ ] Approved ticket branches can integrate into the group branch.
 - [ ] Conflict results create gates instead of corrupting state.
 - [ ] Final group branch is visible as the QA/merge target.
+- [ ] Controller run metrics distinguish created/started/completed/failed.
 - [ ] Metrics can distinguish sequential v1 scheduling from future DAG scheduling.
-- [ ] Metrics exist for major Ultraplan lifecycle events.
 - [ ] User-visible error states are understandable and recoverable.
-- [ ] Permission/runtime/integration failures degrade into clear `failed`, `blocked`, or `needs_human` states.
+- [ ] Permission/runtime/summary/integration failures degrade into clear `failed`, `blocked`, or `needs_human` states.
 
 ## Implementation notes
 
 - This is where service-owned git mutation becomes product-visible.
 - Do not merge into the repository default branch.
-- Keep timeline/history lightweight; event-driven rendering is enough.
+- Keep timeline/history lightweight; controller-run summary events should carry most of the product-readable activity.
 
 ## How to test
 
 1. Integrate a clean ticket branch into the group branch.
 2. Force an integration conflict and verify a conflict gate.
 3. Verify the final group branch contains integrated work from multiple tickets.
-4. Verify metrics emit for controller, worker, gate, and integration events.
-5. Verify UI error states for bridge/runtime/integration failures.
+4. Verify metrics emit for controller runs, workers, gates, and integration events.
+5. Verify UI error states for bridge/runtime/summary/integration failures.

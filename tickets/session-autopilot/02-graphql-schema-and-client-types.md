@@ -2,26 +2,29 @@
 
 ## Summary
 
-Expose Ultraplan, ticket executions, session roles, and gate event types through the single GraphQL schema source of truth.
+Expose Ultraplan, controller runs, ticket executions, session roles, dependency fields, and gate event types through the single GraphQL schema source of truth.
 
 ## What needs to happen
 
 - Add GraphQL enums mirroring the new Prisma enums.
 - Add `Ultraplan` GraphQL type.
+- Add `UltraplanControllerRun` GraphQL type.
 - Add `TicketExecution` GraphQL type.
 - Add `Session.role`.
-- Add ticket acceptance criteria and dependency fields.
+- Add ticket acceptance criteria, test plan, and dependency fields.
 - Add a `SessionGroup.ultraplan` field for the active group plan.
+- Add fields for controller run summaries and linked controller-run sessions.
 - Add queries as needed:
   - `ultraplan(id: ID!)`
   - `ultraplanForSessionGroup(sessionGroupId: ID!)`
+  - `ultraplanControllerRun(id: ID!)`
 - Add mutations:
   - `startUltraplan`
   - `pauseUltraplan`
   - `resumeUltraplan`
   - `runUltraplanControllerNow`
   - `cancelUltraplan`
-- Extend GraphQL `EventType` with Ultraplan events.
+- Extend GraphQL `EventType` with Ultraplan and controller-run events.
 - Extend GraphQL `InboxItemType` with Ultraplan gate values.
 - Run `pnpm gql:codegen`.
 
@@ -31,11 +34,11 @@ Expose Ultraplan, ticket executions, session roles, and gate event types through
 
 ## Completion requirements
 
-- [ ] GraphQL schema contains all Ultraplan types and enums.
+- [ ] GraphQL schema contains all Ultraplan, ControllerRun, and TicketExecution types and enums.
 - [ ] Generated client and resolver types compile.
 - [ ] Session group detail can hydrate the active Ultraplan.
+- [ ] The schema can represent controller run summaries and full-chat links.
 - [ ] The schema can represent a v1 ordered plan and future DAG dependencies.
-- [ ] The schema shape supports the group UI and inbox UI without local-only types.
 - [ ] No duplicate type definitions are added outside `schema.graphql`.
 
 ## Implementation notes

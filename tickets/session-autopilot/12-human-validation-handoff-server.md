@@ -14,6 +14,7 @@ Create the server-side path for Ultraplan human gates: plan approval, ticket val
   - `ultraplan_final_review`
 - Define gate payloads with:
   - Ultraplan id
+  - controller run id, when applicable
   - session group id
   - ticket id, when applicable
   - ticket execution id, when applicable
@@ -23,8 +24,10 @@ Create the server-side path for Ultraplan human gates: plan approval, ticket val
   - summary
   - QA checklist
   - recommended action
+  - links to controller run chat and worker session
 - Update Ultraplan or TicketExecution state to `needs_human`.
 - Define what happens when each gate type is resolved or dismissed.
+- Gate resolution should create a fresh controller run when orchestration needs to continue.
 - Emit human gate events.
 
 ## Dependencies
@@ -33,10 +36,10 @@ Create the server-side path for Ultraplan human gates: plan approval, ticket val
 
 ## Completion requirements
 
-- [ ] Controller can request a human gate through the service.
+- [ ] Controller run can request a human gate through the service.
 - [ ] Duplicate active gates are not created for the same execution/reason.
 - [ ] Ultraplan or execution state transitions to `needs_human`.
-- [ ] Inbox resolution/dismissal wakes the controller.
+- [ ] Inbox resolution/dismissal can trigger a fresh controller run.
 - [ ] Gate payloads are complete enough for the web inbox UI.
 
 ## Implementation notes
@@ -49,6 +52,6 @@ Create the server-side path for Ultraplan human gates: plan approval, ticket val
 
 1. Request a plan approval gate and verify payload/state.
 2. Request a ticket validation gate and verify dedupe.
-3. Resolve a gate and verify controller wakeup.
+3. Resolve a gate and verify controller-run creation when needed.
 4. Dismiss a gate and verify pause/cooldown hooks are possible.
 5. Verify events hydrate client state without refetches.

@@ -18,6 +18,7 @@ Render Ultraplan human gates in the web inbox with clear context and explicit ac
   - QA checklist or decision checklist
   - linked ticket
   - linked worker session
+  - linked controller run summary/chat
   - branch/checkpoint metadata
   - open session/group actions
   - open PR/diff action when available
@@ -33,7 +34,7 @@ Render Ultraplan human gates in the web inbox with clear context and explicit ac
 
 - [ ] Ultraplan gate items render with dedicated bodies.
 - [ ] Checklist items display clearly.
-- [ ] Session, group, ticket, and PR actions work when present.
+- [ ] Session, group, ticket, controller-run, and PR actions work when present.
 - [ ] Gate resolution actions call the appropriate mutation/service path.
 - [ ] The row does not fall through to plan/question/suggestion rendering.
 
@@ -47,5 +48,6 @@ Render Ultraplan human gates in the web inbox with clear context and explicit ac
 
 1. Render each Ultraplan inbox item type.
 2. Verify missing optional links degrade cleanly.
-3. Resolve an approval gate and verify UI state updates from events.
-4. Request changes from a validation gate and verify payload is preserved.
+3. Open the linked controller-run chat from a gate.
+4. Resolve an approval gate and verify UI state updates from events.
+5. Request changes from a validation gate and verify payload is preserved.

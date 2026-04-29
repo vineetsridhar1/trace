@@ -2,7 +2,7 @@
 
 ## Summary
 
-Post-v1 follow-up for giving controller/worker runtimes a narrow authenticated wrapper for service-backed Trace actions when direct tool integration is not enough.
+Post-v1 follow-up for giving controller-run and worker runtimes a narrow authenticated wrapper for service-backed Trace actions when direct tool integration is not enough.
 
 ## What needs to happen
 
@@ -10,7 +10,8 @@ Post-v1 follow-up for giving controller/worker runtimes a narrow authenticated w
 - Mint short-lived `TRACE_RUNTIME_TOKEN` credentials with scoped claims:
   - organization id
   - session group id
-  - controller session id or worker session id
+  - controller run id or worker session id
+  - controller-run session id or worker session id
   - allowed action names
   - expiry
 - Inject `TRACE_API_URL` and `TRACE_RUNTIME_TOKEN` into local and cloud coding-tool launches.
@@ -42,7 +43,7 @@ Post-v1 follow-up for giving controller/worker runtimes a narrow authenticated w
 
 ## How to test
 
-1. Mint a scoped token for a controller session.
+1. Mint a scoped token for a controller run session.
 2. Call one allowed wrapper action and verify service/events.
 3. Attempt a disallowed action and verify failure.
 4. Attempt wrong-org and expired-token calls and verify fail-closed behavior.

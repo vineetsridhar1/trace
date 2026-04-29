@@ -2,20 +2,21 @@
 
 ## Summary
 
-Ultraplan is a session-group orchestration mode for turning a large goal into an ordered ticket plan, running worker sessions against ticket-specific branches, and integrating approved work into one final session-group branch.
+Ultraplan is a session-group orchestration mode for turning a large development goal into an ordered ticket plan, running ticket workers on isolated branches, and integrating approved work into one final session-group branch.
 
 The core idea is:
 
-- A session group owns the shared integration branch and final testable worktree.
-- A special controller session lives inside that same session group.
-- The controller wakes on meaningful worker events, especially worker `agentStatus` transitions to `done` or `failed`.
-- The controller creates and manages tickets through Trace services.
+- A session group owns the integration branch and final testable worktree.
+- Ultraplan has a controller identity, but not one persistent controller chat.
+- Every controller wakeup creates a fresh controller run/session.
+- Each controller run receives a compact context packet, acts through service-backed tools, emits a structured summary, and ends.
 - Worker sessions execute tickets on their own branches/worktrees.
-- V1 runs one ticket worker at a time, while preserving dependency metadata so a future DAG scheduler is straightforward.
-- Human decisions happen through inbox items.
+- V1 runs one worker ticket at a time.
+- Ticket dependencies are still stored as edges so v2 can become a real DAG scheduler.
+- Human decisions happen through inbox gates.
 - Approved ticket branches are integrated into the group branch by the service layer.
 
-The final product should feel like a staff engineer coordinating a feature branch: decomposing the work, launching agents, reviewing their output, asking the human at the right gates, and producing one branch the user can test and merge.
+The final product should feel like a staff engineer coordinating a feature branch: decomposing work, launching workers, reviewing outcomes, asking the human at the right gates, and producing one branch the user can test and merge.
 
 ## Product Thesis
 
@@ -24,23 +25,34 @@ Trace should not treat chat, tickets, coding sessions, reviews, and human approv
 Ultraplan applies that thesis to multi-step development:
 
 - the user states a broad goal once
-- the controller session turns it into tickets
-- worker sessions execute those tickets autonomously, one at a time in v1
-- the controller observes all worker outcomes
+- episodic controller runs turn the goal into tickets and manage the workflow
+- worker sessions execute tickets one at a time in v1
+- controller runs review worker outcomes and update future tickets
 - the service layer integrates approved work into one branch
 - the user is pulled in through inbox gates when judgment or QA is needed
 
-This is not a generic workflow engine in v1. It is an AI-native development workflow centered on a session group.
+The controller's durable memory is not one forever-growing chat. The durable memory is Trace state:
+
+- Ultraplan state
+- tickets
+- ticket dependencies
+- ticket executions
+- inbox gates
+- controller run summaries
+- event log
+- linked controller run transcripts
 
 ## Goals
 
-- Let a user start Ultraplan from a session group.
+- Let a user start Ultraplan from a session group or as a session-start mode.
 - Make tickets first-class units of planned work, not markdown-only artifacts.
-- Keep the controller as a real Trace session with a special role.
+- Use fresh controller runs instead of a persistent god session.
+- Require each controller run to emit a structured summary.
+- Let the UI show controller run summaries and link to full run chats.
 - Let worker sessions in one group use different ticket branches.
 - Generate an ordered ticket plan with dependency metadata, even though v1 execution is sequential.
 - Keep the session group branch as the integration branch and final test target.
-- Wake the controller on coarse worker lifecycle events, not token streams.
+- Wake the controller on coarse lifecycle events, not token streams.
 - Route human gates through inbox.
 - Keep all mutations in the service layer.
 - Emit events for every durable transition.
@@ -50,7 +62,9 @@ This is not a generic workflow engine in v1. It is an AI-native development work
 
 - Autonomous production deploys.
 - Autonomous merge to the repository default branch.
+- True parallel worker execution in v1.
 - A general-purpose no-code workflow engine.
+- A permanent controller chat that is resumed forever.
 - Direct agent writes to the database or event store.
 - Direct privileged git integration from a model process without service authorization.
 - Mobile parity in v1 if mobile lacks the needed inbox/session-group surfaces.
@@ -65,9 +79,9 @@ It owns:
 
 - the integration branch
 - the integration worktree
-- the controller session
 - the worker sessions
-- the ticket plan association
+- the ordered ticket plan association
+- the controller run history
 - the final PR/test target
 
 The group branch is not the repository default branch. It is the final branch the user will test and merge when ready.
@@ -79,48 +93,101 @@ SessionGroup
   branch: ultraplan/auth-redesign
   worktree: /trace/worktrees/ultraplan-auth-redesign
 
-  Session(role: ultraplan_controller)
-    observes group events
-    uses orchestration tools
+  Ultraplan
+    ordered tickets
+    controller runs
+    active inbox gate
 
   Session(role: ticket_worker)
     ticket: login validation
     branch: ultraplan/auth-redesign/login-validation
 
-  Session(role: ticket_worker)
-    ticket: recovery flow
-    branch: ultraplan/auth-redesign/recovery-flow
+  Session(role: ultraplan_controller_run)
+    run: reviewed login validation
+    summary: tests passed, ready for integration
 ```
 
-### Controller Session
+### Controller Runs
 
-The controller is a normal Trace session with a special role.
+The controller is episodic.
 
-Recommended role:
+There is not one controller session that keeps accumulating context forever. Instead:
+
+1. A meaningful event happens.
+2. The Ultraplan event router creates a controller run.
+3. The run creates a fresh controller session/chat.
+4. The run receives the current context packet.
+5. The controller calls service-backed tools.
+6. The controller emits a required structured summary.
+7. The run completes.
+
+Each run should be inspectable:
+
+- summary in the Ultraplan activity timeline
+- link to full controller run chat
+- actions and decisions in event payloads
+
+Recommended session role:
 
 ```prisma
 enum SessionRole {
   primary
   ticket_worker
-  ultraplan_controller
+  ultraplan_controller_run
 }
 ```
 
-The controller should:
+The controller run should:
 
-- observe worker completion/failure
-- inspect ticket state, diffs, checkpoints, and inbox gates
-- decide what should happen next
-- call service-backed tools
+- inspect ticket state, worker outcomes, diffs, checkpoints, and inbox gates
+- update current and future tickets through services
+- decide the next action
 - create human gates when needed
 - request branch integration when work is approved
+- summarize what it did before ending
 
-The controller should not:
+The controller run should not:
 
 - write events directly
 - write database rows directly
 - run privileged git operations outside the service layer
 - wake on every token or `session_output`
+- rely on an unbounded prior chat transcript as its memory
+
+### Controller Run Summary
+
+Every controller run must produce a structured summary.
+
+Suggested shape:
+
+```ts
+type ControllerRunSummary = {
+  title: string;
+  summary: string;
+  actions: Array<{
+    type: string;
+    targetType: "ultraplan" | "ticket" | "execution" | "inbox" | "integration";
+    targetId: string;
+    label: string;
+  }>;
+  decisions: string[];
+  risks: string[];
+  ticketUpdates: Array<{
+    ticketId: string;
+    summary: string;
+  }>;
+  nextStep: string | null;
+};
+```
+
+The summary is used for:
+
+- UI activity timeline
+- future controller context
+- auditability
+- quick human scanning
+
+The full controller chat remains available for deeper inspection.
 
 ### Worker Sessions
 
@@ -156,11 +223,21 @@ Tickets need enough durable structure to drive execution:
 - priority
 - labels
 - acceptance criteria
+- test or QA plan
 - dependency/order metadata
 - generated-by Ultraplan metadata
 - links to worker sessions and executions
 
-Tickets should be created and updated through `ticketService`.
+Controller runs must be able to update:
+
+- the current ticket
+- future tickets
+- acceptance criteria
+- test plans
+- dependencies
+- ticket comments/summaries
+
+All ticket writes go through `ticketService`.
 
 ### Ordered Plan and Future DAG
 
@@ -185,14 +262,14 @@ The service should still store dependencies as edges so v2 can support real DAG 
 
 ```text
 Ticket A
-├─ Ticket B
-├─ Ticket C
-└─ Ticket D depends on B and C
+  -> Ticket B
+  -> Ticket C
+Ticket D depends on B and C
 ```
 
 The v1 scheduler rule is:
 
-- max parallel workers is `1`
+- max active workers is `1`
 - the next runnable ticket is the first unstarted ticket whose dependencies are integrated
 - the group branch is updated after each integrated ticket
 
@@ -228,7 +305,7 @@ Ultraplan should create inbox items for:
 - integration conflict decisions
 - final branch QA
 
-Resolving an inbox item should wake the controller or advance the relevant service state.
+Resolving an inbox item should trigger a fresh controller run or advance service state.
 
 ## Architecture Overview
 
@@ -237,26 +314,29 @@ User
   -> Session Group UI
     -> ultraplanService.start(...)
       -> create/update Ultraplan
-      -> create/reuse controller session
-      -> create ordered ticket plan
+      -> create first controller run
+      -> controller run creates ordered ticket plan
       -> emit events
 
 Worker session lifecycle events
   -> event store
     -> ultraplan event router
       -> on worker agentStatus done/failed/stopped
-      -> enqueue controller wakeup
+      -> enqueue controller run
 
-Controller session
-  -> receives compact event/context packet
-  -> calls service-backed tools
+Controller run
+  -> create fresh controller session
+  -> receive context packet
+  -> call service-backed tools
      - ticket.create/update/link
      - worker.start
      - worker.sendMessage
      - inbox.createGate
      - integration.mergeBranch
      - integration.rebaseBranch
-     - ultraplan.markTicketReady/done/blocked
+     - ultraplan.markExecutionReady/done/blocked
+  -> emit structured run summary
+  -> complete
 
 Service layer
   -> validates
@@ -277,7 +357,7 @@ Everything important remains service-owned.
 enum SessionRole {
   primary
   ticket_worker
-  ultraplan_controller
+  ultraplan_controller_run
 }
 ```
 
@@ -292,6 +372,18 @@ enum UltraplanStatus {
   needs_human
   integrating
   paused
+  completed
+  failed
+  cancelled
+}
+```
+
+### ControllerRunStatus
+
+```prisma
+enum ControllerRunStatus {
+  queued
+  running
   completed
   failed
   cancelled
@@ -331,23 +423,50 @@ enum IntegrationStatus {
 
 ```prisma
 model Ultraplan {
-  id                  String           @id @default(uuid())
-  organizationId      String
-  sessionGroupId      String
-  controllerSessionId String?
-  ownerUserId         String
-  status              UltraplanStatus  @default(draft)
-  baseBranch          String
-  planSummary         String?
-  customInstructions  String?
-  activeInboxItemId   String?
-  lastControllerRunAt DateTime?
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
+  id                    String           @id @default(uuid())
+  organizationId        String
+  sessionGroupId        String
+  ownerUserId           String
+  status                UltraplanStatus  @default(draft)
+  baseBranch            String
+  playbookId            String?
+  playbookConfig        Json?
+  planSummary           String?
+  customInstructions    String?
+  activeInboxItemId     String?
+  lastControllerRunId   String?
+  lastControllerSummary String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
 }
 ```
 
 `sessionGroupId` should be unique for the active Ultraplan v1. Historical completed plans can be handled later if needed.
+
+### UltraplanControllerRun
+
+```prisma
+model UltraplanControllerRun {
+  id             String              @id @default(uuid())
+  organizationId String
+  ultraplanId    String
+  sessionGroupId String
+  sessionId      String?
+  triggerEventId String?
+  triggerType    String
+  status         ControllerRunStatus @default(queued)
+  inputSummary   String?
+  summaryTitle   String?
+  summary        String?
+  summaryPayload Json?
+  error          String?
+  createdAt      DateTime            @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+}
+```
+
+`sessionId` links to the full controller run chat. `summaryPayload` carries the structured summary shown in the UI and fed into later context packets.
 
 ### TicketExecution
 
@@ -382,6 +501,7 @@ Recommended additions:
 model Ticket {
   ...
   acceptanceCriteria String[] @default([])
+  testPlan           String?
 }
 ```
 
@@ -391,6 +511,7 @@ Dependencies should be represented with a dedicated relation:
 model TicketDependency {
   ticketId           String
   dependsOnTicketId  String
+  reason             String?
   createdAt          DateTime @default(now())
 
   @@id([ticketId, dependsOnTicketId])
@@ -409,7 +530,7 @@ Recommended additions:
 enum SessionRole {
   primary
   ticket_worker
-  ultraplan_controller
+  ultraplan_controller_run
 }
 
 enum UltraplanStatus {
@@ -425,15 +546,10 @@ enum UltraplanStatus {
   cancelled
 }
 
-enum TicketExecutionStatus {
+enum ControllerRunStatus {
   queued
   running
-  reviewing
-  needs_human
-  ready_to_integrate
-  integrating
-  integrated
-  blocked
+  completed
   failed
   cancelled
 }
@@ -441,15 +557,35 @@ enum TicketExecutionStatus {
 type Ultraplan {
   id: ID!
   sessionGroupId: ID!
-  controllerSessionId: ID
   status: UltraplanStatus!
   baseBranch: String!
+  playbookId: ID
+  playbookConfig: JSON
   planSummary: String
   customInstructions: String
   activeInboxItemId: ID
+  lastControllerRun: UltraplanControllerRun
+  lastControllerSummary: String
   ticketExecutions: [TicketExecution!]!
+  controllerRuns: [UltraplanControllerRun!]!
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+type UltraplanControllerRun {
+  id: ID!
+  ultraplanId: ID!
+  sessionGroupId: ID!
+  session: Session
+  triggerType: String!
+  status: ControllerRunStatus!
+  summaryTitle: String
+  summary: String
+  summaryPayload: JSON
+  error: String
+  createdAt: DateTime!
+  startedAt: DateTime
+  completedAt: DateTime
 }
 
 type TicketExecution {
@@ -477,6 +613,8 @@ input StartUltraplanInput {
   controllerTool: CodingTool!
   controllerModel: String
   controllerHosting: HostingMode!
+  playbookId: ID
+  playbookConfig: JSON
   customInstructions: String
 }
 
@@ -484,7 +622,7 @@ type Mutation {
   startUltraplan(input: StartUltraplanInput!): Ultraplan!
   pauseUltraplan(id: ID!): Ultraplan!
   resumeUltraplan(id: ID!): Ultraplan!
-  runUltraplanControllerNow(id: ID!): Ultraplan!
+  runUltraplanControllerNow(id: ID!): UltraplanControllerRun!
   cancelUltraplan(id: ID!): Ultraplan!
 }
 ```
@@ -502,8 +640,10 @@ enum EventType {
   ultraplan_resumed
   ultraplan_completed
   ultraplan_failed
-  ultraplan_controller_wakeup_requested
-  ultraplan_controller_ran
+  ultraplan_controller_run_created
+  ultraplan_controller_run_started
+  ultraplan_controller_run_completed
+  ultraplan_controller_run_failed
   ticket_execution_created
   ticket_execution_updated
   ticket_execution_ready_for_review
@@ -514,52 +654,65 @@ enum EventType {
 }
 ```
 
-Events should carry full enough snapshots for Zustand upserts without refetching.
+Controller run completion events should carry the structured summary and enough entity snapshots for Zustand upserts without refetching.
 
 ## Controller Wakeup Rules
 
-The v1 wakeup backbone should be worker `agentStatus` transitions.
+The v1 wakeup backbone should be worker `agentStatus` transitions and inbox gate resolution.
 
-Wake the controller when:
+Create a fresh controller run when:
 
-- a non-controller session in the group transitions to `done`
-- a non-controller session in the group transitions to `failed`
-- a non-controller session in the group transitions to `stopped` and has an active ticket execution
+- a worker session in the group transitions to `done`
+- a worker session in the group transitions to `failed`
+- a worker session in the group transitions to `stopped` and has an active ticket execution
 - an inbox item created by Ultraplan is resolved or dismissed
 - the user manually requests `run now`
+- Ultraplan is first started and needs an initial plan
 
-Do not wake the controller on:
+Do not create controller runs on:
 
 - every `session_output`
 - every tool call
 - every token
 - every checkpoint, unless there is no reliable completion event
 
-The wakeup payload should include:
+The run input should include:
 
 - session group id
-- worker session id
-- linked ticket execution id
-- previous and next agent status
+- Ultraplan state
+- playbook and config
+- ordered ticket plan
+- current and future ticket context
+- prior controller run summaries
+- selected prior controller messages when useful
+- worker session id, when relevant
+- linked ticket execution id, when relevant
 - latest checkpoint metadata
 - branch name
-- relevant inbox item id, if any
+- relevant inbox item id, when relevant
+- worker final message or failure summary, when relevant
+- diff summary or patch only when the run is reviewing implementation or integration
 
 ## Controller Tools
 
-The controller should have service-backed tools, not direct DB access.
+The controller run should have service-backed tools, not direct DB access.
 
 Initial tool surface:
 
 - `ticket.create`
 - `ticket.update`
-- `ticket.link`
+- `ticket.addComment`
+- `ticket.updateAcceptanceCriteria`
+- `ticket.updateTestPlan`
+- `ticket.addDependency`
+- `ticket.reorder`
 - `ultraplan.createTicketExecution`
 - `ultraplan.startWorker`
 - `ultraplan.sendWorkerMessage`
 - `ultraplan.requestHumanGate`
 - `ultraplan.markExecutionReady`
 - `ultraplan.markExecutionBlocked`
+- `ultraplan.completeControllerRun`
 - `integration.mergeTicketBranch`
 - `integration.rebaseTicketBranch`
 - `integration.reportConflict`
@@ -567,7 +720,7 @@ Initial tool surface:
 Each tool call must:
 
 - validate organization and actor access
-- enforce controller permissions
+- enforce controller-run permissions
 - emit events
 - return machine-readable results
 
@@ -606,7 +759,8 @@ Recommended inbox item types:
 
 Inbox payloads should include:
 
-- ultraplan id
+- Ultraplan id
+- controller run id, when applicable
 - ticket id, when applicable
 - ticket execution id, when applicable
 - session group id
@@ -616,7 +770,7 @@ Inbox payloads should include:
 - summary
 - recommended action
 - QA checklist
-- links to session, diff, and PR
+- links to session, controller run chat, diff, and PR
 
 ## Screen-Level Product Experience
 
@@ -627,9 +781,9 @@ Add:
 - `Ultraplan` button
 - status chip
 - run/pause/resume actions
-- controller visibility/debug entry point
+- controller activity/debug entry point
 
-The product surface belongs at the session-group level, not only the active session header.
+The product surface belongs at the session-group level.
 
 ### Ultraplan Panel
 
@@ -643,12 +797,35 @@ Show:
 - integration status
 - active human gate
 - final branch/PR link
+- controller activity timeline
+
+### Controller Activity Timeline
+
+Show controller run summaries as the default surface.
+
+Example:
+
+```text
+10:12 Planned work
+Created 6 tickets, ordered them sequentially, and requested plan approval.
+Open chat
+
+10:34 Reviewed Ticket 1
+Worker completed schema changes. Tests passed. Marked ready for integration.
+Open chat
+
+10:48 Updated future tickets
+Added auth middleware migration criteria to Ticket 3 based on Ticket 1 findings.
+Open chat
+```
+
+The user should be able to click each controller run to open the full run chat.
 
 ### Worker Sessions
 
 Worker sessions should appear as normal sessions, but with clear ticket/branch metadata.
 
-Controller sessions should be hidden from normal tab strips by default, but available from Ultraplan debug/inspector surfaces.
+Controller-run sessions should be hidden from normal tab strips by default, but available from controller activity/debug surfaces.
 
 ## State Machine
 
@@ -660,13 +837,13 @@ draft
   -> waiting
 
 waiting
-  -> running          when ready executions exist
+  -> running          when the next ticket worker starts
   -> needs_human      when a gate is open
   -> paused
   -> completed
 
 running
-  -> waiting          when no active worker is running
+  -> waiting          when no worker is running
   -> needs_human      when user input is needed
   -> integrating      when approved branches are being integrated
   -> failed
@@ -683,6 +860,16 @@ needs_human
 
 paused
   -> waiting
+  -> cancelled
+```
+
+Controller run state:
+
+```text
+queued
+  -> running
+  -> completed
+  -> failed
   -> cancelled
 ```
 
@@ -703,7 +890,7 @@ running
   -> blocked          on worker stopped/needs input
 
 reviewing
-  -> running          if controller sends follow-up
+  -> running          if a controller run sends follow-up
   -> needs_human
   -> ready_to_integrate
   -> blocked
@@ -719,13 +906,16 @@ Add:
 
 - `SessionRole`
 - `UltraplanStatus`
+- `ControllerRunStatus`
 - `TicketExecutionStatus`
 - `IntegrationStatus`
 - `Ultraplan`
+- `UltraplanControllerRun`
 - `TicketExecution`
 - optional `TicketDependency`
 - `Session.role`
 - ticket acceptance criteria
+- ticket test plan
 - Ultraplan inbox item types
 - Ultraplan event types
 
@@ -737,6 +927,7 @@ Add:
 Add:
 
 - Ultraplan types
+- UltraplanControllerRun types
 - TicketExecution types
 - role/status enums
 - session group `ultraplan` field
@@ -748,6 +939,7 @@ Add:
 Add:
 
 - `apps/server/src/services/ultraplan.ts`
+- `apps/server/src/services/ultraplan-controller-run.ts`
 - `apps/server/src/services/ticket-execution.ts`
 - `apps/server/src/services/integration.ts`
 
@@ -768,7 +960,8 @@ Responsibilities:
 
 - subscribe to org events
 - filter worker `agentStatus` transitions
-- dedupe controller wakeups
+- create controller runs
+- dedupe controller run triggers
 - serialize controller runs per session group
 - route inbox gate resolutions back into Ultraplan
 
@@ -776,6 +969,7 @@ Responsibilities:
 
 Update bridge/session-router paths for:
 
+- creating controller-run sessions
 - creating per-session ticket worktrees
 - requesting commit diffs for worker branches
 - integrating worker branches into the group branch
@@ -785,12 +979,12 @@ Update bridge/session-router paths for:
 
 Recommended milestones:
 
-1. Durable contracts: roles, Ultraplan, TicketExecution, events, inbox types.
-2. Service CRUD and controller session creation.
-3. Client store and group-level UI.
+1. Durable contracts: roles, Ultraplan, ControllerRun, TicketExecution, events, inbox types.
+2. Service CRUD and initial controller run creation.
+3. Client store and group-level UI with controller run summaries.
 4. Ordered ticket plan and worker session launch.
-5. Controller wakeup on worker `done`/`failed`.
-6. Context packet and controller tool contract.
+5. Controller run wakeup on worker `done`/`failed`.
+6. Context packet and controller tool/summary contract.
 7. Human gates through inbox.
 8. Integration branch operations.
 9. Guardrails, telemetry, and polish.
@@ -802,15 +996,18 @@ Test at four levels:
 - service tests for state transitions and authorization
 - event-router tests for wakeup filtering and dedupe
 - integration tests for branch/worktree operations
-- UI tests for group panel, inbox gates, and event hydration
+- UI tests for group panel, controller run timeline, inbox gates, and event hydration
 
 Critical scenarios:
 
-- start Ultraplan creates/reuses controller session
-- generated tickets become durable Trace tickets
-- worker completion wakes controller once
-- worker failure wakes controller once
-- controller can launch one worker for the next ready ticket
+- start Ultraplan creates an initial controller run
+- controller run creates durable tickets with acceptance criteria and test plans
+- controller run completion emits a structured summary
+- UI shows controller run summaries and links to full chats
+- worker completion creates a new controller run once
+- worker failure creates a new controller run once
+- controller run can update current and future tickets
+- controller run can launch one worker for the next ready ticket
 - inbox gate halts execution until resolved
 - approved ticket branch integrates into group branch
 - conflict creates a gate instead of corrupting the integration branch
@@ -823,9 +1020,12 @@ Build Ultraplan as a Trace-native orchestration layer, not as a wrapper around s
 The clean v1 is:
 
 - one Ultraplan per active session group
-- one special controller session inside the group
+- episodic controller runs instead of one persistent god session
+- each controller run creates a fresh session/chat
+- each controller run emits a structured summary
+- UI shows controller run summaries and links to full run chats
 - sequential ticket-worker sessions with per-ticket branches in v1
-- controller wakeups on worker `agentStatus` completion/failure
+- controller wakeups on worker `agentStatus` completion/failure and inbox resolution
 - service-backed controller tools
 - inbox-backed human gates
 - one group integration branch as the final test/merge target

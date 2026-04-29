@@ -40,7 +40,8 @@ Add runtime/bridge support for reading worker branch diffs and performing servic
 
 - Keep diff commands read-only.
 - Integration commands are mutating but must remain service-owned and event-backed.
-- Do not let the controller model run privileged git operations directly.
+- Do not let controller-run sessions run privileged git operations directly.
+- Controller-run context should include diffs only when useful, mainly worker review or integration decisions.
 
 ## How to test
 
