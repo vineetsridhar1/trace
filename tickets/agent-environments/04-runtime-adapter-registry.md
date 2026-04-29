@@ -8,11 +8,12 @@ Replace direct hosting-mode branching with an environment-aware runtime adapter 
 
 Owns plan lines:
 
-- 93-105: runtime adapter responsibilities and boundary from message handling
-- 127-144: adapter registry in the target architecture
-- 363-438: runtime adapter interface, start result contract, and registry
-- 950-956: phase 2 registry and router dispatch work
-- 1057: V1 local/provisioned adapter type requirement
+- 97-109: runtime adapter responsibilities and boundary from message handling
+- 131-143: terminal multiplexing requirements at the bridge/adapter boundary
+- 145-162: adapter registry in the target architecture
+- 381-457: runtime adapter interface, start result contract, and registry
+- 970-976: phase 2 registry and router dispatch work
+- 1077: V1 local/provisioned adapter type requirement
 
 ## What needs to happen
 
@@ -26,6 +27,7 @@ Owns plan lines:
 - Add `RuntimeAdapterRegistry` keyed by `local` and `provisioned`.
 - Update `SessionRouter` to resolve adapters from the registry.
 - Keep existing command delivery through the bridge.
+- Preserve bridge-level terminal multiplexing: adapters start/select compute, while multiple terminal sessions per Trace session continue to be addressed by `terminalId` over the bridge.
 - Preserve current `SessionAdapter` behavior during the transition if needed, but make the new boundary environment-aware.
 
 ## Dependencies
@@ -39,12 +41,15 @@ Owns plan lines:
 - [ ] Adapter lookup fails clearly for unsupported adapter types.
 - [ ] Local and provisioned adapters implement the same lifecycle interface.
 - [ ] Existing bridge command sending remains centralized in `SessionRouter`.
+- [ ] Runtime adapter contracts do not expose or imply a single terminal stream per session.
+- [ ] Existing terminal commands/events remain multiplexed by `terminalId` after adapter routing.
 - [ ] No provider-specific code is added to the registry.
 
 ## Implementation notes
 
 - Adapter lifecycle and bridge command delivery are separate concerns.
 - The adapter starts/selects compute; the bridge carries live traffic.
+- Terminal creation, input, output, resize, exit, error, and destroy are live bridge traffic and must remain isolated by `terminalId`.
 - Avoid introducing `aws`, `fly`, or `kubernetes` as adapter types in Trace core.
 
 ## How to test
@@ -53,3 +58,4 @@ Owns plan lines:
 2. Unit test unsupported adapter type handling.
 3. Start a local session and confirm it still routes through the existing bridge.
 4. Use a mocked provisioned adapter and confirm session startup delegates to it.
+5. Create two terminals for one session and confirm adapter routing does not collapse them into one terminal stream.

@@ -8,7 +8,8 @@ Add end-to-end confidence, operational visibility, and rollout controls for agen
 
 Owns plan lines:
 
-- 1002-1041: unit, service, and integration test requirements plus open-decision handoff
+- 131-143: terminal multiplexing requirements that need local/provisioned verification
+- 1022-1060: unit, service, and integration test requirements plus open-decision handoff
 - Also consolidates verification for the implementation tickets' `How to test` sections
 
 ## What needs to happen
@@ -34,6 +35,7 @@ Owns plan lines:
 - Add integration tests with a mock provisioned launcher.
   - Include duplicate start/stop calls with the same idempotency key.
   - Include incompatible runtime protocol and unsupported tool registration.
+  - Include two concurrent terminals on one session/runtime and assert terminal output, resize, and exit handling stay isolated by `terminalId`.
 - Add telemetry/logging for:
   - environment create/update/test
   - provisioned start latency
@@ -58,6 +60,7 @@ Owns plan lines:
 
 - [ ] Critical service and adapter paths have automated coverage.
 - [ ] Mock provisioned launcher test covers start, bridge connect, message delivery, and stop.
+- [ ] Local and provisioned runtime tests cover multiple terminal sessions for one Trace session.
 - [ ] Startup failures produce actionable user-visible errors.
 - [ ] Deprovision failures are visible and retryable.
 - [ ] Rollout path is documented.
@@ -74,3 +77,4 @@ Owns plan lines:
 2. Run web tests for settings/session creation surfaces.
 3. Run an integration scenario with delayed bridge connection.
 4. Run an integration scenario with failed stop and reconciliation.
+5. Run a terminal multiplexing scenario with two terminals attached to the same session/runtime.
