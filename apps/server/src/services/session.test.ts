@@ -1505,6 +1505,59 @@ describe("SessionService", () => {
         include: expect.any(Object),
       });
     });
+
+    it("prepares a bound local runtime when a queued initial run has no workspace", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          workdir: null,
+          toolSessionId: null,
+          repoId: "repo-1",
+          sessionGroupId: "group-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            runtimeLabel: "Laptop",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.event.findFirst.mockResolvedValueOnce(null);
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          pendingRun: {
+            type: "run",
+            prompt: "Plan this",
+            interactionMode: "plan",
+          },
+        }),
+      );
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Laptop",
+      });
+
+      await service.run("session-1", "Plan this", "plan", {
+        userId: "user-1",
+        organizationId: "org-1",
+      });
+
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "runtime-1");
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-1",
+          sessionGroupId: "group-1",
+          hosting: "local",
+          repo: expect.objectContaining({ id: "repo-1" }),
+          branch: "main",
+        }),
+      );
+    });
   });
 
   describe("sendMessage", () => {

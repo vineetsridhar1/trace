@@ -1684,10 +1684,11 @@ export class SessionService {
       });
 
       // If no runtime has been provisioned yet (deferred from startSession),
-      // kick it off now that the user has sent their first message.
-      // Guard: skip if a runtime is already bound (provisioning in progress).
+      // kick it off now that the user has sent their first message. A local
+      // runtime binding only selects the bridge; it does not prepare a workdir.
       const needsProvisioning = !!session.repoId || session.hosting === "cloud";
-      const alreadyProvisioning = !!sessionRouter.getRuntimeForSession(id);
+      const alreadyProvisioning =
+        session.hosting === "cloud" && !!sessionRouter.getRuntimeForSession(id);
       if (needsProvisioning && !alreadyProvisioning) {
         this.provisionRuntime({
           sessionId: id,
