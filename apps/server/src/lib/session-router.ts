@@ -191,7 +191,12 @@ export class SessionRouter {
   /** Pending waitForBridge promises for cloud sessions */
   private pendingWaits = new Map<
     string,
-    { expectedRuntimeId?: string; resolve: () => void; reject: (err: Error) => void }
+    {
+      waitId: string;
+      expectedRuntimeId?: string;
+      resolve: () => void;
+      reject: (err: Error) => void;
+    }
   >();
   /** Pending branch list requests: requestId → resolve/reject */
   private pendingBranchRequests = new Map<
@@ -380,12 +385,17 @@ export class SessionRouter {
     }
 
     return new Promise<void>((resolve, reject) => {
+      const waitId = randomUUID();
       const timer = setTimeout(() => {
-        this.pendingWaits.delete(sessionId);
+        const pending = this.pendingWaits.get(sessionId);
+        if (pending?.waitId === waitId) {
+          this.pendingWaits.delete(sessionId);
+        }
         reject(new Error(`Bridge for session ${sessionId} did not connect within ${timeoutMs}ms`));
       }, timeoutMs);
 
       this.pendingWaits.set(sessionId, {
+        waitId,
         expectedRuntimeId: runtimeId,
         resolve: () => {
           clearTimeout(timer);
@@ -1321,8 +1331,13 @@ export class SessionRouter {
 
     void (async () => {
       try {
+        const provisionedRuntimeInstanceId =
+          adapterType === "provisioned" ? `runtime_${randomUUID()}` : undefined;
+
         if (adapterType === "provisioned") {
-          await options.onLifecycle?.("session_runtime_start_requested");
+          await options.onLifecycle?.("session_runtime_start_requested", {
+            runtimeInstanceId: provisionedRuntimeInstanceId,
+          });
         }
 
         const startResult = await adapter.startSession({
@@ -1339,6 +1354,7 @@ export class SessionRouter {
           branch: options.branch,
           checkpointSha: options.checkpointSha,
           readOnly: options.readOnly,
+          runtimeInstanceId: provisionedRuntimeInstanceId,
           runtimeToken: options.runtimeToken,
           bridgeUrl: options.bridgeUrl,
         });

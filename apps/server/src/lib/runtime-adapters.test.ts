@@ -94,6 +94,7 @@ describe("ProvisionedRuntimeAdapter", () => {
         defaultBranch: "main",
       },
       branch: "feature",
+      runtimeInstanceId: "runtime_preallocated_1",
       runtimeToken: "runtime-token",
       bridgeUrl: "wss://trace.example/bridge",
     });
@@ -105,7 +106,7 @@ describe("ProvisionedRuntimeAdapter", () => {
         status: "provisioning",
       }),
     );
-    expect(result.runtimeInstanceId).toMatch(/^runtime_/);
+    expect(result.runtimeInstanceId).toBe("runtime_preallocated_1");
 
     const call = fetchMock().mock.calls[0];
     const url = call[0] as string;

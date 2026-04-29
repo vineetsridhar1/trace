@@ -423,7 +423,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       throw new Error("Provisioned runtime requires an agent environment");
     }
     const config = parseProvisionedConfig(configRecord(input.environment.config));
-    const runtimeInstanceId = `runtime_${randomUUID()}`;
+    const runtimeInstanceId = input.runtimeInstanceId ?? `runtime_${randomUUID()}`;
     const runtimeToken = createProvisionedRuntimeToken({
       instanceId: runtimeInstanceId,
       organizationId: input.organizationId,
