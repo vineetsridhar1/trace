@@ -8,7 +8,7 @@ import type {
 } from "@trace/gql";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
-import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
+import { TRACE_AI_EMAIL, TRACE_AI_NAME, TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
 
@@ -119,6 +119,21 @@ export class OrganizationService {
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.user.findUniqueOrThrow({
         where: { id: actorId },
+        select: { id: true },
+      });
+      await tx.user.upsert({
+        where: { id: TRACE_AI_USER_ID },
+        update: {
+          email: TRACE_AI_EMAIL,
+          name: TRACE_AI_NAME,
+          avatarUrl: null,
+          githubId: null,
+        },
+        create: {
+          id: TRACE_AI_USER_ID,
+          email: TRACE_AI_EMAIL,
+          name: TRACE_AI_NAME,
+        },
         select: { id: true },
       });
 
