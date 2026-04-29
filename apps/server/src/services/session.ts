@@ -6504,7 +6504,52 @@ export class SessionService {
       actorId: "system",
     });
 
+    await this.markPendingControllerRunStarted(sessionId);
+
     return "delivered";
+  }
+
+  private async markPendingControllerRunStarted(sessionId: string) {
+    const run = await prisma.ultraplanControllerRun.findFirst({
+      where: { sessionId, status: "queued" },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!run) return;
+
+    const updatedRun = await prisma.ultraplanControllerRun.update({
+      where: { id: run.id },
+      data: { status: "running", startedAt: run.startedAt ?? new Date() },
+    });
+
+    await eventService.create({
+      organizationId: updatedRun.organizationId,
+      scopeType: "ultraplan",
+      scopeId: updatedRun.ultraplanId,
+      eventType: "ultraplan_controller_run_started",
+      payload: {
+        ultraplanId: updatedRun.ultraplanId,
+        controllerRun: {
+          id: updatedRun.id,
+          organizationId: updatedRun.organizationId,
+          ultraplanId: updatedRun.ultraplanId,
+          sessionGroupId: updatedRun.sessionGroupId,
+          sessionId: updatedRun.sessionId ?? null,
+          triggerEventId: updatedRun.triggerEventId ?? null,
+          triggerType: updatedRun.triggerType,
+          status: updatedRun.status,
+          inputSummary: updatedRun.inputSummary ?? null,
+          summaryTitle: updatedRun.summaryTitle ?? null,
+          summary: updatedRun.summary ?? null,
+          summaryPayload: updatedRun.summaryPayload ?? null,
+          error: updatedRun.error ?? null,
+          createdAt: updatedRun.createdAt,
+          startedAt: updatedRun.startedAt ?? null,
+          completedAt: updatedRun.completedAt ?? null,
+        },
+      } as unknown as Prisma.InputJsonValue,
+      actorType: "system",
+      actorId: "system",
+    });
   }
 
   private async loadQueuedMessageClientSource(

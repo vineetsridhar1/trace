@@ -367,18 +367,40 @@ describe("UltraplanService", () => {
     );
   });
 
-  it("returns an active controller run when run-now is repeated", async () => {
+  it("nudges an existing queued controller run when run-now is repeated", async () => {
     const activeRun = makeControllerRun({ id: "run-active", status: "queued" });
+    prismaMock.ultraplan.findUniqueOrThrow.mockResolvedValue(makeUltraplan());
+    prismaMock.ultraplanControllerRun.findFirst.mockResolvedValue(activeRun);
+    prismaMock.ultraplanControllerRun.findUniqueOrThrow.mockResolvedValue(
+      makeControllerRun({ id: "run-active", status: "running" }),
+    );
+
+    const result = await service.runControllerNow("ultra-1", "user", "user-1");
+
+    expect(sessionServiceMock.run).toHaveBeenCalledWith(
+      "session-1",
+      expect.stringContaining("Ship autopilot"),
+      "plan",
+      expect.objectContaining({ clientSource: "ultraplan_controller" }),
+    );
+    expect(result).toMatchObject({ id: "run-active", status: "running" });
+    expect(prismaMock.session.create).not.toHaveBeenCalled();
+    expect(prismaMock.ultraplanControllerRun.create).not.toHaveBeenCalled();
+    expect(prismaMock.ultraplan.update).not.toHaveBeenCalled();
+  });
+
+  it("returns an already running controller run when run-now is repeated", async () => {
+    const activeRun = makeControllerRun({ id: "run-active", status: "running" });
     prismaMock.ultraplan.findUniqueOrThrow.mockResolvedValue(makeUltraplan());
     prismaMock.ultraplanControllerRun.findFirst.mockResolvedValue(activeRun);
 
     const result = await service.runControllerNow("ultra-1", "user", "user-1");
 
     expect(result).toBe(activeRun);
+    expect(sessionServiceMock.run).not.toHaveBeenCalled();
     expect(prismaMock.session.create).not.toHaveBeenCalled();
     expect(prismaMock.ultraplanControllerRun.create).not.toHaveBeenCalled();
     expect(prismaMock.ultraplan.update).not.toHaveBeenCalled();
-    expect(eventServiceMock.create).not.toHaveBeenCalled();
   });
 
   it("authorizes controller-run lifecycle mutations and emits parent plan updates", async () => {

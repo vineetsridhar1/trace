@@ -92,6 +92,13 @@ const ULTRAPLAN_STATE_EVENTS: Set<EventType> = new Set([
   "ultraplan_failed",
 ]);
 
+const ULTRAPLAN_CONTROLLER_RUN_EVENTS: Set<EventType> = new Set([
+  "ultraplan_controller_run_created",
+  "ultraplan_controller_run_started",
+  "ultraplan_controller_run_completed",
+  "ultraplan_controller_run_failed",
+]);
+
 function agentStatusFromEvent(eventType: EventType, payload: JsonObject): AgentStatus | undefined {
   const explicit = payload.agentStatus as AgentStatus | undefined;
   if (explicit) return explicit;
@@ -364,6 +371,37 @@ export function handleOrgEvent(event: Event): void {
             typeof ultraplan.updatedAt === "string"
               ? ultraplan.updatedAt
               : existing.updatedAt ?? event.timestamp,
+        } as unknown as Partial<SessionGroupEntity>);
+      }
+    }
+  }
+
+  if (ULTRAPLAN_CONTROLLER_RUN_EVENTS.has(event.eventType)) {
+    const controllerRun = asJsonObject(payload.controllerRun);
+    const sessionGroupId =
+      typeof controllerRun?.sessionGroupId === "string" ? controllerRun.sessionGroupId : null;
+    if (sessionGroupId && controllerRun && typeof controllerRun.id === "string") {
+      const existingGroup = batch.get("sessionGroups", sessionGroupId) as
+        | (SessionGroupEntity & { ultraplan?: Record<string, unknown> | null })
+        | undefined;
+      const existingUltraplan = asJsonObject(existingGroup?.ultraplan);
+      if (existingGroup && existingUltraplan) {
+        const runs = Array.isArray(existingUltraplan.controllerRuns)
+          ? existingUltraplan.controllerRuns.filter((run) => {
+              const existingRun = asJsonObject(run);
+              return existingRun?.id !== controllerRun.id;
+            })
+          : [];
+        batch.patch("sessionGroups", sessionGroupId, {
+          ultraplan: {
+            ...existingUltraplan,
+            lastControllerRunId: controllerRun.id,
+            lastControllerSummary:
+              typeof controllerRun.summary === "string"
+                ? controllerRun.summary
+                : existingUltraplan.lastControllerSummary,
+            controllerRuns: [controllerRun, ...runs],
+          },
         } as unknown as Partial<SessionGroupEntity>);
       }
     }
