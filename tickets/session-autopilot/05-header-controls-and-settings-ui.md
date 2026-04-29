@@ -59,6 +59,12 @@ Move the product surface to the session-group UI and add the first Ultraplan sta
 - Use shadcn/ui components and existing session UI patterns.
 - Product copy should describe the workflow, not implementation details.
 
+## Review follow-ups
+
+- Render dependency edges/blocking reasons in the ticket plan.
+- Render controller summary action labels from the planned `summaryPayload.actions[].label`
+  shape, not only `title` or `summary` fields.
+
 ## How to test
 
 1. Open a session group with no Ultraplan and verify the empty/start state.
