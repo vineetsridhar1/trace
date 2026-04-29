@@ -19,10 +19,15 @@ Owns plan lines:
 
 - Define stop/deprovision states:
   - stopping
-  - stopped
-  - deprovisioning
-  - deprovisioned
+  - stopped (local terminal)
+  - deprovisioned (provisioned terminal)
   - deprovision_failed
+  <!-- Updated after ticket 09 review: the original list included a
+       distinct `deprovisioning` state. We collapsed it into `stopping` to
+       remove a silent (no-event) state transition; the brief window between
+       sending bridge `delete` and the launcher confirming stop is now
+       represented by `stopping`. -->
+
 - Implement deprovision policy handling:
   - `on_session_end`
   - `after_idle`
@@ -46,18 +51,45 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] Local stop/delete does not deprovision the user's machine.
-- [ ] Provisioned stop calls the configured lifecycle endpoint.
-- [ ] Failed stop attempts are retryable.
-- [ ] Stuck deprovisioning runtimes are reconciled.
-- [ ] Runtime state is eventually marked stopped/deprovisioned or failed.
-- [ ] Events accurately reflect deprovision progress.
+- [x] Local stop/delete does not deprovision the user's machine.
+- [x] Provisioned stop calls the configured lifecycle endpoint.
+- [x] Failed stop attempts are retryable.
+- [x] Stuck deprovisioning runtimes are reconciled.
+- [x] Runtime state is eventually marked stopped/deprovisioned or failed.
+- [x] Events accurately reflect deprovision progress.
 
 ## Implementation notes
 
 - Bridge disconnection is a signal, not the cleanup mechanism.
 - Keep provider-specific state in metadata and connection fields.
 - `after_idle` is useful for shared launcher pools, but V1 can default provisioned environments to `on_session_end`.
+- A launcher response of `status: "stopping"` indicates async cleanup is still
+  in flight — leave the connection in `stopping` and rely on the reconciler
+  to re-call `stopUrl` (idempotency key `session:{sessionId}:stop`). Only
+  `status: "stopped"` or `"not_found"` should emit
+  `session_runtime_stopped` and transition to `deprovisioned`.
+- The reconciler bumps `connection.reconcileAttempts` on every pickup and
+  abandons the runtime after `MAX_RECONCILE_ATTEMPTS` (10). Abandoned
+  runtimes get `autoRetryable: false`, `abandonedAt`, a terminal
+  `session_runtime_deprovision_failed` event with `abandoned: true`, and are
+  skipped on subsequent reconciler ticks. Ticket 13 owns the operator alert
+  that surfaces these.
+- A fresh user-initiated stop (delete / unload) calls `resetReconcileState`
+  before invoking `destroyRuntime` so the next round starts with a clean
+  budget.
+- Local stop returns `{ ok: true, status: "stopped" }` synchronously — the
+  desktop bridge does the work via the bridge `delete` command. The runtime
+  adapter's `stopSession` does not call back into the bridge.
+- Connection writes from this ticket's paths
+  (`bumpReconcileAttempts`, `resetReconcileState`, `recordRuntimeLifecycle`)
+  go through `updateConnectionConditional`, an optimistic-locking helper
+  that bumps `connection.version` on each write and retries on version
+  mismatch. Pre-existing writers (e.g. `markConnectionLost`) don't
+  participate yet — see ticket 15 for the broader cleanup once
+  `SessionRuntime` is its own table.
+- `attemptStopSession` short-circuits on `ProvisionedLauncherError` with a
+  4xx status that isn't 408/425/429. Auth or validation failures don't
+  retry; transient 5xx, network errors, and throttles do.
 
 ## How to test
 

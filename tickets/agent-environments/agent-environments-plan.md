@@ -836,6 +836,28 @@ Provisioned cleanup:
 - poll `statusUrl` until stopped or timeout
 - retry stop if needed
 
+<!-- Clarified after ticket 09: V1 reconciliation re-issues the idempotent
+     stopUrl call instead of polling statusUrl directly. Launchers MUST
+     respect `Trace-Idempotency-Key: session:{sessionId}:stop` so a repeat
+     stop request returns the latest known state without starting new work.
+     A statusUrl poll path can be added later if a launcher cannot meet that
+     idempotency contract. -->
+<!-- Capped after ticket 09: the reconciler bumps
+     `connection.reconcileAttempts` on every pickup and abandons the runtime
+     after 10 retries (`autoRetryable: false`, `abandonedAt` set, terminal
+     `session_runtime_deprovision_failed` event with `abandoned: true`). A
+     fresh user-initiated stop clears that bookkeeping. Ticket 13 owns the
+     telemetry and operator alert that surface abandoned runtimes. -->
+<!-- Simplified after ticket 09 review: collapsed the original five-state
+     stop machine (`stopping`/`stopped`/`deprovisioning`/`deprovisioned`/
+     `deprovision_failed`) down to four. The `deprovisioning` state had no
+     event boundary — the brief window between bridge `delete` and the
+     launcher confirming stop is now represented by `stopping`. Local
+     terminates as `stopped`; provisioned terminates as `deprovisioned`.
+     Connection writes on the deprovision path use optimistic locking via
+     `connection.version` to keep concurrent reconciler / user / bridge
+     writes from stomping each other. -->
+
 ### Deprovision Policies
 
 Support environment-level policy:

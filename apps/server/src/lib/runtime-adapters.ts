@@ -281,18 +281,48 @@ function idempotencyKey(sessionId: string, action: "start" | "stop"): string {
   return `session:${sessionId}:${action}`;
 }
 
+/**
+ * Error thrown by the provisioned launcher request layer. Carries enough
+ * context for retry logic to decide whether to back off or give up.
+ *
+ * `retryable` is computed from the HTTP status: 5xx, 408 (request timeout),
+ * 425 (too early), and 429 (throttle) are retryable; other 4xx are
+ * permanent (auth/validation/permission failures retry won't fix).
+ * Network/parse failures (no `status`) are retryable.
+ */
+export class ProvisionedLauncherError extends Error {
+  readonly status: number | undefined;
+  readonly retryable: boolean;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = "ProvisionedLauncherError";
+    this.status = status;
+    this.retryable = isRetryableLauncherStatus(status);
+  }
+}
+
+function isRetryableLauncherStatus(status: number | undefined): boolean {
+  if (status === undefined) return true;
+  if (status >= 500) return true;
+  if (status === 408 || status === 425 || status === 429) return true;
+  return false;
+}
+
 async function readJsonResponse(response: Response, endpointName: string): Promise<unknown> {
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(
+    throw new ProvisionedLauncherError(
       `Provisioned ${endpointName} request failed (${response.status}): ${text.slice(0, 500)}`,
+      response.status,
     );
   }
   if (!text.trim()) return {};
   try {
     return JSON.parse(text) as unknown;
   } catch {
-    throw new Error(`Provisioned ${endpointName} response was not valid JSON`);
+    throw new ProvisionedLauncherError(
+      `Provisioned ${endpointName} response was not valid JSON`,
+    );
   }
 }
 
@@ -331,11 +361,21 @@ async function authenticatedLauncherRequest(params: {
     headers["Trace-Signature"] = `v1=${signature}`;
   }
 
-  const response = await fetch(params.url, {
-    method: "POST",
-    headers,
-    body: rawBody,
-  });
+  let response: Response;
+  try {
+    response = await fetch(params.url, {
+      method: "POST",
+      headers,
+      body: rawBody,
+    });
+  } catch (err) {
+    // Network-level failure (DNS, TCP reset, etc.) — retryable. Wrap so the
+    // adapter caller sees a uniform error type.
+    const message = err instanceof Error ? err.message : String(err);
+    throw new ProvisionedLauncherError(
+      `Provisioned ${params.endpointName} request failed: ${message}`,
+    );
+  }
   return readJsonResponse(response, params.endpointName);
 }
 

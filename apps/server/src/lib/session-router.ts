@@ -22,11 +22,13 @@ import type {
 import { prisma } from "./db.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import {
+  ProvisionedLauncherError,
   runtimeAdapterRegistry,
   setProvisionedRuntimeCloudMachineService,
 } from "./runtime-adapters.js";
 import {
   RuntimeAdapterRegistry,
+  type RuntimeAdapter,
   type RuntimeAdapterType,
   type RuntimeEnvironment,
 } from "./runtime-adapter-registry.js";
@@ -133,6 +135,14 @@ export type RuntimeLifecycleUpdate = {
   providerRuntimeUrl?: string;
   providerStatus?: string;
   error?: string;
+  /**
+   * Set on `session_runtime_deprovision_failed` to mark the runtime
+   * permanently abandoned (cap exhausted). Suppresses retry flags so the
+   * reconciler stops touching the session and lets operator alerts fire.
+   */
+  abandoned?: boolean;
+  /** Reconcile attempt count at the moment of abandonment. */
+  reconcileAttempts?: number;
 };
 
 export type RuntimeLifecycleEventType = Extract<
@@ -143,6 +153,9 @@ export type RuntimeLifecycleEventType = Extract<
   | "session_runtime_connected"
   | "session_runtime_start_failed"
   | "session_runtime_start_timed_out"
+  | "session_runtime_stopping"
+  | "session_runtime_stopped"
+  | "session_runtime_deprovision_failed"
 >;
 
 function adapterTypeFromHosting(
@@ -168,6 +181,31 @@ function environmentConfigRecord(environment?: RuntimeEnvironment | null): Recor
   const config = environment?.config;
   if (!config || typeof config !== "object" || Array.isArray(config)) return {};
   return config as Record<string, unknown>;
+}
+
+function optionalConnectionString(
+  connection: Record<string, unknown> | null,
+  key: string,
+): string | undefined {
+  const value = connection?.[key];
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function lifecycleSnapshotFromConnection(
+  connection: Record<string, unknown> | null,
+): RuntimeLifecycleUpdate {
+  const snapshot: RuntimeLifecycleUpdate = {};
+  const runtimeInstanceId = optionalConnectionString(connection, "runtimeInstanceId");
+  if (runtimeInstanceId) snapshot.runtimeInstanceId = runtimeInstanceId;
+  const runtimeLabel = optionalConnectionString(connection, "runtimeLabel");
+  if (runtimeLabel) snapshot.runtimeLabel = runtimeLabel;
+  const providerRuntimeId =
+    optionalConnectionString(connection, "providerRuntimeId") ??
+    optionalConnectionString(connection, "cloudMachineId");
+  if (providerRuntimeId) snapshot.providerRuntimeId = providerRuntimeId;
+  const providerRuntimeUrl = optionalConnectionString(connection, "providerRuntimeUrl");
+  if (providerRuntimeUrl) snapshot.providerRuntimeUrl = providerRuntimeUrl;
+  return snapshot;
 }
 
 function startupTimeoutMs(environment?: RuntimeEnvironment | null): number {
@@ -1438,6 +1476,15 @@ export class SessionRouter {
 
   /**
    * Destroy a session's runtime. Delegates to the correct adapter.
+   *
+   * Lifecycle (provisioned): stopping → deprovisioned (or deprovision_failed).
+   * Lifecycle (local): stopping → stopped. Local stop cleans only
+   * Trace-created session resources and never deprovisions the desktop
+   * bridge.
+   *
+   * If the launcher returns `status: "stopping"` (async cleanup pending), the
+   * connection stays in `stopping` and the reconciler retries via the
+   * idempotent stopUrl call.
    */
   async destroyRuntime(
     sessionId: string,
@@ -1448,6 +1495,14 @@ export class SessionRouter {
       repoId?: string | null;
       connection?: unknown;
     },
+    options?: {
+      reason?: string;
+      onLifecycle?: (
+        eventType: RuntimeLifecycleEventType,
+        update?: RuntimeLifecycleUpdate,
+      ) => Promise<void> | void;
+      maxStopAttempts?: number;
+    },
   ): Promise<void> {
     const adapterType =
       typeof connectionRecord(session.connection)?.adapterType === "string"
@@ -1456,24 +1511,88 @@ export class SessionRouter {
     const adapter = this.runtimeAdapters.get(adapterType);
     const connection = connectionRecord(session.connection);
     const environment = await this.resolveRuntimeEnvironment(connection);
+    const reason = options?.reason ?? "session_deleted";
+    const lifecycleSnapshot = lifecycleSnapshotFromConnection(connection);
 
-    const result = this.send(sessionId, {
+    const deliveryResult = this.send(sessionId, {
       type: "delete",
       sessionId,
       workdir: session.workdir,
       repoId: session.repoId,
     });
-    if (result !== "delivered" && adapter.type === "local") {
-      console.warn(`[local-adapter] bridge did not receive delete for ${sessionId}: ${result}`);
+    if (deliveryResult !== "delivered" && adapter.type === "local") {
+      console.warn(
+        `[local-adapter] bridge did not receive delete for ${sessionId}: ${deliveryResult}`,
+      );
     }
-    await adapter.stopSession({
-      sessionId,
-      organizationId: session.organizationId,
-      environment,
-      connection,
-      reason: "session_deleted",
-    });
-    this.unbindSession(sessionId);
+
+    await options?.onLifecycle?.("session_runtime_stopping", lifecycleSnapshot);
+
+    try {
+      const stopResult = await this.attemptStopSession(
+        adapter,
+        {
+          sessionId,
+          organizationId: session.organizationId,
+          environment,
+          connection,
+          reason,
+        },
+        options?.maxStopAttempts ?? 3,
+      );
+      // status=stopping means the launcher kicked off async cleanup; the
+      // compute is not yet gone. Leave the connection in `stopping` so the
+      // reconciler picks it up and re-checks via the idempotent stopUrl.
+      // Only emit `stopped` when compute is actually gone (or never existed).
+      if (stopResult.status === "stopped" || stopResult.status === "not_found") {
+        await options?.onLifecycle?.("session_runtime_stopped", {
+          ...lifecycleSnapshot,
+          providerStatus: stopResult.status,
+        });
+      } else if (stopResult.status === "unsupported") {
+        // Adapter cannot stop (e.g., environment metadata missing). Treat as a
+        // deprovision failure so it surfaces to the operator instead of silently
+        // looping.
+        await options?.onLifecycle?.("session_runtime_deprovision_failed", {
+          ...lifecycleSnapshot,
+          error: stopResult.message ?? "Runtime adapter cannot stop this session",
+        });
+      }
+      // status=stopping → leave in stopping; reconciler retries.
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[runtime-adapter] stop failed for ${sessionId}: ${message}`);
+      await options?.onLifecycle?.("session_runtime_deprovision_failed", {
+        ...lifecycleSnapshot,
+        error: message,
+      });
+    } finally {
+      this.unbindSession(sessionId);
+    }
+  }
+
+  private async attemptStopSession(
+    adapter: { stopSession: RuntimeAdapter["stopSession"] },
+    input: Parameters<RuntimeAdapter["stopSession"]>[0],
+    maxAttempts: number,
+  ): Promise<Awaited<ReturnType<RuntimeAdapter["stopSession"]>>> {
+    let lastError: Error | undefined;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await adapter.stopSession(input);
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        // Permanent failures (4xx auth/validation, malformed config) won't be
+        // fixed by retrying — short-circuit to surface them immediately.
+        if (err instanceof ProvisionedLauncherError && !err.retryable) {
+          throw lastError;
+        }
+        if (attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+        }
+      }
+    }
+    throw lastError ?? new Error("stopSession failed");
   }
 
   /**

@@ -56,6 +56,13 @@ Owns plan lines:
 - Do not expose raw secret values after save.
 - Use a secret selector/reference for launcher auth secrets instead of plain text config where possible.
 - Show bearer auth as the simple V1 option and HMAC only if that mode is implemented.
+- The session row carries the deprovision lifecycle in `connection.state`:
+  `stopping`, `stopped`, `deprovisioned`, `deprovision_failed` (in addition
+  to the startup states from ticket 08). Session UI should distinguish
+  "Trace is still cleaning up" (`stopping`/`deprovision_failed` with
+  `autoRetryable: true`) from "Trace gave up" (`deprovision_failed` with
+  `autoRetryable: false` and `abandonedAt` set) — only the latter requires
+  operator action.
 
 ## How to test
 
