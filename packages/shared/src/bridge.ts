@@ -145,6 +145,8 @@ export interface BridgeGitIntegrationCommand {
   sourceRef?: string;
   targetRef?: string;
   commitRef?: string;
+  branchRef?: string;
+  ontoRef?: string;
   /** Fallback workdir from DB, used when bridge has no entry in sessionWorkdirs */
   workdirHint?: string;
 }
@@ -480,6 +482,8 @@ export interface BridgeGitIntegrationResultPayload {
   operation: BridgeGitIntegrationCommand["operation"];
   headCommitSha: string | null;
   conflicts: string[];
+  aborted: boolean;
+  requiresAbort: boolean;
   error: string | null;
 }
 
@@ -799,6 +803,16 @@ export function handleReadFile(
 
 /** Callback-based git command runner, injected by bridges. */
 export type GitExecFn = (args: string[], cwd: string) => Promise<string>;
+export type GitLimitedExecResult = {
+  stdout: string;
+  truncated: boolean;
+  omittedBytes: number;
+};
+export type GitLimitedExecFn = (
+  args: string[],
+  cwd: string,
+  maxOutputBytes: number,
+) => Promise<GitLimitedExecResult>;
 
 /** Reject refs that could be interpreted as git flags or contain dangerous patterns. */
 function hasInvalidGitRef(ref: string): boolean {
@@ -869,28 +883,39 @@ async function buildGitDiffSummary(
   workdir: string,
   range: string,
   options: { includePatch?: boolean; maxPatchBytes?: number; maxFiles?: number },
+  gitExecLimited?: GitLimitedExecFn,
 ): Promise<BridgeGitDiffSummary> {
   const maxFiles = boundedPositiveInteger(options.maxFiles, DEFAULT_DIFF_MAX_FILES, MAX_DIFF_FILES);
-  const [numstatOut, nameStatusOut, patchOut] = await Promise.all([
-    gitExec(["diff", "--numstat", range], workdir),
-    gitExec(["diff", "--name-status", range], workdir),
-    options.includePatch
-      ? gitExec(["diff", "--patch", "--no-ext-diff", range], workdir)
-      : Promise.resolve(""),
-  ]);
-  const files = parseDiffFiles(numstatOut, nameStatusOut, maxFiles);
-  if (!options.includePatch) return { files, patch: null, truncated: false, omittedBytes: 0 };
   const maxPatchBytes = boundedPositiveInteger(
     options.maxPatchBytes,
     DEFAULT_DIFF_PATCH_BYTES,
     MAX_DIFF_PATCH_BYTES,
   );
-  const truncated = truncateUtf8(patchOut, maxPatchBytes);
+  const [numstatOut, nameStatusOut, patchOut] = await Promise.all([
+    gitExec(["diff", "--numstat", range], workdir),
+    gitExec(["diff", "--name-status", range], workdir),
+    options.includePatch
+      ? gitExecLimited
+        ? gitExecLimited(["diff", "--patch", "--no-ext-diff", range], workdir, maxPatchBytes)
+        : gitExec(["diff", "--patch", "--no-ext-diff", range], workdir).then((stdout) =>
+            (() => {
+              const truncated = truncateUtf8(stdout, maxPatchBytes);
+              return {
+                stdout: truncated.text,
+                truncated: truncated.truncated,
+                omittedBytes: truncated.omittedBytes,
+              };
+            })(),
+          )
+      : Promise.resolve({ stdout: "", truncated: false, omittedBytes: 0 }),
+  ]);
+  const files = parseDiffFiles(numstatOut, nameStatusOut, maxFiles);
+  if (!options.includePatch) return { files, patch: null, truncated: false, omittedBytes: 0 };
   return {
     files,
-    patch: truncated.text,
-    truncated: truncated.truncated,
-    omittedBytes: truncated.omittedBytes,
+    patch: patchOut.stdout,
+    truncated: patchOut.truncated,
+    omittedBytes: patchOut.omittedBytes,
   };
 }
 
@@ -903,6 +928,7 @@ export async function handleBranchDiff(
   sessionWorkdirs: Map<string, string>,
   send: (msg: BridgeMessage) => void,
   gitExec: GitExecFn,
+  gitExecLimited?: GitLimitedExecFn,
 ): Promise<void> {
   const { requestId, sessionId, baseBranch, headRef, workdirHint } = cmd;
   const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
@@ -931,6 +957,7 @@ export async function handleBranchDiff(
       workdir,
       `${baseBranch}...${headRef ?? "HEAD"}`,
       cmd,
+      gitExecLimited,
     );
     send({ type: "branch_diff_result", requestId, ...summary });
   } catch (err) {
@@ -948,6 +975,7 @@ export async function handleCommitDiff(
   sessionWorkdirs: Map<string, string>,
   send: (msg: BridgeMessage) => void,
   gitExec: GitExecFn,
+  gitExecLimited?: GitLimitedExecFn,
 ): Promise<void> {
   const { requestId, sessionId, commitRef = "HEAD", workdirHint } = cmd;
   const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
@@ -966,7 +994,13 @@ export async function handleCommitDiff(
   }
 
   try {
-    const summary = await buildGitDiffSummary(gitExec, workdir, `${commitRef}^!`, cmd);
+    const summary = await buildGitDiffSummary(
+      gitExec,
+      workdir,
+      `${commitRef}^!`,
+      cmd,
+      gitExecLimited,
+    );
     send({ type: "commit_diff_result", requestId, ...summary });
   } catch (err) {
     send({
@@ -996,15 +1030,41 @@ async function readHeadCommit(gitExec: GitExecFn, workdir: string): Promise<stri
   }
 }
 
+async function abortIntegration(gitExec: GitExecFn, workdir: string): Promise<boolean> {
+  try {
+    await gitExec(["merge", "--abort"], workdir)
+      .catch(() => gitExec(["cherry-pick", "--abort"], workdir))
+      .catch(() => gitExec(["rebase", "--abort"], workdir));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function handleGitIntegration(
   cmd: BridgeGitIntegrationCommand,
   sessionWorkdirs: Map<string, string>,
   send: (msg: BridgeMessage) => void,
   gitExec: GitExecFn,
 ): Promise<void> {
-  const { requestId, sessionId, operation, sourceRef, targetRef, commitRef, workdirHint } = cmd;
+  const {
+    requestId,
+    sessionId,
+    operation,
+    sourceRef,
+    targetRef,
+    commitRef,
+    branchRef,
+    ontoRef,
+    workdirHint,
+  } = cmd;
   const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
-  const fail = async (error: string, conflicts: string[] = []) => {
+  const fail = async (
+    error: string,
+    conflicts: string[] = [],
+    aborted = false,
+    requiresAbort = false,
+  ) => {
     send({
       type: "git_integration_result",
       requestId,
@@ -1013,6 +1073,8 @@ export async function handleGitIntegration(
         operation,
         headCommitSha: workdir ? await readHeadCommit(gitExec, workdir) : null,
         conflicts,
+        aborted,
+        requiresAbort,
         error,
       },
     });
@@ -1023,7 +1085,7 @@ export async function handleGitIntegration(
     return;
   }
 
-  for (const ref of [sourceRef, targetRef, commitRef].filter(
+  for (const ref of [sourceRef, targetRef, commitRef, branchRef, ontoRef].filter(
     (candidate): candidate is string => Boolean(candidate),
   )) {
     if (hasInvalidGitRef(ref)) {
@@ -1034,9 +1096,11 @@ export async function handleGitIntegration(
 
   try {
     if (operation === "abort") {
-      await gitExec(["merge", "--abort"], workdir)
-        .catch(() => gitExec(["cherry-pick", "--abort"], workdir))
-        .catch(() => gitExec(["rebase", "--abort"], workdir));
+      const aborted = await abortIntegration(gitExec, workdir);
+      if (!aborted) {
+        await fail("No merge, cherry-pick, or rebase operation could be aborted");
+        return;
+      }
       send({
         type: "git_integration_result",
         requestId,
@@ -1045,13 +1109,15 @@ export async function handleGitIntegration(
           operation,
           headCommitSha: await readHeadCommit(gitExec, workdir),
           conflicts: [],
+          aborted: true,
+          requiresAbort: false,
           error: null,
         },
       });
       return;
     }
 
-    if (targetRef) {
+    if (targetRef && operation !== "rebase") {
       await gitExec(["checkout", targetRef], workdir);
     }
 
@@ -1068,11 +1134,16 @@ export async function handleGitIntegration(
       }
       await gitExec(["cherry-pick", commitRef], workdir);
     } else if (operation === "rebase") {
-      if (!sourceRef) {
-        await fail("Missing source ref for rebase");
+      const upstreamRef = ontoRef ?? sourceRef;
+      const checkoutRef = branchRef ?? targetRef;
+      if (!upstreamRef) {
+        await fail("Missing upstream ref for rebase");
         return;
       }
-      await gitExec(["rebase", sourceRef], workdir);
+      if (checkoutRef) {
+        await gitExec(["checkout", checkoutRef], workdir);
+      }
+      await gitExec(["rebase", upstreamRef], workdir);
     }
 
     send({
@@ -1083,11 +1154,14 @@ export async function handleGitIntegration(
         operation,
         headCommitSha: await readHeadCommit(gitExec, workdir),
         conflicts: [],
+        aborted: false,
+        requiresAbort: false,
         error: null,
       },
     });
   } catch (err) {
     const conflicts = await readConflictFiles(gitExec, workdir);
+    const aborted = conflicts.length > 0 ? await abortIntegration(gitExec, workdir) : false;
     send({
       type: "git_integration_result",
       requestId,
@@ -1096,6 +1170,8 @@ export async function handleGitIntegration(
         operation,
         headCommitSha: await readHeadCommit(gitExec, workdir),
         conflicts,
+        aborted,
+        requiresAbort: conflicts.length > 0 && !aborted,
         error: err instanceof Error ? err.message : "Git integration failed",
       },
     });

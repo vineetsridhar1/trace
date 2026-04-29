@@ -102,6 +102,7 @@ export type {
   GitSyncStatusRunner,
 } from "./session-git-sync-status.js";
 export { inspectSessionGitSyncStatus } from "./session-git-sync-status.js";
+export type { GitLimitedExecFn, GitLimitedExecResult } from "./bridge.js";
 export type { BuiltinSlashCommand } from "./slash-commands.js";
 export { BUILTIN_SLASH_COMMANDS } from "./slash-commands.js";
 export type {

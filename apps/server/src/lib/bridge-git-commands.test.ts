@@ -52,6 +52,41 @@ describe("bridge git command handlers", () => {
     ]);
   });
 
+  it("uses bounded patch reader instead of full patch output when available", async () => {
+    const sender = createSender();
+    const gitExec: GitExecFn = async (args) => {
+      const command = args.join(" ");
+      if (command.includes("--numstat")) return "1\t0\tsrc/a.ts\n";
+      if (command.includes("--name-status")) return "M\tsrc/a.ts\n";
+      throw new Error("unbounded patch should not be requested");
+    };
+
+    await handleCommitDiff(
+      {
+        type: "commit_diff",
+        requestId: "request-1",
+        sessionId: "session-1",
+        includePatch: true,
+        maxPatchBytes: 3,
+      },
+      new Map([["session-1", "/repo"]]),
+      sender.send,
+      gitExec,
+      async () => ({ stdout: "abc", truncated: true, omittedBytes: 3 }),
+    );
+
+    expect(sender.messages).toEqual([
+      {
+        type: "commit_diff_result",
+        requestId: "request-1",
+        files: [{ path: "src/a.ts", status: "M", additions: 1, deletions: 0 }],
+        patch: "abc",
+        truncated: true,
+        omittedBytes: 3,
+      },
+    ]);
+  });
+
   it("rejects invalid refs before running commit diff git commands", async () => {
     const sender = createSender();
     let callCount = 0;
@@ -90,6 +125,7 @@ describe("bridge git command handlers", () => {
       if (command === "checkout integration") return "";
       if (command === "merge --no-ff --no-edit ticket") throw new Error("merge conflict");
       if (command === "diff --name-only --diff-filter=U") return "src/conflict.ts\n";
+      if (command === "merge --abort") return "";
       if (command === "rev-parse HEAD") return "abc123\n";
       return "";
     };
@@ -117,9 +153,43 @@ describe("bridge git command handlers", () => {
           operation: "merge",
           headCommitSha: "abc123",
           conflicts: ["src/conflict.ts"],
+          aborted: true,
+          requiresAbort: false,
           error: "merge conflict",
         },
       },
     ]);
+  });
+
+  it("rebases an explicit branch ref onto an explicit upstream ref", async () => {
+    const sender = createSender();
+    const commands: string[] = [];
+    const gitExec: GitExecFn = async (args) => {
+      const command = args.join(" ");
+      commands.push(command);
+      if (command === "rev-parse HEAD") return "abc123\n";
+      return "";
+    };
+
+    await handleGitIntegration(
+      {
+        type: "git_integration",
+        requestId: "request-1",
+        sessionId: "session-1",
+        operation: "rebase",
+        branchRef: "ticket",
+        ontoRef: "integration",
+      },
+      new Map([["session-1", "/repo"]]),
+      sender.send,
+      gitExec,
+    );
+
+    expect(commands).toContain("checkout ticket");
+    expect(commands).toContain("rebase integration");
+    expect(sender.messages[0]).toMatchObject({
+      type: "git_integration_result",
+      result: { ok: true, aborted: false, requiresAbort: false },
+    });
   });
 });
