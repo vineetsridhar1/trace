@@ -1,4 +1,4 @@
-import type { EntityState } from "@trace/client-core";
+import { isUserVisibleSession, type EntityState } from "@trace/client-core";
 
 const EMPTY_IDS: readonly string[] = Object.freeze([]);
 
@@ -11,6 +11,7 @@ function collectActiveSessionIds(state: EntityState, userId?: string): readonly 
   let out: Array<{ id: string; ts: string }> | null = null;
   for (const id in state.sessions) {
     const session = state.sessions[id];
+    if (!isUserVisibleSession(session)) continue;
     if (userId && !ownedBy(session, userId)) continue;
     if (session.sessionStatus === "merged") continue;
     if (session.agentStatus === "failed") continue;

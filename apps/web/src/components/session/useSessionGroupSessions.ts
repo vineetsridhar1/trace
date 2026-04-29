@@ -1,5 +1,9 @@
 import { useMemo } from "react";
-import { useEntitiesByIds, useSessionIdsByGroup } from "@trace/client-core";
+import {
+  filterUserVisibleSessions,
+  useEntitiesByIds,
+  useSessionIdsByGroup,
+} from "@trace/client-core";
 import type { SessionEntity } from "@trace/client-core";
 
 export function useSessionGroupSessions(
@@ -11,7 +15,10 @@ export function useSessionGroupSessions(
   const groupSessionEntities = useEntitiesByIds("sessions", groupSessionIds);
 
   const groupSessions = useMemo(
-    () => groupSessionEntities.filter((session): session is SessionEntity => session != null),
+    () =>
+      filterUserVisibleSessions(
+        groupSessionEntities.filter((session): session is SessionEntity => session != null),
+      ),
     [groupSessionEntities],
   );
 

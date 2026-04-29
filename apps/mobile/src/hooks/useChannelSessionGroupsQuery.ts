@@ -30,6 +30,7 @@ const SESSION_GROUPS_QUERY = gql`
         name
         agentStatus
         sessionStatus
+        role
         tool
         model
         reasoningEffort

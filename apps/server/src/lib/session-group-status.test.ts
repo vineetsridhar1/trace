@@ -45,4 +45,20 @@ describe("deriveSessionGroupStatus", () => {
       ),
     ).toBe("in_progress");
   });
+
+  it("ignores controller-run sessions when deriving user-facing status", () => {
+    expect(
+      deriveSessionGroupStatus(
+        [
+          {
+            agentStatus: "failed",
+            sessionStatus: "needs_input",
+            role: "ultraplan_controller_run",
+          },
+          { agentStatus: "done", sessionStatus: "in_progress", role: "primary" },
+        ],
+        null,
+      ),
+    ).toBe("in_progress");
+  });
 });

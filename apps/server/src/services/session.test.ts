@@ -420,6 +420,7 @@ describe("SessionService", () => {
         where: {
           organizationId: "org-1",
           createdById: "user-1",
+          role: { not: "ultraplan_controller_run" },
           sessionStatus: { not: "merged" },
           OR: [
             { sessionGroupId: null },
@@ -447,6 +448,7 @@ describe("SessionService", () => {
         where: {
           organizationId: "org-1",
           createdById: "user-1",
+          role: { not: "ultraplan_controller_run" },
           agentStatus: "active",
         },
         orderBy: { updatedAt: "desc" },
@@ -480,6 +482,7 @@ describe("SessionService", () => {
       expect(prismaMock.session.findMany).toHaveBeenCalledWith({
         where: {
           organizationId: "org-1",
+          role: { not: "ultraplan_controller_run" },
           name: { contains: "deploy", mode: "insensitive" },
         },
         orderBy: { updatedAt: "desc" },
