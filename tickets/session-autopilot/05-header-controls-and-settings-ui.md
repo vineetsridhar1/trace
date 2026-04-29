@@ -44,8 +44,7 @@ Move the product surface to the session-group UI and add the first Ultraplan sta
 - [x] Session group header shows an Ultraplan affordance.
 - [x] State chip reflects live Ultraplan status.
 - [x] User can start, pause, resume, cancel, and run-now from the group surface.
-- [ ] Ordered tickets and their dependency/blocking state are visible. Ticket order and
-  `UltraplanTicket.status` render, but dependency edges/blocking reasons are not yet surfaced.
+- [x] Ordered tickets and their dependency/blocking state are visible.
 - [x] Planned tickets render before any `TicketExecution` exists.
 - [x] Ticket worker sessions are linked from the panel.
 - [x] Controller run summaries render in an activity timeline.
@@ -58,12 +57,6 @@ Move the product surface to the session-group UI and add the first Ultraplan sta
 - Keep the initial panel practical and dense. Do not build a large management console in v1.
 - Use shadcn/ui components and existing session UI patterns.
 - Product copy should describe the workflow, not implementation details.
-
-## Review follow-ups
-
-- Render dependency edges/blocking reasons in the ticket plan.
-- Render controller summary action labels from the planned `summaryPayload.actions[].label`
-  shape, not only `title` or `summary` fields.
 
 ## How to test
 
