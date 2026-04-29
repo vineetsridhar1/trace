@@ -4,6 +4,16 @@
 
 Secure cloud runtime bridge registration with short-lived runtime tokens tied to the expected session and environment.
 
+## Plan coverage
+
+Owns plan lines:
+
+- 98-118: bridge heartbeats and shared local/cloud protocol expectations
+- 627-677: cloud runtime bridge bootstrap, `runtime_hello`, empty registered repos, token claims, and validation
+- 919-925: phase 5 token validation, heartbeat/stale runtime tracking, and startup queue dependency
+- 989: open decision on JWT versus opaque runtime tokens
+- 1000: V1 cloud runtime bridge token auth requirement
+
 ## What needs to happen
 
 - Add runtime token creation for provisioned sessions.

@@ -4,6 +4,17 @@
 
 Create the service-layer owner for environment CRUD, default resolution, validation, authorization, and event emission.
 
+## Plan coverage
+
+Owns plan lines:
+
+- 119-135: service-layer position in the target architecture
+- 137-163: transactional default-environment enforcement
+- 293-332: `AgentEnvironmentService` responsibilities, methods, and thin resolvers
+- 859-883: service-layer secret resolution
+- 887-895: phase 1 service/resolver/events work
+- 995 and 998: V1 environment service and default environment requirements
+
 ## What needs to happen
 
 - Add `agentEnvironmentService`.

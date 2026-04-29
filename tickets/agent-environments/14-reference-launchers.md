@@ -4,6 +4,15 @@
 
 Provide optional launcher examples outside Trace core for common infrastructure targets.
 
+## Plan coverage
+
+Owns plan lines:
+
+- 11: reference launcher support for AWS, Fly, Kubernetes, and other platforms
+- 79-84: launcher examples outside Trace core
+- 596-626: launcher-side signature verification, timestamp checks, and replay rejection
+- 991-1014: AWS VPC usage path through the provisioned adapter
+
 ## What needs to happen
 
 - Add reference launcher documentation and/or example apps for:

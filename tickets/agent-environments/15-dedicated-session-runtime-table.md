@@ -4,6 +4,13 @@
 
 Move runtime lifecycle state out of `Session.connection` once the environment model is stable.
 
+## Plan coverage
+
+Owns plan lines:
+
+- 191-216: deferred `SessionRuntime` model and migration guidance
+- 983-990: open decisions, including whether `SessionRuntime` is now or post-V1
+
 ## What needs to happen
 
 - Add a `SessionRuntime` model with:

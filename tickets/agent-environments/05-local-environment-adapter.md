@@ -4,6 +4,19 @@
 
 Represent local desktop bridge sessions as agent environments without changing the existing local runtime behavior.
 
+## Plan coverage
+
+Owns plan lines:
+
+- 7-10: connected local desktop bridge support
+- 30-42: existing local bridge/session-router baseline
+- 98-118: shared bridge protocol for local runtime traffic
+- 430-473: local adapter purpose, config, start flow, stop flow, and no host deprovisioning
+- 896-898: phase 2 local adapter extraction
+- 942: migration of existing local runtime selection
+- 986: open decision on explicit local records versus any accessible bridge
+- 996: V1 local adapter type requirement
+
 ## What needs to happen
 
 - Extract or wrap the current local session adapter as `LocalRuntimeAdapter`.

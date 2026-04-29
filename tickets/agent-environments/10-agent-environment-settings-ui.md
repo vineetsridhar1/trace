@@ -4,6 +4,15 @@
 
 Add org settings UI for managing local and provisioned agent environments.
 
+## Plan coverage
+
+Owns plan lines:
+
+- 807-849: org settings environment list, local form, provisioned form, connected bridges/repos, and status display
+- 859-883: secret selector/reference UI for environment config
+- 933-938: phase 7 org settings environment management and session-status display dependency
+- 1003: V1 basic org settings UI requirement
+
 ## What needs to happen
 
 - Add `Org Settings -> Agent Environments`.

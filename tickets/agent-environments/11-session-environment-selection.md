@@ -4,6 +4,18 @@
 
 Let session creation use an explicit environment or the org default while preserving current local behavior.
 
+## Plan coverage
+
+Owns plan lines:
+
+- 164-190: persist environment/runtime metadata in session connection state
+- 333-353: session creation environment resolution and `hosting` compatibility
+- 850-858: session environment selector and advanced environment choice
+- 904-910: phase 3 session creation behavior
+- 936-938: phase 7 session selector and startup/deprovision status
+- 990-998: transition from open decisions into V1 `environmentId` and default environment requirements
+- 1003: session-side portion of the basic UI requirement
+
 ## What needs to happen
 
 - Add environment selector to session creation surfaces.

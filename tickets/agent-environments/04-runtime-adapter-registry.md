@@ -4,6 +4,16 @@
 
 Replace direct hosting-mode branching with an environment-aware runtime adapter registry.
 
+## Plan coverage
+
+Owns plan lines:
+
+- 85-97: runtime adapter responsibilities and boundary from message handling
+- 119-136: adapter registry in the target architecture
+- 354-429: runtime adapter interface, start result contract, and registry
+- 896-903: phase 2 registry and router dispatch work
+- 996: V1 local/provisioned adapter type requirement
+
 ## What needs to happen
 
 - Define a `RuntimeAdapter` interface for:

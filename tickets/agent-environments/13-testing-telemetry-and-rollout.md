@@ -4,6 +4,13 @@
 
 Add end-to-end confidence, operational visibility, and rollout controls for agent environments.
 
+## Plan coverage
+
+Owns plan lines:
+
+- 946-984: unit, service, and integration test requirements plus open-decision handoff
+- Also consolidates verification for the implementation tickets' `How to test` sections
+
 ## What needs to happen
 
 - Add unit tests for:

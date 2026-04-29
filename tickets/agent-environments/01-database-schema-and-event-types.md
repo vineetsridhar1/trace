@@ -4,6 +4,17 @@
 
 Add the durable database and event contracts for org-configured agent environments and runtime lifecycle state.
 
+## Plan coverage
+
+Owns plan lines:
+
+- 43-75: `AgentEnvironment` concept, fields, and initial adapter types
+- 137-190: Prisma model and normalized `Session.connection` runtime state
+- 782-805: provider-neutral runtime lifecycle events
+- 859-895: org secret storage requirements and phase 1 migration items
+- 887-895: phase 1 model/events work
+- 991-995: V1 environment model requirement
+
 ## What needs to happen
 
 - Add an `AgentEnvironment` Prisma model with:

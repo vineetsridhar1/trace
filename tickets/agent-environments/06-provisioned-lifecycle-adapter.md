@@ -4,6 +4,19 @@
 
 Add the generic provisioned adapter that calls an org-owned signed lifecycle endpoint to start, stop, and inspect runtimes.
 
+## Plan coverage
+
+Owns plan lines:
+
+- 7-11: generic provisioned runtimes and reference-launcher path
+- 76-84: signed provisioned endpoints and launcher examples outside core
+- 474-626: provisioned adapter purpose, config, start/stop/status contracts, signing, and replay expectations
+- 627-639: runtime bootstrap values passed to the launcher
+- 859-883: signing secret references and adapter-time secret resolution
+- 911-918: phase 4 provisioned adapter work
+- 988: open decision on provisioned status polling scope
+- 999: V1 signed provisioned start/stop/status requirement
+
 ## What needs to happen
 
 - Implement `ProvisionedRuntimeAdapter`.
