@@ -17,6 +17,33 @@ const TICKET_INCLUDE = {
   links: true,
 } as const;
 
+async function assertDependencyTicketsInOrg(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  dependencyTicketIds: readonly string[] | null | undefined,
+  ticketId?: string,
+) {
+  if (!dependencyTicketIds?.length) return [];
+
+  const uniqueIds = [...new Set(dependencyTicketIds)];
+  if (ticketId && uniqueIds.includes(ticketId)) {
+    throw new Error("A ticket cannot depend on itself");
+  }
+
+  const dependencyCount = await tx.ticket.count({
+    where: {
+      id: { in: uniqueIds },
+      organizationId,
+    },
+  });
+
+  if (dependencyCount !== uniqueIds.length) {
+    throw new Error("One or more dependency tickets were not found");
+  }
+
+  return uniqueIds;
+}
+
 export class TicketService {
   async list(
     organizationId: string,
@@ -51,6 +78,11 @@ export class TicketService {
   async create(input: CreateTicketServiceInput) {
     const [ticket] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await assertActorOrgAccess(tx, input.organizationId, input.actorType, input.actorId);
+      const dependencyTicketIds = await assertDependencyTicketsInOrg(
+        tx,
+        input.organizationId,
+        input.dependencyTicketIds,
+      );
 
       const ticket = await tx.ticket.create({
         data: {
@@ -58,9 +90,19 @@ export class TicketService {
           description: input.description ?? "",
           priority: input.priority ?? "medium",
           labels: input.labels ?? [],
+          acceptanceCriteria: input.acceptanceCriteria ?? [],
+          testPlan: input.testPlan ?? undefined,
           organizationId: input.organizationId,
           createdById: input.actorId,
           channelId: input.channelId ?? undefined,
+          ...(dependencyTicketIds.length && {
+            dependencies: {
+              create: dependencyTicketIds.map((dependsOnTicketId) => ({
+                dependsOnTicketId,
+                organizationId: input.organizationId,
+              })),
+            },
+          }),
           ...(input.projectId && {
             projects: { create: { projectId: input.projectId } },
           }),
@@ -83,6 +125,9 @@ export class TicketService {
             ticketId: ticket.id,
             title: ticket.title,
             priority: ticket.priority,
+            acceptanceCriteria: ticket.acceptanceCriteria,
+            testPlan: ticket.testPlan,
+            dependencyTicketIds,
           },
           actorType: input.actorType,
           actorId: input.actorId,
@@ -97,40 +142,68 @@ export class TicketService {
   }
 
   async update(id: string, input: UpdateTicketInput, actorType: ActorType, actorId: string) {
-    const existing = await prisma.ticket.findUniqueOrThrow({
-      where: { id },
-      select: { organizationId: true, status: true },
-    });
-    await prisma.$transaction((tx: Prisma.TransactionClient) =>
-      assertActorOrgAccess(tx, existing.organizationId, actorType, actorId),
-    );
+    const ticket = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const existing = await tx.ticket.findUniqueOrThrow({
+        where: { id },
+        select: { organizationId: true, status: true },
+      });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
 
-    const ticket = await prisma.ticket.update({
-      where: { id },
-      data: {
-        ...(input.title !== undefined && input.title !== null && { title: input.title }),
-        ...(input.description !== undefined &&
-          input.description !== null && { description: input.description }),
-        ...(input.status !== undefined && input.status !== null && { status: input.status }),
-        ...(input.priority !== undefined &&
-          input.priority !== null && { priority: input.priority }),
-        ...(input.labels !== undefined && input.labels !== null && { labels: input.labels }),
-      },
-      include: TICKET_INCLUDE,
-    });
+      const dependencyTicketIds =
+        input.dependencyTicketIds !== undefined && input.dependencyTicketIds !== null
+          ? await assertDependencyTicketsInOrg(
+              tx,
+              existing.organizationId,
+              input.dependencyTicketIds,
+              id,
+            )
+          : null;
 
-    await eventService.create({
-      organizationId: existing.organizationId,
-      scopeType: "ticket",
-      scopeId: id,
-      eventType: "ticket_updated",
-      payload: {
-        ticketId: id,
-        changes: input,
-        previousStatus: existing.status,
-      },
-      actorType,
-      actorId,
+      const updated = await tx.ticket.update({
+        where: { id },
+        data: {
+          ...(input.title !== undefined && input.title !== null && { title: input.title }),
+          ...(input.description !== undefined &&
+            input.description !== null && { description: input.description }),
+          ...(input.status !== undefined && input.status !== null && { status: input.status }),
+          ...(input.priority !== undefined &&
+            input.priority !== null && { priority: input.priority }),
+          ...(input.acceptanceCriteria !== undefined &&
+            input.acceptanceCriteria !== null && { acceptanceCriteria: input.acceptanceCriteria }),
+          ...(input.testPlan !== undefined &&
+            input.testPlan !== null && { testPlan: input.testPlan }),
+          ...(input.labels !== undefined && input.labels !== null && { labels: input.labels }),
+          ...(dependencyTicketIds && {
+            dependencies: {
+              deleteMany: {},
+              create: dependencyTicketIds.map((dependsOnTicketId) => ({
+                dependsOnTicketId,
+                organizationId: existing.organizationId,
+              })),
+            },
+          }),
+        },
+        include: TICKET_INCLUDE,
+      });
+
+      await eventService.create(
+        {
+          organizationId: existing.organizationId,
+          scopeType: "ticket",
+          scopeId: id,
+          eventType: "ticket_updated",
+          payload: {
+            ticketId: id,
+            changes: input,
+            previousStatus: existing.status,
+          },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      return updated;
     });
 
     return ticket;

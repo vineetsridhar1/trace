@@ -2009,8 +2009,11 @@ export type TicketDependency = {
   __typename?: "TicketDependency";
   createdAt: Scalars["DateTime"]["output"];
   dependsOnTicket: Ticket;
+  dependsOnTicketId: Scalars["ID"]["output"];
+  organizationId: Scalars["ID"]["output"];
   reason?: Maybe<Scalars["String"]["output"]>;
   ticket: Ticket;
+  ticketId: Scalars["ID"]["output"];
 };
 
 export type TicketExecution = {

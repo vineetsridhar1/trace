@@ -2010,8 +2010,11 @@ export type TicketDependency = {
   __typename?: "TicketDependency";
   createdAt: Scalars["DateTime"]["output"];
   dependsOnTicket: Ticket;
+  dependsOnTicketId: Scalars["ID"]["output"];
+  organizationId: Scalars["ID"]["output"];
   reason?: Maybe<Scalars["String"]["output"]>;
   ticket: Ticket;
+  ticketId: Scalars["ID"]["output"];
 };
 
 export type TicketExecution = {
@@ -4440,8 +4443,11 @@ export type TicketDependencyResolvers<
 > = ResolversObject<{
   createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   dependsOnTicket?: Resolver<ResolversTypes["Ticket"], ParentType, ContextType>;
+  dependsOnTicketId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   reason?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   ticket?: Resolver<ResolversTypes["Ticket"], ParentType, ContextType>;
+  ticketId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 

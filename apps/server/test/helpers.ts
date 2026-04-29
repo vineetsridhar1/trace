@@ -114,6 +114,7 @@ export function createPrismaMock() {
       groupBy: vi.fn(),
     },
     ticket: {
+      count: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       findUnique: vi.fn(),
@@ -131,6 +132,11 @@ export function createPrismaMock() {
       findMany: vi.fn(),
       delete: vi.fn(),
       deleteMany: vi.fn(),
+    },
+    ticketDependency: {
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+      createMany: vi.fn(),
     },
     chat: {
       create: vi.fn(),
