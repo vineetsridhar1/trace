@@ -14,7 +14,11 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const SESSION_ID = "session-1";
 const SCOPE_KEY = eventScopeKey("session", SESSION_ID);
 
-function makeEvent(id: string, timestamp: string): Event & { id: string } {
+function makeEvent(
+  id: string,
+  timestamp: string,
+  overrides: Partial<Event> = {},
+): Event & { id: string } {
   return {
     id,
     timestamp,
@@ -26,11 +30,16 @@ function makeEvent(id: string, timestamp: string): Event & { id: string } {
       id: "user-1",
       type: "user",
     },
+    ...overrides,
   };
 }
 
 function upsertEvent(id: string, timestamp: string): void {
   const event = makeEvent(id, timestamp);
+  useEntityStore.getState().upsertScopedEvent(SCOPE_KEY, event.id, event);
+}
+
+function upsertEventRecord(event: Event & { id: string }): void {
   useEntityStore.getState().upsertScopedEvent(SCOPE_KEY, event.id, event);
 }
 
@@ -90,5 +99,65 @@ describe("useSessionNodes", () => {
     });
 
     expect(eventNodeIds(requireLatest(latest).nodes)).toEqual(["event-1", "event-2"]);
+
+    act(() => {
+      renderer.unmount();
+    });
+  });
+
+  it("keeps visible terminal and infrastructure rows after mobile render filtering", () => {
+    let latest: UseSessionNodesResult | null = null;
+
+    function Probe() {
+      latest = useSessionNodes(SESSION_ID);
+      return null;
+    }
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(<Probe />);
+    });
+
+    act(() => {
+      upsertEventRecord(
+        makeEvent("message-1", "2026-04-25T10:00:00.000Z", {
+          eventType: "message_sent",
+          payload: { text: "hello" },
+        }),
+      );
+      upsertEventRecord(
+        makeEvent("error-1", "2026-04-25T10:00:01.000Z", {
+          eventType: "session_output",
+          payload: { type: "error", message: "runtime error" },
+        }),
+      );
+      upsertEventRecord(
+        makeEvent("recovery-1", "2026-04-25T10:00:02.000Z", {
+          eventType: "session_output",
+          payload: {
+            type: "recovery_failed",
+            reason: "home_runtime_offline",
+            connection: { lastError: "OD4MPKT-M is offline" },
+          },
+        }),
+      );
+      upsertEventRecord(
+        makeEvent("terminated-1", "2026-04-25T10:00:03.000Z", {
+          eventType: "session_terminated",
+          payload: { reason: "manual_stop", agentStatus: "done" },
+        }),
+      );
+    });
+
+    expect(eventNodeIds(requireLatest(latest).nodes)).toEqual([
+      "message-1",
+      "error-1",
+      "recovery-1",
+      "terminated-1",
+    ]);
+
+    act(() => {
+      renderer.unmount();
+    });
   });
 });

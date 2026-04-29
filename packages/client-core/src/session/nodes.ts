@@ -340,7 +340,7 @@ function deduplicateResultEvents(
   events: Record<string, Event>,
 ): SessionNode[] {
   const result: SessionNode[] = [];
-  let lastWasResult = false;
+  let lastWasSuccessfulResult = false;
 
   for (const node of nodes) {
     if (node.kind === "event") {
@@ -348,11 +348,13 @@ function deduplicateResultEvents(
       const payload =
         event?.eventType === "session_output" ? asJsonObject(event.payload) : undefined;
       const isResult = payload?.type === "result";
+      const isErrorResult = isResult && payload.subtype === "error";
+      const isSuccessfulResult = isResult && !isErrorResult;
 
-      if (isResult && lastWasResult) continue;
-      lastWasResult = isResult;
+      if (isSuccessfulResult && lastWasSuccessfulResult) continue;
+      lastWasSuccessfulResult = isSuccessfulResult;
     } else {
-      lastWasResult = false;
+      lastWasSuccessfulResult = false;
     }
     result.push(node);
   }
