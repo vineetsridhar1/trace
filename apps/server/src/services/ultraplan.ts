@@ -715,13 +715,55 @@ export class UltraplanService {
   }
 
   async runControllerNow(id: string, actorType: ActorType, actorId: string) {
+    return this.runControllerWithTrigger({
+      id,
+      actorType,
+      actorId,
+      triggerType: "manual",
+      inputSummary: "Manual controller run",
+    });
+  }
+
+  async runControllerForEvent(input: {
+    id: string;
+    actorType: ActorType;
+    actorId: string;
+    triggerEventId: string;
+    triggerType: string;
+    inputSummary: string;
+  }) {
+    return this.runControllerWithTrigger(input);
+  }
+
+  private async runControllerWithTrigger(input: {
+    id: string;
+    actorType: ActorType;
+    actorId: string;
+    triggerEventId?: string | null;
+    triggerType: string;
+    inputSummary: string;
+  }) {
     const ultraplan = await prisma.ultraplan.findUniqueOrThrow({
-      where: { id },
+      where: { id: input.id },
       include: ULTRAPLAN_INCLUDE,
     });
-    await assertActorOrgAccess(prisma, ultraplan.organizationId, actorType, actorId);
+    await assertActorOrgAccess(prisma, ultraplan.organizationId, input.actorType, input.actorId);
     if (["completed", "failed", "cancelled"].includes(ultraplan.status)) {
       throw new Error("Cannot run controller for an inactive Ultraplan");
+    }
+
+    if (input.triggerEventId) {
+      const existingTriggeredRun = await prisma.ultraplanControllerRun.findFirst({
+        where: {
+          organizationId: ultraplan.organizationId,
+          ultraplanId: ultraplan.id,
+          triggerEventId: input.triggerEventId,
+        },
+        include: { session: true, generatedTickets: true },
+      });
+      if (existingTriggeredRun) {
+        return existingTriggeredRun;
+      }
     }
 
     let activeControllerRun = await prisma.ultraplanControllerRun.findFirst({
@@ -745,8 +787,8 @@ export class UltraplanService {
           typeof activeControllerRun.session.connection.lastError === "string"
           ? activeControllerRun.session.connection.lastError
           : "Controller session failed before starting",
-        actorType,
-        actorId,
+        input.actorType,
+        input.actorId,
       );
       activeControllerRun = null;
     }
@@ -755,11 +797,11 @@ export class UltraplanService {
         await this.launchControllerRun({
           runId: activeControllerRun.id,
           sessionId: activeControllerRun.sessionId,
-          goal: activeControllerRun.inputSummary ?? "Manual controller run",
+          goal: activeControllerRun.inputSummary ?? input.inputSummary,
           ultraplanId: ultraplan.id,
           sessionGroupId: ultraplan.sessionGroupId,
-          actorType,
-          actorId,
+          actorType: input.actorType,
+          actorId: input.actorId,
           organizationId: ultraplan.organizationId,
         });
         return prisma.ultraplanControllerRun.findUniqueOrThrow({
@@ -789,10 +831,12 @@ export class UltraplanService {
     });
 
     const result = await prisma.$transaction(async (tx: TxClient) => {
-      const run = await this.createInitialRun(tx, ultraplan, controller, {
-        goal: "Manual controller run",
-        actorType,
-        actorId,
+      const run = await this.createControllerRun(tx, ultraplan, controller, {
+        triggerType: input.triggerType,
+        triggerEventId: input.triggerEventId ?? null,
+        inputSummary: input.inputSummary,
+        actorType: input.actorType,
+        actorId: input.actorId,
       });
       const updated = await tx.ultraplan.update({
         where: { id: ultraplan.id },
@@ -806,8 +850,8 @@ export class UltraplanService {
           scopeId: updated.id,
           eventType: "ultraplan_updated",
           payload: eventPayload(updated as unknown as Record<string, unknown>),
-          actorType,
-          actorId,
+          actorType: input.actorType,
+          actorId: input.actorId,
         },
         tx,
       );
@@ -818,11 +862,11 @@ export class UltraplanService {
       await this.launchControllerRun({
         runId: result.run.id,
         sessionId: result.run.sessionId,
-        goal: "Manual controller run",
+        goal: input.inputSummary,
         ultraplanId: result.ultraplan.id,
         sessionGroupId: result.ultraplan.sessionGroupId,
-        actorType,
-        actorId,
+        actorType: input.actorType,
+        actorId: input.actorId,
         organizationId: result.ultraplan.organizationId,
       });
     }
@@ -884,14 +928,35 @@ export class UltraplanService {
     controller: ControllerConfig,
     input: { goal: string; actorType: ActorType; actorId: string },
   ) {
+    return this.createControllerRun(tx, ultraplan, controller, {
+      triggerType: "initial",
+      inputSummary: input.goal,
+      actorType: input.actorType,
+      actorId: input.actorId,
+    });
+  }
+
+  private async createControllerRun(
+    tx: TxClient,
+    ultraplan: Prisma.UltraplanGetPayload<{ include: typeof ULTRAPLAN_INCLUDE }>,
+    controller: ControllerConfig,
+    input: {
+      triggerType: string;
+      inputSummary: string;
+      actorType: ActorType;
+      actorId: string;
+      triggerEventId?: string | null;
+    },
+  ) {
     return ultraplanControllerRunService.createRun(
       {
         ultraplan,
-        triggerType: "initial",
-        inputSummary: input.goal,
+        triggerType: input.triggerType,
+        inputSummary: input.inputSummary,
         controller,
         actorType: input.actorType,
         actorId: input.actorId,
+        triggerEventId: input.triggerEventId ?? null,
       },
       tx,
     );

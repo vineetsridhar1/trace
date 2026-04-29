@@ -49,6 +49,7 @@ import {
 import { memoryService } from "./services/memory.js";
 import { setPolicyCostTracker } from "./agent/policy-engine.js";
 import { publishWorkerStatus, publishAggregationWindows } from "./services/agent-worker-status.js";
+import { ultraplanEventRouter } from "./services/ultraplan-event-router.js";
 import { Semaphore } from "./agent/concurrency.js";
 import { createAgentLogger, incrementMetric, getMetrics } from "./agent/logger.js";
 import { startRedisHealthMonitor, stopRedisHealthMonitor } from "./agent/redis-health.js";
@@ -479,6 +480,25 @@ async function processEvents(orgId: string, entries: StreamEntry[]): Promise<voi
       trackEventForMemoryExtraction(orgId, event.scopeType, event.scopeId, event.eventType).catch(
         () => {},
       );
+
+      const ultraplanResult = await ultraplanEventRouter.handleEvent(event);
+      if (ultraplanResult.handled) {
+        if (verboseEventLogs) {
+          log("ultraplan event handled", {
+            orgId,
+            streamId: entry.id,
+            eventType: event.eventType,
+            scopeType: event.scopeType,
+            scopeId: event.scopeId,
+            reason: ultraplanResult.reason,
+            ...(ultraplanResult.ultraplanId ? { ultraplanId: ultraplanResult.ultraplanId } : {}),
+            ...(ultraplanResult.controllerRunId
+              ? { controllerRunId: ultraplanResult.controllerRunId }
+              : {}),
+          });
+        }
+        continue;
+      }
 
       // Route the event
       const result = routeEvent(event, agentContext);

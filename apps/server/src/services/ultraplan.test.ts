@@ -445,6 +445,38 @@ describe("UltraplanService", () => {
     );
   });
 
+  it("runs the controller for a lifecycle event with trigger metadata", async () => {
+    prismaMock.ultraplan.findUniqueOrThrow.mockResolvedValue(makeUltraplan());
+    prismaMock.ultraplan.update.mockResolvedValue(
+      makeUltraplan({ status: "planning", lastControllerRunId: "run-1" }),
+    );
+
+    await service.runControllerForEvent({
+      id: "ultra-1",
+      actorType: "system",
+      actorId: "system",
+      triggerEventId: "evt-worker-done",
+      triggerType: "worker_session_terminated",
+      inputSummary: "Worker session done: Add event router",
+    });
+
+    expect(prismaMock.ultraplanControllerRun.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          triggerEventId: "evt-worker-done",
+          triggerType: "worker_session_terminated",
+          inputSummary: "Worker session done: Add event router",
+        }),
+      }),
+    );
+    expect(sessionServiceMock.run).toHaveBeenCalledWith(
+      "session-1",
+      expect.stringContaining("Worker session done: Add event router"),
+      "plan",
+      expect.objectContaining({ clientSource: "ultraplan_controller" }),
+    );
+  });
+
   it("nudges an existing queued controller run when run-now is repeated", async () => {
     const activeRun = makeControllerRun({ id: "run-active", status: "queued" });
     prismaMock.ultraplan.findUniqueOrThrow.mockResolvedValue(makeUltraplan());
