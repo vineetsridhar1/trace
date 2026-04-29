@@ -41,6 +41,11 @@ const START_ULTRAPLAN_MUTATION = gql`
       status
       sessionGroupId
       updatedAt
+      lastControllerRun {
+        session {
+          id
+        }
+      }
     }
   }
 `;
@@ -52,6 +57,19 @@ function normalizeControllerProvider(tool?: string | null): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unexpected client error";
+}
+
+function getControllerSessionId(data: unknown): string | null {
+  const result = data as
+    | {
+        startUltraplan?: {
+          lastControllerRun?: { session?: { id?: unknown } | null } | null;
+        } | null;
+      }
+    | null
+    | undefined;
+  const sessionId = result?.startUltraplan?.lastControllerRun?.session?.id;
+  return typeof sessionId === "string" ? sessionId : null;
 }
 
 export function SessionInput({
@@ -101,6 +119,8 @@ export function SessionInput({
     bridgeInteractionAllowed &&
     !isOptimistic &&
     (isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted) || canQueue);
+  const canStartUltraplan = bridgeInteractionAllowed && !isOptimistic && !worktreeDeleted;
+  const canSubmit = mode === "ultraplan" ? canStartUltraplan : canSend;
   const displayModel = model ? getModelLabel(model) : "Claude Code";
 
   const _lastUserMessageAt = useEntityField("sessions", sessionId, "lastUserMessageAt") as
@@ -150,7 +170,6 @@ export function SessionInput({
   const handleSubmit = useCallback(
     async (_html: string, text: string) => {
       if (isSendingRef.current) return;
-      if ((!text && images.length === 0) || !canSend) return;
 
       if (text === "/clear") {
         const channelId = useUIStore.getState().activeChannelId;
@@ -161,6 +180,11 @@ export function SessionInput({
       }
 
       if (mode === "ultraplan") {
+        if (!text && images.length === 0) return;
+        if (!canStartUltraplan) {
+          toast.error("Ultraplan cannot start from this session");
+          throw new Error("Ultraplan cannot start from this session");
+        }
         if (!sessionGroupId) {
           toast.error("Ultraplan needs a session group");
           throw new Error("Ultraplan needs a session group");
@@ -206,6 +230,15 @@ export function SessionInput({
             toast.error("Failed to start Ultraplan", { description: result.error.message });
             throw result.error;
           }
+
+          const controllerSessionId = getControllerSessionId(result.data);
+          if (controllerSessionId) {
+            const ui = useUIStore.getState();
+            ui.openSessionTab(sessionGroupId, controllerSessionId);
+            ui.setActiveSessionId(controllerSessionId);
+            ui.setActiveTerminalId(null);
+          }
+          toast.success("Ultraplan started");
         } catch (error: unknown) {
           if (!handledError) {
             toast.error("Failed to start Ultraplan", { description: errorMessage(error) });
@@ -217,6 +250,8 @@ export function SessionInput({
         }
         return;
       }
+
+      if ((!text && images.length === 0) || !canSend) return;
 
       isSendingRef.current = true;
       setIsSending(true);
@@ -316,7 +351,19 @@ export function SessionInput({
         setIsSending(false);
       }
     },
-    [sessionId, mode, canSend, canQueue, images, sessionGroupId, hosting, connection, tool, model],
+    [
+      sessionId,
+      mode,
+      canSend,
+      canQueue,
+      canStartUltraplan,
+      images,
+      sessionGroupId,
+      hosting,
+      connection,
+      tool,
+      model,
+    ],
   );
 
   // If the user has bridge access (owner or granted), a disconnected session
@@ -401,7 +448,7 @@ export function SessionInput({
               initialHtml={initialDraftHtml}
               onSubmit={handleSubmit}
               placeholder={placeholder}
-              disabled={!canSend || isSending}
+              disabled={!canSubmit || isSending}
               slashCommands={slashCommands.commands}
               onShiftTab={cycleMode}
               onImagePaste={handleImagePaste}
@@ -417,7 +464,7 @@ export function SessionInput({
           <>
             <button
               onClick={() => void editorRef.current?.submit()}
-              disabled={(!hasContent && images.length === 0) || !canSend || isSending}
+              disabled={(!hasContent && images.length === 0) || !canSubmit || isSending}
               className={cn(
                 "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
                 MODE_CONFIG[mode as InteractionMode].sendButton,
@@ -437,7 +484,7 @@ export function SessionInput({
         ) : (
           <button
             onClick={() => void editorRef.current?.submit()}
-            disabled={(!hasContent && images.length === 0) || !canSend || isSending}
+            disabled={(!hasContent && images.length === 0) || !canSubmit || isSending}
             className={cn(
               "my-0.5 shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
               MODE_CONFIG[mode as InteractionMode].sendButton,
