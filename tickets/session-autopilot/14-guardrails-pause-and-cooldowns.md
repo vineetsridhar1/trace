@@ -14,6 +14,7 @@ Add the safety rules that keep Ultraplan from becoming noisy or destructive: ded
 - Add pause and resume behavior for Ultraplan.
 - Add cooldown behavior when a human dismisses or rejects a gate.
 - Prevent new worker launches and controller-run side effects while paused or blocked on required gates.
+- Ensure runtime action endpoints enforce pause, gate, and sequencing checks server-side.
 - Prevent controller-run sessions from affecting normal session group status.
 - Add max retry/attempt behavior for failed ticket executions.
 
@@ -30,6 +31,7 @@ Add the safety rules that keep Ultraplan from becoming noisy or destructive: ded
 - [ ] Scheduler chooses the next ticket from dependency state, not just raw array order.
 - [ ] Pause prevents new worker launches and integrations.
 - [ ] Controller-run active/failed state is excluded from user-facing group active/failed state.
+- [ ] Runtime action calls fail closed while the Ultraplan is paused or blocked.
 - [ ] Resume restarts the scheduler/controller-run pipeline safely.
 - [ ] Dismissal cooldowns prevent instant re-notification spam.
 - [ ] Failed executions do not retry forever.

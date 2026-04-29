@@ -29,6 +29,7 @@ Add the event router/worker that creates fresh controller runs when meaningful s
 - [04 — Ultraplan Service CRUD and Controller Runs](04-autopilot-service-crud-and-state.md)
 - [08 — Controller Run Context Packet Builder](08-autopilot-context-packet-builder.md)
 - [09 — Controller Tool and Summary Contract](09-controller-prompt-and-decision-parser.md)
+- [17 — Runtime Action Wrapper and Auth Plumbing](17-runtime-action-wrapper-and-auth-plumbing.md)
 
 ## Completion requirements
 
@@ -40,6 +41,7 @@ Add the event router/worker that creates fresh controller runs when meaningful s
 - [ ] Manual run-now uses the same run pipeline.
 - [ ] Run events carry enough payload for debugging and client state.
 - [ ] Run events are scoped to the Ultraplan.
+- [ ] Controller-run sessions launch with scoped runtime action env.
 
 ## Implementation notes
 

@@ -32,7 +32,8 @@ Create ticket work, run workers on isolated branches, and collect controller-run
 | --- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | 07  | [Branch and Diff Runtime Commands](07-commit-diff-bridge-command.md)               | Adds read-only diff and service-owned branch integration runtime plumbing  |
 | 08  | [Controller Run Context Packet Builder](08-autopilot-context-packet-builder.md)    | Builds per-run context across tickets, prior summaries, workers, checkpoints, and gates |
-| 09  | [Controller Tool and Summary Contract](09-controller-prompt-and-decision-parser.md) | Defines the controller prompt, tools, and required structured summary       |
+| 09  | [Controller Tool and Summary Contract](09-controller-prompt-and-decision-parser.md) | Defines the controller prompt, runtime actions, and required structured summary |
+| 17  | [Runtime Action Wrapper and Auth Plumbing](17-runtime-action-wrapper-and-auth-plumbing.md) | Adds scoped executables and controller-run skill/instructions for actions |
 
 ## M3 — Controller Loop
 
@@ -61,7 +62,6 @@ Useful once the core loop is stable.
 | #   | Ticket                                                                                     | What it does                                                                 |
 | --- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
 | 16  | [Controller Debugging and Playbook Expansion](16-playbook-expansion-and-debug-followups.md) | Adds richer playbooks, controller-run inspection, and future DAG scheduling   |
-| 17  | [Runtime Action Wrapper and Auth Plumbing](17-runtime-action-wrapper-and-auth-plumbing.md) | Adds scoped runtime-issued service actions for more direct controller tooling |
 
 ## Dependency Graph
 
@@ -79,10 +79,11 @@ M1 — Product Surface and Service Layer
 M2 — Worker Branches and Review Context
 07 Branch and Diff Runtime Commands
 ├─ 08 Controller Run Context Packet Builder  (needs 04, 07)
-└─ 09 Controller Tool and Summary Contract  (needs 08)
+├─ 17 Runtime Action Wrapper and Auth Plumbing  (needs 04)
+└─ 09 Controller Tool and Summary Contract  (needs 08, 17)
 
 M3 — Controller Loop
-10 Ultraplan Event Router  (needs 04, 08, 09)
+10 Ultraplan Event Router  (needs 04, 08, 09, 17)
 ├─ 11 Worker Execution Actions  (needs 10)
 ├─ 12 Human Gates Server Flow  (needs 10)
 └─ 14 Guardrails, Pause, and Sequencing  (needs 11, 12)
@@ -93,7 +94,6 @@ M4 — Human UX and Integration
 
 Post-V1
 16 Controller Debugging and Playbook Expansion  (needs 15)
-└─ 17 Runtime Action Wrapper and Auth Plumbing  (needs 15, 16)
 ```
 
 ## Implementation Parallelization Notes
@@ -113,6 +113,8 @@ The intended v1 is:
 - Ultraplan activity uses canonical `ScopeType.ultraplan`
 - episodic controller runs, not a persistent god session
 - each controller run creates a fresh session/chat
+- controller-run sessions perform actions through scoped runtime executables
+- controller-run prompts include a skill/instructions file for those executables
 - every controller run emits a structured summary event
 - controller run summaries are visible in the Ultraplan UI
 - full controller run chats are available by click-through

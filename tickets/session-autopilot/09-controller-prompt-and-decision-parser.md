@@ -2,7 +2,7 @@
 
 ## Summary
 
-Define how each fresh Ultraplan controller run reasons and acts: its system prompt, allowed service-backed tools, and required structured summary.
+Define how each fresh Ultraplan controller run reasons and acts: its system prompt, runtime action executable contract, controller skill/instructions, and required structured summary.
 
 ## What needs to happen
 
@@ -17,7 +17,7 @@ Define how each fresh Ultraplan controller run reasons and acts: its system prom
   - request human gates
   - request integration of approved branches
   - emit a final structured run summary before completing
-- Define the initial tool surface:
+- Define the initial runtime action surface exposed through `trace-agent` or equivalent:
   - `ticket.create`
   - `ticket.update`
   - `ticket.addComment`
@@ -39,36 +39,39 @@ Define how each fresh Ultraplan controller run reasons and acts: its system prom
   - `integration.rebaseTicketBranch`
   - `integration.reportConflict`
 - Define the structured summary schema.
-- Define a strict structured output fallback for runtimes that cannot call tools directly.
+- Define the controller-run skill/instructions file that teaches the agent how to call the runtime executable.
 - Fail safe when controller output is malformed or missing the required summary.
 
 ## Dependencies
 
 - [08 — Controller Run Context Packet Builder](08-autopilot-context-packet-builder.md)
+- [17 — Runtime Action Wrapper and Auth Plumbing](17-runtime-action-wrapper-and-auth-plumbing.md)
 
 ## Completion requirements
 
 - [ ] Prompt contract is checked into the repo.
-- [ ] Tool contract is narrow and service-backed.
+- [ ] Runtime action contract is narrow and service-backed.
+- [ ] Controller-run skill/instructions explain executable usage and expected JSON input/output.
 - [ ] Prompt requires acceptance criteria, test plans, and dependency rationale for generated tickets.
 - [ ] Prompt creates durable planned-ticket membership before worker execution.
 - [ ] Prompt requires a structured summary for every completed controller run.
 - [ ] Controller is instructed not to mutate DB/events/git directly.
 - [ ] Malformed output does not result in speculative actions.
 - [ ] Missing or invalid summaries fail visibly.
-- [ ] Parser/tool validation errors are observable to the service/router.
+- [ ] Runtime action validation errors are observable to the service/router and controller transcript.
 
 ## Implementation notes
 
 - Do not let this ticket drift into orchestration or inbox creation.
-- Prefer explicit tools over free-form instructions when the runtime supports them.
-- Keep a bounded XML/JSON decision fallback for the first version if direct tool calls are not ready.
+- Prefer executable-backed actions over free-form action JSON.
+- The final structured output is for the run summary, not primary action execution.
 
 ## How to test
 
-1. Unit test valid controller tool requests.
+1. Unit test valid runtime action requests.
 2. Unit test valid controller run summaries.
 3. Unit test malformed output and missing summary.
 4. Verify forbidden actions are rejected by validation.
 5. Verify generated plans can express a linear dependency chain.
 6. Verify prompts include the service-layer boundary clearly.
+7. Verify the controller-run skill tells the agent how to use `trace-agent`.

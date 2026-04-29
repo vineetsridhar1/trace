@@ -14,7 +14,7 @@ Post-v1 follow-up for richer controller-run inspection, additional orchestration
 - Keep controller-run inspection behind explicit Ultraplan entry points.
 - Add future DAG scheduling and parallel worker playbooks once sequential v1 is proven.
 - Add mobile follow-up surfaces once inbox and session-group support are ready there.
-- Revisit whether structured XML/JSON fallback should be replaced by direct tool calls everywhere.
+- Revisit whether native model tool calling should replace or complement the `trace-agent` executable surface.
 
 ## Dependencies
 

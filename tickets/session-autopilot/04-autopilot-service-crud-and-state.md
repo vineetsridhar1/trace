@@ -27,6 +27,7 @@ Add `ultraplanService` as the service-layer owner for starting, pausing, resumin
 - Emit Ultraplan and controller-run lifecycle events through the event service.
 - Enforce service-layer authorization for read/write actions on the target session group.
 - Validate requested controller provider/model/runtime policy before creating a run.
+- Mint or request scoped runtime action credentials for controller-run launches.
 - Add GraphQL resolvers that delegate to the services.
 
 ## Dependencies
@@ -44,6 +45,7 @@ Add `ultraplanService` as the service-layer owner for starting, pausing, resumin
 - [ ] Pause, resume, cancel, and run-now are idempotent enough for repeated UI calls.
 - [ ] Unauthorized callers cannot read or mutate Ultraplan or controller-run state.
 - [ ] Invalid or unavailable controller config is rejected before persistence.
+- [ ] Controller runs receive scoped runtime action environment only after authorization passes.
 - [ ] Emitted events use `ScopeType.ultraplan`.
 - [ ] All durable state changes emit events.
 

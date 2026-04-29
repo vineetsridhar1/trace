@@ -18,6 +18,7 @@ Complete the loop by integrating approved ticket branches into the group branch,
   - controller runs created/started/completed/failed
   - planned tickets created/updated/reordered
   - controller run summary validation failures
+  - runtime action calls succeeded/failed/denied
   - worker sessions launched
   - next-ticket scheduling decisions
   - worker done/failed/stopped outcomes
@@ -53,6 +54,7 @@ Complete the loop by integrating approved ticket branches into the group branch,
 - [ ] Metrics can distinguish sequential v1 scheduling from future DAG scheduling.
 - [ ] User-visible error states are understandable and recoverable.
 - [ ] Permission/runtime/summary/integration failures degrade into clear `failed`, `blocked`, or `needs_human` states.
+- [ ] Runtime action failures are visible in the controller-run transcript and Ultraplan timeline when they affect workflow state.
 
 ## Implementation notes
 

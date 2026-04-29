@@ -9,7 +9,7 @@ The core idea is:
 - A session group owns the integration branch and final testable worktree.
 - Ultraplan has a controller identity, but not one persistent controller chat.
 - Every controller wakeup creates a fresh controller run/session.
-- Each controller run receives a compact context packet, acts through service-backed tools, emits a structured summary, and ends.
+- Each controller run receives a compact context packet, calls service-backed runtime executables, emits a structured summary, and ends.
 - Worker sessions execute tickets on their own branches/worktrees.
 - V1 runs one worker ticket at a time.
 - Ticket dependencies are still stored as edges so v2 can become a real DAG scheduler.
@@ -55,6 +55,7 @@ The controller's durable memory is not one forever-growing chat. The durable mem
 - Wake the controller on coarse lifecycle events, not token streams.
 - Route human gates through inbox.
 - Keep all mutations in the service layer.
+- Let controller-run sessions perform actions through scoped executables that call the server.
 - Emit events for every durable transition.
 - Preserve GraphQL as a thin interface over services.
 
@@ -117,7 +118,7 @@ There is not one controller session that keeps accumulating context forever. Ins
 2. The Ultraplan event router creates a controller run.
 3. The run creates a fresh controller session/chat.
 4. The run receives the current context packet.
-5. The controller calls service-backed tools.
+5. The controller calls service-backed runtime executables.
 6. The controller emits a required structured summary.
 7. The run completes.
 
@@ -351,7 +352,7 @@ Worker session lifecycle events
 Controller run
   -> create fresh controller session
   -> receive context packet
-  -> call service-backed tools
+  -> call service-backed runtime executables
      - ticket.create/update/link
      - worker.start
      - worker.sendMessage
@@ -777,9 +778,39 @@ The run input should include:
 - worker final message or failure summary, when relevant
 - diff summary or patch only when the run is reviewing implementation or integration
 
-## Controller Tools
+## Controller Runtime Actions
 
-The controller run should have service-backed tools, not direct DB access.
+The controller run should perform actions through service-backed runtime executables, not by returning a fragile action batch and not through direct DB access.
+
+The controller-run session should launch with scoped environment variables:
+
+```text
+TRACE_API_URL
+TRACE_RUNTIME_TOKEN
+TRACE_ULTRAPLAN_ID
+TRACE_CONTROLLER_RUN_ID
+```
+
+The runtime should provide a narrow executable on `PATH`, such as `trace-agent`:
+
+```bash
+trace-agent ticket.create --json '{...}'
+trace-agent ultraplan.addPlannedTicket --json '{...}'
+trace-agent ultraplan.startWorker --json '{...}'
+trace-agent integration.mergeTicketBranch --json '{...}'
+```
+
+The executable should:
+
+- read auth and scope from the environment
+- call a server endpoint
+- receive machine-readable results
+- print concise structured output for the model
+- never write directly to the database or event store
+
+Controller-run prompts should include a small skill/instructions file that teaches the agent how to use these executables and when to call each action.
+
+The final structured controller response is still required for the run summary. Action execution should happen through the runtime executable surface.
 
 Initial tool surface:
 
@@ -1030,6 +1061,7 @@ Add:
 - `apps/server/src/services/ultraplan-controller-run.ts`
 - `apps/server/src/services/ticket-execution.ts`
 - `apps/server/src/services/integration.ts`
+- `apps/server/src/services/runtime-action.ts`
 
 Update:
 
@@ -1058,6 +1090,8 @@ Responsibilities:
 Update bridge/session-router paths for:
 
 - creating controller-run sessions
+- injecting scoped runtime action env into controller-run sessions
+- making `trace-agent` or equivalent available in controller-run runtimes
 - creating per-session ticket worktrees
 - preserving separate group integration and ticket execution workspace identities
 - requesting commit diffs for worker branches
@@ -1073,10 +1107,11 @@ Recommended milestones:
 3. Client store and group-level UI with controller run summaries.
 4. Ordered ticket plan and worker session launch.
 5. Controller run wakeup on worker `done`/`failed`.
-6. Context packet and controller tool/summary contract.
-7. Human gates through inbox.
-8. Integration branch operations.
-9. Guardrails, telemetry, and polish.
+6. Runtime action wrapper and controller skill/instructions.
+7. Context packet and controller tool/summary contract.
+8. Human gates through inbox.
+9. Integration branch operations.
+10. Guardrails, telemetry, and polish.
 
 ## Testing Strategy
 
@@ -1096,6 +1131,7 @@ Critical scenarios:
 - worker completion creates a new controller run once
 - worker failure creates a new controller run once
 - controller run can update current and future tickets
+- controller run can call `trace-agent` actions with scoped runtime auth
 - controller run can launch one worker for the next ready ticket
 - inbox gate halts execution until resolved
 - approved ticket branch integrates into group branch
@@ -1111,6 +1147,7 @@ The clean v1 is:
 - one Ultraplan per active session group
 - episodic controller runs instead of one persistent god session
 - each controller run creates a fresh session/chat
+- controller runs use scoped runtime executables for actions in v1
 - each controller run emits a structured summary
 - UI shows controller run summaries and links to full run chats
 - sequential ticket-worker sessions with per-ticket branches in v1
