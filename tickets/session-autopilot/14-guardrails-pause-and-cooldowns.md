@@ -1,38 +1,44 @@
-# 14 — Guardrails, Pause, and Cooldowns
+# 14 — Guardrails, Pause, and Concurrency
 
 ## Summary
 
-Add the loop protections that keep Session Autopilot useful instead of noisy: max auto turns, checkpoint dedupe, pause semantics, and cooldowns after human dismissal.
+Add the safety rules that keep Ultraplan from becoming noisy or destructive: dedupe, pause/resume behavior, controller run limits, worker concurrency limits, and gate cooldowns.
 
 ## What needs to happen
 
-- Enforce a max consecutive auto-turn count.
-- Store and compare the last reviewed checkpoint sha.
-- Prevent duplicate `continue_worker` actions for the same checkpoint.
-- Add pause and resume behavior for Autopilot.
-- Add cooldown behavior when a human dismisses a validation request.
-- Prevent review runs while Autopilot is paused or cooling down.
+- Enforce one active controller run per session group.
+- Enforce configurable worker concurrency per Ultraplan.
+- Prevent duplicate controller actions for the same worker completion event.
+- Prevent duplicate active gates for the same execution/reason.
+- Add pause and resume behavior for Ultraplan.
+- Add cooldown behavior when a human dismisses or rejects a gate.
+- Prevent new worker launches while paused or blocked on required gates.
+- Add max retry/attempt behavior for failed ticket executions.
 
 ## Dependencies
 
-- [11 — Continue-Worker Execution](11-continue-worker-execution.md)
-- [12 — Human Validation Handoff (Server)](12-human-validation-handoff-server.md)
+- [11 — Worker Execution Actions](11-continue-worker-execution.md)
+- [12 — Human Gates Server Flow](12-human-validation-handoff-server.md)
 
 ## Completion requirements
 
-- [ ] Autopilot cannot continue indefinitely without human involvement.
-- [ ] Same-checkpoint duplicate actions are blocked.
-- [ ] Pause and resume are explicit product states.
+- [ ] Controller cannot process the same completion event repeatedly.
+- [ ] Worker concurrency is bounded.
+- [ ] Pause prevents new worker launches and integrations.
+- [ ] Resume restarts the scheduler/controller safely.
 - [ ] Dismissal cooldowns prevent instant re-notification spam.
+- [ ] Failed executions do not retry forever.
 
 ## Implementation notes
 
-- Keep these protections in the service/orchestrator layer, not the UI.
-- Favor a small set of clear rules over many heuristics.
+- Keep protections in the service/router layer, not the UI.
+- Favor a small set of deterministic rules over many heuristics.
+- Parallel worker execution should be allowed only when dependencies permit it.
 
 ## How to test
 
-1. Trigger repeated continue decisions and verify max-turn enforcement.
-2. Replay a review on the same checkpoint and verify no action is taken.
-3. Pause Autopilot and verify worker completion no longer triggers review.
-4. Dismiss a validation inbox item and verify cooldown behavior.
+1. Emit duplicate worker completion events and verify one controller action.
+2. Start more ready tickets than the concurrency limit and verify only allowed workers launch.
+3. Pause Ultraplan and verify no new worker/integration action starts.
+4. Dismiss a gate and verify cooldown behavior.
+5. Force repeated worker failures and verify max-attempt handling.

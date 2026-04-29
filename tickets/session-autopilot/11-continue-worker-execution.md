@@ -1,40 +1,46 @@
-# 11 — Continue-Worker Execution
+# 11 — Worker Execution Actions
 
 ## Summary
 
-Take a parsed `continue_worker` decision and apply it to the primary worker session using the existing session service control plane.
+Let the controller create, start, and continue ticket worker sessions through service-backed actions.
 
 ## What needs to happen
 
-- Map parsed `continue_worker` decisions onto:
-  - `sessionService.sendMessage(...)`, or
-  - `sessionService.run(...)` when needed
-- Update Autopilot state after applying the decision:
-  - status
-  - last checkpoint sha
-  - last decision summary
-  - consecutive auto turns
-- Emit `session_autopilot_decision_applied`.
+- Add service methods/actions for:
+  - creating a ticket execution
+  - creating a ticket branch/worktree from the group branch
+  - starting a worker session with `role = ticket_worker`
+  - linking the worker session to the ticket execution
+  - sending a follow-up message to an existing worker
+  - marking execution state as running/reviewing/blocked/ready
+- Ensure worker sessions use their own ticket branch.
+- Ensure workers do not directly mutate the group integration branch.
+- Emit ticket execution events for every transition.
 - Handle runtime access or delivery errors safely.
 
 ## Dependencies
 
-- [10 — Autopilot Orchestrator](10-autopilot-orchestrator.md)
+- [10 — Ultraplan Event Router](10-autopilot-orchestrator.md)
 
 ## Completion requirements
 
-- [ ] A valid `continue_worker` decision sends a focused follow-up to the worker session.
-- [ ] Worker messages are not duplicated on the same checkpoint.
-- [ ] Autopilot state tracks consecutive auto turns.
-- [ ] Failures surface as Autopilot errors, not silent drops.
+- [ ] Controller can create a TicketExecution for a ticket.
+- [ ] Controller can start a worker session for that execution.
+- [ ] Worker session has `role = ticket_worker`.
+- [ ] Worker session uses a ticket-specific branch/worktree.
+- [ ] Controller can send a bounded follow-up to a worker.
+- [ ] Failures surface as execution/Ultraplan errors, not silent drops.
 
 ## Implementation notes
 
-- Reuse the existing session service instead of inventing a second message path.
-- The follow-up message should be concrete and bounded, not a raw dump of the controller XML.
+- Reuse the existing session service and session router.
+- Do not create a second session launch path for Ultraplan.
+- Follow-up messages should be concrete and scoped to the ticket.
 
 ## How to test
 
-1. Force a `continue_worker` decision and verify the worker session receives one follow-up.
-2. Repeat the same decision on the same checkpoint and verify it is ignored.
-3. Simulate delivery failure and verify Autopilot enters a visible error state.
+1. Create a ticket execution from a service call.
+2. Start a worker session and verify branch, role, and links.
+3. Send a follow-up to an existing worker.
+4. Simulate runtime access failure and verify state/error events.
+5. Verify the group branch is unchanged by worker launch.

@@ -2,29 +2,27 @@
 
 ## Summary
 
-Add the durable database shape for Session Autopilot: new enums, the new `SessionAutopilot` model, the controller-session role, and the event/inbox enum values the rest of the system will build on.
+Add the durable database shape for Ultraplan: session roles, the `Ultraplan` entity, ticket execution state, event types, inbox gate types, and ticket fields needed for AI-generated work plans.
 
 ## What needs to happen
 
 - Add Prisma enums:
-  - `SessionRole`
-  - `SessionAutopilotStatus`
-  - `AutopilotDecisionAction`
+  - `SessionRole`: `primary`, `ticket_worker`, `ultraplan_controller`
+  - `UltraplanStatus`
+  - `TicketExecutionStatus`
+  - `IntegrationStatus`
 - Add `role SessionRole @default(primary)` to `Session`.
-- Add a new `SessionAutopilot` model with:
-  - org ownership
-  - one-to-one relation to `SessionGroup`
-  - owner user id
-  - controller tool/model/hosting/runtime config
-  - controller session id
-  - active worker session id
-  - status and enablement
-  - last checkpoint sha
-  - last decision summary
-  - last human inbox item id
-  - consecutive auto turns
-- Extend Prisma `EventType` with the Autopilot event family.
-- Extend Prisma `InboxItemType` with `autopilot_validation_request`.
+- Add `Ultraplan` with a unique active association to `SessionGroup` for v1.
+- Add `TicketExecution` linked to organization, Ultraplan, ticket, session group, and optional worker session.
+- Add ticket planning fields:
+  - acceptance criteria
+  - dependency relation or equivalent durable dependency table
+- Extend Prisma `EventType` with the Ultraplan event family.
+- Extend Prisma `InboxItemType` with Ultraplan gate types:
+  - `ultraplan_plan_approval`
+  - `ultraplan_validation_request`
+  - `ultraplan_conflict_resolution`
+  - `ultraplan_final_review`
 - Run migration and Prisma generate.
 
 ## Dependencies
@@ -33,22 +31,26 @@ Add the durable database shape for Session Autopilot: new enums, the new `Sessio
 
 ## Completion requirements
 
-- [ ] Schema compiles with the new enums and model.
+- [ ] Schema compiles with the new enums and models.
 - [ ] Existing sessions default to `role = primary`.
-- [ ] `SessionAutopilot` is one-to-one with `SessionGroup`.
+- [ ] `Ultraplan` is linked to a `SessionGroup`.
+- [ ] `TicketExecution` can represent a ticket branch and worker session.
+- [ ] Ticket dependencies and acceptance criteria are durable.
 - [ ] New event types exist in Prisma.
-- [ ] New inbox item type exists in Prisma.
+- [ ] New inbox item types exist in Prisma.
 - [ ] Migration runs cleanly on an existing local database.
 
 ## Implementation notes
 
-- Keep `SessionAutopilot` first-class rather than hiding JSON inside `SessionGroup`.
-- Do not add speculative fields for post-v1 playbooks or mobile state.
-- Use nullable foreign-key style string fields for controller session id and active session id in v1; stronger relational wiring can come later if needed.
+- Keep Ultraplan first-class rather than hiding JSON inside `SessionGroup`.
+- Keep execution state out of `Ticket`; use `TicketExecution` for runtime attempts.
+- Do not add direct relations that force containment where Trace wants links and peers.
+- Use nullable session ids for controller/worker references in v1 if stronger relational wiring creates migration risk.
 
 ## How to test
 
-1. Run `pnpm db:migrate`.
-2. Run `pnpm db:generate`.
-3. Inspect the generated Prisma client for the new enums and model.
-4. Create a session manually and verify `role` defaults to `primary`.
+1. Run the Prisma migration locally.
+2. Run Prisma generate.
+3. Confirm existing sessions read back with `role = primary`.
+4. Create sample Ultraplan and TicketExecution rows in a test transaction.
+5. Verify event and inbox enum values are usable.

@@ -1,47 +1,54 @@
-# 05 — Header Controls and Settings UI
+# 05 — Group Controls and Ultraplan UI
 
 ## Summary
 
-Add the user-facing controls for Session Autopilot in the session experience: button, state chip, and settings popover.
+Move the product surface from a single session header to the session-group UI and add the first Ultraplan status/control panel.
 
 ## What needs to happen
 
-- Add an `Autopilot` button to the session header.
-- Add a state chip with the supported statuses.
-- Build a settings popover or compact dialog with:
-  - enabled toggle
-  - controller tool picker
-  - controller model picker
-  - controller hosting/runtime picker
-  - playbook selector
-  - custom instructions
-  - `Run now`
-  - `Pause`
-  - `Disable`
-- Wire the UI to the Autopilot GraphQL operations.
-- Use optimistic UI sparingly; final state should come back through events.
+- Add an `Ultraplan` button or menu to the session group header.
+- Add a state chip with the supported Ultraplan statuses.
+- Build a compact group-level panel showing:
+  - plan summary
+  - current status
+  - controller session state
+  - ticket executions
+  - worker sessions
+  - branch names
+  - active human gate
+  - final branch/PR link
+- Add controls for:
+  - start
+  - pause
+  - resume
+  - run controller now
+  - cancel
+- Wire controls to GraphQL operations.
+- Use events as the source of truth for final UI state.
 
 ## Dependencies
 
 - [02 — GraphQL Schema and Client Types](02-graphql-schema-and-client-types.md)
-- [04 — Autopilot Service CRUD and State](04-autopilot-service-crud-and-state.md)
+- [04 — Ultraplan Service CRUD and State](04-autopilot-service-crud-and-state.md)
 
 ## Completion requirements
 
-- [ ] Session header shows an Autopilot affordance.
-- [ ] State chip reflects live Autopilot status.
-- [ ] User can enable, disable, pause, and run-now from the UI.
-- [ ] Tool/model/runtime selection persists through the service layer.
-- [ ] UI survives missing Autopilot state cleanly.
+- [ ] Session group header shows an Ultraplan affordance.
+- [ ] State chip reflects live Ultraplan status.
+- [ ] User can start, pause, resume, cancel, and run-now from the group surface.
+- [ ] Ticket worker sessions are linked from the panel.
+- [ ] Controller session is not shown in normal tabs, but can be inspected from an explicit debug entry if available.
+- [ ] UI survives missing Ultraplan state cleanly.
 
 ## Implementation notes
 
-- Keep the initial surface compact. Do not build a large management console in v1.
-- Reuse existing session tool/model/runtime patterns where possible so the Autopilot settings feel native to Trace.
+- Keep the initial panel practical and dense. Do not build a large management console in v1.
+- Use shadcn/ui components and existing session UI patterns.
+- Product copy should describe the workflow, not implementation details.
 
 ## How to test
 
-1. Open a session with no Autopilot state and verify the header renders cleanly.
-2. Enable Autopilot and verify state changes to `waiting`.
-3. Change controller tool/model/runtime and verify the persisted state updates.
-4. Run now, pause, and disable from the UI.
+1. Open a session group with no Ultraplan and verify the empty/start state.
+2. Start Ultraplan and verify event-driven status updates.
+3. Pause/resume/run-now/cancel and verify the chip and panel update.
+4. Verify the UI does not expose controller sessions in normal navigation.

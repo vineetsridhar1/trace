@@ -1,43 +1,54 @@
-# 12 — Human Validation Handoff (Server)
+# 12 — Human Gates Server Flow
 
 ## Summary
 
-Create the server-side handoff path for `request_human_validation`. This ticket creates the inbox item, updates Autopilot state, and wires resolution or dismissal back into the Autopilot lifecycle.
+Create the server-side path for Ultraplan human gates: plan approval, ticket validation, conflict resolution, and final review.
 
 ## What needs to happen
 
-- Create `autopilot_validation_request` inbox items through the inbox service.
-- Define the payload:
+- Create Ultraplan inbox items through the inbox service.
+- Support gate item types:
+  - `ultraplan_plan_approval`
+  - `ultraplan_validation_request`
+  - `ultraplan_conflict_resolution`
+  - `ultraplan_final_review`
+- Define gate payloads with:
+  - Ultraplan id
   - session group id
-  - worker session id
+  - ticket id, when applicable
+  - ticket execution id, when applicable
+  - worker session id, when applicable
+  - branch name
   - checkpoint sha
-  - PR url
   - summary
   - QA checklist
-  - controller tool/model
-- Emit `session_autopilot_handoff_requested`.
-- Update Autopilot state to `needs_human`.
-- Define what happens when the inbox item is resolved or dismissed.
+  - recommended action
+- Update Ultraplan or TicketExecution state to `needs_human`.
+- Define what happens when each gate type is resolved or dismissed.
+- Emit human gate events.
 
 ## Dependencies
 
-- [10 — Autopilot Orchestrator](10-autopilot-orchestrator.md)
+- [10 — Ultraplan Event Router](10-autopilot-orchestrator.md)
 
 ## Completion requirements
 
-- [ ] `request_human_validation` creates one active inbox item.
-- [ ] Duplicate active validation inbox items are not created for the same group.
-- [ ] Autopilot state transitions to `needs_human`.
-- [ ] Inbox resolution or dismissal is visible to Autopilot.
+- [ ] Controller can request a human gate through the service.
+- [ ] Duplicate active gates are not created for the same execution/reason.
+- [ ] Ultraplan or execution state transitions to `needs_human`.
+- [ ] Inbox resolution/dismissal wakes the controller.
+- [ ] Gate payloads are complete enough for the web inbox UI.
 
 ## Implementation notes
 
-- Use the inbox service and event service; do not special-case the DB writes.
-- Prefer `sourceType = session_group` for the inbox item if the handoff is truly lineage-scoped.
+- Use the inbox service and event service; do not special-case DB writes.
+- Prefer `sourceType = ultraplan` or `ticket_execution` depending on the gate scope.
+- Gate resolution should be explicit: approved, changes requested, dismissed, blocked, or cancelled.
 
 ## How to test
 
-1. Force a `request_human_validation` decision and verify an inbox item is created.
-2. Force the same decision again and verify no duplicate active item is created.
-3. Resolve the inbox item and verify Autopilot state updates.
-4. Dismiss the inbox item and verify cooldown/pause hooks are possible.
+1. Request a plan approval gate and verify payload/state.
+2. Request a ticket validation gate and verify dedupe.
+3. Resolve a gate and verify controller wakeup.
+4. Dismiss a gate and verify pause/cooldown hooks are possible.
+5. Verify events hydrate client state without refetches.

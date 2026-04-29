@@ -1,41 +1,52 @@
-# 10 — Autopilot Orchestrator
+# 10 — Ultraplan Event Router
 
 ## Summary
 
-Create the background process that decides when Autopilot should review a worker session. This keeps review work out of the request path and gives the feature one clear execution engine.
+Add the event router/worker that wakes the controller session when meaningful session-group events happen.
 
 ## What needs to happen
 
-- Add a dedicated Autopilot orchestrator/worker process or module.
+- Add a dedicated Ultraplan event router/worker module.
 - Subscribe to the relevant event stream.
-- Trigger review runs on:
-  - worker completion
-  - worker rehome/move
-  - manual `run now`
-- Serialize work per `sessionGroupId`.
-- Skip duplicate or stale runs.
-- Update Autopilot status as runs begin and end.
+- Trigger controller wakeups on:
+  - worker session `agentStatus` transitioning to `done`
+  - worker session `agentStatus` transitioning to `failed`
+  - worker session `agentStatus` transitioning to `stopped` when it has an active ticket execution
+  - Ultraplan inbox gate resolution/dismissal
+  - manual `run controller now`
+- Ignore:
+  - controller session status events unless explicitly needed
+  - ordinary `session_output`
+  - token/tool-call noise
+- Serialize controller runs per session group.
+- Skip duplicate or stale wakeups.
+- Emit wakeup/run events.
 
 ## Dependencies
 
-- [04 — Autopilot Service CRUD and State](04-autopilot-service-crud-and-state.md)
-- [08 — Autopilot Context Packet Builder](08-autopilot-context-packet-builder.md)
-- [09 — Controller Prompt and Decision Parser](09-controller-prompt-and-decision-parser.md)
+- [04 — Ultraplan Service CRUD and State](04-autopilot-service-crud-and-state.md)
+- [08 — Ultraplan Context Packet Builder](08-autopilot-context-packet-builder.md)
+- [09 — Controller Prompt and Tool Contract](09-controller-prompt-and-decision-parser.md)
 
 ## Completion requirements
 
-- [ ] Autopilot runs are triggered only from the intended event set.
-- [ ] Only one run per session group can be in flight at a time.
-- [ ] Status changes are emitted through events.
-- [ ] Manual `run now` uses the same review pipeline.
+- [ ] Controller wakes when a worker reaches `done`.
+- [ ] Controller wakes when a worker reaches `failed`.
+- [ ] Controller does not wake on every `session_output`.
+- [ ] Only one controller run per session group can be in flight.
+- [ ] Manual run-now uses the same wakeup pipeline.
+- [ ] Wakeup events carry enough payload for debugging and client state.
 
 ## Implementation notes
 
-- Do not trigger on every `session_output`.
-- The orchestrator should be checkpoint-driven and completion-driven, not token-stream-driven.
+- The v1 backbone is worker `agentStatus`, not checkpoint or token events.
+- Keep dedupe in the worker/router layer and state transitions in services.
+- The controller itself is a session; this router only decides when to wake it.
 
 ## How to test
 
-1. Complete a worker session and verify one review run starts.
-2. Emit duplicate completion signals and verify no duplicate run starts.
-3. Trigger `run now` and verify the same execution path is used.
+1. Emit a worker active-to-done event and verify one wakeup.
+2. Emit duplicate done events and verify dedupe.
+3. Emit session output and verify no wakeup.
+4. Resolve an Ultraplan inbox gate and verify a wakeup.
+5. Verify two simultaneous worker completions serialize controller runs per group.

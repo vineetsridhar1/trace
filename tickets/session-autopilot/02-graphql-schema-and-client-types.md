@@ -2,22 +2,27 @@
 
 ## Summary
 
-Expose Session Autopilot through GraphQL so web clients and services have a typed contract for reading and mutating Autopilot state.
+Expose Ultraplan, ticket executions, session roles, and gate event types through the single GraphQL schema source of truth.
 
 ## What needs to happen
 
-- Add GraphQL enums mirroring the new Prisma enums:
-  - `SessionRole`
-  - `SessionAutopilotStatus`
-- Add `SessionAutopilot` GraphQL type.
-- Add an Autopilot field on the relevant visible entity:
-  - recommended: `SessionGroup.autopilot`
+- Add GraphQL enums mirroring the new Prisma enums.
+- Add `Ultraplan` GraphQL type.
+- Add `TicketExecution` GraphQL type.
+- Add `Session.role`.
+- Add ticket acceptance criteria and dependency fields if included in the DB model.
+- Add a `SessionGroup.ultraplan` field for the active group plan.
+- Add queries as needed:
+  - `ultraplan(id: ID!)`
+  - `ultraplanForSessionGroup(sessionGroupId: ID!)`
 - Add mutations:
-  - `upsertSessionAutopilot`
-  - `disableSessionAutopilot`
-  - `runSessionAutopilotNow`
-- Extend GraphQL `EventType` with the Autopilot event family.
-- Extend GraphQL `InboxItemType` with `autopilot_validation_request`.
+  - `startUltraplan`
+  - `pauseUltraplan`
+  - `resumeUltraplan`
+  - `runUltraplanControllerNow`
+  - `cancelUltraplan`
+- Extend GraphQL `EventType` with Ultraplan events.
+- Extend GraphQL `InboxItemType` with Ultraplan gate values.
 - Run `pnpm gql:codegen`.
 
 ## Dependencies
@@ -26,18 +31,21 @@ Expose Session Autopilot through GraphQL so web clients and services have a type
 
 ## Completion requirements
 
-- [ ] GraphQL schema contains all new Autopilot types and enums.
+- [ ] GraphQL schema contains all Ultraplan types and enums.
 - [ ] Generated client and resolver types compile.
-- [ ] The schema shape is enough for the header UI and inbox UI to work without local-only types.
+- [ ] Session group detail can hydrate the active Ultraplan.
+- [ ] The schema shape supports the group UI and inbox UI without local-only types.
 - [ ] No duplicate type definitions are added outside `schema.graphql`.
 
 ## Implementation notes
 
-- Keep GraphQL thin. This ticket defines schema and generated types, not the business logic.
-- Prefer surfacing Autopilot off `SessionGroup` so the client can fetch one coherent object from the group detail flow.
+- Keep GraphQL thin. This ticket defines schema and generated types, not business logic.
+- Prefer surfacing Ultraplan off `SessionGroup` because the product surface is group-level.
+- Do not expose mutations that let clients directly create events or ticket execution state without services.
 
 ## How to test
 
 1. Run `pnpm gql:codegen`.
-2. Verify generated types include `SessionAutopilot`.
-3. Typecheck the repo and confirm no GraphQL-generated type errors remain.
+2. Run package typechecking.
+3. Confirm generated types include the new enums, fields, and mutations.
+4. Confirm server resolver type generation requires thin resolver additions only.
