@@ -1495,6 +1495,35 @@ describe("SessionService", () => {
   });
 
   describe("sendMessage", () => {
+    it("does not preserve a channel base branch as the worktree branch for deferred sessions", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "not_started",
+          workdir: null,
+          toolSessionId: null,
+          branch: "release",
+          channel: { id: "channel-1", name: "Backend", baseBranch: "release" },
+          sessionGroup: makeSessionGroup({ slug: null, branch: "release" }),
+        }),
+      );
+      prismaMock.session.update.mockResolvedValueOnce(makeSession({ branch: "release" }));
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "start work",
+        actorType: "agent",
+        actorId: "agent-1",
+      });
+
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-1",
+          branch: "release",
+          preserveBranchName: false,
+        }),
+      );
+    });
+
     it("pins delivery to the session's home runtime via expectedHomeRuntimeId", async () => {
       // Scenario: session was running on Laptop A (runtime-a). sendMessage must
       // pass runtime-a as expectedHomeRuntimeId so sessionRouter.send cannot
