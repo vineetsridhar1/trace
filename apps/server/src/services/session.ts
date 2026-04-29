@@ -185,6 +185,24 @@ function connJson(data: SessionConnectionData): Prisma.InputJsonValue {
   return data as unknown as Prisma.InputJsonValue;
 }
 
+function configRecord(config: Prisma.JsonValue | null | undefined): Record<string, unknown> {
+  if (!config || typeof config !== "object" || Array.isArray(config)) return {};
+  return config as Record<string, unknown>;
+}
+
+function localEnvironmentRuntimeInstanceId(
+  environment?: {
+    adapterType: RuntimeAdapterType;
+    config: Prisma.JsonValue;
+  } | null,
+): string | null {
+  if (environment?.adapterType !== "local") return null;
+  const runtimeInstanceId = configRecord(environment.config).runtimeInstanceId;
+  return typeof runtimeInstanceId === "string" && runtimeInstanceId.trim()
+    ? runtimeInstanceId
+    : null;
+}
+
 function shortCommitSha(commitSha: string): string {
   return commitSha.slice(0, 7);
 }
@@ -1393,13 +1411,23 @@ export class SessionService {
       hosting = "local";
     }
     let runtimeLabel: string | undefined;
+    const environmentRuntimeInstanceId = localEnvironmentRuntimeInstanceId(requestedEnvironment);
+    const shouldUseEnvironmentRuntime =
+      !input.runtimeInstanceId &&
+      !sharedRuntimeInstanceId &&
+      !restoreGroupRuntimeInstanceId &&
+      !!environmentRuntimeInstanceId;
     let requestedRuntimeInstanceId =
-      input.runtimeInstanceId ?? sharedRuntimeInstanceId ?? restoreGroupRuntimeInstanceId ?? null;
-    if (input.runtimeInstanceId) {
-      const runtime = sessionRouter.getRuntime(input.runtimeInstanceId);
+      input.runtimeInstanceId ??
+      sharedRuntimeInstanceId ??
+      restoreGroupRuntimeInstanceId ??
+      environmentRuntimeInstanceId;
+    if (input.runtimeInstanceId || shouldUseEnvironmentRuntime) {
+      const runtimeId = input.runtimeInstanceId ?? environmentRuntimeInstanceId;
+      const runtime = runtimeId ? sessionRouter.getRuntime(runtimeId) : null;
       runtimeDebug("startSession resolving requested runtime", {
         sessionId: "pending",
-        runtimeInstanceId: input.runtimeInstanceId,
+        runtimeInstanceId: runtimeId,
         requestedHosting: input.hosting ?? null,
         runtimeFoundInRouter: !!runtime,
       });
@@ -1409,7 +1437,7 @@ export class SessionService {
       await this.assertRuntimeAccess({
         userId: input.createdById,
         organizationId: input.organizationId,
-        runtimeInstanceId: input.runtimeInstanceId,
+        runtimeInstanceId: runtimeId,
         sessionGroupId: existingGroup?.id ?? null,
       });
       if (
@@ -1421,6 +1449,7 @@ export class SessionService {
       }
       hosting = runtime.hostingMode;
       runtimeLabel = runtime.label;
+      requestedRuntimeInstanceId = runtime.id;
     }
 
     if (!requestedRuntimeInstanceId && hosting === "local") {
