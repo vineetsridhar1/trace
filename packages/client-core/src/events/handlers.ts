@@ -315,6 +315,14 @@ export function handleOrgEvent(event: Event): void {
               ? ultraplan.updatedAt
               : existing.updatedAt ?? event.timestamp,
         } as unknown as Partial<SessionGroupEntity>);
+      } else {
+        batch.upsert("sessionGroups", sessionGroupId, {
+          id: sessionGroupId,
+          ultraplan,
+          createdAt: event.timestamp,
+          updatedAt:
+            typeof ultraplan.updatedAt === "string" ? ultraplan.updatedAt : event.timestamp,
+        } as unknown as SessionGroupEntity);
       }
     }
   }

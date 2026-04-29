@@ -162,6 +162,36 @@ describe("handleOrgEvent session visibility", () => {
     });
   });
 
+  it("hydrates Ultraplan state when the session group is not in the store yet", () => {
+    handleOrgEvent(
+      event({
+        eventType: "ultraplan_created",
+        scopeType: "ultraplan",
+        scopeId: "ultra-1",
+        payload: {
+          sessionGroupId: "group-1",
+          ultraplan: {
+            id: "ultra-1",
+            sessionGroupId: "group-1",
+            status: "planning",
+            planSummary: "Ship the workflow",
+            updatedAt: "2026-04-25T10:02:00.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionGroups["group-1"]).toMatchObject({
+      id: "group-1",
+      updatedAt: "2026-04-25T10:02:00.000Z",
+      ultraplan: {
+        id: "ultra-1",
+        status: "planning",
+        planSummary: "Ship the workflow",
+      },
+    });
+  });
+
   it("updates hydrated controller runs on Ultraplan run events", () => {
     useEntityStore.getState().upsert("sessionGroups", "group-1", {
       id: "group-1",
