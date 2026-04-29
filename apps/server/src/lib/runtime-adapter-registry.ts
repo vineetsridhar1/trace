@@ -2,6 +2,13 @@ import { Prisma } from "@prisma/client";
 
 export type RuntimeAdapterType = "local" | "provisioned";
 
+export type RuntimeEnvironment = {
+  id: string;
+  name: string;
+  adapterType: RuntimeAdapterType;
+  config: Prisma.JsonValue;
+};
+
 export type RuntimeStartInput = {
   sessionId: string;
   sessionGroupId?: string;
@@ -9,12 +16,7 @@ export type RuntimeStartInput = {
   preserveBranchName?: boolean;
   organizationId: string;
   actorId: string;
-  environment?: {
-    id: string;
-    name: string;
-    adapterType: RuntimeAdapterType;
-    config: Prisma.JsonValue;
-  } | null;
+  environment?: RuntimeEnvironment | null;
   tool: string;
   model?: string;
   repo?: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
@@ -38,6 +40,7 @@ export type RuntimeStopInput = {
   sessionId: string;
   organizationId?: string;
   actorId?: string;
+  environment?: RuntimeEnvironment | null;
   connection?: Record<string, unknown> | null;
   reason?: string;
 };
@@ -50,6 +53,7 @@ export type RuntimeStopResult = {
 
 export type RuntimeStatusInput = {
   organizationId: string;
+  environment?: RuntimeEnvironment | null;
   connection?: Record<string, unknown> | null;
 };
 

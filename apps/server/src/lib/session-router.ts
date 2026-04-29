@@ -24,7 +24,11 @@ import {
   runtimeAdapterRegistry,
   setProvisionedRuntimeCloudMachineService,
 } from "./runtime-adapters.js";
-import { RuntimeAdapterRegistry, type RuntimeAdapterType } from "./runtime-adapter-registry.js";
+import {
+  RuntimeAdapterRegistry,
+  type RuntimeAdapterType,
+  type RuntimeEnvironment,
+} from "./runtime-adapter-registry.js";
 
 interface BaseSessionCommand {
   type:
@@ -133,6 +137,11 @@ function adapterTypeFromHosting(
 function connectionRecord(connection: unknown): Record<string, unknown> | null {
   if (!connection || typeof connection !== "object" || Array.isArray(connection)) return null;
   return connection as Record<string, unknown>;
+}
+
+function connectionEnvironmentId(connection: Record<string, unknown> | null): string | null {
+  const environmentId = connection?.environmentId;
+  return typeof environmentId === "string" && environmentId.trim() ? environmentId : null;
 }
 
 /**
@@ -579,6 +588,27 @@ export class SessionRouter {
       lastHeartbeatAgeMs: now - runtime.lastHeartbeat,
       boundSessions: [...runtime.boundSessions],
     }));
+  }
+
+  private async resolveRuntimeEnvironment(
+    connection: Record<string, unknown> | null,
+  ): Promise<RuntimeEnvironment | null> {
+    const environmentId = connectionEnvironmentId(connection);
+    if (!environmentId) return null;
+
+    const environment = await prisma.agentEnvironment.findFirst({
+      where: { id: environmentId },
+      select: { id: true, name: true, adapterType: true, config: true },
+    });
+    if (!environment) return null;
+
+    const adapterType = this.runtimeAdapters.get(environment.adapterType).type;
+    return {
+      id: environment.id,
+      name: environment.name,
+      adapterType,
+      config: environment.config,
+    };
   }
 
   /** Send a command directly to a runtime (not session-scoped). */
@@ -1341,6 +1371,7 @@ export class SessionRouter {
     sessionId: string,
     session: {
       hosting: string;
+      organizationId?: string;
       workdir?: string | null;
       repoId?: string | null;
       connection?: unknown;
@@ -1351,6 +1382,8 @@ export class SessionRouter {
         ? (connectionRecord(session.connection)?.adapterType as string)
         : adapterTypeFromHosting(session.hosting, this.runtimeAdapters);
     const adapter = this.runtimeAdapters.get(adapterType);
+    const connection = connectionRecord(session.connection);
+    const environment = await this.resolveRuntimeEnvironment(connection);
 
     const result = this.send(sessionId, {
       type: "delete",
@@ -1363,7 +1396,9 @@ export class SessionRouter {
     }
     await adapter.stopSession({
       sessionId,
-      connection: connectionRecord(session.connection),
+      organizationId: session.organizationId,
+      environment,
+      connection,
       reason: "session_deleted",
     });
     this.unbindSession(sessionId);
@@ -1392,10 +1427,12 @@ export class SessionRouter {
         },
       });
       const conn = connectionRecord(session.connection);
+      const environment = await this.resolveRuntimeEnvironment(conn);
       const startResult = await adapter.startSession({
         sessionId,
         organizationId: session.organizationId,
         actorId: session.createdById,
+        environment,
         tool: session.tool,
         model: session.model ?? undefined,
       });

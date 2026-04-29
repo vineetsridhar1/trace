@@ -1,7 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("./db.js", async () => {
+  const { createPrismaMock } = await import("../../test/helpers.js");
+  return { prisma: createPrismaMock() };
+});
+
 import type WebSocket from "ws";
+import { prisma } from "./db.js";
 import { SessionRouter } from "./session-router.js";
 import { RuntimeAdapterRegistry, type RuntimeAdapter } from "./runtime-adapter-registry.js";
+import type { createPrismaMock } from "../../test/helpers.js";
+
+const prismaMock = prisma as unknown as ReturnType<typeof createPrismaMock>;
 
 function makeWs() {
   return {
@@ -14,6 +24,7 @@ function makeWs() {
 describe("SessionRouter stale runtime eviction", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("does not evict a runtime that reconnected after the stale snapshot", () => {
@@ -358,5 +369,82 @@ describe("SessionRouter runtime adapter dispatch", () => {
       expect.objectContaining({ type: "terminal_create", terminalId: "term-1" }),
       expect.objectContaining({ type: "terminal_create", terminalId: "term-2" }),
     ]);
+  });
+
+  it("passes environment config to stopSession when destroying a provisioned runtime", async () => {
+    const provisionedStop = vi.fn().mockResolvedValue({ ok: true, status: "stopping" });
+    const provisionedAdapter: RuntimeAdapter = {
+      type: "provisioned",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return { status: "connecting" };
+      },
+      stopSession: provisionedStop,
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    const localAdapter: RuntimeAdapter = {
+      type: "local",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return { status: "selected" };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce({
+      id: "env-1",
+      name: "Company Launcher",
+      adapterType: "provisioned",
+      config: {
+        startUrl: "https://launcher.example/start",
+        stopUrl: "https://launcher.example/stop",
+        statusUrl: "https://launcher.example/status",
+        auth: { secretId: "secret-1" },
+      },
+    });
+    const router = new SessionRouter(
+      new RuntimeAdapterRegistry([localAdapter, provisionedAdapter]),
+    );
+
+    await router.destroyRuntime("session-1", {
+      hosting: "cloud",
+      organizationId: "org-1",
+      connection: {
+        adapterType: "provisioned",
+        environmentId: "env-1",
+        providerRuntimeId: "provider-1",
+      },
+    });
+
+    expect(prismaMock.agentEnvironment.findFirst).toHaveBeenCalledWith({
+      where: { id: "env-1" },
+      select: { id: true, name: true, adapterType: true, config: true },
+    });
+    expect(provisionedStop).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        environment: expect.objectContaining({
+          id: "env-1",
+          adapterType: "provisioned",
+          config: expect.objectContaining({
+            stopUrl: "https://launcher.example/stop",
+            auth: { secretId: "secret-1" },
+          }),
+        }),
+      }),
+    );
   });
 });

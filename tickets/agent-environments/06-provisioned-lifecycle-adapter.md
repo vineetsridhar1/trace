@@ -102,9 +102,9 @@ Owns plan lines:
 - Replace the ticket 04 `LegacyCloudMachineProvisionedRuntimeAdapter` compatibility shim with the
   generic lifecycle endpoint implementation. The shim exists only to keep current cloud sessions
   working while the registry boundary lands.
-- Ticket 04's initial contract passes environment config to `startSession` only. Extend the
-  stop/status inputs or router call sites as part of this ticket before implementing authenticated
-  `stopUrl` and `statusUrl`; the adapter should not query around the registry boundary for config.
+- Ticket 04 now passes environment context through runtime stop/status inputs. Use that contract
+  for authenticated `stopUrl` and `statusUrl`; the adapter should not query around the registry
+  boundary for config.
 - This is the only Trace-core cloud adapter in V1.
 - AWS, Fly, Kubernetes, and internal platforms all sit behind this lifecycle contract.
 - Keep the launcher payload stable before building reference launchers.
