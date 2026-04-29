@@ -35,6 +35,7 @@ Owns plan lines:
   - startup timeout
 - Ensure only one default environment exists per org.
 - Emit `agent_environment.*` events from the service layer.
+- Persist environment mutations and their corresponding events in the same transaction.
 - Add thin GraphQL resolvers that call this service.
 
 ## Dependencies
@@ -50,6 +51,7 @@ Owns plan lines:
 - [ ] Invalid configs are rejected before persistence.
 - [ ] Invalid environment compatibility constraints are rejected before persistence.
 - [ ] Service emits environment lifecycle events.
+- [ ] Environment mutations cannot commit without their lifecycle event.
 - [ ] Resolvers contain no business logic.
 
 ## Implementation notes
