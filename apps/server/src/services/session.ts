@@ -21,6 +21,7 @@ import { runtimeDebug } from "../lib/runtime-debug.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { storage } from "../lib/storage/index.js";
 import { runtimeAccessService } from "./runtime-access.js";
+import { ultraplanControllerRunService } from "./ultraplan-controller-run.js";
 import {
   deriveSessionGroupStatus,
   type SessionGroupStatus as DerivedSessionGroupStatus,
@@ -2341,6 +2342,7 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+
   }
 
   /**
@@ -2420,6 +2422,7 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+
   }
 
   async complete(id: string) {
@@ -3248,6 +3251,20 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+
+    if (session.role === "ultraplan_controller_run") {
+      const controllerRun = await prisma.ultraplanControllerRun.findFirst({
+        where: {
+          sessionId,
+          status: { in: ["queued", "running"] },
+        },
+        select: { id: true },
+        orderBy: { createdAt: "desc" },
+      });
+      if (controllerRun) {
+        await ultraplanControllerRunService.failRun(controllerRun.id, error, "system", "system");
+      }
+    }
   }
 
   async retrySessionGroupSetup(
