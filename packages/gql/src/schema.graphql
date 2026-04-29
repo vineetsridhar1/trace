@@ -1080,6 +1080,7 @@ input CreateAgentEnvironmentInput {
 input UpdateAgentEnvironmentInput {
   id: ID!
   name: String
+  adapterType: AgentEnvironmentAdapterType
   config: JSON
   enabled: Boolean
   isDefault: Boolean

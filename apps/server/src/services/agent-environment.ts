@@ -1,14 +1,16 @@
-import type { ActorType } from "@trace/gql";
+import type { ActorType, CodingTool } from "@trace/gql";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
 
 const ADAPTER_TYPES = new Set(["local", "provisioned"]);
+const CODING_TOOLS = new Set(["claude_code", "codex", "custom"]);
 const AUTH_CONFIG_KEYS = new Set(["type", "secretId"]);
 const RAW_SECRET_KEY_PATTERNS = ["apikey", "authorization", "password", "secret", "token"];
 
 type TxClient = Prisma.TransactionClient;
+type AgentEnvironmentAdapterType = "local" | "provisioned";
 
 type AgentEnvironmentInput = {
   organizationId: string;
@@ -21,16 +23,53 @@ type AgentEnvironmentInput = {
 
 type AgentEnvironmentUpdateInput = Partial<Omit<AgentEnvironmentInput, "organizationId">>;
 
+type AgentEnvironmentRecord = {
+  id: string;
+  organizationId: string;
+  name: string;
+  adapterType: string;
+  config: Prisma.JsonValue;
+  enabled: boolean;
+  isDefault: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type ResolvedSessionEnvironment = AgentEnvironmentRecord & {
+  adapterType: AgentEnvironmentAdapterType;
+};
+
+type RuntimeEnvironmentAdapter = {
+  type: AgentEnvironmentAdapterType;
+  validateConfig(config: Record<string, unknown>): Promise<void>;
+  testConfig(input: {
+    organizationId: string;
+    config: Record<string, unknown>;
+  }): Promise<{ ok: boolean; message?: string | null }>;
+};
+
 function normalizeName(name: string): string {
   const normalized = name.trim();
   if (!normalized) throw new Error("Agent environment name is required");
   return normalized;
 }
 
-function assertSupportedAdapter(adapterType: string): void {
+function assertSupportedAdapter(
+  adapterType: string,
+): asserts adapterType is AgentEnvironmentAdapterType {
   if (!ADAPTER_TYPES.has(adapterType)) {
     throw new Error("Agent environment adapterType must be local or provisioned");
   }
+}
+
+function asConfigRecord(
+  config: Prisma.InputJsonValue | Prisma.JsonValue | undefined,
+): Record<string, unknown> {
+  if (config === undefined) return {};
+  if (!config || typeof config !== "object" || Array.isArray(config)) {
+    throw new Error("Agent environment config must be an object");
+  }
+  return config as Record<string, unknown>;
 }
 
 function assertConfigStoresOnlySecretReferences(value: unknown): void {
@@ -73,17 +112,49 @@ function assertAuthConfigStoresOnlySecretReferences(value: unknown): void {
   }
 }
 
-function environmentPayload(environment: {
-  id: string;
-  organizationId: string;
-  name: string;
-  adapterType: string;
-  config: Prisma.JsonValue;
-  enabled: boolean;
-  isDefault: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}): Prisma.InputJsonObject {
+function getCapabilities(config: Record<string, unknown>): Record<string, unknown> | null {
+  const capabilities = config.capabilities;
+  if (!capabilities || typeof capabilities !== "object" || Array.isArray(capabilities)) return null;
+  return capabilities as Record<string, unknown>;
+}
+
+function assertCompatibilityConstraints(config: Record<string, unknown>): void {
+  const capabilities = getCapabilities(config);
+  const supportedTools = capabilities?.supportedTools;
+  if (supportedTools !== undefined) {
+    if (!Array.isArray(supportedTools)) {
+      throw new Error("Agent environment capabilities.supportedTools must be an array");
+    }
+    for (const tool of supportedTools) {
+      if (typeof tool !== "string" || !CODING_TOOLS.has(tool)) {
+        throw new Error(
+          "Agent environment capabilities.supportedTools contains an unsupported tool",
+        );
+      }
+    }
+  }
+
+  const startupTimeoutSeconds = config.startupTimeoutSeconds;
+  if (
+    startupTimeoutSeconds !== undefined &&
+    (typeof startupTimeoutSeconds !== "number" ||
+      !Number.isInteger(startupTimeoutSeconds) ||
+      startupTimeoutSeconds < 1)
+  ) {
+    throw new Error("Agent environment startupTimeoutSeconds must be a positive integer");
+  }
+}
+
+function assertSupportsTool(environment: AgentEnvironmentRecord, tool: CodingTool): void {
+  const capabilities = getCapabilities(asConfigRecord(environment.config));
+  const supportedTools = capabilities?.supportedTools;
+  if (!Array.isArray(supportedTools)) return;
+  if (!supportedTools.includes(tool)) {
+    throw new Error("Agent environment does not support the requested coding tool");
+  }
+}
+
+function environmentPayload(environment: AgentEnvironmentRecord): Prisma.InputJsonObject {
   return {
     id: environment.id,
     organizationId: environment.organizationId,
@@ -95,6 +166,46 @@ function environmentPayload(environment: {
     createdAt: environment.createdAt.toISOString(),
     updatedAt: environment.updatedAt.toISOString(),
   };
+}
+
+const runtimeEnvironmentAdapters: Record<AgentEnvironmentAdapterType, RuntimeEnvironmentAdapter> = {
+  local: {
+    type: "local",
+    async validateConfig(config) {
+      assertCompatibilityConstraints(config);
+    },
+    async testConfig() {
+      return { ok: true, message: "Local environment config is valid" };
+    },
+  },
+  provisioned: {
+    type: "provisioned",
+    async validateConfig(config) {
+      assertCompatibilityConstraints(config);
+      for (const key of ["startUrl", "stopUrl", "statusUrl"]) {
+        const value = config[key];
+        if (typeof value !== "string" || !value.trim()) {
+          throw new Error(`Provisioned agent environment config requires ${key}`);
+        }
+        try {
+          new URL(value);
+        } catch {
+          throw new Error(`Provisioned agent environment ${key} must be a valid URL`);
+        }
+      }
+    },
+    async testConfig() {
+      return {
+        ok: false,
+        message: "Provisioned environment testing requires runtime adapter connectivity",
+      };
+    },
+  },
+};
+
+function getRuntimeEnvironmentAdapter(adapterType: string): RuntimeEnvironmentAdapter {
+  assertSupportedAdapter(adapterType);
+  return runtimeEnvironmentAdapters[adapterType];
 }
 
 export class AgentEnvironmentService {
@@ -111,7 +222,9 @@ export class AgentEnvironmentService {
   async create(input: AgentEnvironmentInput, actorType: ActorType, actorId: string) {
     const name = normalizeName(input.name);
     assertSupportedAdapter(input.adapterType);
+    const config = asConfigRecord(input.config);
     assertConfigStoresOnlySecretReferences(input.config);
+    await getRuntimeEnvironmentAdapter(input.adapterType).validateConfig(config);
 
     const environment = await prisma.$transaction(async (tx: TxClient) => {
       await assertActorOrgAccess(tx, input.organizationId, actorType, actorId);
@@ -130,7 +243,7 @@ export class AgentEnvironmentService {
           organizationId: input.organizationId,
           name,
           adapterType: input.adapterType,
-          config: input.config ?? {},
+          config: config as Prisma.InputJsonObject,
           enabled,
           isDefault,
         },
@@ -170,6 +283,11 @@ export class AgentEnvironmentService {
         where: { id },
       });
       await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
+      const adapterType = input.adapterType ?? existing.adapterType;
+      assertSupportedAdapter(adapterType);
+      const config =
+        input.config === undefined ? asConfigRecord(existing.config) : asConfigRecord(input.config);
+      await getRuntimeEnvironmentAdapter(adapterType).validateConfig(config);
       await this.lockOrganizationDefaults(tx, existing.organizationId);
 
       const enabled = input.enabled ?? existing.enabled;
@@ -191,8 +309,8 @@ export class AgentEnvironmentService {
         where: { id },
         data: {
           ...(input.name !== undefined ? { name: normalizeName(input.name) } : {}),
-          ...(input.adapterType !== undefined ? { adapterType: input.adapterType } : {}),
-          ...(input.config !== undefined ? { config: input.config } : {}),
+          ...(input.adapterType !== undefined ? { adapterType } : {}),
+          ...(input.config !== undefined ? { config: config as Prisma.InputJsonObject } : {}),
           ...(input.enabled !== undefined ? { enabled } : {}),
           isDefault,
         },
@@ -221,13 +339,21 @@ export class AgentEnvironmentService {
     const environment = await prisma.$transaction(async (tx: TxClient) => {
       const existing = await tx.agentEnvironment.findFirstOrThrow({
         where: { id },
-        select: { organizationId: true },
       });
       await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
 
-      const deleted = await tx.agentEnvironment.delete({
-        where: { id },
+      const referencingSessions = await tx.session.count({
+        where: { connection: { path: ["environmentId"], equals: id } },
       });
+      const deleted =
+        referencingSessions > 0
+          ? await tx.agentEnvironment.update({
+              where: { id },
+              data: { enabled: false, isDefault: false },
+            })
+          : await tx.agentEnvironment.delete({
+              where: { id },
+            });
 
       await eventService.create(
         {
@@ -252,7 +378,6 @@ export class AgentEnvironmentService {
     const environment = await prisma.$transaction(async (tx: TxClient) => {
       const existing = await tx.agentEnvironment.findFirstOrThrow({
         where: { id },
-        select: { adapterType: true, enabled: true, organizationId: true },
       });
       await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
       return existing;
@@ -265,10 +390,53 @@ export class AgentEnvironmentService {
       };
     }
 
-    return {
-      ok: false,
-      message: `${environment.adapterType} environment testing requires runtime adapter validation`,
-    };
+    return getRuntimeEnvironmentAdapter(environment.adapterType).testConfig({
+      organizationId: environment.organizationId,
+      config: asConfigRecord(environment.config),
+    });
+  }
+
+  async setDefault(id: string, actorType: ActorType, actorId: string) {
+    return this.update(id, { isDefault: true, enabled: true }, actorType, actorId);
+  }
+
+  async resolveDefault(organizationId: string, actorType: ActorType, actorId: string) {
+    return prisma.$transaction(async (tx: TxClient) => {
+      await assertActorOrgAccess(tx, organizationId, actorType, actorId);
+      return tx.agentEnvironment.findFirstOrThrow({
+        where: { organizationId, enabled: true, isDefault: true },
+      });
+    });
+  }
+
+  async resolveForSessionRequest(params: {
+    organizationId: string;
+    environmentId?: string | null;
+    tool: CodingTool;
+    actorType: ActorType;
+    actorId: string;
+  }): Promise<ResolvedSessionEnvironment | null> {
+    return prisma.$transaction(async (tx: TxClient) => {
+      await assertActorOrgAccess(tx, params.organizationId, params.actorType, params.actorId);
+      const environment = params.environmentId
+        ? await tx.agentEnvironment.findFirstOrThrow({
+            where: { id: params.environmentId, organizationId: params.organizationId },
+          })
+        : await tx.agentEnvironment.findFirst({
+            where: { organizationId: params.organizationId, enabled: true, isDefault: true },
+          });
+
+      if (!environment) return null;
+      if (!environment.enabled) {
+        throw new Error("Agent environment is disabled");
+      }
+      assertSupportedAdapter(environment.adapterType);
+      await getRuntimeEnvironmentAdapter(environment.adapterType).validateConfig(
+        asConfigRecord(environment.config),
+      );
+      assertSupportsTool(environment, params.tool);
+      return environment as ResolvedSessionEnvironment;
+    });
   }
 
   private async lockOrganizationDefaults(tx: TxClient, organizationId: string): Promise<void> {

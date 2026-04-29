@@ -21,6 +21,7 @@ import { runtimeDebug } from "../lib/runtime-debug.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { storage } from "../lib/storage/index.js";
 import { runtimeAccessService } from "./runtime-access.js";
+import { agentEnvironmentService } from "./agent-environment.js";
 import {
   deriveSessionGroupStatus,
   type SessionGroupStatus as DerivedSessionGroupStatus,
@@ -33,6 +34,7 @@ export type StartSessionServiceInput = StartSessionInput & {
   sourceSessionId?: string | null;
   organizationId: string;
   createdById: string;
+  actorType?: ActorType;
   clientSource?: string | null;
 };
 
@@ -1371,7 +1373,25 @@ export class SessionService {
       throw new Error("Cloud sessions are disabled in local mode");
     }
 
-    let hosting = input.hosting ?? sourceSession?.hosting ?? (isLocalMode() ? "local" : "cloud");
+    const requestedEnvironment = await agentEnvironmentService.resolveForSessionRequest({
+      organizationId: input.organizationId,
+      environmentId: input.environmentId ?? null,
+      tool: input.tool,
+      actorType: input.actorType ?? "user",
+      actorId: input.createdById,
+    });
+    const environmentHosting =
+      requestedEnvironment?.adapterType === "local"
+        ? "local"
+        : requestedEnvironment?.adapterType === "provisioned"
+          ? "cloud"
+          : null;
+
+    let hosting =
+      environmentHosting ??
+      input.hosting ??
+      sourceSession?.hosting ??
+      (isLocalMode() ? "local" : "cloud");
     if (isLocalMode() && hosting === "cloud") {
       hosting = "local";
     }
@@ -1437,6 +1457,10 @@ export class SessionService {
       ? sharedConnection
       : connJson(
           defaultConnection({
+            ...(requestedEnvironment && {
+              environmentId: requestedEnvironment.id,
+              adapterType: requestedEnvironment.adapterType,
+            }),
             ...(requestedRuntimeInstanceId && { runtimeInstanceId: requestedRuntimeInstanceId }),
             ...(runtimeLabel && { runtimeLabel }),
           }),

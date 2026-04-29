@@ -41,7 +41,12 @@ describe("AgentEnvironmentService", () => {
       organizationId: "org-1",
       name: "Company Launcher",
       adapterType: "provisioned",
-      config: { auth: { secretId: "secret-1" } },
+      config: {
+        startUrl: "https://launcher.example/start",
+        stopUrl: "https://launcher.example/stop",
+        statusUrl: "https://launcher.example/status",
+        auth: { secretId: "secret-1" },
+      },
       enabled: true,
       isDefault: true,
       createdAt: now,
@@ -54,7 +59,12 @@ describe("AgentEnvironmentService", () => {
         organizationId: "org-1",
         name: " Company Launcher ",
         adapterType: "provisioned",
-        config: { auth: { secretId: "secret-1" } },
+        config: {
+          startUrl: "https://launcher.example/start",
+          stopUrl: "https://launcher.example/stop",
+          statusUrl: "https://launcher.example/status",
+          auth: { secretId: "secret-1" },
+        },
         isDefault: true,
       },
       "user",
@@ -72,7 +82,12 @@ describe("AgentEnvironmentService", () => {
         organizationId: "org-1",
         name: "Company Launcher",
         adapterType: "provisioned",
-        config: { auth: { secretId: "secret-1" } },
+        config: {
+          startUrl: "https://launcher.example/start",
+          stopUrl: "https://launcher.example/stop",
+          statusUrl: "https://launcher.example/status",
+          auth: { secretId: "secret-1" },
+        },
         enabled: true,
         isDefault: true,
       },
@@ -89,7 +104,12 @@ describe("AgentEnvironmentService", () => {
             organizationId: "org-1",
             name: "Company Launcher",
             adapterType: "provisioned",
-            config: { auth: { secretId: "secret-1" } },
+            config: {
+              startUrl: "https://launcher.example/start",
+              stopUrl: "https://launcher.example/stop",
+              statusUrl: "https://launcher.example/status",
+              auth: { secretId: "secret-1" },
+            },
             enabled: true,
             isDefault: true,
             createdAt: now.toISOString(),
@@ -224,9 +244,19 @@ describe("AgentEnvironmentService", () => {
 
   it("does not report environment tests as successful before adapter validation exists", async () => {
     prismaMock.agentEnvironment.findFirstOrThrow.mockResolvedValueOnce({
+      id: "env-1",
+      name: "Launcher",
       adapterType: "provisioned",
+      config: {
+        startUrl: "https://launcher.example/start",
+        stopUrl: "https://launcher.example/stop",
+        statusUrl: "https://launcher.example/status",
+      },
       enabled: true,
       organizationId: "org-1",
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now,
     });
 
     const service = new AgentEnvironmentService();
@@ -234,7 +264,81 @@ describe("AgentEnvironmentService", () => {
 
     expect(result).toEqual({
       ok: false,
-      message: "provisioned environment testing requires runtime adapter validation",
+      message: "Provisioned environment testing requires runtime adapter connectivity",
     });
+  });
+
+  it("rejects a session environment that does not support the requested tool", async () => {
+    prismaMock.agentEnvironment.findFirstOrThrow.mockResolvedValueOnce({
+      id: "env-1",
+      organizationId: "org-1",
+      name: "Codex Only",
+      adapterType: "local",
+      config: { capabilities: { supportedTools: ["codex"] } },
+      enabled: true,
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const service = new AgentEnvironmentService();
+
+    await expect(
+      service.resolveForSessionRequest({
+        organizationId: "org-1",
+        environmentId: "env-1",
+        tool: "claude_code",
+        actorType: "user",
+        actorId: "user-1",
+      }),
+    ).rejects.toThrow("does not support the requested coding tool");
+  });
+
+  it("disables instead of hard-deleting environments referenced by sessions", async () => {
+    prismaMock.agentEnvironment.findFirstOrThrow.mockResolvedValueOnce({
+      id: "env-1",
+      organizationId: "org-1",
+      name: "Local",
+      adapterType: "local",
+      config: {},
+      enabled: true,
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    prismaMock.session.count.mockResolvedValueOnce(1);
+    prismaMock.agentEnvironment.update.mockResolvedValueOnce({
+      id: "env-1",
+      organizationId: "org-1",
+      name: "Local",
+      adapterType: "local",
+      config: {},
+      enabled: false,
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const service = new AgentEnvironmentService();
+    await service.delete("env-1", "user", "user-1");
+
+    expect(prismaMock.agentEnvironment.delete).not.toHaveBeenCalled();
+    expect(prismaMock.agentEnvironment.update).toHaveBeenCalledWith({
+      where: { id: "env-1" },
+      data: { enabled: false, isDefault: false },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "agent_environment_deleted",
+        payload: expect.objectContaining({
+          agentEnvironment: expect.objectContaining({
+            id: "env-1",
+            enabled: false,
+            isDefault: false,
+          }),
+        }),
+      }),
+      prismaMock,
+    );
   });
 });

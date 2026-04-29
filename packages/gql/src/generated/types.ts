@@ -1895,6 +1895,7 @@ export type Turn = {
 export type TurnRole = "ASSISTANT" | "USER";
 
 export type UpdateAgentEnvironmentInput = {
+  adapterType?: InputMaybe<AgentEnvironmentAdapterType>;
   config?: InputMaybe<Scalars["JSON"]["input"]>;
   enabled?: InputMaybe<Scalars["Boolean"]["input"]>;
   id: Scalars["ID"]["input"];
