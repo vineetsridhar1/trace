@@ -9,6 +9,11 @@ import {
   type ControllerConfig,
 } from "./ultraplan-controller-run.js";
 import { sessionService } from "./session.js";
+import type {
+  BridgeGitDiffSummary,
+  BridgeGitIntegrationCommand,
+  BridgeGitIntegrationResultPayload,
+} from "@trace/shared";
 
 type TxClient = Prisma.TransactionClient;
 
@@ -120,6 +125,114 @@ export class UltraplanService {
       where: { sessionGroupId, organizationId },
       include: ULTRAPLAN_INCLUDE,
     });
+  }
+
+  async getBranchDiff(input: {
+    ultraplanId: string;
+    organizationId: string;
+    userId: string;
+    baseRef?: string | null;
+    headRef?: string | null;
+    includePatch?: boolean;
+    maxPatchBytes?: number;
+    maxFiles?: number;
+  }): Promise<BridgeGitDiffSummary> {
+    const ultraplan = await prisma.ultraplan.findFirst({
+      where: { id: input.ultraplanId, organizationId: input.organizationId },
+      select: { sessionGroupId: true },
+    });
+    if (!ultraplan) throw new Error("Ultraplan not found");
+    return sessionService.branchDiffSummary(
+      ultraplan.sessionGroupId,
+      input.organizationId,
+      input.userId,
+      {
+        baseRef: input.baseRef,
+        headRef: input.headRef,
+        includePatch: input.includePatch,
+        maxPatchBytes: input.maxPatchBytes,
+        maxFiles: input.maxFiles,
+      },
+    );
+  }
+
+  async getCommitDiff(input: {
+    ultraplanId: string;
+    organizationId: string;
+    userId: string;
+    commitRef?: string | null;
+    includePatch?: boolean;
+    maxPatchBytes?: number;
+    maxFiles?: number;
+  }): Promise<BridgeGitDiffSummary> {
+    const ultraplan = await prisma.ultraplan.findFirst({
+      where: { id: input.ultraplanId, organizationId: input.organizationId },
+      select: { sessionGroupId: true },
+    });
+    if (!ultraplan) throw new Error("Ultraplan not found");
+    return sessionService.commitDiff(ultraplan.sessionGroupId, input.organizationId, input.userId, {
+      commitRef: input.commitRef,
+      includePatch: input.includePatch,
+      maxPatchBytes: input.maxPatchBytes,
+      maxFiles: input.maxFiles,
+    });
+  }
+
+  async runServiceOwnedGitIntegration(input: {
+    ultraplanId: string;
+    organizationId: string;
+    userId: string;
+    actorType?: ActorType;
+    actorId?: string;
+    operation: BridgeGitIntegrationCommand["operation"];
+    sourceRef?: string | null;
+    targetRef?: string | null;
+    commitRef?: string | null;
+    branchRef?: string | null;
+    ontoRef?: string | null;
+  }): Promise<BridgeGitIntegrationResultPayload> {
+    const ultraplan = await prisma.ultraplan.findFirst({
+      where: { id: input.ultraplanId, organizationId: input.organizationId },
+      include: ULTRAPLAN_INCLUDE,
+    });
+    if (!ultraplan) throw new Error("Ultraplan not found");
+    const result = await sessionService.runServiceOwnedGitIntegration(
+      ultraplan.sessionGroupId,
+      input.organizationId,
+      input.userId,
+      {
+        operation: input.operation,
+        sourceRef: input.sourceRef,
+        targetRef: input.targetRef,
+        commitRef: input.commitRef,
+        branchRef: input.branchRef,
+        ontoRef: input.ontoRef,
+      },
+    );
+    const basePayload = eventPayload(ultraplan as unknown as Record<string, unknown>) as unknown as Record<
+      string,
+      unknown
+    >;
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "ultraplan",
+      scopeId: ultraplan.id,
+      eventType: "ultraplan_updated",
+      payload: ({
+        ...basePayload,
+        type: "git_integration",
+        operation: input.operation,
+        sourceRef: input.sourceRef ?? null,
+        targetRef: input.targetRef ?? null,
+        commitRef: input.commitRef ?? null,
+        branchRef: input.branchRef ?? null,
+        ontoRef: input.ontoRef ?? null,
+        result,
+      } as unknown) as Prisma.InputJsonValue,
+      actorType: input.actorType ?? "user",
+      actorId: input.actorId ?? input.userId,
+    });
+    return result;
   }
 
   async start(input: StartUltraplanServiceInput) {

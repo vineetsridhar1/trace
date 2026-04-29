@@ -30,12 +30,12 @@ Add runtime/bridge support for reading worker branch diffs and performing servic
 
 ## Completion requirements
 
-- [ ] Server can request a bounded diff for a worker branch/checkpoint.
-- [ ] Desktop and container bridges both support the diff command.
-- [ ] Service-owned merge/rebase/cherry-pick commands exist behind authorization.
-- [ ] Invalid refs fail safely.
-- [ ] Merge conflicts produce structured conflict results, not silent failures.
-- [ ] Large diffs are truncated deterministically.
+- [x] Server can request a bounded diff for a worker branch/checkpoint.
+- [x] Desktop and container bridges both support the diff command.
+- [x] Service-owned merge/rebase/cherry-pick commands exist behind authorization.
+- [x] Invalid refs fail safely.
+- [x] Merge conflicts produce structured conflict results, not silent failures.
+- [x] Large diffs are truncated deterministically.
 
 ## Implementation notes
 

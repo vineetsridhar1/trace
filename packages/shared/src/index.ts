@@ -50,9 +50,15 @@ export type {
   BridgeFilesResult,
   BridgeFileContentResult,
   BridgeBranchDiffCommand,
+  BridgeCommitDiffCommand,
+  BridgeGitIntegrationCommand,
   BridgeFileAtRefCommand,
   BridgeBranchDiffResult,
+  BridgeCommitDiffResult,
   BridgeBranchDiffFile,
+  BridgeGitDiffSummary,
+  BridgeGitIntegrationResult,
+  BridgeGitIntegrationResultPayload,
   BridgeFileAtRefResult,
   BridgeTerminalCreateCommand,
   BridgeTerminalInputCommand,
@@ -83,12 +89,15 @@ export {
   handleListFiles,
   handleReadFile,
   handleBranchDiff,
+  handleCommitDiff,
+  handleGitIntegration,
   handleFileAtRef,
   handleListSkills,
   downloadImagesToTempFiles,
   cleanupTempImages,
 } from "./bridge.js";
 export type { GitExecFn } from "./bridge.js";
+export type { GitLimitedExecFn, GitLimitedExecResult } from "./bridge.js";
 export type { BuiltinSlashCommand } from "./slash-commands.js";
 export { BUILTIN_SLASH_COMMANDS } from "./slash-commands.js";
 export type {
