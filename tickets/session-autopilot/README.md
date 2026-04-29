@@ -73,8 +73,8 @@ M0 — Contracts and Durable State
 
 M1 — Product Surface and Service Layer
 04 Ultraplan Service CRUD and Controller Runs  (needs 01, 02, 03)
-├─ 05 Group Controls and Ultraplan UI  (needs 02, 04)
-└─ 06 Client Store and Event Handling  (needs 02, 04)
+├─ 06 Client Store and Event Handling  (needs 02, 04)
+└─ 05 Group Controls and Ultraplan UI  (needs 02, 04, 06 for event-driven status/timeline hydration)
 
 M2 — Worker Branches and Review Context
 07 Branch and Diff Runtime Commands  (needs 01, 04)
@@ -99,7 +99,7 @@ Post-V1
 ## Implementation Parallelization Notes
 
 - Diff-only parts of `07 Branch and Diff Runtime Commands` can start once contracts are settled, but service-owned integration commands should wait for ticket 04.
-- `05 Group Controls and Ultraplan UI` and `06 Client Store and Event Handling` can run in parallel after ticket 04 lands.
+- The composer-start portion of `05 Group Controls and Ultraplan UI` can run after ticket 04 lands, but its visible event-driven status/timeline surface depends on `06 Client Store and Event Handling`.
 - `11 Worker Execution Actions` and `12 Human Gates Server Flow` can run in parallel after ticket 10 lands.
 - Ticket 13 should wait for the server-side gate payload in ticket 12.
 - Ticket 15 should wait until branch integration behavior and gate UX are both defined.
