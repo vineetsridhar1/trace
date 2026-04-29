@@ -134,6 +134,35 @@ function makeControllerRun(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function makeControllerSummaryPayload(overrides: Record<string, unknown> = {}) {
+  return {
+    schemaVersion: 1,
+    outcome: "plan_updated",
+    summary: "Finished planning",
+    actions: [
+      {
+        action: "ticket.create",
+        result: "success",
+        targetType: "ticket",
+        targetId: "ticket-1",
+      },
+    ],
+    plannedTickets: [
+      {
+        ticketId: "ticket-1",
+        title: "Build autopilot",
+        status: "planned",
+        dependsOnTicketIds: [],
+        dependencyRationale: null,
+      },
+    ],
+    workerExecutions: [],
+    humanGates: [],
+    nextSteps: ["Start the first worker."],
+    ...overrides,
+  };
+}
+
 function makeTicketExecution(overrides: Record<string, unknown> = {}) {
   return {
     id: "execution-1",
@@ -536,7 +565,7 @@ describe("UltraplanService", () => {
 
     await controllerRunService.completeRun(
       "run-1",
-      { summary: "Finished planning" },
+      { summary: "Finished planning", summaryPayload: makeControllerSummaryPayload() },
       "user",
       "user-1",
     );
@@ -575,8 +604,37 @@ describe("UltraplanService", () => {
     prismaMock.orgMember.findUniqueOrThrow.mockRejectedValue(new Error("not a member"));
 
     await expect(
-      controllerRunService.completeRun("run-1", { summary: "Finished planning" }, "user", "user-2"),
+      controllerRunService.completeRun(
+        "run-1",
+        { summary: "Finished planning", summaryPayload: makeControllerSummaryPayload() },
+        "user",
+        "user-2",
+      ),
     ).rejects.toThrow("not a member");
+
+    expect(prismaMock.ultraplanControllerRun.update).not.toHaveBeenCalled();
+    expect(prismaMock.ultraplan.update).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
+  });
+
+  it("does not complete controller runs without a valid structured summary", async () => {
+    const controllerRunService = new UltraplanControllerRunService();
+
+    await expect(
+      controllerRunService.completeRun("run-1", { summary: "Finished planning" }, "user", "user-1"),
+    ).rejects.toThrow("Controller run summaryPayload is required");
+
+    await expect(
+      controllerRunService.completeRun(
+        "run-1",
+        {
+          summary: "Finished planning",
+          summaryPayload: makeControllerSummaryPayload({ actions: [{ action: "git.commit" }] }),
+        },
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("summaryPayload.actions[0].action is not supported");
 
     expect(prismaMock.ultraplanControllerRun.update).not.toHaveBeenCalled();
     expect(prismaMock.ultraplan.update).not.toHaveBeenCalled();

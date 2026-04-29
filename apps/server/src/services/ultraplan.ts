@@ -8,6 +8,7 @@ import {
   validateControllerConfig,
   type ControllerConfig,
 } from "./ultraplan-controller-run.js";
+import { buildControllerRunPrompt } from "./ultraplan-controller-contract.js";
 import { sessionService } from "./session.js";
 import { inboxService } from "./inbox.js";
 import type {
@@ -79,27 +80,6 @@ const ACTIVE_STATUSES: readonly string[] = [
 ] as const;
 
 const ACTIVE_CONTROLLER_RUN_STATUSES = ["queued", "running"] as const;
-
-function buildControllerRunPrompt(input: {
-  goal: string;
-  ultraplanId: string;
-  runId: string;
-  sessionGroupId: string;
-}): string {
-  return [
-    "You are the Ultraplan controller for this Trace session group.",
-    "",
-    "Goal:",
-    input.goal,
-    "",
-    "Trace context:",
-    `- Ultraplan id: ${input.ultraplanId}`,
-    `- Controller run id: ${input.runId}`,
-    `- Session group id: ${input.sessionGroupId}`,
-    "",
-    "For this controller run, inspect the current repository and session context, then produce a concise ordered plan for completing the goal. Do not mutate files, commit, push, or create tickets directly from this controller chat unless a Trace-provided controller action explicitly asks you to.",
-  ].join("\n");
-}
 
 function serializeUltraplan(ultraplan: Record<string, unknown>) {
   return {
