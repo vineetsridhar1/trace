@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { gql } from "@urql/core";
 import { useStoreWithEqualityFn } from "zustand/traditional";
-import { type EntityState, useEntityStore, type SessionEntity } from "@trace/client-core";
+import {
+  isUserVisibleSession,
+  type EntityState,
+  useEntityStore,
+  type SessionEntity,
+} from "@trace/client-core";
 import type { Session, SessionGroup } from "@trace/gql";
 import { userFacingError } from "@/lib/requestError";
 import { mergeSessionGroupEntity } from "@/lib/session-group";
@@ -237,10 +242,12 @@ export function useSessionGroupSessionIds(groupId: string): string[] {
     (state: EntityState): string[] => {
       const ids = state._sessionIdsByGroup[groupId];
       if (!ids || ids.length === 0) return EMPTY_IDS;
-      return ids.slice().sort((a, b) => {
-        const diff = sessionTime(state.sessions[b]) - sessionTime(state.sessions[a]);
-        return diff !== 0 ? diff : a.localeCompare(b);
-      });
+      return ids
+        .filter((id) => isUserVisibleSession(state.sessions[id]))
+        .sort((a, b) => {
+          const diff = sessionTime(state.sessions[b]) - sessionTime(state.sessions[a]);
+          return diff !== 0 ? diff : a.localeCompare(b);
+        });
     },
     areIdsEqual,
   );
