@@ -26,6 +26,7 @@ describe("OrganizationService", () => {
 
   it("creates organizations with the creator as admin and emits organization_created", async () => {
     prismaMock.user.findUniqueOrThrow.mockResolvedValueOnce({ id: "user-1" });
+    prismaMock.user.upsert.mockResolvedValueOnce({ id: "00000000-0000-4000-a000-000000000001" });
     prismaMock.organization.create.mockResolvedValueOnce({ id: "org-1", name: "Acme" });
     prismaMock.orgMember.create
       .mockResolvedValueOnce({
@@ -52,6 +53,21 @@ describe("OrganizationService", () => {
     expect(prismaMock.organization.create).toHaveBeenCalledWith({
       data: { name: "Acme" },
       select: { id: true, name: true },
+    });
+    expect(prismaMock.user.upsert).toHaveBeenCalledWith({
+      where: { id: "00000000-0000-4000-a000-000000000001" },
+      update: {
+        email: "ai@trace.dev",
+        name: "Trace AI",
+        avatarUrl: null,
+        githubId: null,
+      },
+      create: {
+        id: "00000000-0000-4000-a000-000000000001",
+        email: "ai@trace.dev",
+        name: "Trace AI",
+      },
+      select: { id: true },
     });
     expect(prismaMock.orgMember.create).toHaveBeenNthCalledWith(2, {
       data: {
