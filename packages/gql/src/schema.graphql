@@ -1230,14 +1230,28 @@ input RequestUltraplanHumanGateInput {
   itemType: InboxItemType!
   title: String!
   summary: String
+  gateReason: String
   payload: JSON
   controllerRunId: ID
+  controllerRunSessionId: ID
   ticketId: ID
   ticketExecutionId: ID
+  workerSessionId: ID
+  branchName: String
+  checkpointSha: String
+  recommendedAction: String
+  qaChecklist: [String!]
+  controllerRunUrl: String
+  workerSessionUrl: String
+  diffUrl: String
+  prUrl: String
 }
 
 enum UltraplanHumanGateResolution {
   approved
+  changes_requested
+  blocked
+  cancelled
   resolved
   dismissed
 }

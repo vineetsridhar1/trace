@@ -38,15 +38,18 @@ describe("InboxService", () => {
       }),
     ).resolves.toEqual({ id: "item-1" });
 
-    expect(eventServiceMock.create).toHaveBeenCalledWith({
-      organizationId: "org-1",
-      scopeType: "system",
-      scopeId: "org-1",
-      eventType: "inbox_item_created",
-      payload: { inboxItem: { id: "item-1" } },
-      actorType: "system",
-      actorId: "system",
-    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      {
+        organizationId: "org-1",
+        scopeType: "system",
+        scopeId: "org-1",
+        eventType: "inbox_item_created",
+        payload: { inboxItem: { id: "item-1" } },
+        actorType: "system",
+        actorId: "system",
+      },
+      prismaMock,
+    );
   });
 
   it("resolves active items by source and preserves payload fields", async () => {

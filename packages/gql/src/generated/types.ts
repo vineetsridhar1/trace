@@ -1594,14 +1594,25 @@ export type Repo = {
 };
 
 export type RequestUltraplanHumanGateInput = {
+  branchName?: InputMaybe<Scalars["String"]["input"]>;
+  checkpointSha?: InputMaybe<Scalars["String"]["input"]>;
   controllerRunId?: InputMaybe<Scalars["ID"]["input"]>;
+  controllerRunSessionId?: InputMaybe<Scalars["ID"]["input"]>;
+  controllerRunUrl?: InputMaybe<Scalars["String"]["input"]>;
+  diffUrl?: InputMaybe<Scalars["String"]["input"]>;
+  gateReason?: InputMaybe<Scalars["String"]["input"]>;
   itemType: InboxItemType;
   payload?: InputMaybe<Scalars["JSON"]["input"]>;
+  prUrl?: InputMaybe<Scalars["String"]["input"]>;
+  qaChecklist?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  recommendedAction?: InputMaybe<Scalars["String"]["input"]>;
   summary?: InputMaybe<Scalars["String"]["input"]>;
   ticketExecutionId?: InputMaybe<Scalars["ID"]["input"]>;
   ticketId?: InputMaybe<Scalars["ID"]["input"]>;
   title: Scalars["String"]["input"];
   ultraplanId: Scalars["ID"]["input"];
+  workerSessionId?: InputMaybe<Scalars["ID"]["input"]>;
+  workerSessionUrl?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type ScopeInput = {
@@ -2017,7 +2028,13 @@ export type UltraplanControllerRun = {
   ultraplanId: Scalars["ID"]["output"];
 };
 
-export type UltraplanHumanGateResolution = "approved" | "dismissed" | "resolved";
+export type UltraplanHumanGateResolution =
+  | "approved"
+  | "blocked"
+  | "cancelled"
+  | "changes_requested"
+  | "dismissed"
+  | "resolved";
 
 export type UltraplanStatus =
   | "cancelled"

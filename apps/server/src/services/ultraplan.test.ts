@@ -170,10 +170,16 @@ function makeInboxItem(overrides: Record<string, unknown> = {}) {
     payload: {
       ultraplanId: "ultra-1",
       sessionGroupId: "group-1",
+      gateReason: "validate-ticket",
       ticketExecutionId: "execution-1",
+      workerSessionId: "worker-1",
+      branchName: "ultraplan/ticket-1",
+      checkpointSha: "head-sha",
+      recommendedAction: "Approve if tests pass",
+      qaChecklist: ["Run tests"],
     },
-    sourceType: "ultraplan_human_gate",
-    sourceId: "ultra-1",
+    sourceType: "ticket_execution",
+    sourceId: "execution-1",
     createdAt: now,
     resolvedAt: null,
     ...overrides,
@@ -229,11 +235,14 @@ describe("UltraplanService", () => {
     prismaMock.ultraplan.create.mockResolvedValue(makeUltraplan());
     prismaMock.ultraplan.update.mockResolvedValue(makeUltraplan({ lastControllerRunId: "run-1" }));
     prismaMock.ultraplan.findFirstOrThrow.mockResolvedValue(makeUltraplan());
+    prismaMock.ultraplan.findUniqueOrThrow.mockResolvedValue(makeUltraplan());
     prismaMock.session.create.mockResolvedValue(makeSession());
     prismaMock.ultraplanControllerRun.create.mockResolvedValue(makeControllerRun());
     prismaMock.ultraplanControllerRun.update.mockResolvedValue(makeControllerRun());
+    prismaMock.ultraplanControllerRun.findFirst.mockResolvedValue(null);
     prismaMock.ultraplanControllerRun.findUniqueOrThrow.mockResolvedValue(makeControllerRun());
     prismaMock.inboxItem.create.mockResolvedValue(makeInboxItem());
+    prismaMock.inboxItem.findMany.mockResolvedValue([]);
     prismaMock.inboxItem.findFirstOrThrow.mockResolvedValue(makeInboxItem());
     prismaMock.inboxItem.update.mockResolvedValue(
       makeInboxItem({ status: "resolved", payload: { resolution: "approved" } }),
@@ -592,7 +601,9 @@ describe("UltraplanService", () => {
       itemType: "ultraplan_validation_request",
       title: "Validate ticket",
       summary: "Please validate the worker result",
-      payload: { recommendedAction: "Approve if tests pass" },
+      gateReason: "validate-ticket",
+      recommendedAction: "Approve if tests pass",
+      qaChecklist: ["Run tests"],
       ticketExecutionId: "execution-1",
     });
 
@@ -601,13 +612,17 @@ describe("UltraplanService", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           userId: "user-1",
-          sourceType: "ultraplan_human_gate",
-          sourceId: "ultra-1",
+          sourceType: "ticket_execution",
+          sourceId: "execution-1",
           payload: expect.objectContaining({
             ultraplanId: "ultra-1",
             sessionGroupId: "group-1",
+            gateReason: "validate-ticket",
             ticketExecutionId: "execution-1",
+            workerSessionId: "worker-1",
+            branchName: "ultraplan/ticket-1",
             recommendedAction: "Approve if tests pass",
+            qaChecklist: ["Run tests"],
           }),
         }),
       }),
@@ -624,6 +639,26 @@ describe("UltraplanService", () => {
       }),
       prismaMock,
     );
+  });
+
+  it("reuses an active human gate for the same execution and reason", async () => {
+    prismaMock.inboxItem.findMany.mockResolvedValueOnce([makeInboxItem()]);
+
+    const result = await service.requestHumanGate({
+      organizationId: "org-1",
+      ultraplanId: "ultra-1",
+      actorType: "agent",
+      actorId: "agent-1",
+      itemType: "ultraplan_validation_request",
+      title: "Validate ticket",
+      gateReason: "validate-ticket",
+      ticketExecutionId: "execution-1",
+    });
+
+    expect(result.id).toBe("inbox-1");
+    expect(prismaMock.inboxItem.create).not.toHaveBeenCalled();
+    expect(prismaMock.ultraplan.update).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
   });
 
   it("resolves a human gate and clears active gate pointers", async () => {
@@ -680,6 +715,13 @@ describe("UltraplanService", () => {
         scopeType: "ultraplan",
       }),
       prismaMock,
+    );
+    expect(prismaMock.ultraplanControllerRun.create).toHaveBeenCalledWith(expect.any(Object));
+    expect(sessionServiceMock.run).toHaveBeenCalledWith(
+      "session-1",
+      expect.stringContaining("Manual controller run"),
+      "plan",
+      expect.objectContaining({ clientSource: "ultraplan_controller" }),
     );
   });
 });
