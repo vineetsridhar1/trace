@@ -13,6 +13,7 @@ import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { GroupHeader } from "./GroupHeader";
 import { GroupTabStrip } from "./GroupTabStrip";
 import { SessionGroupContentArea } from "./SessionGroupContentArea";
+import { UltraplanStatusPanel } from "./UltraplanStatusPanel";
 import { CheckpointOpenContext } from "./CheckpointOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
 import { SidebarPanel } from "./SidebarPanel";
@@ -68,6 +69,41 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       }
       setupStatus
       setupError
+      ultraplan {
+        id
+        status
+        planSummary
+        lastControllerSummary
+        activeInboxItemId
+        integrationBranch
+        updatedAt
+        tickets {
+          id
+          status
+          position
+          ticket {
+            id
+            title
+            status
+          }
+        }
+        ticketExecutions {
+          id
+          status
+          branch
+          workerSessionId
+        }
+        controllerRuns {
+          id
+          status
+          summaryTitle
+          summary
+          sessionId
+          createdAt
+          startedAt
+          completedAt
+        }
+      }
       createdAt
       updatedAt
       sessions {
@@ -534,6 +570,11 @@ export function SessionGroupDetailView({
             onClose={() => setActiveSessionId(null)}
             onToggleFullscreen={toggleFullscreen}
             onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
+          />
+
+          <UltraplanStatusPanel
+            sessionGroupId={sessionGroupId}
+            canInteract={bridgeInteractionAllowed}
           />
 
           <GroupTabStrip

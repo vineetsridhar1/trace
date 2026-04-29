@@ -83,7 +83,7 @@ function upsertAgentEnvironmentFromPayload(batch: StoreBatchWriter, payload: Jso
   }
 }
 
-const ULTRAPLAN_EVENTS: Set<EventType> = new Set([
+const ULTRAPLAN_STATE_EVENTS: Set<EventType> = new Set([
   "ultraplan_created",
   "ultraplan_updated",
   "ultraplan_paused",
@@ -341,6 +341,30 @@ export function handleOrgEvent(event: Event): void {
       batch.remove("channels", channelId);
       if (ui.getActiveChannelId() === channelId) {
         ui.setActiveChannelId(null);
+      }
+    }
+  }
+
+  // Ultraplan lifecycle events hydrate the active plan onto its session group
+  // until Ultraplan has first-class client store tables.
+  if (ULTRAPLAN_STATE_EVENTS.has(event.eventType)) {
+    const ultraplan = asJsonObject(payload.ultraplan);
+    const sessionGroupId =
+      typeof payload.sessionGroupId === "string"
+        ? payload.sessionGroupId
+        : typeof ultraplan?.sessionGroupId === "string"
+          ? ultraplan.sessionGroupId
+          : null;
+    if (sessionGroupId && ultraplan && typeof ultraplan.id === "string") {
+      const existing = batch.get("sessionGroups", sessionGroupId);
+      if (existing) {
+        batch.patch("sessionGroups", sessionGroupId, {
+          ultraplan,
+          updatedAt:
+            typeof ultraplan.updatedAt === "string"
+              ? ultraplan.updatedAt
+              : existing.updatedAt ?? event.timestamp,
+        } as unknown as Partial<SessionGroupEntity>);
       }
     }
   }
