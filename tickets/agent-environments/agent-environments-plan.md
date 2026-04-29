@@ -732,6 +732,9 @@ After the bridge connects, cloud runtimes must handle multiple concurrent `termi
 
 Cloud bridge authentication needs a short-lived runtime token.
 
+<!-- Resolved in ticket 07: runtime tokens use signed JWT validation, avoiding
+process-local token state for server restarts and multi-instance deployments. -->
+
 The token should encode:
 
 - `organizationId`

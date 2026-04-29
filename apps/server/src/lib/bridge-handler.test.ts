@@ -147,8 +147,10 @@ describe("bridge handler auth", () => {
       instanceId: "cloud-machine-owned",
       label: "owned cloud",
       hostingMode: "cloud",
+      protocolVersion: 1,
+      agentVersion: "0.1.0",
       supportedTools: ["codex"],
-      registeredRepoIds: ["repo-1"],
+      registeredRepoIds: [],
     });
     await Promise.resolve();
 
@@ -160,10 +162,107 @@ describe("bridge handler auth", () => {
         organizationId: "org-1",
         ownerUserId: "user-1",
         supportedTools: ["codex"],
-        registeredRepoIds: ["repo-1"],
+        registeredRepoIds: [],
       }),
     );
     expect(ws.close).not.toHaveBeenCalledWith(1008, "Bridge auth mismatch");
+  });
+
+  it("rejects a provisioned cloud bridge with incompatible protocol metadata", async () => {
+    const ws = createMockWs();
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "cloud",
+        instanceId: "cloud-machine-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+        sessionId: "session-1",
+        environmentId: "env-1",
+        allowedScope: "session",
+        tool: "codex",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "cloud-machine-owned",
+      hostingMode: "cloud",
+      protocolVersion: 0,
+      agentVersion: "0.1.0",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    await Promise.resolve();
+
+    expect(ws.close).toHaveBeenCalledWith(1008, "Incompatible bridge protocol");
+    expect(mocks.registerRuntime).not.toHaveBeenCalled();
+  });
+
+  it("rejects a provisioned cloud bridge missing the requested tool", async () => {
+    const ws = createMockWs();
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "cloud",
+        instanceId: "cloud-machine-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+        sessionId: "session-1",
+        environmentId: "env-1",
+        allowedScope: "session",
+        tool: "codex",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "cloud-machine-owned",
+      hostingMode: "cloud",
+      protocolVersion: 1,
+      agentVersion: "0.1.0",
+      supportedTools: ["claude_code"],
+      registeredRepoIds: [],
+    });
+    await Promise.resolve();
+
+    expect(ws.close).toHaveBeenCalledWith(1008, "Runtime does not support requested tool");
+    expect(mocks.registerRuntime).not.toHaveBeenCalled();
+  });
+
+  it("binds the scoped session when a provisioned cloud bridge registers", async () => {
+    const ws = createMockWs();
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "cloud",
+        instanceId: "cloud-machine-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+        sessionId: "session-1",
+        environmentId: "env-1",
+        allowedScope: "session",
+        tool: "codex",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "cloud-machine-owned",
+      hostingMode: "cloud",
+      protocolVersion: 1,
+      agentVersion: "0.1.0",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    await Promise.resolve();
+
+    expect(mocks.bindSession).toHaveBeenCalledWith("session-1", "cloud-machine-owned");
+    expect(mocks.registerRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "cloud-machine-owned",
+        hostingMode: "cloud",
+        supportedTools: ["codex"],
+        registeredRepoIds: [],
+      }),
+    );
   });
 
   it("ignores session output for sessions not bound to this bridge runtime", async () => {

@@ -116,22 +116,62 @@ describe("ProvisionedRuntimeAdapter", () => {
     expect(url).toBe("https://launcher.example/start");
     expect(headers.Authorization).toBe("Bearer launcher-secret");
     expect(headers["Trace-Idempotency-Key"]).toBe("session:session-1:start");
-    expect(body.runtimeToken).toBe("runtime-token");
+    expect(typeof body.runtimeToken).toBe("string");
+    expect(body.runtimeToken).not.toBe("runtime-token");
+    expect(body.runtimeTokenScope).toBe("session");
+    expect(body.runtimeTokenExpiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(body.bootstrapEnv).toEqual(
       expect.objectContaining({
         TRACE_SESSION_ID: "session-1",
         TRACE_ORG_ID: "org-1",
         TRACE_RUNTIME_INSTANCE_ID: result.runtimeInstanceId,
-        TRACE_RUNTIME_TOKEN: "runtime-token",
+        TRACE_RUNTIME_TOKEN: body.runtimeToken,
         TRACE_BRIDGE_URL: "wss://trace.example/bridge",
       }),
     );
 
-    expect(authenticateProvisionedRuntimeToken("runtime-token")).toEqual({
+    expect(authenticateProvisionedRuntimeToken(body.runtimeToken as string)).toEqual({
       instanceId: result.runtimeInstanceId,
       organizationId: "org-1",
       userId: "user-1",
+      sessionId: "session-1",
+      environmentId: "env-1",
+      allowedScope: "session",
+      tool: "codex",
     });
+  });
+
+  it("rejects expired runtime bridge tokens", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-29T12:00:00Z"));
+    fetchMock().mockResolvedValueOnce(makeResponse({ runtimeId: "provider-runtime-1" }));
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await adapter.startSession({
+      sessionId: "session-expired",
+      organizationId: "org-1",
+      actorId: "user-1",
+      environment: {
+        id: "env-1",
+        name: "Company Launcher",
+        adapterType: "provisioned",
+        config: provisionedConfig,
+      },
+      tool: "codex",
+      runtimeToken: "runtime-token-expired",
+      bridgeUrl: "wss://trace.example/bridge",
+    });
+
+    const startBody = JSON.parse(fetchMock().mock.calls[0][1].body as string) as Record<
+      string,
+      unknown
+    >;
+    const runtimeToken = startBody.runtimeToken as string;
+
+    expect(authenticateProvisionedRuntimeToken(runtimeToken)).not.toBeNull();
+    vi.setSystemTime(new Date("2026-04-29T12:16:00Z"));
+    expect(authenticateProvisionedRuntimeToken(runtimeToken)).toBeNull();
+    vi.useRealTimers();
   });
 
   it("signs HMAC lifecycle requests without bearer auth", async () => {
