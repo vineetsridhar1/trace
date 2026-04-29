@@ -22,6 +22,13 @@ type AgentEnvironmentInput = {
 
 type AgentEnvironmentUpdateInput = Partial<Omit<AgentEnvironmentInput, "organizationId">>;
 
+type EnsureLocalBridgeEnvironmentInput = {
+  organizationId: string;
+  runtimeInstanceId: string;
+  runtimeLabel: string;
+  supportedTools: CodingTool[];
+};
+
 type AgentEnvironmentRecord = {
   id: string;
   organizationId: string;
@@ -127,6 +134,26 @@ function environmentPayload(environment: AgentEnvironmentRecord): Prisma.InputJs
   };
 }
 
+function localBridgeEnvironmentConfig(input: {
+  existingConfig?: Prisma.JsonValue;
+  runtimeInstanceId: string;
+  supportedTools: CodingTool[];
+}): Prisma.InputJsonObject {
+  const existingConfig = asConfigRecord(input.existingConfig);
+  const configWithoutRuntimeSelection = Object.fromEntries(
+    Object.entries(existingConfig).filter(([key]) => key !== "runtimeSelection"),
+  );
+  const existingCapabilities = getCapabilities(existingConfig) ?? {};
+  return {
+    ...configWithoutRuntimeSelection,
+    runtimeInstanceId: input.runtimeInstanceId,
+    capabilities: {
+      ...existingCapabilities,
+      supportedTools: [...input.supportedTools],
+    },
+  };
+}
+
 async function affectedEnvironmentPayloads(
   tx: TxClient,
   organizationId: string,
@@ -206,6 +233,110 @@ export class AgentEnvironmentService {
     });
 
     return environment;
+  }
+
+  async ensureLocalBridgeEnvironment(
+    input: EnsureLocalBridgeEnvironmentInput,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    const name = normalizeName(input.runtimeLabel);
+    const config = localBridgeEnvironmentConfig({
+      runtimeInstanceId: input.runtimeInstanceId,
+      supportedTools: input.supportedTools,
+    });
+    await runtimeAdapterRegistry.get("local").validateConfig(config);
+
+    return prisma.$transaction(async (tx: TxClient) => {
+      await assertActorOrgAccess(tx, input.organizationId, actorType, actorId);
+      await this.lockOrganizationDefaults(tx, input.organizationId);
+
+      const existing = await tx.agentEnvironment.findFirst({
+        where: {
+          organizationId: input.organizationId,
+          adapterType: "local",
+          config: { path: ["runtimeInstanceId"], equals: input.runtimeInstanceId },
+        },
+      });
+      const existingDefault = await tx.agentEnvironment.findFirst({
+        where: { organizationId: input.organizationId, enabled: true, isDefault: true },
+        select: { id: true },
+      });
+
+      if (existing) {
+        const updatedConfig = localBridgeEnvironmentConfig({
+          existingConfig: existing.config,
+          runtimeInstanceId: input.runtimeInstanceId,
+          supportedTools: input.supportedTools,
+        });
+        await runtimeAdapterRegistry.get("local").validateConfig(updatedConfig);
+        const shouldBecomeDefault = existing.enabled && !existingDefault;
+        const configChanged = JSON.stringify(existing.config) !== JSON.stringify(updatedConfig);
+        if (!shouldBecomeDefault && !configChanged) return existing;
+
+        const updated = await tx.agentEnvironment.update({
+          where: { id: existing.id },
+          data: {
+            ...(configChanged ? { config: updatedConfig } : {}),
+            ...(shouldBecomeDefault ? { isDefault: true } : {}),
+          },
+        });
+        const payloads = await affectedEnvironmentPayloads(
+          tx,
+          input.organizationId,
+          shouldBecomeDefault,
+          updated,
+        );
+
+        await eventService.create(
+          {
+            organizationId: input.organizationId,
+            scopeType: "system",
+            scopeId: input.organizationId,
+            eventType: "agent_environment_updated",
+            payload: { agentEnvironment: environmentPayload(updated), agentEnvironments: payloads },
+            actorType,
+            actorId,
+          },
+          tx,
+        );
+
+        return updated;
+      }
+
+      const isDefault = !existingDefault;
+      const created = await tx.agentEnvironment.create({
+        data: {
+          organizationId: input.organizationId,
+          name,
+          adapterType: "local",
+          config,
+          enabled: true,
+          isDefault,
+        },
+      });
+      const payloads = await affectedEnvironmentPayloads(
+        tx,
+        input.organizationId,
+        isDefault,
+        created,
+      );
+
+      await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "system",
+          scopeId: input.organizationId,
+          eventType: "agent_environment_created",
+          payload: { agentEnvironment: environmentPayload(created), agentEnvironments: payloads },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      return created;
+    });
   }
 
   async update(
