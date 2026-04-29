@@ -358,6 +358,20 @@ describe("UltraplanService", () => {
     );
   });
 
+  it("returns an active controller run when run-now is repeated", async () => {
+    const activeRun = makeControllerRun({ id: "run-active", status: "queued" });
+    prismaMock.ultraplan.findUniqueOrThrow.mockResolvedValue(makeUltraplan());
+    prismaMock.ultraplanControllerRun.findFirst.mockResolvedValue(activeRun);
+
+    const result = await service.runControllerNow("ultra-1", "user", "user-1");
+
+    expect(result).toBe(activeRun);
+    expect(prismaMock.session.create).not.toHaveBeenCalled();
+    expect(prismaMock.ultraplanControllerRun.create).not.toHaveBeenCalled();
+    expect(prismaMock.ultraplan.update).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
+  });
+
   it("authorizes controller-run lifecycle mutations and emits parent plan updates", async () => {
     const controllerRunService = new UltraplanControllerRunService();
     prismaMock.ultraplanControllerRun.findUniqueOrThrow.mockResolvedValue(
