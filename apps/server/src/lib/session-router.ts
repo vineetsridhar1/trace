@@ -1532,10 +1532,25 @@ export class SessionRouter {
         },
         options?.maxStopAttempts ?? 3,
       );
-      await options?.onLifecycle?.("session_runtime_stopped", {
-        ...lifecycleSnapshot,
-        providerStatus: stopResult.status,
-      });
+      // status=stopping means the launcher kicked off async cleanup; the compute
+      // is not yet gone. Leave the connection in `deprovisioning` so the
+      // reconciler picks it up and re-checks via the idempotent stopUrl.
+      // Only mark stopped when compute is actually gone (or never existed).
+      if (stopResult.status === "stopped" || stopResult.status === "not_found") {
+        await options?.onLifecycle?.("session_runtime_stopped", {
+          ...lifecycleSnapshot,
+          providerStatus: stopResult.status,
+        });
+      } else if (stopResult.status === "unsupported") {
+        // Adapter cannot stop (e.g., environment metadata missing). Treat as a
+        // deprovision failure so it surfaces to the operator instead of silently
+        // looping.
+        await options?.onLifecycle?.("session_runtime_deprovision_failed", {
+          ...lifecycleSnapshot,
+          error: stopResult.message ?? "Runtime adapter cannot stop this session",
+        });
+      }
+      // status=stopping → leave in deprovisioning; reconciler retries.
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.warn(`[runtime-adapter] stop failed for ${sessionId}: ${message}`);

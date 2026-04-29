@@ -43,6 +43,10 @@ Owns plan lines:
   - runtime heartbeat freshness
   - startup timeout
   - deprovision failure
+  - reconciler iterations (per-tick reconciled count, time-to-deprovisioned)
+  - abandoned runtimes (sessions still in `deprovision_failed` /
+    `deprovisioning` after N reconcile attempts — see ticket 09 follow-up
+    about adding a per-session reconcile cap)
 - Add negative assertions that launcher bearer tokens and runtime tokens are not logged.
 - Add feature flag or rollout guard if needed.
 - Add operator-facing error messages for failed provisioning and deprovisioning.
@@ -63,6 +67,9 @@ Owns plan lines:
 - [ ] Local and provisioned runtime tests cover multiple terminal sessions for one Trace session.
 - [ ] Startup failures produce actionable user-visible errors.
 - [ ] Deprovision failures are visible and retryable.
+  - Reconciliation/retry already shipped with ticket 09; this ticket should
+    add the operator-facing surface (telemetry + alert when a runtime stays
+    in `deprovision_failed` / `deprovisioning` past a cap).
 - [ ] Rollout path is documented.
 
 ## Implementation notes
