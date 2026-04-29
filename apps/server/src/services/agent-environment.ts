@@ -2,6 +2,7 @@ import type { ActorType } from "@trace/gql";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
+import { assertActorOrgAccess } from "./actor-auth.js";
 
 const ADAPTER_TYPES = new Set(["local", "provisioned"]);
 const AUTH_CONFIG_KEYS = new Set(["type", "secretId"]);
@@ -97,10 +98,13 @@ function environmentPayload(environment: {
 }
 
 export class AgentEnvironmentService {
-  async list(organizationId: string) {
-    return prisma.agentEnvironment.findMany({
-      where: { organizationId },
-      orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+  async list(organizationId: string, actorType: ActorType, actorId: string) {
+    return prisma.$transaction(async (tx: TxClient) => {
+      await assertActorOrgAccess(tx, organizationId, actorType, actorId);
+      return tx.agentEnvironment.findMany({
+        where: { organizationId },
+        orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+      });
     });
   }
 
@@ -110,6 +114,7 @@ export class AgentEnvironmentService {
     assertConfigStoresOnlySecretReferences(input.config);
 
     const environment = await prisma.$transaction(async (tx: TxClient) => {
+      await assertActorOrgAccess(tx, input.organizationId, actorType, actorId);
       await this.lockOrganizationDefaults(tx, input.organizationId);
       const enabled = input.enabled ?? true;
       const isDefault = enabled && input.isDefault === true;
@@ -152,7 +157,6 @@ export class AgentEnvironmentService {
 
   async update(
     id: string,
-    organizationId: string,
     input: AgentEnvironmentUpdateInput,
     actorType: ActorType,
     actorId: string,
@@ -162,17 +166,23 @@ export class AgentEnvironmentService {
     if (input.config !== undefined) assertConfigStoresOnlySecretReferences(input.config);
 
     const environment = await prisma.$transaction(async (tx: TxClient) => {
-      await this.lockOrganizationDefaults(tx, organizationId);
-
       const existing = await tx.agentEnvironment.findFirstOrThrow({
-        where: { id, organizationId },
+        where: { id },
       });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
+      await this.lockOrganizationDefaults(tx, existing.organizationId);
+
       const enabled = input.enabled ?? existing.enabled;
       const isDefault = enabled && (input.isDefault ?? existing.isDefault);
 
       if (isDefault) {
         await tx.agentEnvironment.updateMany({
-          where: { organizationId, enabled: true, isDefault: true, id: { not: id } },
+          where: {
+            organizationId: existing.organizationId,
+            enabled: true,
+            isDefault: true,
+            id: { not: id },
+          },
           data: { isDefault: false },
         });
       }
@@ -190,9 +200,9 @@ export class AgentEnvironmentService {
 
       await eventService.create(
         {
-          organizationId,
+          organizationId: existing.organizationId,
           scopeType: "system",
-          scopeId: organizationId,
+          scopeId: existing.organizationId,
           eventType: "agent_environment_updated",
           payload: { agentEnvironment: environmentPayload(updated) },
           actorType,
@@ -207,21 +217,23 @@ export class AgentEnvironmentService {
     return environment;
   }
 
-  async delete(id: string, organizationId: string, actorType: ActorType, actorId: string) {
+  async delete(id: string, actorType: ActorType, actorId: string) {
     const environment = await prisma.$transaction(async (tx: TxClient) => {
-      await tx.agentEnvironment.findFirstOrThrow({
-        where: { id, organizationId },
-        select: { id: true },
+      const existing = await tx.agentEnvironment.findFirstOrThrow({
+        where: { id },
+        select: { organizationId: true },
       });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
+
       const deleted = await tx.agentEnvironment.delete({
         where: { id },
       });
 
       await eventService.create(
         {
-          organizationId,
+          organizationId: existing.organizationId,
           scopeType: "system",
-          scopeId: organizationId,
+          scopeId: existing.organizationId,
           eventType: "agent_environment_deleted",
           payload: { agentEnvironment: environmentPayload(deleted) },
           actorType,
@@ -236,17 +248,26 @@ export class AgentEnvironmentService {
     return environment;
   }
 
-  async test(id: string, organizationId: string) {
-    const environment = await prisma.agentEnvironment.findFirstOrThrow({
-      where: { id, organizationId },
-      select: { enabled: true },
+  async test(id: string, actorType: ActorType, actorId: string) {
+    const environment = await prisma.$transaction(async (tx: TxClient) => {
+      const existing = await tx.agentEnvironment.findFirstOrThrow({
+        where: { id },
+        select: { adapterType: true, enabled: true, organizationId: true },
+      });
+      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
+      return existing;
     });
 
+    if (!environment.enabled) {
+      return {
+        ok: false,
+        message: "Agent environment is disabled",
+      };
+    }
+
     return {
-      ok: environment.enabled,
-      message: environment.enabled
-        ? "Agent environment configuration is valid"
-        : "Agent environment is disabled",
+      ok: false,
+      message: `${environment.adapterType} environment testing requires runtime adapter validation`,
     };
   }
 
