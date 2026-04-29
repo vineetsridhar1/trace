@@ -1225,6 +1225,37 @@ input StartUltraplanInput {
   customInstructions: String
 }
 
+input RequestUltraplanHumanGateInput {
+  ultraplanId: ID!
+  itemType: InboxItemType!
+  title: String!
+  summary: String
+  gateReason: String
+  payload: JSON
+  controllerRunId: ID
+  controllerRunSessionId: ID
+  ticketId: ID
+  ticketExecutionId: ID
+  workerSessionId: ID
+  branchName: String
+  checkpointSha: String
+  recommendedAction: String
+  qaChecklist: [String!]
+  controllerRunUrl: String
+  workerSessionUrl: String
+  diffUrl: String
+  prUrl: String
+}
+
+enum UltraplanHumanGateResolution {
+  approved
+  changes_requested
+  blocked
+  cancelled
+  resolved
+  dismissed
+}
+
 # --- Queries ---
 
 type Query {
@@ -1440,6 +1471,12 @@ type Mutation {
   resumeUltraplan(id: ID!): Ultraplan!
   runUltraplanControllerNow(id: ID!): UltraplanControllerRun!
   cancelUltraplan(id: ID!): Ultraplan!
+  requestUltraplanHumanGate(input: RequestUltraplanHumanGateInput!): InboxItem!
+  resolveUltraplanHumanGate(
+    inboxItemId: ID!
+    resolution: UltraplanHumanGateResolution!
+    response: JSON
+  ): InboxItem!
   linkEntityToProject(entityType: EntityType!, entityId: ID!, projectId: ID!): Project!
   createOrganization(input: CreateOrganizationInput!): OrgMember!
   createRepo(input: CreateRepoInput!): Repo!

@@ -1,9 +1,21 @@
 import type { Context } from "../context.js";
-import type { StartUltraplanInput } from "@trace/gql";
+import type {
+  RequestUltraplanHumanGateInput,
+  StartUltraplanInput,
+  UltraplanHumanGateResolution,
+} from "@trace/gql";
 import { requireOrgContext } from "../lib/require-org.js";
 import { ultraplanService } from "../services/ultraplan.js";
 import { ultraplanControllerRunService } from "../services/ultraplan-controller-run.js";
 import { prisma } from "../lib/db.js";
+
+function optionalJsonObject(value: unknown, fieldName: string): Record<string, unknown> | null {
+  if (value == null) return null;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
 
 export const ultraplanQueries = {
   ultraplan: (_: unknown, args: { id: string }, ctx: Context) => {
@@ -38,6 +50,41 @@ export const ultraplanMutations = {
   cancelUltraplan: (_: unknown, args: { id: string }, ctx: Context) => {
     return ultraplanService.cancel(args.id, ctx.actorType, ctx.userId);
   },
+  requestUltraplanHumanGate: (
+    _: unknown,
+    args: { input: RequestUltraplanHumanGateInput },
+    ctx: Context,
+  ) => {
+    return ultraplanService.requestHumanGate({
+      ...args.input,
+      organizationId: requireOrgContext(ctx),
+      actorType: ctx.actorType,
+      actorId: ctx.userId,
+      summary: args.input.summary ?? null,
+      payload: optionalJsonObject(args.input.payload, "payload"),
+      controllerRunId: args.input.controllerRunId ?? null,
+      ticketId: args.input.ticketId ?? null,
+      ticketExecutionId: args.input.ticketExecutionId ?? null,
+    });
+  },
+  resolveUltraplanHumanGate: (
+    _: unknown,
+    args: {
+      inboxItemId: string;
+      resolution: UltraplanHumanGateResolution;
+      response?: Record<string, unknown> | null;
+    },
+    ctx: Context,
+  ) => {
+    return ultraplanService.resolveHumanGate({
+      inboxItemId: args.inboxItemId,
+      organizationId: requireOrgContext(ctx),
+      actorType: ctx.actorType,
+      actorId: ctx.userId,
+      resolution: args.resolution,
+      response: optionalJsonObject(args.response, "response"),
+    });
+  },
 };
 
 export const ultraplanTypeResolvers = {
@@ -64,7 +111,8 @@ export const ultraplanTypeResolvers = {
   UltraplanTicket: {
     ultraplan: (ticket: { ultraplanId: string }) =>
       prisma.ultraplan.findUnique({ where: { id: ticket.ultraplanId } }),
-    ticket: (ticket: { ticketId: string }) => prisma.ticket.findUnique({ where: { id: ticket.ticketId } }),
+    ticket: (ticket: { ticketId: string }) =>
+      prisma.ticket.findUnique({ where: { id: ticket.ticketId } }),
     generatedByRun: (ticket: { generatedByRunId?: string | null }) =>
       ticket.generatedByRunId
         ? prisma.ultraplanControllerRun.findUnique({ where: { id: ticket.generatedByRunId } })
@@ -89,8 +137,11 @@ export const ultraplanTypeResolvers = {
       prisma.ticket.findUnique({ where: { id: execution.ticketId } }),
     sessionGroup: (execution: { sessionGroupId: string }, _args: unknown, ctx: Context) =>
       ctx.sessionGroupLoader.load(execution.sessionGroupId),
-    workerSession: (execution: { workerSessionId?: string | null }, _args: unknown, ctx: Context) =>
-      execution.workerSessionId ? ctx.sessionLoader.load(execution.workerSessionId) : null,
+    workerSession: (
+      execution: { workerSessionId?: string | null },
+      _args: unknown,
+      ctx: Context,
+    ) => (execution.workerSessionId ? ctx.sessionLoader.load(execution.workerSessionId) : null),
     activeInboxItem: (execution: { activeInboxItemId?: string | null }) =>
       execution.activeInboxItemId
         ? prisma.inboxItem.findFirst({ where: { id: execution.activeInboxItemId } })

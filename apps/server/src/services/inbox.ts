@@ -1,6 +1,9 @@
 import { Prisma, type InboxItemType, type InboxItemStatus } from "@prisma/client";
+import type { ActorType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
+
+type TxClient = Prisma.TransactionClient;
 
 export interface CreateInboxItemInput {
   orgId: string;
@@ -11,11 +14,23 @@ export interface CreateInboxItemInput {
   payload?: Prisma.InputJsonValue;
   sourceType: string;
   sourceId: string;
+  actorType?: ActorType;
+  actorId?: string;
+}
+
+export interface ResolveInboxItemInput {
+  id: string;
+  organizationId: string;
+  status: Extract<InboxItemStatus, "resolved" | "dismissed">;
+  resolution: string;
+  payload?: Prisma.InputJsonValue;
+  actorType: ActorType;
+  actorId: string;
 }
 
 export class InboxService {
-  async createItem(input: CreateInboxItemInput) {
-    const item = await prisma.inboxItem.create({
+  async createItem(input: CreateInboxItemInput, tx: TxClient = prisma) {
+    const item = await tx.inboxItem.create({
       data: {
         organizationId: input.orgId,
         userId: input.userId,
@@ -28,17 +43,49 @@ export class InboxService {
       },
     });
 
-    await eventService.create({
-      organizationId: input.orgId,
-      scopeType: "system",
-      scopeId: input.orgId,
-      eventType: "inbox_item_created",
-      payload: { inboxItem: item } as unknown as Prisma.InputJsonValue,
-      actorType: "system",
-      actorId: "system",
-    });
+    await eventService.create(
+      {
+        organizationId: input.orgId,
+        scopeType: "system",
+        scopeId: input.orgId,
+        eventType: "inbox_item_created",
+        payload: { inboxItem: item } as unknown as Prisma.InputJsonValue,
+        actorType: input.actorType ?? "system",
+        actorId: input.actorId ?? "system",
+      },
+      tx,
+    );
 
     return item;
+  }
+
+  async resolveItem(input: ResolveInboxItemInput, tx: TxClient = prisma) {
+    const updated = await tx.inboxItem.update({
+      where: { id: input.id },
+      data: {
+        status: input.status,
+        resolvedAt: new Date(),
+        ...(input.payload !== undefined ? { payload: input.payload } : {}),
+      },
+    });
+
+    await eventService.create(
+      {
+        organizationId: input.organizationId,
+        scopeType: "system",
+        scopeId: input.organizationId,
+        eventType: "inbox_item_resolved",
+        payload: {
+          inboxItem: updated,
+          resolution: input.resolution,
+        } as unknown as Prisma.InputJsonValue,
+        actorType: input.actorType,
+        actorId: input.actorId,
+      },
+      tx,
+    );
+
+    return updated;
   }
 
   async resolveBySource({

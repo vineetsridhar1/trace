@@ -1,12 +1,14 @@
-import { Workflow } from "lucide-react";
+import { Inbox, Workflow } from "lucide-react";
 import {
   useActiveUltraplanBySessionGroupId,
   useControllerRunsByUltraplanId,
+  useEntityField,
   useLatestControllerRunSummary,
   usePlannedTicketsByUltraplanId,
   useTicketExecutionsByUltraplanId,
 } from "@trace/client-core";
 import { cn } from "../../lib/utils";
+import { useUIStore } from "../../stores/ui";
 import { UltraplanControllerTimeline } from "./UltraplanControllerTimeline";
 import { UltraplanStatusActions } from "./UltraplanStatusActions";
 import { UltraplanTicketPlan } from "./UltraplanTicketPlan";
@@ -25,6 +27,9 @@ export function UltraplanStatusPanel({
   const executions = useTicketExecutionsByUltraplanId(ultraplanId);
   const controllerRuns = useControllerRunsByUltraplanId(ultraplanId);
   const latestRunSummary = useLatestControllerRunSummary(ultraplanId);
+  const setActivePage = useUIStore((s) => s.setActivePage);
+  const activeInboxItemId = ultraplan?.activeInboxItemId ?? null;
+  const activeGateTitle = useEntityField("inboxItems", activeInboxItemId ?? "", "title");
 
   if (!ultraplan) return null;
 
@@ -72,6 +77,16 @@ export function UltraplanStatusPanel({
           canInteract={canInteract}
         />
       </div>
+      {activeInboxItemId ? (
+        <button
+          type="button"
+          onClick={() => setActivePage("inbox")}
+          className="mt-2 flex max-w-full items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-200 hover:bg-amber-500/15"
+        >
+          <Inbox size={13} className="shrink-0" />
+          <span className="truncate">{activeGateTitle ?? "Human input needed"}</span>
+        </button>
+      ) : null}
       <div className="mt-2 grid gap-3 lg:grid-cols-2">
         <UltraplanTicketPlan
           tickets={tickets}
