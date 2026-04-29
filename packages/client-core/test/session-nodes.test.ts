@@ -129,6 +129,12 @@ describe("session status rows", () => {
     );
   });
 
+  it("extracts scalar error fields from nested JSON strings", () => {
+    expect(extractSessionErrorMessage('{"type":"error","error":"adapter crashed"}')).toBe(
+      "adapter crashed",
+    );
+  });
+
   it("labels output errors and error results as failed runs", () => {
     expect(statusRowForSessionOutput({ type: "error", message: "boom" })).toEqual({
       tone: "error",

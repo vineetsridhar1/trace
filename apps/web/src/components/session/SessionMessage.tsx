@@ -52,6 +52,18 @@ function agentResultToString(content: unknown): string | undefined {
   return undefined;
 }
 
+function renderStatusRow(row: ReturnType<typeof statusRowForSessionOutput>, timestamp: string) {
+  return row ? (
+    <CompletionRow
+      timestamp={timestamp}
+      title={row.title}
+      result={row.detail}
+      tone={row.tone}
+      isUserStop={row.tone === "stop"}
+    />
+  ) : null;
+}
+
 /**
  * Render an assistant event. Adapters normalize all tool output into a
  * consistent schema: { type: "assistant", message: { content: MessageBlock[] } }
@@ -139,42 +151,7 @@ function renderSessionOutput(
     );
   }
 
-  if (type === "result") {
-    const row = statusRowForSessionOutput(payload);
-    return row ? (
-      <CompletionRow
-        timestamp={ts}
-        title={row.title}
-        result={row.detail}
-        tone={row.tone}
-        isUserStop={row.tone === "stop"}
-      />
-    ) : null;
-  }
-
-  if (type === "error") {
-    const row = statusRowForSessionOutput(payload);
-    return row ? (
-      <CompletionRow
-        timestamp={ts}
-        title={row.title}
-        result={row.detail}
-        tone={row.tone}
-        isUserStop={row.tone === "stop"}
-      />
-    ) : null;
-  }
-
-  const row = statusRowForSessionOutput(payload);
-  return row ? (
-    <CompletionRow
-      timestamp={ts}
-      title={row.title}
-      result={row.detail}
-      tone={row.tone}
-      isUserStop={row.tone === "stop"}
-    />
-  ) : null;
+  return renderStatusRow(statusRowForSessionOutput(payload), ts);
 }
 
 export const SessionMessage = memo(function SessionMessage({
@@ -250,15 +227,7 @@ export const SessionMessage = memo(function SessionMessage({
 
     case "session_terminated": {
       const row = payload ? statusRowForSessionTermination(payload) : null;
-      return row ? (
-        <CompletionRow
-          timestamp={timestamp}
-          title={row.title}
-          result={row.detail}
-          tone={row.tone}
-          isUserStop={row.tone === "stop"}
-        />
-      ) : null;
+      return renderStatusRow(row, timestamp);
     }
 
     default:
