@@ -22,6 +22,7 @@ import type {
 import { prisma } from "./db.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import {
+  ProvisionedLauncherError,
   runtimeAdapterRegistry,
   setProvisionedRuntimeCloudMachineService,
 } from "./runtime-adapters.js";
@@ -134,6 +135,14 @@ export type RuntimeLifecycleUpdate = {
   providerRuntimeUrl?: string;
   providerStatus?: string;
   error?: string;
+  /**
+   * Set on `session_runtime_deprovision_failed` to mark the runtime
+   * permanently abandoned (cap exhausted). Suppresses retry flags so the
+   * reconciler stops touching the session and lets operator alerts fire.
+   */
+  abandoned?: boolean;
+  /** Reconcile attempt count at the moment of abandonment. */
+  reconcileAttempts?: number;
 };
 
 export type RuntimeLifecycleEventType = Extract<
@@ -1468,10 +1477,14 @@ export class SessionRouter {
   /**
    * Destroy a session's runtime. Delegates to the correct adapter.
    *
-   * Lifecycle (provisioned): stopping → deprovisioning → deprovisioned (or
-   * deprovision_failed). Lifecycle (local): stopping → stopped. Local stop
-   * cleans only Trace-created session resources and never deprovisions the
-   * desktop bridge.
+   * Lifecycle (provisioned): stopping → deprovisioned (or deprovision_failed).
+   * Lifecycle (local): stopping → stopped. Local stop cleans only
+   * Trace-created session resources and never deprovisions the desktop
+   * bridge.
+   *
+   * If the launcher returns `status: "stopping"` (async cleanup pending), the
+   * connection stays in `stopping` and the reconciler retries via the
+   * idempotent stopUrl call.
    */
   async destroyRuntime(
     sessionId: string,
@@ -1488,7 +1501,6 @@ export class SessionRouter {
         eventType: RuntimeLifecycleEventType,
         update?: RuntimeLifecycleUpdate,
       ) => Promise<void> | void;
-      onMarkDeprovisioning?: () => Promise<void> | void;
       maxStopAttempts?: number;
     },
   ): Promise<void> {
@@ -1516,10 +1528,6 @@ export class SessionRouter {
 
     await options?.onLifecycle?.("session_runtime_stopping", lifecycleSnapshot);
 
-    if (adapter.type === "provisioned") {
-      await options?.onMarkDeprovisioning?.();
-    }
-
     try {
       const stopResult = await this.attemptStopSession(
         adapter,
@@ -1532,10 +1540,10 @@ export class SessionRouter {
         },
         options?.maxStopAttempts ?? 3,
       );
-      // status=stopping means the launcher kicked off async cleanup; the compute
-      // is not yet gone. Leave the connection in `deprovisioning` so the
+      // status=stopping means the launcher kicked off async cleanup; the
+      // compute is not yet gone. Leave the connection in `stopping` so the
       // reconciler picks it up and re-checks via the idempotent stopUrl.
-      // Only mark stopped when compute is actually gone (or never existed).
+      // Only emit `stopped` when compute is actually gone (or never existed).
       if (stopResult.status === "stopped" || stopResult.status === "not_found") {
         await options?.onLifecycle?.("session_runtime_stopped", {
           ...lifecycleSnapshot,
@@ -1550,7 +1558,7 @@ export class SessionRouter {
           error: stopResult.message ?? "Runtime adapter cannot stop this session",
         });
       }
-      // status=stopping → leave in deprovisioning; reconciler retries.
+      // status=stopping → leave in stopping; reconciler retries.
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.warn(`[runtime-adapter] stop failed for ${sessionId}: ${message}`);
@@ -1574,6 +1582,11 @@ export class SessionRouter {
         return await adapter.stopSession(input);
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
+        // Permanent failures (4xx auth/validation, malformed config) won't be
+        // fixed by retrying — short-circuit to surface them immediately.
+        if (err instanceof ProvisionedLauncherError && !err.retryable) {
+          throw lastError;
+        }
         if (attempt < maxAttempts) {
           await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
         }

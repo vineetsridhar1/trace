@@ -118,7 +118,6 @@ export type SessionConnectionData = {
     | "timed_out"
     | "stopping"
     | "stopped"
-    | "deprovisioning"
     | "deprovisioned"
     | "deprovision_failed";
   environmentId?: string;
@@ -136,7 +135,6 @@ export type SessionConnectionData = {
   timedOutAt?: string;
   stoppingAt?: string;
   stoppedAt?: string;
-  deprovisioningAt?: string;
   deprovisionedAt?: string;
   deprovisionFailedAt?: string;
   deprovisionAttempts?: number;
@@ -147,6 +145,14 @@ export type SessionConnectionData = {
    */
   reconcileAttempts?: number;
   abandonedAt?: string;
+  /**
+   * Optimistic-concurrency token bumped by `updateConnectionConditional` on
+   * every successful write. Treat missing/undefined as 0. Only writers that
+   * use the helper participate; legacy writers (markConnectionLost, etc.)
+   * leave it unchanged, which is acceptable because they don't intersect
+   * with the deprovision lifecycle paths.
+   */
+  version?: number;
   disconnectedAt?: string;
   reconnectedAt?: string;
   lastSeen?: string;
@@ -226,6 +232,30 @@ function pendingRunValue(
  * is marked abandoned and skipped so the launcher operator can investigate.
  */
 const MAX_RECONCILE_ATTEMPTS = 10;
+
+/** Maximum optimistic-concurrency retries for `updateConnectionConditional`. */
+const MAX_CONNECTION_UPDATE_ATTEMPTS = 5;
+
+/**
+ * Build the WHERE clause that matches a session row only if its
+ * `connection.version` is the expected value. Treats missing/null version as
+ * 0 so the helper bootstraps cleanly on rows that predate the version field.
+ */
+function connectionVersionWhere(sessionId: string, expectedVersion: number): Prisma.SessionWhereInput {
+  if (expectedVersion === 0) {
+    return {
+      id: sessionId,
+      OR: [
+        { connection: { path: ["version"], equals: 0 } },
+        { connection: { path: ["version"], equals: Prisma.AnyNull } },
+      ],
+    };
+  }
+  return {
+    id: sessionId,
+    connection: { path: ["version"], equals: expectedVersion },
+  };
+}
 
 function isRuntimeStartupState(state: SessionConnectionData["state"]): boolean {
   return (
@@ -757,6 +787,9 @@ export class SessionService {
     eventType: RuntimeLifecycleEventType,
     update: RuntimeLifecycleUpdate = {},
   ): Promise<void> {
+    // Pull the immutable session metadata once for the event payload. The
+    // connection itself is read inside `updateConnectionConditional` so we
+    // re-read on retry and the write sees a consistent baseline.
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       select: {
@@ -764,38 +797,88 @@ export class SessionService {
         sessionGroupId: true,
         agentStatus: true,
         sessionStatus: true,
-        connection: true,
       },
     });
     if (!session) return;
 
-    const conn = this.parseConnection(session.connection);
-    if (
-      update.runtimeInstanceId &&
-      conn.runtimeInstanceId &&
-      conn.runtimeInstanceId !== update.runtimeInstanceId
-    ) {
-      return;
-    }
+    const result = await this.updateConnectionConditional(sessionId, (conn) => {
+      if (
+        update.runtimeInstanceId &&
+        conn.runtimeInstanceId &&
+        conn.runtimeInstanceId !== update.runtimeInstanceId
+      ) {
+        return null;
+      }
 
-    if (
-      isRuntimeTerminalState(conn.state) &&
-      eventType !== "session_runtime_start_requested" &&
-      eventType !== "session_runtime_start_failed" &&
-      eventType !== "session_runtime_start_timed_out" &&
-      eventType !== "session_runtime_stopping" &&
-      eventType !== "session_runtime_stopped" &&
-      eventType !== "session_runtime_deprovision_failed"
-    ) {
-      return;
-    }
+      if (
+        isRuntimeTerminalState(conn.state) &&
+        eventType !== "session_runtime_start_requested" &&
+        eventType !== "session_runtime_start_failed" &&
+        eventType !== "session_runtime_start_timed_out" &&
+        eventType !== "session_runtime_stopping" &&
+        eventType !== "session_runtime_stopped" &&
+        eventType !== "session_runtime_deprovision_failed"
+      ) {
+        return null;
+      }
 
-    const adapterType = this.lifecycleAdapterType(conn, update);
-    const nextState = this.lifecycleConnectionState(eventType, adapterType);
-    if (conn.state === "connected" && isRuntimeStartupState(nextState)) {
-      return;
-    }
+      const adapterType = this.lifecycleAdapterType(conn, update);
+      const nextState = this.lifecycleConnectionState(eventType, adapterType);
+      if (conn.state === "connected" && isRuntimeStartupState(nextState)) {
+        return null;
+      }
 
+      return { ...conn, ...this.lifecycleConnectionPatch(eventType, conn, update, adapterType) };
+    });
+
+    if (!result) return;
+
+    const adapterType = this.lifecycleAdapterType(result.updated, update);
+    const lifecycleState = this.lifecycleConnectionState(eventType, adapterType);
+    const sessionGroup = await this.syncGroupWorkspaceState(result.sessionGroupId, {
+      connection: connJson(result.updated),
+    });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType,
+      payload: {
+        type: "runtime_lifecycle",
+        sessionId,
+        lifecycleState,
+        connection: connJson(result.updated),
+        agentStatus: session.agentStatus,
+        sessionStatus: session.sessionStatus,
+        ...(update.runtimeInstanceId && { runtimeInstanceId: update.runtimeInstanceId }),
+        ...(update.runtimeLabel && { runtimeLabel: update.runtimeLabel }),
+        ...(update.providerRuntimeId && { providerRuntimeId: update.providerRuntimeId }),
+        ...(update.providerRuntimeUrl && { providerRuntimeUrl: update.providerRuntimeUrl }),
+        ...(update.providerStatus && { providerStatus: update.providerStatus }),
+        ...(update.error && { error: update.error }),
+        ...(update.abandoned && { abandoned: true }),
+        ...(update.reconcileAttempts !== undefined && {
+          reconcileAttempts: update.reconcileAttempts,
+        }),
+        ...(sessionGroup ? { sessionGroup } : {}),
+      } as Prisma.InputJsonValue,
+      actorType: "system",
+      actorId: "system",
+    });
+  }
+
+  /**
+   * Build the connection patch for a lifecycle event. Pure: takes the current
+   * connection plus the event/update and returns the per-event field changes.
+   * Caller composes via `{ ...conn, ...patch }`.
+   */
+  private lifecycleConnectionPatch(
+    eventType: RuntimeLifecycleEventType,
+    conn: SessionConnectionData,
+    update: RuntimeLifecycleUpdate,
+    adapterType: RuntimeAdapterType | null,
+  ): Partial<SessionConnectionData> {
     const now = new Date().toISOString();
     const runtimePatch: Partial<SessionConnectionData> = {
       ...(update.runtimeInstanceId && { runtimeInstanceId: update.runtimeInstanceId }),
@@ -808,10 +891,9 @@ export class SessionService {
       ...(update.providerStatus && { providerStatus: update.providerStatus }),
     };
 
-    let connectionPatch: Partial<SessionConnectionData> = { state: nextState };
     switch (eventType) {
       case "session_runtime_start_requested":
-        connectionPatch = {
+        return {
           ...runtimePatch,
           state: "requested",
           requestedAt: now,
@@ -820,9 +902,8 @@ export class SessionService {
           canMove: true,
           autoRetryable: true,
         };
-        break;
       case "session_runtime_provisioning":
-        connectionPatch = {
+        return {
           ...runtimePatch,
           state: "provisioning",
           provisioningAt: now,
@@ -831,9 +912,8 @@ export class SessionService {
           canMove: true,
           autoRetryable: true,
         };
-        break;
       case "session_runtime_connecting":
-        connectionPatch = {
+        return {
           ...runtimePatch,
           state: "connecting",
           connectingAt: now,
@@ -842,9 +922,8 @@ export class SessionService {
           canMove: true,
           autoRetryable: true,
         };
-        break;
       case "session_runtime_connected":
-        connectionPatch = {
+        return {
           ...runtimePatch,
           state: "connected",
           connectedAt: now,
@@ -855,9 +934,8 @@ export class SessionService {
           canMove: true,
           autoRetryable: true,
         };
-        break;
       case "session_runtime_start_failed":
-        connectionPatch = {
+        return {
           ...runtimePatch,
           state: "failed",
           failedAt: now,
@@ -866,9 +944,8 @@ export class SessionService {
           canMove: true,
           autoRetryable: false,
         };
-        break;
       case "session_runtime_start_timed_out":
-        connectionPatch = {
+        return {
           ...runtimePatch,
           state: "timed_out",
           timedOutAt: now,
@@ -877,9 +954,8 @@ export class SessionService {
           canMove: true,
           autoRetryable: false,
         };
-        break;
       case "session_runtime_stopping":
-        connectionPatch = {
+        return {
           ...runtimePatch,
           state: "stopping",
           stoppingAt: now,
@@ -888,11 +964,10 @@ export class SessionService {
           canMove: false,
           autoRetryable: false,
         };
-        break;
       case "session_runtime_stopped":
-        connectionPatch = {
+        return {
           ...runtimePatch,
-          state: nextState,
+          state: this.lifecycleConnectionState(eventType, adapterType),
           stoppedAt: now,
           ...(adapterType === "provisioned" && { deprovisionedAt: now }),
           lastError: undefined,
@@ -900,53 +975,26 @@ export class SessionService {
           canMove: false,
           autoRetryable: false,
         };
-        break;
-      case "session_runtime_deprovision_failed":
-        connectionPatch = {
+      case "session_runtime_deprovision_failed": {
+        const abandoned = update.abandoned === true;
+        return {
           ...runtimePatch,
           state: "deprovision_failed",
           deprovisionFailedAt: now,
           deprovisionAttempts: (conn.deprovisionAttempts ?? 0) + 1,
           lastError: update.error ?? "Runtime deprovisioning failed",
-          canRetry: true,
+          canRetry: !abandoned,
           canMove: false,
-          autoRetryable: true,
+          autoRetryable: !abandoned,
+          ...(abandoned && { abandonedAt: now }),
         };
-        break;
+      }
     }
-
-    const nextConnection = connJson({ ...conn, ...connectionPatch });
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: { connection: nextConnection },
-    });
-    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
-      connection: nextConnection,
-    });
-
-    await eventService.create({
-      organizationId: session.organizationId,
-      scopeType: "session",
-      scopeId: sessionId,
-      eventType,
-      payload: {
-        type: "runtime_lifecycle",
-        sessionId,
-        lifecycleState: nextState,
-        connection: nextConnection,
-        agentStatus: session.agentStatus,
-        sessionStatus: session.sessionStatus,
-        ...(update.runtimeInstanceId && { runtimeInstanceId: update.runtimeInstanceId }),
-        ...(update.runtimeLabel && { runtimeLabel: update.runtimeLabel }),
-        ...(update.providerRuntimeId && { providerRuntimeId: update.providerRuntimeId }),
-        ...(update.providerRuntimeUrl && { providerRuntimeUrl: update.providerRuntimeUrl }),
-        ...(update.providerStatus && { providerStatus: update.providerStatus }),
-        ...(update.error && { error: update.error }),
-        ...(sessionGroup ? { sessionGroup } : {}),
-      } as Prisma.InputJsonValue,
-      actorType: "system",
-      actorId: "system",
-    });
+    // Defensive default — every RuntimeLifecycleEventType has a switch case
+    // above. If a new event type is added without updating this method we
+    // return only the runtime metadata patch so the lifecycle still advances
+    // bookkeeping without overwriting state with a stale value.
+    return runtimePatch;
   }
 
   private lifecycleConnectionState(
@@ -992,68 +1040,82 @@ export class SessionService {
       reason,
       onLifecycle: (eventType: RuntimeLifecycleEventType, update?: RuntimeLifecycleUpdate) =>
         this.recordRuntimeLifecycle(sessionId, eventType, update),
-      onMarkDeprovisioning: () => this.markRuntimeDeprovisioning(sessionId),
     };
+  }
+
+  /**
+   * Optimistic-locking primitive for `Session.connection` writes.
+   *
+   * Reads connection, calls `mutator(current)` to compute the next value,
+   * then `updateMany` with `WHERE connection.version = current.version`. If
+   * the update affects 0 rows the row was changed under us — re-read and
+   * retry. Returns the persisted next value, or `null` if the mutator
+   * declined (returned `null`) or the session no longer exists.
+   *
+   * Each successful write bumps `connection.version`. Only writers that go
+   * through this helper participate in the lock, but it is enough to make
+   * reconciler/abandon/reset paths safe against each other and against
+   * lifecycle events that route through `recordRuntimeLifecycle` (which
+   * uses the helper for new write paths).
+   */
+  private async updateConnectionConditional(
+    sessionId: string,
+    mutator: (current: SessionConnectionData) => SessionConnectionData | null,
+    options?: { maxAttempts?: number },
+  ): Promise<{ updated: SessionConnectionData; sessionGroupId: string | null } | null> {
+    const maxAttempts = options?.maxAttempts ?? MAX_CONNECTION_UPDATE_ATTEMPTS;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const session = await prisma.session.findUnique({
+        where: { id: sessionId },
+        select: { connection: true, sessionGroupId: true },
+      });
+      if (!session) return null;
+      const current = this.parseConnection(session.connection);
+      const next = mutator(current);
+      if (!next) return null;
+
+      const expectedVersion = current.version ?? 0;
+      const nextWithVersion: SessionConnectionData = {
+        ...next,
+        version: expectedVersion + 1,
+      };
+
+      const result = await prisma.session.updateMany({
+        where: connectionVersionWhere(sessionId, expectedVersion),
+        data: { connection: connJson(nextWithVersion) },
+      });
+      if (result.count === 1) {
+        await this.syncGroupWorkspaceState(session.sessionGroupId, {
+          connection: connJson(nextWithVersion),
+        });
+        return { updated: nextWithVersion, sessionGroupId: session.sessionGroupId };
+      }
+      // Version mismatch — another writer landed first. Loop and retry.
+    }
+    throw new Error(
+      `Failed to update session connection for ${sessionId} after ${maxAttempts} attempts`,
+    );
   }
 
   /**
    * Clear reconciler bookkeeping so a user-initiated retry gets a fresh
    * MAX_RECONCILE_ATTEMPTS budget. No-op if no prior reconciler activity.
+   * Conditional on the connection still having reconciler state so we don't
+   * race with concurrent writes that have already advanced the state.
    */
   private async resetReconcileState(sessionId: string): Promise<void> {
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-      select: { connection: true, sessionGroupId: true },
-    });
-    if (!session) return;
-    const conn = this.parseConnection(session.connection);
-    if (!conn.abandonedAt && (conn.reconcileAttempts ?? 0) === 0) return;
-    const updated: SessionConnectionData = {
-      ...conn,
-      reconcileAttempts: 0,
-      abandonedAt: undefined,
-    };
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: { connection: connJson(updated) },
-    });
-    await this.syncGroupWorkspaceState(session.sessionGroupId, {
-      connection: connJson(updated),
-    });
+    await this.updateConnectionConditional(
+      sessionId,
+      (conn) => {
+        if (!conn.abandonedAt && (conn.reconcileAttempts ?? 0) === 0) return null;
+        return { ...conn, reconcileAttempts: 0, abandonedAt: undefined };
+      },
+    );
   }
 
   /**
-   * Mark a session's runtime as actively deprovisioning. Distinct from the
-   * `stopping` state which represents bridge cleanup; `deprovisioning` runs
-   * while the provisioned adapter is calling stopUrl. No event is emitted —
-   * the surrounding `session_runtime_stopping`/`session_runtime_stopped`
-   * events bracket the transition.
-   */
-  async markRuntimeDeprovisioning(sessionId: string): Promise<void> {
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-      select: { connection: true, sessionGroupId: true },
-    });
-    if (!session) return;
-    const conn = this.parseConnection(session.connection);
-    if (conn.state !== "stopping" && conn.state !== "deprovision_failed") return;
-    const updated: SessionConnectionData = {
-      ...conn,
-      state: "deprovisioning",
-      deprovisioningAt: new Date().toISOString(),
-    };
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: { connection: connJson(updated) },
-    });
-    await this.syncGroupWorkspaceState(session.sessionGroupId, {
-      connection: connJson(updated),
-    });
-  }
-
-  /**
-   * Find sessions whose provisioned runtime is stuck in stopping /
-   * deprovisioning / deprovision_failed and retry the adapter stop.
+   * Find sessions whose provisioned runtime is stuck in stopping or
+   * deprovision_failed and retry the adapter stop.
    *
    * Bridge disconnection is only a signal; provider compute can outlive a
    * dropped bridge. The reconciler is what eventually drives the launcher
@@ -1086,7 +1148,6 @@ export class SessionService {
           {
             OR: [
               { connection: { path: ["state"], equals: "stopping" } },
-              { connection: { path: ["state"], equals: "deprovisioning" } },
               { connection: { path: ["state"], equals: "deprovision_failed" } },
             ],
           },
@@ -1122,9 +1183,15 @@ export class SessionService {
         continue;
       }
 
-      await this.bumpReconcileAttempts(candidate.id, attemptsSoFar + 1);
-
       try {
+        // Bump conditionally — if the state moved between findMany and now
+        // (e.g., user delete just landed), skip this candidate rather than
+        // step on the concurrent change. A throw from the optimistic-
+        // locking helper (concurrent writers won every retry) is treated
+        // the same: skip this tick, try again next interval.
+        const bumped = await this.bumpReconcileAttempts(candidate.id, attemptsSoFar + 1);
+        if (!bumped) continue;
+
         await sessionRouter.destroyRuntime(
           candidate.id,
           candidate,
@@ -1141,77 +1208,43 @@ export class SessionService {
     return { reconciled, abandoned };
   }
 
-  private async bumpReconcileAttempts(sessionId: string, nextValue: number): Promise<void> {
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-      select: { connection: true, sessionGroupId: true },
-    });
-    if (!session) return;
-    const conn = this.parseConnection(session.connection);
-    const updated: SessionConnectionData = { ...conn, reconcileAttempts: nextValue };
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: { connection: connJson(updated) },
-    });
-    await this.syncGroupWorkspaceState(session.sessionGroupId, {
-      connection: connJson(updated),
-    });
+  private async bumpReconcileAttempts(sessionId: string, nextValue: number): Promise<boolean> {
+    const result = await this.updateConnectionConditional(
+      sessionId,
+      (conn) => {
+        // Only bump while the runtime is still in a deprovision-pending state.
+        // If state has moved (user retried, manual reset), abandon the bump.
+        if (
+          conn.state !== "stopping" &&
+          conn.state !== "deprovision_failed"
+        ) {
+          return null;
+        }
+        return { ...conn, reconcileAttempts: nextValue };
+      },
+    );
+    return result !== null;
   }
 
   private async markRuntimeAbandoned(sessionId: string, attempts: number): Promise<void> {
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-      select: { organizationId: true, sessionGroupId: true, connection: true },
+    // Route through the lifecycle event path so the abandoned variant of
+    // session_runtime_deprovision_failed is the single emitter for that
+    // event type. recordRuntimeLifecycle handles state precondition logic
+    // (terminal-state guard) and event payload construction in one place.
+    await this.recordRuntimeLifecycle(sessionId, "session_runtime_deprovision_failed", {
+      abandoned: true,
+      reconcileAttempts: attempts,
+      error: `Runtime deprovision abandoned after ${attempts} reconcile attempts`,
     });
-    if (!session) return;
-    const conn = this.parseConnection(session.connection);
-    if (conn.autoRetryable === false && conn.abandonedAt) return;
-
-    const now = new Date().toISOString();
-    const message = `Runtime deprovision abandoned after ${attempts} reconcile attempts`;
-    const updated: SessionConnectionData = {
-      ...conn,
-      state: "deprovision_failed",
-      deprovisionFailedAt: now,
-      abandonedAt: now,
-      lastError: message,
-      canRetry: false,
-      autoRetryable: false,
-    };
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: { connection: connJson(updated) },
-    });
-    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
-      connection: connJson(updated),
-    });
-    await eventService.create({
-      organizationId: session.organizationId,
-      scopeType: "session",
-      scopeId: sessionId,
-      eventType: "session_runtime_deprovision_failed",
-      payload: {
-        type: "runtime_lifecycle",
-        sessionId,
-        lifecycleState: "deprovision_failed",
-        connection: connJson(updated),
-        error: message,
-        abandoned: true,
-        reconcileAttempts: attempts,
-        ...(sessionGroup ? { sessionGroup } : {}),
-      } as Prisma.InputJsonValue,
-      actorType: "system",
-      actorId: "system",
-    });
-    console.warn(`[session-service] ${message} for ${sessionId}`);
+    console.warn(
+      `[session-service] runtime deprovision abandoned after ${attempts} reconcile attempts for ${sessionId}`,
+    );
   }
 
   private lastDeprovisionTouchAt(conn: SessionConnectionData): Date | null {
-    const candidates = [
-      conn.deprovisionFailedAt,
-      conn.deprovisioningAt,
-      conn.stoppingAt,
-    ].filter((value): value is string => typeof value === "string" && value.length > 0);
+    const candidates = [conn.deprovisionFailedAt, conn.stoppingAt].filter(
+      (value): value is string => typeof value === "string" && value.length > 0,
+    );
     if (candidates.length === 0) return null;
     let latest: Date | null = null;
     for (const value of candidates) {

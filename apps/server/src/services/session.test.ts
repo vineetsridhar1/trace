@@ -3778,9 +3778,22 @@ describe("SessionService", () => {
   });
 
   describe("reconcileStuckDeprovisions", () => {
+    function provisionedConn(overrides: Record<string, unknown> = {}) {
+      return {
+        adapterType: "provisioned",
+        state: "deprovision_failed",
+        providerRuntimeId: "provider-1",
+        retryCount: 1,
+        canRetry: true,
+        canMove: false,
+        ...overrides,
+      };
+    }
+
     it("retries provisioned runtimes that have been stopping past the cutoff", async () => {
       const now = Date.now();
       const ancient = new Date(now - 5 * 60_000).toISOString();
+      const conn = provisionedConn({ stoppingAt: ancient, deprovisionFailedAt: ancient });
       prismaMock.session.findMany.mockResolvedValueOnce([
         {
           id: "session-stuck",
@@ -3788,18 +3801,15 @@ describe("SessionService", () => {
           organizationId: "org-1",
           workdir: null,
           repoId: null,
-          connection: {
-            adapterType: "provisioned",
-            state: "deprovision_failed",
-            providerRuntimeId: "provider-1",
-            stoppingAt: ancient,
-            deprovisionFailedAt: ancient,
-            retryCount: 1,
-            canRetry: true,
-            canMove: false,
-          },
+          connection: conn,
         },
       ] as unknown as Awaited<ReturnType<typeof prismaMock.session.findMany>>);
+      // bumpReconcileAttempts → updateConnectionConditional reads + writes
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        connection: conn,
+        sessionGroupId: null,
+      } as unknown as Awaited<ReturnType<typeof prismaMock.session.findUnique>>);
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
 
       const result = await service.reconcileStuckDeprovisions({ now, stuckAfterMs: 60_000 });
 
@@ -3842,6 +3852,11 @@ describe("SessionService", () => {
     it("abandons candidates that have exceeded MAX_RECONCILE_ATTEMPTS", async () => {
       const now = Date.now();
       const ancient = new Date(now - 5 * 60_000).toISOString();
+      const conn = provisionedConn({
+        stoppingAt: ancient,
+        deprovisionFailedAt: ancient,
+        reconcileAttempts: 10,
+      });
       prismaMock.session.findMany.mockResolvedValueOnce([
         {
           id: "session-exhausted",
@@ -3849,34 +3864,23 @@ describe("SessionService", () => {
           organizationId: "org-1",
           workdir: null,
           repoId: null,
-          connection: {
-            adapterType: "provisioned",
-            state: "deprovision_failed",
-            providerRuntimeId: "provider-1",
-            stoppingAt: ancient,
-            deprovisionFailedAt: ancient,
-            reconcileAttempts: 10,
-            retryCount: 0,
-            canRetry: true,
-            canMove: false,
-          },
+          connection: conn,
         },
       ] as unknown as Awaited<ReturnType<typeof prismaMock.session.findMany>>);
-      prismaMock.session.findUnique.mockResolvedValueOnce({
-        organizationId: "org-1",
-        sessionGroupId: null,
-        connection: {
-          adapterType: "provisioned",
-          state: "deprovision_failed",
-          providerRuntimeId: "provider-1",
-          stoppingAt: ancient,
-          deprovisionFailedAt: ancient,
-          reconcileAttempts: 10,
-          retryCount: 0,
-          canRetry: true,
-          canMove: false,
-        },
-      } as unknown as Awaited<ReturnType<typeof prismaMock.session.findUnique>>);
+      // markRuntimeAbandoned → recordRuntimeLifecycle → reads session metadata
+      // and the connection (via updateConnectionConditional).
+      prismaMock.session.findUnique
+        .mockResolvedValueOnce({
+          organizationId: "org-1",
+          sessionGroupId: null,
+          agentStatus: "stopped",
+          sessionStatus: "in_progress",
+        } as unknown as Awaited<ReturnType<typeof prismaMock.session.findUnique>>)
+        .mockResolvedValueOnce({
+          connection: conn,
+          sessionGroupId: null,
+        } as unknown as Awaited<ReturnType<typeof prismaMock.session.findUnique>>);
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
 
       const result = await service.reconcileStuckDeprovisions({ now, stuckAfterMs: 60_000 });
 
@@ -3928,6 +3932,11 @@ describe("SessionService", () => {
     it("bumps reconcileAttempts before invoking destroyRuntime", async () => {
       const now = Date.now();
       const ancient = new Date(now - 5 * 60_000).toISOString();
+      const conn = provisionedConn({
+        stoppingAt: ancient,
+        deprovisionFailedAt: ancient,
+        reconcileAttempts: 3,
+      });
       prismaMock.session.findMany.mockResolvedValueOnce([
         {
           id: "session-stuck",
@@ -3935,39 +3944,58 @@ describe("SessionService", () => {
           organizationId: "org-1",
           workdir: null,
           repoId: null,
-          connection: {
-            adapterType: "provisioned",
-            state: "deprovision_failed",
-            providerRuntimeId: "provider-1",
-            stoppingAt: ancient,
-            deprovisionFailedAt: ancient,
-            reconcileAttempts: 3,
-            retryCount: 0,
-            canRetry: true,
-            canMove: false,
-          },
+          connection: conn,
         },
       ] as unknown as Awaited<ReturnType<typeof prismaMock.session.findMany>>);
       prismaMock.session.findUnique.mockResolvedValueOnce({
-        connection: {
-          adapterType: "provisioned",
-          state: "deprovision_failed",
-          providerRuntimeId: "provider-1",
-          reconcileAttempts: 3,
-        },
+        connection: conn,
         sessionGroupId: null,
       } as unknown as Awaited<ReturnType<typeof prismaMock.session.findUnique>>);
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
 
       await service.reconcileStuckDeprovisions({ now, stuckAfterMs: 60_000 });
 
-      const updateCalls = (
-        prismaMock.session.update as unknown as ReturnType<typeof vi.fn>
+      const updateManyCalls = (
+        prismaMock.session.updateMany as unknown as ReturnType<typeof vi.fn>
       ).mock.calls.map((call) => call[0] as { data: { connection: unknown } });
-      const bumpCall = updateCalls.find(
+      const bumpCall = updateManyCalls.find(
         (call) =>
           (call.data.connection as { reconcileAttempts?: number }).reconcileAttempts === 4,
       );
       expect(bumpCall).toBeDefined();
+    });
+
+    it("skips destroyRuntime when bumpReconcileAttempts loses the optimistic-locking race", async () => {
+      const now = Date.now();
+      const ancient = new Date(now - 5 * 60_000).toISOString();
+      const conn = provisionedConn({
+        stoppingAt: ancient,
+        deprovisionFailedAt: ancient,
+        reconcileAttempts: 2,
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-raced",
+          hosting: "cloud",
+          organizationId: "org-1",
+          workdir: null,
+          repoId: null,
+          connection: conn,
+        },
+      ] as unknown as Awaited<ReturnType<typeof prismaMock.session.findMany>>);
+      // Simulate concurrent state change: every read shows the deprovision
+      // state, but every conditional write loses the race (count = 0). The
+      // helper retries up to MAX_CONNECTION_UPDATE_ATTEMPTS, then throws.
+      prismaMock.session.findUnique.mockResolvedValue({
+        connection: conn,
+        sessionGroupId: null,
+      } as unknown as Awaited<ReturnType<typeof prismaMock.session.findUnique>>);
+      prismaMock.session.updateMany.mockResolvedValue({ count: 0 });
+
+      const result = await service.reconcileStuckDeprovisions({ now, stuckAfterMs: 60_000 });
+
+      expect(result.reconciled).toEqual([]);
+      expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
     });
   });
 });
