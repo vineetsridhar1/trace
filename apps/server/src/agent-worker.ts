@@ -351,7 +351,10 @@ interface StreamEntry {
  */
 async function readEvents(): Promise<Map<string, StreamEntry[]>> {
   const result = new Map<string, StreamEntry[]>();
-  if (activeOrgs.size === 0) return result;
+  if (activeOrgs.size === 0) {
+    await sleep(BLOCK_MS);
+    return result;
+  }
 
   const streams: string[] = [];
   const ids: string[] = [];
@@ -367,7 +370,10 @@ async function readEvents(): Promise<Map<string, StreamEntry[]>> {
     ids.push(">"); // only new messages not yet delivered to this group
   }
 
-  if (streams.length === 0) return result;
+  if (streams.length === 0) {
+    await sleep(BLOCK_MS);
+    return result;
+  }
 
   try {
     // XREADGROUP GROUP <group> <consumer> COUNT 100 BLOCK <ms> STREAMS <keys...> <ids...>
