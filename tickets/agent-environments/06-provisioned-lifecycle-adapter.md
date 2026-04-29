@@ -66,9 +66,11 @@ Owns plan lines:
   - the connected runtime must accept multiple `terminal_create` commands for the same session/runtime
   - terminal traffic must remain keyed and isolated by `terminalId`
 - Implement `stopSession`:
+  - consume the selected environment config through `RuntimeStopInput` or a typed environment reference
   - call `stopUrl` with `sessionId`, provider runtime ID, and reason
   - reuse the stop idempotency key on retries
 - Implement `getStatus`:
+  - consume the selected environment config through `RuntimeStatusInput` or a typed environment reference
   - call `statusUrl` and map launcher status to Trace status
 - Add request/response validation with `unknown` narrowing.
 
@@ -100,6 +102,9 @@ Owns plan lines:
 - Replace the ticket 04 `LegacyCloudMachineProvisionedRuntimeAdapter` compatibility shim with the
   generic lifecycle endpoint implementation. The shim exists only to keep current cloud sessions
   working while the registry boundary lands.
+- Ticket 04's initial contract passes environment config to `startSession` only. Extend the
+  stop/status inputs or router call sites as part of this ticket before implementing authenticated
+  `stopUrl` and `statusUrl`; the adapter should not query around the registry boundary for config.
 - This is the only Trace-core cloud adapter in V1.
 - AWS, Fly, Kubernetes, and internal platforms all sit behind this lifecycle contract.
 - Keep the launcher payload stable before building reference launchers.
