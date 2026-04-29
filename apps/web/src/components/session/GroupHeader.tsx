@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Circle,
   GitPullRequest,
@@ -35,6 +35,7 @@ interface GroupHeaderProps {
   panelMode?: boolean;
   isFullscreen: boolean;
   showSidebar: boolean;
+  ultraplanControl?: ReactNode;
   onClose: () => void;
   onToggleFullscreen: () => void;
   onToggleSidebar: () => void;
@@ -57,6 +58,7 @@ export function GroupHeader({
   panelMode,
   isFullscreen,
   showSidebar,
+  ultraplanControl,
   onClose,
   onToggleFullscreen,
   onToggleSidebar,
@@ -128,6 +130,8 @@ export function GroupHeader({
       </div>
 
       <LinkedCheckoutActions state={linkedCheckout} />
+
+      {ultraplanControl}
 
       {hasRunScripts && (
         <button

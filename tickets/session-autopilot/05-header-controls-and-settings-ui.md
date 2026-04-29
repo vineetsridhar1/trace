@@ -41,16 +41,16 @@ Move the product surface to the session-group UI and add the first Ultraplan sta
 
 ## Completion requirements
 
-- [ ] Session group header shows an Ultraplan affordance.
-- [ ] State chip reflects live Ultraplan status.
-- [ ] User can start, pause, resume, cancel, and run-now from the group surface.
-- [ ] Ordered tickets and their dependency/blocking state are visible.
-- [ ] Planned tickets render before any `TicketExecution` exists.
-- [ ] Ticket worker sessions are linked from the panel.
-- [ ] Controller run summaries render in an activity timeline.
-- [ ] User can open the full chat for a controller run from the timeline.
-- [ ] Controller-run sessions are not shown in normal tabs.
-- [ ] UI survives missing Ultraplan state cleanly.
+- [x] Session group header shows an Ultraplan affordance.
+- [x] State chip reflects live Ultraplan status.
+- [x] User can start, pause, resume, cancel, and run-now from the group surface.
+- [x] Ordered tickets and their dependency/blocking state are visible.
+- [x] Planned tickets render before any `TicketExecution` exists.
+- [x] Ticket worker sessions are linked from the panel.
+- [x] Controller run summaries render in an activity timeline.
+- [x] User can open the full chat for a controller run from the timeline.
+- [x] Controller-run sessions are not shown in normal tabs.
+- [x] UI survives missing Ultraplan state cleanly.
 
 ## Implementation notes
 
