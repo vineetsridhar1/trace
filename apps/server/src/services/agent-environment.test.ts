@@ -29,6 +29,10 @@ describe("AgentEnvironmentService", () => {
     prismaMock.$transaction.mockImplementation(
       async (callback: (tx: typeof prismaMock) => Promise<unknown>) => callback(prismaMock),
     );
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({
+      userId: "user-1",
+      organizationId: "org-1",
+    });
   });
 
   it("creates a default environment transactionally and clears existing defaults", async () => {
@@ -175,7 +179,7 @@ describe("AgentEnvironmentService", () => {
     });
 
     const service = new AgentEnvironmentService();
-    await service.update("env-1", "org-1", { enabled: false }, "user", "user-1");
+    await service.update("env-1", { enabled: false }, "user", "user-1");
 
     expect(prismaMock.agentEnvironment.update).toHaveBeenCalledWith({
       where: { id: "env-1" },
@@ -183,6 +187,54 @@ describe("AgentEnvironmentService", () => {
         enabled: false,
         isDefault: false,
       },
+    });
+  });
+
+  it("checks actor organization access inside environment mutations", async () => {
+    prismaMock.orgMember.findUniqueOrThrow.mockRejectedValueOnce(new Error("Not found"));
+    prismaMock.agentEnvironment.findFirstOrThrow.mockResolvedValueOnce({
+      id: "env-1",
+      organizationId: "org-2",
+      name: "Local",
+      adapterType: "local",
+      config: {},
+      enabled: true,
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const service = new AgentEnvironmentService();
+
+    await expect(service.update("env-1", { name: "Renamed" }, "user", "user-1")).rejects.toThrow(
+      "Not found",
+    );
+
+    expect(prismaMock.orgMember.findUniqueOrThrow).toHaveBeenCalledWith({
+      where: {
+        userId_organizationId: {
+          userId: "user-1",
+          organizationId: "org-2",
+        },
+      },
+      select: { userId: true },
+    });
+    expect(prismaMock.agentEnvironment.update).not.toHaveBeenCalled();
+  });
+
+  it("does not report environment tests as successful before adapter validation exists", async () => {
+    prismaMock.agentEnvironment.findFirstOrThrow.mockResolvedValueOnce({
+      adapterType: "provisioned",
+      enabled: true,
+      organizationId: "org-1",
+    });
+
+    const service = new AgentEnvironmentService();
+    const result = await service.test("env-1", "user", "user-1");
+
+    expect(result).toEqual({
+      ok: false,
+      message: "provisioned environment testing requires runtime adapter validation",
     });
   });
 });

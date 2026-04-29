@@ -2,7 +2,6 @@ import type { Context } from "../context.js";
 import type { CreateAgentEnvironmentInput, UpdateAgentEnvironmentInput } from "@trace/gql";
 import { Prisma } from "@prisma/client";
 import { agentEnvironmentService } from "../services/agent-environment.js";
-import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
 
 function requiredConfig(value: CreateAgentEnvironmentInput["config"]): Prisma.InputJsonValue {
   if (value === null) throw new Error("Agent environment config is required");
@@ -12,14 +11,14 @@ function requiredConfig(value: CreateAgentEnvironmentInput["config"]): Prisma.In
 function optionalConfig(
   value: UpdateAgentEnvironmentInput["config"],
 ): Prisma.InputJsonValue | undefined {
-  if (value === undefined || value === null) return undefined;
+  if (value === null) throw new Error("Agent environment config cannot be null");
+  if (value === undefined) return undefined;
   return value;
 }
 
 export const agentEnvironmentQueries = {
   agentEnvironments: (_: unknown, args: { orgId: string }, ctx: Context) => {
-    assertOrgAccess(ctx, args.orgId);
-    return agentEnvironmentService.list(args.orgId);
+    return agentEnvironmentService.list(args.orgId, ctx.actorType, ctx.userId);
   },
 };
 
@@ -29,7 +28,6 @@ export const agentEnvironmentMutations = {
     args: { input: CreateAgentEnvironmentInput },
     ctx: Context,
   ) => {
-    assertOrgAccess(ctx, args.input.orgId);
     return agentEnvironmentService.create(
       {
         organizationId: args.input.orgId,
@@ -49,10 +47,8 @@ export const agentEnvironmentMutations = {
     args: { input: UpdateAgentEnvironmentInput },
     ctx: Context,
   ) => {
-    const orgId = requireOrgContext(ctx);
     return agentEnvironmentService.update(
       args.input.id,
-      orgId,
       {
         name: args.input.name ?? undefined,
         config: optionalConfig(args.input.config),
@@ -65,14 +61,12 @@ export const agentEnvironmentMutations = {
   },
 
   deleteAgentEnvironment: async (_: unknown, args: { id: string }, ctx: Context) => {
-    const orgId = requireOrgContext(ctx);
-    await agentEnvironmentService.delete(args.id, orgId, ctx.actorType, ctx.userId);
+    await agentEnvironmentService.delete(args.id, ctx.actorType, ctx.userId);
     return true;
   },
 
   testAgentEnvironment: (_: unknown, args: { id: string }, ctx: Context) => {
-    const orgId = requireOrgContext(ctx);
-    return agentEnvironmentService.test(args.id, orgId);
+    return agentEnvironmentService.test(args.id, ctx.actorType, ctx.userId);
   },
 };
 
