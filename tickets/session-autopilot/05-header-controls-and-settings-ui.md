@@ -12,6 +12,7 @@ Move the product surface from a single session header to the session-group UI an
   - plan summary
   - current status
   - controller session state
+  - ordered ticket plan
   - ticket executions
   - worker sessions
   - branch names
@@ -36,6 +37,7 @@ Move the product surface from a single session header to the session-group UI an
 - [ ] Session group header shows an Ultraplan affordance.
 - [ ] State chip reflects live Ultraplan status.
 - [ ] User can start, pause, resume, cancel, and run-now from the group surface.
+- [ ] Ordered tickets and their dependency/blocking state are visible.
 - [ ] Ticket worker sessions are linked from the panel.
 - [ ] Controller session is not shown in normal tabs, but can be inspected from an explicit debug entry if available.
 - [ ] UI survives missing Ultraplan state cleanly.
@@ -51,4 +53,5 @@ Move the product surface from a single session header to the session-group UI an
 1. Open a session group with no Ultraplan and verify the empty/start state.
 2. Start Ultraplan and verify event-driven status updates.
 3. Pause/resume/run-now/cancel and verify the chip and panel update.
-4. Verify the UI does not expose controller sessions in normal navigation.
+4. Verify the ordered plan shows the active ticket and blocked future tickets.
+5. Verify the UI does not expose controller sessions in normal navigation.

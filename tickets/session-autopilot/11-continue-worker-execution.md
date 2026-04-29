@@ -2,7 +2,7 @@
 
 ## Summary
 
-Let the controller create, start, and continue ticket worker sessions through service-backed actions.
+Let the controller create, start, and continue ticket worker sessions through service-backed actions. V1 starts only one worker execution at a time.
 
 ## What needs to happen
 
@@ -13,8 +13,10 @@ Let the controller create, start, and continue ticket worker sessions through se
   - linking the worker session to the ticket execution
   - sending a follow-up message to an existing worker
   - marking execution state as running/reviewing/blocked/ready
+- Add scheduler helper for selecting the next runnable ticket from dependency edges.
 - Ensure worker sessions use their own ticket branch.
 - Ensure workers do not directly mutate the group integration branch.
+- Ensure v1 does not launch more than one active worker execution per Ultraplan.
 - Emit ticket execution events for every transition.
 - Handle runtime access or delivery errors safely.
 
@@ -28,6 +30,8 @@ Let the controller create, start, and continue ticket worker sessions through se
 - [ ] Controller can start a worker session for that execution.
 - [ ] Worker session has `role = ticket_worker`.
 - [ ] Worker session uses a ticket-specific branch/worktree.
+- [ ] Scheduler starts only the next dependency-ready ticket.
+- [ ] V1 blocks parallel worker launches for one Ultraplan.
 - [ ] Controller can send a bounded follow-up to a worker.
 - [ ] Failures surface as execution/Ultraplan errors, not silent drops.
 
@@ -42,5 +46,6 @@ Let the controller create, start, and continue ticket worker sessions through se
 1. Create a ticket execution from a service call.
 2. Start a worker session and verify branch, role, and links.
 3. Send a follow-up to an existing worker.
-4. Simulate runtime access failure and verify state/error events.
-5. Verify the group branch is unchanged by worker launch.
+4. Try to start a second worker while one execution is active and verify it is rejected or queued.
+5. Simulate runtime access failure and verify state/error events.
+6. Verify the group branch is unchanged by worker launch.

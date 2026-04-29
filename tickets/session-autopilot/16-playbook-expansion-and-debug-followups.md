@@ -6,7 +6,7 @@ Post-v1 follow-up for richer controller inspection, additional orchestration pla
 
 ## What needs to happen
 
-- Add more built-in playbooks beyond the default ticket-graph implementation flow.
+- Add more built-in playbooks beyond the default ordered-ticket implementation flow.
 - Add a debug panel or drill-down for controller activity.
 - Expose the full controller transcript/log for power users through an Ultraplan inspector.
 - Reuse existing session transcript/log components where possible.

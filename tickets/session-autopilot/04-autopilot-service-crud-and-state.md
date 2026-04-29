@@ -40,7 +40,7 @@ Add `ultraplanService` as the service-layer owner for starting, pausing, resumin
 ## Implementation notes
 
 - Keep this ticket limited to service CRUD and core state transitions.
-- Ticket graph generation and worker launch can be added in later tickets.
+- Ordered ticket generation and worker launch can be added in later tickets.
 - The service layer owns state transitions; GraphQL resolvers should parse input and delegate.
 
 ## How to test

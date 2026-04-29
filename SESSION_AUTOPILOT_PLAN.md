@@ -2,7 +2,7 @@
 
 ## Summary
 
-Ultraplan is a session-group orchestration mode for turning a large goal into a ticket graph, running worker sessions against ticket-specific branches, and integrating approved work into one final session-group branch.
+Ultraplan is a session-group orchestration mode for turning a large goal into an ordered ticket plan, running worker sessions against ticket-specific branches, and integrating approved work into one final session-group branch.
 
 The core idea is:
 
@@ -11,6 +11,7 @@ The core idea is:
 - The controller wakes on meaningful worker events, especially worker `agentStatus` transitions to `done` or `failed`.
 - The controller creates and manages tickets through Trace services.
 - Worker sessions execute tickets on their own branches/worktrees.
+- V1 runs one ticket worker at a time, while preserving dependency metadata so a future DAG scheduler is straightforward.
 - Human decisions happen through inbox items.
 - Approved ticket branches are integrated into the group branch by the service layer.
 
@@ -24,7 +25,7 @@ Ultraplan applies that thesis to multi-step development:
 
 - the user states a broad goal once
 - the controller session turns it into tickets
-- worker sessions execute those tickets autonomously
+- worker sessions execute those tickets autonomously, one at a time in v1
 - the controller observes all worker outcomes
 - the service layer integrates approved work into one branch
 - the user is pulled in through inbox gates when judgment or QA is needed
@@ -37,6 +38,7 @@ This is not a generic workflow engine in v1. It is an AI-native development work
 - Make tickets first-class units of planned work, not markdown-only artifacts.
 - Keep the controller as a real Trace session with a special role.
 - Let worker sessions in one group use different ticket branches.
+- Generate an ordered ticket plan with dependency metadata, even though v1 execution is sequential.
 - Keep the session group branch as the integration branch and final test target.
 - Wake the controller on coarse worker lifecycle events, not token streams.
 - Route human gates through inbox.
@@ -65,7 +67,7 @@ It owns:
 - the integration worktree
 - the controller session
 - the worker sessions
-- the ticket graph association
+- the ticket plan association
 - the final PR/test target
 
 The group branch is not the repository default branch. It is the final branch the user will test and merge when ready.
@@ -131,7 +133,16 @@ Each worker session should normally map to:
 - one isolated worktree
 - one execution record
 
-Workers can run in parallel when their tickets are independent. Parallel workers must not mutate the group integration branch directly.
+V1 runs one worker session at a time. After a ticket is approved and integrated into the group branch, the next ready ticket starts from the updated group branch.
+
+The model should still be DAG-ready:
+
+- every ticket can have dependencies
+- every execution records its base checkpoint
+- the scheduler asks for the next ready ticket instead of hardcoding array position
+- v1 playbooks set `executionMode = sequential` and `maxParallelWorkers = 1`
+
+Parallel worker execution is a v2 behavior.
 
 ### Tickets
 
@@ -150,6 +161,40 @@ Tickets need enough durable structure to drive execution:
 - links to worker sessions and executions
 
 Tickets should be created and updated through `ticketService`.
+
+### Ordered Plan and Future DAG
+
+The controller should generate a plan as dependency-aware tickets, not as freeform prose.
+
+For v1, the dependency graph is normally a simple chain:
+
+```text
+Ticket A -> Ticket B -> Ticket C -> Ticket D
+```
+
+That gives the product a simple execution model:
+
+```text
+start worker for A
+  -> review A
+  -> integrate A into group branch
+  -> start worker for B from updated group branch
+```
+
+The service should still store dependencies as edges so v2 can support real DAG scheduling:
+
+```text
+Ticket A
+├─ Ticket B
+├─ Ticket C
+└─ Ticket D depends on B and C
+```
+
+The v1 scheduler rule is:
+
+- max parallel workers is `1`
+- the next runnable ticket is the first unstarted ticket whose dependencies are integrated
+- the group branch is updated after each integrated ticket
 
 ### Ticket Execution
 
@@ -193,7 +238,7 @@ User
     -> ultraplanService.start(...)
       -> create/update Ultraplan
       -> create/reuse controller session
-      -> create ticket graph
+      -> create ordered ticket plan
       -> emit events
 
 Worker session lifecycle events
@@ -340,7 +385,7 @@ model Ticket {
 }
 ```
 
-Dependencies can be represented with a dedicated relation:
+Dependencies should be represented with a dedicated relation:
 
 ```prisma
 model TicketDependency {
@@ -351,6 +396,8 @@ model TicketDependency {
   @@id([ticketId, dependsOnTicketId])
 }
 ```
+
+V1 can create a linear dependency chain by making each generated ticket depend on the previous ticket. The model should not require linearity.
 
 ## GraphQL Contract
 
@@ -543,8 +590,9 @@ Rules:
 - workers never directly mutate the group branch
 - integration happens through service-layer merge/cherry-pick/rebase actions
 - the group branch remains the final test target
-- dependent tickets should be based on the latest integrated group branch
-- independent tickets can run in parallel from the current group branch
+- every v1 ticket worker should start from the latest integrated group branch
+- only one worker branch should be active by default in v1
+- future DAG playbooks can allow independent tickets to run in parallel from the current group branch
 - conflicts create inbox gates or controller follow-up tasks
 
 ## Human Handoff
@@ -588,7 +636,7 @@ The product surface belongs at the session-group level, not only the active sess
 Show:
 
 - plan summary
-- ticket graph/list
+- ordered ticket plan/list
 - execution status per ticket
 - worker session links
 - branch names
@@ -740,7 +788,7 @@ Recommended milestones:
 1. Durable contracts: roles, Ultraplan, TicketExecution, events, inbox types.
 2. Service CRUD and controller session creation.
 3. Client store and group-level UI.
-4. Ticket graph and worker session launch.
+4. Ordered ticket plan and worker session launch.
 5. Controller wakeup on worker `done`/`failed`.
 6. Context packet and controller tool contract.
 7. Human gates through inbox.
@@ -762,7 +810,7 @@ Critical scenarios:
 - generated tickets become durable Trace tickets
 - worker completion wakes controller once
 - worker failure wakes controller once
-- controller can launch a worker for a ticket
+- controller can launch one worker for the next ready ticket
 - inbox gate halts execution until resolved
 - approved ticket branch integrates into group branch
 - conflict creates a gate instead of corrupting the integration branch
@@ -776,8 +824,9 @@ The clean v1 is:
 
 - one Ultraplan per active session group
 - one special controller session inside the group
-- ticket-worker sessions with per-ticket branches
+- sequential ticket-worker sessions with per-ticket branches in v1
 - controller wakeups on worker `agentStatus` completion/failure
 - service-backed controller tools
 - inbox-backed human gates
 - one group integration branch as the final test/merge target
+- dependency metadata that can become a true DAG scheduler in v2

@@ -10,7 +10,7 @@ Expose Ultraplan, ticket executions, session roles, and gate event types through
 - Add `Ultraplan` GraphQL type.
 - Add `TicketExecution` GraphQL type.
 - Add `Session.role`.
-- Add ticket acceptance criteria and dependency fields if included in the DB model.
+- Add ticket acceptance criteria and dependency fields.
 - Add a `SessionGroup.ultraplan` field for the active group plan.
 - Add queries as needed:
   - `ultraplan(id: ID!)`
@@ -34,6 +34,7 @@ Expose Ultraplan, ticket executions, session roles, and gate event types through
 - [ ] GraphQL schema contains all Ultraplan types and enums.
 - [ ] Generated client and resolver types compile.
 - [ ] Session group detail can hydrate the active Ultraplan.
+- [ ] The schema can represent a v1 ordered plan and future DAG dependencies.
 - [ ] The schema shape supports the group UI and inbox UI without local-only types.
 - [ ] No duplicate type definitions are added outside `schema.graphql`.
 

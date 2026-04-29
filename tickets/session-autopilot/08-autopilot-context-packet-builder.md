@@ -10,7 +10,7 @@ Build the compact context packet the controller session receives when it wakes.
 - Include:
   - Ultraplan summary and status
   - session group branch and PR state
-  - ticket graph and dependency state
+  - ordered ticket plan and dependency state
   - active ticket executions
   - worker session statuses
   - latest worker checkpoint metadata
@@ -30,7 +30,8 @@ Build the compact context packet the controller session receives when it wakes.
 ## Completion requirements
 
 - [ ] Context packet includes the event that woke the controller.
-- [ ] Ticket graph and execution state are included.
+- [ ] Ordered ticket plan and execution state are included.
+- [ ] Dependency edges and the next runnable ticket are included.
 - [ ] Latest checkpoint and branch diff are included when available.
 - [ ] Active inbox gates are included.
 - [ ] Large packets are truncated predictably.

@@ -8,7 +8,8 @@ Define how the Ultraplan controller session reasons and acts: its system prompt,
 
 - Author the base controller prompt.
 - Make the controller's role explicit:
-  - manage the ticket graph
+  - manage the ordered ticket plan
+  - record dependency edges so future DAG scheduling is possible
   - launch or continue worker sessions
   - review completed/failed workers
   - request human gates
@@ -37,6 +38,7 @@ Define how the Ultraplan controller session reasons and acts: its system prompt,
 
 - [ ] Prompt contract is checked into the repo.
 - [ ] Tool contract is narrow and service-backed.
+- [ ] Prompt requires acceptance criteria, test plans, and dependency rationale for generated tickets.
 - [ ] Controller is instructed not to mutate DB/events/git directly.
 - [ ] Malformed output does not result in speculative actions.
 - [ ] Parser/tool validation errors are observable to the service/router.
@@ -52,4 +54,5 @@ Define how the Ultraplan controller session reasons and acts: its system prompt,
 1. Unit test valid controller decisions/tool requests.
 2. Unit test malformed output.
 3. Verify forbidden actions are rejected by validation.
-4. Verify prompts include the service-layer boundary clearly.
+4. Verify generated plans can express a linear dependency chain.
+5. Verify prompts include the service-layer boundary clearly.
