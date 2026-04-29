@@ -132,9 +132,10 @@ export function buildControllerRunPrompt(input: {
     ...RUNTIME_ACTION_NAMES.map((name) => `- ${name}`),
     "",
     "Final response contract:",
-    "- Every completed controller run must end with one JSON object and no surrounding prose.",
-    "- The JSON object must match the `ControllerRunSummaryPayload` schema described in `.claude/skills/ultraplan-controller/SKILL.md`.",
-    "- Missing or malformed final JSON fails the controller run visibly.",
+    "- Before ending, call `trace-agent ultraplan.completeControllerRun --json '<object>'` with the structured summary payload.",
+    "- The summary payload must match the `ControllerRunSummaryPayload` schema described in `.claude/skills/ultraplan-controller/SKILL.md`.",
+    "- After the completion action succeeds, end with the same JSON object and no surrounding prose.",
+    "- Missing or malformed completion JSON fails the controller run visibly.",
   ].join("\n");
 }
 
