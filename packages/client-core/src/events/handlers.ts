@@ -120,6 +120,8 @@ const TICKET_EXECUTION_EVENTS: Set<EventType> = new Set([
   "ticket_execution_blocked",
 ]);
 
+const ULTRAPLAN_GATE_EVENTS: Set<EventType> = new Set(["ultraplan_human_gate_requested"]);
+
 type HydratedEventEntityType = keyof Pick<
   EntityTableMap,
   "ultraplans" | "ultraplanTickets" | "ultraplanControllerRuns" | "ticketExecutions" | "tickets"
@@ -526,6 +528,21 @@ export function handleOrgEvent(event: Event): void {
     const execution = asJsonObject(payload.ticketExecution);
     if (execution && typeof execution.id === "string") {
       mergeEntity(batch, "ticketExecutions", execution as unknown as TicketExecution);
+    }
+  }
+
+  if (ULTRAPLAN_GATE_EVENTS.has(event.eventType)) {
+    const ultraplan = asJsonObject(payload.ultraplan);
+    if (ultraplan && typeof ultraplan.id === "string") {
+      upsertNestedUltraplanEntities(batch, ultraplan);
+    }
+    const execution = asJsonObject(payload.ticketExecution);
+    if (execution && typeof execution.id === "string") {
+      mergeEntity(batch, "ticketExecutions", execution as unknown as TicketExecution);
+    }
+    const item = asJsonObject(payload.inboxItem);
+    if (item && typeof item.id === "string") {
+      batch.upsert("inboxItems", item.id, item as unknown as InboxItem);
     }
   }
 

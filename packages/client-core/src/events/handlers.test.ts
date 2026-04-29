@@ -360,4 +360,50 @@ describe("handleOrgEvent session visibility", () => {
       status: "running",
     });
   });
+
+  it("hydrates Ultraplan gate event payloads", () => {
+    handleOrgEvent(
+      event({
+        eventType: "ultraplan_human_gate_requested",
+        scopeType: "ultraplan",
+        scopeId: "ultra-1",
+        payload: {
+          ultraplan: {
+            id: "ultra-1",
+            sessionGroupId: "group-1",
+            status: "needs_human",
+            activeInboxItemId: "inbox-1",
+          },
+          ticketExecution: {
+            id: "execution-1",
+            ultraplanId: "ultra-1",
+            ticketId: "ticket-1",
+            status: "needs_human",
+            activeInboxItemId: "inbox-1",
+          },
+          inboxItem: {
+            id: "inbox-1",
+            itemType: "ultraplan_validation_request",
+            status: "open",
+          },
+        },
+      }),
+    );
+
+    const state = useEntityStore.getState();
+    expect(state.ultraplans["ultra-1"]).toMatchObject({
+      id: "ultra-1",
+      status: "needs_human",
+      activeInboxItemId: "inbox-1",
+    });
+    expect(state.ticketExecutions["execution-1"]).toMatchObject({
+      id: "execution-1",
+      status: "needs_human",
+      activeInboxItemId: "inbox-1",
+    });
+    expect(state.inboxItems["inbox-1"]).toMatchObject({
+      id: "inbox-1",
+      itemType: "ultraplan_validation_request",
+    });
+  });
 });
