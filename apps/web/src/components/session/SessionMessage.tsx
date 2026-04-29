@@ -1,7 +1,11 @@
 import { memo } from "react";
 import type { GitCheckpoint } from "@trace/gql";
 import { asJsonObject, type JsonObject } from "@trace/shared";
-import { useScopedEventField } from "@trace/client-core";
+import {
+  statusRowForSessionOutput,
+  statusRowForSessionTermination,
+  useScopedEventField,
+} from "@trace/client-core";
 import { useEventScopeKey } from "./EventScopeContext";
 import { UserBubble } from "./messages/UserBubble";
 import { AssistantText } from "./messages/AssistantText";
@@ -136,14 +140,41 @@ function renderSessionOutput(
   }
 
   if (type === "result") {
-    return <CompletionRow timestamp={ts} />;
+    const row = statusRowForSessionOutput(payload);
+    return row ? (
+      <CompletionRow
+        timestamp={ts}
+        title={row.title}
+        result={row.detail}
+        tone={row.tone}
+        isUserStop={row.tone === "stop"}
+      />
+    ) : null;
   }
 
   if (type === "error") {
-    return <CompletionRow timestamp={ts} result={str(payload.message, "Error")} isUserStop />;
+    const row = statusRowForSessionOutput(payload);
+    return row ? (
+      <CompletionRow
+        timestamp={ts}
+        title={row.title}
+        result={row.detail}
+        tone={row.tone}
+        isUserStop={row.tone === "stop"}
+      />
+    ) : null;
   }
 
-  return null;
+  const row = statusRowForSessionOutput(payload);
+  return row ? (
+    <CompletionRow
+      timestamp={ts}
+      title={row.title}
+      result={row.detail}
+      tone={row.tone}
+      isUserStop={row.tone === "stop"}
+    />
+  ) : null;
 }
 
 export const SessionMessage = memo(function SessionMessage({
@@ -218,27 +249,16 @@ export const SessionMessage = memo(function SessionMessage({
       );
 
     case "session_terminated": {
-      if (payload?.reason === "bridge_complete") return null;
-      if (payload?.reason === "workspace_failed") {
-        const error = str(payload?.error);
-        return <SystemBadge text={error || "Workspace preparation failed"} />;
-      }
-      if (payload?.reason === "manual_stop") {
-        return <SystemBadge text="Session stopped" />;
-      }
-      if (payload?.sessionStatus === "merged") {
-        return <SystemBadge text="Session merged" />;
-      }
-      if (payload?.agentStatus === "failed") {
-        return <SystemBadge text="Session failed" />;
-      }
-      if (payload?.agentStatus === "stopped") {
-        return <SystemBadge text="Session stopped" />;
-      }
-      if (payload?.agentStatus === "done") {
-        return <SystemBadge text="Session completed" />;
-      }
-      return <SystemBadge text="Session terminated" />;
+      const row = payload ? statusRowForSessionTermination(payload) : null;
+      return row ? (
+        <CompletionRow
+          timestamp={timestamp}
+          title={row.title}
+          result={row.detail}
+          tone={row.tone}
+          isUserStop={row.tone === "stop"}
+        />
+      ) : null;
     }
 
     default:

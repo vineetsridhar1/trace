@@ -88,6 +88,12 @@ export {
   HIDDEN_SESSION_PAYLOAD_TYPES,
   HIDDEN_SESSION_PAYLOAD_TYPE_SET,
 } from "./session/event-filters.js";
+export {
+  extractSessionErrorMessage,
+  statusRowForSessionOutput,
+  statusRowForSessionTermination,
+} from "./session/status-rows.js";
+export type { SessionStatusRow, SessionStatusRowTone } from "./session/status-rows.js";
 export { buildSessionNodes } from "./session/nodes.js";
 export type {
   AgentToolResult,
