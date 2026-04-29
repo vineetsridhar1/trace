@@ -732,9 +732,8 @@ After the bridge connects, cloud runtimes must handle multiple concurrent `termi
 
 Cloud bridge authentication needs a short-lived runtime token.
 
-<!-- Review note after ticket 07: token validation must be signed or durable.
-Process-local in-memory opaque tokens are not sufficient once Trace runs multiple
-server instances or a provisioned runtime connects after a server restart. -->
+<!-- Resolved in ticket 07: runtime tokens use signed JWT validation, avoiding
+process-local token state for server restarts and multi-instance deployments. -->
 
 The token should encode:
 
