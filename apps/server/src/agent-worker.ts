@@ -118,6 +118,18 @@ const STREAM_KEY_PREFIX = "stream:org:";
 const STREAM_KEY_SUFFIX = ":events";
 const BLOCK_MS = 5_000; // block timeout for XREADGROUP
 const ORG_POLL_INTERVAL_MS = 30_000; // poll for new orgs every 30s
+const AGENT_WORKER_ENABLED =
+  process.env.TRACE_AGENT_WORKER_ENABLED === "1" ||
+  process.env.TRACE_AGENT_WORKER_ENABLED === "true";
+const STATUS_HEARTBEAT_ENABLED = process.env.TRACE_AGENT_STATUS_HEARTBEAT_ENABLED === "1";
+const configuredStatusHeartbeatIntervalMs = Number.parseInt(
+  process.env.TRACE_AGENT_STATUS_HEARTBEAT_INTERVAL_MS ?? "15000",
+  10,
+);
+const STATUS_HEARTBEAT_INTERVAL_MS =
+  Number.isFinite(configuredStatusHeartbeatIntervalMs) && configuredStatusHeartbeatIntervalMs > 0
+    ? configuredStatusHeartbeatIntervalMs
+    : 15_000;
 
 // ---------------------------------------------------------------------------
 // State
@@ -342,7 +354,10 @@ interface StreamEntry {
  */
 async function readEvents(): Promise<Map<string, StreamEntry[]>> {
   const result = new Map<string, StreamEntry[]>();
-  if (activeOrgs.size === 0) return result;
+  if (activeOrgs.size === 0) {
+    await sleep(BLOCK_MS);
+    return result;
+  }
 
   const streams: string[] = [];
   const ids: string[] = [];
@@ -358,7 +373,10 @@ async function readEvents(): Promise<Map<string, StreamEntry[]>> {
     ids.push(">"); // only new messages not yet delivered to this group
   }
 
-  if (streams.length === 0) return result;
+  if (streams.length === 0) {
+    await sleep(BLOCK_MS);
+    return result;
+  }
 
   try {
     // XREADGROUP GROUP <group> <consumer> COUNT 100 BLOCK <ms> STREAMS <keys...> <ids...>
@@ -552,7 +570,14 @@ let statusHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
 const workerStartedAt = Date.now();
 
 function startStatusHeartbeat(): void {
-  // Publish status immediately, then every 15 seconds
+  if (!STATUS_HEARTBEAT_ENABLED) {
+    log("status heartbeat disabled", {
+      env: "TRACE_AGENT_STATUS_HEARTBEAT_ENABLED",
+    });
+    return;
+  }
+
+  // Publish status immediately, then at the configured interval.
   const publish = () => {
     const metrics = getMetrics();
     publishWorkerStatus({
@@ -568,7 +593,7 @@ function startStatusHeartbeat(): void {
     publishAggregationWindows(aggregator.getOpenWindows()).catch(() => {});
   };
   publish();
-  statusHeartbeatTimer = setInterval(publish, 15_000);
+  statusHeartbeatTimer = setInterval(publish, STATUS_HEARTBEAT_INTERVAL_MS);
 }
 
 function startOrgPolling(): void {
@@ -667,6 +692,11 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
+  if (!AGENT_WORKER_ENABLED) {
+    log("TRACE_AGENT_WORKER_ENABLED is not set — ambient agent worker disabled");
+    return;
+  }
+
   if (isLocalMode()) {
     log("TRACE_LOCAL_MODE=1 — ambient agent worker disabled");
     return;
@@ -734,7 +764,9 @@ async function main(): Promise<void> {
 
   // Start publishing worker status to Redis for the debug console
   startStatusHeartbeat();
-  log("status heartbeat started");
+  if (STATUS_HEARTBEAT_ENABLED) {
+    log("status heartbeat started");
+  }
 
   // Enter the main consume loop (blocks until shutdown)
   await consumeLoop();
