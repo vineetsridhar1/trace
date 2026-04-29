@@ -131,8 +131,9 @@ describe("ultraplan controller contract", () => {
     expect(prompt).toContain("Do not write directly to the database, event store, or git repository");
     expect(prompt).toContain("trace-agent <action> --json");
     expect(prompt).toContain("ultraplan.addPlannedTicket");
+    expect(prompt).toContain("trace-agent ultraplan.completeControllerRun");
     expect(prompt).toContain("acceptance criteria and a test plan");
     expect(prompt).toContain("Create durable Ultraplan planned-ticket membership");
-    expect(prompt).toContain("Missing or malformed final JSON fails");
+    expect(prompt).toContain("Missing or malformed completion JSON fails");
   });
 });

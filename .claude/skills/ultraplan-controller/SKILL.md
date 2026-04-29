@@ -63,7 +63,13 @@ Every JSON input must be an object. Use service IDs from the context packet or e
 
 ## Final Summary
 
-End every completed controller run with one JSON object and no surrounding prose:
+Before ending, complete the controller run through the service-backed runtime action:
+
+```bash
+trace-agent ultraplan.completeControllerRun --json '<object>'
+```
+
+Use this shape for the JSON object:
 
 ```json
 {
@@ -107,6 +113,8 @@ End every completed controller run with one JSON object and no surrounding prose
   "nextSteps": ["Review worker output."]
 }
 ```
+
+After that action succeeds, end the chat with the same JSON object and no surrounding prose.
 
 Allowed `outcome` values:
 

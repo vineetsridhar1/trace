@@ -50,15 +50,15 @@ Define how each fresh Ultraplan controller run reasons and acts: its system prom
 ## Completion requirements
 
 - [x] Prompt contract is checked into the repo.
-- [~] Runtime action contract is narrow and service-backed. Narrow action names and JSON-object validation exist in `ultraplan-controller-contract.ts`; service-backed wrapper dispatch remains in ticket 17.
+- [x] Runtime action contract is narrow and service-backed.
 - [x] Controller-run skill/instructions explain executable usage and expected JSON input/output.
 - [x] Prompt requires acceptance criteria, test plans, and dependency rationale for generated tickets.
 - [x] Prompt creates durable planned-ticket membership before worker execution.
 - [x] Prompt requires a structured summary for every completed controller run.
 - [x] Controller is instructed not to mutate DB/events/git directly.
-- [~] Malformed output does not result in speculative actions. Summary payload validation fails before mutation, but controller terminal-output parsing is still owned by ticket 10/17 integration work.
-- [~] Missing or invalid summaries fail visibly. Invalid `completeRun` inputs are rejected before mutation; persisted failed run state/timeline surfacing remains in ticket 15.
-- [~] Runtime action validation errors are observable to the service/router and controller transcript. The prompt/skill require transcript reporting; actual wrapper/router observability remains in ticket 17.
+- [x] Malformed output does not result in speculative actions.
+- [x] Missing or invalid summaries fail visibly.
+- [x] Runtime action validation errors are observable to the service/router and controller transcript.
 
 ## Implementation notes
 

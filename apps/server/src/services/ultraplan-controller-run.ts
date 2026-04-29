@@ -376,10 +376,22 @@ export class UltraplanControllerRunService {
     actorType: ActorType,
     actorId: string,
   ) {
-    if (input.summaryPayload == null) {
-      throw new Error("Controller run summaryPayload is required");
+    const currentRun = await prisma.$transaction((tx: TxClient) =>
+      this.getRunForMutation(tx, id, actorType, actorId),
+    );
+    if (currentRun.status === "completed") return currentRun;
+
+    let summaryPayload: ReturnType<typeof validateControllerRunSummaryPayload>;
+    try {
+      if (input.summaryPayload == null) {
+        throw new Error("Controller run summaryPayload is required");
+      }
+      summaryPayload = validateControllerRunSummaryPayload(input.summaryPayload);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Controller run summary is invalid";
+      await this.failRun(id, message, actorType, actorId);
+      throw new Error(message);
     }
-    const summaryPayload = validateControllerRunSummaryPayload(input.summaryPayload);
     const summary = input.summary ?? summaryPayload.summary;
 
     return prisma.$transaction(async (tx: TxClient) => {
