@@ -16,7 +16,8 @@ const ACTIVE_EXECUTION_STATUSES = [
 
 type Classification =
   | { decision: "ignore"; reason: string }
-  | { decision: "session_terminated"; sessionId: string; status: string };
+  | { decision: "session_terminated"; sessionId: string; status: string }
+  | { decision: "inbox_gate_resolved" };
 
 export type UltraplanEventRouterResult =
   | { handled: false; reason: string }
@@ -29,6 +30,10 @@ function stringValue(value: unknown): string | null {
 export function classifyUltraplanEvent(event: AgentEvent): Classification {
   if (event.eventType === "session_output") {
     return { decision: "ignore", reason: "session_output" };
+  }
+
+  if (event.eventType === "inbox_item_resolved") {
+    return { decision: "inbox_gate_resolved" };
   }
 
   if (event.eventType !== "session_terminated") {
@@ -51,6 +56,10 @@ export class UltraplanEventRouter {
     const classification = classifyUltraplanEvent(event);
     if (classification.decision === "ignore") {
       return { handled: false, reason: classification.reason };
+    }
+
+    if (classification.decision === "inbox_gate_resolved") {
+      return this.handleInboxGateResolution(event);
     }
 
     const session = await prisma.session.findFirst({
@@ -194,6 +203,128 @@ export class UltraplanEventRouter {
       controllerRunId: run.id,
     };
   }
+
+  private async handleInboxGateResolution(event: AgentEvent): Promise<UltraplanEventRouterResult> {
+    const inboxItem = readInboxItem(event.payload.inboxItem);
+    if (!inboxItem) {
+      return { handled: false, reason: "inbox_item_missing" };
+    }
+    if (inboxItem.sourceType !== "ultraplan" && inboxItem.sourceType !== "ticket_execution") {
+      return { handled: false, reason: "not_ultraplan_gate" };
+    }
+
+    const payloadUltraplanId = stringValue(inboxItem.payload.ultraplanId);
+    const payloadSessionGroupId = stringValue(inboxItem.payload.sessionGroupId);
+    let target: { ultraplanId: string; sessionGroupId: string } | null = null;
+    if (payloadUltraplanId && payloadSessionGroupId) {
+      target = { ultraplanId: payloadUltraplanId, sessionGroupId: payloadSessionGroupId };
+    } else if (inboxItem.sourceType === "ultraplan") {
+      const ultraplan = await prisma.ultraplan.findFirst({
+        where: { id: inboxItem.sourceId, organizationId: event.organizationId },
+        select: { id: true, sessionGroupId: true },
+      });
+      target = ultraplan
+        ? { ultraplanId: ultraplan.id, sessionGroupId: ultraplan.sessionGroupId }
+        : null;
+    } else {
+      const execution = await prisma.ticketExecution.findFirst({
+        where: { id: inboxItem.sourceId, organizationId: event.organizationId },
+        select: { ultraplanId: true, sessionGroupId: true },
+      });
+      target = execution
+        ? { ultraplanId: execution.ultraplanId, sessionGroupId: execution.sessionGroupId }
+        : null;
+    }
+    if (!target) {
+      return { handled: false, reason: "ultraplan_gate_target_not_found" };
+    }
+
+    return this.withSessionGroupLock(target.sessionGroupId, () =>
+      this.wakeControllerForGate(event, target.ultraplanId, inboxItem),
+    );
+  }
+
+  private async wakeControllerForGate(
+    event: AgentEvent,
+    ultraplanId: string,
+    inboxItem: InboxItemSnapshot,
+  ): Promise<UltraplanEventRouterResult> {
+    const existingRun = await prisma.ultraplanControllerRun.findFirst({
+      where: {
+        organizationId: event.organizationId,
+        triggerEventId: event.id,
+      },
+      select: { id: true, ultraplanId: true },
+    });
+    if (existingRun) {
+      return {
+        handled: true,
+        reason: "duplicate_trigger",
+        ultraplanId: existingRun.ultraplanId,
+        controllerRunId: existingRun.id,
+      };
+    }
+
+    const ultraplan = await prisma.ultraplan.findFirst({
+      where: { id: ultraplanId, organizationId: event.organizationId },
+      select: { id: true, status: true },
+    });
+    if (!ultraplan) {
+      return { handled: false, reason: "ultraplan_not_found" };
+    }
+    if (["completed", "failed", "cancelled", "paused"].includes(ultraplan.status)) {
+      return { handled: false, reason: "inactive_ultraplan" };
+    }
+
+    const resolution = stringValue(event.payload.resolution) ?? "resolved";
+    const run = await ultraplanService.runControllerForEvent({
+      id: ultraplan.id,
+      actorType: "system",
+      actorId: "system",
+      triggerEventId: event.id,
+      triggerType: "ultraplan_gate_resolved",
+      inputSummary: `Human gate ${resolution}: ${inboxItem.title}`,
+    });
+
+    return {
+      handled: true,
+      reason: "gate_resolution_woke_controller",
+      ultraplanId: ultraplan.id,
+      controllerRunId: run.id,
+    };
+  }
 }
 
 export const ultraplanEventRouter = new UltraplanEventRouter();
+
+type InboxItemSnapshot = {
+  id: string;
+  sourceType: string;
+  sourceId: string;
+  title: string;
+  payload: Record<string, unknown>;
+};
+
+function readInboxItem(raw: unknown): InboxItemSnapshot | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const item = raw as Record<string, unknown>;
+  if (
+    typeof item.id !== "string" ||
+    typeof item.sourceType !== "string" ||
+    typeof item.sourceId !== "string" ||
+    typeof item.title !== "string"
+  ) {
+    return null;
+  }
+  const payload =
+    item.payload && typeof item.payload === "object" && !Array.isArray(item.payload)
+      ? (item.payload as Record<string, unknown>)
+      : {};
+  return {
+    id: item.id,
+    sourceType: item.sourceType,
+    sourceId: item.sourceId,
+    title: item.title,
+    payload,
+  };
+}

@@ -34,14 +34,14 @@ Add the event router/worker that creates fresh controller runs when meaningful s
 ## Completion requirements
 
 - [x] Initial Ultraplan start creates a controller run.
-- [ ] Worker `done` creates one fresh controller run.
-- [ ] Worker `failed` creates one fresh controller run.
+- [x] Worker `done` creates one fresh controller run.
+- [x] Worker `failed` creates one fresh controller run.
 - [x] Controller does not wake on every `session_output`.
-- [ ] Only one controller run per session group can be in flight.
+- [x] Only one controller run per session group can be in flight.
 - [x] Manual run-now uses the same run pipeline.
 - [x] Run events carry enough payload for debugging and client state.
 - [x] Run events are scoped to the Ultraplan.
-- [ ] Controller-run sessions launch with scoped runtime action env.
+- [x] Controller-run sessions launch with scoped runtime action env.
 
 ## Implementation notes
 

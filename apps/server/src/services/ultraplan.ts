@@ -15,6 +15,7 @@ import type {
   BridgeGitIntegrationCommand,
   BridgeGitIntegrationResultPayload,
 } from "@trace/shared";
+import { defaultTraceApiUrl, mintUltraplanRuntimeToken } from "./ultraplan-runtime-token.js";
 
 type TxClient = Prisma.TransactionClient;
 
@@ -564,20 +565,11 @@ export class UltraplanService {
         );
       }
 
-      const shouldWakeController = !["paused", "completed", "failed", "cancelled"].includes(
-        updatedUltraplan.status,
-      );
-
       return {
         inboxItem: updatedItem,
         ultraplanId: updatedUltraplan.id,
-        shouldWakeController,
       };
     });
-
-    if (result.shouldWakeController) {
-      await this.runControllerNow(result.ultraplanId, input.actorType, input.actorId);
-    }
 
     return result.inboxItem;
   }
@@ -752,20 +744,6 @@ export class UltraplanService {
       throw new Error("Cannot run controller for an inactive Ultraplan");
     }
 
-    if (input.triggerEventId) {
-      const existingTriggeredRun = await prisma.ultraplanControllerRun.findFirst({
-        where: {
-          organizationId: ultraplan.organizationId,
-          ultraplanId: ultraplan.id,
-          triggerEventId: input.triggerEventId,
-        },
-        include: { session: true, generatedTickets: true },
-      });
-      if (existingTriggeredRun) {
-        return existingTriggeredRun;
-      }
-    }
-
     let activeControllerRun = await prisma.ultraplanControllerRun.findFirst({
       where: {
         organizationId: ultraplan.organizationId,
@@ -792,25 +770,6 @@ export class UltraplanService {
       );
       activeControllerRun = null;
     }
-    if (activeControllerRun) {
-      if (activeControllerRun.status === "queued" && activeControllerRun.sessionId) {
-        await this.launchControllerRun({
-          runId: activeControllerRun.id,
-          sessionId: activeControllerRun.sessionId,
-          goal: activeControllerRun.inputSummary ?? input.inputSummary,
-          ultraplanId: ultraplan.id,
-          sessionGroupId: ultraplan.sessionGroupId,
-          actorType: input.actorType,
-          actorId: input.actorId,
-          organizationId: ultraplan.organizationId,
-        });
-        return prisma.ultraplanControllerRun.findUniqueOrThrow({
-          where: { id: activeControllerRun.id },
-          include: { session: true, generatedTickets: true },
-        });
-      }
-      return activeControllerRun;
-    }
 
     const lastControllerRun = ultraplan.lastControllerRunId
       ? await prisma.ultraplanControllerRun.findUnique({
@@ -831,7 +790,49 @@ export class UltraplanService {
     });
 
     const result = await prisma.$transaction(async (tx: TxClient) => {
-      const run = await this.createControllerRun(tx, ultraplan, controller, {
+      await tx.$queryRaw(
+        Prisma.sql`SELECT id FROM "Ultraplan" WHERE id = ${ultraplan.id} FOR UPDATE`,
+      );
+      const lockedUltraplan = await tx.ultraplan.findUniqueOrThrow({
+        where: { id: ultraplan.id },
+        include: ULTRAPLAN_INCLUDE,
+      });
+      if (["completed", "failed", "cancelled"].includes(lockedUltraplan.status)) {
+        throw new Error("Cannot run controller for an inactive Ultraplan");
+      }
+
+      if (input.triggerEventId) {
+        const existingTriggeredRun = await tx.ultraplanControllerRun.findFirst({
+          where: {
+            organizationId: lockedUltraplan.organizationId,
+            ultraplanId: lockedUltraplan.id,
+            triggerEventId: input.triggerEventId,
+          },
+          include: { session: true, generatedTickets: true },
+        });
+        if (existingTriggeredRun) {
+          return { run: existingTriggeredRun, ultraplan: lockedUltraplan, shouldLaunch: false };
+        }
+      }
+
+      const activeRun = await tx.ultraplanControllerRun.findFirst({
+        where: {
+          organizationId: lockedUltraplan.organizationId,
+          ultraplanId: lockedUltraplan.id,
+          status: { in: [...ACTIVE_CONTROLLER_RUN_STATUSES] },
+        },
+        orderBy: { createdAt: "desc" },
+        include: { session: true, generatedTickets: true },
+      });
+      if (activeRun) {
+        return {
+          run: activeRun,
+          ultraplan: lockedUltraplan,
+          shouldLaunch: activeRun.status === "queued" && !!activeRun.sessionId,
+        };
+      }
+
+      const run = await this.createControllerRun(tx, lockedUltraplan, controller, {
         triggerType: input.triggerType,
         triggerEventId: input.triggerEventId ?? null,
         inputSummary: input.inputSummary,
@@ -839,7 +840,7 @@ export class UltraplanService {
         actorId: input.actorId,
       });
       const updated = await tx.ultraplan.update({
-        where: { id: ultraplan.id },
+        where: { id: lockedUltraplan.id },
         include: ULTRAPLAN_INCLUDE,
         data: { status: "planning", lastControllerRunId: run.id },
       });
@@ -855,19 +856,23 @@ export class UltraplanService {
         },
         tx,
       );
-      return { run, ultraplan: updated };
+      return { run, ultraplan: updated, shouldLaunch: true };
     });
 
-    if (result.run.sessionId) {
+    if (result.shouldLaunch && result.run.sessionId) {
       await this.launchControllerRun({
         runId: result.run.id,
         sessionId: result.run.sessionId,
-        goal: input.inputSummary,
+        goal: result.run.inputSummary ?? input.inputSummary,
         ultraplanId: result.ultraplan.id,
         sessionGroupId: result.ultraplan.sessionGroupId,
         actorType: input.actorType,
         actorId: input.actorId,
         organizationId: result.ultraplan.organizationId,
+      });
+      return prisma.ultraplanControllerRun.findUniqueOrThrow({
+        where: { id: result.run.id },
+        include: { session: true, generatedTickets: true },
       });
     }
 
@@ -973,6 +978,13 @@ export class UltraplanService {
     organizationId: string;
   }) {
     await sessionService.prepareUltraplanControllerSessionForLaunch(input.sessionId);
+    const runtimeToken = mintUltraplanRuntimeToken({
+      organizationId: input.organizationId,
+      ultraplanId: input.ultraplanId,
+      sessionGroupId: input.sessionGroupId,
+      controllerRunId: input.runId,
+      sessionId: input.sessionId,
+    });
 
     const session = await sessionService.run(
       input.sessionId,
@@ -982,6 +994,12 @@ export class UltraplanService {
         userId: input.actorId,
         organizationId: input.organizationId,
         clientSource: "ultraplan_controller",
+        runtimeEnv: {
+          TRACE_API_URL: defaultTraceApiUrl(),
+          TRACE_RUNTIME_TOKEN: runtimeToken,
+          TRACE_ULTRAPLAN_ID: input.ultraplanId,
+          TRACE_CONTROLLER_RUN_ID: input.runId,
+        },
       },
     );
 

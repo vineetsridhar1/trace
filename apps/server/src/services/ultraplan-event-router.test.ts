@@ -155,6 +155,22 @@ describe("UltraplanEventRouter", () => {
     );
   });
 
+  it("wakes the controller when a worker is stopped with an active ticket execution", async () => {
+    await router.handleEvent(
+      makeEvent({
+        id: "evt-stopped",
+        payload: { sessionId: "worker-session-1", agentStatus: "stopped" },
+      }),
+    );
+
+    expect(ultraplanServiceMock.runControllerForEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        triggerEventId: "evt-stopped",
+        inputSummary: "Worker session stopped: Add event router",
+      }),
+    );
+  });
+
   it("dedupes already-triggered controller runs", async () => {
     prismaMock.ultraplanControllerRun.findFirst.mockResolvedValueOnce({
       id: "run-existing",
@@ -179,6 +195,47 @@ describe("UltraplanEventRouter", () => {
 
     expect(result).toEqual({ handled: false, reason: "no_active_ticket_execution" });
     expect(ultraplanServiceMock.runControllerForEvent).not.toHaveBeenCalled();
+  });
+
+  it("wakes the controller when an Ultraplan gate is resolved", async () => {
+    prismaMock.ultraplan.findFirst.mockResolvedValue({ id: "ultra-1", status: "waiting" });
+
+    const result = await router.handleEvent(
+      makeEvent({
+        id: "evt-gate",
+        eventType: "inbox_item_resolved",
+        scopeType: "system",
+        scopeId: "org-1",
+        payload: {
+          resolution: "approved",
+          inboxItem: {
+            id: "inbox-1",
+            sourceType: "ticket_execution",
+            sourceId: "execution-1",
+            title: "Validate ticket",
+            payload: {
+              ultraplanId: "ultra-1",
+              sessionGroupId: "group-1",
+            },
+          },
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      handled: true,
+      reason: "gate_resolution_woke_controller",
+      ultraplanId: "ultra-1",
+      controllerRunId: "run-new",
+    });
+    expect(ultraplanServiceMock.runControllerForEvent).toHaveBeenCalledWith({
+      id: "ultra-1",
+      actorType: "system",
+      actorId: "system",
+      triggerEventId: "evt-gate",
+      triggerType: "ultraplan_gate_resolved",
+      inputSummary: "Human gate approved: Validate ticket",
+    });
   });
 
   it("fails a non-terminal controller run when its session terminates without a summary", async () => {

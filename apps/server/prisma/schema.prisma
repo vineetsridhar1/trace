@@ -337,38 +337,38 @@ enum EventType {
 }
 
 model Organization {
-  id       String   @id @default(uuid())
+  id       String @id @default(uuid())
   name     String
-  settings Json     @default("{}")
+  settings Json   @default("{}")
 
-  orgMembers OrgMember[]
-  pushTokens PushToken[]
+  orgMembers               OrgMember[]
+  pushTokens               PushToken[]
   localMobilePairingTokens LocalMobilePairingToken[]
-  localMobileDevices LocalMobileDevice[]
-  repos    Repo[]
-  projects Project[]
-  bridgeRuntimes BridgeRuntime[]
-  channelGroups ChannelGroup[]
-  channels Channel[]
-  sessionGroups SessionGroup[]
-  sessions Session[]
-  tickets  Ticket[]
-  ultraplans Ultraplan[]
-  ultraplanTickets UltraplanTicket[]
-  ultraplanControllerRuns UltraplanControllerRun[]
-  ticketExecutions TicketExecution[]
-  ticketDependencies TicketDependency[] @relation("TicketDependencyOrganization")
-  events        Event[]
-  inboxItems    InboxItem[]
-  cloudMachines CloudMachine[]
-  agentIdentity    AgentIdentity?
-  executionLogs    AgentExecutionLog[]
-  processedEvents  ProcessedAgentEvent[]
-  costTrackers     AgentCostTracker[]
-  entitySummaries  EntitySummary[]
-  derivedMemories  DerivedMemory[]
-  memoryExtractionCursors MemoryExtractionCursor[]
-  aiConversations  AiConversation[]
+  localMobileDevices       LocalMobileDevice[]
+  repos                    Repo[]
+  projects                 Project[]
+  bridgeRuntimes           BridgeRuntime[]
+  channelGroups            ChannelGroup[]
+  channels                 Channel[]
+  sessionGroups            SessionGroup[]
+  sessions                 Session[]
+  tickets                  Ticket[]
+  ultraplans               Ultraplan[]
+  ultraplanTickets         UltraplanTicket[]
+  ultraplanControllerRuns  UltraplanControllerRun[]
+  ticketExecutions         TicketExecution[]
+  ticketDependencies       TicketDependency[]        @relation("TicketDependencyOrganization")
+  events                   Event[]
+  inboxItems               InboxItem[]
+  cloudMachines            CloudMachine[]
+  agentIdentity            AgentIdentity?
+  executionLogs            AgentExecutionLog[]
+  processedEvents          ProcessedAgentEvent[]
+  costTrackers             AgentCostTracker[]
+  entitySummaries          EntitySummary[]
+  derivedMemories          DerivedMemory[]
+  memoryExtractionCursors  MemoryExtractionCursor[]
+  aiConversations          AiConversation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -387,46 +387,46 @@ model OrgMember {
 }
 
 model AgentIdentity {
-  id             String       @id @default(uuid())
-  organizationId String       @unique
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  name           String       @default("Trace AI")
-  status         OrgAgentStatus  @default(disabled)
-  autonomyMode   AutonomyMode @default(observe)
-  soulFile       String       @default("")
-  dailyLimitCents Int         @default(1000)
+  id              String         @id @default(uuid())
+  organizationId  String         @unique
+  organization    Organization   @relation(fields: [organizationId], references: [id])
+  name            String         @default("Trace AI")
+  status          OrgAgentStatus @default(disabled)
+  autonomyMode    AutonomyMode   @default(observe)
+  soulFile        String         @default("")
+  dailyLimitCents Int            @default(1000)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model AgentExecutionLog {
-  id                    String               @id @default(uuid())
-  organizationId        String
-  organization          Organization         @relation(fields: [organizationId], references: [id])
-  triggerEventId        String
-  batchSize             Int                  @default(1)
-  agentId               String
-  modelTier             ModelTier
-  model                 String
-  promoted              Boolean              @default(false)
-  promotionReason       String?
-  inputTokens           Int
-  outputTokens          Int
-  estimatedCostCents    Float
-  contextTokenAllocation Json                @default("{}")
-  disposition           ExecutionDisposition
-  confidence            Float
-  plannedActions        Json                 @default("[]")
-  policyDecision        Json                 @default("{}")
-  finalActions          Json                 @default("[]")
-  status                ExecutionStatus
-  inboxItemId           String?
-  latencyMs             Int
-  replayPacket          Json?
-  promptVersions        Json?
+  id                     String               @id @default(uuid())
+  organizationId         String
+  organization           Organization         @relation(fields: [organizationId], references: [id])
+  triggerEventId         String
+  batchSize              Int                  @default(1)
+  agentId                String
+  modelTier              ModelTier
+  model                  String
+  promoted               Boolean              @default(false)
+  promotionReason        String?
+  inputTokens            Int
+  outputTokens           Int
+  estimatedCostCents     Float
+  contextTokenAllocation Json                 @default("{}")
+  disposition            ExecutionDisposition
+  confidence             Float
+  plannedActions         Json                 @default("[]")
+  policyDecision         Json                 @default("{}")
+  finalActions           Json                 @default("[]")
+  status                 ExecutionStatus
+  inboxItemId            String?
+  latencyMs              Int
+  replayPacket           Json?
+  promptVersions         Json?
 
-  llmCalls  AgentLlmCall[]
+  llmCalls AgentLlmCall[]
 
   createdAt DateTime @default(now())
 
@@ -436,15 +436,15 @@ model AgentExecutionLog {
 }
 
 model AgentLlmCall {
-  id                 String             @id @default(uuid())
+  id                 String            @id @default(uuid())
   executionLogId     String
-  executionLog       AgentExecutionLog  @relation(fields: [executionLogId], references: [id], onDelete: Cascade)
+  executionLog       AgentExecutionLog @relation(fields: [executionLogId], references: [id], onDelete: Cascade)
   turnNumber         Int
   model              String
   provider           String
-  systemPrompt       String?            @db.Text
+  systemPrompt       String?           @db.Text
   messages           Json
-  tools              Json               @default("[]")
+  tools              Json              @default("[]")
   maxTokens          Int?
   temperature        Float?
   responseContent    Json
@@ -453,7 +453,7 @@ model AgentLlmCall {
   outputTokens       Int
   estimatedCostCents Float
   latencyMs          Int
-  createdAt          DateTime           @default(now())
+  createdAt          DateTime          @default(now())
 
   @@index([executionLogId, turnNumber])
   @@index([createdAt])
@@ -473,17 +473,17 @@ model ProcessedAgentEvent {
 }
 
 model AgentCostTracker {
-  id             String       @id @default(uuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  date           String       // YYYY-MM-DD
-  totalCostCents Float        @default(0)
-  tier2Calls     Int          @default(0)
-  tier2CostCents Float        @default(0)
-  tier3Calls     Int          @default(0)
-  tier3CostCents Float        @default(0)
-  summaryCalls     Int        @default(0)
-  summaryCostCents Float      @default(0)
+  id               String       @id @default(uuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  date             String // YYYY-MM-DD
+  totalCostCents   Float        @default(0)
+  tier2Calls       Int          @default(0)
+  tier2CostCents   Float        @default(0)
+  tier3Calls       Int          @default(0)
+  tier3CostCents   Float        @default(0)
+  summaryCalls     Int          @default(0)
+  summaryCostCents Float        @default(0)
 
   updatedAt DateTime @updatedAt
 
@@ -494,7 +494,7 @@ model EntitySummary {
   id             String       @id @default(uuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
-  entityType     String       // channel, chat, ticket, session, project, repo
+  entityType     String // channel, chat, ticket, session, project, repo
   entityId       String
   summaryType    SummaryType  @default(rolling)
   content        String       @default("")
@@ -504,7 +504,7 @@ model EntitySummary {
   eventCount     Int          @default(0)
 
   /// pgvector embedding for semantic search (Phase 4). Nullable — populated by embedding worker.
-  embedding      Unsupported("vector(1536)")?
+  embedding Unsupported("vector(1536)")?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -514,35 +514,35 @@ model EntitySummary {
 }
 
 model User {
-  id             String       @id @default(uuid())
-  email          String       @unique
-  name           String
-  avatarUrl      String?
-  githubId       Int?         @unique
+  id        String  @id @default(uuid())
+  email     String  @unique
+  name      String
+  avatarUrl String?
+  githubId  Int?    @unique
 
-  orgMemberships    OrgMember[]
-  localMobilePairingTokens LocalMobilePairingToken[] @relation("LocalMobilePairingTokenOwner")
-  localMobileDevices LocalMobileDevice[] @relation("LocalMobileDeviceOwner")
-  ownedBridgeRuntimes BridgeRuntime[] @relation("BridgeRuntimeOwner")
-  bridgeAccessGrants BridgeAccessGrant[] @relation("BridgeAccessGrantGrantee")
-  grantedBridgeAccessGrants BridgeAccessGrant[] @relation("BridgeAccessGrantGrantedBy")
-  requestedBridgeAccess BridgeAccessRequest[] @relation("BridgeAccessRequestRequester")
-  ownedBridgeAccessRequests BridgeAccessRequest[] @relation("BridgeAccessRequestOwner")
-  resolvedBridgeAccessRequests BridgeAccessRequest[] @relation("BridgeAccessRequestResolver")
-  createdSessions   Session[]        @relation("SessionCreator")
-  createdTickets    Ticket[]         @relation("TicketCreator")
-  ticketAssignments TicketAssignee[] @relation("TicketAssignees")
-  createdChats      Chat[]           @relation("ChatCreator")
-  chatMemberships      ChatMember[]
-  channelMemberships   ChannelMember[]
-  participants         Participant[]
-  apiTokens         ApiToken[]
-  pushTokens        PushToken[]
-  cloudMachines     CloudMachine[]
-  aiConversations   AiConversation[] @relation("AiConversationCreator")
-  aiBranches        AiBranch[]       @relation("AiBranchCreator")
-  queuedMessages    QueuedMessage[]  @relation("QueuedMessageCreator")
-  ownedUltraplans   Ultraplan[]      @relation("UltraplanOwner")
+  orgMemberships               OrgMember[]
+  localMobilePairingTokens     LocalMobilePairingToken[] @relation("LocalMobilePairingTokenOwner")
+  localMobileDevices           LocalMobileDevice[]       @relation("LocalMobileDeviceOwner")
+  ownedBridgeRuntimes          BridgeRuntime[]           @relation("BridgeRuntimeOwner")
+  bridgeAccessGrants           BridgeAccessGrant[]       @relation("BridgeAccessGrantGrantee")
+  grantedBridgeAccessGrants    BridgeAccessGrant[]       @relation("BridgeAccessGrantGrantedBy")
+  requestedBridgeAccess        BridgeAccessRequest[]     @relation("BridgeAccessRequestRequester")
+  ownedBridgeAccessRequests    BridgeAccessRequest[]     @relation("BridgeAccessRequestOwner")
+  resolvedBridgeAccessRequests BridgeAccessRequest[]     @relation("BridgeAccessRequestResolver")
+  createdSessions              Session[]                 @relation("SessionCreator")
+  createdTickets               Ticket[]                  @relation("TicketCreator")
+  ticketAssignments            TicketAssignee[]          @relation("TicketAssignees")
+  createdChats                 Chat[]                    @relation("ChatCreator")
+  chatMemberships              ChatMember[]
+  channelMemberships           ChannelMember[]
+  participants                 Participant[]
+  apiTokens                    ApiToken[]
+  pushTokens                   PushToken[]
+  cloudMachines                CloudMachine[]
+  aiConversations              AiConversation[]          @relation("AiConversationCreator")
+  aiBranches                   AiBranch[]                @relation("AiBranchCreator")
+  queuedMessages               QueuedMessage[]           @relation("QueuedMessageCreator")
+  ownedUltraplans              Ultraplan[]               @relation("UltraplanOwner")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -557,10 +557,10 @@ model Repo {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  projects Project[]
-  sessions Session[]
-  sessionGroups SessionGroup[]
-  channels Channel[]
+  projects       Project[]
+  sessions       Session[]
+  sessionGroups  SessionGroup[]
+  channels       Channel[]
   gitCheckpoints GitCheckpoint[]
 
   webhookId     String?
@@ -573,18 +573,18 @@ model Repo {
 }
 
 model Project {
-  id             String       @id @default(uuid())
+  id             String        @id @default(uuid())
   name           String
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization  @relation(fields: [organizationId], references: [id])
   repoId         String?
-  repo           Repo?        @relation(fields: [repoId], references: [id])
+  repo           Repo?         @relation(fields: [repoId], references: [id])
   aiMode         AutonomyMode?
-  soulFile       String       @default("")
+  soulFile       String        @default("")
 
-  channels       ChannelProject[]
-  sessions       SessionProject[]
-  tickets        TicketProject[]
+  channels ChannelProject[]
+  sessions SessionProject[]
+  tickets  TicketProject[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -607,12 +607,12 @@ model ChannelGroup {
 }
 
 model Channel {
-  id             String       @id @default(uuid())
+  id             String        @id @default(uuid())
   name           String
-  type           ChannelType  @default(coding)
-  position       Int          @default(0)
+  type           ChannelType   @default(coding)
+  position       Int           @default(0)
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization  @relation(fields: [organizationId], references: [id])
   groupId        String?
   group          ChannelGroup? @relation(fields: [groupId], references: [id])
   repoId         String?
@@ -620,14 +620,14 @@ model Channel {
   baseBranch     String?
   aiMode         AutonomyMode?
   setupScript    String?
-  runScripts     Json?          @default("[]")
+  runScripts     Json?         @default("[]")
 
-  projects ChannelProject[]
+  projects      ChannelProject[]
   sessionGroups SessionGroup[]
-  sessions Session[]
-  tickets  Ticket[]
-  members  ChannelMember[]
-  messages Message[]
+  sessions      Session[]
+  tickets       Ticket[]
+  members       ChannelMember[]
+  messages      Message[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -645,12 +645,12 @@ model ChannelProject {
 }
 
 model ChannelMember {
-  channelId       String
-  channel         Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  joinedAt        DateTime @default(now())
-  leftAt          DateTime?
+  channelId String
+  channel   Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime  @default(now())
+  leftAt    DateTime?
 
   @@id([channelId, userId])
   @@index([userId])
@@ -658,31 +658,31 @@ model ChannelMember {
 }
 
 model SessionGroup {
-  id             String       @id @default(uuid())
-  name           String
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  channelId      String?
-  channel        Channel?     @relation(fields: [channelId], references: [id])
-  repoId         String?
-  repo           Repo?        @relation(fields: [repoId], references: [id])
-  slug           String?
-  branch         String?
-  workdir        String?
-  connection     Json?
-  prUrl          String?
-  worktreeDeleted Boolean     @default(false)
+  id              String       @id @default(uuid())
+  name            String
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  channelId       String?
+  channel         Channel?     @relation(fields: [channelId], references: [id])
+  repoId          String?
+  repo            Repo?        @relation(fields: [repoId], references: [id])
+  slug            String?
+  branch          String?
+  workdir         String?
+  connection      Json?
+  prUrl           String?
+  worktreeDeleted Boolean      @default(false)
   archivedAt      DateTime?
-  setupStatus     String      @default("idle")
+  setupStatus     String       @default("idle")
   setupError      String?
 
-  sessions Session[]
-  gitCheckpoints GitCheckpoint[]
-  bridgeAccessGrants BridgeAccessGrant[]
-  bridgeAccessRequests BridgeAccessRequest[]
-  ultraplan Ultraplan?
+  sessions                Session[]
+  gitCheckpoints          GitCheckpoint[]
+  bridgeAccessGrants      BridgeAccessGrant[]
+  bridgeAccessRequests    BridgeAccessRequest[]
+  ultraplan               Ultraplan?
   ultraplanControllerRuns UltraplanControllerRun[]
-  ticketExecutions TicketExecution[]
+  ticketExecutions        TicketExecution[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -693,41 +693,41 @@ model SessionGroup {
 }
 
 model Session {
-  id             String       @id @default(uuid())
-  name           String
-  agentStatus    AgentStatus   @default(not_started)
-  sessionStatus  SessionStatus @default(in_progress)
-  role           SessionRole   @default(primary)
-  tool           CodingTool
-  model          String?
-  toolChangedAt      DateTime?
-  lastUserMessageAt  DateTime?
-  lastMessageAt      DateTime?
-  hosting        HostingMode
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  createdById    String
-  createdBy      User         @relation("SessionCreator", fields: [createdById], references: [id])
-  repoId         String?
-  repo           Repo?        @relation(fields: [repoId], references: [id])
-  branch         String?
-  channelId      String?
-  channel        Channel?     @relation(fields: [channelId], references: [id])
-  sessionGroupId String?
-  sessionGroup   SessionGroup? @relation(fields: [sessionGroupId], references: [id])
-  workdir         String?
-  toolSessionId   String?
-  pendingRun      Json?
-  endpoints       Json?
-  connection      Json?
-  prUrl           String?
-  worktreeDeleted Boolean      @default(false)
-  readOnlyWorkspace Boolean    @default(false)
+  id                String        @id @default(uuid())
+  name              String
+  agentStatus       AgentStatus   @default(not_started)
+  sessionStatus     SessionStatus @default(in_progress)
+  role              SessionRole   @default(primary)
+  tool              CodingTool
+  model             String?
+  toolChangedAt     DateTime?
+  lastUserMessageAt DateTime?
+  lastMessageAt     DateTime?
+  hosting           HostingMode
+  organizationId    String
+  organization      Organization  @relation(fields: [organizationId], references: [id])
+  createdById       String
+  createdBy         User          @relation("SessionCreator", fields: [createdById], references: [id])
+  repoId            String?
+  repo              Repo?         @relation(fields: [repoId], references: [id])
+  branch            String?
+  channelId         String?
+  channel           Channel?      @relation(fields: [channelId], references: [id])
+  sessionGroupId    String?
+  sessionGroup      SessionGroup? @relation(fields: [sessionGroupId], references: [id])
+  workdir           String?
+  toolSessionId     String?
+  pendingRun        Json?
+  endpoints         Json?
+  connection        Json?
+  prUrl             String?
+  worktreeDeleted   Boolean       @default(false)
+  readOnlyWorkspace Boolean       @default(false)
 
-  projects        SessionProject[]
-  queuedMessages  QueuedMessage[]
-  controllerRuns  UltraplanControllerRun[] @relation("ControllerRunSession")
-  ticketExecutions TicketExecution[] @relation("TicketExecutionWorkerSession")
+  projects         SessionProject[]
+  queuedMessages   QueuedMessage[]
+  controllerRuns   UltraplanControllerRun[] @relation("ControllerRunSession")
+  ticketExecutions TicketExecution[]        @relation("TicketExecutionWorkerSession")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -763,30 +763,30 @@ model SessionProject {
 }
 
 model Ticket {
-  id             String       @id @default(uuid())
-  title          String
-  description    String       @default("")
-  status         TicketStatus @default(backlog)
-  priority       Priority     @default(medium)
-  labels         String[]     @default([])
-  acceptanceCriteria String[] @default([])
-  testPlan       String?
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  createdById    String
-  createdBy      User         @relation("TicketCreator", fields: [createdById], references: [id])
-  originEventId  String?
-  channelId      String?
-  channel        Channel?     @relation(fields: [channelId], references: [id])
-  aiMode         AutonomyMode?
+  id                 String        @id @default(uuid())
+  title              String
+  description        String        @default("")
+  status             TicketStatus  @default(backlog)
+  priority           Priority      @default(medium)
+  labels             String[]      @default([])
+  acceptanceCriteria String[]      @default([])
+  testPlan           String?
+  organizationId     String
+  organization       Organization  @relation(fields: [organizationId], references: [id])
+  createdById        String
+  createdBy          User          @relation("TicketCreator", fields: [createdById], references: [id])
+  originEventId      String?
+  channelId          String?
+  channel            Channel?      @relation(fields: [channelId], references: [id])
+  aiMode             AutonomyMode?
 
-  projects  TicketProject[]
-  assignees TicketAssignee[]
-  links     TicketLink[]
+  projects         TicketProject[]
+  assignees        TicketAssignee[]
+  links            TicketLink[]
   ultraplanTickets UltraplanTicket[]
   ticketExecutions TicketExecution[]
-  dependencies TicketDependency[] @relation("TicketDependencyTicket")
-  dependedOnBy TicketDependency[] @relation("TicketDependencyDependsOn")
+  dependencies     TicketDependency[] @relation("TicketDependencyTicket")
+  dependedOnBy     TicketDependency[] @relation("TicketDependencyDependsOn")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -825,7 +825,6 @@ model TicketLink {
   @@index([entityType, entityId])
 }
 
-
 model TicketDependency {
   ticketId          String
   ticket            Ticket       @relation("TicketDependencyTicket", fields: [ticketId], references: [id], onDelete: Cascade)
@@ -842,14 +841,14 @@ model TicketDependency {
 }
 
 model Ultraplan {
-  id                    String           @id @default(uuid())
+  id                    String                  @id @default(uuid())
   organizationId        String
-  organization          Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sessionGroupId        String           @unique
-  sessionGroup          SessionGroup     @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  organization          Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessionGroupId        String                  @unique
+  sessionGroup          SessionGroup            @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
   ownerUserId           String
-  ownerUser             User             @relation("UltraplanOwner", fields: [ownerUserId], references: [id])
-  status                UltraplanStatus  @default(draft)
+  ownerUser             User                    @relation("UltraplanOwner", fields: [ownerUserId], references: [id])
+  status                UltraplanStatus         @default(draft)
   integrationBranch     String
   integrationWorkdir    String?
   playbookId            String?
@@ -857,7 +856,7 @@ model Ultraplan {
   planSummary           String?
   customInstructions    String?
   activeInboxItemId     String?
-  activeInboxItem       InboxItem?       @relation("UltraplanActiveInboxItem", fields: [activeInboxItemId], references: [id], onDelete: SetNull)
+  activeInboxItem       InboxItem?              @relation("UltraplanActiveInboxItem", fields: [activeInboxItemId], references: [id], onDelete: SetNull)
   lastControllerRunId   String?
   lastControllerRun     UltraplanControllerRun? @relation("UltraplanLastControllerRun", fields: [lastControllerRunId], references: [id], onDelete: SetNull)
   lastControllerSummary String?
@@ -873,21 +872,21 @@ model Ultraplan {
 }
 
 model UltraplanTicket {
-  id               String                @id @default(uuid())
+  id               String                  @id @default(uuid())
   organizationId   String
-  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization     Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   ultraplanId      String
-  ultraplan        Ultraplan             @relation(fields: [ultraplanId], references: [id], onDelete: Cascade)
+  ultraplan        Ultraplan               @relation(fields: [ultraplanId], references: [id], onDelete: Cascade)
   ticketId         String
-  ticket           Ticket                @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket           Ticket                  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   position         Int
-  status           UltraplanTicketStatus @default(planned)
+  status           UltraplanTicketStatus   @default(planned)
   generatedByRunId String?
   generatedByRun   UltraplanControllerRun? @relation(fields: [generatedByRunId], references: [id], onDelete: SetNull)
   rationale        String?
   metadata         Json?
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
 
   @@unique([ultraplanId, ticketId])
   @@unique([ultraplanId, position])
@@ -905,7 +904,7 @@ model UltraplanControllerRun {
   sessionGroup   SessionGroup        @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
   sessionId      String?
   session        Session?            @relation("ControllerRunSession", fields: [sessionId], references: [id], onDelete: SetNull)
-  triggerEventId String?
+  triggerEventId String?             @unique
   triggerEvent   Event?              @relation("ControllerRunTriggerEvent", fields: [triggerEventId], references: [id], onDelete: SetNull)
   triggerType    String
   status         ControllerRunStatus @default(queued)
@@ -915,8 +914,8 @@ model UltraplanControllerRun {
   summaryPayload Json?
   error          String?
 
-  generatedTickets UltraplanTicket[]
-  lastForUltraplans Ultraplan[] @relation("UltraplanLastControllerRun")
+  generatedTickets  UltraplanTicket[]
+  lastForUltraplans Ultraplan[]       @relation("UltraplanLastControllerRun")
 
   createdAt   DateTime  @default(now())
   startedAt   DateTime?
@@ -926,7 +925,6 @@ model UltraplanControllerRun {
   @@index([ultraplanId, status])
   @@index([sessionGroupId])
   @@index([sessionId])
-  @@index([triggerEventId])
 }
 
 model TicketExecution {
@@ -1006,8 +1004,8 @@ model Event {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  timestamp DateTime @default(now())
-  gitCheckpoints GitCheckpoint[] @relation("GitCheckpointPromptEvent")
+  timestamp               DateTime                 @default(now())
+  gitCheckpoints          GitCheckpoint[]          @relation("GitCheckpointPromptEvent")
   controllerRunsTriggered UltraplanControllerRun[] @relation("ControllerRunTriggerEvent")
 
   @@index([organizationId, scopeType, scopeId])
@@ -1046,8 +1044,8 @@ model GitCheckpoint {
   createdAt      DateTime @default(now())
 
   sessionGroup SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  repo         Repo @relation(fields: [repoId], references: [id], onDelete: Cascade)
-  promptEvent  Event @relation("GitCheckpointPromptEvent", fields: [promptEventId], references: [id], onDelete: Restrict)
+  repo         Repo         @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  promptEvent  Event        @relation("GitCheckpointPromptEvent", fields: [promptEventId], references: [id], onDelete: Restrict)
 
   @@unique([sessionGroupId, commitSha])
   @@index([sessionId, committedAt])
@@ -1058,7 +1056,7 @@ model GitCheckpoint {
 
 model CloudMachine {
   id                String             @id @default(uuid())
-  provider          String             // "fly", "aws", etc.
+  provider          String // "fly", "aws", etc.
   providerMachineId String
   userId            String
   user              User               @relation(fields: [userId], references: [id])
@@ -1116,16 +1114,16 @@ model LocalMobilePairingToken {
 }
 
 model LocalMobileDevice {
-  id             String       @id @default(uuid())
+  id             String        @id @default(uuid())
   ownerUserId    String
-  ownerUser      User         @relation("LocalMobileDeviceOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  ownerUser      User          @relation("LocalMobileDeviceOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   installId      String
   deviceName     String?
   platform       PushPlatform?
   appVersion     String?
-  tokenHash      String       @unique
+  tokenHash      String        @unique
   lastSeenAt     DateTime?
   revokedAt      DateTime?
 
@@ -1137,19 +1135,19 @@ model LocalMobileDevice {
 }
 
 model BridgeAccessGrant {
-  id               String                @id @default(uuid())
-  bridgeRuntimeId  String
-  bridgeRuntime    BridgeRuntime         @relation(fields: [bridgeRuntimeId], references: [id], onDelete: Cascade)
-  granteeUserId    String
-  granteeUser      User                  @relation("BridgeAccessGrantGrantee", fields: [granteeUserId], references: [id], onDelete: Cascade)
-  grantedByUserId  String
-  grantedByUser    User                  @relation("BridgeAccessGrantGrantedBy", fields: [grantedByUserId], references: [id], onDelete: Cascade)
-  scopeType        BridgeAccessScopeType
-  sessionGroupId   String?
-  sessionGroup     SessionGroup?         @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  capabilities     BridgeAccessCapability[] @default([])
-  expiresAt        DateTime?
-  revokedAt        DateTime?
+  id              String                   @id @default(uuid())
+  bridgeRuntimeId String
+  bridgeRuntime   BridgeRuntime            @relation(fields: [bridgeRuntimeId], references: [id], onDelete: Cascade)
+  granteeUserId   String
+  granteeUser     User                     @relation("BridgeAccessGrantGrantee", fields: [granteeUserId], references: [id], onDelete: Cascade)
+  grantedByUserId String
+  grantedByUser   User                     @relation("BridgeAccessGrantGrantedBy", fields: [grantedByUserId], references: [id], onDelete: Cascade)
+  scopeType       BridgeAccessScopeType
+  sessionGroupId  String?
+  sessionGroup    SessionGroup?            @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  capabilities    BridgeAccessCapability[] @default([])
+  expiresAt       DateTime?
+  revokedAt       DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1160,22 +1158,22 @@ model BridgeAccessGrant {
 }
 
 model BridgeAccessRequest {
-  id                 String                    @id @default(uuid())
-  bridgeRuntimeId    String
-  bridgeRuntime      BridgeRuntime             @relation(fields: [bridgeRuntimeId], references: [id], onDelete: Cascade)
-  requesterUserId    String
-  requesterUser      User                      @relation("BridgeAccessRequestRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
-  ownerUserId        String
-  ownerUser          User                      @relation("BridgeAccessRequestOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
-  scopeType          BridgeAccessScopeType
-  sessionGroupId     String?
-  sessionGroup       SessionGroup?             @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  requestedCapabilities BridgeAccessCapability[] @default([])
-  requestedExpiresAt DateTime?
-  status             BridgeAccessRequestStatus @default(pending)
-  resolvedAt         DateTime?
-  resolvedByUserId   String?
-  resolvedByUser     User?                     @relation("BridgeAccessRequestResolver", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  id                    String                    @id @default(uuid())
+  bridgeRuntimeId       String
+  bridgeRuntime         BridgeRuntime             @relation(fields: [bridgeRuntimeId], references: [id], onDelete: Cascade)
+  requesterUserId       String
+  requesterUser         User                      @relation("BridgeAccessRequestRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  ownerUserId           String
+  ownerUser             User                      @relation("BridgeAccessRequestOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  scopeType             BridgeAccessScopeType
+  sessionGroupId        String?
+  sessionGroup          SessionGroup?             @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  requestedCapabilities BridgeAccessCapability[]  @default([])
+  requestedExpiresAt    DateTime?
+  status                BridgeAccessRequestStatus @default(pending)
+  resolvedAt            DateTime?
+  resolvedByUserId      String?
+  resolvedByUser        User?                     @relation("BridgeAccessRequestResolver", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1186,21 +1184,21 @@ model BridgeAccessRequest {
 }
 
 model InboxItem {
-  id             String          @id @default(uuid())
-  itemType       InboxItemType
-  status         InboxItemStatus @default(active)
-  title          String
-  summary        String?
-  payload        Json            @default("{}")
-  userId         String
-  organizationId String
-  organization   Organization    @relation(fields: [organizationId], references: [id])
-  sourceType     String
-  sourceId       String
-  createdAt      DateTime        @default(now())
-  resolvedAt     DateTime?
-  updatedAt      DateTime        @updatedAt
-  activeUltraplans Ultraplan[] @relation("UltraplanActiveInboxItem")
+  id                     String            @id @default(uuid())
+  itemType               InboxItemType
+  status                 InboxItemStatus   @default(active)
+  title                  String
+  summary                String?
+  payload                Json              @default("{}")
+  userId                 String
+  organizationId         String
+  organization           Organization      @relation(fields: [organizationId], references: [id])
+  sourceType             String
+  sourceId               String
+  createdAt              DateTime          @default(now())
+  resolvedAt             DateTime?
+  updatedAt              DateTime          @updatedAt
+  activeUltraplans       Ultraplan[]       @relation("UltraplanActiveInboxItem")
   activeTicketExecutions TicketExecution[] @relation("TicketExecutionActiveInboxItem")
 
   @@index([userId, status])
@@ -1209,15 +1207,15 @@ model InboxItem {
 }
 
 model Chat {
-  id             String       @id @default(uuid())
-  type           ChatType
-  name           String?
-  dmKey          String?      @unique
-  createdById    String
-  createdBy      User         @relation("ChatCreator", fields: [createdById], references: [id])
-  aiMode         AutonomyMode?
+  id          String        @id @default(uuid())
+  type        ChatType
+  name        String?
+  dmKey       String?       @unique
+  createdById String
+  createdBy   User          @relation("ChatCreator", fields: [createdById], references: [id])
+  aiMode      AutonomyMode?
 
-  members ChatMember[]
+  members  ChatMember[]
   messages Message[]
 
   createdAt DateTime @default(now())
@@ -1225,23 +1223,23 @@ model Chat {
 }
 
 model Message {
-  id              String       @id @default(uuid())
+  id              String    @id @default(uuid())
   chatId          String?
-  chat            Chat?        @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chat            Chat?     @relation(fields: [chatId], references: [id], onDelete: Cascade)
   channelId       String?
-  channel         Channel?     @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channel         Channel?  @relation(fields: [channelId], references: [id], onDelete: Cascade)
   actorType       ActorType
   actorId         String
   text            String
   html            String?
   mentions        Json?
   parentMessageId String?
-  parentMessage   Message?     @relation("MessageThread", fields: [parentMessageId], references: [id], onDelete: SetNull)
-  replies         Message[]    @relation("MessageThread")
+  parentMessage   Message?  @relation("MessageThread", fields: [parentMessageId], references: [id], onDelete: SetNull)
+  replies         Message[] @relation("MessageThread")
   editedAt        DateTime?
   deletedAt       DateTime?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([chatId, createdAt])
   @@index([channelId, createdAt])
@@ -1250,12 +1248,12 @@ model Message {
 }
 
 model ChatMember {
-  chatId          String
-  chat            Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  joinedAt        DateTime @default(now())
-  leftAt          DateTime?
+  chatId   String
+  chat     Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
 
   @@id([chatId, userId])
   @@index([userId])
@@ -1267,7 +1265,7 @@ model Participant {
   scopeType    ParticipantScope
   scopeId      String
   subscribedAt DateTime         @default(now())
-  mutedAt        DateTime?
+  mutedAt      DateTime?
 
   @@id([userId, scopeType, scopeId])
   @@index([scopeType, scopeId])
@@ -1320,9 +1318,9 @@ model AiTurn {
   branch       AiBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
   role         TurnRole
   content      String
-  parentTurnId String?    @unique
-  parentTurn   AiTurn?    @relation("AiTurnChain", fields: [parentTurnId], references: [id])
-  childTurn    AiTurn?    @relation("AiTurnChain")
+  parentTurnId String?  @unique
+  parentTurn   AiTurn?  @relation("AiTurnChain", fields: [parentTurnId], references: [id])
+  childTurn    AiTurn?  @relation("AiTurnChain")
 
   forkedBranches AiBranch[] @relation("ForkTurn")
 
@@ -1333,40 +1331,40 @@ model AiTurn {
 }
 
 model DerivedMemory {
-  id              String       @id @default(uuid())
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id])
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
 
   // What kind of memory
-  kind            MemoryKind
+  kind MemoryKind
 
   // What it's about
-  subjectType     String       // user, project, repo, team, channel
-  subjectId       String
+  subjectType String // user, project, repo, team, channel
+  subjectId   String
 
   // Where it was extracted from (provenance)
   sourceScopeType ScopeType
   sourceScopeId   String
-  sourceIsDm      Boolean      @default(false)
+  sourceIsDm      Boolean   @default(false)
   startEventId    String
   endEventId      String
-  sourceType      String       @default("auto") // "auto" | "summary" | "manual"
+  sourceType      String    @default("auto") // "auto" | "summary" | "manual"
 
   // The actual content
-  content         String
-  structuredData  Json         @default("{}")
+  content        String
+  structuredData Json   @default("{}")
 
   // Confidence and lifecycle
-  confidence      Float        @default(0.7)
-  validFrom       DateTime     @default(now())
-  validTo         DateTime?
-  supersededBy    String?
+  confidence   Float     @default(0.7)
+  validFrom    DateTime  @default(now())
+  validTo      DateTime?
+  supersededBy String?
 
   /// pgvector embedding for semantic search (Phase 4). Nullable — populated by embedding worker.
-  embedding       Unsupported("vector(1536)")?
+  embedding Unsupported("vector(1536)")?
 
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([organizationId, subjectType, subjectId])
   @@index([organizationId, sourceScopeType, sourceScopeId])

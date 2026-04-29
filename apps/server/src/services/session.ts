@@ -126,6 +126,7 @@ type PendingSessionCommand =
       interactionMode?: string | null;
       clientSource?: string | null;
       checkpointContext?: GitCheckpointContext | null;
+      runtimeEnv?: Record<string, string> | null;
       workspaceUpgrade?: boolean;
     }
   | {
@@ -135,6 +136,7 @@ type PendingSessionCommand =
       clientSource?: string | null;
       checkpointContext?: GitCheckpointContext | null;
       imageKeys?: string[] | null;
+      runtimeEnv?: Record<string, string> | null;
       workspaceUpgrade?: boolean;
     };
 
@@ -199,6 +201,17 @@ function parseCheckpointContext(raw: unknown): GitCheckpointContext | null {
     repoId: context.repoId,
     updatedAt: context.updatedAt,
   };
+}
+
+function parseRuntimeEnv(raw: unknown): Record<string, string> | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === "string") {
+      env[key] = value;
+    }
+  }
+  return Object.keys(env).length > 0 ? env : null;
 }
 
 function createCheckpointContext({
@@ -1575,7 +1588,12 @@ export class SessionService {
     id: string,
     prompt?: string | null,
     interactionMode?: string,
-    access?: { userId: string; organizationId: string; clientSource?: string | null },
+    access?: {
+      userId: string;
+      organizationId: string;
+      clientSource?: string | null;
+      runtimeEnv?: Record<string, string> | null;
+    },
   ) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id },
@@ -1623,6 +1641,7 @@ export class SessionService {
         prompt: prompt ?? null,
         interactionMode: interactionMode ?? null,
         clientSource: normalizeClientSource(access?.clientSource),
+        runtimeEnv: access?.runtimeEnv ?? null,
         checkpointContext: buildCheckpointContextFromStartMeta({
           sessionId: id,
           sessionGroupId: session.sessionGroupId,
@@ -1644,6 +1663,7 @@ export class SessionService {
             prompt: prompt ?? null,
             interactionMode: interactionMode ?? null,
             clientSource: normalizeClientSource(access?.clientSource),
+            runtimeEnv: access?.runtimeEnv ?? null,
             checkpointContext: buildCheckpointContextFromStartMeta({
               sessionId: id,
               sessionGroupId: session.sessionGroupId,
@@ -1749,6 +1769,7 @@ export class SessionService {
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
       checkpointContext,
+      env: access?.runtimeEnv ?? undefined,
     };
 
     const deliveryResult = sessionRouter.send(id, command, {
@@ -1761,6 +1782,7 @@ export class SessionService {
         prompt: resolvedPrompt ?? null,
         interactionMode: interactionMode ?? null,
         clientSource: normalizeClientSource(access?.clientSource),
+        runtimeEnv: access?.runtimeEnv ?? null,
         checkpointContext,
       });
       await this.persistConnectionFailure(id, session.organizationId, deliveryResult, "run");
@@ -2353,7 +2375,6 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
-
   }
 
   /**
@@ -2433,7 +2454,6 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
-
   }
 
   async complete(id: string) {
@@ -5169,6 +5189,7 @@ export class SessionService {
         clientSource: typeof pending.clientSource === "string" ? pending.clientSource : null,
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
         imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
+        runtimeEnv: parseRuntimeEnv(pending.runtimeEnv),
         workspaceUpgrade: pending.workspaceUpgrade === true,
       };
     }
@@ -5180,6 +5201,7 @@ export class SessionService {
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
         clientSource: typeof pending.clientSource === "string" ? pending.clientSource : null,
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
+        runtimeEnv: parseRuntimeEnv(pending.runtimeEnv),
         workspaceUpgrade: pending.workspaceUpgrade === true,
       };
     }
@@ -5316,6 +5338,7 @@ export class SessionService {
       toolSessionId: session.toolSessionId ?? undefined,
       checkpointContext: checkpointContext ?? undefined,
       imageUrls,
+      env: pending.runtimeEnv ?? undefined,
     } satisfies {
       type: "run" | "send";
       sessionId: string;
@@ -5327,6 +5350,7 @@ export class SessionService {
       toolSessionId?: string;
       checkpointContext?: GitCheckpointContext;
       imageUrls?: string[];
+      env?: Record<string, string>;
     };
 
     const conn = this.parseConnection(session.connection);

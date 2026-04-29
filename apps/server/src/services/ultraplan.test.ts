@@ -450,6 +450,9 @@ describe("UltraplanService", () => {
     prismaMock.ultraplan.update.mockResolvedValue(
       makeUltraplan({ status: "planning", lastControllerRunId: "run-1" }),
     );
+    prismaMock.ultraplanControllerRun.findUniqueOrThrow.mockResolvedValue(
+      makeControllerRun({ inputSummary: "Worker session done: Add event router" }),
+    );
 
     await service.runControllerForEvent({
       id: "ultra-1",
@@ -460,6 +463,7 @@ describe("UltraplanService", () => {
       inputSummary: "Worker session done: Add event router",
     });
 
+    expect(prismaMock.$queryRaw).toHaveBeenCalled();
     expect(prismaMock.ultraplanControllerRun.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -473,7 +477,14 @@ describe("UltraplanService", () => {
       "session-1",
       expect.stringContaining("Worker session done: Add event router"),
       "plan",
-      expect.objectContaining({ clientSource: "ultraplan_controller" }),
+      expect.objectContaining({
+        clientSource: "ultraplan_controller",
+        runtimeEnv: expect.objectContaining({
+          TRACE_RUNTIME_TOKEN: expect.any(String),
+          TRACE_ULTRAPLAN_ID: "ultra-1",
+          TRACE_CONTROLLER_RUN_ID: "run-1",
+        }),
+      }),
     );
   });
 
@@ -514,7 +525,9 @@ describe("UltraplanService", () => {
       }),
     };
     prismaMock.ultraplan.findUniqueOrThrow.mockResolvedValue(makeUltraplan());
-    prismaMock.ultraplanControllerRun.findFirst.mockResolvedValue(activeRun);
+    prismaMock.ultraplanControllerRun.findFirst
+      .mockResolvedValueOnce(activeRun)
+      .mockResolvedValue(null);
     prismaMock.ultraplan.update.mockResolvedValue(
       makeUltraplan({ status: "planning", lastControllerRunId: "run-1" }),
     );
@@ -748,12 +761,7 @@ describe("UltraplanService", () => {
       }),
       prismaMock,
     );
-    expect(prismaMock.ultraplanControllerRun.create).toHaveBeenCalledWith(expect.any(Object));
-    expect(sessionServiceMock.run).toHaveBeenCalledWith(
-      "session-1",
-      expect.stringContaining("Manual controller run"),
-      "plan",
-      expect.objectContaining({ clientSource: "ultraplan_controller" }),
-    );
+    expect(prismaMock.ultraplanControllerRun.create).not.toHaveBeenCalled();
+    expect(sessionServiceMock.run).not.toHaveBeenCalled();
   });
 });
