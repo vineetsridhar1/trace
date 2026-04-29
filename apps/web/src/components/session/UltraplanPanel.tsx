@@ -154,14 +154,19 @@ export function UltraplanPanel({
   const [goal, setGoal] = useState(groupName ? `Finish ${groupName}` : "");
   const [customInstructions, setCustomInstructions] = useState("");
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const tickets = Array.isArray(ultraplan?.tickets) ? ultraplan.tickets : [];
+  const ticketExecutions = Array.isArray(ultraplan?.ticketExecutions)
+    ? ultraplan.ticketExecutions
+    : [];
+  const controllerRuns = Array.isArray(ultraplan?.controllerRuns) ? ultraplan.controllerRuns : [];
 
   const executionsByTicketId = useMemo(() => {
     const map = new Map<string, TicketExecution[]>();
-    for (const execution of ultraplan?.ticketExecutions ?? []) {
+    for (const execution of ticketExecutions) {
       map.set(execution.ticketId, [...(map.get(execution.ticketId) ?? []), execution]);
     }
     return map;
-  }, [ultraplan?.ticketExecutions]);
+  }, [ticketExecutions]);
 
   const runMutation = async (name: string, mutation: ReturnType<typeof gql>) => {
     if (!ultraplan) return;
@@ -332,13 +337,13 @@ export function UltraplanPanel({
 
         <section className="space-y-2">
           <div className="text-[11px] font-semibold uppercase text-muted-foreground">Ticket plan</div>
-          {ultraplan.tickets.length === 0 ? (
+          {tickets.length === 0 ? (
             <div className="rounded-md border border-border p-2 text-xs text-muted-foreground">
               No planned tickets yet.
             </div>
           ) : (
             <div className="space-y-1.5">
-              {[...ultraplan.tickets]
+              {[...tickets]
                 .sort((a, b) => a.position - b.position)
                 .map((planned) => {
                   const executions = executionsByTicketId.get(planned.ticketId) ?? [];
@@ -413,13 +418,13 @@ export function UltraplanPanel({
           <div className="text-[11px] font-semibold uppercase text-muted-foreground">
             Controller activity
           </div>
-          {ultraplan.controllerRuns.length === 0 ? (
+          {controllerRuns.length === 0 ? (
             <div className="rounded-md border border-border p-2 text-xs text-muted-foreground">
               No controller runs yet.
             </div>
           ) : (
             <div className="space-y-1.5">
-              {[...ultraplan.controllerRuns]
+              {[...controllerRuns]
                 .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                 .map((run: UltraplanControllerRun) => {
                   const items = summaryItems(run.summaryPayload);
