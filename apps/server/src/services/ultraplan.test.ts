@@ -22,6 +22,12 @@ vi.mock("./runtime-access.js", () => ({
   },
 }));
 
+vi.mock("./session.js", () => ({
+  sessionService: {
+    run: vi.fn().mockResolvedValue({ agentStatus: "active" }),
+  },
+}));
+
 vi.mock("@trace/shared", () => ({
   getDefaultModel: vi.fn().mockReturnValue("claude-sonnet-4-20250514"),
   isSupportedModel: vi.fn().mockReturnValue(true),
@@ -29,6 +35,7 @@ vi.mock("@trace/shared", () => ({
 
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
+import { sessionService } from "./session.js";
 import { UltraplanService } from "./ultraplan.js";
 import { UltraplanControllerRunService } from "./ultraplan-controller-run.js";
 import { isSupportedModel } from "@trace/shared";
@@ -43,6 +50,7 @@ type MockedDeep<T> = {
 
 const prismaMock = prisma as unknown as MockedDeep<typeof prisma>;
 const eventServiceMock = eventService as unknown as MockedDeep<typeof eventService>;
+const sessionServiceMock = sessionService as unknown as MockedDeep<typeof sessionService>;
 const isSupportedModelMock = isSupportedModel as unknown as ReturnType<
   typeof vi.fn<(tool: string, model: string) => boolean>
 >;
@@ -174,6 +182,7 @@ describe("UltraplanService", () => {
     prismaMock.ultraplanControllerRun.create.mockResolvedValue(makeControllerRun());
     prismaMock.ultraplanControllerRun.update.mockResolvedValue(makeControllerRun());
     prismaMock.ultraplanControllerRun.findUniqueOrThrow.mockResolvedValue(makeControllerRun());
+    sessionServiceMock.run.mockResolvedValue(makeSession({ agentStatus: "active" }));
     isSupportedModelMock.mockReturnValue(true);
   });
 
