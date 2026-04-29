@@ -29,6 +29,12 @@ vi.mock("./runtime-access.js", () => ({
   },
 }));
 
+vi.mock("./ultraplan-controller-run.js", () => ({
+  ultraplanControllerRunService: {
+    failRun: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
     send: vi.fn().mockReturnValue("delivered"),
@@ -102,6 +108,7 @@ import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { runtimeAccessService } from "./runtime-access.js";
 import { getDefaultReasoningEffort, isSupportedReasoningEffort } from "@trace/shared";
+import { ultraplanControllerRunService } from "./ultraplan-controller-run.js";
 import { SessionService, isFullyUnloadedSession } from "./session.js";
 import type { StartSessionServiceInput } from "./session.js";
 
@@ -122,6 +129,8 @@ const runtimeAccessServiceMock = runtimeAccessService as unknown as MockedDeep<
 >;
 const getDefaultReasoningEffortMock = vi.mocked(getDefaultReasoningEffort);
 const isSupportedReasoningEffortMock = vi.mocked(isSupportedReasoningEffort);
+const ultraplanControllerRunServiceMock =
+  ultraplanControllerRunService as unknown as MockedDeep<typeof ultraplanControllerRunService>;
 
 function makeSessionGroup(overrides: Record<string, unknown> = {}) {
   return {
@@ -3522,6 +3531,52 @@ describe("SessionService", () => {
             exitCode: 0,
           }),
         }),
+      );
+    });
+  });
+
+  describe("workspaceFailed", () => {
+    it("fails a queued Ultraplan controller run when its workspace fails", async () => {
+      const error = "git worktree add failed";
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          id: "controller-session-1",
+          role: "ultraplan_controller_run",
+          agentStatus: "failed",
+          workdir: null,
+          worktreeDeleted: true,
+          connection: {
+            state: "disconnected",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+            lastError: error,
+          },
+        }),
+      );
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({
+          workdir: null,
+          worktreeDeleted: true,
+          connection: {
+            state: "disconnected",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+            lastError: error,
+          },
+        }),
+      );
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.ultraplanControllerRun.findFirst.mockResolvedValueOnce({ id: "run-1" });
+
+      await service.workspaceFailed("controller-session-1", error);
+
+      expect(ultraplanControllerRunServiceMock.failRun).toHaveBeenCalledWith(
+        "run-1",
+        error,
+        "system",
+        "system",
       );
     });
   });

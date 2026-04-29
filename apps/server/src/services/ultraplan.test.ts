@@ -38,7 +38,10 @@ import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { sessionService } from "./session.js";
 import { UltraplanService } from "./ultraplan.js";
-import { UltraplanControllerRunService } from "./ultraplan-controller-run.js";
+import {
+  UltraplanControllerRunService,
+  ultraplanControllerRunService,
+} from "./ultraplan-controller-run.js";
 import { isSupportedModel } from "@trace/shared";
 
 type MockedDeep<T> = {
@@ -400,6 +403,36 @@ describe("UltraplanService", () => {
     expect(prismaMock.session.create).not.toHaveBeenCalled();
     expect(prismaMock.ultraplanControllerRun.create).not.toHaveBeenCalled();
     expect(prismaMock.ultraplan.update).not.toHaveBeenCalled();
+  });
+
+  it("replaces a queued controller run whose session already failed", async () => {
+    const failRunSpy = vi
+      .spyOn(ultraplanControllerRunService, "failRun")
+      .mockResolvedValueOnce(makeControllerRun({ id: "run-active", status: "failed" }));
+    const activeRun = {
+      ...makeControllerRun({ id: "run-active", status: "queued" }),
+      session: makeSession({
+        agentStatus: "failed",
+        connection: { state: "disconnected", lastError: "git worktree add failed" },
+      }),
+    };
+    prismaMock.ultraplan.findUniqueOrThrow.mockResolvedValue(makeUltraplan());
+    prismaMock.ultraplanControllerRun.findFirst.mockResolvedValue(activeRun);
+    prismaMock.ultraplan.update.mockResolvedValue(
+      makeUltraplan({ status: "planning", lastControllerRunId: "run-1" }),
+    );
+
+    const result = await service.runControllerNow("ultra-1", "user", "user-1");
+
+    expect(failRunSpy).toHaveBeenCalledWith(
+      "run-active",
+      "git worktree add failed",
+      "user",
+      "user-1",
+    );
+    expect(prismaMock.session.create).toHaveBeenCalledWith(expect.any(Object));
+    expect(result).toMatchObject({ id: "run-1" });
+    failRunSpy.mockRestore();
   });
 
   it("returns an already running controller run when run-now is repeated", async () => {

@@ -264,7 +264,7 @@ export class UltraplanService {
       throw new Error("Cannot run controller for an inactive Ultraplan");
     }
 
-    const activeControllerRun = await prisma.ultraplanControllerRun.findFirst({
+    let activeControllerRun = await prisma.ultraplanControllerRun.findFirst({
       where: {
         organizationId: ultraplan.organizationId,
         ultraplanId: ultraplan.id,
@@ -273,6 +273,23 @@ export class UltraplanService {
       orderBy: { createdAt: "desc" },
       include: { session: true, generatedTickets: true },
     });
+    if (
+      activeControllerRun?.status === "queued" &&
+      activeControllerRun.session?.agentStatus === "failed"
+    ) {
+      await ultraplanControllerRunService.failRun(
+        activeControllerRun.id,
+        activeControllerRun.session.connection &&
+          typeof activeControllerRun.session.connection === "object" &&
+          "lastError" in activeControllerRun.session.connection &&
+          typeof activeControllerRun.session.connection.lastError === "string"
+          ? activeControllerRun.session.connection.lastError
+          : "Controller session failed before starting",
+        actorType,
+        actorId,
+      );
+      activeControllerRun = null;
+    }
     if (activeControllerRun) {
       if (activeControllerRun.status === "queued" && activeControllerRun.sessionId) {
         await this.launchControllerRun({
