@@ -212,6 +212,11 @@ function defaultConnection(overrides?: Partial<SessionConnectionData>): SessionC
     retryCount: 0,
     canRetry: true,
     canMove: true,
+    // New sessions start at version 0 so the first conditional write through
+    // updateConnectionConditional has a key to compare against. The
+    // 20260429170000_session_deprovision_index migration backfills the same
+    // baseline on rows that predate this field.
+    version: 0,
     ...overrides,
   };
 }
@@ -237,20 +242,12 @@ const MAX_RECONCILE_ATTEMPTS = 10;
 const MAX_CONNECTION_UPDATE_ATTEMPTS = 5;
 
 /**
- * Build the WHERE clause that matches a session row only if its
- * `connection.version` is the expected value. Treats missing/null version as
- * 0 so the helper bootstraps cleanly on rows that predate the version field.
+ * WHERE clause that matches a session only if its `connection.version` is
+ * the expected value. Migration `20260429170000_session_deprovision_index`
+ * backfills `version: 0` on existing rows, so we don't need to special-case
+ * a missing key here.
  */
 function connectionVersionWhere(sessionId: string, expectedVersion: number): Prisma.SessionWhereInput {
-  if (expectedVersion === 0) {
-    return {
-      id: sessionId,
-      OR: [
-        { connection: { path: ["version"], equals: 0 } },
-        { connection: { path: ["version"], equals: Prisma.AnyNull } },
-      ],
-    };
-  }
   return {
     id: sessionId,
     connection: { path: ["version"], equals: expectedVersion },
@@ -990,11 +987,11 @@ export class SessionService {
         };
       }
     }
-    // Defensive default — every RuntimeLifecycleEventType has a switch case
-    // above. If a new event type is added without updating this method we
-    // return only the runtime metadata patch so the lifecycle still advances
-    // bookkeeping without overwriting state with a stale value.
-    return runtimePatch;
+    // Every RuntimeLifecycleEventType has a switch case above. If we land
+    // here, a new event type was added to the union without updating this
+    // method — fail loudly so the gap is caught in tests rather than
+    // silently corrupting connection state.
+    throw new Error(`Unhandled runtime lifecycle event type: ${eventType}`);
   }
 
   private lifecycleConnectionState(
