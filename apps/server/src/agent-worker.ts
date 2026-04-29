@@ -118,6 +118,9 @@ const STREAM_KEY_PREFIX = "stream:org:";
 const STREAM_KEY_SUFFIX = ":events";
 const BLOCK_MS = 5_000; // block timeout for XREADGROUP
 const ORG_POLL_INTERVAL_MS = 30_000; // poll for new orgs every 30s
+const AGENT_WORKER_ENABLED =
+  process.env.TRACE_AGENT_WORKER_ENABLED === "1" ||
+  process.env.TRACE_AGENT_WORKER_ENABLED === "true";
 const STATUS_HEARTBEAT_ENABLED = process.env.TRACE_AGENT_STATUS_HEARTBEAT_ENABLED === "1";
 const configuredStatusHeartbeatIntervalMs = Number.parseInt(
   process.env.TRACE_AGENT_STATUS_HEARTBEAT_INTERVAL_MS ?? "15000",
@@ -689,6 +692,11 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
+  if (!AGENT_WORKER_ENABLED) {
+    log("TRACE_AGENT_WORKER_ENABLED is not set — ambient agent worker disabled");
+    return;
+  }
+
   if (isLocalMode()) {
     log("TRACE_LOCAL_MODE=1 — ambient agent worker disabled");
     return;
