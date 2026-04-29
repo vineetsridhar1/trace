@@ -848,6 +848,15 @@ Provisioned cleanup:
      `session_runtime_deprovision_failed` event with `abandoned: true`). A
      fresh user-initiated stop clears that bookkeeping. Ticket 13 owns the
      telemetry and operator alert that surface abandoned runtimes. -->
+<!-- Simplified after ticket 09 review: collapsed the original five-state
+     stop machine (`stopping`/`stopped`/`deprovisioning`/`deprovisioned`/
+     `deprovision_failed`) down to four. The `deprovisioning` state had no
+     event boundary — the brief window between bridge `delete` and the
+     launcher confirming stop is now represented by `stopping`. Local
+     terminates as `stopped`; provisioned terminates as `deprovisioned`.
+     Connection writes on the deprovision path use optimistic locking via
+     `connection.version` to keep concurrent reconciler / user / bridge
+     writes from stomping each other. -->
 
 ### Deprovision Policies
 
