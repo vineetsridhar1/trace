@@ -2,7 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
 import { SESSION_TERMINALS_QUERY, START_SESSION_MUTATION } from "@trace/client-core";
-import type { Terminal } from "@trace/gql";
+import type {
+  Terminal,
+  Ticket,
+  TicketExecution,
+  Ultraplan,
+  UltraplanControllerRun,
+  UltraplanTicket,
+} from "@trace/gql";
 import { useDetailPanelStore } from "../../stores/detail-panel";
 import { useEntityField, useEntityStore } from "@trace/client-core";
 import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
@@ -155,6 +162,16 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
   }
 `;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+type IdentifiedRecord = Record<string, unknown> & { id: string };
+
+function isIdentifiedRecord(value: unknown): value is IdentifiedRecord {
+  return isRecord(value) && typeof value.id === "string";
+}
+
 export function SessionGroupDetailView({
   sessionGroupId,
   panelMode,
@@ -293,6 +310,64 @@ export function SessionGroupDetailView({
               ...session,
             })) as Array<SessionEntity & { id: string }>,
           );
+        }
+        if (isRecord(fetchedUltraplan) && typeof fetchedUltraplan.id === "string") {
+          const state = useEntityStore.getState();
+          upsert("ultraplans", fetchedUltraplan.id, {
+            ...(state.ultraplans[fetchedUltraplan.id] ?? {}),
+            ...fetchedUltraplan,
+          } as Ultraplan);
+
+          const fetchedTickets = Array.isArray(fetchedUltraplan.tickets)
+            ? fetchedUltraplan.tickets.filter(isIdentifiedRecord)
+            : [];
+          if (fetchedTickets.length > 0) {
+            upsertMany(
+              "ultraplanTickets",
+              fetchedTickets.map((ticket) => ({
+                ...(state.ultraplanTickets[ticket.id] ?? {}),
+                ...ticket,
+              })) as Array<UltraplanTicket & { id: string }>,
+            );
+            const nestedTickets = fetchedTickets
+              .map((ultraplanTicket) => ultraplanTicket.ticket)
+              .filter(isIdentifiedRecord);
+            if (nestedTickets.length > 0) {
+              upsertMany(
+                "tickets",
+                nestedTickets.map((ticket) => ({
+                  ...(state.tickets[ticket.id] ?? {}),
+                  ...ticket,
+                })) as Array<Ticket & { id: string }>,
+              );
+            }
+          }
+
+          const fetchedExecutions = Array.isArray(fetchedUltraplan.ticketExecutions)
+            ? fetchedUltraplan.ticketExecutions.filter(isIdentifiedRecord)
+            : [];
+          if (fetchedExecutions.length > 0) {
+            upsertMany(
+              "ticketExecutions",
+              fetchedExecutions.map((execution) => ({
+                ...(state.ticketExecutions[execution.id] ?? {}),
+                ...execution,
+              })) as Array<TicketExecution & { id: string }>,
+            );
+          }
+
+          const fetchedControllerRuns = Array.isArray(fetchedUltraplan.controllerRuns)
+            ? fetchedUltraplan.controllerRuns.filter(isIdentifiedRecord)
+            : [];
+          if (fetchedControllerRuns.length > 0) {
+            upsertMany(
+              "ultraplanControllerRuns",
+              fetchedControllerRuns.map((run) => ({
+                ...(state.ultraplanControllerRuns[run.id] ?? {}),
+                ...run,
+              })) as Array<UltraplanControllerRun & { id: string }>,
+            );
+          }
         }
       });
   }, [sessionGroupId, upsert, upsertMany]);

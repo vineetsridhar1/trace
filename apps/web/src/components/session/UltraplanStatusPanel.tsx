@@ -1,19 +1,16 @@
-import { useMemo } from "react";
 import { Workflow } from "lucide-react";
-import { useEntityField } from "@trace/client-core";
+import {
+  useActiveUltraplanBySessionGroupId,
+  useControllerRunsByUltraplanId,
+  useLatestControllerRunSummary,
+  usePlannedTicketsByUltraplanId,
+  useTicketExecutionsByUltraplanId,
+} from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import { UltraplanControllerTimeline } from "./UltraplanControllerTimeline";
 import { UltraplanStatusActions } from "./UltraplanStatusActions";
 import { UltraplanTicketPlan } from "./UltraplanTicketPlan";
-import { formatUltraplanStatus, type UltraplanSummary } from "./ultraplan-panel-types";
-
-function asUltraplanSummary(value: unknown): UltraplanSummary | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
-  return typeof record.id === "string" && typeof record.status === "string"
-    ? (record as unknown as UltraplanSummary)
-    : null;
-}
+import { formatUltraplanStatus } from "./ultraplan-panel-types";
 
 export function UltraplanStatusPanel({
   sessionGroupId,
@@ -22,33 +19,19 @@ export function UltraplanStatusPanel({
   sessionGroupId: string;
   canInteract: boolean;
 }) {
-  const rawUltraplan = useEntityField("sessionGroups", sessionGroupId, "ultraplan");
-  const ultraplan = asUltraplanSummary(rawUltraplan);
-
-  const latestRun = useMemo(() => {
-    const runs = Array.isArray(ultraplan?.controllerRuns) ? ultraplan.controllerRuns : [];
-    return [...runs].sort((a, b) => {
-      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return bTime - aTime;
-    })[0];
-  }, [ultraplan?.controllerRuns]);
+  const ultraplan = useActiveUltraplanBySessionGroupId(sessionGroupId);
+  const ultraplanId = ultraplan?.id;
+  const tickets = usePlannedTicketsByUltraplanId(ultraplanId);
+  const executions = useTicketExecutionsByUltraplanId(ultraplanId);
+  const controllerRuns = useControllerRunsByUltraplanId(ultraplanId);
+  const latestRunSummary = useLatestControllerRunSummary(ultraplanId);
 
   if (!ultraplan) return null;
 
-  const ultraplanId = ultraplan.id;
-  const ticketCount = Array.isArray(ultraplan.tickets) ? ultraplan.tickets.length : 0;
-  const tickets = Array.isArray(ultraplan.tickets) ? ultraplan.tickets : [];
-  const executionCount = Array.isArray(ultraplan.ticketExecutions)
-    ? ultraplan.ticketExecutions.length
-    : 0;
-  const executions = Array.isArray(ultraplan.ticketExecutions) ? ultraplan.ticketExecutions : [];
-  const controllerRuns = Array.isArray(ultraplan.controllerRuns) ? ultraplan.controllerRuns : [];
-  const controllerRunCount = Array.isArray(ultraplan.controllerRuns)
-    ? ultraplan.controllerRuns.length
-    : latestRun
-      ? 1
-      : 0;
+  const activeUltraplanId = ultraplan.id;
+  const ticketCount = tickets.length;
+  const executionCount = executions.length;
+  const controllerRunCount = controllerRuns.length;
 
   return (
     <div className="shrink-0 border-b border-border bg-surface px-4 py-2">
@@ -70,8 +53,7 @@ export function UltraplanStatusPanel({
           </span>
           <span className="min-w-0 truncate text-xs text-muted-foreground">
             {ultraplan.lastControllerSummary ??
-              latestRun?.summary ??
-              latestRun?.summaryTitle ??
+              latestRunSummary ??
               ultraplan.planSummary ??
               "Controller run queued"}
           </span>
@@ -85,7 +67,7 @@ export function UltraplanStatusPanel({
         </div>
 
         <UltraplanStatusActions
-          ultraplanId={ultraplanId}
+          ultraplanId={activeUltraplanId}
           status={ultraplan.status}
           canInteract={canInteract}
         />

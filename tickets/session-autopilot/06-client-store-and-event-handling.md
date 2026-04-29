@@ -31,13 +31,13 @@ Add client-core/Zustand support for Ultraplan, controller runs, and ticket execu
 
 ## Completion requirements
 
-- [ ] Client store can upsert and patch Ultraplan entities.
-- [ ] Client store can upsert and patch UltraplanTicket entities.
-- [ ] Client store can upsert and patch UltraplanControllerRun entities.
-- [ ] Client store can upsert and patch TicketExecution entities.
-- [ ] Event handlers update UI state without refetches.
-- [ ] Session group detail views can read Ultraplan and controller-run state from the store.
-- [ ] Mutation responses are not required to keep the UI in sync.
+- [x] Client store can upsert and patch Ultraplan entities.
+- [x] Client store can upsert and patch UltraplanTicket entities.
+- [x] Client store can upsert and patch UltraplanControllerRun entities.
+- [x] Client store can upsert and patch TicketExecution entities.
+- [x] Event handlers update UI state without refetches.
+- [x] Session group detail views can read Ultraplan and controller-run state from the store.
+- [x] Mutation responses are not required to keep the UI in sync.
 
 ## Implementation notes
 

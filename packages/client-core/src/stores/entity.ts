@@ -15,6 +15,10 @@ import type {
   InboxItem,
   Message,
   QueuedMessage,
+  TicketExecution,
+  Ultraplan,
+  UltraplanControllerRun,
+  UltraplanTicket,
 } from "@trace/gql";
 
 /** Client-side session entity with extra fields not in the GQL schema */
@@ -41,6 +45,10 @@ export type EntityTableMap = {
   chats: Chat;
   sessions: SessionEntity;
   tickets: Ticket;
+  ultraplans: Ultraplan;
+  ultraplanTickets: UltraplanTicket;
+  ultraplanControllerRuns: UltraplanControllerRun;
+  ticketExecutions: TicketExecution;
   inboxItems: InboxItem;
   messages: Message;
   queuedMessages: QueuedMessage;
@@ -105,6 +113,10 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   chats: {},
   sessions: {},
   tickets: {},
+  ultraplans: {},
+  ultraplanTickets: {},
+  ultraplanControllerRuns: {},
+  ticketExecutions: {},
   inboxItems: {},
   messages: {},
   queuedMessages: {},
@@ -341,6 +353,10 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       chats: {},
       sessions: {},
       tickets: {},
+      ultraplans: {},
+      ultraplanTickets: {},
+      ultraplanControllerRuns: {},
+      ticketExecutions: {},
       inboxItems: {},
       messages: {},
       queuedMessages: {},
@@ -671,6 +687,10 @@ const ENTITY_KEYS: EntityType[] = [
   "chats",
   "sessions",
   "tickets",
+  "ultraplans",
+  "ultraplanTickets",
+  "ultraplanControllerRuns",
+  "ticketExecutions",
   "inboxItems",
   "messages",
   "queuedMessages",
@@ -866,6 +886,91 @@ export function useEntitiesByIds<T extends EntityType>(
   );
 }
 
+export function useActiveUltraplanBySessionGroupId(
+  sessionGroupId: string | undefined,
+): Ultraplan | null {
+  return useEntityStore((state: EntityState) => {
+    if (!sessionGroupId) return null;
+    return (
+      Object.values(state.ultraplans).find(
+        (ultraplan) => ultraplan.sessionGroupId === sessionGroupId,
+      ) ?? null
+    );
+  });
+}
+
+export function usePlannedTicketsByUltraplanId(
+  ultraplanId: string | undefined,
+): UltraplanTicket[] {
+  return useEntityStore(
+    useShallow((state: EntityState) => {
+      if (!ultraplanId) return EMPTY_ULTRAPLAN_TICKETS;
+      return Object.values(state.ultraplanTickets)
+        .filter((ticket) => ticket.ultraplanId === ultraplanId)
+        .sort((a, b) => a.position - b.position);
+    }),
+  );
+}
+
+export function useControllerRunsByUltraplanId(
+  ultraplanId: string | undefined,
+): UltraplanControllerRun[] {
+  return useEntityStore(
+    useShallow((state: EntityState) => {
+      if (!ultraplanId) return EMPTY_ULTRAPLAN_CONTROLLER_RUNS;
+      return Object.values(state.ultraplanControllerRuns)
+        .filter((run) => run.ultraplanId === ultraplanId)
+        .sort((a, b) => {
+          const bTime = new Date(b.createdAt).getTime();
+          const aTime = new Date(a.createdAt).getTime();
+          return bTime - aTime;
+        });
+    }),
+  );
+}
+
+export function useLatestControllerRunSummary(
+  ultraplanId: string | undefined,
+): string | null {
+  return useEntityStore((state: EntityState) => {
+    if (!ultraplanId) return null;
+    const latest = Object.values(state.ultraplanControllerRuns)
+      .filter((run) => run.ultraplanId === ultraplanId)
+      .sort((a, b) => {
+        const bTime = new Date(b.createdAt).getTime();
+        const aTime = new Date(a.createdAt).getTime();
+        return bTime - aTime;
+      })[0];
+    return latest?.summary ?? latest?.summaryTitle ?? null;
+  });
+}
+
+export function useTicketExecutionsByUltraplanId(
+  ultraplanId: string | undefined,
+): TicketExecution[] {
+  return useEntityStore(
+    useShallow((state: EntityState) => {
+      if (!ultraplanId) return EMPTY_TICKET_EXECUTIONS;
+      return Object.values(state.ticketExecutions)
+        .filter((execution) => execution.ultraplanId === ultraplanId)
+        .sort((a, b) => {
+          const aTime = new Date(a.updatedAt).getTime();
+          const bTime = new Date(b.updatedAt).getTime();
+          return bTime - aTime;
+        });
+    }),
+  );
+}
+
+export function useTicketExecutionField<F extends keyof TicketExecution>(
+  executionId: string,
+  field: F,
+): TicketExecution[F] | undefined {
+  return useEntityField("ticketExecutions", executionId, field) as
+    | TicketExecution[F]
+    | undefined;
+}
+
 /** Build a scope key for event partitioning */
 export function eventScopeKey(scopeType: string, scopeId: string): string {
   return `${scopeType}:${scopeId}`;
@@ -989,6 +1094,9 @@ export function useQueuedMessageIdsForSession(sessionId: string): string[] {
 }
 
 const EMPTY_IDS: string[] = [];
+const EMPTY_ULTRAPLAN_TICKETS: UltraplanTicket[] = [];
+const EMPTY_ULTRAPLAN_CONTROLLER_RUNS: UltraplanControllerRun[] = [];
+const EMPTY_TICKET_EXECUTIONS: TicketExecution[] = [];
 
 /** Subscribe to session IDs belonging to a specific group via the reverse index.
  *  Uses shallow comparison — only re-renders when the list of IDs changes. */
