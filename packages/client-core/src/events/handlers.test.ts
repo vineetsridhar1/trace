@@ -123,4 +123,42 @@ describe("handleOrgEvent session visibility", () => {
     expect(markSessionDone).not.toHaveBeenCalled();
     expect(markSessionGroupDone).not.toHaveBeenCalled();
   });
+
+  it("hydrates active Ultraplan state onto its session group", () => {
+    useEntityStore.getState().upsert("sessionGroups", "group-1", {
+      id: "group-1",
+      name: "Group",
+      slug: "group",
+      status: "active",
+      createdAt: "2026-04-25T10:00:00.000Z",
+      updatedAt: "2026-04-25T10:00:00.000Z",
+    } as never);
+
+    handleOrgEvent(
+      event({
+        eventType: "ultraplan_created",
+        scopeType: "ultraplan",
+        scopeId: "ultra-1",
+        payload: {
+          sessionGroupId: "group-1",
+          ultraplan: {
+            id: "ultra-1",
+            sessionGroupId: "group-1",
+            status: "planning",
+            planSummary: "Ship the workflow",
+            updatedAt: "2026-04-25T10:02:00.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionGroups["group-1"]).toMatchObject({
+      updatedAt: "2026-04-25T10:02:00.000Z",
+      ultraplan: {
+        id: "ultra-1",
+        status: "planning",
+        planSummary: "Ship the workflow",
+      },
+    });
+  });
 });

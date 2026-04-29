@@ -46,6 +46,15 @@ const SESSION_PR_EVENTS: Set<EventType> = new Set(["session_pr_opened", "session
 
 const SESSION_ACTIVITY_EVENTS: Set<EventType> = new Set(["session_output", "message_sent"]);
 
+const ULTRAPLAN_STATE_EVENTS: Set<EventType> = new Set([
+  "ultraplan_created",
+  "ultraplan_updated",
+  "ultraplan_paused",
+  "ultraplan_resumed",
+  "ultraplan_completed",
+  "ultraplan_failed",
+]);
+
 function agentStatusFromEvent(eventType: EventType, payload: JsonObject): AgentStatus | undefined {
   const explicit = payload.agentStatus as AgentStatus | undefined;
   if (explicit) return explicit;
@@ -275,6 +284,30 @@ export function handleOrgEvent(event: Event): void {
       batch.remove("channels", channelId);
       if (ui.getActiveChannelId() === channelId) {
         ui.setActiveChannelId(null);
+      }
+    }
+  }
+
+  // Ultraplan lifecycle events hydrate the active plan onto its session group
+  // until Ultraplan has first-class client store tables.
+  if (ULTRAPLAN_STATE_EVENTS.has(event.eventType)) {
+    const ultraplan = asJsonObject(payload.ultraplan);
+    const sessionGroupId =
+      typeof payload.sessionGroupId === "string"
+        ? payload.sessionGroupId
+        : typeof ultraplan?.sessionGroupId === "string"
+          ? ultraplan.sessionGroupId
+          : null;
+    if (sessionGroupId && ultraplan && typeof ultraplan.id === "string") {
+      const existing = batch.get("sessionGroups", sessionGroupId);
+      if (existing) {
+        batch.patch("sessionGroups", sessionGroupId, {
+          ultraplan,
+          updatedAt:
+            typeof ultraplan.updatedAt === "string"
+              ? ultraplan.updatedAt
+              : existing.updatedAt ?? event.timestamp,
+        } as unknown as Partial<SessionGroupEntity>);
       }
     }
   }

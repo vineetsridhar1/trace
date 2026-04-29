@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import {
   filterUserVisibleSessions,
+  isUserVisibleSession,
   useEntitiesByIds,
   useSessionIdsByGroup,
 } from "@trace/client-core";
@@ -40,7 +41,7 @@ export function useSessionGroupSessions(
       sessionMap.set(session.id, session);
     }
     for (const session of openSessionEntities) {
-      if (session?.sessionGroupId === sessionGroupId) {
+      if (session?.sessionGroupId === sessionGroupId && isUserVisibleSession(session)) {
         sessionMap.set(session.id, session);
       }
     }

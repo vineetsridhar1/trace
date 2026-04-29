@@ -43,14 +43,14 @@ Move the product start surface into the normal session composer and add the firs
 - [x] Header no longer includes a separate Ultraplan start affordance.
 - [x] There is no separate optional-instructions field in the start flow.
 - [x] Composer submit path wires to `startUltraplan`.
-- [ ] State/readout surface reflects live Ultraplan status after the success toast.
-- [ ] Pause, resume, cancel, and run-now controls are available from the group surface.
+- [x] State/readout surface reflects live Ultraplan status after the success toast.
+- [x] Pause, resume, cancel, and run-now controls are available from the group surface.
 - [ ] Ordered tickets and their dependency/blocking state are visible.
 - [ ] Planned tickets render before any `TicketExecution` exists.
 - [ ] Ticket worker sessions are linked from the Ultraplan surface.
 - [ ] Controller run summaries render in an activity timeline.
 - [ ] User can open the full chat for a controller run from the timeline.
-- [ ] Controller-run sessions remain hidden in normal tabs.
+- [x] Controller-run sessions remain hidden in normal tabs.
 - [x] UI survives missing Ultraplan state cleanly.
 
 ## Implementation notes
