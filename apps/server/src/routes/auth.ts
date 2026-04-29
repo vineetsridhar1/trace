@@ -47,6 +47,7 @@ const OAUTH_STATE_TTL_SECONDS = 5 * 60;
 const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a paired mobile token";
 
 type OAuthStatePayload = { origin: string; tokenType: "oauth_state" };
+type GitHubEmail = { email: string; primary: boolean; verified: boolean };
 
 // Origins permitted on /auth/github and /auth/github/callback. The popup
 // embeds this as the postMessage target — accepting arbitrary values would
@@ -65,6 +66,20 @@ export function getAllowedOAuthOrigins(): Set<string> {
 
 function isAllowedOrigin(origin: string): boolean {
   return getAllowedOAuthOrigins().has(origin);
+}
+
+function isGitHubEmail(value: unknown): value is GitHubEmail {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.email === "string" &&
+    typeof record.primary === "boolean" &&
+    typeof record.verified === "boolean"
+  );
+}
+
+function parseGitHubEmails(value: unknown): GitHubEmail[] {
+  return Array.isArray(value) ? value.filter(isGitHubEmail) : [];
 }
 
 function logoutPushToken(req: Request): string | null {
@@ -428,11 +443,7 @@ router.get("/auth/github/callback", async (req: Request, res: Response) => {
       const emailsRes = await fetch("https://api.github.com/user/emails", {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
       });
-      const emails = (await emailsRes.json()) as Array<{
-        email: string;
-        primary: boolean;
-        verified: boolean;
-      }>;
+      const emails = parseGitHubEmails(await emailsRes.json());
       const primary = emails.find((e) => e.primary && e.verified);
       email = primary?.email ?? emails[0]?.email ?? null;
     }

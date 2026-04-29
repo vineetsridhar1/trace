@@ -13,6 +13,7 @@ import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { GroupHeader } from "./GroupHeader";
 import { GroupTabStrip } from "./GroupTabStrip";
 import { SessionGroupContentArea } from "./SessionGroupContentArea";
+import { UltraplanStatusPanel } from "./UltraplanStatusPanel";
 import { CheckpointOpenContext } from "./CheckpointOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
 import { SidebarPanel } from "./SidebarPanel";
@@ -68,6 +69,49 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       }
       setupStatus
       setupError
+      ultraplan {
+        id
+        status
+        planSummary
+        lastControllerSummary
+        activeInboxItemId
+        integrationBranch
+        updatedAt
+        tickets {
+          id
+          status
+          position
+          ticket {
+            id
+            title
+            status
+            dependencies {
+              dependsOnTicket {
+                id
+                title
+              }
+            }
+          }
+        }
+        ticketExecutions {
+          id
+          ticketId
+          status
+          integrationStatus
+          branch
+          workerSessionId
+        }
+        controllerRuns {
+          id
+          status
+          summaryTitle
+          summary
+          sessionId
+          createdAt
+          startedAt
+          completedAt
+        }
+      }
       createdAt
       updatedAt
       sessions {
@@ -222,10 +266,20 @@ export function SessionGroupDetailView({
           sessions?: unknown[];
         };
         const existingGroup = useEntityStore.getState().sessionGroups[fetchedGroup.id];
+        const fetchedUltraplan = (fetchedGroup as { ultraplan?: unknown }).ultraplan;
+        const existingUltraplan = (existingGroup as { ultraplan?: unknown } | undefined)
+          ?.ultraplan;
+        const mergedGroup = (
+          existingGroup && (fetchedUltraplan == null || fetchedUltraplan === undefined)
+            ? { ...existingGroup, ...fetchedGroup, ultraplan: existingUltraplan }
+            : existingGroup
+              ? { ...existingGroup, ...fetchedGroup }
+              : fetchedGroup
+        ) as SessionGroupEntity;
         upsert(
           "sessionGroups",
           fetchedGroup.id,
-          existingGroup ? { ...existingGroup, ...fetchedGroup } : fetchedGroup,
+          mergedGroup,
         );
         const fetchedSessions = fetchedGroup.sessions as
           | Array<Record<string, unknown> & { id: string }>
@@ -247,14 +301,16 @@ export function SessionGroupDetailView({
   useEffect(() => {
     if (activeSessionGroupId !== sessionGroupId) return;
     if (sessionsByRecency.length === 0) return;
-    if (activeSessionId && sessionsByRecency.some((s: SessionEntity) => s.id === activeSessionId))
+    if (activeSessionId && sessionTabs.some((s: SessionEntity) => s.id === activeSessionId)) {
       return;
+    }
     setActiveSessionId(sessionsByRecency[0].id);
   }, [
     activeSessionGroupId,
     activeSessionId,
     sessionGroupId,
     sessionsByRecency,
+    sessionTabs,
     setActiveSessionId,
   ]);
 
@@ -511,6 +567,11 @@ export function SessionGroupDetailView({
             onClose={() => setActiveSessionId(null)}
             onToggleFullscreen={toggleFullscreen}
             onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
+          />
+
+          <UltraplanStatusPanel
+            sessionGroupId={sessionGroupId}
+            canInteract={bridgeInteractionAllowed}
           />
 
           <GroupTabStrip

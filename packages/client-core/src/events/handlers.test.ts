@@ -123,4 +123,113 @@ describe("handleOrgEvent session visibility", () => {
     expect(markSessionDone).not.toHaveBeenCalled();
     expect(markSessionGroupDone).not.toHaveBeenCalled();
   });
+
+  it("hydrates active Ultraplan state onto its session group", () => {
+    useEntityStore.getState().upsert("sessionGroups", "group-1", {
+      id: "group-1",
+      name: "Group",
+      slug: "group",
+      status: "active",
+      createdAt: "2026-04-25T10:00:00.000Z",
+      updatedAt: "2026-04-25T10:00:00.000Z",
+    } as never);
+
+    handleOrgEvent(
+      event({
+        eventType: "ultraplan_created",
+        scopeType: "ultraplan",
+        scopeId: "ultra-1",
+        payload: {
+          sessionGroupId: "group-1",
+          ultraplan: {
+            id: "ultra-1",
+            sessionGroupId: "group-1",
+            status: "planning",
+            planSummary: "Ship the workflow",
+            updatedAt: "2026-04-25T10:02:00.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionGroups["group-1"]).toMatchObject({
+      updatedAt: "2026-04-25T10:02:00.000Z",
+      ultraplan: {
+        id: "ultra-1",
+        status: "planning",
+        planSummary: "Ship the workflow",
+      },
+    });
+  });
+
+  it("hydrates Ultraplan state when the session group is not in the store yet", () => {
+    handleOrgEvent(
+      event({
+        eventType: "ultraplan_created",
+        scopeType: "ultraplan",
+        scopeId: "ultra-1",
+        payload: {
+          sessionGroupId: "group-1",
+          ultraplan: {
+            id: "ultra-1",
+            sessionGroupId: "group-1",
+            status: "planning",
+            planSummary: "Ship the workflow",
+            updatedAt: "2026-04-25T10:02:00.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionGroups["group-1"]).toMatchObject({
+      id: "group-1",
+      updatedAt: "2026-04-25T10:02:00.000Z",
+      ultraplan: {
+        id: "ultra-1",
+        status: "planning",
+        planSummary: "Ship the workflow",
+      },
+    });
+  });
+
+  it("updates hydrated controller runs on Ultraplan run events", () => {
+    useEntityStore.getState().upsert("sessionGroups", "group-1", {
+      id: "group-1",
+      name: "Group",
+      slug: "group",
+      status: "active",
+      createdAt: "2026-04-25T10:00:00.000Z",
+      updatedAt: "2026-04-25T10:00:00.000Z",
+      ultraplan: {
+        id: "ultra-1",
+        status: "planning",
+        controllerRuns: [{ id: "run-1", status: "queued", sessionGroupId: "group-1" }],
+      },
+    } as never);
+
+    handleOrgEvent(
+      event({
+        eventType: "ultraplan_controller_run_started",
+        scopeType: "ultraplan",
+        scopeId: "ultra-1",
+        payload: {
+          ultraplanId: "ultra-1",
+          controllerRun: {
+            id: "run-1",
+            ultraplanId: "ultra-1",
+            sessionGroupId: "group-1",
+            status: "running",
+            summary: null,
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionGroups["group-1"]).toMatchObject({
+      ultraplan: {
+        lastControllerRunId: "run-1",
+        controllerRuns: [{ id: "run-1", status: "running" }],
+      },
+    });
+  });
 });

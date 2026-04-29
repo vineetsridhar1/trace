@@ -763,16 +763,21 @@ describe("github oauth callback", () => {
   let server: Server;
   let baseUrl: string;
   const realFetch = globalThis.fetch;
+  const githubUser = {
+    id: 42,
+    login: "octocat",
+    email: "octo@example.com" as string | null,
+    avatar_url: "https://example.com/a.png",
+    name: "Octo Cat",
+  };
 
-  beforeEach(async () => {
-    const app = express();
-    app.use(authRouter);
-
-    server = createServer(app);
-    await new Promise<void>((resolve) => server.listen(0, resolve));
-    const { port } = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${port}`;
-
+  function stubGitHubFetch({
+    user = githubUser,
+    emails,
+  }: {
+    user?: typeof githubUser;
+    emails?: unknown;
+  } = {}) {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -786,20 +791,30 @@ describe("github oauth callback", () => {
           });
         }
         if (url.endsWith("/user")) {
-          return new Response(
-            JSON.stringify({
-              id: 42,
-              login: "octocat",
-              email: "octo@example.com",
-              avatar_url: "https://example.com/a.png",
-              name: "Octo Cat",
-            }),
-            { headers: { "Content-Type": "application/json" } },
-          );
+          return new Response(JSON.stringify(user), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (url.endsWith("/user/emails")) {
+          return new Response(JSON.stringify(emails), {
+            headers: { "Content-Type": "application/json" },
+          });
         }
         throw new Error(`unexpected fetch: ${url}`);
       }),
     );
+  }
+
+  beforeEach(async () => {
+    const app = express();
+    app.use(authRouter);
+
+    server = createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const { port } = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${port}`;
+
+    stubGitHubFetch();
 
     prismaMock.user.findFirst.mockResolvedValue({ id: "user-1" });
     prismaMock.user.update.mockResolvedValue({
@@ -831,6 +846,42 @@ describe("github oauth callback", () => {
     const token = new URL(location).searchParams.get("token");
     expect(token).toBeTruthy();
     expect(jwt.verify(token!, JWT_SECRET)).toMatchObject({ userId: "user-1" });
+  });
+
+  it("uses the verified primary GitHub email when the public profile email is hidden", async () => {
+    stubGitHubFetch({
+      user: { ...githubUser, email: null },
+      emails: [
+        { email: "secondary@example.com", primary: false, verified: true },
+        { email: "private@example.com", primary: true, verified: true },
+      ],
+    });
+    const state = createOAuthStateToken("trace-mobile");
+    const res = await fetch(
+      `${baseUrl}/auth/github/callback?code=abc&state=${encodeURIComponent(state)}`,
+      { redirect: "manual" },
+    );
+
+    expect(res.status).toBe(302);
+    expect(prismaMock.user.findFirst).toHaveBeenCalledWith({
+      where: { OR: [{ githubId: 42 }, { email: "private@example.com" }] },
+    });
+  });
+
+  it("returns a bad request instead of throwing when GitHub emails is not an array", async () => {
+    stubGitHubFetch({
+      user: { ...githubUser, email: null },
+      emails: { message: "Requires authentication" },
+    });
+    const state = createOAuthStateToken("trace-mobile");
+    const res = await fetch(
+      `${baseUrl}/auth/github/callback?code=abc&state=${encodeURIComponent(state)}`,
+      { redirect: "manual" },
+    );
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Could not retrieve email from GitHub" });
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
   });
 
   it("falls back to popup HTML for web origins", async () => {

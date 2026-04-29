@@ -2,13 +2,15 @@
 
 ## Summary
 
-Move the product surface to the session-group UI and add the first Ultraplan status/control panel, including the controller run summary timeline.
+Move the product start surface into the normal session composer and add the first session-group Ultraplan status surface. The user selects Ultraplan from the mode pill and submits the goal through the normal input, then the group UI shows enough event-driven Ultraplan state to make the background controller run observable.
 
 ## What needs to happen
 
-- Add an `Ultraplan` button or menu to the session group header.
-- Add a state chip with the supported Ultraplan statuses.
-- Build a compact group-level panel showing:
+- Add `Ultraplan` to the composer mode pill.
+- When the composer is in Ultraplan mode, submit the normal input text as the Ultraplan goal.
+- Remove the separate header start panel and optional-instructions form.
+- Wire the composer submit path to `startUltraplan`.
+- Add group-level Ultraplan status/readout surface showing:
   - plan summary
   - current status
   - ordered ticket plan
@@ -25,45 +27,46 @@ Move the product surface to the session-group UI and add the first Ultraplan sta
   - actions/decisions when available
   - timestamp/status
   - link to full controller run chat
-- Add controls for:
-  - start
-  - pause
-  - resume
-  - run controller now
-  - cancel
-- Wire controls to GraphQL operations.
+- Add controls for pause, resume, run controller now, and cancel once Ultraplan exists.
 - Use events as the source of truth for final UI state.
 
 ## Dependencies
 
 - [02 — GraphQL Schema and Client Types](02-graphql-schema-and-client-types.md)
 - [04 — Ultraplan Service CRUD and Controller Runs](04-autopilot-service-crud-and-state.md)
+- [06 — Client Store and Event Handling](06-client-store-and-event-handling.md) for event-driven status, timeline, and planned-ticket hydration
 
 ## Completion requirements
 
-- [ ] Session group header shows an Ultraplan affordance.
-- [ ] State chip reflects live Ultraplan status.
-- [ ] User can start, pause, resume, cancel, and run-now from the group surface.
-- [ ] Ordered tickets and their dependency/blocking state are visible.
-- [ ] Planned tickets render before any `TicketExecution` exists.
-- [ ] Ticket worker sessions are linked from the panel.
-- [ ] Controller run summaries render in an activity timeline.
-- [ ] User can open the full chat for a controller run from the timeline.
-- [ ] Controller-run sessions are not shown in normal tabs.
-- [ ] UI survives missing Ultraplan state cleanly.
+- [x] Composer mode pill includes Ultraplan.
+- [x] Ultraplan mode starts Ultraplan with the normal composer text as the goal.
+- [x] Header no longer includes a separate Ultraplan start affordance.
+- [x] There is no separate optional-instructions field in the start flow.
+- [x] Composer submit path wires to `startUltraplan`.
+- [x] State/readout surface reflects live Ultraplan status after the success toast.
+- [x] Pause, resume, cancel, and run-now controls are available from the group surface.
+- [x] Ordered tickets and their dependency/blocking state are visible.
+- [x] Planned tickets render before any `TicketExecution` exists.
+- [x] Ticket worker sessions are linked from the Ultraplan surface.
+- [x] Controller run summaries render in an activity timeline.
+- [x] User can open the full chat for a controller run from the timeline.
+- [x] Controller-run sessions remain hidden in normal tabs.
+- [x] UI survives missing Ultraplan state cleanly.
 
 ## Implementation notes
 
-- Keep the initial panel practical and dense. Do not build a large management console in v1.
+- Keep the initial start flow practical and dense. Do not build a large management console in v1.
 - Use shadcn/ui components and existing session UI patterns.
 - Product copy should describe the workflow, not implementation details.
 
 ## How to test
 
-1. Open a session group with no Ultraplan and verify the empty/start state.
-2. Start Ultraplan and verify event-driven status updates.
-3. Pause/resume/run-now/cancel and verify the chip and panel update.
-4. Verify the ordered plan shows the active ticket and blocked future tickets.
-5. Verify planned tickets without executions still appear in the plan.
-6. Verify controller run summaries appear and link to full chats.
-7. Verify the UI does not expose controller-run sessions in normal navigation.
+1. Open a not-started session and verify the mode pill cycles to Ultraplan.
+2. Enter a goal in the normal composer while in Ultraplan mode.
+3. Submit and verify `startUltraplan` is called with that goal.
+4. Verify the composer restores the draft if `startUltraplan` fails.
+5. Verify the session group header does not show a separate Ultraplan start control.
+6. After `startUltraplan` succeeds, verify visible group-level Ultraplan state changes without manually opening an internal controller-run session.
+7. Verify pause/resume/run-now/cancel update the visible state through events.
+8. Verify planned tickets, ticket executions, worker links, and controller run summaries render from store/event state.
+9. Verify controller-run sessions do not appear in normal session tab strips, but are reachable from controller activity/debug links.

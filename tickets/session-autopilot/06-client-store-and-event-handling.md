@@ -42,6 +42,10 @@ Add client-core/Zustand support for Ultraplan, controller runs, and ticket execu
 ## Implementation notes
 
 - Follow existing entity-store patterns.
+- Ticket 05 only starts Ultraplan from the composer. The status, plan, execution,
+  and controller-run UI should be built on normalized `ultraplans`,
+  `ultraplanTickets`, `ultraplanControllerRuns`, and `ticketExecutions` tables,
+  not a nested session-group panel snapshot.
 - Every Ultraplan event handler should rely on event snapshots, not mutation responses or refetches.
 - Do not store events in generic entity tables; keep event storage scoped as already defined by client-core.
 - Avoid React context for shared Ultraplan state.

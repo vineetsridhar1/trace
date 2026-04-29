@@ -15,7 +15,6 @@ import type {
 } from "@trace/gql";
 import {
   StoreBatchWriter,
-  useEntityStore,
   type SessionEntity,
   type SessionGroupEntity,
 } from "../stores/entity.js";
@@ -46,6 +45,22 @@ const SESSION_STATUS_EVENTS: Set<EventType> = new Set([
 const SESSION_PR_EVENTS: Set<EventType> = new Set(["session_pr_opened", "session_pr_closed"]);
 
 const SESSION_ACTIVITY_EVENTS: Set<EventType> = new Set(["session_output", "message_sent"]);
+
+const ULTRAPLAN_STATE_EVENTS: Set<EventType> = new Set([
+  "ultraplan_created",
+  "ultraplan_updated",
+  "ultraplan_paused",
+  "ultraplan_resumed",
+  "ultraplan_completed",
+  "ultraplan_failed",
+]);
+
+const ULTRAPLAN_CONTROLLER_RUN_EVENTS: Set<EventType> = new Set([
+  "ultraplan_controller_run_created",
+  "ultraplan_controller_run_started",
+  "ultraplan_controller_run_completed",
+  "ultraplan_controller_run_failed",
+]);
 
 function agentStatusFromEvent(eventType: EventType, payload: JsonObject): AgentStatus | undefined {
   const explicit = payload.agentStatus as AgentStatus | undefined;
@@ -276,6 +291,69 @@ export function handleOrgEvent(event: Event): void {
       batch.remove("channels", channelId);
       if (ui.getActiveChannelId() === channelId) {
         ui.setActiveChannelId(null);
+      }
+    }
+  }
+
+  // Ultraplan lifecycle events hydrate the active plan onto its session group
+  // until Ultraplan has first-class client store tables.
+  if (ULTRAPLAN_STATE_EVENTS.has(event.eventType)) {
+    const ultraplan = asJsonObject(payload.ultraplan);
+    const sessionGroupId =
+      typeof payload.sessionGroupId === "string"
+        ? payload.sessionGroupId
+        : typeof ultraplan?.sessionGroupId === "string"
+          ? ultraplan.sessionGroupId
+          : null;
+    if (sessionGroupId && ultraplan && typeof ultraplan.id === "string") {
+      const existing = batch.get("sessionGroups", sessionGroupId);
+      if (existing) {
+        batch.patch("sessionGroups", sessionGroupId, {
+          ultraplan,
+          updatedAt:
+            typeof ultraplan.updatedAt === "string"
+              ? ultraplan.updatedAt
+              : existing.updatedAt ?? event.timestamp,
+        } as unknown as Partial<SessionGroupEntity>);
+      } else {
+        batch.upsert("sessionGroups", sessionGroupId, {
+          id: sessionGroupId,
+          ultraplan,
+          createdAt: event.timestamp,
+          updatedAt:
+            typeof ultraplan.updatedAt === "string" ? ultraplan.updatedAt : event.timestamp,
+        } as unknown as SessionGroupEntity);
+      }
+    }
+  }
+
+  if (ULTRAPLAN_CONTROLLER_RUN_EVENTS.has(event.eventType)) {
+    const controllerRun = asJsonObject(payload.controllerRun);
+    const sessionGroupId =
+      typeof controllerRun?.sessionGroupId === "string" ? controllerRun.sessionGroupId : null;
+    if (sessionGroupId && controllerRun && typeof controllerRun.id === "string") {
+      const existingGroup = batch.get("sessionGroups", sessionGroupId) as
+        | (SessionGroupEntity & { ultraplan?: Record<string, unknown> | null })
+        | undefined;
+      const existingUltraplan = asJsonObject(existingGroup?.ultraplan);
+      if (existingGroup && existingUltraplan) {
+        const runs = Array.isArray(existingUltraplan.controllerRuns)
+          ? existingUltraplan.controllerRuns.filter((run) => {
+              const existingRun = asJsonObject(run);
+              return existingRun?.id !== controllerRun.id;
+            })
+          : [];
+        batch.patch("sessionGroups", sessionGroupId, {
+          ultraplan: {
+            ...existingUltraplan,
+            lastControllerRunId: controllerRun.id,
+            lastControllerSummary:
+              typeof controllerRun.summary === "string"
+                ? controllerRun.summary
+                : existingUltraplan.lastControllerSummary,
+            controllerRuns: [controllerRun, ...runs],
+          },
+        } as unknown as Partial<SessionGroupEntity>);
       }
     }
   }

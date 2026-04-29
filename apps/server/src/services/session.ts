@@ -21,6 +21,7 @@ import { runtimeDebug } from "../lib/runtime-debug.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { storage } from "../lib/storage/index.js";
 import { runtimeAccessService } from "./runtime-access.js";
+import { ultraplanControllerRunService } from "./ultraplan-controller-run.js";
 import {
   deriveSessionGroupStatus,
   type SessionGroupStatus as DerivedSessionGroupStatus,
@@ -1607,7 +1608,13 @@ export class SessionService {
 
     // If session has a read-only workspace and the mode explicitly switched away from ask,
     // upgrade to a full worktree before running
-    if (session.readOnlyWorkspace && interactionMode && interactionMode !== "ask" && session.repo) {
+    if (
+      session.role !== "ultraplan_controller_run" &&
+      session.readOnlyWorkspace &&
+      interactionMode &&
+      interactionMode !== "ask" &&
+      session.repo
+    ) {
       const pendingCommand: PendingSessionCommand = {
         type: "run",
         prompt: prompt ?? null,
@@ -1801,6 +1808,38 @@ export class SessionService {
     return updated;
   }
 
+  async prepareUltraplanControllerSessionForLaunch(id: string) {
+    const session = await prisma.session.findUnique({
+      where: { id },
+      select: {
+        role: true,
+        hosting: true,
+        agentStatus: true,
+        workdir: true,
+        connection: true,
+      },
+    });
+    if (!session) return;
+    if (session.role !== "ultraplan_controller_run") return;
+    if (session.hosting !== "cloud") return;
+    if (session.agentStatus !== "not_started") return;
+    if (!session.workdir) return;
+
+    const conn = this.parseConnection(session.connection);
+    const hasLiveRuntime =
+      !!sessionRouter.getRuntimeForSession(id) ||
+      (!!conn.runtimeInstanceId && sessionRouter.isRuntimeAvailable(conn.runtimeInstanceId));
+    if (hasLiveRuntime) return;
+
+    await prisma.session.update({
+      where: { id },
+      data: {
+        workdir: null,
+        connection: connJson(defaultConnection()),
+      },
+    });
+  }
+
   async terminate(id: string, actorType: ActorType = "system", actorId: string = "system") {
     return this.terminateWithStatus(id, "stopped", "Session stopped", actorType, actorId);
   }
@@ -1975,6 +2014,7 @@ export class SessionService {
       select: {
         hosting: true,
         organizationId: true,
+        role: true,
         agentStatus: true,
         sessionStatus: true,
         sessionGroupId: true,
@@ -2177,6 +2217,7 @@ export class SessionService {
       where: { id: sessionId },
       select: {
         organizationId: true,
+        role: true,
         agentStatus: true,
         sessionStatus: true,
         sessionGroupId: true,
@@ -2309,6 +2350,7 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+
   }
 
   /**
@@ -2388,6 +2430,7 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+
   }
 
   async complete(id: string) {
@@ -2521,6 +2564,7 @@ export class SessionService {
       where: { id: sessionId },
       select: {
         organizationId: true,
+        role: true,
         agentStatus: true,
         sessionStatus: true,
         hosting: true,
@@ -2638,7 +2682,13 @@ export class SessionService {
 
     // If session has a read-only workspace and user explicitly switched away from ask mode,
     // trigger a workspace upgrade to create a real worktree
-    if (session.readOnlyWorkspace && interactionMode && interactionMode !== "ask" && session.repo) {
+    if (
+      session.role !== "ultraplan_controller_run" &&
+      session.readOnlyWorkspace &&
+      interactionMode &&
+      interactionMode !== "ask" &&
+      session.repo
+    ) {
       const pendingCommand: PendingSessionCommand = {
         type: "send",
         prompt: text,
@@ -3216,6 +3266,20 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+
+    if (session.role === "ultraplan_controller_run") {
+      const controllerRun = await prisma.ultraplanControllerRun.findFirst({
+        where: {
+          sessionId,
+          status: { in: ["queued", "running"] },
+        },
+        select: { id: true },
+        orderBy: { createdAt: "desc" },
+      });
+      if (controllerRun) {
+        await ultraplanControllerRunService.failRun(controllerRun.id, error, "system", "system");
+      }
+    }
   }
 
   async retrySessionGroupSetup(
@@ -5090,6 +5154,7 @@ export class SessionService {
         repoId: true,
         connection: true,
         sessionGroupId: true,
+        role: true,
       },
     });
 
@@ -5181,6 +5246,20 @@ export class SessionService {
       connection: updatedSession.connection as Prisma.InputJsonValue,
       worktreeDeleted: false,
     });
+
+    if (session.role === "ultraplan_controller_run") {
+      const controllerRun = await prisma.ultraplanControllerRun.findFirst({
+        where: {
+          sessionId,
+          status: "queued",
+        },
+        select: { id: true },
+        orderBy: { createdAt: "desc" },
+      });
+      if (controllerRun) {
+        await ultraplanControllerRunService.markStarted(controllerRun.id, "system", "system");
+      }
+    }
 
     await eventService.create({
       organizationId: session.organizationId,
