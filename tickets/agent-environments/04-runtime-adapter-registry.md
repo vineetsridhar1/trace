@@ -50,6 +50,7 @@ Owns plan lines:
 - Adapter lifecycle and bridge command delivery are separate concerns.
 - The adapter starts/selects compute; the bridge carries live traffic.
 - Terminal creation, input, output, resize, exit, error, and destroy are live bridge traffic and must remain isolated by `terminalId`.
+- Ticket 03 introduced service-layer config validation behind a small local/provisioned adapter shim in `AgentEnvironmentService`; replace that shim with the real registry so environment CRUD, environment testing, and session startup all use the same adapter lookup and validation path.
 - Avoid introducing `aws`, `fly`, or `kubernetes` as adapter types in Trace core.
 
 ## How to test
