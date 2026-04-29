@@ -9,6 +9,11 @@ import {
   type ControllerConfig,
 } from "./ultraplan-controller-run.js";
 import { sessionService } from "./session.js";
+import type {
+  BridgeGitDiffSummary,
+  BridgeGitIntegrationCommand,
+  BridgeGitIntegrationResultPayload,
+} from "@trace/shared";
 
 type TxClient = Prisma.TransactionClient;
 
@@ -120,6 +125,84 @@ export class UltraplanService {
       where: { sessionGroupId, organizationId },
       include: ULTRAPLAN_INCLUDE,
     });
+  }
+
+  async getBranchDiff(input: {
+    ultraplanId: string;
+    organizationId: string;
+    userId: string;
+    baseRef?: string | null;
+    headRef?: string | null;
+    includePatch?: boolean;
+    maxPatchBytes?: number;
+    maxFiles?: number;
+  }): Promise<BridgeGitDiffSummary> {
+    const ultraplan = await prisma.ultraplan.findFirst({
+      where: { id: input.ultraplanId, organizationId: input.organizationId },
+      select: { sessionGroupId: true },
+    });
+    if (!ultraplan) throw new Error("Ultraplan not found");
+    return sessionService.branchDiffSummary(
+      ultraplan.sessionGroupId,
+      input.organizationId,
+      input.userId,
+      {
+        baseRef: input.baseRef,
+        headRef: input.headRef,
+        includePatch: input.includePatch,
+        maxPatchBytes: input.maxPatchBytes,
+        maxFiles: input.maxFiles,
+      },
+    );
+  }
+
+  async getCommitDiff(input: {
+    ultraplanId: string;
+    organizationId: string;
+    userId: string;
+    commitRef?: string | null;
+    includePatch?: boolean;
+    maxPatchBytes?: number;
+    maxFiles?: number;
+  }): Promise<BridgeGitDiffSummary> {
+    const ultraplan = await prisma.ultraplan.findFirst({
+      where: { id: input.ultraplanId, organizationId: input.organizationId },
+      select: { sessionGroupId: true },
+    });
+    if (!ultraplan) throw new Error("Ultraplan not found");
+    return sessionService.commitDiff(ultraplan.sessionGroupId, input.organizationId, input.userId, {
+      commitRef: input.commitRef,
+      includePatch: input.includePatch,
+      maxPatchBytes: input.maxPatchBytes,
+      maxFiles: input.maxFiles,
+    });
+  }
+
+  async runServiceOwnedGitIntegration(input: {
+    ultraplanId: string;
+    organizationId: string;
+    userId: string;
+    operation: BridgeGitIntegrationCommand["operation"];
+    sourceRef?: string | null;
+    targetRef?: string | null;
+    commitRef?: string | null;
+  }): Promise<BridgeGitIntegrationResultPayload> {
+    const ultraplan = await prisma.ultraplan.findFirst({
+      where: { id: input.ultraplanId, organizationId: input.organizationId },
+      select: { sessionGroupId: true },
+    });
+    if (!ultraplan) throw new Error("Ultraplan not found");
+    return sessionService.runServiceOwnedGitIntegration(
+      ultraplan.sessionGroupId,
+      input.organizationId,
+      input.userId,
+      {
+        operation: input.operation,
+        sourceRef: input.sourceRef,
+        targetRef: input.targetRef,
+        commitRef: input.commitRef,
+      },
+    );
   }
 
   async start(input: StartUltraplanServiceInput) {

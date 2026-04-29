@@ -22,6 +22,8 @@ import {
   handleListFiles,
   handleReadFile,
   handleBranchDiff,
+  handleCommitDiff,
+  handleGitIntegration,
   handleFileAtRef,
   handleListSkills,
   downloadImagesToTempFiles,
@@ -1254,6 +1256,14 @@ export class BridgeClient implements IBridgeClient {
       }
       case "branch_diff": {
         void handleBranchDiff(cmd, this.sessionWorkdirs, (msg) => this.send(msg), this.gitExec);
+        break;
+      }
+      case "commit_diff": {
+        void handleCommitDiff(cmd, this.sessionWorkdirs, (msg) => this.send(msg), this.gitExec);
+        break;
+      }
+      case "git_integration": {
+        void handleGitIntegration(cmd, this.sessionWorkdirs, (msg) => this.send(msg), this.gitExec);
         break;
       }
       case "file_at_ref": {
