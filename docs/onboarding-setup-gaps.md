@@ -83,13 +83,21 @@ Add a GitHub CLI setup capability:
 - detect whether `gh` is installed
 - run `gh auth status --hostname github.com`
 - show the authenticated GitHub login when ready
-- provide a terminal flow for `gh auth login`
+- provide a guided terminal fallback for `gh auth login` on local desktop runtimes
 - re-check status after the terminal exits or the window regains focus
 
 Success criteria:
 
 - A user can see whether `gh` is ready before asking agents to create PRs, inspect CI, or use GitHub issue/PR commands.
 - Missing CLI auth should produce a setup action, not a late agent failure.
+
+Product guidance:
+
+- Do not make an interactive terminal the primary GitHub login path.
+- Use GitHub OAuth/device flow for Trace's first-party GitHub identity.
+- Use `gh auth status` as a readiness check for runtime shell workflows.
+- Offer `gh auth login` in a terminal only when the user needs local shell-level GitHub access and the current desktop runtime is missing it.
+- Avoid putting browser-only or cloud-only users through a local terminal flow they cannot complete.
 
 ### 5. GitHub API identity and GitHub CLI identity are separate
 
@@ -120,6 +128,7 @@ Why `gh auth` is not enough:
 - Browser-only users may not have a local `gh` installation.
 - Cloud/container runtimes may have their own filesystem and auth state.
 - Product-owned API calls need a stable token available to the Trace service layer.
+- An interactive terminal flow does not map cleanly to browser-only setup or server-side background work.
 
 Why OAuth is better than manual API keys:
 
