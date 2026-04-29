@@ -190,6 +190,132 @@ describe("AgentEnvironmentService", () => {
     expect(prismaMock.agentEnvironment.create).not.toHaveBeenCalled();
   });
 
+  it("creates a default local environment for a newly connected bridge", async () => {
+    prismaMock.agentEnvironment.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    prismaMock.agentEnvironment.create.mockResolvedValueOnce({
+      id: "env-local-1",
+      organizationId: "org-1",
+      name: "Vineet MacBook",
+      adapterType: "local",
+      config: {
+        runtimeInstanceId: "bridge-1",
+        capabilities: { supportedTools: ["claude_code", "codex"] },
+      },
+      enabled: true,
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    prismaMock.agentEnvironment.findMany.mockResolvedValueOnce([
+      {
+        id: "env-local-1",
+        organizationId: "org-1",
+        name: "Vineet MacBook",
+        adapterType: "local",
+        config: {
+          runtimeInstanceId: "bridge-1",
+          capabilities: { supportedTools: ["claude_code", "codex"] },
+        },
+        enabled: true,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+
+    const service = new AgentEnvironmentService();
+    const environment = await service.ensureLocalBridgeEnvironment(
+      {
+        organizationId: "org-1",
+        runtimeInstanceId: "bridge-1",
+        runtimeLabel: "Vineet MacBook",
+        supportedTools: ["claude_code", "codex"],
+      },
+      "user",
+      "user-1",
+    );
+
+    expect(environment.id).toBe("env-local-1");
+    expect(prismaMock.agentEnvironment.findFirst).toHaveBeenNthCalledWith(1, {
+      where: {
+        organizationId: "org-1",
+        adapterType: "local",
+        config: { path: ["runtimeInstanceId"], equals: "bridge-1" },
+      },
+    });
+    expect(prismaMock.agentEnvironment.create).toHaveBeenCalledWith({
+      data: {
+        organizationId: "org-1",
+        name: "Vineet MacBook",
+        adapterType: "local",
+        config: {
+          runtimeInstanceId: "bridge-1",
+          capabilities: { supportedTools: ["claude_code", "codex"] },
+        },
+        enabled: true,
+        isDefault: true,
+      },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "agent_environment_created",
+        payload: expect.objectContaining({
+          agentEnvironment: expect.objectContaining({
+            id: "env-local-1",
+            adapterType: "local",
+            isDefault: true,
+          }),
+          agentEnvironments: [
+            expect.objectContaining({
+              id: "env-local-1",
+              isDefault: true,
+            }),
+          ],
+        }),
+      }),
+      prismaMock,
+    );
+  });
+
+  it("does not duplicate or rename an existing bridge environment", async () => {
+    const existing = {
+      id: "env-local-1",
+      organizationId: "org-1",
+      name: "My custom name",
+      adapterType: "local",
+      config: {
+        runtimeInstanceId: "bridge-1",
+        capabilities: { supportedTools: ["claude_code", "codex"] },
+      },
+      enabled: false,
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    prismaMock.agentEnvironment.findFirst
+      .mockResolvedValueOnce(existing)
+      .mockResolvedValueOnce(null);
+
+    const service = new AgentEnvironmentService();
+    const environment = await service.ensureLocalBridgeEnvironment(
+      {
+        organizationId: "org-1",
+        runtimeInstanceId: "bridge-1",
+        runtimeLabel: "New bridge label",
+        supportedTools: ["claude_code", "codex"],
+      },
+      "user",
+      "user-1",
+    );
+
+    expect(environment).toBe(existing);
+    expect(prismaMock.agentEnvironment.create).not.toHaveBeenCalled();
+    expect(prismaMock.agentEnvironment.update).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
+  });
+
   it("rejects credential-shaped config keys that are not secret references", async () => {
     const service = new AgentEnvironmentService();
 
