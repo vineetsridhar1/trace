@@ -85,11 +85,19 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
             id
             title
             status
+            dependencies {
+              dependsOnTicket {
+                id
+                title
+              }
+            }
           }
         }
         ticketExecutions {
           id
+          ticketId
           status
+          integrationStatus
           branch
           workerSessionId
         }
