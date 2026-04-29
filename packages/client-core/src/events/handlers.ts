@@ -2,6 +2,7 @@ import { asJsonObject } from "@trace/shared";
 import type { JsonObject } from "@trace/shared";
 import type {
   AgentStatus,
+  AgentEnvironment,
   Channel,
   ChannelGroup,
   Chat,
@@ -54,6 +55,13 @@ const SESSION_RUNTIME_EVENTS: Set<EventType> = new Set([
 const SESSION_PR_EVENTS: Set<EventType> = new Set(["session_pr_opened", "session_pr_closed"]);
 
 const SESSION_ACTIVITY_EVENTS: Set<EventType> = new Set(["session_output", "message_sent"]);
+
+function upsertAgentEnvironmentFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const environment = asJsonObject(payload.agentEnvironment);
+  if (environment && typeof environment.id === "string") {
+    batch.upsert("agentEnvironments", environment.id, environment as unknown as AgentEnvironment);
+  }
+}
 
 function agentStatusFromEvent(eventType: EventType, payload: JsonObject): AgentStatus | undefined {
   const explicit = payload.agentStatus as AgentStatus | undefined;
@@ -176,6 +184,26 @@ export function handleOrgEvent(event: Event): void {
     const sid = payload.sessionId as string | undefined;
     if (qmId && sid) {
       batch.removeQueuedMessage(sid, qmId);
+    }
+  }
+
+  // Agent environment events
+  if (
+    event.eventType === "agent_environment_created" ||
+    event.eventType === "agent_environment_updated"
+  ) {
+    upsertAgentEnvironmentFromPayload(batch, payload);
+  }
+  if (event.eventType === "agent_environment_deleted") {
+    const environment = asJsonObject(payload.agentEnvironment);
+    const environmentId =
+      typeof payload.agentEnvironmentId === "string"
+        ? payload.agentEnvironmentId
+        : typeof environment?.id === "string"
+          ? environment.id
+          : null;
+    if (environmentId) {
+      batch.remove("agentEnvironments", environmentId);
     }
   }
 

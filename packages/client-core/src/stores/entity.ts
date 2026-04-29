@@ -15,6 +15,7 @@ import type {
   InboxItem,
   Message,
   QueuedMessage,
+  AgentEnvironment,
 } from "@trace/gql";
 
 /** Client-side session entity with extra fields not in the GQL schema */
@@ -44,6 +45,7 @@ export type EntityTableMap = {
   inboxItems: InboxItem;
   messages: Message;
   queuedMessages: QueuedMessage;
+  agentEnvironments: AgentEnvironment;
 };
 
 export type EntityType = keyof EntityTableMap;
@@ -108,6 +110,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   inboxItems: {},
   messages: {},
   queuedMessages: {},
+  agentEnvironments: {},
   eventsByScope: {},
   _eventIdsByScope: {},
   _sessionIdsByGroup: {},
@@ -344,6 +347,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       inboxItems: {},
       messages: {},
       queuedMessages: {},
+      agentEnvironments: {},
       eventsByScope: {},
       _eventIdsByScope: {},
       _sessionIdsByGroup: {},
@@ -674,6 +678,7 @@ const ENTITY_KEYS: EntityType[] = [
   "inboxItems",
   "messages",
   "queuedMessages",
+  "agentEnvironments",
 ];
 
 function getMessageEntityScopeKey(
