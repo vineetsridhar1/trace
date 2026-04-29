@@ -41,6 +41,15 @@ const SESSION_STATUS_EVENTS: Set<EventType> = new Set([
   "session_pr_merged",
 ]);
 
+const SESSION_RUNTIME_EVENTS: Set<EventType> = new Set([
+  "session_runtime_start_requested",
+  "session_runtime_provisioning",
+  "session_runtime_connecting",
+  "session_runtime_connected",
+  "session_runtime_start_failed",
+  "session_runtime_start_timed_out",
+]);
+
 /** PR lifecycle events update the group PR URL; review state is derived from that. */
 const SESSION_PR_EVENTS: Set<EventType> = new Set(["session_pr_opened", "session_pr_closed"]);
 
@@ -433,6 +442,24 @@ export function handleOrgEvent(event: Event): void {
         }
       }
     }
+  }
+
+  // Route runtime lifecycle events
+  if (
+    SESSION_RUNTIME_EVENTS.has(event.eventType) &&
+    event.scopeType === ("session" satisfies ScopeType)
+  ) {
+    upsertSessionGroupFromPayload({ batch, payload, timestamp: event.timestamp, bumpSort: false });
+    const connection = asJsonObject(payload.connection);
+    const agentStatus = payload.agentStatus as AgentStatus | undefined;
+    const sessionStatus = payload.sessionStatus as SessionStatus | undefined;
+    const sessionPatch: Partial<SessionEntity> = {
+      updatedAt: event.timestamp,
+      ...(connection ? { connection: connection as SessionEntity["connection"] } : {}),
+      ...(agentStatus ? { agentStatus } : {}),
+      ...(sessionStatus ? { sessionStatus } : {}),
+    };
+    batch.patch("sessions", event.scopeId, sessionPatch);
   }
 
   // Route PR lifecycle events

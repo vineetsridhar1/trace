@@ -59,15 +59,29 @@ export const terminalStatusLabel: Record<string, string> = {
 // ─── Connection ───
 
 export const connectionColor: Record<string, string> = {
+  pending: "text-amber-400",
+  requested: "text-amber-400",
+  provisioning: "text-amber-400",
+  booting: "text-amber-400",
+  connecting: "text-amber-400",
   connected: "text-green-400",
   degraded: "text-yellow-400",
   disconnected: "text-destructive",
+  failed: "text-destructive",
+  timed_out: "text-destructive",
 };
 
 export const connectionLabel: Record<string, string> = {
+  pending: "Starting",
+  requested: "Starting",
+  provisioning: "Provisioning",
+  booting: "Booting",
+  connecting: "Connecting",
   connected: "Connected",
   degraded: "Degraded",
   disconnected: "Connection Lost",
+  failed: "Connection Failed",
+  timed_out: "Startup Timed Out",
 };
 
 // ─── Derived helpers ───
@@ -159,7 +173,11 @@ export function getSessionGroupAgentStatus(
 /** Check if a session's connection is in a disconnected state */
 export function isDisconnected(connection: Record<string, unknown> | null | undefined): boolean {
   if (!connection) return false;
-  return connection.state === "disconnected";
+  return (
+    connection.state === "disconnected" ||
+    connection.state === "failed" ||
+    connection.state === "timed_out"
+  );
 }
 
 /** Whether the session has reached a final state and cannot accept further input. */

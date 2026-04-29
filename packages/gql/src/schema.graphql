@@ -56,10 +56,15 @@ enum HostingMode {
 
 enum SessionConnectionState {
   pending
+  requested
+  provisioning
+  booting
+  connecting
   connected
   degraded
   disconnected
   failed
+  timed_out
   stopping
   stopped
 }

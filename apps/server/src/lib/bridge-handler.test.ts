@@ -230,6 +230,10 @@ describe("bridge handler auth", () => {
 
   it("binds the scoped session when a provisioned cloud bridge registers", async () => {
     const ws = createMockWs();
+    mocks.sessionFindFirst.mockResolvedValue({
+      id: "session-1",
+      connection: { state: "connecting", runtimeInstanceId: "cloud-machine-owned" },
+    });
 
     handleBridgeConnection(ws as never, {
       bridgeAuth: {
@@ -265,6 +269,40 @@ describe("bridge handler auth", () => {
     );
   });
 
+  it("rejects a scoped cloud bridge after startup timeout", async () => {
+    const ws = createMockWs();
+    mocks.sessionFindFirst.mockResolvedValue({
+      id: "session-1",
+      connection: { state: "timed_out", runtimeInstanceId: "cloud-machine-owned" },
+    });
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "cloud",
+        instanceId: "cloud-machine-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+        sessionId: "session-1",
+        environmentId: "env-1",
+        allowedScope: "session",
+        tool: "codex",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "cloud-machine-owned",
+      hostingMode: "cloud",
+      protocolVersion: 1,
+      agentVersion: "0.1.0",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    await Promise.resolve();
+
+    expect(ws.close).toHaveBeenCalledWith(1008, "Session is not waiting for this runtime");
+    expect(mocks.bindSession).not.toHaveBeenCalled();
+  });
+
   it("ignores session output for sessions not bound to this bridge runtime", async () => {
     const ws = createMockWs();
     mocks.getRuntimeForSession.mockReturnValue({
@@ -298,7 +336,10 @@ describe("bridge handler auth", () => {
 
   it("accepts session output when persisted session ownership matches this runtime", async () => {
     const ws = createMockWs();
-    mocks.sessionFindFirst.mockResolvedValue({ id: "session-1" });
+    mocks.sessionFindFirst.mockResolvedValue({
+      id: "session-1",
+      connection: { state: "connected", runtimeInstanceId: "cloud-machine-owned" },
+    });
 
     handleBridgeConnection(ws as never, {
       bridgeAuth: {

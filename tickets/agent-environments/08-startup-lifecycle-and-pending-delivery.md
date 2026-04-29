@@ -39,12 +39,12 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] A slow provisioned runtime shows a starting/provisioning state.
-- [ ] User messages sent during startup are persisted.
-- [ ] Pending messages are delivered once the runtime bridge connects.
-- [ ] Startup timeout marks runtime failed/timed out.
-- [ ] Timed-out sessions do not later dispatch stale queued messages to the wrong runtime.
-- [ ] Lifecycle events are emitted in order.
+- [x] A slow provisioned runtime shows a starting/provisioning state.
+- [x] User messages sent during startup are persisted.
+- [x] Pending messages are delivered once the runtime bridge connects.
+- [x] Startup timeout marks runtime failed/timed out.
+- [x] Timed-out sessions do not later dispatch stale queued messages to the wrong runtime.
+- [x] Lifecycle events are emitted in order.
 
 ## Implementation notes
 

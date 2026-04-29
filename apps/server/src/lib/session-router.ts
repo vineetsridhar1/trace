@@ -1,4 +1,5 @@
 import type WebSocket from "ws";
+import type { EventType } from "@trace/gql";
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import type { CloudMachineService } from "./cloud-machine-service.js";
@@ -125,6 +126,25 @@ export interface SessionAdapterCreateOptions {
   } | null;
 }
 
+export type RuntimeLifecycleUpdate = {
+  runtimeInstanceId?: string;
+  runtimeLabel?: string;
+  providerRuntimeId?: string;
+  providerRuntimeUrl?: string;
+  providerStatus?: string;
+  error?: string;
+};
+
+export type RuntimeLifecycleEventType = Extract<
+  EventType,
+  | "session_runtime_start_requested"
+  | "session_runtime_provisioning"
+  | "session_runtime_connecting"
+  | "session_runtime_connected"
+  | "session_runtime_start_failed"
+  | "session_runtime_start_timed_out"
+>;
+
 function adapterTypeFromHosting(
   hosting: string,
   runtimeAdapters: RuntimeAdapterRegistry,
@@ -144,6 +164,20 @@ function connectionEnvironmentId(connection: Record<string, unknown> | null): st
   return typeof environmentId === "string" && environmentId.trim() ? environmentId : null;
 }
 
+function environmentConfigRecord(environment?: RuntimeEnvironment | null): Record<string, unknown> {
+  const config = environment?.config;
+  if (!config || typeof config !== "object" || Array.isArray(config)) return {};
+  return config as Record<string, unknown>;
+}
+
+function startupTimeoutMs(environment?: RuntimeEnvironment | null): number {
+  const rawSeconds = environmentConfigRecord(environment).startupTimeoutSeconds;
+  if (typeof rawSeconds === "number" && Number.isInteger(rawSeconds) && rawSeconds > 0) {
+    return rawSeconds * 1000;
+  }
+  return 120_000;
+}
+
 /**
  * Runtime-aware registry that tracks runtime instances, their capabilities,
  * and which sessions they own. Replaces the old bridge-only socket map.
@@ -155,7 +189,10 @@ export class SessionRouter {
   /** Maps sessionId → runtimeId */
   private sessionRuntime = new Map<string, string>();
   /** Pending waitForBridge promises for cloud sessions */
-  private pendingWaits = new Map<string, { resolve: () => void; reject: (err: Error) => void }>();
+  private pendingWaits = new Map<
+    string,
+    { expectedRuntimeId?: string; resolve: () => void; reject: (err: Error) => void }
+  >();
   /** Pending branch list requests: requestId → resolve/reject */
   private pendingBranchRequests = new Map<
     string,
@@ -326,7 +363,7 @@ export class SessionRouter {
   waitForBridge(sessionId: string, timeoutMs = 60_000, runtimeId?: string): Promise<void> {
     // Already bound to a connected runtime.
     const boundRuntimeId = this.sessionRuntime.get(sessionId);
-    if (boundRuntimeId) {
+    if (boundRuntimeId && (!runtimeId || boundRuntimeId === runtimeId)) {
       const boundRuntime = this.runtimes.get(boundRuntimeId);
       if (boundRuntime && boundRuntime.ws.readyState === boundRuntime.ws.OPEN) {
         return Promise.resolve();
@@ -349,6 +386,7 @@ export class SessionRouter {
       }, timeoutMs);
 
       this.pendingWaits.set(sessionId, {
+        expectedRuntimeId: runtimeId,
         resolve: () => {
           clearTimeout(timer);
           resolve();
@@ -412,6 +450,14 @@ export class SessionRouter {
     // Resolve any pending waitForBridge promise
     const pending = this.pendingWaits.get(sessionId);
     if (pending) {
+      if (pending.expectedRuntimeId && pending.expectedRuntimeId !== runtimeId) {
+        runtimeDebug("pending bridge wait ignored mismatched runtime", {
+          sessionId,
+          expectedRuntimeId: pending.expectedRuntimeId,
+          receivedRuntimeId: runtimeId,
+        });
+        return;
+      }
       this.pendingWaits.delete(sessionId);
       pending.resolve();
     }
@@ -1263,6 +1309,10 @@ export class SessionRouter {
       hosting: string;
       onFailed: (error: string) => void;
       onWorkspaceReady?: (workdir: string) => void;
+      onLifecycle?: (
+        eventType: RuntimeLifecycleEventType,
+        update?: RuntimeLifecycleUpdate,
+      ) => Promise<void> | void;
     },
   ): void {
     const adapterType =
@@ -1271,6 +1321,10 @@ export class SessionRouter {
 
     void (async () => {
       try {
+        if (adapterType === "provisioned") {
+          await options.onLifecycle?.("session_runtime_start_requested");
+        }
+
         const startResult = await adapter.startSession({
           sessionId: options.sessionId,
           sessionGroupId: options.sessionGroupId,
@@ -1289,49 +1343,42 @@ export class SessionRouter {
           bridgeUrl: options.bridgeUrl,
         });
 
-        if (startResult.runtimeInstanceId) {
+        if (startResult.runtimeInstanceId && adapterType !== "provisioned") {
           this.bindSession(options.sessionId, startResult.runtimeInstanceId);
         }
 
         if (adapterType === "provisioned" && startResult.runtimeInstanceId) {
-          const updatedSession = await prisma.session.update({
-            where: { id: options.sessionId },
-            data: {
-              connection: {
-                state: "connected",
-                retryCount: 0,
-                canRetry: true,
-                canMove: true,
-                ...(options.environment && {
-                  environmentId: options.environment.id,
-                  adapterType: options.environment.adapterType,
-                }),
-                ...(startResult.runtimeInstanceId && {
-                  runtimeInstanceId: startResult.runtimeInstanceId,
-                }),
-                ...(startResult.runtimeLabel && { runtimeLabel: startResult.runtimeLabel }),
-                ...(startResult.providerRuntimeId && {
-                  cloudMachineId: startResult.providerRuntimeId,
-                  providerRuntimeId: startResult.providerRuntimeId,
-                }),
-                ...(startResult.providerRuntimeUrl && {
-                  providerRuntimeUrl: startResult.providerRuntimeUrl,
-                }),
-              } satisfies Prisma.InputJsonValue,
-            },
-            select: { sessionGroupId: true, connection: true },
-          });
-          if (updatedSession.sessionGroupId) {
-            await prisma.sessionGroup.update({
-              where: { id: updatedSession.sessionGroupId },
-              data: {
-                connection: updatedSession.connection ?? Prisma.DbNull,
-                worktreeDeleted: false,
-              },
+          const lifecycleUpdate = {
+            runtimeInstanceId: startResult.runtimeInstanceId,
+            ...(startResult.runtimeLabel && { runtimeLabel: startResult.runtimeLabel }),
+            ...(startResult.providerRuntimeId && {
+              providerRuntimeId: startResult.providerRuntimeId,
+            }),
+            ...(startResult.providerRuntimeUrl && {
+              providerRuntimeUrl: startResult.providerRuntimeUrl,
+            }),
+            providerStatus: startResult.status,
+          } satisfies RuntimeLifecycleUpdate;
+          await options.onLifecycle?.("session_runtime_provisioning", lifecycleUpdate);
+          await options.onLifecycle?.("session_runtime_connecting", lifecycleUpdate);
+
+          try {
+            await this.waitForBridge(
+              options.sessionId,
+              startupTimeoutMs(options.environment),
+              startResult.runtimeInstanceId,
+            );
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            await options.onLifecycle?.("session_runtime_start_timed_out", {
+              ...lifecycleUpdate,
+              error: message,
             });
+            options.onFailed(`${adapterType} runtime timed out: ${message}`);
+            return;
           }
 
-          await this.waitForBridge(options.sessionId, 120_000, startResult.runtimeInstanceId);
+          await options.onLifecycle?.("session_runtime_connected", lifecycleUpdate);
         }
 
         if (options.repo) {
@@ -1365,6 +1412,9 @@ export class SessionRouter {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`[runtime-adapter] failed to start ${options.sessionId}:`, message);
+        if (adapterType === "provisioned") {
+          await options.onLifecycle?.("session_runtime_start_failed", { error: message });
+        }
         options.onFailed(`${adapterType} runtime failed: ${message}`);
       }
     })();

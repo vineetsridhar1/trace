@@ -341,6 +341,98 @@ describe("SessionRouter runtime adapter dispatch", () => {
     );
   });
 
+  it("emits provisioned lifecycle events only after bridge readiness", async () => {
+    const provisionedAdapter: RuntimeAdapter = {
+      type: "provisioned",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return {
+          runtimeInstanceId: "runtime-1",
+          runtimeLabel: "Provisioned runtime",
+          providerRuntimeId: "provider-1",
+          providerRuntimeUrl: "https://runtime.example",
+          status: "provisioning",
+        };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopping" };
+      },
+      async getStatus() {
+        return { status: "provisioning" };
+      },
+    };
+    const localAdapter: RuntimeAdapter = {
+      type: "local",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return { status: "selected" };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    const router = new SessionRouter(
+      new RuntimeAdapterRegistry([localAdapter, provisionedAdapter]),
+    );
+    const lifecycleEvents: string[] = [];
+
+    router.createRuntime({
+      sessionId: "session-1",
+      hosting: "cloud",
+      adapterType: "provisioned",
+      environment: {
+        id: "env-1",
+        name: "Provisioned",
+        adapterType: "provisioned",
+        config: { startupTimeoutSeconds: 5 },
+      },
+      tool: "codex",
+      repo: null,
+      createdById: "user-1",
+      organizationId: "org-1",
+      onLifecycle: (eventType) => {
+        lifecycleEvents.push(eventType);
+      },
+      onFailed: vi.fn(),
+    });
+
+    await vi.waitFor(() => {
+      expect(lifecycleEvents).toEqual([
+        "session_runtime_start_requested",
+        "session_runtime_provisioning",
+        "session_runtime_connecting",
+      ]);
+    });
+    expect(router.getRuntimeForSession("session-1")).toBeUndefined();
+
+    router.registerRuntime({
+      id: "runtime-1",
+      label: "Provisioned runtime",
+      ws: makeWs(),
+      hostingMode: "cloud",
+      supportedTools: ["codex"],
+    });
+    router.bindSession("session-1", "runtime-1");
+
+    await vi.waitFor(() => {
+      expect(lifecycleEvents).toEqual([
+        "session_runtime_start_requested",
+        "session_runtime_provisioning",
+        "session_runtime_connecting",
+        "session_runtime_connected",
+      ]);
+    });
+  });
+
   it("keeps multiple terminal commands multiplexed by terminalId after adapter routing", async () => {
     const router = new SessionRouter();
     const ws = makeWs();
