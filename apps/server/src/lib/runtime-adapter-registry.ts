@@ -21,6 +21,8 @@ export type RuntimeStartInput = {
   branch?: string;
   checkpointSha?: string;
   readOnly?: boolean;
+  runtimeToken?: string;
+  bridgeUrl?: string;
 };
 
 export type RuntimeStartResult = {

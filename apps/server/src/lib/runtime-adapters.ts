@@ -60,18 +60,9 @@ class LocalRuntimeAdapter implements RuntimeAdapter {
     return { ok: true, message: "Local environment config is valid" };
   }
 
-  async startSession(input: RuntimeStartInput): Promise<RuntimeStartResult> {
-    const config =
-      input.environment?.config && typeof input.environment.config === "object"
-        ? (input.environment.config as Record<string, unknown>)
-        : {};
-    const runtimeInstanceId =
-      typeof config.runtimeInstanceId === "string" && config.runtimeInstanceId.trim()
-        ? config.runtimeInstanceId
-        : undefined;
+  async startSession(): Promise<RuntimeStartResult> {
     return {
-      ...(runtimeInstanceId && { runtimeInstanceId }),
-      status: runtimeInstanceId ? "selected" : "connected",
+      status: "selected",
     };
   }
 
@@ -84,7 +75,12 @@ class LocalRuntimeAdapter implements RuntimeAdapter {
   }
 }
 
-class ProvisionedRuntimeAdapter implements RuntimeAdapter {
+/**
+ * Transitional compatibility adapter: keeps existing CloudMachine-backed cloud
+ * sessions working until ticket 06 replaces this with the generic launcher
+ * start/stop/status endpoint implementation.
+ */
+class LegacyCloudMachineProvisionedRuntimeAdapter implements RuntimeAdapter {
   readonly type = "provisioned" as const;
 
   constructor(private cloudMachineService: CloudMachineService | null = null) {}
@@ -159,7 +155,7 @@ class ProvisionedRuntimeAdapter implements RuntimeAdapter {
   }
 }
 
-const provisionedRuntimeAdapter = new ProvisionedRuntimeAdapter();
+const provisionedRuntimeAdapter = new LegacyCloudMachineProvisionedRuntimeAdapter();
 
 export function setProvisionedRuntimeCloudMachineService(service: CloudMachineService): void {
   provisionedRuntimeAdapter.setCloudMachineService(service);
