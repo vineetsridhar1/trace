@@ -149,6 +149,32 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
 });
 
 describe("SessionRouter runtime adapter dispatch", () => {
+  it("waits for a prebound provisioned runtime to register before resolving bridge readiness", async () => {
+    const router = new SessionRouter();
+    router.bindSession("session-1", "runtime-1");
+
+    let settled = false;
+    const promise = router.waitForBridge("session-1", 1_000, "runtime-1");
+    promise.then(() => {
+      settled = true;
+    });
+
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    router.registerRuntime({
+      id: "runtime-1",
+      label: "Provisioned runtime",
+      ws: makeWs(),
+      hostingMode: "cloud",
+      supportedTools: ["codex"],
+    });
+    router.bindSession("session-1", "runtime-1");
+
+    await expect(promise).resolves.toBeUndefined();
+    expect(settled).toBe(true);
+  });
+
   it("starts local sessions through the registry and keeps prepare delivery on the bridge", async () => {
     const router = new SessionRouter();
     const ws = makeWs();
