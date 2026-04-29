@@ -5154,6 +5154,7 @@ export class SessionService {
         repoId: true,
         connection: true,
         sessionGroupId: true,
+        role: true,
       },
     });
 
@@ -5245,6 +5246,20 @@ export class SessionService {
       connection: updatedSession.connection as Prisma.InputJsonValue,
       worktreeDeleted: false,
     });
+
+    if (session.role === "ultraplan_controller_run") {
+      const controllerRun = await prisma.ultraplanControllerRun.findFirst({
+        where: {
+          sessionId,
+          status: "queued",
+        },
+        select: { id: true },
+        orderBy: { createdAt: "desc" },
+      });
+      if (controllerRun) {
+        await ultraplanControllerRunService.markStarted(controllerRun.id, "system", "system");
+      }
+    }
 
     await eventService.create({
       organizationId: session.organizationId,

@@ -31,6 +31,7 @@ vi.mock("./runtime-access.js", () => ({
 vi.mock("./ultraplan-controller-run.js", () => ({
   ultraplanControllerRunService: {
     failRun: vi.fn().mockResolvedValue(undefined),
+    markStarted: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -2171,6 +2172,78 @@ describe("SessionService", () => {
         expect.objectContaining({
           data: expect.objectContaining({ readOnlyWorkspace: false }),
         }),
+      );
+    });
+
+    it("marks an ultraplan controller run started when a queued command is delivered", async () => {
+      prismaMock.session.findUniqueOrThrow
+        .mockResolvedValueOnce({
+          pendingRun: {
+            type: "run",
+            prompt: "Create the plan",
+            interactionMode: "plan",
+            clientSource: "ultraplan_controller",
+          },
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          readOnlyWorkspace: true,
+          workdir: null,
+        })
+        .mockResolvedValueOnce({
+          organizationId: "org-1",
+          tool: "claude_code",
+          model: "claude-sonnet-4-20250514",
+          workdir: "/tmp/trace/controller",
+          toolSessionId: null,
+          repoId: "repo-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-a",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+          sessionGroupId: "group-1",
+          role: "ultraplan_controller_run",
+        });
+      prismaMock.session.update
+        .mockResolvedValueOnce(
+          makeSession({
+            role: "ultraplan_controller_run",
+            readOnlyWorkspace: true,
+            workdir: "/tmp/trace/controller",
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeSession({
+            role: "ultraplan_controller_run",
+            agentStatus: "active",
+            sessionStatus: "in_progress",
+            readOnlyWorkspace: true,
+            workdir: "/tmp/trace/controller",
+          }),
+        );
+      prismaMock.sessionGroup.update
+        .mockResolvedValueOnce(makeSessionGroup({ workdir: "/tmp/trace/controller" }))
+        .mockResolvedValueOnce(makeSessionGroup({ workdir: "/tmp/trace/controller" }));
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.ultraplanControllerRun.findFirst.mockResolvedValueOnce({ id: "run-1" });
+
+      await service.workspaceReady("session-1", "/tmp/trace/controller");
+
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          type: "run",
+          prompt: expect.stringContaining("Create the plan"),
+        }),
+        { expectedHomeRuntimeId: "runtime-a" },
+      );
+      expect(ultraplanControllerRunServiceMock.markStarted).toHaveBeenCalledWith(
+        "run-1",
+        "system",
+        "system",
       );
     });
 
