@@ -218,6 +218,25 @@ export const DISMISS_AGENT_SUGGESTION_MUTATION = gql`
   }
 `;
 
+export const RESOLVE_ULTRAPLAN_HUMAN_GATE_MUTATION = gql`
+  mutation ResolveUltraplanHumanGate(
+    $inboxItemId: ID!
+    $resolution: UltraplanHumanGateResolution!
+    $response: JSON
+  ) {
+    resolveUltraplanHumanGate(
+      inboxItemId: $inboxItemId
+      resolution: $resolution
+      response: $response
+    ) {
+      id
+      status
+      resolvedAt
+      payload
+    }
+  }
+`;
+
 export const REGISTER_PUSH_TOKEN_MUTATION = gql`
   mutation RegisterPushToken($token: String!, $platform: PushPlatform!) {
     registerPushToken(token: $token, platform: $platform)

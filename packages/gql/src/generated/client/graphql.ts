@@ -759,6 +759,8 @@ export type Mutation = {
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
   requestBridgeAccess: BridgeAccessRequest;
+  requestUltraplanHumanGate: InboxItem;
+  resolveUltraplanHumanGate: InboxItem;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   resumeUltraplan: Ultraplan;
   retrySessionConnection: Session;
@@ -1065,6 +1067,16 @@ export type MutationRequestBridgeAccessArgs = {
   runtimeInstanceId: Scalars["ID"]["input"];
   scopeType: BridgeAccessScopeType;
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
+export type MutationRequestUltraplanHumanGateArgs = {
+  input: RequestUltraplanHumanGateInput;
+};
+
+export type MutationResolveUltraplanHumanGateArgs = {
+  inboxItemId: Scalars["ID"]["input"];
+  resolution: UltraplanHumanGateResolution;
+  response?: InputMaybe<Scalars["JSON"]["input"]>;
 };
 
 export type MutationRestoreLinkedCheckoutArgs = {
@@ -1686,6 +1698,28 @@ export type Repo = {
   webhookActive: Scalars["Boolean"]["output"];
 };
 
+export type RequestUltraplanHumanGateInput = {
+  branchName?: InputMaybe<Scalars["String"]["input"]>;
+  checkpointSha?: InputMaybe<Scalars["String"]["input"]>;
+  controllerRunId?: InputMaybe<Scalars["ID"]["input"]>;
+  controllerRunSessionId?: InputMaybe<Scalars["ID"]["input"]>;
+  controllerRunUrl?: InputMaybe<Scalars["String"]["input"]>;
+  diffUrl?: InputMaybe<Scalars["String"]["input"]>;
+  gateReason?: InputMaybe<Scalars["String"]["input"]>;
+  itemType: InboxItemType;
+  payload?: InputMaybe<Scalars["JSON"]["input"]>;
+  prUrl?: InputMaybe<Scalars["String"]["input"]>;
+  qaChecklist?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  recommendedAction?: InputMaybe<Scalars["String"]["input"]>;
+  summary?: InputMaybe<Scalars["String"]["input"]>;
+  ticketExecutionId?: InputMaybe<Scalars["ID"]["input"]>;
+  ticketId?: InputMaybe<Scalars["ID"]["input"]>;
+  title: Scalars["String"]["input"];
+  ultraplanId: Scalars["ID"]["input"];
+  workerSessionId?: InputMaybe<Scalars["ID"]["input"]>;
+  workerSessionUrl?: InputMaybe<Scalars["String"]["input"]>;
+};
+
 export type ScopeInput = {
   id: Scalars["ID"]["input"];
   type: ScopeType;
@@ -2146,6 +2180,14 @@ export type UltraplanControllerRun = {
   ultraplanId: Scalars["ID"]["output"];
 };
 
+export type UltraplanHumanGateResolution =
+  | "approved"
+  | "blocked"
+  | "cancelled"
+  | "changes_requested"
+  | "dismissed"
+  | "resolved";
+
 export type UltraplanStatus =
   | "cancelled"
   | "completed"
@@ -2445,6 +2487,7 @@ export type SessionGroupsQuery = {
       name: string;
       agentStatus: AgentStatus;
       sessionStatus: SessionStatus;
+      role: SessionRole;
       tool: CodingTool;
       model?: string | null;
       reasoningEffort?: string | null;
@@ -2501,6 +2544,7 @@ export type FilteredSessionGroupsQuery = {
       name: string;
       agentStatus: AgentStatus;
       sessionStatus: SessionStatus;
+      role: SessionRole;
       tool: CodingTool;
       model?: string | null;
       reasoningEffort?: string | null;
@@ -2661,6 +2705,7 @@ export type SessionDetailQuery = {
     name: string;
     agentStatus: AgentStatus;
     sessionStatus: SessionStatus;
+    role: SessionRole;
     tool: CodingTool;
     model?: string | null;
     reasoningEffort?: string | null;
@@ -2797,12 +2842,65 @@ export type SessionGroupDetailQuery = {
       autoRetryable?: boolean | null;
     } | null;
     channel?: { __typename?: "Channel"; id: string } | null;
+    ultraplan?: {
+      __typename?: "Ultraplan";
+      id: string;
+      status: UltraplanStatus;
+      planSummary?: string | null;
+      lastControllerSummary?: string | null;
+      activeInboxItemId?: string | null;
+      integrationBranch: string;
+      updatedAt: string;
+      tickets: Array<{
+        __typename?: "UltraplanTicket";
+        id: string;
+        ultraplanId: string;
+        ticketId: string;
+        status: UltraplanTicketStatus;
+        position: number;
+        ticket: {
+          __typename?: "Ticket";
+          id: string;
+          title: string;
+          status: TicketStatus;
+          dependencies: Array<{
+            __typename?: "TicketDependency";
+            dependsOnTicket: { __typename?: "Ticket"; id: string; title: string };
+          }>;
+        };
+      }>;
+      ticketExecutions: Array<{
+        __typename?: "TicketExecution";
+        id: string;
+        ultraplanId: string;
+        ticketId: string;
+        updatedAt: string;
+        status: TicketExecutionStatus;
+        integrationStatus: IntegrationStatus;
+        branch: string;
+        workerSessionId?: string | null;
+      }>;
+      controllerRuns: Array<{
+        __typename?: "UltraplanControllerRun";
+        id: string;
+        ultraplanId: string;
+        sessionGroupId: string;
+        status: ControllerRunStatus;
+        summaryTitle?: string | null;
+        summary?: string | null;
+        sessionId?: string | null;
+        createdAt: string;
+        startedAt?: string | null;
+        completedAt?: string | null;
+      }>;
+    } | null;
     sessions: Array<{
       __typename?: "Session";
       id: string;
       name: string;
       agentStatus: AgentStatus;
       sessionStatus: SessionStatus;
+      role: SessionRole;
       tool: CodingTool;
       model?: string | null;
       reasoningEffort?: string | null;
@@ -2828,6 +2926,57 @@ export type SessionGroupDetailQuery = {
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   } | null;
+};
+
+export type StartUltraplanFromComposerMutationVariables = Exact<{
+  input: StartUltraplanInput;
+}>;
+
+export type StartUltraplanFromComposerMutation = {
+  __typename?: "Mutation";
+  startUltraplan: {
+    __typename?: "Ultraplan";
+    id: string;
+    status: UltraplanStatus;
+    sessionGroupId: string;
+    updatedAt: string;
+  };
+};
+
+export type PauseUltraplanFromGroupMutationVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type PauseUltraplanFromGroupMutation = {
+  __typename?: "Mutation";
+  pauseUltraplan: { __typename?: "Ultraplan"; id: string };
+};
+
+export type ResumeUltraplanFromGroupMutationVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type ResumeUltraplanFromGroupMutation = {
+  __typename?: "Mutation";
+  resumeUltraplan: { __typename?: "Ultraplan"; id: string };
+};
+
+export type RunUltraplanControllerFromGroupMutationVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type RunUltraplanControllerFromGroupMutation = {
+  __typename?: "Mutation";
+  runUltraplanControllerNow: { __typename?: "UltraplanControllerRun"; id: string };
+};
+
+export type CancelUltraplanFromGroupMutationVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type CancelUltraplanFromGroupMutation = {
+  __typename?: "Mutation";
+  cancelUltraplan: { __typename?: "Ultraplan"; id: string };
 };
 
 export type AgentIdentityQueryVariables = Exact<{
@@ -4207,6 +4356,7 @@ export const SessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "name" } },
                       { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "role" } },
                       { kind: "Field", name: { kind: "Name", value: "tool" } },
                       { kind: "Field", name: { kind: "Name", value: "model" } },
                       { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
@@ -4358,6 +4508,7 @@ export const FilteredSessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "name" } },
                       { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "role" } },
                       { kind: "Field", name: { kind: "Name", value: "tool" } },
                       { kind: "Field", name: { kind: "Name", value: "model" } },
                       { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
@@ -4965,6 +5116,7 @@ export const SessionDetailDocument = {
                 { kind: "Field", name: { kind: "Name", value: "name" } },
                 { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
                 { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "role" } },
                 { kind: "Field", name: { kind: "Name", value: "tool" } },
                 { kind: "Field", name: { kind: "Name", value: "model" } },
                 { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
@@ -5240,6 +5392,110 @@ export const SessionGroupDetailDocument = {
                 },
                 { kind: "Field", name: { kind: "Name", value: "setupStatus" } },
                 { kind: "Field", name: { kind: "Name", value: "setupError" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "ultraplan" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                      { kind: "Field", name: { kind: "Name", value: "planSummary" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastControllerSummary" } },
+                      { kind: "Field", name: { kind: "Name", value: "activeInboxItemId" } },
+                      { kind: "Field", name: { kind: "Name", value: "integrationBranch" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "tickets" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "ultraplanId" } },
+                            { kind: "Field", name: { kind: "Name", value: "ticketId" } },
+                            { kind: "Field", name: { kind: "Name", value: "status" } },
+                            { kind: "Field", name: { kind: "Name", value: "position" } },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "ticket" },
+                              selectionSet: {
+                                kind: "SelectionSet",
+                                selections: [
+                                  { kind: "Field", name: { kind: "Name", value: "id" } },
+                                  { kind: "Field", name: { kind: "Name", value: "title" } },
+                                  { kind: "Field", name: { kind: "Name", value: "status" } },
+                                  {
+                                    kind: "Field",
+                                    name: { kind: "Name", value: "dependencies" },
+                                    selectionSet: {
+                                      kind: "SelectionSet",
+                                      selections: [
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "dependsOnTicket" },
+                                          selectionSet: {
+                                            kind: "SelectionSet",
+                                            selections: [
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "id" },
+                                              },
+                                              {
+                                                kind: "Field",
+                                                name: { kind: "Name", value: "title" },
+                                              },
+                                            ],
+                                          },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                          ],
+                        },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "ticketExecutions" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "ultraplanId" } },
+                            { kind: "Field", name: { kind: "Name", value: "ticketId" } },
+                            { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                            { kind: "Field", name: { kind: "Name", value: "status" } },
+                            { kind: "Field", name: { kind: "Name", value: "integrationStatus" } },
+                            { kind: "Field", name: { kind: "Name", value: "branch" } },
+                            { kind: "Field", name: { kind: "Name", value: "workerSessionId" } },
+                          ],
+                        },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "controllerRuns" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "ultraplanId" } },
+                            { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                            { kind: "Field", name: { kind: "Name", value: "status" } },
+                            { kind: "Field", name: { kind: "Name", value: "summaryTitle" } },
+                            { kind: "Field", name: { kind: "Name", value: "summary" } },
+                            { kind: "Field", name: { kind: "Name", value: "sessionId" } },
+                            { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                            { kind: "Field", name: { kind: "Name", value: "startedAt" } },
+                            { kind: "Field", name: { kind: "Name", value: "completedAt" } },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
                 { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                 { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
                 {
@@ -5252,6 +5508,7 @@ export const SessionGroupDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "name" } },
                       { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "role" } },
                       { kind: "Field", name: { kind: "Name", value: "tool" } },
                       { kind: "Field", name: { kind: "Name", value: "model" } },
                       { kind: "Field", name: { kind: "Name", value: "reasoningEffort" } },
@@ -5320,6 +5577,226 @@ export const SessionGroupDetailDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupDetailQuery, SessionGroupDetailQueryVariables>;
+export const StartUltraplanFromComposerDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "StartUltraplanFromComposer" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "StartUltraplanInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "startUltraplan" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  StartUltraplanFromComposerMutation,
+  StartUltraplanFromComposerMutationVariables
+>;
+export const PauseUltraplanFromGroupDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "PauseUltraplanFromGroup" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "pauseUltraplan" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  PauseUltraplanFromGroupMutation,
+  PauseUltraplanFromGroupMutationVariables
+>;
+export const ResumeUltraplanFromGroupDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "ResumeUltraplanFromGroup" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "resumeUltraplan" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  ResumeUltraplanFromGroupMutation,
+  ResumeUltraplanFromGroupMutationVariables
+>;
+export const RunUltraplanControllerFromGroupDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "RunUltraplanControllerFromGroup" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "runUltraplanControllerNow" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  RunUltraplanControllerFromGroupMutation,
+  RunUltraplanControllerFromGroupMutationVariables
+>;
+export const CancelUltraplanFromGroupDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CancelUltraplanFromGroup" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "cancelUltraplan" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  CancelUltraplanFromGroupMutation,
+  CancelUltraplanFromGroupMutationVariables
+>;
 export const AgentIdentityDocument = {
   kind: "Document",
   definitions: [

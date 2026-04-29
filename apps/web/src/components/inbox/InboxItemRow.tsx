@@ -1,6 +1,7 @@
 import { useState, useCallback, memo } from "react";
 import { MessageCircleQuestion, Map, Check, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import type { UltraplanHumanGateResolution } from "@trace/gql";
 import { client } from "../../lib/urql";
 import {
   SEND_SESSION_MESSAGE_MUTATION,
@@ -11,6 +12,7 @@ import {
   TERMINATE_SESSION_MUTATION,
   ACCEPT_AGENT_SUGGESTION_MUTATION,
   DISMISS_AGENT_SUGGESTION_MUTATION,
+  RESOLVE_ULTRAPLAN_HUMAN_GATE_MUTATION,
 } from "@trace/client-core";
 import { useEntityField } from "@trace/client-core";
 import { navigateToSession, useUIStore } from "../../stores/ui";
@@ -18,6 +20,7 @@ import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { InboxPlanBody } from "./InboxPlanBody";
 import { InboxQuestionBody } from "./InboxQuestionBody";
 import { InboxSuggestionBody } from "./InboxSuggestionBody";
+import { InboxUltraplanGateBody } from "./InboxUltraplanGateBody";
 import type { QuestionData } from "./InboxQuestionBody";
 
 const SUGGESTION_TYPES = new Set([
@@ -30,6 +33,13 @@ const SUGGESTION_TYPES = new Set([
   "agent_suggestion",
 ]);
 
+const ULTRAPLAN_GATE_TYPES = new Set([
+  "ultraplan_plan_approval",
+  "ultraplan_validation_request",
+  "ultraplan_conflict_resolution",
+  "ultraplan_final_review",
+]);
+
 function isSuggestionType(itemType: string | undefined): boolean {
   return !!itemType && SUGGESTION_TYPES.has(itemType);
 }
@@ -39,6 +49,7 @@ function itemTypeLabel(itemType: string | undefined): string {
   if (!itemType) return "";
   if (itemType === "question") return "Question";
   if (itemType === "plan") return "Plan";
+  if (ULTRAPLAN_GATE_TYPES.has(itemType)) return "Ultraplan";
   if (SUGGESTION_TYPES.has(itemType)) return "Suggestion";
   return itemType;
 }
@@ -59,6 +70,7 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
   const itemType = useEntityField("inboxItems", id, "itemType");
   const status = useEntityField("inboxItems", id, "status");
   const createdAt = useEntityField("inboxItems", id, "createdAt");
+  const summary = useEntityField("inboxItems", id, "summary");
   const payload = useEntityField("inboxItems", id, "payload") as
     | Record<string, unknown>
     | undefined;
@@ -100,6 +112,7 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
 
   const isQuestion = itemType === "question";
   const isSuggestion = isSuggestionType(itemType as string | undefined);
+  const isUltraplanGate = ULTRAPLAN_GATE_TYPES.has(itemType as string);
   const isResolved = status === "resolved" || status === "dismissed" || status === "expired";
   const planContent = (payload?.planContent as string) ?? "";
   const questions = (payload?.questions as QuestionData[] | undefined) ?? [];
@@ -236,6 +249,28 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
     }
   }, [sending, id]);
 
+  const handleResolveUltraplanGate = useCallback(
+    async (gateResolution: UltraplanHumanGateResolution) => {
+      if (sending) return;
+      setSending(true);
+      try {
+        const result = await client
+          .mutation(RESOLVE_ULTRAPLAN_HUMAN_GATE_MUTATION, {
+            inboxItemId: id,
+            resolution: gateResolution,
+            response: null,
+          })
+          .toPromise();
+        if (result.error) {
+          toast.error(`Failed to resolve: ${result.error.message}`);
+        }
+      } finally {
+        setSending(false);
+      }
+    },
+    [sending, id],
+  );
+
   const handleSendMessage = useCallback(
     async (text: string, interactionMode?: string) => {
       if (!text.trim() || sending || !sourceId) return;
@@ -290,7 +325,7 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
       {/* Header */}
       <div
         className="flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-surface-elevated"
-        onClick={isSuggestion ? undefined : handleNavigate}
+        onClick={isSuggestion || isUltraplanGate ? undefined : handleNavigate}
       >
         <div className="mt-0.5 shrink-0 text-muted-foreground">
           {isSuggestion ? (
@@ -321,6 +356,13 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
           sending={sending}
           onAccept={handleAcceptSuggestion}
           onDismiss={handleDismissSuggestion}
+        />
+      ) : isUltraplanGate ? (
+        <InboxUltraplanGateBody
+          payload={payload ?? {}}
+          summary={typeof summary === "string" ? summary : null}
+          sending={sending}
+          onResolve={handleResolveUltraplanGate}
         />
       ) : isQuestion ? (
         <InboxQuestionBody

@@ -1,5 +1,5 @@
-import type { ActorType, StartUltraplanInput } from "@trace/gql";
-import { Prisma } from "@prisma/client";
+import type { ActorType, StartUltraplanInput, UltraplanHumanGateResolution } from "@trace/gql";
+import { Prisma, type InboxItemStatus, type InboxItemType } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
@@ -9,6 +9,7 @@ import {
   type ControllerConfig,
 } from "./ultraplan-controller-run.js";
 import { sessionService } from "./session.js";
+import { inboxService } from "./inbox.js";
 import type {
   BridgeGitDiffSummary,
   BridgeGitIntegrationCommand,
@@ -21,6 +22,40 @@ type StartUltraplanServiceInput = StartUltraplanInput & {
   organizationId: string;
   actorType: ActorType;
   actorId: string;
+};
+
+export type RequestHumanGateInput = {
+  ultraplanId: string;
+  organizationId: string;
+  actorType: ActorType;
+  actorId: string;
+  itemType: InboxItemType;
+  title: string;
+  summary?: string | null;
+  gateReason?: string | null;
+  payload?: Record<string, unknown> | null;
+  controllerRunId?: string | null;
+  controllerRunSessionId?: string | null;
+  ticketId?: string | null;
+  ticketExecutionId?: string | null;
+  workerSessionId?: string | null;
+  branchName?: string | null;
+  checkpointSha?: string | null;
+  recommendedAction?: string | null;
+  qaChecklist?: readonly string[] | null;
+  controllerRunUrl?: string | null;
+  workerSessionUrl?: string | null;
+  diffUrl?: string | null;
+  prUrl?: string | null;
+};
+
+export type ResolveHumanGateInput = {
+  inboxItemId: string;
+  organizationId: string;
+  actorType: ActorType;
+  actorId: string;
+  resolution: UltraplanHumanGateResolution;
+  response?: Record<string, unknown> | null;
 };
 
 const ULTRAPLAN_INCLUDE = {
@@ -93,6 +128,34 @@ function eventPayload(ultraplan: Record<string, unknown>): Prisma.InputJsonValue
     ultraplanId: ultraplan.id,
     sessionGroupId: ultraplan.sessionGroupId,
   } as Prisma.InputJsonValue;
+}
+
+function serializeTicketExecution(execution: Record<string, unknown>) {
+  return {
+    id: execution.id,
+    organizationId: execution.organizationId,
+    ultraplanId: execution.ultraplanId,
+    ticketId: execution.ticketId,
+    sessionGroupId: execution.sessionGroupId,
+    workerSessionId: execution.workerSessionId ?? null,
+    branch: execution.branch,
+    workdir: execution.workdir ?? null,
+    status: execution.status,
+    integrationStatus: execution.integrationStatus,
+    baseCheckpointSha: execution.baseCheckpointSha ?? null,
+    headCheckpointSha: execution.headCheckpointSha ?? null,
+    integrationCheckpointSha: execution.integrationCheckpointSha ?? null,
+    activeInboxItemId: execution.activeInboxItemId ?? null,
+    lastReviewSummary: execution.lastReviewSummary ?? null,
+    attempt: execution.attempt,
+    createdAt: execution.createdAt,
+    updatedAt: execution.updatedAt,
+  };
+}
+
+function optionalTrimmed(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
 }
 
 function runtimePolicyFromSessionConnection(
@@ -209,16 +272,15 @@ export class UltraplanService {
         ontoRef: input.ontoRef,
       },
     );
-    const basePayload = eventPayload(ultraplan as unknown as Record<string, unknown>) as unknown as Record<
-      string,
-      unknown
-    >;
+    const basePayload = eventPayload(
+      ultraplan as unknown as Record<string, unknown>,
+    ) as unknown as Record<string, unknown>;
     await eventService.create({
       organizationId: input.organizationId,
       scopeType: "ultraplan",
       scopeId: ultraplan.id,
       eventType: "ultraplan_updated",
-      payload: ({
+      payload: {
         ...basePayload,
         type: "git_integration",
         operation: input.operation,
@@ -228,11 +290,296 @@ export class UltraplanService {
         branchRef: input.branchRef ?? null,
         ontoRef: input.ontoRef ?? null,
         result,
-      } as unknown) as Prisma.InputJsonValue,
+      } as unknown as Prisma.InputJsonValue,
       actorType: input.actorType ?? "user",
       actorId: input.actorId ?? input.userId,
     });
     return result;
+  }
+
+  async requestHumanGate(input: RequestHumanGateInput) {
+    return prisma.$transaction(async (tx: TxClient) => {
+      const ultraplan = await tx.ultraplan.findFirstOrThrow({
+        where: { id: input.ultraplanId, organizationId: input.organizationId },
+        include: ULTRAPLAN_INCLUDE,
+      });
+      await assertActorOrgAccess(tx, input.organizationId, input.actorType, input.actorId);
+
+      const ticketExecution = input.ticketExecutionId
+        ? await tx.ticketExecution.findFirstOrThrow({
+            where: {
+              id: input.ticketExecutionId,
+              organizationId: input.organizationId,
+              ultraplanId: ultraplan.id,
+            },
+          })
+        : null;
+
+      const sourceType = ticketExecution ? "ticket_execution" : "ultraplan";
+      const sourceId = ticketExecution?.id ?? ultraplan.id;
+      const gateReason = optionalTrimmed(input.gateReason) ?? input.itemType;
+      const existingGate = await tx.inboxItem.findMany({
+        where: {
+          organizationId: input.organizationId,
+          sourceType,
+          sourceId,
+          itemType: input.itemType,
+          status: "active",
+          AND: [{ payload: { path: ["gateReason"], equals: gateReason } }],
+        },
+        take: 1,
+      });
+      if (existingGate[0]) {
+        return existingGate[0];
+      }
+      if (ultraplan.activeInboxItemId) {
+        throw new Error("Ultraplan already has an active human gate");
+      }
+      if (ticketExecution?.activeInboxItemId) {
+        throw new Error("Ticket execution already has an active human gate");
+      }
+
+      const gatePayload = {
+        ...(input.payload ?? {}),
+        ultraplanId: ultraplan.id,
+        sessionGroupId: ultraplan.sessionGroupId,
+        gateReason,
+        controllerRunId: input.controllerRunId ?? null,
+        controllerRunSessionId: input.controllerRunSessionId ?? null,
+        ticketId: input.ticketId ?? ticketExecution?.ticketId ?? null,
+        ticketExecutionId: ticketExecution?.id ?? null,
+        workerSessionId: input.workerSessionId ?? ticketExecution?.workerSessionId ?? null,
+        branchName: input.branchName ?? ticketExecution?.branch ?? null,
+        checkpointSha:
+          input.checkpointSha ??
+          ticketExecution?.headCheckpointSha ??
+          ticketExecution?.baseCheckpointSha ??
+          null,
+        summary: input.summary ?? null,
+        recommendedAction: input.recommendedAction ?? null,
+        qaChecklist: input.qaChecklist ?? [],
+        links: {
+          controllerRunUrl: input.controllerRunUrl ?? null,
+          workerSessionUrl: input.workerSessionUrl ?? null,
+          diffUrl: input.diffUrl ?? null,
+          prUrl: input.prUrl ?? null,
+        },
+      };
+
+      const inboxItem = await inboxService.createItem(
+        {
+          orgId: input.organizationId,
+          userId: ultraplan.ownerUserId,
+          itemType: input.itemType,
+          title: input.title,
+          summary: input.summary ?? undefined,
+          payload: gatePayload as unknown as Prisma.InputJsonValue,
+          sourceType,
+          sourceId,
+          actorType: input.actorType,
+          actorId: input.actorId,
+        },
+        tx,
+      );
+
+      const updatedUltraplan = await tx.ultraplan.update({
+        where: { id: ultraplan.id },
+        data: {
+          status: "needs_human",
+          activeInboxItemId: inboxItem.id,
+        },
+        include: ULTRAPLAN_INCLUDE,
+      });
+
+      const updatedExecution = ticketExecution
+        ? await tx.ticketExecution.update({
+            where: { id: ticketExecution.id },
+            data: {
+              status: "needs_human",
+              activeInboxItemId: inboxItem.id,
+            },
+          })
+        : null;
+
+      await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "system",
+          scopeId: input.organizationId,
+          eventType: "inbox_item_created",
+          payload: { inboxItem } as unknown as Prisma.InputJsonValue,
+          actorType: input.actorType,
+          actorId: input.actorId,
+        },
+        tx,
+      );
+
+      await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "ultraplan",
+          scopeId: ultraplan.id,
+          eventType: "ultraplan_human_gate_requested",
+          payload: {
+            ultraplan: serializeUltraplan(updatedUltraplan as unknown as Record<string, unknown>),
+            ultraplanId: updatedUltraplan.id,
+            sessionGroupId: updatedUltraplan.sessionGroupId,
+            inboxItem,
+            ticketExecution: updatedExecution
+              ? serializeTicketExecution(updatedExecution as unknown as Record<string, unknown>)
+              : null,
+          } as unknown as Prisma.InputJsonValue,
+          actorType: input.actorType,
+          actorId: input.actorId,
+        },
+        tx,
+      );
+
+      return inboxItem;
+    });
+  }
+
+  async resolveHumanGate(input: ResolveHumanGateInput) {
+    const targetStatus: InboxItemStatus =
+      input.resolution === "dismissed" || input.resolution === "cancelled"
+        ? "dismissed"
+        : "resolved";
+
+    const result = await prisma.$transaction(async (tx: TxClient) => {
+      const item = await tx.inboxItem.findFirstOrThrow({
+        where: {
+          id: input.inboxItemId,
+          organizationId: input.organizationId,
+          userId: input.actorId,
+          status: "active",
+          sourceType: { in: ["ultraplan", "ticket_execution"] },
+        },
+      });
+      await assertActorOrgAccess(tx, input.organizationId, input.actorType, input.actorId);
+
+      const payload = (item.payload ?? {}) as Record<string, unknown>;
+      const ultraplanId =
+        typeof payload.ultraplanId === "string" ? payload.ultraplanId : item.sourceId;
+      const ticketExecutionId =
+        typeof payload.ticketExecutionId === "string" ? payload.ticketExecutionId : null;
+
+      const existingUltraplan = await tx.ultraplan.findFirstOrThrow({
+        where: { id: ultraplanId, organizationId: input.organizationId },
+        include: ULTRAPLAN_INCLUDE,
+      });
+
+      const updatedPayload = {
+        ...payload,
+        resolution: input.resolution,
+        response: input.response ?? null,
+      };
+
+      const updatedItem = await inboxService.resolveItem(
+        {
+          id: item.id,
+          organizationId: input.organizationId,
+          status: targetStatus,
+          resolution: input.resolution,
+          payload: updatedPayload as unknown as Prisma.InputJsonValue,
+          actorType: input.actorType,
+          actorId: input.actorId,
+        },
+        tx,
+      );
+
+      const updatedUltraplan = await tx.ultraplan.update({
+        where: { id: existingUltraplan.id },
+        data: {
+          activeInboxItemId:
+            existingUltraplan.activeInboxItemId === item.id
+              ? null
+              : existingUltraplan.activeInboxItemId,
+          status:
+            existingUltraplan.activeInboxItemId === item.id &&
+            existingUltraplan.status === "needs_human"
+              ? "waiting"
+              : existingUltraplan.status,
+        },
+        include: ULTRAPLAN_INCLUDE,
+      });
+
+      const existingExecution = ticketExecutionId
+        ? await tx.ticketExecution.findFirst({
+            where: {
+              id: ticketExecutionId,
+              organizationId: input.organizationId,
+              ultraplanId: existingUltraplan.id,
+            },
+          })
+        : null;
+
+      const updatedExecution = existingExecution
+        ? await tx.ticketExecution.update({
+            where: { id: existingExecution.id },
+            data: {
+              activeInboxItemId:
+                existingExecution.activeInboxItemId === item.id
+                  ? null
+                  : existingExecution.activeInboxItemId,
+              status:
+                existingExecution.activeInboxItemId === item.id &&
+                existingExecution.status === "needs_human"
+                  ? "reviewing"
+                  : existingExecution.status,
+            },
+          })
+        : null;
+
+      await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "ultraplan",
+          scopeId: updatedUltraplan.id,
+          eventType: "ultraplan_updated",
+          payload: eventPayload(updatedUltraplan as unknown as Record<string, unknown>),
+          actorType: input.actorType,
+          actorId: input.actorId,
+        },
+        tx,
+      );
+
+      if (updatedExecution) {
+        await eventService.create(
+          {
+            organizationId: input.organizationId,
+            scopeType: "ultraplan",
+            scopeId: updatedUltraplan.id,
+            eventType: "ticket_execution_updated",
+            payload: {
+              ticketExecution: serializeTicketExecution(
+                updatedExecution as unknown as Record<string, unknown>,
+              ),
+              ultraplanId: updatedUltraplan.id,
+              sessionGroupId: updatedUltraplan.sessionGroupId,
+            } as unknown as Prisma.InputJsonValue,
+            actorType: input.actorType,
+            actorId: input.actorId,
+          },
+          tx,
+        );
+      }
+
+      const shouldWakeController = !["paused", "completed", "failed", "cancelled"].includes(
+        updatedUltraplan.status,
+      );
+
+      return {
+        inboxItem: updatedItem,
+        ultraplanId: updatedUltraplan.id,
+        shouldWakeController,
+      };
+    });
+
+    if (result.shouldWakeController) {
+      await this.runControllerNow(result.ultraplanId, input.actorType, input.actorId);
+    }
+
+    return result.inboxItem;
   }
 
   async start(input: StartUltraplanServiceInput) {
@@ -574,11 +921,7 @@ export class UltraplanService {
     );
 
     if (session.agentStatus === "active") {
-      await ultraplanControllerRunService.markStarted(
-        input.runId,
-        input.actorType,
-        input.actorId,
-      );
+      await ultraplanControllerRunService.markStarted(input.runId, input.actorType, input.actorId);
     }
   }
 }

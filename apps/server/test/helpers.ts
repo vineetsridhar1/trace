@@ -141,6 +141,7 @@ export function createPrismaMock() {
     ultraplan: {
       create: vi.fn(),
       findFirst: vi.fn(),
+      findFirstOrThrow: vi.fn(),
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       findMany: vi.fn(),
@@ -159,6 +160,9 @@ export function createPrismaMock() {
     },
     ticketExecution: {
       findMany: vi.fn(),
+      findFirst: vi.fn(),
+      findFirstOrThrow: vi.fn(),
+      update: vi.fn(),
     },
     chat: {
       create: vi.fn(),
