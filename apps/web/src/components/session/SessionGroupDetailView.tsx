@@ -286,6 +286,24 @@ export function SessionGroupDetailView({
     sessionGroupId,
   ]);
 
+  useEffect(() => {
+    if (sessionsByRecency.length === 0) return;
+    if (sessionTabs.length > 0) return;
+    const fallbackSessionId = sessionsByRecency[0].id;
+    openSessionTab(sessionGroupId, fallbackSessionId);
+    if (activeSessionGroupId === sessionGroupId && activeSessionId !== fallbackSessionId) {
+      setActiveSessionId(fallbackSessionId);
+    }
+  }, [
+    activeSessionGroupId,
+    activeSessionId,
+    openSessionTab,
+    sessionGroupId,
+    sessionTabs,
+    sessionsByRecency,
+    setActiveSessionId,
+  ]);
+
   // Clear terminal selection if the terminal was removed
   useEffect(() => {
     if (!activeTerminalId) return;
