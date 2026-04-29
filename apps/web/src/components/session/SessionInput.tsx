@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { gql } from "@urql/core";
 import { Send, Square, Cloud, Monitor } from "lucide-react";
-import { useEntityField } from "@trace/client-core";
+import { useEntityField, useEntityStore, type SessionEntity } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { SEND_SESSION_MESSAGE_MUTATION, QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
 import { type InteractionMode, MODE_CYCLE, MODE_CONFIG, wrapPrompt } from "./interactionModes";
@@ -44,6 +44,19 @@ const START_ULTRAPLAN_MUTATION = gql`
       lastControllerRun {
         session {
           id
+          name
+          agentStatus
+          sessionStatus
+          role
+          tool
+          model
+          hosting
+          branch
+          connection
+          worktreeDeleted
+          sessionGroupId
+          createdAt
+          updatedAt
         }
       }
     }
@@ -59,17 +72,25 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unexpected client error";
 }
 
-function getControllerSessionId(data: unknown): string | null {
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function getControllerSession(data: unknown): (SessionEntity & { id: string }) | null {
   const result = data as
     | {
         startUltraplan?: {
-          lastControllerRun?: { session?: { id?: unknown } | null } | null;
+          lastControllerRun?: { session?: unknown } | null;
         } | null;
       }
     | null
     | undefined;
-  const sessionId = result?.startUltraplan?.lastControllerRun?.session?.id;
-  return typeof sessionId === "string" ? sessionId : null;
+  const session = asRecord(result?.startUltraplan?.lastControllerRun?.session);
+  return typeof session?.id === "string"
+    ? ({ ...session } as unknown as SessionEntity & { id: string })
+    : null;
 }
 
 export function SessionInput({
@@ -231,11 +252,12 @@ export function SessionInput({
             throw result.error;
           }
 
-          const controllerSessionId = getControllerSessionId(result.data);
-          if (controllerSessionId) {
+          const controllerSession = getControllerSession(result.data);
+          if (controllerSession) {
+            useEntityStore.getState().upsert("sessions", controllerSession.id, controllerSession);
             const ui = useUIStore.getState();
-            ui.openSessionTab(sessionGroupId, controllerSessionId);
-            ui.setActiveSessionId(controllerSessionId);
+            ui.openSessionTab(sessionGroupId, controllerSession.id);
+            ui.setActiveSessionId(controllerSession.id);
             ui.setActiveTerminalId(null);
           }
           toast.success("Ultraplan started");
