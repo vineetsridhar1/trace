@@ -273,7 +273,25 @@ export class UltraplanService {
       orderBy: { createdAt: "desc" },
       include: { session: true, generatedTickets: true },
     });
-    if (activeControllerRun) return activeControllerRun;
+    if (activeControllerRun) {
+      if (activeControllerRun.status === "queued" && activeControllerRun.sessionId) {
+        await this.launchControllerRun({
+          runId: activeControllerRun.id,
+          sessionId: activeControllerRun.sessionId,
+          goal: activeControllerRun.inputSummary ?? "Manual controller run",
+          ultraplanId: ultraplan.id,
+          sessionGroupId: ultraplan.sessionGroupId,
+          actorType,
+          actorId,
+          organizationId: ultraplan.organizationId,
+        });
+        return prisma.ultraplanControllerRun.findUniqueOrThrow({
+          where: { id: activeControllerRun.id },
+          include: { session: true, generatedTickets: true },
+        });
+      }
+      return activeControllerRun;
+    }
 
     const lastControllerRun = ultraplan.lastControllerRunId
       ? await prisma.ultraplanControllerRun.findUnique({
