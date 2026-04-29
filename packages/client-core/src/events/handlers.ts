@@ -320,28 +320,6 @@ export function handleOrgEvent(event: Event): void {
     }
   }
 
-  // Ultraplan lifecycle snapshots update the session-group surface. Detailed
-  // lists still come from the session-group detail query until full client
-  // entity tables land.
-  if (ULTRAPLAN_EVENTS.has(event.eventType)) {
-    const ultraplan = asJsonObject(payload.ultraplan);
-    const sessionGroupId =
-      (typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null) ??
-      (typeof ultraplan?.sessionGroupId === "string" ? ultraplan.sessionGroupId : null);
-    if (sessionGroupId && ultraplan && typeof ultraplan.id === "string") {
-      const existingGroup = batch.get("sessionGroups", sessionGroupId);
-      const existingUltraplan = asJsonObject(existingGroup?.ultraplan);
-      batch.patch("sessionGroups", sessionGroupId, {
-        ultraplan: {
-          ...(existingUltraplan ?? {}),
-          ...ultraplan,
-        },
-        updatedAt: event.timestamp,
-        _sortTimestamp: event.timestamp,
-      } as Partial<SessionGroupEntity>);
-    }
-  }
-
   // Channel deleted — remove channel and its sessions/groups from store
   if (event.eventType === "channel_deleted") {
     if (typeof payload.channelId === "string") {

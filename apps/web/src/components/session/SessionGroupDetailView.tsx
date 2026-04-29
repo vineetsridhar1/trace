@@ -3,7 +3,6 @@ import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
 import { SESSION_TERMINALS_QUERY, START_SESSION_MUTATION } from "@trace/client-core";
 import type { Terminal } from "@trace/gql";
-import type { Ultraplan } from "@trace/gql";
 import { useDetailPanelStore } from "../../stores/detail-panel";
 import { useEntityField, useEntityStore } from "@trace/client-core";
 import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
@@ -18,7 +17,6 @@ import { CheckpointOpenContext } from "./CheckpointOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
 import { SidebarPanel } from "./SidebarPanel";
 import type { SidebarTab } from "./SidebarPanel";
-import { UltraplanHeaderControl } from "./UltraplanHeaderControl";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useSessionGroupSessions } from "./useSessionGroupSessions";
 import { useTerminalActions } from "./useTerminalActions";
@@ -72,147 +70,6 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       setupError
       createdAt
       updatedAt
-      ultraplan {
-        id
-        organizationId
-        sessionGroupId
-        ownerUserId
-        status
-        integrationBranch
-        integrationWorkdir
-        playbookId
-        playbookConfig
-        planSummary
-        customInstructions
-        activeInboxItemId
-        activeInboxItem {
-          id
-          itemType
-          status
-          title
-          summary
-          payload
-          userId
-          sourceType
-          sourceId
-          createdAt
-          resolvedAt
-        }
-        lastControllerRunId
-        lastControllerSummary
-        tickets {
-          id
-          organizationId
-          ultraplanId
-          ticketId
-          position
-          status
-          generatedByRunId
-          rationale
-          metadata
-          createdAt
-          updatedAt
-          ticket {
-            id
-            title
-            description
-            status
-            priority
-            acceptanceCriteria
-            testPlan
-            labels
-            createdAt
-            updatedAt
-            dependencies {
-              ticketId
-              dependsOnTicketId
-              reason
-              organizationId
-              createdAt
-              dependsOnTicket {
-                id
-                title
-                status
-              }
-            }
-          }
-        }
-        ticketExecutions {
-          id
-          organizationId
-          ultraplanId
-          ticketId
-          sessionGroupId
-          workerSessionId
-          branch
-          workdir
-          status
-          integrationStatus
-          baseCheckpointSha
-          headCheckpointSha
-          integrationCheckpointSha
-          activeInboxItemId
-          lastReviewSummary
-          attempt
-          createdAt
-          updatedAt
-          workerSession {
-            id
-            name
-            agentStatus
-            sessionStatus
-            role
-            tool
-            model
-            hosting
-            branch
-            worktreeDeleted
-            sessionGroupId
-            createdAt
-            updatedAt
-          }
-          ticket {
-            id
-            title
-            status
-          }
-        }
-        controllerRuns {
-          id
-          organizationId
-          ultraplanId
-          sessionGroupId
-          sessionId
-          triggerEventId
-          triggerType
-          status
-          inputSummary
-          summaryTitle
-          summary
-          summaryPayload
-          error
-          createdAt
-          startedAt
-          completedAt
-          session {
-            id
-            name
-            agentStatus
-            sessionStatus
-            role
-            tool
-            model
-            hosting
-            branch
-            worktreeDeleted
-            sessionGroupId
-            createdAt
-            updatedAt
-          }
-        }
-        createdAt
-        updatedAt
-      }
       sessions {
         id
         name
@@ -289,10 +146,6 @@ export function SessionGroupDetailView({
     sessionGroupId,
     "worktreeDeleted",
   ) as boolean | undefined;
-  const groupUltraplan = useEntityField("sessionGroups", sessionGroupId, "ultraplan") as
-    | Ultraplan
-    | null
-    | undefined;
 
   const activeSessionGroupId = useUIStore(
     (s: { activeSessionGroupId: string | null }) => s.activeSessionGroupId,
@@ -380,28 +233,9 @@ export function SessionGroupDetailView({
           | undefined;
         if (Array.isArray(fetchedSessions)) {
           const existingSessions = useEntityStore.getState().sessions;
-          const nestedSessions: Array<Record<string, unknown> & { id: string }> = [];
-          const ultraplan = fetchedGroup.ultraplan as
-            | {
-                controllerRuns?: Array<{
-                  session?: (Record<string, unknown> & { id: string }) | null;
-                }>;
-                ticketExecutions?: Array<{
-                  workerSession?: (Record<string, unknown> & { id: string }) | null;
-                }>;
-              }
-            | null
-            | undefined;
-          for (const run of ultraplan?.controllerRuns ?? []) {
-            if (run.session?.id) nestedSessions.push(run.session);
-          }
-          for (const execution of ultraplan?.ticketExecutions ?? []) {
-            if (execution.workerSession?.id) nestedSessions.push(execution.workerSession);
-          }
-          const sessions = [...fetchedSessions, ...nestedSessions];
           upsertMany(
             "sessions",
-            sessions.map((session) => ({
+            fetchedSessions.map((session) => ({
               ...(existingSessions[session.id] ?? {}),
               ...session,
             })) as Array<SessionEntity & { id: string }>,
@@ -669,22 +503,6 @@ export function SessionGroupDetailView({
     [setActiveSessionId, setActiveTerminalId, setActiveFilePath],
   );
 
-  const handleOpenTimelineSession = useCallback(
-    (sessionId: string) => {
-      openSessionTab(sessionGroupId, sessionId);
-      setActiveSessionId(sessionId);
-      setActiveTerminalId(null);
-      setActiveFilePath(null);
-    },
-    [
-      openSessionTab,
-      sessionGroupId,
-      setActiveFilePath,
-      setActiveSessionId,
-      setActiveTerminalId,
-    ],
-  );
-
   const handleCloseSession = useCallback(
     (sessionId: string) => closeSessionTab(sessionGroupId, sessionId),
     [closeSessionTab, sessionGroupId],
@@ -714,27 +532,6 @@ export function SessionGroupDetailView({
             onClose={() => setActiveSessionId(null)}
             onToggleFullscreen={toggleFullscreen}
             onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
-            ultraplanControl={
-              <UltraplanHeaderControl
-                sessionGroupId={sessionGroupId}
-                groupName={groupName as string | undefined}
-                groupBranch={linkedCheckoutBranch}
-                groupPrUrl={groupPrUrl}
-                ultraplan={groupUltraplan ?? null}
-                controllerSession={
-                  selectedSession
-                    ? {
-                        tool: selectedSession.tool,
-                        model: selectedSession.model,
-                        hosting: selectedSession.hosting,
-                      }
-                    : null
-                }
-                runtimeInstanceId={groupRuntimeInstanceId}
-                canInteract={bridgeInteractionAllowed}
-                onOpenSession={handleOpenTimelineSession}
-              />
-            }
           />
 
           <GroupTabStrip

@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { gql } from "@urql/core";
 import { Send, Square, Cloud, Monitor } from "lucide-react";
 import { useEntityField, useEntityStore, type SessionEntity } from "@trace/client-core";
 import { client } from "../../lib/urql";
@@ -33,6 +34,26 @@ const EMPTY_IMAGES: ImageAttachment[] = [];
 
 const MAX_IMAGES = 5;
 
+const START_ULTRAPLAN_MUTATION = gql`
+  mutation StartUltraplanFromComposer($input: StartUltraplanInput!) {
+    startUltraplan(input: $input) {
+      id
+      status
+      sessionGroupId
+      updatedAt
+    }
+  }
+`;
+
+function normalizeControllerProvider(tool?: string | null): string {
+  if (tool === "claude_code" || tool === "codex" || tool === "custom") return tool;
+  return "codex";
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unexpected client error";
+}
+
 export function SessionInput({
   sessionId,
   onStop,
@@ -47,6 +68,7 @@ export function SessionInput({
   onAccessRequested?: () => void | Promise<void>;
 }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
+  const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | Record<string, unknown>
@@ -135,6 +157,64 @@ export function SessionInput({
         const channelId = useUIStore.getState().activeChannelId;
         if (channelId) {
           void createQuickSession(channelId);
+        }
+        return;
+      }
+
+      if (mode === "ultraplan") {
+        if (!sessionGroupId) {
+          toast.error("Ultraplan needs a session group");
+          throw new Error("Ultraplan needs a session group");
+        }
+        if (images.length > 0) {
+          toast.error("Ultraplan goals do not support image attachments yet");
+          throw new Error("Ultraplan goals do not support image attachments yet");
+        }
+
+        isSendingRef.current = true;
+        setIsSending(true);
+        let handledError = false;
+        try {
+          const runtimePolicy: Record<string, unknown> = {};
+          if (hosting === "cloud" || hosting === "local") {
+            runtimePolicy.hosting = hosting;
+          }
+          if (
+            connection &&
+            typeof connection === "object" &&
+            typeof connection.runtimeInstanceId === "string" &&
+            connection.runtimeInstanceId.trim()
+          ) {
+            runtimePolicy.runtimeInstanceId = connection.runtimeInstanceId;
+          }
+
+          const result = await client
+            .mutation(START_ULTRAPLAN_MUTATION, {
+              input: {
+                sessionGroupId,
+                goal: text,
+                controllerProvider: normalizeControllerProvider(tool),
+                ...(model ? { controllerModel: model } : {}),
+                ...(Object.keys(runtimePolicy).length > 0
+                  ? { controllerRuntimePolicy: runtimePolicy }
+                  : {}),
+              },
+            })
+            .toPromise();
+
+          if (result.error) {
+            handledError = true;
+            toast.error("Failed to start Ultraplan", { description: result.error.message });
+            throw result.error;
+          }
+        } catch (error: unknown) {
+          if (!handledError) {
+            toast.error("Failed to start Ultraplan", { description: errorMessage(error) });
+          }
+          throw error;
+        } finally {
+          isSendingRef.current = false;
+          setIsSending(false);
         }
         return;
       }
@@ -265,7 +345,19 @@ export function SessionInput({
         setIsSending(false);
       }
     },
-    [sessionId, mode, canSend, canQueue, images, isNotStarted, hosting, connection],
+    [
+      sessionId,
+      mode,
+      canSend,
+      canQueue,
+      images,
+      isNotStarted,
+      sessionGroupId,
+      hosting,
+      connection,
+      tool,
+      model,
+    ],
   );
 
   // If the user has bridge access (owner or granted), a disconnected session
@@ -291,11 +383,13 @@ export function SessionInput({
     ? "Worktree deleted. This session is read-only."
     : isOptimistic
       ? "Creating session..."
-      : isActive
-        ? "Queue a message..."
-        : isNotStarted
-          ? "What should the agent work on?"
-          : "Send a message...";
+      : mode === "ultraplan"
+        ? "Describe the goal for Ultraplan..."
+        : isActive
+          ? "Queue a message..."
+          : isNotStarted
+            ? "What should the agent work on?"
+            : "Send a message...";
 
   return (
     <div
