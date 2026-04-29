@@ -2296,32 +2296,32 @@ export class SessionService {
           startMeta,
         }),
       };
-      const hadPendingCommands = this.parsePendingCommands(session.pendingRun).length > 0;
       const commands = this.parsePendingCommands(session.pendingRun);
+      const needsProvisioning = !!session.repoId || session.hosting === "cloud";
+      const markLocalPreparing = session.hosting === "local" && needsProvisioning;
       const updated = await prisma.session.update({
         where: { id },
         data: {
           pendingRun: pendingRunValue([...commands, pendingCommand]),
-          ...(session.hosting === "local" &&
-            runtimeBinding.runtimeId &&
-            !conn.runtimeInstanceId && {
-              connection: this.mergeConnection(session.connection, {
-                runtimeInstanceId: runtimeBinding.runtimeId,
-                runtimeLabel: runtimeBinding.runtimeLabel ?? undefined,
-              }),
+          ...(markLocalPreparing && {
+            connection: this.mergeConnection(session.connection, {
+              state: "connecting",
+              ...(runtimeBinding.runtimeId &&
+                !conn.runtimeInstanceId && {
+                  runtimeInstanceId: runtimeBinding.runtimeId,
+                  runtimeLabel: runtimeBinding.runtimeLabel ?? undefined,
+                }),
             }),
+          }),
         },
         include: SESSION_INCLUDE,
       });
 
-      // If no runtime has been provisioned yet (deferred from startSession),
+      // If no workspace has been prepared yet (deferred from startSession),
       // kick it off now that the user has sent their first message.
-      // Guard: skip if a runtime is already bound (provisioning in progress).
-      const needsProvisioning = !!session.repoId || session.hosting === "cloud";
-      const alreadyProvisioning =
-        hadPendingCommands ||
-        isRuntimeStartupState(conn.state) ||
-        !!sessionRouter.getRuntimeForSession(id);
+      // A local bridge may already be bound here; only a startup connection
+      // state means preparation is already in progress.
+      const alreadyProvisioning = isRuntimeStartupState(conn.state);
       if (needsProvisioning && !alreadyProvisioning) {
         this.provisionRuntime({
           sessionId: id,
@@ -3261,29 +3261,28 @@ export class SessionService {
           checkpointContext: null,
           ...(imageKeys?.length ? { imageKeys } : {}),
         };
-        const hadPendingCommands = this.parsePendingCommands(session.pendingRun).length > 0;
+        const markLocalPreparing = session.hosting === "local";
         await this.storePendingCommand(
           sessionId,
           pendingCommand,
           {
             lastMessageAt: new Date(),
             ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
-            ...(session.hosting === "local" &&
-              runtimeBinding.runtimeId &&
-              !conn.runtimeInstanceId && {
-                connection: this.mergeConnection(session.connection, {
-                  runtimeInstanceId: runtimeBinding.runtimeId,
-                  runtimeLabel: runtimeBinding.runtimeLabel ?? undefined,
-                }),
+            ...(markLocalPreparing && {
+              connection: this.mergeConnection(session.connection, {
+                state: "connecting",
+                ...(runtimeBinding.runtimeId &&
+                  !conn.runtimeInstanceId && {
+                    runtimeInstanceId: runtimeBinding.runtimeId,
+                    runtimeLabel: runtimeBinding.runtimeLabel ?? undefined,
+                  }),
               }),
+            }),
           },
           session.pendingRun,
         );
 
-        const alreadyStarting =
-          hadPendingCommands ||
-          isRuntimeStartupState(conn.state) ||
-          !!sessionRouter.getRuntimeForSession(sessionId);
+        const alreadyStarting = isRuntimeStartupState(conn.state);
         if (!alreadyStarting) {
           this.provisionRuntime({
             sessionId,
