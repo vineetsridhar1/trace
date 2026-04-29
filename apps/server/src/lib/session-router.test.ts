@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type WebSocket from "ws";
 import { SessionRouter } from "./session-router.js";
+import { RuntimeAdapterRegistry, type RuntimeAdapter } from "./runtime-adapter-registry.js";
 
 function makeWs() {
   return {
@@ -182,5 +183,180 @@ describe("SessionRouter runtime adapter dispatch", () => {
       repoId: "repo-1",
       branch: "feature",
     });
+  });
+
+  it("does not let local environment config override the authorized bound runtime", async () => {
+    const router = new SessionRouter();
+    const authorizedWs = makeWs();
+    const configuredWs = makeWs();
+
+    router.registerRuntime({
+      id: "runtime-authorized",
+      label: "Authorized laptop",
+      ws: authorizedWs,
+      hostingMode: "local",
+      supportedTools: ["codex"],
+      registeredRepoIds: ["repo-1"],
+    });
+    router.registerRuntime({
+      id: "runtime-from-config",
+      label: "Config laptop",
+      ws: configuredWs,
+      hostingMode: "local",
+      supportedTools: ["codex"],
+      registeredRepoIds: ["repo-1"],
+    });
+    router.bindSession("session-1", "runtime-authorized");
+
+    router.createRuntime({
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      hosting: "local",
+      adapterType: "local",
+      environment: {
+        id: "env-1",
+        name: "Local",
+        adapterType: "local",
+        config: { runtimeInstanceId: "runtime-from-config" },
+      },
+      tool: "codex",
+      repo: {
+        id: "repo-1",
+        name: "repo",
+        remoteUrl: "https://github.com/acme/repo.git",
+        defaultBranch: "main",
+      },
+      createdById: "user-1",
+      organizationId: "org-1",
+      onFailed: vi.fn(),
+    });
+
+    await Promise.resolve();
+
+    expect(router.getRuntimeForSession("session-1")?.id).toBe("runtime-authorized");
+    expect(authorizedWs.send).toHaveBeenCalledTimes(1);
+    expect(configuredWs.send).not.toHaveBeenCalled();
+  });
+
+  it("delegates provisioned startup through the injected adapter registry", async () => {
+    const provisionedStart = vi.fn().mockResolvedValue({ status: "provisioning" });
+    const provisionedAdapter: RuntimeAdapter = {
+      type: "provisioned",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      startSession: provisionedStart,
+      async stopSession() {
+        return { ok: true, status: "stopping" };
+      },
+      async getStatus() {
+        return { status: "provisioning" };
+      },
+    };
+    const localAdapter: RuntimeAdapter = {
+      type: "local",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return { status: "selected" };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    const router = new SessionRouter(
+      new RuntimeAdapterRegistry([localAdapter, provisionedAdapter]),
+    );
+
+    router.createRuntime({
+      sessionId: "session-1",
+      hosting: "cloud",
+      adapterType: "provisioned",
+      tool: "codex",
+      model: "gpt-test",
+      repo: null,
+      createdById: "user-1",
+      organizationId: "org-1",
+      runtimeToken: "runtime-token",
+      bridgeUrl: "wss://trace.example/bridge",
+      onFailed: vi.fn(),
+      onWorkspaceReady: vi.fn(),
+    });
+
+    await Promise.resolve();
+
+    expect(provisionedStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        actorId: "user-1",
+        tool: "codex",
+        model: "gpt-test",
+        runtimeToken: "runtime-token",
+        bridgeUrl: "wss://trace.example/bridge",
+      }),
+    );
+  });
+
+  it("keeps multiple terminal commands multiplexed by terminalId after adapter routing", async () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+
+    router.registerRuntime({
+      id: "runtime-1",
+      label: "Laptop",
+      ws,
+      hostingMode: "local",
+      supportedTools: ["codex"],
+      registeredRepoIds: ["repo-1"],
+    });
+    router.bindSession("session-1", "runtime-1");
+
+    router.createRuntime({
+      sessionId: "session-1",
+      hosting: "local",
+      adapterType: "local",
+      tool: "codex",
+      repo: null,
+      createdById: "user-1",
+      organizationId: "org-1",
+      onFailed: vi.fn(),
+    });
+
+    await Promise.resolve();
+
+    expect(
+      router.send("session-1", {
+        type: "terminal_create",
+        terminalId: "term-1",
+        sessionId: "session-1",
+        cols: 80,
+        rows: 24,
+        cwd: "/repo",
+      }),
+    ).toBe("delivered");
+    expect(
+      router.send("session-1", {
+        type: "terminal_create",
+        terminalId: "term-2",
+        sessionId: "session-1",
+        cols: 120,
+        rows: 30,
+        cwd: "/repo",
+      }),
+    ).toBe("delivered");
+
+    const send = ws.send as unknown as ReturnType<typeof vi.fn>;
+    const commands = send.mock.calls.map((call) => JSON.parse(call[0] as string));
+    expect(commands).toEqual([
+      expect.objectContaining({ type: "terminal_create", terminalId: "term-1" }),
+      expect.objectContaining({ type: "terminal_create", terminalId: "term-2" }),
+    ]);
   });
 });

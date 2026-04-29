@@ -24,7 +24,7 @@ import {
   runtimeAdapterRegistry,
   setProvisionedRuntimeCloudMachineService,
 } from "./runtime-adapters.js";
-import { type RuntimeAdapterType } from "./runtime-adapter-registry.js";
+import { RuntimeAdapterRegistry, type RuntimeAdapterType } from "./runtime-adapter-registry.js";
 
 interface BaseSessionCommand {
   type:
@@ -111,6 +111,8 @@ export interface SessionAdapterCreateOptions {
   organizationId: string;
   readOnly?: boolean;
   adapterType?: RuntimeAdapterType;
+  runtimeToken?: string;
+  bridgeUrl?: string;
   environment?: {
     id: string;
     name: string;
@@ -119,10 +121,13 @@ export interface SessionAdapterCreateOptions {
   } | null;
 }
 
-function adapterTypeFromHosting(hosting: string): RuntimeAdapterType {
+function adapterTypeFromHosting(
+  hosting: string,
+  runtimeAdapters: RuntimeAdapterRegistry,
+): RuntimeAdapterType {
   if (hosting === "cloud") return "provisioned";
   if (hosting === "local") return "local";
-  return runtimeAdapterRegistry.get(hosting).type;
+  return runtimeAdapters.get(hosting).type;
 }
 
 function connectionRecord(connection: unknown): Record<string, unknown> | null {
@@ -135,6 +140,8 @@ function connectionRecord(connection: unknown): Record<string, unknown> | null {
  * and which sessions they own. Replaces the old bridge-only socket map.
  */
 export class SessionRouter {
+  constructor(private readonly runtimeAdapters = runtimeAdapterRegistry) {}
+
   private runtimes = new Map<string, RuntimeInstance>();
   /** Maps sessionId → runtimeId */
   private sessionRuntime = new Map<string, string>();
@@ -1222,8 +1229,9 @@ export class SessionRouter {
       onWorkspaceReady?: (workdir: string) => void;
     },
   ): void {
-    const adapterType = options.adapterType ?? adapterTypeFromHosting(options.hosting);
-    const adapter = runtimeAdapterRegistry.get(adapterType);
+    const adapterType =
+      options.adapterType ?? adapterTypeFromHosting(options.hosting, this.runtimeAdapters);
+    const adapter = this.runtimeAdapters.get(adapterType);
 
     void (async () => {
       try {
@@ -1241,13 +1249,15 @@ export class SessionRouter {
           branch: options.branch,
           checkpointSha: options.checkpointSha,
           readOnly: options.readOnly,
+          runtimeToken: options.runtimeToken,
+          bridgeUrl: options.bridgeUrl,
         });
 
         if (startResult.runtimeInstanceId) {
           this.bindSession(options.sessionId, startResult.runtimeInstanceId);
         }
 
-        if (adapterType === "provisioned") {
+        if (adapterType === "provisioned" && startResult.runtimeInstanceId) {
           const updatedSession = await prisma.session.update({
             where: { id: options.sessionId },
             data: {
@@ -1339,8 +1349,8 @@ export class SessionRouter {
     const adapterType =
       typeof connectionRecord(session.connection)?.adapterType === "string"
         ? (connectionRecord(session.connection)?.adapterType as string)
-        : adapterTypeFromHosting(session.hosting);
-    const adapter = runtimeAdapterRegistry.get(adapterType);
+        : adapterTypeFromHosting(session.hosting, this.runtimeAdapters);
+    const adapter = this.runtimeAdapters.get(adapterType);
 
     const result = this.send(sessionId, {
       type: "delete",
@@ -1367,8 +1377,8 @@ export class SessionRouter {
     hosting: string,
     command: "pause" | "resume" | "terminate",
   ): Promise<DeliveryResult> {
-    const adapterType = adapterTypeFromHosting(hosting);
-    const adapter = runtimeAdapterRegistry.get(adapterType);
+    const adapterType = adapterTypeFromHosting(hosting, this.runtimeAdapters);
+    const adapter = this.runtimeAdapters.get(adapterType);
 
     if (command === "resume" && adapter.type === "provisioned") {
       const session = await prisma.session.findUniqueOrThrow({

@@ -97,6 +97,9 @@ Owns plan lines:
 
 ## Implementation notes
 
+- Replace the ticket 04 `LegacyCloudMachineProvisionedRuntimeAdapter` compatibility shim with the
+  generic lifecycle endpoint implementation. The shim exists only to keep current cloud sessions
+  working while the registry boundary lands.
 - This is the only Trace-core cloud adapter in V1.
 - AWS, Fly, Kubernetes, and internal platforms all sit behind this lifecycle contract.
 - Keep the launcher payload stable before building reference launchers.
