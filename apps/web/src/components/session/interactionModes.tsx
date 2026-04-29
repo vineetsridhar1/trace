@@ -1,10 +1,19 @@
-import { Pencil, Map, HelpCircle, type LucideIcon } from "lucide-react";
-import { stripPromptWrapping, wrapPrompt, type InteractionMode } from "@trace/client-core";
+import { Pencil, Map, HelpCircle, Workflow, type LucideIcon } from "lucide-react";
+import {
+  stripPromptWrapping,
+  wrapPrompt as wrapCorePrompt,
+  type InteractionMode as CoreInteractionMode,
+} from "@trace/client-core";
 
-export { stripPromptWrapping, wrapPrompt };
-export type { InteractionMode };
+export { stripPromptWrapping };
 
-export const MODE_CYCLE: InteractionMode[] = ["code", "plan", "ask"];
+export type InteractionMode = CoreInteractionMode | "ultraplan";
+
+export function wrapPrompt(mode: InteractionMode, prompt: string): string {
+  return mode === "ultraplan" ? prompt : wrapCorePrompt(mode, prompt);
+}
+
+export const MODE_CYCLE: InteractionMode[] = ["code", "plan", "ask", "ultraplan"];
 
 export interface ModeConfig {
   label: string;
@@ -47,5 +56,14 @@ export const MODE_CONFIG: Record<InteractionMode, ModeConfig> = {
     sendButton: "bg-orange-600 hover:bg-orange-600/90 text-white",
     iconColor: "text-orange-400",
     containerBorder: "border-orange-600/50",
+  },
+  ultraplan: {
+    label: "Ultraplan",
+    icon: Workflow,
+    style: "border-cyan-500 bg-cyan-500/20 text-cyan-300",
+    inputBorder: "border-cyan-500/50 focus:ring-cyan-500",
+    sendButton: "bg-cyan-500 hover:bg-cyan-500/90 text-white",
+    iconColor: "text-cyan-400",
+    containerBorder: "border-cyan-500/50",
   },
 };
