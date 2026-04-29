@@ -24,6 +24,7 @@ vi.mock("./runtime-access.js", () => ({
 
 vi.mock("./session.js", () => ({
   sessionService: {
+    prepareUltraplanControllerSessionForLaunch: vi.fn().mockResolvedValue(undefined),
     run: vi.fn().mockResolvedValue({ agentStatus: "active" }),
   },
 }));
@@ -257,6 +258,9 @@ describe("UltraplanService", () => {
       }),
       prismaMock,
     );
+    expect(sessionServiceMock.prepareUltraplanControllerSessionForLaunch).toHaveBeenCalledWith(
+      "session-1",
+    );
   });
 
   it("reuses an active ultraplan instead of duplicating it", async () => {
@@ -388,6 +392,9 @@ describe("UltraplanService", () => {
       expect.stringContaining("Ship autopilot"),
       "plan",
       expect.objectContaining({ clientSource: "ultraplan_controller" }),
+    );
+    expect(sessionServiceMock.prepareUltraplanControllerSessionForLaunch).toHaveBeenCalledWith(
+      "session-1",
     );
     expect(result).toMatchObject({ id: "run-active", status: "running" });
     expect(prismaMock.session.create).not.toHaveBeenCalled();
