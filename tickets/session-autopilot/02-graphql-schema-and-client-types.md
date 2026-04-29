@@ -2,18 +2,20 @@
 
 ## Summary
 
-Expose Ultraplan, controller runs, ticket executions, session roles, dependency fields, and gate event types through the single GraphQL schema source of truth.
+Expose Ultraplan, planned tickets, controller runs, ticket executions, session roles, dependency fields, event scope, and gate event types through the single GraphQL schema source of truth.
 
 ## What needs to happen
 
 - Add GraphQL enums mirroring the new Prisma enums.
 - Add `Ultraplan` GraphQL type.
+- Add `UltraplanTicket` GraphQL type.
 - Add `UltraplanControllerRun` GraphQL type.
 - Add `TicketExecution` GraphQL type.
 - Add `Session.role`.
 - Add ticket acceptance criteria, test plan, and dependency fields.
 - Add a `SessionGroup.ultraplan` field for the active group plan.
 - Add fields for controller run summaries and linked controller-run sessions.
+- Add `ScopeType.ultraplan`.
 - Add queries as needed:
   - `ultraplan(id: ID!)`
   - `ultraplanForSessionGroup(sessionGroupId: ID!)`
@@ -35,6 +37,8 @@ Expose Ultraplan, controller runs, ticket executions, session roles, dependency 
 ## Completion requirements
 
 - [ ] GraphQL schema contains all Ultraplan, ControllerRun, and TicketExecution types and enums.
+- [ ] GraphQL schema exposes planned tickets independently from executions.
+- [ ] GraphQL schema includes `ScopeType.ultraplan`.
 - [ ] Generated client and resolver types compile.
 - [ ] Session group detail can hydrate the active Ultraplan.
 - [ ] The schema can represent controller run summaries and full-chat links.
@@ -45,6 +49,7 @@ Expose Ultraplan, controller runs, ticket executions, session roles, dependency 
 
 - Keep GraphQL thin. This ticket defines schema and generated types, not business logic.
 - Prefer surfacing Ultraplan off `SessionGroup` because the product surface is group-level.
+- `StartUltraplanInput` should use controller provider/model/runtime policy language, not worker-only `CodingTool`/`HostingMode` coupling.
 - Do not expose mutations that let clients directly create events or ticket execution state without services.
 
 ## How to test

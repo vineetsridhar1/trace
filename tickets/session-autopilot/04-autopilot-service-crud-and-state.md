@@ -22,10 +22,11 @@ Add `ultraplanService` as the service-layer owner for starting, pausing, resumin
   - `listForUltraplan`
 - Starting Ultraplan should create an initial controller run, not a permanent controller session.
 - Each controller run should create or link to a fresh session with `role = ultraplan_controller_run`.
-- Store the session group branch as the Ultraplan base/integration branch.
+- Store the session group branch/workdir as the Ultraplan integration workspace.
+- Keep ticket execution branch/workdir separate from the group integration workspace.
 - Emit Ultraplan and controller-run lifecycle events through the event service.
 - Enforce service-layer authorization for read/write actions on the target session group.
-- Validate requested controller tool/model/runtime before creating a run.
+- Validate requested controller provider/model/runtime policy before creating a run.
 - Add GraphQL resolvers that delegate to the services.
 
 ## Dependencies
@@ -37,11 +38,13 @@ Add `ultraplanService` as the service-layer owner for starting, pausing, resumin
 ## Completion requirements
 
 - [ ] `startUltraplan` creates or reuses the active Ultraplan for a session group.
+- [ ] `startUltraplan` enforces the v1 unique active plan rule for a session group.
 - [ ] Starting Ultraplan creates an initial controller run.
 - [ ] Controller runs create fresh sessions with `role = ultraplan_controller_run`.
 - [ ] Pause, resume, cancel, and run-now are idempotent enough for repeated UI calls.
 - [ ] Unauthorized callers cannot read or mutate Ultraplan or controller-run state.
 - [ ] Invalid or unavailable controller config is rejected before persistence.
+- [ ] Emitted events use `ScopeType.ultraplan`.
 - [ ] All durable state changes emit events.
 
 ## Implementation notes
@@ -49,6 +52,7 @@ Add `ultraplanService` as the service-layer owner for starting, pausing, resumin
 - Keep this ticket limited to service CRUD, initial controller-run creation, and core state transitions.
 - Ordered ticket generation and worker launch can be added in later tickets.
 - The service layer owns state transitions; GraphQL resolvers should parse input and delegate.
+- Every Ultraplan event should include snapshots sufficient for client upserts.
 
 ## How to test
 

@@ -16,6 +16,7 @@ Complete the loop by integrating approved ticket branches into the group branch,
 - Emit metrics for:
   - Ultraplan created/completed/failed/cancelled
   - controller runs created/started/completed/failed
+  - planned tickets created/updated/reordered
   - controller run summary validation failures
   - worker sessions launched
   - next-ticket scheduling decisions
@@ -48,6 +49,7 @@ Complete the loop by integrating approved ticket branches into the group branch,
 - [ ] Conflict results create gates instead of corrupting state.
 - [ ] Final group branch is visible as the QA/merge target.
 - [ ] Controller run metrics distinguish created/started/completed/failed.
+- [ ] Planned-ticket events are visible and hydrate client state without refetches.
 - [ ] Metrics can distinguish sequential v1 scheduling from future DAG scheduling.
 - [ ] User-visible error states are understandable and recoverable.
 - [ ] Permission/runtime/summary/integration failures degrade into clear `failed`, `blocked`, or `needs_human` states.
@@ -57,6 +59,7 @@ Complete the loop by integrating approved ticket branches into the group branch,
 - This is where service-owned git mutation becomes product-visible.
 - Do not merge into the repository default branch.
 - Keep timeline/history lightweight; controller-run summary events should carry most of the product-readable activity.
+- All Ultraplan and ticket-execution events should carry snapshots sufficient for Zustand upserts.
 
 ## How to test
 

@@ -29,6 +29,7 @@ Create the server-side path for Ultraplan human gates: plan approval, ticket val
 - Define what happens when each gate type is resolved or dismissed.
 - Gate resolution should create a fresh controller run when orchestration needs to continue.
 - Emit human gate events.
+- Emit gate events with `ScopeType.ultraplan` and enough snapshots for client upserts.
 
 ## Dependencies
 
@@ -41,6 +42,7 @@ Create the server-side path for Ultraplan human gates: plan approval, ticket val
 - [ ] Ultraplan or execution state transitions to `needs_human`.
 - [ ] Inbox resolution/dismissal can trigger a fresh controller run.
 - [ ] Gate payloads are complete enough for the web inbox UI.
+- [ ] Gate events are scoped to the Ultraplan.
 
 ## Implementation notes
 

@@ -23,6 +23,7 @@ Add role-aware session behavior so controller-run sessions are hidden from norma
 - [ ] Controller-run sessions never appear in normal session tables.
 - [ ] Controller-run sessions never appear in normal session group tab strips.
 - [ ] Group status ignores controller-run sessions.
+- [ ] Controller-run sessions cannot make the user-facing group appear active, failed, or blocked.
 - [ ] Worker sessions remain visible and navigable.
 - [ ] Existing session UX remains unchanged when Ultraplan is not active.
 
@@ -31,6 +32,7 @@ Add role-aware session behavior so controller-run sessions are hidden from norma
 - Hidden is a product concern, not a security boundary. Services can still fetch controller-run sessions directly.
 - Do not hide ticket worker sessions; they are part of the user's observable workflow.
 - Keep role filtering centralized so future session lists do not accidentally expose controller-run sessions.
+- Status derivation, tab strips, active-session selectors, and failed-state badges must all use the same exclusion rule.
 
 ## How to test
 

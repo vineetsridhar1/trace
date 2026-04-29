@@ -10,7 +10,7 @@ Define the durable primitives before adding orchestration behavior.
 
 | #   | Ticket                                                                           | What it does                                                                 |
 | --- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| 01  | [Database Schema and Event Types](01-database-schema-and-event-types.md)         | Adds roles, Ultraplan, ControllerRun, TicketExecution, dependencies, events, and gates |
+| 01  | [Database Schema and Event Types](01-database-schema-and-event-types.md)         | Adds roles, Ultraplan, UltraplanTicket, ControllerRun, TicketExecution, scopes, events, and gates |
 | 02  | [GraphQL Schema and Client Types](02-graphql-schema-and-client-types.md)         | Adds the GraphQL contract and generated types                                 |
 | 03  | [Session Roles and Visibility](03-session-role-and-visible-filtering.md)         | Hides controller-run sessions by default and labels worker sessions correctly |
 
@@ -109,12 +109,15 @@ Post-V1
 The intended v1 is:
 
 - one active Ultraplan per session group
+- planned tickets are linked through `UltraplanTicket` before execution
+- Ultraplan activity uses canonical `ScopeType.ultraplan`
 - episodic controller runs, not a persistent god session
 - each controller run creates a fresh session/chat
 - every controller run emits a structured summary event
 - controller run summaries are visible in the Ultraplan UI
 - full controller run chats are available by click-through
 - worker sessions on per-ticket branches/worktrees
+- group integration workspace and ticket execution workspaces are separate
 - v1 runs one worker ticket at a time
 - ticket dependencies are stored as edges so v2 can support DAG scheduling
 - inbox-backed human gates

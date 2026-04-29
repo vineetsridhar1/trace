@@ -9,6 +9,7 @@ Define how each fresh Ultraplan controller run reasons and acts: its system prom
 - Author the base controller-run prompt.
 - Make the controller's role explicit:
   - manage the ordered ticket plan
+  - create and update `UltraplanTicket` plan membership
   - record dependency edges so future DAG scheduling is possible
   - launch or continue worker sessions
   - review completed/failed workers
@@ -24,6 +25,9 @@ Define how each fresh Ultraplan controller run reasons and acts: its system prom
   - `ticket.updateTestPlan`
   - `ticket.addDependency`
   - `ticket.reorder`
+  - `ultraplan.addPlannedTicket`
+  - `ultraplan.updatePlannedTicket`
+  - `ultraplan.reorderPlannedTickets`
   - `ultraplan.createTicketExecution`
   - `ultraplan.startWorker`
   - `ultraplan.sendWorkerMessage`
@@ -47,6 +51,7 @@ Define how each fresh Ultraplan controller run reasons and acts: its system prom
 - [ ] Prompt contract is checked into the repo.
 - [ ] Tool contract is narrow and service-backed.
 - [ ] Prompt requires acceptance criteria, test plans, and dependency rationale for generated tickets.
+- [ ] Prompt creates durable planned-ticket membership before worker execution.
 - [ ] Prompt requires a structured summary for every completed controller run.
 - [ ] Controller is instructed not to mutate DB/events/git directly.
 - [ ] Malformed output does not result in speculative actions.

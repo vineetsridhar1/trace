@@ -11,6 +11,7 @@ Post-v1 follow-up for giving controller-run and worker runtimes a narrow authent
   - organization id
   - session group id
   - controller run id or worker session id
+  - Ultraplan id
   - controller-run session id or worker session id
   - allowed action names
   - expiry

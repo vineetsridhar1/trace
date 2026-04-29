@@ -22,6 +22,7 @@ Add the event router/worker that creates fresh controller runs when meaningful s
 - Serialize controller runs per session group.
 - Skip duplicate or stale wakeups.
 - Emit controller-run created/started/completed/failed events.
+- Emit events with `ScopeType.ultraplan` and snapshots sufficient for client upserts.
 
 ## Dependencies
 
@@ -38,6 +39,7 @@ Add the event router/worker that creates fresh controller runs when meaningful s
 - [ ] Only one controller run per session group can be in flight.
 - [ ] Manual run-now uses the same run pipeline.
 - [ ] Run events carry enough payload for debugging and client state.
+- [ ] Run events are scoped to the Ultraplan.
 
 ## Implementation notes
 

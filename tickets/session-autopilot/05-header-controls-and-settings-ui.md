@@ -12,6 +12,7 @@ Move the product surface to the session-group UI and add the first Ultraplan sta
   - plan summary
   - current status
   - ordered ticket plan
+  - planned tickets before execution
   - ticket executions
   - worker sessions
   - branch names
@@ -44,6 +45,7 @@ Move the product surface to the session-group UI and add the first Ultraplan sta
 - [ ] State chip reflects live Ultraplan status.
 - [ ] User can start, pause, resume, cancel, and run-now from the group surface.
 - [ ] Ordered tickets and their dependency/blocking state are visible.
+- [ ] Planned tickets render before any `TicketExecution` exists.
 - [ ] Ticket worker sessions are linked from the panel.
 - [ ] Controller run summaries render in an activity timeline.
 - [ ] User can open the full chat for a controller run from the timeline.
@@ -62,5 +64,6 @@ Move the product surface to the session-group UI and add the first Ultraplan sta
 2. Start Ultraplan and verify event-driven status updates.
 3. Pause/resume/run-now/cancel and verify the chip and panel update.
 4. Verify the ordered plan shows the active ticket and blocked future tickets.
-5. Verify controller run summaries appear and link to full chats.
-6. Verify the UI does not expose controller-run sessions in normal navigation.
+5. Verify planned tickets without executions still appear in the plan.
+6. Verify controller run summaries appear and link to full chats.
+7. Verify the UI does not expose controller-run sessions in normal navigation.

@@ -13,6 +13,7 @@ Build the compact context packet each fresh controller run receives when it star
   - playbook and playbook config
   - session group branch and PR state
   - ordered ticket plan and dependency state
+  - `UltraplanTicket` position/status/generated metadata
   - current and future ticket context
   - active ticket executions
   - worker session statuses
@@ -36,6 +37,7 @@ Build the compact context packet each fresh controller run receives when it star
 
 - [ ] Context packet includes the event that triggered the controller run.
 - [ ] Ordered ticket plan and execution state are included.
+- [ ] Planned tickets are read from `UltraplanTicket`, not inferred only from executions.
 - [ ] Dependency edges and the next runnable ticket are included.
 - [ ] Prior controller run summaries are included.
 - [ ] Latest checkpoint and branch diff are included when useful.
@@ -48,6 +50,7 @@ Build the compact context packet each fresh controller run receives when it star
 - Favor server-built context over asking the controller to rediscover state through broad tool calls.
 - Keep the packet session-group-scoped and event-centered.
 - Prior controller summaries are the main memory layer; full old chats should be linked, not blindly pasted.
+- Diff context should be included selectively for implementation review and integration decisions, not every run.
 
 ## How to test
 

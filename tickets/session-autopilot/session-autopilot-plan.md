@@ -80,7 +80,7 @@ It owns:
 - the integration branch
 - the integration worktree
 - the worker sessions
-- the ordered ticket plan association
+- the ordered ticket plan association through `UltraplanTicket`
 - the controller run history
 - the final PR/test target
 
@@ -292,6 +292,30 @@ It links:
 
 This avoids overloading `Ticket` with runtime details and avoids hiding execution state in session JSON.
 
+### Workspace Identity
+
+Ultraplan has two workspace identities that must not be conflated:
+
+- group integration workspace
+- ticket execution workspace
+
+The group integration workspace belongs to the session group and final branch:
+
+- `Ultraplan.integrationBranch`
+- `Ultraplan.integrationWorkdir`
+- `SessionGroup.branch`
+- `SessionGroup.workdir`
+
+Ticket execution workspaces belong to individual worker sessions and executions:
+
+- `TicketExecution.branch`
+- `TicketExecution.workdir`
+- `TicketExecution.baseCheckpointSha`
+- `Session.branch`
+- `Session.workdir`
+
+Worker sessions must not mirror their ticket branch/workdir back onto the session group. The session group branch/workdir is the integration target and final QA workspace.
+
 ### Inbox Gates
 
 Inbox remains the human handoff primitive.
@@ -428,7 +452,8 @@ model Ultraplan {
   sessionGroupId        String
   ownerUserId           String
   status                UltraplanStatus  @default(draft)
-  baseBranch            String
+  integrationBranch     String
+  integrationWorkdir    String?
   playbookId            String?
   playbookConfig        Json?
   planSummary           String?
@@ -438,10 +463,35 @@ model Ultraplan {
   lastControllerSummary String?
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
+
+  @@unique([sessionGroupId])
 }
 ```
 
-`sessionGroupId` should be unique for the active Ultraplan v1. Historical completed plans can be handled later if needed.
+`sessionGroupId` is unique in v1 because historical Ultraplans are out of scope. If history becomes a near-term requirement, replace this with a partial unique index for active plans in a migration.
+
+### UltraplanTicket
+
+```prisma
+model UltraplanTicket {
+  id             String   @id @default(uuid())
+  organizationId String
+  ultraplanId    String
+  ticketId       String
+  position       Int
+  status         String   @default("planned")
+  generatedByRunId String?
+  rationale      String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([ultraplanId, ticketId])
+  @@unique([ultraplanId, position])
+}
+```
+
+`UltraplanTicket` is the durable association between a plan and its planned tickets before execution. `TicketExecution` should reference tickets that are already part of the plan.
 
 ### UltraplanControllerRun
 
@@ -558,7 +608,8 @@ type Ultraplan {
   id: ID!
   sessionGroupId: ID!
   status: UltraplanStatus!
-  baseBranch: String!
+  integrationBranch: String!
+  integrationWorkdir: String
   playbookId: ID
   playbookConfig: JSON
   planSummary: String
@@ -566,8 +617,22 @@ type Ultraplan {
   activeInboxItemId: ID
   lastControllerRun: UltraplanControllerRun
   lastControllerSummary: String
+  tickets: [UltraplanTicket!]!
   ticketExecutions: [TicketExecution!]!
   controllerRuns: [UltraplanControllerRun!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type UltraplanTicket {
+  id: ID!
+  ultraplanId: ID!
+  ticket: Ticket!
+  position: Int!
+  status: String!
+  generatedByRun: UltraplanControllerRun
+  rationale: String
+  metadata: JSON
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -610,9 +675,9 @@ type TicketExecution {
 input StartUltraplanInput {
   sessionGroupId: ID!
   goal: String!
-  controllerTool: CodingTool!
+  controllerProvider: String!
   controllerModel: String
-  controllerHosting: HostingMode!
+  controllerRuntimePolicy: JSON
   playbookId: ID
   playbookConfig: JSON
   customInstructions: String
@@ -629,6 +694,21 @@ type Mutation {
 
 ## Event Model
 
+Ultraplan needs its own event scope. Add `ScopeType.ultraplan` and use it as the canonical scope for Ultraplan activity, controller runs, ticket planning, ticket executions, and human gates.
+
+Use `session_group` only if Trace later introduces a broader group-level event history product. For v1, `ultraplan` keeps orchestration events scoped to the workflow entity.
+
+```graphql
+enum ScopeType {
+  channel
+  chat
+  session
+  ticket
+  system
+  ultraplan
+}
+```
+
 Recommended new event types:
 
 ```graphql
@@ -644,6 +724,9 @@ enum EventType {
   ultraplan_controller_run_started
   ultraplan_controller_run_completed
   ultraplan_controller_run_failed
+  ultraplan_ticket_created
+  ultraplan_ticket_updated
+  ultraplan_ticket_reordered
   ticket_execution_created
   ticket_execution_updated
   ticket_execution_ready_for_review
@@ -654,7 +737,7 @@ enum EventType {
 }
 ```
 
-Controller run completion events should carry the structured summary and enough entity snapshots for Zustand upserts without refetching.
+All Ultraplan-related events should carry enough snapshots for Zustand upserts without refetching. That includes Ultraplan, UltraplanTicket, UltraplanControllerRun, TicketExecution, and inbox gate events.
 
 ## Controller Wakeup Rules
 
@@ -682,6 +765,7 @@ The run input should include:
 - Ultraplan state
 - playbook and config
 - ordered ticket plan
+- `UltraplanTicket` metadata and positions
 - current and future ticket context
 - prior controller run summaries
 - selected prior controller messages when useful
@@ -743,6 +827,7 @@ Rules:
 - workers never directly mutate the group branch
 - integration happens through service-layer merge/cherry-pick/rebase actions
 - the group branch remains the final test target
+- group integration workspace state must never be overwritten by ticket worker workspace state
 - every v1 ticket worker should start from the latest integrated group branch
 - only one worker branch should be active by default in v1
 - future DAG playbooks can allow independent tickets to run in parallel from the current group branch
@@ -910,12 +995,14 @@ Add:
 - `TicketExecutionStatus`
 - `IntegrationStatus`
 - `Ultraplan`
+- `UltraplanTicket`
 - `UltraplanControllerRun`
 - `TicketExecution`
 - optional `TicketDependency`
 - `Session.role`
 - ticket acceptance criteria
 - ticket test plan
+- `ScopeType.ultraplan`
 - Ultraplan inbox item types
 - Ultraplan event types
 
@@ -927,6 +1014,7 @@ Add:
 Add:
 
 - Ultraplan types
+- UltraplanTicket types
 - UltraplanControllerRun types
 - TicketExecution types
 - role/status enums
@@ -971,6 +1059,7 @@ Update bridge/session-router paths for:
 
 - creating controller-run sessions
 - creating per-session ticket worktrees
+- preserving separate group integration and ticket execution workspace identities
 - requesting commit diffs for worker branches
 - integrating worker branches into the group branch
 - reporting conflicts safely
