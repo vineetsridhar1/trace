@@ -44,7 +44,7 @@ Owns plan lines:
 - [x] Runtime adapter contracts do not expose or imply a single terminal stream per session.
 - [x] Existing terminal commands/events remain multiplexed by `terminalId` after adapter routing.
 - [x] No provider-specific code is added to the registry.
-- [ ] Review follow-up: `RuntimeStopInput` and `RuntimeStatusInput` carry enough environment/config context for authenticated provisioned stop/status implementations.
+- [x] Review follow-up: `RuntimeStopInput` and `RuntimeStatusInput` carry enough environment/config context for authenticated provisioned stop/status implementations.
 
 ## Implementation notes
 
@@ -52,7 +52,7 @@ Owns plan lines:
 - The adapter starts/selects compute; the bridge carries live traffic.
 - Terminal creation, input, output, resize, exit, error, and destroy are live bridge traffic and must remain isolated by `terminalId`.
 - Ticket 03 introduced service-layer config validation behind a small local/provisioned adapter shim in `AgentEnvironmentService`; replace that shim with the real registry so environment CRUD, environment testing, and session startup all use the same adapter lookup and validation path.
-- Review note: the current start input carries `environment`, but stop/status inputs only carry connection/org data. Before ticket 06, extend those inputs or router call sites so provisioned stop/status can use the selected environment's URLs and auth secret through the adapter boundary.
+- Review note resolved: stop/status inputs now carry environment context so provisioned stop/status can use the selected environment's URLs and auth secret through the adapter boundary.
 - Avoid introducing `aws`, `fly`, or `kubernetes` as adapter types in Trace core.
 
 ## How to test
