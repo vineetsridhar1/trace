@@ -68,15 +68,23 @@ export type AgentCostSummary = {
 
 export type AgentEnvironment = {
   __typename?: "AgentEnvironment";
-  adapterType: Scalars["String"]["output"];
+  adapterType: AgentEnvironmentAdapterType;
   config: Scalars["JSON"]["output"];
   createdAt: Scalars["DateTime"]["output"];
   enabled: Scalars["Boolean"]["output"];
   id: Scalars["ID"]["output"];
   isDefault: Scalars["Boolean"]["output"];
   name: Scalars["String"]["output"];
-  organizationId: Scalars["ID"]["output"];
+  orgId: Scalars["ID"]["output"];
   updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type AgentEnvironmentAdapterType = "local" | "provisioned";
+
+export type AgentEnvironmentTestResult = {
+  __typename?: "AgentEnvironmentTestResult";
+  message?: Maybe<Scalars["String"]["output"]>;
+  ok: Scalars["Boolean"]["output"];
 };
 
 export type AgentExecutionLog = {
@@ -387,6 +395,15 @@ export type CostBudget = {
   dailyLimitCents: Scalars["Int"]["output"];
 };
 
+export type CreateAgentEnvironmentInput = {
+  adapterType: AgentEnvironmentAdapterType;
+  config: Scalars["JSON"]["input"];
+  enabled?: InputMaybe<Scalars["Boolean"]["input"]>;
+  isDefault?: InputMaybe<Scalars["Boolean"]["input"]>;
+  name: Scalars["String"]["input"];
+  orgId: Scalars["ID"]["input"];
+};
+
 export type CreateAiConversationInput = {
   title?: InputMaybe<Scalars["String"]["input"]>;
   visibility?: InputMaybe<AiConversationVisibility>;
@@ -662,6 +679,7 @@ export type Mutation = {
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
   commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
+  createAgentEnvironment: AgentEnvironment;
   createAiConversation: AiConversation;
   createChannel: Channel;
   createChannelGroup: ChannelGroup;
@@ -672,6 +690,7 @@ export type Mutation = {
   createRepo: Repo;
   createTerminal: Terminal;
   createTicket: Ticket;
+  deleteAgentEnvironment: Scalars["Boolean"]["output"];
   deleteApiToken: Scalars["Boolean"]["output"];
   deleteChannel: Scalars["Boolean"]["output"];
   deleteChannelGroup: Scalars["Boolean"]["output"];
@@ -721,12 +740,14 @@ export type Mutation = {
   subscribe: Participant;
   syncLinkedCheckout: LinkedCheckoutActionResult;
   terminateSession: Session;
+  testAgentEnvironment: AgentEnvironmentTestResult;
   unassignTicket: Ticket;
   unlinkTicket: Ticket;
   unmuteScope: Participant;
   unregisterPushToken: Scalars["Boolean"]["output"];
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars["Boolean"]["output"];
+  updateAgentEnvironment: AgentEnvironment;
   updateAgentSettings: AgentIdentity;
   updateAiConversationTitle: AiConversation;
   updateBridgeAccessGrant: BridgeAccessGrant;
@@ -786,6 +807,10 @@ export type MutationCommitLinkedCheckoutChangesArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationCreateAgentEnvironmentArgs = {
+  input: CreateAgentEnvironmentInput;
+};
+
 export type MutationCreateAiConversationArgs = {
   input: CreateAiConversationInput;
   organizationId: Scalars["ID"]["input"];
@@ -830,6 +855,10 @@ export type MutationCreateTerminalArgs = {
 
 export type MutationCreateTicketArgs = {
   input: CreateTicketInput;
+};
+
+export type MutationDeleteAgentEnvironmentArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationDeleteApiTokenArgs = {
@@ -1074,6 +1103,10 @@ export type MutationTerminateSessionArgs = {
   id: Scalars["ID"]["input"];
 };
 
+export type MutationTestAgentEnvironmentArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationUnassignTicketArgs = {
   ticketId: Scalars["ID"]["input"];
   userId: Scalars["ID"]["input"];
@@ -1101,6 +1134,10 @@ export type MutationUnregisterRepoWebhookArgs = {
 export type MutationUnsubscribeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type MutationUpdateAgentEnvironmentArgs = {
+  input: UpdateAgentEnvironmentInput;
 };
 
 export type MutationUpdateAgentSettingsArgs = {
@@ -1225,6 +1262,7 @@ export type Query = {
   __typename?: "Query";
   agentAggregationWindows: Array<AggregationWindowInfo>;
   agentCostSummary: AgentCostSummary;
+  agentEnvironments: Array<AgentEnvironment>;
   agentExecutionLog?: Maybe<AgentExecutionLog>;
   agentExecutionLogs: AgentExecutionLogConnection;
   agentIdentity?: Maybe<AgentIdentity>;
@@ -1285,6 +1323,10 @@ export type QueryAgentCostSummaryArgs = {
   endDate: Scalars["String"]["input"];
   organizationId: Scalars["ID"]["input"];
   startDate: Scalars["String"]["input"];
+};
+
+export type QueryAgentEnvironmentsArgs = {
+  orgId: Scalars["ID"]["input"];
 };
 
 export type QueryAgentExecutionLogArgs = {
@@ -1706,6 +1748,7 @@ export type SlashCommandSource = "builtin" | "project_skill" | "user_skill";
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
+  environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   model?: InputMaybe<Scalars["String"]["input"]>;
@@ -1852,6 +1895,14 @@ export type Turn = {
 };
 
 export type TurnRole = "ASSISTANT" | "USER";
+
+export type UpdateAgentEnvironmentInput = {
+  config?: InputMaybe<Scalars["JSON"]["input"]>;
+  enabled?: InputMaybe<Scalars["Boolean"]["input"]>;
+  id: Scalars["ID"]["input"];
+  isDefault?: InputMaybe<Scalars["Boolean"]["input"]>;
+  name?: InputMaybe<Scalars["String"]["input"]>;
+};
 
 export type UpdateAgentSettingsInput = {
   autonomyMode?: InputMaybe<AutonomyMode>;

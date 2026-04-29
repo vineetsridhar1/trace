@@ -14,6 +14,7 @@ export type {
   ResolversParentTypes,
   ActorResolvers,
   AgentEnvironmentResolvers,
+  AgentEnvironmentTestResultResolvers,
   ChannelResolvers,
   EventResolvers,
   MutationResolvers,

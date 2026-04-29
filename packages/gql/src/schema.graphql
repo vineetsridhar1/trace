@@ -162,6 +162,11 @@ enum OrgAgentStatus {
   disabled
 }
 
+enum AgentEnvironmentAdapterType {
+  local
+  provisioned
+}
+
 enum AutonomyMode {
   observe
   suggest
@@ -289,14 +294,19 @@ type Organization {
 
 type AgentEnvironment {
   id: ID!
-  organizationId: ID!
+  orgId: ID!
   name: String!
-  adapterType: String!
+  adapterType: AgentEnvironmentAdapterType!
   config: JSON!
   enabled: Boolean!
   isDefault: Boolean!
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+type AgentEnvironmentTestResult {
+  ok: Boolean!
+  message: String
 }
 
 type OrgMember {
@@ -960,6 +970,7 @@ input ReorderChannelsInput {
 input StartSessionInput {
   tool: CodingTool!
   model: String
+  environmentId: ID
   hosting: HostingMode
   runtimeInstanceId: ID
   repoId: ID
@@ -1057,6 +1068,23 @@ input CreateAiConversationInput {
   visibility: AiConversationVisibility
 }
 
+input CreateAgentEnvironmentInput {
+  orgId: ID!
+  name: String!
+  adapterType: AgentEnvironmentAdapterType!
+  config: JSON!
+  enabled: Boolean
+  isDefault: Boolean
+}
+
+input UpdateAgentEnvironmentInput {
+  id: ID!
+  name: String
+  config: JSON
+  enabled: Boolean
+  isDefault: Boolean
+}
+
 input CreateOrganizationInput {
   name: String!
 }
@@ -1066,6 +1094,7 @@ input CreateOrganizationInput {
 type Query {
   organization(id: ID!): Organization
   myOrganizations: [OrgMember!]!
+  agentEnvironments(orgId: ID!): [AgentEnvironment!]!
   repos(organizationId: ID!): [Repo!]!
   repo(id: ID!): Repo
   projects(organizationId: ID!, repoId: ID): [Project!]!
@@ -1172,6 +1201,10 @@ enum LinkedCheckoutErrorCode {
 
 type Mutation {
   createChannel(input: CreateChannelInput!): Channel!
+  createAgentEnvironment(input: CreateAgentEnvironmentInput!): AgentEnvironment!
+  updateAgentEnvironment(input: UpdateAgentEnvironmentInput!): AgentEnvironment!
+  deleteAgentEnvironment(id: ID!): Boolean!
+  testAgentEnvironment(id: ID!): AgentEnvironmentTestResult!
   updateChannel(id: ID!, input: UpdateChannelInput!): Channel!
   joinChannel(channelId: ID!): Channel!
   deleteChannel(id: ID!): Boolean!

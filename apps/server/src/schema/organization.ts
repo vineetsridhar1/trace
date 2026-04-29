@@ -130,8 +130,8 @@ export const organizationTypeResolvers = {
     members: (org: { id: string }) => {
       return orgMemberService.getMembers(org.id);
     },
-    agentEnvironments: (org: { id: string }) => {
-      return agentEnvironmentService.list(org.id);
+    agentEnvironments: (org: { id: string }, _args: unknown, ctx: Context) => {
+      return agentEnvironmentService.list(org.id, ctx.actorType, ctx.userId);
     },
   },
   OrgMember: {
