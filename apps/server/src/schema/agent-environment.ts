@@ -51,6 +51,7 @@ export const agentEnvironmentMutations = {
       args.input.id,
       {
         name: args.input.name ?? undefined,
+        adapterType: args.input.adapterType ?? undefined,
         config: optionalConfig(args.input.config),
         enabled: args.input.enabled ?? undefined,
         isDefault: args.input.isDefault ?? undefined,

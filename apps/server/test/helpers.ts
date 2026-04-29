@@ -63,6 +63,7 @@ export function createPrismaMock() {
     },
     agentIdentity: {
       findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
       findMany: vi.fn(),
       upsert: vi.fn(),
       update: vi.fn(),
@@ -76,6 +77,7 @@ export function createPrismaMock() {
     agentEnvironment: {
       create: vi.fn(),
       delete: vi.fn(),
+      findFirst: vi.fn(),
       findFirstOrThrow: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),

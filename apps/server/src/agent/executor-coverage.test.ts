@@ -572,6 +572,7 @@ const CANONICAL_EXECUTION_CASES: ExecutionCase[] = [
         prompt: "Fix the flaky build",
         organizationId: "org-1",
         createdById: "agent-1",
+        actorType: "agent",
       });
     },
   },
