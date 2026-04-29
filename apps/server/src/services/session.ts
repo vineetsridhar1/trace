@@ -15,7 +15,13 @@ import {
 import { prisma } from "../lib/db.js";
 import { AuthorizationError } from "../lib/errors.js";
 import { eventService } from "./event.js";
-import { sessionRouter, type DeliveryResult, type RuntimeInstance } from "../lib/session-router.js";
+import {
+  sessionRouter,
+  type DeliveryResult,
+  type RuntimeInstance,
+  type RuntimeLifecycleEventType,
+  type RuntimeLifecycleUpdate,
+} from "../lib/session-router.js";
 import type { RuntimeAdapterType } from "../lib/runtime-adapter-registry.js";
 import { inboxService } from "./inbox.js";
 import { runtimeDebug } from "../lib/runtime-debug.js";
@@ -99,13 +105,26 @@ function extractPendingInputInfo(data: Record<string, unknown>): PendingInputInf
 
 /** Shape of Session.connection JSON stored in the DB */
 export type SessionConnectionData = {
-  state: "pending" | "connected" | "degraded" | "disconnected" | "failed" | "stopping" | "stopped";
+  state:
+    | "pending"
+    | "requested"
+    | "provisioning"
+    | "booting"
+    | "connecting"
+    | "connected"
+    | "degraded"
+    | "disconnected"
+    | "failed"
+    | "timed_out"
+    | "stopping"
+    | "stopped";
   environmentId?: string;
   adapterType?: "local" | "provisioned";
   runtimeInstanceId?: string;
   runtimeLabel?: string;
   providerRuntimeId?: string;
   providerRuntimeUrl?: string;
+  providerStatus?: string;
   requestedAt?: string;
   provisioningAt?: string;
   connectingAt?: string;
@@ -150,6 +169,11 @@ type PendingSessionCommand =
       workspaceUpgrade?: boolean;
     };
 
+type PendingSessionCommandQueue = {
+  type: "queue";
+  commands: PendingSessionCommand[];
+};
+
 type GroupWorkspaceStatePatch = {
   workdir?: string | null;
   connection?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | null;
@@ -170,6 +194,30 @@ function defaultConnection(overrides?: Partial<SessionConnectionData>): SessionC
     canMove: true,
     ...overrides,
   };
+}
+
+function pendingRunValue(
+  commands: PendingSessionCommand[],
+): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput {
+  if (commands.length === 0) return Prisma.DbNull;
+  if (commands.length === 1) return commands[0] as unknown as Prisma.InputJsonValue;
+  return {
+    type: "queue",
+    commands,
+  } satisfies PendingSessionCommandQueue as unknown as Prisma.InputJsonValue;
+}
+
+function isRuntimeStartupState(state: SessionConnectionData["state"]): boolean {
+  return (
+    state === "requested" ||
+    state === "provisioning" ||
+    state === "booting" ||
+    state === "connecting"
+  );
+}
+
+function isRuntimeTerminalState(state: SessionConnectionData["state"]): boolean {
+  return state === "failed" || state === "timed_out" || state === "stopped";
 }
 
 function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
@@ -685,9 +733,189 @@ export class SessionService {
       createdById: params.createdById,
       organizationId: params.organizationId,
       readOnly: params.readOnly,
+      onLifecycle: (eventType, update) =>
+        this.recordRuntimeLifecycle(params.sessionId, eventType, update),
       onFailed: (error) => this.workspaceFailed(params.sessionId, error),
       onWorkspaceReady: (workdir) => this.workspaceReady(params.sessionId, workdir),
     });
+  }
+
+  private async recordRuntimeLifecycle(
+    sessionId: string,
+    eventType: RuntimeLifecycleEventType,
+    update: RuntimeLifecycleUpdate = {},
+  ): Promise<void> {
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: {
+        organizationId: true,
+        sessionGroupId: true,
+        agentStatus: true,
+        sessionStatus: true,
+        connection: true,
+      },
+    });
+    if (!session) return;
+
+    const conn = this.parseConnection(session.connection);
+    if (
+      update.runtimeInstanceId &&
+      conn.runtimeInstanceId &&
+      conn.runtimeInstanceId !== update.runtimeInstanceId
+    ) {
+      return;
+    }
+
+    if (
+      isRuntimeTerminalState(conn.state) &&
+      eventType !== "session_runtime_start_requested" &&
+      eventType !== "session_runtime_start_failed" &&
+      eventType !== "session_runtime_start_timed_out"
+    ) {
+      return;
+    }
+
+    const nextState = this.lifecycleConnectionState(eventType);
+    if (conn.state === "connected" && isRuntimeStartupState(nextState)) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const runtimePatch: Partial<SessionConnectionData> = {
+      ...(update.runtimeInstanceId && { runtimeInstanceId: update.runtimeInstanceId }),
+      ...(update.runtimeLabel && { runtimeLabel: update.runtimeLabel }),
+      ...(update.providerRuntimeId && {
+        cloudMachineId: update.providerRuntimeId,
+        providerRuntimeId: update.providerRuntimeId,
+      }),
+      ...(update.providerRuntimeUrl && { providerRuntimeUrl: update.providerRuntimeUrl }),
+      ...(update.providerStatus && { providerStatus: update.providerStatus }),
+    };
+
+    let connectionPatch: Partial<SessionConnectionData> = { state: nextState };
+    switch (eventType) {
+      case "session_runtime_start_requested":
+        connectionPatch = {
+          ...runtimePatch,
+          state: "requested",
+          requestedAt: now,
+          lastError: undefined,
+          canRetry: true,
+          canMove: true,
+          autoRetryable: true,
+        };
+        break;
+      case "session_runtime_provisioning":
+        connectionPatch = {
+          ...runtimePatch,
+          state: "provisioning",
+          provisioningAt: now,
+          lastError: undefined,
+          canRetry: true,
+          canMove: true,
+          autoRetryable: true,
+        };
+        break;
+      case "session_runtime_connecting":
+        connectionPatch = {
+          ...runtimePatch,
+          state: "connecting",
+          connectingAt: now,
+          lastError: undefined,
+          canRetry: true,
+          canMove: true,
+          autoRetryable: true,
+        };
+        break;
+      case "session_runtime_connected":
+        connectionPatch = {
+          ...runtimePatch,
+          state: "connected",
+          connectedAt: now,
+          lastSeen: now,
+          lastError: undefined,
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+          autoRetryable: true,
+        };
+        break;
+      case "session_runtime_start_failed":
+        connectionPatch = {
+          ...runtimePatch,
+          state: "failed",
+          failedAt: now,
+          lastError: update.error ?? "Runtime failed to start",
+          canRetry: true,
+          canMove: true,
+          autoRetryable: false,
+        };
+        break;
+      case "session_runtime_start_timed_out":
+        connectionPatch = {
+          ...runtimePatch,
+          state: "timed_out",
+          timedOutAt: now,
+          lastError: update.error ?? "Runtime startup timed out",
+          canRetry: true,
+          canMove: true,
+          autoRetryable: false,
+        };
+        break;
+    }
+
+    const nextConnection = connJson({ ...conn, ...connectionPatch });
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { connection: nextConnection },
+    });
+    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
+      connection: nextConnection,
+    });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType,
+      payload: {
+        type: "runtime_lifecycle",
+        sessionId,
+        lifecycleState: nextState,
+        connection: nextConnection,
+        agentStatus: session.agentStatus,
+        sessionStatus: session.sessionStatus,
+        ...(update.runtimeInstanceId && { runtimeInstanceId: update.runtimeInstanceId }),
+        ...(update.runtimeLabel && { runtimeLabel: update.runtimeLabel }),
+        ...(update.providerRuntimeId && { providerRuntimeId: update.providerRuntimeId }),
+        ...(update.providerRuntimeUrl && { providerRuntimeUrl: update.providerRuntimeUrl }),
+        ...(update.providerStatus && { providerStatus: update.providerStatus }),
+        ...(update.error && { error: update.error }),
+        ...(sessionGroup ? { sessionGroup } : {}),
+      } as Prisma.InputJsonValue,
+      actorType: "system",
+      actorId: "system",
+    });
+  }
+
+  private lifecycleConnectionState(
+    eventType: RuntimeLifecycleEventType,
+  ): SessionConnectionData["state"] {
+    switch (eventType) {
+      case "session_runtime_start_requested":
+        return "requested";
+      case "session_runtime_provisioning":
+        return "provisioning";
+      case "session_runtime_connecting":
+        return "connecting";
+      case "session_runtime_connected":
+        return "connected";
+      case "session_runtime_start_failed":
+        return "failed";
+      case "session_runtime_start_timed_out":
+        return "timed_out";
+    }
+    return "failed";
   }
 
   private async assertRuntimeAccess(params: {
@@ -1709,21 +1937,24 @@ export class SessionService {
 
     // If workspace is still being prepared, queue the run for later
     if (session.agentStatus === "not_started" && !session.workdir) {
+      const pendingCommand: PendingSessionCommand = {
+        type: "run",
+        prompt: prompt ?? null,
+        interactionMode: interactionMode ?? null,
+        clientSource: normalizeClientSource(access?.clientSource),
+        checkpointContext: buildCheckpointContextFromStartMeta({
+          sessionId: id,
+          sessionGroupId: session.sessionGroupId,
+          repoId: session.repoId,
+          startMeta,
+        }),
+      };
+      const hadPendingCommands = this.parsePendingCommands(session.pendingRun).length > 0;
+      const commands = this.parsePendingCommands(session.pendingRun);
       const updated = await prisma.session.update({
         where: { id },
         data: {
-          pendingRun: {
-            type: "run",
-            prompt: prompt ?? null,
-            interactionMode: interactionMode ?? null,
-            clientSource: normalizeClientSource(access?.clientSource),
-            checkpointContext: buildCheckpointContextFromStartMeta({
-              sessionId: id,
-              sessionGroupId: session.sessionGroupId,
-              repoId: session.repoId,
-              startMeta,
-            }),
-          } as unknown as Prisma.InputJsonValue,
+          pendingRun: pendingRunValue([...commands, pendingCommand]),
           ...(session.hosting === "local" &&
             runtimeBinding.runtimeId &&
             !conn.runtimeInstanceId && {
@@ -1740,7 +1971,10 @@ export class SessionService {
       // kick it off now that the user has sent their first message.
       // Guard: skip if a runtime is already bound (provisioning in progress).
       const needsProvisioning = !!session.repoId || session.hosting === "cloud";
-      const alreadyProvisioning = !!sessionRouter.getRuntimeForSession(id);
+      const alreadyProvisioning =
+        hadPendingCommands ||
+        isRuntimeStartupState(conn.state) ||
+        !!sessionRouter.getRuntimeForSession(id);
       if (needsProvisioning && !alreadyProvisioning) {
         this.provisionRuntime({
           sessionId: id,
@@ -2575,7 +2809,7 @@ export class SessionService {
 
     if (newSessionStatus !== "needs_input") {
       setImmediate(() => {
-        void this.drainOneQueuedMessage(id);
+        void this.drainNextPendingOrQueuedMessage(id);
       });
     }
   }
@@ -2625,6 +2859,7 @@ export class SessionService {
         sessionGroup: { select: { slug: true } },
         channel: { select: { baseBranch: true } },
         connection: true,
+        pendingRun: true,
         worktreeDeleted: true,
         readOnlyWorkspace: true,
         repo: { select: { id: true, name: true, remoteUrl: true, defaultBranch: true } },
@@ -2670,17 +2905,19 @@ export class SessionService {
     if (session.agentStatus === "not_started" && !session.workdir && !session.toolSessionId) {
       const needsProvisioning = !!session.repoId || session.hosting === "cloud";
       if (needsProvisioning) {
-        await prisma.session.update({
-          where: { id: sessionId },
-          data: {
-            pendingRun: {
-              type: "send",
-              prompt: text,
-              interactionMode: interactionMode ?? null,
-              clientSource: normalizeClientSource(clientSource),
-              checkpointContext: null,
-              ...(imageKeys?.length ? { imageKeys } : {}),
-            } as unknown as Prisma.InputJsonValue,
+        const pendingCommand: PendingSessionCommand = {
+          type: "send",
+          prompt: text,
+          interactionMode: interactionMode ?? null,
+          clientSource: normalizeClientSource(clientSource),
+          checkpointContext: null,
+          ...(imageKeys?.length ? { imageKeys } : {}),
+        };
+        const hadPendingCommands = this.parsePendingCommands(session.pendingRun).length > 0;
+        await this.storePendingCommand(
+          sessionId,
+          pendingCommand,
+          {
             lastMessageAt: new Date(),
             ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
             ...(session.hosting === "local" &&
@@ -2692,27 +2929,34 @@ export class SessionService {
                 }),
               }),
           },
-        });
+          session.pendingRun,
+        );
 
-        this.provisionRuntime({
-          sessionId,
-          sessionGroupId: session.sessionGroupId,
-          slug: session.sessionGroup?.slug,
-          preserveBranchName: shouldPreserveWorkspaceBranchName({
+        const alreadyStarting =
+          hadPendingCommands ||
+          isRuntimeStartupState(conn.state) ||
+          !!sessionRouter.getRuntimeForSession(sessionId);
+        if (!alreadyStarting) {
+          this.provisionRuntime({
+            sessionId,
+            sessionGroupId: session.sessionGroupId,
             slug: session.sessionGroup?.slug,
+            preserveBranchName: shouldPreserveWorkspaceBranchName({
+              slug: session.sessionGroup?.slug,
+              branch: session.branch,
+              channelBaseBranch: session.channel?.baseBranch,
+            }),
+            hosting: session.hosting,
+            tool: session.tool,
+            model: session.model,
+            repo: session.repo,
             branch: session.branch,
-            channelBaseBranch: session.channel?.baseBranch,
-          }),
-          hosting: session.hosting,
-          tool: session.tool,
-          model: session.model,
-          repo: session.repo,
-          branch: session.branch,
-          createdById: session.createdById,
-          organizationId: session.organizationId,
-          readOnly: session.readOnlyWorkspace,
-          adapterType: conn.adapterType,
-        });
+            createdById: session.createdById,
+            organizationId: session.organizationId,
+            readOnly: session.readOnlyWorkspace,
+            adapterType: conn.adapterType,
+          });
+        }
 
         const event = await eventService.create({
           organizationId: session.organizationId,
@@ -2722,6 +2966,7 @@ export class SessionService {
           payload: {
             text,
             clientSource: normalizeClientSource(clientSource),
+            deliveryStatus: "pending_runtime",
             ...(imageKeys?.length ? { imageKeys } : {}),
             ...(clientMutationId ? { clientMutationId } : {}),
           },
@@ -2860,6 +3105,7 @@ export class SessionService {
           lastMessageAt: new Date(),
           ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
         },
+        session.pendingRun,
       );
       await this.persistConnectionFailure(
         sessionId,
@@ -3098,6 +3344,30 @@ export class SessionService {
     return true;
   }
 
+  private async drainNextPendingOrQueuedMessage(sessionId: string) {
+    const pending = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { organizationId: true, pendingRun: true },
+    });
+    if (!pending) return false;
+
+    if (this.parsePendingCommands(pending.pendingRun).length > 0) {
+      const replayResult = await this.deliverPendingCommand(sessionId, pending.pendingRun);
+      if (replayResult && replayResult !== "delivered") {
+        await this.persistConnectionFailure(
+          sessionId,
+          pending.organizationId,
+          replayResult,
+          "pending_replay",
+        );
+        return false;
+      }
+      return replayResult === "delivered";
+    }
+
+    return this.drainOneQueuedMessage(sessionId);
+  }
+
   private async drainOneQueuedMessage(sessionId: string) {
     // Verify the session is in a drainable state before popping
     const current = await prisma.session.findUnique({
@@ -3192,7 +3462,7 @@ export class SessionService {
             workdir: true,
           },
         });
-        const pendingCommand = this.parsePendingCommand(prev.pendingRun);
+        const pendingCommand = this.parsePendingCommands(prev.pendingRun)[0] ?? null;
 
         const updated = await tx.session.update({
           where: { id: sessionId },
@@ -3267,6 +3537,11 @@ export class SessionService {
     if (pendingRun) {
       const replayResult = await this.deliverPendingCommand(sessionId, pendingRun);
       if (replayResult && replayResult !== "delivered") {
+        const commands = this.parsePendingCommands(pendingRun);
+        await prisma.session.update({
+          where: { id: sessionId },
+          data: { pendingRun: pendingRunValue(commands) },
+        });
         await this.persistConnectionFailure(
           sessionId,
           session.organizationId,
@@ -3278,6 +3553,25 @@ export class SessionService {
   }
 
   async workspaceFailed(sessionId: string, error: string) {
+    const prev = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { connection: true },
+    });
+    const conn = this.parseConnection(prev.connection);
+    const now = new Date().toISOString();
+    const failedState: SessionConnectionData["state"] =
+      conn.state === "timed_out" ? "timed_out" : "failed";
+    const nextConnection = connJson({
+      ...conn,
+      state: failedState,
+      lastError: error,
+      canRetry: true,
+      canMove: true,
+      autoRetryable: false,
+      ...(failedState === "failed" ? { failedAt: conn.failedAt ?? now } : {}),
+      ...(failedState === "timed_out" ? { timedOutAt: conn.timedOutAt ?? now } : {}),
+    });
+
     const session = await prisma.session.update({
       where: { id: sessionId },
       data: {
@@ -3285,7 +3579,7 @@ export class SessionService {
         workdir: null,
         worktreeDeleted: true,
         pendingRun: Prisma.DbNull,
-        connection: connJson(defaultConnection({ state: "disconnected", lastError: error })),
+        connection: nextConnection,
       },
       include: SESSION_INCLUDE,
     });
@@ -5110,6 +5404,22 @@ export class SessionService {
     return null;
   }
 
+  private parsePendingCommands(raw: unknown): PendingSessionCommand[] {
+    const singleCommand = this.parsePendingCommand(raw);
+    if (singleCommand) return [singleCommand];
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+
+    const pending = raw as Record<string, unknown>;
+    if (pending.type !== "queue" || !Array.isArray(pending.commands)) return [];
+
+    const commands: PendingSessionCommand[] = [];
+    for (const commandValue of pending.commands) {
+      const command = this.parsePendingCommand(commandValue);
+      if (command) commands.push(command);
+    }
+    return commands;
+  }
+
   /**
    * Store a pending command and send upgrade_workspace to the bridge.
    * If delivery fails, persists the connection failure so the user sees the error.
@@ -5173,10 +5483,21 @@ export class SessionService {
     sessionId: string,
     pending: PendingSessionCommand,
     extraData?: Partial<Prisma.SessionUpdateInput>,
+    existingPendingRun?: unknown,
   ) {
+    const rawPendingRun =
+      arguments.length >= 4
+        ? existingPendingRun
+        : (
+            await prisma.session.findUnique({
+              where: { id: sessionId },
+              select: { pendingRun: true },
+            })
+          )?.pendingRun;
+    const commands = this.parsePendingCommands(rawPendingRun);
     await prisma.session.update({
       where: { id: sessionId },
-      data: { pendingRun: pending as unknown as Prisma.InputJsonValue, ...extraData },
+      data: { pendingRun: pendingRunValue([...commands, pending]), ...extraData },
     });
   }
 
@@ -5184,8 +5505,10 @@ export class SessionService {
     sessionId: string,
     rawPending: unknown,
   ): Promise<DeliveryResult | null> {
-    const pending = this.parsePendingCommand(rawPending);
+    const pendingCommands = this.parsePendingCommands(rawPending);
+    const pending = pendingCommands[0];
     if (!pending) return null;
+    const remainingCommands = pendingCommands.slice(1);
 
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
@@ -5271,7 +5594,7 @@ export class SessionService {
       data: {
         agentStatus: "active",
         sessionStatus: "in_progress",
-        pendingRun: Prisma.DbNull,
+        pendingRun: pendingRunValue(remainingCommands),
         connection: this.mergeConnection(session.connection, {
           state: "connected",
           lastSeen: new Date().toISOString(),

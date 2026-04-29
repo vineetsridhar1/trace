@@ -67,6 +67,16 @@ function isCompatibleProtocolVersion(value: unknown): boolean {
   return value === BRIDGE_PROTOCOL_VERSION;
 }
 
+function jsonRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function isTerminalConnectionState(connection: unknown): boolean {
+  const state = jsonRecord(connection)?.state;
+  return state === "failed" || state === "timed_out" || state === "stopped";
+}
+
 export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequest) {
   // Default runtime ID; replaced if the bridge sends runtime_hello
   let runtimeId: string = randomUUID();
@@ -122,11 +132,13 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
     const persisted = await prisma.session.findFirst({
       where: {
         id: sessionId,
+        agentStatus: { notIn: ["failed", "stopped"] },
+        sessionStatus: { not: "merged" },
         connection: { path: ["runtimeInstanceId"], equals: runtimeId },
       },
-      select: { id: true },
+      select: { id: true, connection: true },
     });
-    if (!persisted) {
+    if (!persisted || isTerminalConnectionState(persisted.connection)) {
       runtimeDebug("bridge ignored message for unbound session", {
         runtimeId,
         sessionId,
@@ -293,6 +305,24 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               registeredRepoIds,
             });
             if (bridgeAuth.sessionId) {
+              const scopedSession = await prisma.session.findFirst({
+                where: {
+                  id: bridgeAuth.sessionId,
+                  organizationId: bridgeAuth.organizationId,
+                  agentStatus: { notIn: ["failed", "stopped"] },
+                  sessionStatus: { not: "merged" },
+                  connection: { path: ["runtimeInstanceId"], equals: runtimeId },
+                },
+                select: { id: true, connection: true },
+              });
+              if (!scopedSession || isTerminalConnectionState(scopedSession.connection)) {
+                runtimeDebug("cloud bridge auth rejected inactive scoped session", {
+                  runtimeId,
+                  sessionId: bridgeAuth.sessionId,
+                });
+                ws.close(1008, "Session is not waiting for this runtime");
+                return;
+              }
               sessionRouter.bindSession(bridgeAuth.sessionId, runtimeId);
             }
 
@@ -535,10 +565,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         });
       } else if (msg.type === "workspace_failed" && msg.sessionId) {
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
-          await sessionService.workspaceFailed(
-            sessionId,
-            (msg.error as string) ?? "Unknown error",
-          );
+          await sessionService.workspaceFailed(sessionId, (msg.error as string) ?? "Unknown error");
         });
       } else if (msg.type === "register_session" && msg.sessionId) {
         void (async () => {

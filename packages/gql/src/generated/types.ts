@@ -1652,13 +1652,18 @@ export type SessionConnection = {
 };
 
 export type SessionConnectionState =
+  | "booting"
   | "connected"
+  | "connecting"
   | "degraded"
   | "disconnected"
   | "failed"
   | "pending"
+  | "provisioning"
+  | "requested"
   | "stopped"
-  | "stopping";
+  | "stopping"
+  | "timed_out";
 
 export type SessionEndpoints = {
   __typename?: "SessionEndpoints";
