@@ -612,6 +612,135 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).not.toHaveBeenCalled();
     });
 
+    it("uses an explicit runtime from a local environment config", async () => {
+      const sessionGroup = makeSessionGroup();
+      const session = makeSession({ sessionGroup, hosting: "local" });
+      prismaMock.agentEnvironment.findFirstOrThrow.mockResolvedValueOnce({
+        id: "env-1",
+        organizationId: "org-1",
+        name: "Local Laptop",
+        adapterType: "local",
+        config: { runtimeInstanceId: "runtime-env" },
+        enabled: true,
+        isDefault: false,
+        createdAt: new Date("2024-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+      });
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-env",
+        label: "Env Laptop",
+        hostingMode: "local",
+        registeredRepoIds: ["repo-1"],
+        supportedTools: ["claude_code"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        channelId: "channel-1",
+        environmentId: "env-1",
+        prompt: "Use the local environment",
+      } as unknown as StartSessionServiceInput);
+
+      expect(runtimeAccessServiceMock.assertAccess).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runtimeInstanceId: "runtime-env",
+          sessionGroupId: null,
+        }),
+      );
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            connection: expect.objectContaining({
+              environmentId: "env-1",
+              adapterType: "local",
+              runtimeInstanceId: "runtime-env",
+              runtimeLabel: "Env Laptop",
+            }),
+          }),
+        }),
+      );
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "runtime-env");
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          adapterType: "local",
+          environment: expect.objectContaining({ id: "env-1" }),
+        }),
+      );
+    });
+
+    it("falls back to an accessible bridge for any-accessible local environments", async () => {
+      const sessionGroup = makeSessionGroup();
+      const session = makeSession({ sessionGroup, hosting: "local" });
+      prismaMock.agentEnvironment.findFirstOrThrow.mockResolvedValueOnce({
+        id: "env-1",
+        organizationId: "org-1",
+        name: "Any Local",
+        adapterType: "local",
+        config: { runtimeSelection: "any_accessible_local" },
+        enabled: true,
+        isDefault: false,
+        createdAt: new Date("2024-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+      });
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds.mockResolvedValueOnce(
+        new Set(["runtime-accessible"]),
+      );
+      sessionRouterMock.listRuntimes.mockReturnValueOnce([
+        {
+          id: "runtime-accessible",
+          label: "Accessible Laptop",
+          hostingMode: "local",
+          registeredRepoIds: ["repo-1"],
+          supportedTools: ["claude_code"],
+          boundSessions: new Set<string>(),
+          ws: { readyState: 1, OPEN: 1 },
+        },
+      ] as unknown as ReturnType<typeof sessionRouterMock.listRuntimes>);
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        channelId: "channel-1",
+        environmentId: "env-1",
+        prompt: "Use any local runtime",
+      } as unknown as StartSessionServiceInput);
+
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            connection: expect.objectContaining({
+              environmentId: "env-1",
+              adapterType: "local",
+              runtimeInstanceId: "runtime-accessible",
+              runtimeLabel: "Accessible Laptop",
+            }),
+          }),
+        }),
+      );
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "runtime-accessible");
+    });
+
     it("creates a new chat inside an existing group and copies workdir plus links from the source session", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce({
         id: "source-1",

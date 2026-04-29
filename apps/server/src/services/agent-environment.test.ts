@@ -174,6 +174,41 @@ describe("AgentEnvironmentService", () => {
     expect(prismaMock.agentEnvironment.create).not.toHaveBeenCalled();
   });
 
+  it("validates local environment runtime selection config", async () => {
+    const service = new AgentEnvironmentService();
+
+    await expect(
+      service.create(
+        {
+          organizationId: "org-1",
+          name: "Local",
+          adapterType: "local",
+          config: { runtimeSelection: "nearest_laptop" },
+        },
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("runtimeSelection must be any_accessible_local");
+
+    await expect(
+      service.create(
+        {
+          organizationId: "org-1",
+          name: "Local",
+          adapterType: "local",
+          config: {
+            runtimeInstanceId: "runtime-1",
+            runtimeSelection: "any_accessible_local",
+          },
+        },
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("cannot set both runtimeInstanceId and runtimeSelection");
+
+    expect(prismaMock.agentEnvironment.create).not.toHaveBeenCalled();
+  });
+
   it("clears default when an environment is disabled", async () => {
     prismaMock.agentEnvironment.findFirstOrThrow.mockResolvedValueOnce({
       id: "env-1",
