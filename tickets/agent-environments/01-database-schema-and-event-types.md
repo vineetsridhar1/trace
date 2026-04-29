@@ -64,8 +64,7 @@ Owns plan lines:
 - [x] Existing sessions can continue to read their current `connection` JSON.
 - [x] New runtime lifecycle event types are available server-side and in generated types.
 - [x] One default environment per org is enforced.
-- [ ] Raw provider tokens are not stored in `AgentEnvironment.config`.
-  - Review note: initial service validation rejects common raw-secret keys, but it should be tightened before this is considered complete.
+- [x] Raw provider tokens are not stored in `AgentEnvironment.config`.
 - [ ] Migration runs cleanly on an existing local database.
   - Review note: `pnpm db:migrate` could not be verified in the current workspace because `DATABASE_URL` is unset.
 

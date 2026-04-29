@@ -4,15 +4,8 @@ import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 
 const ADAPTER_TYPES = new Set(["local", "provisioned"]);
-const RAW_SECRET_KEYS = new Set([
-  "apikey",
-  "authorization",
-  "bearertoken",
-  "password",
-  "refreshtoken",
-  "secret",
-  "token",
-]);
+const AUTH_CONFIG_KEYS = new Set(["type", "secretId"]);
+const RAW_SECRET_KEY_PATTERNS = ["apikey", "authorization", "password", "secret", "token"];
 
 type TxClient = Prisma.TransactionClient;
 
@@ -39,19 +32,43 @@ function assertSupportedAdapter(adapterType: string): void {
   }
 }
 
-function assertConfigHasNoRawSecrets(value: unknown): void {
+function assertConfigStoresOnlySecretReferences(value: unknown): void {
   if (!value || typeof value !== "object") return;
   if (Array.isArray(value)) {
-    value.forEach(assertConfigHasNoRawSecrets);
+    value.forEach(assertConfigStoresOnlySecretReferences);
     return;
   }
 
   for (const [key, child] of Object.entries(value)) {
     const normalizedKey = key.toLowerCase().replace(/[_-]/g, "");
-    if (RAW_SECRET_KEYS.has(normalizedKey) && typeof child === "string" && child.trim()) {
+    if (key === "auth") {
+      assertAuthConfigStoresOnlySecretReferences(child);
+    } else if (
+      normalizedKey !== "secretid" &&
+      RAW_SECRET_KEY_PATTERNS.some((pattern) => normalizedKey.includes(pattern)) &&
+      typeof child === "string" &&
+      child.trim()
+    ) {
       throw new Error("Agent environment config cannot store raw secrets; reference an OrgSecret");
     }
-    assertConfigHasNoRawSecrets(child);
+    assertConfigStoresOnlySecretReferences(child);
+  }
+}
+
+function assertAuthConfigStoresOnlySecretReferences(value: unknown): void {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Agent environment auth config must reference an OrgSecret");
+  }
+
+  for (const key of Object.keys(value)) {
+    if (!AUTH_CONFIG_KEYS.has(key)) {
+      throw new Error("Agent environment auth config can only include type and secretId");
+    }
+  }
+
+  const auth = value as Record<string, unknown>;
+  if (auth.secretId !== undefined && typeof auth.secretId !== "string") {
+    throw new Error("Agent environment auth secretId must be a string");
   }
 }
 
@@ -90,7 +107,7 @@ export class AgentEnvironmentService {
   async create(input: AgentEnvironmentInput, actorType: ActorType, actorId: string) {
     const name = normalizeName(input.name);
     assertSupportedAdapter(input.adapterType);
-    assertConfigHasNoRawSecrets(input.config);
+    assertConfigStoresOnlySecretReferences(input.config);
 
     const environment = await prisma.$transaction(async (tx: TxClient) => {
       await this.lockOrganizationDefaults(tx, input.organizationId);
@@ -103,7 +120,7 @@ export class AgentEnvironmentService {
         });
       }
 
-      return tx.agentEnvironment.create({
+      const created = await tx.agentEnvironment.create({
         data: {
           organizationId: input.organizationId,
           name,
@@ -113,16 +130,21 @@ export class AgentEnvironmentService {
           isDefault,
         },
       });
-    });
 
-    await eventService.create({
-      organizationId: environment.organizationId,
-      scopeType: "system",
-      scopeId: environment.organizationId,
-      eventType: "agent_environment_created",
-      payload: { agentEnvironment: environmentPayload(environment) },
-      actorType,
-      actorId,
+      await eventService.create(
+        {
+          organizationId: created.organizationId,
+          scopeType: "system",
+          scopeId: created.organizationId,
+          eventType: "agent_environment_created",
+          payload: { agentEnvironment: environmentPayload(created) },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      return created;
     });
 
     return environment;
@@ -137,7 +159,7 @@ export class AgentEnvironmentService {
   ) {
     if (input.name !== undefined) normalizeName(input.name);
     if (input.adapterType !== undefined) assertSupportedAdapter(input.adapterType);
-    if (input.config !== undefined) assertConfigHasNoRawSecrets(input.config);
+    if (input.config !== undefined) assertConfigStoresOnlySecretReferences(input.config);
 
     const environment = await prisma.$transaction(async (tx: TxClient) => {
       await this.lockOrganizationDefaults(tx, organizationId);
@@ -155,7 +177,7 @@ export class AgentEnvironmentService {
         });
       }
 
-      return tx.agentEnvironment.update({
+      const updated = await tx.agentEnvironment.update({
         where: { id },
         data: {
           ...(input.name !== undefined ? { name: normalizeName(input.name) } : {}),
@@ -165,38 +187,50 @@ export class AgentEnvironmentService {
           isDefault,
         },
       });
-    });
 
-    await eventService.create({
-      organizationId,
-      scopeType: "system",
-      scopeId: organizationId,
-      eventType: "agent_environment_updated",
-      payload: { agentEnvironment: environmentPayload(environment) },
-      actorType,
-      actorId,
+      await eventService.create(
+        {
+          organizationId,
+          scopeType: "system",
+          scopeId: organizationId,
+          eventType: "agent_environment_updated",
+          payload: { agentEnvironment: environmentPayload(updated) },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      return updated;
     });
 
     return environment;
   }
 
   async delete(id: string, organizationId: string, actorType: ActorType, actorId: string) {
-    await prisma.agentEnvironment.findFirstOrThrow({
-      where: { id, organizationId },
-      select: { id: true },
-    });
-    const environment = await prisma.agentEnvironment.delete({
-      where: { id },
-    });
+    const environment = await prisma.$transaction(async (tx: TxClient) => {
+      await tx.agentEnvironment.findFirstOrThrow({
+        where: { id, organizationId },
+        select: { id: true },
+      });
+      const deleted = await tx.agentEnvironment.delete({
+        where: { id },
+      });
 
-    await eventService.create({
-      organizationId,
-      scopeType: "system",
-      scopeId: organizationId,
-      eventType: "agent_environment_deleted",
-      payload: { agentEnvironment: environmentPayload(environment) },
-      actorType,
-      actorId,
+      await eventService.create(
+        {
+          organizationId,
+          scopeType: "system",
+          scopeId: organizationId,
+          eventType: "agent_environment_deleted",
+          payload: { agentEnvironment: environmentPayload(deleted) },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      return deleted;
     });
 
     return environment;
