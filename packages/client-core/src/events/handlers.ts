@@ -12,9 +12,15 @@ import type {
   Repo,
   ScopeType,
   SessionStatus,
+  Ticket,
+  TicketExecution,
+  Ultraplan,
+  UltraplanControllerRun,
+  UltraplanTicket,
 } from "@trace/gql";
 import {
   StoreBatchWriter,
+  type EntityTableMap,
   type SessionEntity,
   type SessionGroupEntity,
 } from "../stores/entity.js";
@@ -62,6 +68,28 @@ const ULTRAPLAN_CONTROLLER_RUN_EVENTS: Set<EventType> = new Set([
   "ultraplan_controller_run_failed",
 ]);
 
+const ULTRAPLAN_TICKET_EVENTS: Set<EventType> = new Set([
+  "ultraplan_ticket_created",
+  "ultraplan_ticket_updated",
+  "ultraplan_ticket_reordered",
+]);
+
+const TICKET_EXECUTION_EVENTS: Set<EventType> = new Set([
+  "ticket_execution_created",
+  "ticket_execution_updated",
+  "ticket_execution_ready_for_review",
+  "ticket_execution_integration_requested",
+  "ticket_execution_integrated",
+  "ticket_execution_blocked",
+]);
+
+const ULTRAPLAN_GATE_EVENTS: Set<EventType> = new Set(["ultraplan_human_gate_requested"]);
+
+type HydratedEventEntityType = keyof Pick<
+  EntityTableMap,
+  "ultraplans" | "ultraplanTickets" | "ultraplanControllerRuns" | "ticketExecutions" | "tickets"
+>;
+
 function agentStatusFromEvent(eventType: EventType, payload: JsonObject): AgentStatus | undefined {
   const explicit = payload.agentStatus as AgentStatus | undefined;
   if (explicit) return explicit;
@@ -96,6 +124,58 @@ function sessionStatusFromEvent(
       return "merged";
     default:
       return undefined;
+  }
+}
+
+function mergeEntity<T extends HydratedEventEntityType>(
+  batch: StoreBatchWriter,
+  type: T,
+  entity: EntityTableMap[T] & { id: string },
+): void {
+  const existing = batch.get(type, entity.id);
+  batch.upsert(type, entity.id, existing ? { ...existing, ...entity } : entity);
+}
+
+function upsertNestedUltraplanEntities(
+  batch: StoreBatchWriter,
+  ultraplan: Record<string, unknown>,
+): void {
+  if (typeof ultraplan.id !== "string") return;
+  mergeEntity(batch, "ultraplans", ultraplan as unknown as Ultraplan);
+
+  if (Array.isArray(ultraplan.tickets)) {
+    for (const value of ultraplan.tickets) {
+      const ultraplanTicket = asJsonObject(value);
+      if (ultraplanTicket && typeof ultraplanTicket.id === "string") {
+        mergeEntity(batch, "ultraplanTickets", ultraplanTicket as unknown as UltraplanTicket);
+        const ticket = asJsonObject(ultraplanTicket.ticket);
+        if (ticket && typeof ticket.id === "string") {
+          mergeEntity(batch, "tickets", ticket as unknown as Ticket);
+        }
+      }
+    }
+  }
+
+  if (Array.isArray(ultraplan.controllerRuns)) {
+    for (const value of ultraplan.controllerRuns) {
+      const controllerRun = asJsonObject(value);
+      if (controllerRun && typeof controllerRun.id === "string") {
+        mergeEntity(
+          batch,
+          "ultraplanControllerRuns",
+          controllerRun as unknown as UltraplanControllerRun,
+        );
+      }
+    }
+  }
+
+  if (Array.isArray(ultraplan.ticketExecutions)) {
+    for (const value of ultraplan.ticketExecutions) {
+      const execution = asJsonObject(value);
+      if (execution && typeof execution.id === "string") {
+        mergeEntity(batch, "ticketExecutions", execution as unknown as TicketExecution);
+      }
+    }
   }
 }
 
@@ -295,8 +375,8 @@ export function handleOrgEvent(event: Event): void {
     }
   }
 
-  // Ultraplan lifecycle events hydrate the active plan onto its session group
-  // until Ultraplan has first-class client store tables.
+  // Ultraplan lifecycle events hydrate normalized plan tables and keep the
+  // session-group snapshot available for older call sites during rollout.
   if (ULTRAPLAN_STATE_EVENTS.has(event.eventType)) {
     const ultraplan = asJsonObject(payload.ultraplan);
     const sessionGroupId =
@@ -305,6 +385,9 @@ export function handleOrgEvent(event: Event): void {
         : typeof ultraplan?.sessionGroupId === "string"
           ? ultraplan.sessionGroupId
           : null;
+    if (ultraplan && typeof ultraplan.id === "string") {
+      upsertNestedUltraplanEntities(batch, ultraplan);
+    }
     if (sessionGroupId && ultraplan && typeof ultraplan.id === "string") {
       const existing = batch.get("sessionGroups", sessionGroupId);
       if (existing) {
@@ -329,6 +412,13 @@ export function handleOrgEvent(event: Event): void {
 
   if (ULTRAPLAN_CONTROLLER_RUN_EVENTS.has(event.eventType)) {
     const controllerRun = asJsonObject(payload.controllerRun);
+    if (controllerRun && typeof controllerRun.id === "string") {
+      mergeEntity(
+        batch,
+        "ultraplanControllerRuns",
+        controllerRun as unknown as UltraplanControllerRun,
+      );
+    }
     const sessionGroupId =
       typeof controllerRun?.sessionGroupId === "string" ? controllerRun.sessionGroupId : null;
     if (sessionGroupId && controllerRun && typeof controllerRun.id === "string") {
@@ -355,6 +445,47 @@ export function handleOrgEvent(event: Event): void {
           },
         } as unknown as Partial<SessionGroupEntity>);
       }
+    }
+  }
+
+  if (ULTRAPLAN_TICKET_EVENTS.has(event.eventType)) {
+    const ticketValues =
+      event.eventType === "ultraplan_ticket_reordered" && Array.isArray(payload.ultraplanTickets)
+        ? payload.ultraplanTickets
+        : event.eventType === "ultraplan_ticket_reordered" && Array.isArray(payload.tickets)
+          ? payload.tickets
+          : [payload.ultraplanTicket ?? payload.ticket];
+    for (const value of ticketValues) {
+      const ultraplanTicket = asJsonObject(value);
+      if (ultraplanTicket && typeof ultraplanTicket.id === "string") {
+        mergeEntity(batch, "ultraplanTickets", ultraplanTicket as unknown as UltraplanTicket);
+        const ticket = asJsonObject(ultraplanTicket.ticket);
+        if (ticket && typeof ticket.id === "string") {
+          mergeEntity(batch, "tickets", ticket as unknown as Ticket);
+        }
+      }
+    }
+  }
+
+  if (TICKET_EXECUTION_EVENTS.has(event.eventType)) {
+    const execution = asJsonObject(payload.ticketExecution);
+    if (execution && typeof execution.id === "string") {
+      mergeEntity(batch, "ticketExecutions", execution as unknown as TicketExecution);
+    }
+  }
+
+  if (ULTRAPLAN_GATE_EVENTS.has(event.eventType)) {
+    const ultraplan = asJsonObject(payload.ultraplan);
+    if (ultraplan && typeof ultraplan.id === "string") {
+      upsertNestedUltraplanEntities(batch, ultraplan);
+    }
+    const execution = asJsonObject(payload.ticketExecution);
+    if (execution && typeof execution.id === "string") {
+      mergeEntity(batch, "ticketExecutions", execution as unknown as TicketExecution);
+    }
+    const item = asJsonObject(payload.inboxItem);
+    if (item && typeof item.id === "string") {
+      batch.upsert("inboxItems", item.id, item as unknown as InboxItem);
     }
   }
 
