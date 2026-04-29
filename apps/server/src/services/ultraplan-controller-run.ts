@@ -233,6 +233,7 @@ export class UltraplanControllerRunService {
   async createRun(input: CreateControllerRunInput, tx: TxClient = prisma) {
     const runtime = await this.resolveRuntime(input);
     const hosting = runtime?.hosting ?? input.controller.runtimePolicy.hosting ?? "cloud";
+    const reusableWorkspace = runtime ? input.ultraplan.integrationWorkdir : null;
 
     const session = await tx.session.create({
       data: {
@@ -247,12 +248,12 @@ export class UltraplanControllerRunService {
         createdById: input.actorId,
         repoId: input.ultraplan.sessionGroup.repoId ?? undefined,
         branch: input.ultraplan.integrationBranch,
-        workdir: input.ultraplan.integrationWorkdir ?? undefined,
+        workdir: reusableWorkspace ?? undefined,
         channelId: input.ultraplan.sessionGroup.channelId ?? undefined,
         sessionGroupId: input.ultraplan.sessionGroupId,
-        connection:
-          input.ultraplan.sessionGroup.connection ??
-          defaultConnection(runtime ? { id: runtime.id, label: runtime.label } : undefined),
+        connection: defaultConnection(
+          runtime ? { id: runtime.id, label: runtime.label } : undefined,
+        ),
         worktreeDeleted: false,
       },
       include: {

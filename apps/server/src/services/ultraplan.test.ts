@@ -215,7 +215,13 @@ describe("UltraplanService", () => {
           tool: "claude_code",
           sessionGroupId: "group-1",
           branch: "ultraplan",
-          workdir: "/work/anchovy",
+          workdir: undefined,
+          connection: {
+            state: "connected",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
         }),
       }),
     );
