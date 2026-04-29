@@ -37,6 +37,12 @@ enum SessionStatus {
   merged
 }
 
+enum SessionRole {
+  primary
+  ticket_worker
+  ultraplan_controller_run
+}
+
 enum TicketStatus {
   backlog
   todo
@@ -91,6 +97,7 @@ enum ScopeType {
   session
   ticket
   system
+  ultraplan
 }
 
 enum ActorType {
@@ -110,6 +117,10 @@ enum InboxItemType {
   field_change_suggestion
   comment_suggestion
   message_suggestion
+  ultraplan_plan_approval
+  ultraplan_validation_request
+  ultraplan_conflict_resolution
+  ultraplan_final_review
 }
 
 enum InboxItemStatus {
@@ -202,6 +213,58 @@ enum TurnRole {
   ASSISTANT
 }
 
+enum UltraplanStatus {
+  draft
+  waiting
+  planning
+  running
+  needs_human
+  integrating
+  paused
+  completed
+  failed
+  cancelled
+}
+
+enum ControllerRunStatus {
+  queued
+  running
+  completed
+  failed
+  cancelled
+}
+
+enum TicketExecutionStatus {
+  queued
+  running
+  reviewing
+  needs_human
+  ready_to_integrate
+  integrating
+  integrated
+  blocked
+  failed
+  cancelled
+}
+
+enum UltraplanTicketStatus {
+  planned
+  ready
+  running
+  blocked
+  completed
+  skipped
+  cancelled
+}
+
+enum IntegrationStatus {
+  not_started
+  running
+  conflicted
+  completed
+  failed
+}
+
 enum EventType {
   message_sent
   message_edited
@@ -251,6 +314,26 @@ enum EventType {
   queued_message_removed
   queued_messages_cleared
   queued_messages_drained
+  ultraplan_created
+  ultraplan_updated
+  ultraplan_paused
+  ultraplan_resumed
+  ultraplan_completed
+  ultraplan_failed
+  ultraplan_controller_run_created
+  ultraplan_controller_run_started
+  ultraplan_controller_run_completed
+  ultraplan_controller_run_failed
+  ultraplan_ticket_created
+  ultraplan_ticket_updated
+  ultraplan_ticket_reordered
+  ticket_execution_created
+  ticket_execution_updated
+  ticket_execution_ready_for_review
+  ticket_execution_integration_requested
+  ticket_execution_integrated
+  ticket_execution_blocked
+  ultraplan_human_gate_requested
 }
 
 model Organization {
@@ -270,6 +353,11 @@ model Organization {
   sessionGroups SessionGroup[]
   sessions Session[]
   tickets  Ticket[]
+  ultraplans Ultraplan[]
+  ultraplanTickets UltraplanTicket[]
+  ultraplanControllerRuns UltraplanControllerRun[]
+  ticketExecutions TicketExecution[]
+  ticketDependencies TicketDependency[] @relation("TicketDependencyOrganization")
   events        Event[]
   inboxItems    InboxItem[]
   cloudMachines CloudMachine[]
@@ -454,6 +542,7 @@ model User {
   aiConversations   AiConversation[] @relation("AiConversationCreator")
   aiBranches        AiBranch[]       @relation("AiBranchCreator")
   queuedMessages    QueuedMessage[]  @relation("QueuedMessageCreator")
+  ownedUltraplans   Ultraplan[]      @relation("UltraplanOwner")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -591,6 +680,9 @@ model SessionGroup {
   gitCheckpoints GitCheckpoint[]
   bridgeAccessGrants BridgeAccessGrant[]
   bridgeAccessRequests BridgeAccessRequest[]
+  ultraplan Ultraplan?
+  ultraplanControllerRuns UltraplanControllerRun[]
+  ticketExecutions TicketExecution[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -605,6 +697,7 @@ model Session {
   name           String
   agentStatus    AgentStatus   @default(not_started)
   sessionStatus  SessionStatus @default(in_progress)
+  role           SessionRole   @default(primary)
   tool           CodingTool
   model          String?
   toolChangedAt      DateTime?
@@ -633,6 +726,8 @@ model Session {
 
   projects        SessionProject[]
   queuedMessages  QueuedMessage[]
+  controllerRuns  UltraplanControllerRun[] @relation("ControllerRunSession")
+  ticketExecutions TicketExecution[] @relation("TicketExecutionWorkerSession")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -674,6 +769,8 @@ model Ticket {
   status         TicketStatus @default(backlog)
   priority       Priority     @default(medium)
   labels         String[]     @default([])
+  acceptanceCriteria String[] @default([])
+  testPlan       String?
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
   createdById    String
@@ -686,6 +783,10 @@ model Ticket {
   projects  TicketProject[]
   assignees TicketAssignee[]
   links     TicketLink[]
+  ultraplanTickets UltraplanTicket[]
+  ticketExecutions TicketExecution[]
+  dependencies TicketDependency[] @relation("TicketDependencyTicket")
+  dependedOnBy TicketDependency[] @relation("TicketDependencyDependsOn")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -722,6 +823,144 @@ model TicketLink {
 
   @@unique([ticketId, entityType, entityId])
   @@index([entityType, entityId])
+}
+
+
+model TicketDependency {
+  ticketId          String
+  ticket            Ticket       @relation("TicketDependencyTicket", fields: [ticketId], references: [id], onDelete: Cascade)
+  dependsOnTicketId String
+  dependsOnTicket   Ticket       @relation("TicketDependencyDependsOn", fields: [dependsOnTicketId], references: [id], onDelete: Cascade)
+  organizationId    String
+  organization      Organization @relation("TicketDependencyOrganization", fields: [organizationId], references: [id], onDelete: Cascade)
+  reason            String?
+  createdAt         DateTime     @default(now())
+
+  @@id([ticketId, dependsOnTicketId])
+  @@index([dependsOnTicketId])
+  @@index([organizationId])
+}
+
+model Ultraplan {
+  id                    String           @id @default(uuid())
+  organizationId        String
+  organization          Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessionGroupId        String           @unique
+  sessionGroup          SessionGroup     @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  ownerUserId           String
+  ownerUser             User             @relation("UltraplanOwner", fields: [ownerUserId], references: [id])
+  status                UltraplanStatus  @default(draft)
+  integrationBranch     String
+  integrationWorkdir    String?
+  playbookId            String?
+  playbookConfig        Json?
+  planSummary           String?
+  customInstructions    String?
+  activeInboxItemId     String?
+  activeInboxItem       InboxItem?       @relation("UltraplanActiveInboxItem", fields: [activeInboxItemId], references: [id], onDelete: SetNull)
+  lastControllerRunId   String?
+  lastControllerRun     UltraplanControllerRun? @relation("UltraplanLastControllerRun", fields: [lastControllerRunId], references: [id], onDelete: SetNull)
+  lastControllerSummary String?
+
+  tickets          UltraplanTicket[]
+  controllerRuns   UltraplanControllerRun[] @relation("UltraplanControllerRuns")
+  ticketExecutions TicketExecution[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status])
+}
+
+model UltraplanTicket {
+  id               String                @id @default(uuid())
+  organizationId   String
+  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ultraplanId      String
+  ultraplan        Ultraplan             @relation(fields: [ultraplanId], references: [id], onDelete: Cascade)
+  ticketId         String
+  ticket           Ticket                @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  position         Int
+  status           UltraplanTicketStatus @default(planned)
+  generatedByRunId String?
+  generatedByRun   UltraplanControllerRun? @relation(fields: [generatedByRunId], references: [id], onDelete: SetNull)
+  rationale        String?
+  metadata         Json?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  @@unique([ultraplanId, ticketId])
+  @@unique([ultraplanId, position])
+  @@index([organizationId])
+  @@index([generatedByRunId])
+}
+
+model UltraplanControllerRun {
+  id             String              @id @default(uuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ultraplanId    String
+  ultraplan      Ultraplan           @relation("UltraplanControllerRuns", fields: [ultraplanId], references: [id], onDelete: Cascade)
+  sessionGroupId String
+  sessionGroup   SessionGroup        @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  sessionId      String?
+  session        Session?            @relation("ControllerRunSession", fields: [sessionId], references: [id], onDelete: SetNull)
+  triggerEventId String?
+  triggerEvent   Event?              @relation("ControllerRunTriggerEvent", fields: [triggerEventId], references: [id], onDelete: SetNull)
+  triggerType    String
+  status         ControllerRunStatus @default(queued)
+  inputSummary   String?
+  summaryTitle   String?
+  summary        String?
+  summaryPayload Json?
+  error          String?
+
+  generatedTickets UltraplanTicket[]
+  lastForUltraplans Ultraplan[] @relation("UltraplanLastControllerRun")
+
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  @@index([organizationId, createdAt])
+  @@index([ultraplanId, status])
+  @@index([sessionGroupId])
+  @@index([sessionId])
+  @@index([triggerEventId])
+}
+
+model TicketExecution {
+  id                       String                @id @default(uuid())
+  organizationId           String
+  organization             Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ultraplanId              String
+  ultraplan                Ultraplan             @relation(fields: [ultraplanId], references: [id], onDelete: Cascade)
+  ticketId                 String
+  ticket                   Ticket                @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sessionGroupId           String
+  sessionGroup             SessionGroup          @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  workerSessionId          String?
+  workerSession            Session?              @relation("TicketExecutionWorkerSession", fields: [workerSessionId], references: [id], onDelete: SetNull)
+  branch                   String
+  workdir                  String?
+  status                   TicketExecutionStatus @default(queued)
+  integrationStatus        IntegrationStatus     @default(not_started)
+  baseCheckpointSha        String?
+  headCheckpointSha        String?
+  integrationCheckpointSha String?
+  activeInboxItemId        String?
+  activeInboxItem          InboxItem?            @relation("TicketExecutionActiveInboxItem", fields: [activeInboxItemId], references: [id], onDelete: SetNull)
+  lastReviewSummary        String?
+  attempt                  Int                   @default(1)
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+
+  @@index([organizationId, status])
+  @@index([ultraplanId, status])
+  @@index([ticketId])
+  @@index([sessionGroupId])
+  @@index([workerSessionId])
+  @@index([activeInboxItemId])
 }
 
 model ApiToken {
@@ -769,6 +1008,7 @@ model Event {
 
   timestamp DateTime @default(now())
   gitCheckpoints GitCheckpoint[] @relation("GitCheckpointPromptEvent")
+  controllerRunsTriggered UltraplanControllerRun[] @relation("ControllerRunTriggerEvent")
 
   @@index([organizationId, scopeType, scopeId])
   @@index([organizationId, eventType])
@@ -872,7 +1112,7 @@ model LocalMobilePairingToken {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([ownerUserId, organizationId, usedAt, expiresAt])
+  @@index([ownerUserId, organizationId, usedAt, expiresAt], map: "LocalMobilePairingToken_ownerUserId_organizationId_usedAt_expir")
 }
 
 model LocalMobileDevice {
@@ -893,7 +1133,7 @@ model LocalMobileDevice {
   updatedAt DateTime @updatedAt
 
   @@unique([ownerUserId, organizationId, installId])
-  @@index([organizationId, ownerUserId, revokedAt, lastSeenAt])
+  @@index([organizationId, ownerUserId, revokedAt, lastSeenAt], map: "LocalMobileDevice_organizationId_ownerUserId_revokedAt_lastSeen")
 }
 
 model BridgeAccessGrant {
@@ -960,6 +1200,8 @@ model InboxItem {
   createdAt      DateTime        @default(now())
   resolvedAt     DateTime?
   updatedAt      DateTime        @updatedAt
+  activeUltraplans Ultraplan[] @relation("UltraplanActiveInboxItem")
+  activeTicketExecutions TicketExecution[] @relation("TicketExecutionActiveInboxItem")
 
   @@index([userId, status])
   @@index([organizationId, userId])
