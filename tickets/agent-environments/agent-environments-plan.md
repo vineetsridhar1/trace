@@ -128,6 +128,20 @@ It carries:
 
 Local and cloud runtimes should both use the same bridge protocol once connected.
 
+### Terminal Multiplexing
+
+The environment refactor must preserve multiple terminal sessions per Trace session/runtime.
+
+Requirements:
+
+- A Trace session/runtime can have zero, one, or many active terminal sessions.
+- Every terminal command and runtime terminal event must carry a `terminalId`.
+- Terminal lifecycle is owned by the runtime bridge path, not the lifecycle adapter.
+- Runtime adapters must not assume a single shell, terminal, or PTY per session.
+- Terminal input, output, resize, ready, exit, error, and destroy flows must remain isolated by `terminalId`.
+- Session cleanup must destroy all active terminals for the session/runtime.
+- Provisioned runtimes must support the same terminal multiplexing behavior as local desktop runtimes once their bridge is connected.
+
 ## Target Architecture
 
 ```txt
@@ -388,6 +402,8 @@ interface RuntimeAdapter {
   getStatus(input: RuntimeStatusInput): Promise<RuntimeStatusResult>;
 }
 ```
+
+The adapter interface starts/selects compute only. It must not expose a single terminal endpoint or terminal stream; terminal creation and I/O continue to flow through bridge commands keyed by `terminalId`.
 
 Inputs:
 
@@ -702,6 +718,8 @@ The cloud container starts `trace-agent-runtime`, which connects to the server b
 ```
 
 Cloud runtimes use an empty `registeredRepoIds` list because they can clone on demand.
+
+After the bridge connects, cloud runtimes must handle multiple concurrent `terminal_create` commands for the same session/runtime and route all terminal traffic by `terminalId`, matching local desktop behavior.
 
 ## Runtime Tokens
 
