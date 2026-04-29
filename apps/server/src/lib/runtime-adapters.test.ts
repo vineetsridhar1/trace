@@ -116,7 +116,8 @@ describe("ProvisionedRuntimeAdapter", () => {
     expect(url).toBe("https://launcher.example/start");
     expect(headers.Authorization).toBe("Bearer launcher-secret");
     expect(headers["Trace-Idempotency-Key"]).toBe("session:session-1:start");
-    expect(body.runtimeToken).toBe("runtime-token");
+    expect(typeof body.runtimeToken).toBe("string");
+    expect(body.runtimeToken).not.toBe("runtime-token");
     expect(body.runtimeTokenScope).toBe("session");
     expect(body.runtimeTokenExpiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(body.bootstrapEnv).toEqual(
@@ -124,12 +125,12 @@ describe("ProvisionedRuntimeAdapter", () => {
         TRACE_SESSION_ID: "session-1",
         TRACE_ORG_ID: "org-1",
         TRACE_RUNTIME_INSTANCE_ID: result.runtimeInstanceId,
-        TRACE_RUNTIME_TOKEN: "runtime-token",
+        TRACE_RUNTIME_TOKEN: body.runtimeToken,
         TRACE_BRIDGE_URL: "wss://trace.example/bridge",
       }),
     );
 
-    expect(authenticateProvisionedRuntimeToken("runtime-token")).toEqual({
+    expect(authenticateProvisionedRuntimeToken(body.runtimeToken as string)).toEqual({
       instanceId: result.runtimeInstanceId,
       organizationId: "org-1",
       userId: "user-1",
@@ -161,9 +162,15 @@ describe("ProvisionedRuntimeAdapter", () => {
       bridgeUrl: "wss://trace.example/bridge",
     });
 
-    expect(authenticateProvisionedRuntimeToken("runtime-token-expired")).not.toBeNull();
+    const startBody = JSON.parse(fetchMock().mock.calls[0][1].body as string) as Record<
+      string,
+      unknown
+    >;
+    const runtimeToken = startBody.runtimeToken as string;
+
+    expect(authenticateProvisionedRuntimeToken(runtimeToken)).not.toBeNull();
     vi.setSystemTime(new Date("2026-04-29T12:16:00Z"));
-    expect(authenticateProvisionedRuntimeToken("runtime-token-expired")).toBeNull();
+    expect(authenticateProvisionedRuntimeToken(runtimeToken)).toBeNull();
     vi.useRealTimers();
   });
 

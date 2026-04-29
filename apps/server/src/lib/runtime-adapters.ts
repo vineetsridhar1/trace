@@ -1,4 +1,5 @@
 import { createHmac, randomUUID } from "crypto";
+import jwt from "jsonwebtoken";
 import type { CloudMachineService } from "./cloud-machine-service.js";
 import {
   RuntimeAdapterRegistry,
@@ -12,6 +13,7 @@ import {
   type RuntimeEnvironment,
 } from "./runtime-adapter-registry.js";
 import { orgSecretService } from "../services/org-secret.js";
+import { resolveJwtSecret } from "./jwt-secret.js";
 
 const CODING_TOOLS = new Set(["claude_code", "codex", "custom"]);
 const PROVISIONED_DEPROVISION_POLICIES = new Set(["on_session_end", "manual"]);
@@ -31,7 +33,9 @@ const PROVISIONED_STOP_STATUS_VALUES = new Set([
   "not_found",
   "unsupported",
 ]);
-const RUNTIME_TOKEN_TTL_MS = 15 * 60 * 1000;
+const RUNTIME_TOKEN_TTL_SECONDS = 15 * 60;
+const RUNTIME_TOKEN_TTL_MS = RUNTIME_TOKEN_TTL_SECONDS * 1000;
+const JWT_SECRET = resolveJwtSecret();
 
 type ProvisionedAuthConfig = {
   type: "bearer" | "hmac";
@@ -58,45 +62,58 @@ type ProvisionedRuntimeTokenAuth = {
   tool: string;
 };
 
-type StoredProvisionedRuntimeToken = ProvisionedRuntimeTokenAuth & {
-  expiresAt: number;
+type ProvisionedRuntimeTokenPayload = ProvisionedRuntimeTokenAuth & {
+  tokenType: "provisioned_runtime";
 };
-
-const provisionedRuntimeTokens = new Map<string, StoredProvisionedRuntimeToken>();
 
 export function authenticateProvisionedRuntimeToken(
   token: string,
 ): ProvisionedRuntimeTokenAuth | null {
-  const stored = provisionedRuntimeTokens.get(token);
-  if (!stored) return null;
-  if (stored.expiresAt < Date.now()) {
-    provisionedRuntimeTokens.delete(token);
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as unknown as ProvisionedRuntimeTokenPayload;
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      payload.tokenType !== "provisioned_runtime" ||
+      typeof payload.instanceId !== "string" ||
+      typeof payload.organizationId !== "string" ||
+      typeof payload.userId !== "string" ||
+      typeof payload.sessionId !== "string" ||
+      typeof payload.environmentId !== "string" ||
+      payload.allowedScope !== "session" ||
+      typeof payload.tool !== "string"
+    ) {
+      return null;
+    }
+
+    return {
+      instanceId: payload.instanceId,
+      organizationId: payload.organizationId,
+      userId: payload.userId,
+      sessionId: payload.sessionId,
+      environmentId: payload.environmentId,
+      allowedScope: payload.allowedScope,
+      tool: payload.tool,
+    };
+  } catch {
     return null;
   }
-
-  return {
-    instanceId: stored.instanceId,
-    organizationId: stored.organizationId,
-    userId: stored.userId,
-    sessionId: stored.sessionId,
-    environmentId: stored.environmentId,
-    allowedScope: stored.allowedScope,
-    tool: stored.tool,
-  };
 }
 
-function registerProvisionedRuntimeToken(
-  token: string,
-  auth: ProvisionedRuntimeTokenAuth,
-): void {
-  provisionedRuntimeTokens.set(token, {
-    ...auth,
-    expiresAt: Date.now() + RUNTIME_TOKEN_TTL_MS,
-  });
-}
-
-function revokeProvisionedRuntimeToken(token: string): void {
-  provisionedRuntimeTokens.delete(token);
+function createProvisionedRuntimeToken(auth: ProvisionedRuntimeTokenAuth): {
+  token: string;
+  expiresAt: Date;
+} {
+  const expiresAt = new Date(Date.now() + RUNTIME_TOKEN_TTL_MS);
+  const token = jwt.sign(
+    {
+      ...auth,
+      tokenType: "provisioned_runtime",
+    } satisfies ProvisionedRuntimeTokenPayload,
+    JWT_SECRET,
+    { expiresIn: RUNTIME_TOKEN_TTL_SECONDS },
+  );
+  return { token, expiresAt };
 }
 
 function getCapabilities(config: Record<string, unknown>): Record<string, unknown> | null {
@@ -407,10 +424,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
     }
     const config = parseProvisionedConfig(configRecord(input.environment.config));
     const runtimeInstanceId = `runtime_${randomUUID()}`;
-    const runtimeToken = input.runtimeToken ?? randomUUID();
-    const bridgeUrl = input.bridgeUrl ?? defaultBridgeUrl();
-
-    registerProvisionedRuntimeToken(runtimeToken, {
+    const runtimeToken = createProvisionedRuntimeToken({
       instanceId: runtimeInstanceId,
       organizationId: input.organizationId,
       userId: input.actorId,
@@ -419,14 +433,15 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       allowedScope: "session",
       tool: input.tool,
     });
+    const bridgeUrl = input.bridgeUrl ?? defaultBridgeUrl();
 
     const body = {
       sessionId: input.sessionId,
       sessionGroupId: input.sessionGroupId ?? null,
       orgId: input.organizationId,
       runtimeInstanceId,
-      runtimeToken,
-      runtimeTokenExpiresAt: new Date(Date.now() + RUNTIME_TOKEN_TTL_MS).toISOString(),
+      runtimeToken: runtimeToken.token,
+      runtimeTokenExpiresAt: runtimeToken.expiresAt.toISOString(),
       runtimeTokenScope: "session",
       bridgeUrl,
       repo: input.repo
@@ -443,7 +458,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
         TRACE_SESSION_ID: input.sessionId,
         TRACE_ORG_ID: input.organizationId,
         TRACE_RUNTIME_INSTANCE_ID: runtimeInstanceId,
-        TRACE_RUNTIME_TOKEN: runtimeToken,
+        TRACE_RUNTIME_TOKEN: runtimeToken.token,
         TRACE_BRIDGE_URL: bridgeUrl,
       },
       metadata: {
@@ -453,32 +468,27 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       },
     };
 
-    try {
-      const json = await authenticatedLauncherRequest({
-        organizationId: input.organizationId,
-        url: config.startUrl,
-        auth: config.auth,
-        body,
-        idempotencyKey: idempotencyKey(input.sessionId, "start"),
-        endpointName: "start",
-      });
-      const record = responseRecord(json, "start");
-      const providerRuntimeId = optionalString(record.runtimeId);
-      if (!providerRuntimeId) {
-        throw new Error("Provisioned start response requires runtimeId");
-      }
-
-      return {
-        runtimeInstanceId,
-        runtimeLabel: optionalString(record.label),
-        providerRuntimeId,
-        providerRuntimeUrl: optionalString(record.runtimeUrl),
-        status: startStatus(record.status),
-      };
-    } catch (error) {
-      revokeProvisionedRuntimeToken(runtimeToken);
-      throw error;
+    const json = await authenticatedLauncherRequest({
+      organizationId: input.organizationId,
+      url: config.startUrl,
+      auth: config.auth,
+      body,
+      idempotencyKey: idempotencyKey(input.sessionId, "start"),
+      endpointName: "start",
+    });
+    const record = responseRecord(json, "start");
+    const providerRuntimeId = optionalString(record.runtimeId);
+    if (!providerRuntimeId) {
+      throw new Error("Provisioned start response requires runtimeId");
     }
+
+    return {
+      runtimeInstanceId,
+      runtimeLabel: optionalString(record.label),
+      providerRuntimeId,
+      providerRuntimeUrl: optionalString(record.runtimeUrl),
+      status: startStatus(record.status),
+    };
   }
 
   async stopSession(input: RuntimeStopInput): Promise<RuntimeStopResult> {
