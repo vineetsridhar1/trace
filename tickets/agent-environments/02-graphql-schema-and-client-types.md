@@ -39,11 +39,11 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] Schema compiles from `packages/gql/src/schema.graphql`.
-- [ ] Shared generated types include `AgentEnvironment`.
-- [ ] Server resolver types include the new query/mutations.
-- [ ] Session creation accepts `environmentId`.
-- [ ] Existing clients using `hosting` and `runtimeInstanceId` still compile.
+- [x] Schema compiles from `packages/gql/src/schema.graphql`.
+- [x] Shared generated types include `AgentEnvironment`.
+- [x] Server resolver types include the new query/mutations.
+- [x] Session creation accepts `environmentId`.
+- [x] Existing clients using `hosting` and `runtimeInstanceId` still compile.
 
 ## Implementation notes
 

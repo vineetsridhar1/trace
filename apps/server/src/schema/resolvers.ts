@@ -5,6 +5,11 @@ import {
   organizationTypeResolvers,
   repoResolvers,
 } from "./organization.js";
+import {
+  agentEnvironmentQueries,
+  agentEnvironmentMutations,
+  agentEnvironmentTypeResolvers,
+} from "./agent-environment.js";
 import { orgMemberService } from "../services/org-member.js";
 import {
   channelQueries,
@@ -65,6 +70,7 @@ export const resolvers = {
 
   ...repoResolvers,
   ...organizationTypeResolvers,
+  ...agentEnvironmentTypeResolvers,
   ...channelTypeResolvers,
   ...chatTypeResolvers,
   ...participantTypeResolvers,
@@ -86,6 +92,7 @@ export const resolvers = {
 
   Query: {
     ...organizationQueries,
+    ...agentEnvironmentQueries,
     ...channelQueries,
     ...channelGroupQueries,
     ...sessionQueries,
@@ -107,6 +114,7 @@ export const resolvers = {
 
   Mutation: {
     ...organizationMutations,
+    ...agentEnvironmentMutations,
     ...channelMutations,
     ...channelGroupMutations,
     ...sessionMutations,
