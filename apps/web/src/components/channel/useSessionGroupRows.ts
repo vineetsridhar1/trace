@@ -1,7 +1,7 @@
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useEntityStore, type EntityState } from "@trace/client-core";
 import type { SessionGroupEntity, SessionEntity } from "@trace/client-core";
-import { getSessionGroupChannelId } from "@trace/client-core";
+import { getSessionGroupChannelId, isUserVisibleSession } from "@trace/client-core";
 import { getSessionGroupDisplayStatus, getSessionGroupAgentStatus } from "../session/sessionStatus";
 import type { SessionGroupRow } from "./sessions-table-types";
 
@@ -87,6 +87,7 @@ export function useSessionGroupRows(
         const groupSessions = groupSessionIds
           .map((id: string) => state.sessions[id])
           .filter(Boolean)
+          .filter(isUserVisibleSession)
           .sort((a: SessionEntity, b: SessionEntity) => {
             const aSort = getSessionSortTimestamp(a) ?? "";
             const bSort = getSessionSortTimestamp(b) ?? "";

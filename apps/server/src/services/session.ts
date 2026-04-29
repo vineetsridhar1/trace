@@ -27,6 +27,7 @@ import {
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
 import { isLocalMode } from "../lib/mode.js";
+import { visibleSessionWhere } from "../lib/session-visibility.js";
 
 export type StartSessionServiceInput = StartSessionInput & {
   sessionGroupId?: string | null;
@@ -274,6 +275,7 @@ const SESSION_GROUP_INCLUDE = {
   channel: true,
   repo: true,
   sessions: {
+    where: visibleSessionWhere(),
     orderBy: [
       { updatedAt: "desc" },
       { createdAt: "desc" },
@@ -306,6 +308,7 @@ function serializeSession(session: {
   name: string;
   agentStatus: AgentStatus;
   sessionStatus: SessionStatus;
+  role: string;
   tool: string;
   model: string | null;
   hosting: string;
@@ -329,6 +332,7 @@ function serializeSession(session: {
     name: session.name,
     agentStatus: session.agentStatus,
     sessionStatus: session.sessionStatus,
+    role: session.role,
     tool: session.tool,
     model: session.model,
     hosting: session.hosting,
@@ -985,14 +989,14 @@ export class SessionService {
 
   async getGroupStatusSources(sessionGroupId: string) {
     return prisma.session.findMany({
-      where: { sessionGroupId },
+      where: { sessionGroupId, ...visibleSessionWhere() },
       select: { agentStatus: true, sessionStatus: true },
     });
   }
 
   async getGroupSessions(sessionGroupId: string) {
     return prisma.session.findMany({
-      where: { sessionGroupId },
+      where: { sessionGroupId, ...visibleSessionWhere() },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       include: SESSION_INCLUDE,
     });
@@ -1007,9 +1011,9 @@ export class SessionService {
       channelId?: string | null;
     },
   ) {
-    const where: Record<string, unknown> = { organizationId };
-    if (filters?.agentStatus) where.agentStatus = filters.agentStatus;
-    if (filters?.tool) where.tool = filters.tool;
+    const where: Prisma.SessionWhereInput = { organizationId, ...visibleSessionWhere() };
+    if (filters?.agentStatus) where.agentStatus = filters.agentStatus as AgentStatus;
+    if (filters?.tool) where.tool = filters.tool as CodingTool;
     if (filters?.repoId) where.repoId = filters.repoId;
     if (filters?.channelId) where.channelId = filters.channelId;
     return prisma.session.findMany({
@@ -1039,7 +1043,11 @@ export class SessionService {
       includeArchived?: boolean;
     },
   ) {
-    const where: Prisma.SessionWhereInput = { organizationId, createdById: userId };
+    const where: Prisma.SessionWhereInput = {
+      organizationId,
+      createdById: userId,
+      ...visibleSessionWhere(),
+    };
     if (options?.agentStatus) where.agentStatus = options.agentStatus as AgentStatus;
     if (options?.includeMerged === false) where.sessionStatus = { not: "merged" };
 
@@ -1065,6 +1073,7 @@ export class SessionService {
 
     const sessionWhere: Prisma.SessionWhereInput = {
       organizationId,
+      ...visibleSessionWhere(),
       name: { contains: trimmed, mode: "insensitive" },
     };
     if (channelId) sessionWhere.channelId = channelId;
@@ -4867,9 +4876,11 @@ export class SessionService {
       select: {
         ...SESSION_GROUP_SUMMARY_SELECT,
         sessions: {
+          where: visibleSessionWhere(),
           select: {
             agentStatus: true,
             sessionStatus: true,
+            role: true,
           },
         },
       },

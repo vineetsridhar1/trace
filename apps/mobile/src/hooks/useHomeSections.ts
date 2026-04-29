@@ -2,6 +2,7 @@ import { useStoreWithEqualityFn } from "zustand/traditional";
 import { asJsonObject } from "@trace/shared";
 import {
   eventScopeKey,
+  isUserVisibleSession,
   useEntityStore,
   type EntityState,
   type SessionEntity,
@@ -45,6 +46,7 @@ function sessionRepoId(session: SessionEntity): string | null {
 }
 
 function hiddenFromHome(state: EntityState, session: SessionEntity): boolean {
+  if (!isUserVisibleSession(session)) return true;
   if (session.sessionStatus === "merged") return true;
 
   const storedGroup = session.sessionGroupId

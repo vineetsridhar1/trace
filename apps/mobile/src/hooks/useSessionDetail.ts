@@ -23,6 +23,7 @@ const SESSION_DETAIL_QUERY = gql`
       name
       agentStatus
       sessionStatus
+      role
       tool
       model
       hosting

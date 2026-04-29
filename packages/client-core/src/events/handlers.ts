@@ -21,6 +21,7 @@ import {
 } from "../stores/entity.js";
 import { useAuthStore } from "../stores/auth.js";
 import { getSessionChannelId } from "../lib/session-group.js";
+import { isUserVisibleSession } from "../lib/session-visibility.js";
 import {
   takePendingOptimisticSession,
   upsertSessionEventWithOptimisticResolution,
@@ -295,7 +296,11 @@ export function handleOrgEvent(event: Event): void {
 
       // Auto-navigate to continuation sessions
       const sourceSessionId = payload.sourceSessionId;
-      if (typeof sourceSessionId === "string" && sourceSessionId === ui.getActiveSessionId()) {
+      if (
+        isUserVisibleSession(session) &&
+        typeof sourceSessionId === "string" &&
+        sourceSessionId === ui.getActiveSessionId()
+      ) {
         const sessionGroupId = session.sessionGroupId as string | undefined;
         const channel = asJsonObject(session.channel);
         const channelId = typeof channel?.id === "string" ? channel.id : null;
@@ -394,7 +399,10 @@ export function handleOrgEvent(event: Event): void {
       batch.patch("sessions", event.scopeId, sessionPatch);
 
       // Mark badges when agent reaches a terminal state
-      if (agentStatus === "done" || agentStatus === "failed" || agentStatus === "stopped") {
+      if (
+        (agentStatus === "done" || agentStatus === "failed" || agentStatus === "stopped") &&
+        isUserVisibleSession(useEntityStore.getState().sessions[event.scopeId])
+      ) {
         const session = useEntityStore.getState().sessions[event.scopeId];
         const channelId = getSessionChannelId(session);
         if (channelId && channelId !== ui.getActiveChannelId()) {

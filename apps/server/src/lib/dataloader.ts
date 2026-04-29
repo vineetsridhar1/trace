@@ -1,5 +1,6 @@
 import DataLoader from "dataloader";
 import { prisma } from "./db.js";
+import { visibleSessionWhere } from "./session-visibility.js";
 
 export function createUserLoader() {
   return new DataLoader<
@@ -64,6 +65,7 @@ export function createSessionGroupLoader() {
       channel: true,
       repo: true,
       sessions: {
+        where: visibleSessionWhere(),
         orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
         include: {
           createdBy: true,

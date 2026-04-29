@@ -20,12 +20,12 @@ Add role-aware session behavior so controller-run sessions are hidden from norma
 
 ## Completion requirements
 
-- [ ] Controller-run sessions never appear in normal session tables.
-- [ ] Controller-run sessions never appear in normal session group tab strips.
-- [ ] Group status ignores controller-run sessions.
-- [ ] Controller-run sessions cannot make the user-facing group appear active, failed, or blocked.
-- [ ] Worker sessions remain visible and navigable.
-- [ ] Existing session UX remains unchanged when Ultraplan is not active.
+- [x] Controller-run sessions never appear in normal session tables.
+- [x] Controller-run sessions never appear in normal session group tab strips.
+- [x] Group status ignores controller-run sessions.
+- [x] Controller-run sessions cannot make the user-facing group appear active, failed, or blocked.
+- [x] Worker sessions remain visible and navigable.
+- [x] Existing session UX remains unchanged when Ultraplan is not active.
 
 ## Implementation notes
 

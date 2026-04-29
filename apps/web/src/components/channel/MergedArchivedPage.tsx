@@ -44,6 +44,7 @@ const FILTERED_SESSION_GROUPS_QUERY = gql`
         name
         agentStatus
         sessionStatus
+        role
         tool
         model
         hosting
