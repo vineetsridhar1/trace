@@ -39,20 +39,20 @@ Add the durable database shape for Ultraplan: session roles, the `Ultraplan` ent
 
 ## Completion requirements
 
-- [ ] Schema compiles with the new enums and models.
-- [ ] Existing sessions default to `role = primary`.
-- [ ] `ScopeType.ultraplan` exists and can be used by events.
-- [ ] `Ultraplan` is linked to a `SessionGroup` with v1 uniqueness enforced.
-- [ ] `Ultraplan` distinguishes integration branch/workdir from worker execution branch/workdir.
-- [ ] `UltraplanTicket` links planned tickets before execution exists.
-- [ ] `UltraplanTicket.status` uses `UltraplanTicketStatus`, not a stringly workflow field.
-- [ ] `UltraplanControllerRun` can link to a fresh controller-run session and structured summary.
-- [ ] `TicketExecution` can represent a ticket branch and worker session.
-- [ ] Ticket dependencies, acceptance criteria, and test plans are durable.
-- [ ] V1 can represent an ordered chain without blocking future DAG scheduling.
-- [ ] New event types exist in Prisma.
-- [ ] New inbox item types exist in Prisma.
-- [ ] Migration runs cleanly on an existing local database.
+- [x] Schema compiles with the new enums and models.
+- [x] Existing sessions default to `role = primary`.
+- [x] `ScopeType.ultraplan` exists and can be used by events.
+- [x] `Ultraplan` is linked to a `SessionGroup` with v1 uniqueness enforced.
+- [x] `Ultraplan` distinguishes integration branch/workdir from worker execution branch/workdir.
+- [x] `UltraplanTicket` links planned tickets before execution exists.
+- [x] `UltraplanTicket.status` uses `UltraplanTicketStatus`, not a stringly workflow field.
+- [x] `UltraplanControllerRun` can link to a fresh controller-run session and structured summary.
+- [x] `TicketExecution` can represent a ticket branch and worker session.
+- [x] Ticket dependencies, acceptance criteria, and test plans are durable.
+- [x] V1 can represent an ordered chain without blocking future DAG scheduling.
+- [x] New event types exist in Prisma.
+- [x] New inbox item types exist in Prisma.
+- [x] Migration runs cleanly on an existing local database.
 
 ## Implementation notes
 
