@@ -40,15 +40,15 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] Admin can list org environments.
-- [ ] Admin can create/edit local environment.
-- [ ] Local environment form shows connected local bridges and registered repos.
-- [ ] Admin can create/edit provisioned environment.
-- [ ] Provisioned environment form can display/edit supported-tool compatibility constraints.
-- [ ] Admin can set an org default.
-- [ ] Admin can disable an environment.
-- [ ] Test connection shows success/error clearly.
-- [ ] UI uses generated GraphQL types and no duplicated enums.
+- [x] Admin can list org environments.
+- [x] Admin can create/edit local environment.
+- [x] Local environment form shows connected local bridges and registered repos.
+- [x] Admin can create/edit provisioned environment.
+- [x] Provisioned environment form can display/edit supported-tool compatibility constraints.
+- [x] Admin can set an org default.
+- [x] Admin can disable an environment.
+- [x] Test connection shows success/error clearly.
+- [x] UI uses generated GraphQL types and no duplicated enums.
 
 ## Implementation notes
 

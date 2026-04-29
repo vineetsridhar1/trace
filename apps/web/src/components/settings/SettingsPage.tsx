@@ -9,6 +9,7 @@ import {
   Users,
   Code,
   MonitorCog,
+  ServerCog,
 } from "lucide-react";
 import { useUIStore } from "../../stores/ui";
 import { Button } from "../ui/button";
@@ -22,6 +23,7 @@ import { ApiTokensSection } from "./ApiTokensSection";
 import { MembersSection } from "./MembersSection";
 import { ChannelsSection } from "./ChannelsSection";
 import { BridgeAccessSection } from "./BridgeAccessSection";
+import { AgentEnvironmentsSection } from "./AgentEnvironmentsSection";
 import { isLocalMode } from "../../lib/runtime-mode";
 
 type SettingsTab =
@@ -32,7 +34,8 @@ type SettingsTab =
   | "api-keys"
   | "members"
   | "channels"
-  | "bridge-access";
+  | "bridge-access"
+  | "agent-environments";
 
 const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
   { id: "repositories", label: "Repositories", icon: GitBranch },
@@ -42,6 +45,7 @@ const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "api-keys", label: "API Keys", icon: Key },
   { id: "bridge-access", label: "Bridge Access", icon: MonitorCog },
+  { id: "agent-environments", label: "Agent Environments", icon: ServerCog },
   { id: "channels", label: "Channels", icon: Code },
 ];
 
@@ -86,7 +90,8 @@ export function SettingsPage() {
     activeTab === "members" ||
     activeTab === "repositories" ||
     activeTab === "channels" ||
-    activeTab === "bridge-access"
+    activeTab === "bridge-access" ||
+    activeTab === "agent-environments"
       ? "mx-auto max-w-5xl"
       : "mx-auto max-w-2xl";
 
@@ -136,6 +141,7 @@ export function SettingsPage() {
             {activeTab === "notifications" && <NotificationsSection />}
             {activeTab === "api-keys" && <ApiTokensSection />}
             {activeTab === "bridge-access" && <BridgeAccessSection />}
+            {activeTab === "agent-environments" && <AgentEnvironmentsSection />}
             {activeTab === "channels" && <ChannelsSection />}
           </div>
         </div>
