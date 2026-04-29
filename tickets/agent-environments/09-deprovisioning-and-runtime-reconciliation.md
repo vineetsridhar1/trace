@@ -46,12 +46,12 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] Local stop/delete does not deprovision the user's machine.
-- [ ] Provisioned stop calls the configured lifecycle endpoint.
-- [ ] Failed stop attempts are retryable.
-- [ ] Stuck deprovisioning runtimes are reconciled.
-- [ ] Runtime state is eventually marked stopped/deprovisioned or failed.
-- [ ] Events accurately reflect deprovision progress.
+- [x] Local stop/delete does not deprovision the user's machine.
+- [x] Provisioned stop calls the configured lifecycle endpoint.
+- [x] Failed stop attempts are retryable.
+- [x] Stuck deprovisioning runtimes are reconciled.
+- [x] Runtime state is eventually marked stopped/deprovisioned or failed.
+- [x] Events accurately reflect deprovision progress.
 
 ## Implementation notes
 
