@@ -5,6 +5,7 @@ import { prisma } from "../lib/db.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { runtimeAccessService } from "./runtime-access.js";
 import { eventService } from "./event.js";
+import { assertActorOrgAccess } from "./actor-auth.js";
 
 type TxClient = Prisma.TransactionClient;
 
@@ -33,6 +34,32 @@ type UltraplanForRun = {
     connection: Prisma.JsonValue | null;
     repo: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
   };
+};
+
+type ControllerSession = {
+  id: string;
+  name: string;
+  agentStatus: string;
+  sessionStatus: string;
+  role: string;
+  tool: string;
+  model: string | null;
+  hosting: string;
+  createdBy: unknown;
+  repo: unknown;
+  repoId: string | null;
+  branch: string | null;
+  workdir: string | null;
+  channel: unknown;
+  channelId: string | null;
+  sessionGroup: unknown;
+  sessionGroupId: string | null;
+  connection: Prisma.JsonValue | null;
+  worktreeDeleted: boolean;
+  lastUserMessageAt: Date | null;
+  lastMessageAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 export type ControllerConfig = {
@@ -138,6 +165,55 @@ function serializeRun(run: Record<string, unknown>) {
   };
 }
 
+function serializeUltraplan(ultraplan: Record<string, unknown>) {
+  return {
+    id: ultraplan.id,
+    organizationId: ultraplan.organizationId,
+    sessionGroupId: ultraplan.sessionGroupId,
+    ownerUserId: ultraplan.ownerUserId,
+    status: ultraplan.status,
+    integrationBranch: ultraplan.integrationBranch,
+    integrationWorkdir: ultraplan.integrationWorkdir ?? null,
+    playbookId: ultraplan.playbookId ?? null,
+    playbookConfig: ultraplan.playbookConfig ?? null,
+    planSummary: ultraplan.planSummary ?? null,
+    customInstructions: ultraplan.customInstructions ?? null,
+    activeInboxItemId: ultraplan.activeInboxItemId ?? null,
+    lastControllerRunId: ultraplan.lastControllerRunId ?? null,
+    lastControllerSummary: ultraplan.lastControllerSummary ?? null,
+    createdAt: ultraplan.createdAt,
+    updatedAt: ultraplan.updatedAt,
+  };
+}
+
+function serializeSession(session: ControllerSession) {
+  return {
+    id: session.id,
+    name: session.name,
+    agentStatus: session.agentStatus,
+    sessionStatus: session.sessionStatus,
+    role: session.role,
+    tool: session.tool,
+    model: session.model,
+    hosting: session.hosting,
+    createdBy: session.createdBy,
+    repo: session.repo ?? null,
+    repoId: session.repoId ?? null,
+    branch: session.branch ?? null,
+    workdir: session.workdir ?? null,
+    channel: session.channel ?? null,
+    channelId: session.channelId ?? null,
+    sessionGroupId: session.sessionGroupId ?? null,
+    sessionGroup: session.sessionGroup ?? null,
+    connection: session.connection,
+    worktreeDeleted: session.worktreeDeleted,
+    lastUserMessageAt: session.lastUserMessageAt,
+    lastMessageAt: session.lastMessageAt,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+  };
+}
+
 export class UltraplanControllerRunService {
   async get(id: string, organizationId: string) {
     return prisma.ultraplanControllerRun.findFirst({
@@ -179,6 +255,12 @@ export class UltraplanControllerRunService {
           defaultConnection(runtime ? { id: runtime.id, label: runtime.label } : undefined),
         worktreeDeleted: false,
       },
+      include: {
+        createdBy: true,
+        repo: true,
+        channel: true,
+        sessionGroup: true,
+      },
     });
 
     if (runtime) {
@@ -198,11 +280,31 @@ export class UltraplanControllerRunService {
       },
     });
 
-    const updatedRun = await tx.ultraplanControllerRun.update({
+    const updatedRun = await tx.ultraplanControllerRun.findUniqueOrThrow({
       where: { id: run.id },
-      data: {},
       include: { session: true, generatedTickets: true },
     });
+
+    await eventService.create(
+      {
+        organizationId: input.ultraplan.organizationId,
+        scopeType: "session",
+        scopeId: session.id,
+        eventType: "session_started",
+        payload: {
+          session: serializeSession(session),
+          sessionGroup: session.sessionGroup ?? null,
+          prompt: null,
+          clientSource: "ultraplan_controller",
+          sourceSessionId: null,
+          ultraplanId: input.ultraplan.id,
+          controllerRunId: run.id,
+        } as unknown as Prisma.InputJsonValue,
+        actorType: input.actorType,
+        actorId: input.actorId,
+      },
+      tx,
+    );
 
     await eventService.create(
       {
@@ -210,10 +312,10 @@ export class UltraplanControllerRunService {
         scopeType: "ultraplan",
         scopeId: input.ultraplan.id,
         eventType: "ultraplan_controller_run_created",
-          payload: {
-            ultraplanId: input.ultraplan.id,
-            controllerRun: serializeRun(updatedRun as unknown as Record<string, unknown>),
-            sessionId: session.id,
+        payload: {
+          ultraplanId: input.ultraplan.id,
+          controllerRun: serializeRun(updatedRun as unknown as Record<string, unknown>),
+          sessionId: session.id,
           runtimeActionScope: {
             organizationId: input.ultraplan.organizationId,
             ultraplanId: input.ultraplan.id,
@@ -221,7 +323,7 @@ export class UltraplanControllerRunService {
             sessionGroupId: input.ultraplan.sessionGroupId,
             sessionId: session.id,
           },
-          } as unknown as Prisma.InputJsonValue,
+        } as unknown as Prisma.InputJsonValue,
         actorType: input.actorType,
         actorId: input.actorId,
       },
@@ -233,10 +335,7 @@ export class UltraplanControllerRunService {
 
   async markStarted(id: string, actorType: ActorType, actorId: string) {
     return prisma.$transaction(async (tx: TxClient) => {
-      const existing = await tx.ultraplanControllerRun.findUniqueOrThrow({
-        where: { id },
-        include: { ultraplan: true },
-      });
+      const existing = await this.getRunForMutation(tx, id, actorType, actorId);
       if (existing.status === "running") return existing;
 
       const run = await tx.ultraplanControllerRun.update({
@@ -272,7 +371,7 @@ export class UltraplanControllerRunService {
     actorId: string,
   ) {
     return prisma.$transaction(async (tx: TxClient) => {
-      const existing = await tx.ultraplanControllerRun.findUniqueOrThrow({ where: { id } });
+      const existing = await this.getRunForMutation(tx, id, actorType, actorId);
       if (existing.status === "completed") return existing;
 
       const run = await tx.ultraplanControllerRun.update({
@@ -288,7 +387,7 @@ export class UltraplanControllerRunService {
         include: { session: true, generatedTickets: true },
       });
 
-      await tx.ultraplan.update({
+      const updatedUltraplan = await tx.ultraplan.update({
         where: { id: run.ultraplanId },
         data: {
           lastControllerRunId: run.id,
@@ -313,13 +412,30 @@ export class UltraplanControllerRunService {
         tx,
       );
 
+      await eventService.create(
+        {
+          organizationId: updatedUltraplan.organizationId,
+          scopeType: "ultraplan",
+          scopeId: updatedUltraplan.id,
+          eventType: "ultraplan_updated",
+          payload: {
+            ultraplanId: updatedUltraplan.id,
+            sessionGroupId: updatedUltraplan.sessionGroupId,
+            ultraplan: serializeUltraplan(updatedUltraplan as unknown as Record<string, unknown>),
+          } as unknown as Prisma.InputJsonValue,
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
       return run;
     });
   }
 
   async failRun(id: string, error: string, actorType: ActorType, actorId: string) {
     return prisma.$transaction(async (tx: TxClient) => {
-      const existing = await tx.ultraplanControllerRun.findUniqueOrThrow({ where: { id } });
+      const existing = await this.getRunForMutation(tx, id, actorType, actorId);
       if (existing.status === "failed") return existing;
 
       const run = await tx.ultraplanControllerRun.update({
@@ -332,7 +448,7 @@ export class UltraplanControllerRunService {
         include: { session: true, generatedTickets: true },
       });
 
-      await tx.ultraplan.update({
+      const updatedUltraplan = await tx.ultraplan.update({
         where: { id: run.ultraplanId },
         data: { lastControllerRunId: run.id, status: "failed" },
       });
@@ -354,8 +470,40 @@ export class UltraplanControllerRunService {
         tx,
       );
 
+      await eventService.create(
+        {
+          organizationId: updatedUltraplan.organizationId,
+          scopeType: "ultraplan",
+          scopeId: updatedUltraplan.id,
+          eventType: "ultraplan_failed",
+          payload: {
+            ultraplanId: updatedUltraplan.id,
+            sessionGroupId: updatedUltraplan.sessionGroupId,
+            ultraplan: serializeUltraplan(updatedUltraplan as unknown as Record<string, unknown>),
+            error,
+          } as unknown as Prisma.InputJsonValue,
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
       return run;
     });
+  }
+
+  private async getRunForMutation(
+    tx: TxClient,
+    id: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    const run = await tx.ultraplanControllerRun.findUniqueOrThrow({
+      where: { id },
+      include: { ultraplan: true },
+    });
+    await assertActorOrgAccess(tx, run.organizationId, actorType, actorId);
+    return run;
   }
 
   private async resolveRuntime(input: CreateControllerRunInput) {

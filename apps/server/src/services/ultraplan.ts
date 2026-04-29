@@ -66,6 +66,23 @@ function eventPayload(ultraplan: Record<string, unknown>): Prisma.InputJsonValue
   } as Prisma.InputJsonValue;
 }
 
+function runtimePolicyFromSessionConnection(
+  hosting: string,
+  connection: Prisma.JsonValue | null,
+): Record<string, unknown> {
+  const policy: Record<string, unknown> = {};
+  if (hosting === "cloud" || hosting === "local") {
+    policy.hosting = hosting;
+  }
+  if (connection && typeof connection === "object" && !Array.isArray(connection)) {
+    const runtimeInstanceId = (connection as Record<string, unknown>).runtimeInstanceId;
+    if (typeof runtimeInstanceId === "string" && runtimeInstanceId.trim()) {
+      policy.runtimeInstanceId = runtimeInstanceId;
+    }
+  }
+  return policy;
+}
+
 export class UltraplanService {
   async get(id: string, organizationId: string) {
     return prisma.ultraplan.findFirst({
@@ -162,6 +179,19 @@ export class UltraplanService {
         include: ULTRAPLAN_INCLUDE,
       });
 
+      await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "ultraplan",
+          scopeId: updated.id,
+          eventType: "ultraplan_updated",
+          payload: eventPayload(updated as unknown as Record<string, unknown>),
+          actorType: input.actorType,
+          actorId: input.actorId,
+        },
+        tx,
+      );
+
       return updated;
     });
   }
@@ -195,10 +225,22 @@ export class UltraplanService {
       throw new Error("Cannot run controller for an inactive Ultraplan");
     }
 
+    const lastControllerRun = ultraplan.lastControllerRunId
+      ? await prisma.ultraplanControllerRun.findUnique({
+          where: { id: ultraplan.lastControllerRunId },
+          include: { session: true },
+        })
+      : null;
+    const lastControllerSession = lastControllerRun?.session ?? null;
     const controller = validateControllerConfig({
-      controllerProvider: "claude_code",
-      controllerModel: null,
-      controllerRuntimePolicy: null,
+      controllerProvider: lastControllerSession?.tool ?? "claude_code",
+      controllerModel: lastControllerSession?.model ?? null,
+      controllerRuntimePolicy: lastControllerSession
+        ? runtimePolicyFromSessionConnection(
+            lastControllerSession.hosting,
+            lastControllerSession.connection,
+          )
+        : null,
     });
 
     return prisma.$transaction(async (tx: TxClient) => {
@@ -207,10 +249,23 @@ export class UltraplanService {
         actorType,
         actorId,
       });
-      await tx.ultraplan.update({
+      const updated = await tx.ultraplan.update({
         where: { id: ultraplan.id },
+        include: ULTRAPLAN_INCLUDE,
         data: { status: "planning", lastControllerRunId: run.id },
       });
+      await eventService.create(
+        {
+          organizationId: updated.organizationId,
+          scopeType: "ultraplan",
+          scopeId: updated.id,
+          eventType: "ultraplan_updated",
+          payload: eventPayload(updated as unknown as Record<string, unknown>),
+          actorType,
+          actorId,
+        },
+        tx,
+      );
       return run;
     });
   }
