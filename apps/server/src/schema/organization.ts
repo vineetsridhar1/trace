@@ -8,6 +8,7 @@ import type {
   UserRole,
 } from "@trace/gql";
 import { organizationService } from "../services/organization.js";
+import { agentEnvironmentService } from "../services/agent-environment.js";
 import { webhookService } from "../services/webhook.js";
 import { orgMemberService } from "../services/org-member.js";
 import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
@@ -128,6 +129,9 @@ export const organizationTypeResolvers = {
   Organization: {
     members: (org: { id: string }) => {
       return orgMemberService.getMembers(org.id);
+    },
+    agentEnvironments: (org: { id: string }) => {
+      return agentEnvironmentService.list(org.id);
     },
   },
   OrgMember: {

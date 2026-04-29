@@ -96,9 +96,23 @@ function extractPendingInputInfo(data: Record<string, unknown>): PendingInputInf
 
 /** Shape of Session.connection JSON stored in the DB */
 export type SessionConnectionData = {
-  state: "connected" | "degraded" | "disconnected";
+  state: "pending" | "connected" | "degraded" | "disconnected" | "failed" | "stopping" | "stopped";
+  environmentId?: string;
+  adapterType?: "local" | "provisioned";
   runtimeInstanceId?: string;
   runtimeLabel?: string;
+  providerRuntimeId?: string;
+  providerRuntimeUrl?: string;
+  requestedAt?: string;
+  provisioningAt?: string;
+  connectingAt?: string;
+  connectedAt?: string;
+  failedAt?: string;
+  timedOutAt?: string;
+  stoppingAt?: string;
+  stoppedAt?: string;
+  disconnectedAt?: string;
+  reconnectedAt?: string;
   lastSeen?: string;
   lastError?: string;
   lastDeliveryFailureAt?: string;

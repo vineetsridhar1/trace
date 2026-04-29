@@ -41,6 +41,7 @@ export function createPrismaMock() {
       update: vi.fn(),
     },
     $transaction: vi.fn(),
+    $executeRaw: vi.fn(),
     user: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
@@ -71,6 +72,19 @@ export function createPrismaMock() {
       findUnique: vi.fn(),
       upsert: vi.fn(),
       delete: vi.fn(),
+    },
+    agentEnvironment: {
+      create: vi.fn(),
+      delete: vi.fn(),
+      findFirstOrThrow: vi.fn(),
+      findMany: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    orgSecret: {
+      delete: vi.fn(),
+      findFirst: vi.fn(),
+      upsert: vi.fn(),
     },
     pushToken: {
       findMany: vi.fn(),

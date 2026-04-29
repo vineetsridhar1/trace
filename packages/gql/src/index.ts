@@ -13,6 +13,7 @@ export type {
   ResolversTypes,
   ResolversParentTypes,
   ActorResolvers,
+  AgentEnvironmentResolvers,
   ChannelResolvers,
   EventResolvers,
   MutationResolvers,
