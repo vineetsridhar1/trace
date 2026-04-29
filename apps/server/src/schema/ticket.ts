@@ -2,6 +2,7 @@ import type { Context } from "../context.js";
 import type { CreateTicketInput, EntityType, TicketFilters, UpdateTicketInput } from "@trace/gql";
 import { ticketService } from "../services/ticket.js";
 import { pubsub, topics } from "../lib/pubsub.js";
+import { prisma } from "../lib/db.js";
 import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
 import { assertScopeAccess } from "../services/access.js";
 
@@ -101,6 +102,16 @@ type TicketLinkRow = {
   entityId: string;
 };
 
+type TicketDependencyRow = {
+  ticketId: string;
+  dependsOnTicketId: string;
+  organizationId: string;
+  reason: string | null;
+  createdAt: Date;
+  ticket?: unknown;
+  dependsOnTicket?: unknown;
+};
+
 type LoadedSession = Awaited<ReturnType<Context["sessionLoader"]["load"]>>;
 
 export const ticketTypeResolvers = {
@@ -123,5 +134,40 @@ export const ticketTypeResolvers = {
           session != null,
       );
     },
+    dependencies: async (
+      ticket: { id: string; organizationId: string; dependencies?: TicketDependencyRow[] },
+      _args: unknown,
+      ctx: Context,
+    ) => {
+      if (ticket.dependencies) return ticket.dependencies;
+      return prisma.ticketDependency.findMany({
+        where: { ticketId: ticket.id, organizationId: requireOrgContext(ctx) },
+        include: { ticket: true, dependsOnTicket: true },
+        orderBy: { createdAt: "asc" },
+      });
+    },
+    dependedOnBy: async (
+      ticket: { id: string; organizationId: string; dependedOnBy?: TicketDependencyRow[] },
+      _args: unknown,
+      ctx: Context,
+    ) => {
+      if (ticket.dependedOnBy) return ticket.dependedOnBy;
+      return prisma.ticketDependency.findMany({
+        where: { dependsOnTicketId: ticket.id, organizationId: requireOrgContext(ctx) },
+        include: { ticket: true, dependsOnTicket: true },
+        orderBy: { createdAt: "asc" },
+      });
+    },
+  },
+  TicketDependency: {
+    ticket: (dependency: { ticket?: unknown; ticketId: string }, _args: unknown, ctx: Context) =>
+      dependency.ticket ?? ticketService.get(dependency.ticketId, requireOrgContext(ctx)),
+    dependsOnTicket: (
+      dependency: { dependsOnTicket?: unknown; dependsOnTicketId: string },
+      _args: unknown,
+      ctx: Context,
+    ) =>
+      dependency.dependsOnTicket ??
+      ticketService.get(dependency.dependsOnTicketId, requireOrgContext(ctx)),
   },
 };

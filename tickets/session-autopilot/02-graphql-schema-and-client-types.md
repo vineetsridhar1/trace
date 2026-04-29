@@ -44,10 +44,8 @@ Expose Ultraplan, planned tickets, controller runs, ticket executions, session r
 - [x] Generated client and resolver types compile.
 - [x] Session group detail can hydrate the active Ultraplan.
 - [x] The schema can represent controller run summaries and full-chat links.
-- [ ] The schema can represent a v1 ordered plan and future DAG dependencies.
+- [x] The schema can represent a v1 ordered plan and future DAG dependencies.
 - [x] No duplicate type definitions are added outside `schema.graphql`.
-
-Review note: the first pass added `Ticket.dependencies` and `Ticket.dependedOnBy` to the schema, but those non-null fields still need thin resolver/query support before the requirement should be considered complete. Otherwise existing `Ticket` queries will fail when clients ask for dependency edges.
 
 ## Implementation notes
 

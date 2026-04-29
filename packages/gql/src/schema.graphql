@@ -527,8 +527,11 @@ type Ticket {
 }
 
 type TicketDependency {
+  ticketId: ID!
   ticket: Ticket!
+  dependsOnTicketId: ID!
   dependsOnTicket: Ticket!
+  organizationId: ID!
   reason: String
   createdAt: DateTime!
 }

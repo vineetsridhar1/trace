@@ -13,6 +13,7 @@ vi.mock("./event.js", () => ({
 
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
+import { ticketTypeResolvers } from "../schema/ticket.js";
 import { TicketService } from "./ticket.js";
 
 const prismaMock = prisma as any;
@@ -49,6 +50,8 @@ describe("TicketService", () => {
         description: "",
         priority: "medium",
         labels: [],
+        acceptanceCriteria: [],
+        testPlan: undefined,
         organizationId: "org-1",
         createdById: "user-1",
         channelId: undefined,
@@ -69,6 +72,9 @@ describe("TicketService", () => {
           ticketId: "ticket-1",
           title: "Fix auth",
           priority: "medium",
+          acceptanceCriteria: undefined,
+          testPlan: undefined,
+          dependencyTicketIds: [],
         },
         actorType: "user",
         actorId: "user-1",
@@ -77,17 +83,69 @@ describe("TicketService", () => {
     );
   });
 
+  it("persists acceptance criteria, test plans, and dependency edges on create", async () => {
+    prismaMock.ticket.count.mockResolvedValueOnce(2);
+    prismaMock.ticket.create.mockResolvedValueOnce({
+      id: "ticket-1",
+      title: "Fix auth",
+      priority: "high",
+      organizationId: "org-1",
+      acceptanceCriteria: ["Shows an error"],
+      testPlan: "Run auth tests",
+    });
+
+    const service = new TicketService();
+    await service.create({
+      organizationId: "org-1",
+      title: "Fix auth",
+      priority: "high",
+      acceptanceCriteria: ["Shows an error"],
+      testPlan: "Run auth tests",
+      dependencyTicketIds: ["ticket-a", "ticket-b", "ticket-a"],
+      actorType: "user",
+      actorId: "user-1",
+    } as any);
+
+    expect(prismaMock.ticket.count).toHaveBeenCalledWith({
+      where: {
+        id: { in: ["ticket-a", "ticket-b"] },
+        organizationId: "org-1",
+      },
+    });
+    expect(prismaMock.ticket.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        acceptanceCriteria: ["Shows an error"],
+        testPlan: "Run auth tests",
+        dependencies: {
+          create: [
+            { dependsOnTicketId: "ticket-a", organizationId: "org-1" },
+            { dependsOnTicketId: "ticket-b", organizationId: "org-1" },
+          ],
+        },
+      }),
+      include: expect.any(Object),
+    });
+  });
+
   it("updates tickets and records prior status in the event payload", async () => {
     prismaMock.ticket.findUniqueOrThrow.mockResolvedValueOnce({
       organizationId: "org-1",
       status: "todo",
     });
+    prismaMock.ticket.count.mockResolvedValueOnce(1);
     prismaMock.ticket.update.mockResolvedValueOnce({ id: "ticket-1", title: "Updated" });
 
     const service = new TicketService();
     await service.update(
       "ticket-1",
-      { title: "Updated", status: "done", description: null } as any,
+      {
+        title: "Updated",
+        status: "done",
+        description: null,
+        acceptanceCriteria: ["Works"],
+        testPlan: "Run tests",
+        dependencyTicketIds: ["ticket-0"],
+      } as any,
       "user",
       "user-1",
     );
@@ -97,22 +155,38 @@ describe("TicketService", () => {
       data: {
         title: "Updated",
         status: "done",
+        acceptanceCriteria: ["Works"],
+        testPlan: "Run tests",
+        dependencies: {
+          deleteMany: {},
+          create: [{ dependsOnTicketId: "ticket-0", organizationId: "org-1" }],
+        },
       },
       include: expect.any(Object),
     });
-    expect(eventServiceMock.create).toHaveBeenCalledWith({
-      organizationId: "org-1",
-      scopeType: "ticket",
-      scopeId: "ticket-1",
-      eventType: "ticket_updated",
-      payload: {
-        ticketId: "ticket-1",
-        changes: { title: "Updated", status: "done", description: null },
-        previousStatus: "todo",
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      {
+        organizationId: "org-1",
+        scopeType: "ticket",
+        scopeId: "ticket-1",
+        eventType: "ticket_updated",
+        payload: {
+          ticketId: "ticket-1",
+          changes: {
+            title: "Updated",
+            status: "done",
+            description: null,
+            acceptanceCriteria: ["Works"],
+            testPlan: "Run tests",
+            dependencyTicketIds: ["ticket-0"],
+          },
+          previousStatus: "todo",
+        },
+        actorType: "user",
+        actorId: "user-1",
       },
-      actorType: "user",
-      actorId: "user-1",
-    });
+      prismaMock,
+    );
   });
 
   it("adds comments through event creation", async () => {
@@ -132,6 +206,31 @@ describe("TicketService", () => {
       payload: { text: "hello" },
       actorType: "user",
       actorId: "user-1",
+    });
+  });
+
+  it("resolves ticket dependency fields with org scoping", async () => {
+    prismaMock.ticketDependency.findMany.mockResolvedValueOnce([
+      {
+        ticketId: "ticket-1",
+        dependsOnTicketId: "ticket-0",
+        organizationId: "org-1",
+        reason: null,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+    ]);
+
+    const dependencies = await ticketTypeResolvers.Ticket.dependencies(
+      { id: "ticket-1", organizationId: "org-1" },
+      {},
+      { organizationId: "org-1" } as any,
+    );
+
+    expect(dependencies).toHaveLength(1);
+    expect(prismaMock.ticketDependency.findMany).toHaveBeenCalledWith({
+      where: { ticketId: "ticket-1", organizationId: "org-1" },
+      include: { ticket: true, dependsOnTicket: true },
+      orderBy: { createdAt: "asc" },
     });
   });
 
