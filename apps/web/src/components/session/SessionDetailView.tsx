@@ -338,7 +338,7 @@ export function SessionDetailView({
   const connectionState = getConnectionState(connection);
   const runtimeBooting =
     agentStatus === "active" &&
-    (hasPendingRuntimeMessage ||
+    ((hasPendingRuntimeMessage && connectionState !== "connected") ||
       (connectionState !== null && RUNTIME_BOOTING_STATES.has(connectionState)));
 
   // Find plan content when server says session needs input
