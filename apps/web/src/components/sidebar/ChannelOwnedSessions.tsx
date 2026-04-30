@@ -1,23 +1,41 @@
-import { memo } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, Circle } from "lucide-react";
+import { useStoreWithEqualityFn } from "zustand/traditional";
 import {
   useAuthStore,
   useEntityField,
   useEntityIds,
+  useEntityStore,
   getSessionChannelId,
 } from "@trace/client-core";
-import type { AuthState, EntityTableMap } from "@trace/client-core";
+import type { AuthState, EntityState, EntityTableMap } from "@trace/client-core";
 import { AgentStatusIcon } from "../session/AgentStatusIcon";
 import {
   getDisplayAgentStatus,
   getDisplaySessionStatus,
   sessionStatusColor,
+  sessionStatusLabel,
 } from "../session/sessionStatus";
+import { sessionStatusGroupOrder } from "../channel/sessions-table-types";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { cn, timeAgo } from "../../lib/utils";
 
 type SessionGroupRef = {
   channel?: { id: string } | null;
+  archivedAt?: string | null;
 } | null;
+
+type SidebarSessionRecord = {
+  id: string;
+  name: string;
+  sortTimestamp: string;
+  status: string;
+};
+
+type SidebarSessionStatusGroup = {
+  status: string;
+  sessionIds: string[];
+};
 
 function getSidebarSessionChannelId(session: EntityTableMap["sessions"]): string | null {
   return (
@@ -45,6 +63,86 @@ export function useOwnedSessionIdsForChannel(channelId: string): string[] {
   );
 }
 
+function areSidebarSessionRecordsEqual(
+  previous: SidebarSessionRecord[],
+  next: SidebarSessionRecord[],
+): boolean {
+  if (previous.length !== next.length) return false;
+  for (let i = 0; i < previous.length; i++) {
+    const a = previous[i];
+    const b = next[i];
+    if (
+      a.id !== b.id ||
+      a.name !== b.name ||
+      a.sortTimestamp !== b.sortTimestamp ||
+      a.status !== b.status
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function sortSessionRecords(a: SidebarSessionRecord, b: SidebarSessionRecord): number {
+  const diff = new Date(b.sortTimestamp).getTime() - new Date(a.sortTimestamp).getTime();
+  if (diff !== 0) return diff;
+  return a.name.localeCompare(b.name);
+}
+
+function useSidebarSessionStatusGroups(sessionIds: string[]): SidebarSessionStatusGroup[] {
+  const records = useStoreWithEqualityFn(
+    useEntityStore,
+    (state: EntityState): SidebarSessionRecord[] =>
+      sessionIds
+        .map((sessionId: string) => {
+          const session = state.sessions[sessionId];
+          if (!session) return null;
+
+          const sessionGroup = session.sessionGroup as SessionGroupRef | undefined;
+          const status = getDisplaySessionStatus(
+            session.sessionStatus ?? undefined,
+            session.prUrl ?? undefined,
+            session.agentStatus ?? undefined,
+            sessionGroup?.archivedAt ?? undefined,
+          );
+
+          return {
+            id: session.id,
+            name: session.name ?? "",
+            sortTimestamp: session.lastMessageAt ?? session.updatedAt ?? session.createdAt,
+            status,
+          };
+        })
+        .filter((record): record is SidebarSessionRecord => record !== null),
+    areSidebarSessionRecordsEqual,
+  );
+
+  return useMemo(() => {
+    const groups = new Map<string, SidebarSessionRecord[]>();
+
+    for (const record of records) {
+      const statusRecords = groups.get(record.status) ?? [];
+      statusRecords.push(record);
+      groups.set(record.status, statusRecords);
+    }
+
+    return [...groups.entries()]
+      .sort(([statusA, recordsA], [statusB, recordsB]) => {
+        const statusDiff =
+          (sessionStatusGroupOrder[statusA] ?? 99) - (sessionStatusGroupOrder[statusB] ?? 99);
+        if (statusDiff !== 0) return statusDiff;
+        return (
+          Math.max(...recordsB.map((record) => new Date(record.sortTimestamp).getTime()), 0) -
+          Math.max(...recordsA.map((record) => new Date(record.sortTimestamp).getTime()), 0)
+        );
+      })
+      .map(([status, statusRecords]) => ({
+        status,
+        sessionIds: [...statusRecords].sort(sortSessionRecords).map((record) => record.id),
+      }));
+  }, [records]);
+}
+
 export const ChannelOwnedSessions = memo(function ChannelOwnedSessions({
   channelId,
   sessionIds,
@@ -56,21 +154,85 @@ export const ChannelOwnedSessions = memo(function ChannelOwnedSessions({
   expanded: boolean;
   onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string) => void;
 }) {
+  const groups = useSidebarSessionStatusGroups(sessionIds);
+  const [collapsedStatuses, setCollapsedStatuses] = useState<ReadonlySet<string>>(() => new Set());
+
+  const toggleStatus = useCallback((status: string) => {
+    setCollapsedStatuses((previous) => {
+      const next = new Set(previous);
+      if (next.has(status)) {
+        next.delete(status);
+      } else {
+        next.add(status);
+      }
+      return next;
+    });
+  }, []);
+
   if (!expanded || sessionIds.length === 0) return null;
 
   return (
-    <div className="ml-6 mt-0.5 space-y-0.5 pl-2">
-      {sessionIds.map((sessionId) => (
-        <OwnedSessionItem
-          key={sessionId}
+    <div className="ml-6 mt-1 space-y-1 pl-2">
+      {groups.map((group) => (
+        <SidebarSessionStatusGroup
+          key={group.status}
           channelId={channelId}
-          sessionId={sessionId}
+          collapsed={collapsedStatuses.has(group.status)}
+          group={group}
           onSessionClick={onSessionClick}
+          onToggle={toggleStatus}
         />
       ))}
     </div>
   );
 });
+
+function SidebarSessionStatusGroup({
+  channelId,
+  collapsed,
+  group,
+  onSessionClick,
+  onToggle,
+}: {
+  channelId: string;
+  collapsed: boolean;
+  group: SidebarSessionStatusGroup;
+  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string) => void;
+  onToggle: (status: string) => void;
+}) {
+  const Icon = collapsed ? ChevronRight : ChevronDown;
+  const color = sessionStatusColor[group.status] ?? "text-muted-foreground";
+  const label = sessionStatusLabel[group.status] ?? group.status;
+
+  return (
+    <div>
+      <button
+        type="button"
+        className="flex h-6 w-full cursor-pointer items-center gap-1.5 rounded-md px-2 text-left text-xs font-semibold transition-colors hover:bg-white/10"
+        onClick={() => onToggle(group.status)}
+      >
+        <Icon size={12} className="shrink-0 text-muted-foreground" />
+        <Circle size={5} className={cn("shrink-0 fill-current", color)} />
+        <span className={cn("min-w-0 flex-1 truncate", color)}>{label}</span>
+        <span className="shrink-0 text-[11px] text-muted-foreground">
+          {group.sessionIds.length}
+        </span>
+      </button>
+      {!collapsed && (
+        <div className="mt-0.5 space-y-0.5">
+          {group.sessionIds.map((sessionId) => (
+            <OwnedSessionItem
+              key={sessionId}
+              channelId={channelId}
+              sessionId={sessionId}
+              onSessionClick={onSessionClick}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function OwnedSessionItem({
   channelId,
