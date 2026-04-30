@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Monitor, Loader2 } from "lucide-react";
+import { AlertTriangle, Cloud, Monitor, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import {
   AVAILABLE_SESSION_RUNTIMES_QUERY,
+  MOVE_SESSION_TO_CLOUD_MUTATION,
   MOVE_SESSION_TO_RUNTIME_MUTATION,
 } from "@trace/client-core";
 import { useEntityField } from "@trace/client-core";
@@ -86,6 +87,30 @@ export function SessionRuntimePicker({
     [onClose, sessionId],
   );
 
+  const handleMoveToCloud = useCallback(async () => {
+    setMoving("cloud");
+    try {
+      const result = await client
+        .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, { sessionId })
+        .toPromise();
+      if (result.error) {
+        toast.error("Failed to move session", { description: result.error.message });
+        return;
+      }
+      if (!result.data?.moveSessionToCloud?.id) {
+        toast.error("Failed to move session", { description: "No session returned" });
+        return;
+      }
+      onClose();
+    } catch (err) {
+      toast.error("Failed to move session", {
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
+    } finally {
+      setMoving(null);
+    }
+  }, [onClose, sessionId]);
+
   const localRuntimes = runtimes.filter(
     (rt: RuntimeInstance) => rt.hostingMode === "local" && rt.id !== currentRuntimeInstanceId,
   );
@@ -105,6 +130,21 @@ export function SessionRuntimePicker({
         </div>
       ) : (
         <div className="space-y-1">
+          <button
+            onClick={handleMoveToCloud}
+            disabled={moving !== null}
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors hover:bg-surface-elevated disabled:opacity-50"
+          >
+            <Cloud size={14} className="shrink-0 text-sky-400" />
+            <div className="min-w-0 flex-1">
+              <span className="text-foreground">New cloud container</span>
+              <span className="ml-2 text-xs text-muted-foreground">pulls current branch</span>
+            </div>
+            {moving === "cloud" && (
+              <Loader2 size={12} className="animate-spin text-muted-foreground" />
+            )}
+          </button>
+
           {localRuntimes.map((rt: RuntimeInstance) => {
             const lacksRepo =
               !!repoId && rt.hostingMode === "local" && !rt.registeredRepoIds.includes(repoId);
@@ -140,7 +180,7 @@ export function SessionRuntimePicker({
           })}
 
           {localRuntimes.length === 0 && (
-            <p className="py-1 text-xs text-muted-foreground">No other local bridges connected.</p>
+            <p className="py-1 text-xs text-muted-foreground">No local bridges connected.</p>
           )}
         </div>
       )}
