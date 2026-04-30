@@ -1,7 +1,7 @@
 <h1 align="center">Trace</h1>
 
 <p align="center">
-  <strong>Open-source control plane for multiplayer AI coding sessions.</strong>
+  <strong>Source-available control plane for multiplayer AI coding sessions.</strong>
 </p>
 
 <p align="center">
@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="AGPL-3.0 License" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-FSL--1.1--ALv2-blue" alt="FSL-1.1-ALv2 License" /></a>
   <img src="https://img.shields.io/badge/node-%3E%3D22-43853d" alt="Node.js >= 22" />
   <img src="https://img.shields.io/badge/pnpm-%3E%3D10-f69220" alt="pnpm >= 10" />
 </p>
@@ -178,7 +178,7 @@ Trace treats AI coding sessions as collaborative, durable workspace objects.
 
 ## Quickstart
 
-Open source. Self-hosted. No Trace cloud account required.
+Source-available. Self-hosted. No Trace cloud account required.
 
 ```bash
 git clone https://github.com/vineetsridhar1/trace.git
@@ -411,7 +411,15 @@ please read [SECURITY.md](SECURITY.md) before reporting vulnerabilities.
 
 ## License
 
-Trace is open source under the [GNU Affero General Public License v3.0](LICENSE).
+Trace is source-available under the [Functional Source License 1.1 with Apache
+2.0 Future License](LICENSE) (`FSL-1.1-ALv2`).
+
+You may use, modify, and self-host Trace for permitted purposes, including
+internal use. You may not make Trace, a modified Trace, or a substantially
+similar service available to others as a competing commercial product or service
+without a separate commercial license. Each version becomes available under the
+Apache License 2.0 on the second anniversary of the date that version is made
+available.
 
 <br/>
 
