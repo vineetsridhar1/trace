@@ -13,7 +13,7 @@ import {
   type BridgeSessionGitSyncStatus,
 } from "@trace/shared";
 import { prisma } from "../lib/db.js";
-import { AuthorizationError } from "../lib/errors.js";
+import { AuthorizationError, ValidationError } from "../lib/errors.js";
 import { eventService } from "./event.js";
 import {
   sessionRouter,
@@ -2026,6 +2026,17 @@ export class SessionService {
       actorType: input.actorType ?? "user",
       actorId: input.createdById,
     });
+    const hasCompatibilityRuntimeFallback =
+      !!input.hosting ||
+      !!input.runtimeInstanceId ||
+      !!sharedRuntimeInstanceId ||
+      !!restoreGroupRuntimeInstanceId ||
+      !!sourceSession?.hosting;
+    if (!requestedEnvironment && !hasCompatibilityRuntimeFallback) {
+      throw new ValidationError(
+        "No default agent environment is configured. Choose an environment or set an org default in Agent Environments.",
+      );
+    }
     const environmentHosting =
       requestedEnvironment?.adapterType === "local"
         ? "local"

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { AVAILABLE_RUNTIMES_QUERY, useEntityField } from "@trace/client-core";
-import type { SessionRuntimeInstance } from "@trace/gql";
+import type { AgentEnvironment, SessionRuntimeInstance } from "@trace/gql";
 import { Plus } from "lucide-react";
 import { client } from "../../lib/urql";
 import { createQuickSession, quickSessionUnavailableMessage } from "../../lib/create-quick-session";
@@ -23,10 +23,17 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [repoNotLinked, setRepoNotLinked] = useState(false);
   const [checkingRepoLink, setCheckingRepoLink] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
+  const [selectedEnvironmentAdapter, setSelectedEnvironmentAdapter] = useState<
+    AgentEnvironment["adapterType"] | null
+  >(null);
 
   useEffect(() => {
     let cancelled = false;
-    if (selectedTarget === null || selectedTarget === CLOUD_SESSION_TARGET) {
+    if (
+      selectedTarget === null ||
+      selectedTarget === CLOUD_SESSION_TARGET ||
+      selectedEnvironmentAdapter !== "local"
+    ) {
       setRepoNotLinked(false);
       setCheckingRepoLink(false);
       return () => {
@@ -75,17 +82,27 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [channelRepoId, defaultTool, selectedTarget]);
+  }, [channelRepoId, defaultTool, selectedEnvironmentAdapter, selectedTarget]);
 
   const disabled = checkingRepoLink || repoNotLinked;
+
+  const handleTargetChange = useCallback(
+    (target: string | null, environment?: Pick<AgentEnvironment, "adapterType"> | null) => {
+      setSelectedTarget(target);
+      setSelectedEnvironmentAdapter(environment?.adapterType ?? null);
+    },
+    [],
+  );
 
   const handleClick = useCallback(() => {
     if (disabled) return;
     createQuickSession(
       channelId,
-      selectedTarget === null || selectedTarget === CLOUD_SESSION_TARGET
-        ? { hosting: "cloud" }
-        : { environmentId: selectedTarget },
+      selectedTarget === null
+        ? {}
+        : selectedTarget === CLOUD_SESSION_TARGET
+          ? { hosting: "cloud" }
+          : { environmentId: selectedTarget },
     );
   }, [channelId, disabled, selectedTarget]);
 
@@ -100,7 +117,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
       <SessionEnvironmentSelect
         tool={defaultTool}
         selectedTarget={selectedTarget}
-        onSelectionChange={setSelectedTarget}
+        onSelectionChange={handleTargetChange}
       />
       <Tooltip>
         <TooltipTrigger render={<span className="inline-flex" />}>
