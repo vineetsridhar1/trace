@@ -105,7 +105,7 @@ export function SidebarChannelTree({
         }}
       >
         <SortableContext items={topLevelIds} strategy={verticalListSortingStrategy}>
-          <div className="py-2">
+          <div className="py-1">
             {currentTopLevel.map((item: TopLevelItem) =>
               item.kind === "channel" ? (
                 <SidebarChannelSection
@@ -138,7 +138,7 @@ export function SidebarChannelTree({
 
         <DragOverlay dropAnimation={null}>
           {dragItem ? (
-            <div className="flex h-8 min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border bg-sidebar-accent px-2 text-sm text-sidebar-accent-foreground shadow-lg">
+            <div className="flex h-10 min-w-0 items-center gap-2 overflow-hidden rounded-[18px] border border-white/10 bg-black/70 px-4 text-sm text-white shadow-lg">
               {dragItem.type === "channel" ? (
                 <Hash size={16} className="opacity-50" />
               ) : (

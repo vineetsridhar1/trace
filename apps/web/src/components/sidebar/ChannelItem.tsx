@@ -65,12 +65,17 @@ export const ChannelItem = memo(function ChannelItem({
         <ContextMenuTrigger>
           <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
             <SidebarMenuItem>
-              <SidebarMenuButton isActive={isActive} onClick={onClick} tooltip={name ?? ""}>
+              <SidebarMenuButton
+                isActive={isActive}
+                onClick={onClick}
+                tooltip={name ?? ""}
+                className="h-8 gap-2 rounded-md bg-transparent px-0 text-[17px] font-medium text-white/65 hover:bg-transparent hover:text-white data-[active=true]:bg-transparent data-[active=true]:text-white"
+              >
                 {canExpand && (
                   <span
                     role="button"
                     tabIndex={0}
-                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground"
+                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-white/35 transition-colors hover:text-white/80"
                     title={isExpanded ? "Collapse channel sessions" : "Expand channel sessions"}
                     onClick={(event: MouseEvent<HTMLSpanElement>) => {
                       event.stopPropagation();
@@ -95,7 +100,7 @@ export const ChannelItem = memo(function ChannelItem({
                   </span>
                 )}
                 <div className="relative">
-                  <ChannelIcon type={type} className="opacity-50" />
+                  <ChannelIcon type={type} className="text-white/50" />
                   {hasDoneBadge && (
                     <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-foreground opacity-75" />
@@ -103,7 +108,9 @@ export const ChannelItem = memo(function ChannelItem({
                     </span>
                   )}
                 </div>
-                <span className={hasDoneBadge ? "font-semibold" : undefined}>{name}</span>
+                <span className={hasDoneBadge ? "truncate font-semibold" : "truncate"}>
+                  {name}
+                </span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </div>

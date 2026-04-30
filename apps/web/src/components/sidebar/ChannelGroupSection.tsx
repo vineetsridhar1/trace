@@ -86,14 +86,14 @@ export function ChannelGroupSection({
   const sortableIds = groupSortableIds(channelIds);
 
   return (
-    <div ref={setSortableRef} style={style} className="rounded-md transition-colors">
+    <div ref={setSortableRef} style={style} className="rounded-md py-1 transition-colors">
       <div
         className="flex items-center justify-between pr-1 group/group-header"
         {...attributes}
         {...listeners}
       >
         <button
-          className="flex flex-1 items-center gap-0.5 px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+          className="flex flex-1 items-center gap-1 px-0 py-1 text-[15px] font-medium text-white/35 transition-colors hover:text-white/70"
           onClick={toggleCollapse}
           onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
         >
@@ -128,7 +128,7 @@ export function ChannelGroupSection({
         <div
           ref={setDropRef}
           className={cn(
-            "ml-3 border-l border-border/60 pl-2 rounded-md transition-colors",
+            "rounded-md transition-colors",
             isOver && !isThisDragging && "bg-blue-500/10 ring-1 ring-blue-500/50",
           )}
         >
