@@ -20,7 +20,7 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-3">
-        <label className="space-y-4">
+        <label className="space-y-1.5">
           <AgentEnvironmentFieldLabel tooltip="Trace calls this endpoint to provision a new cloud runtime for a session.">
             Start URL
           </AgentEnvironmentFieldLabel>
@@ -29,7 +29,7 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
             onChange={(event) => update("startUrl", event.target.value)}
           />
         </label>
-        <label className="space-y-4">
+        <label className="space-y-1.5">
           <AgentEnvironmentFieldLabel tooltip="Trace calls this endpoint when the session ends so the launcher can stop and clean up the runtime.">
             Stop URL
           </AgentEnvironmentFieldLabel>
@@ -38,7 +38,7 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
             onChange={(event) => update("stopUrl", event.target.value)}
           />
         </label>
-        <label className="space-y-4">
+        <label className="space-y-1.5">
           <AgentEnvironmentFieldLabel tooltip="Trace polls this endpoint while the runtime is starting to learn when it is ready.">
             Status URL
           </AgentEnvironmentFieldLabel>
@@ -48,7 +48,7 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
           />
         </label>
       </div>
-      <label className="space-y-4">
+      <label className="space-y-1.5">
         <AgentEnvironmentFieldLabel tooltip="Select the organization secret used as the bearer token for launcher requests. Configure secrets in Settings, Launcher Secrets.">
           Bearer secret
         </AgentEnvironmentFieldLabel>
@@ -71,7 +71,7 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
           </SelectContent>
         </Select>
       </label>
-      <label className="space-y-4">
+      <label className="space-y-1.5">
         <AgentEnvironmentFieldLabel tooltip="How long Trace waits for the provisioned runtime to connect before treating startup as failed.">
           Startup timeout seconds
         </AgentEnvironmentFieldLabel>
@@ -82,7 +82,7 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
           onChange={(event) => update("startupTimeoutSeconds", event.target.value)}
         />
       </label>
-      <label className="space-y-4">
+      <label className="space-y-1.5">
         <AgentEnvironmentFieldLabel tooltip="Optional JSON sent to the launcher with each start request for provider-specific settings.">
           Launcher metadata JSON
         </AgentEnvironmentFieldLabel>

@@ -11,7 +11,7 @@ type Props = {
 
 export function AgentEnvironmentBasicsFields({ draft, update }: Props) {
   return (
-    <label className="space-y-4">
+    <label className="space-y-1.5">
       <span className="text-xs font-medium text-muted-foreground">Name</span>
       <Input value={draft.name} onChange={(event) => update("name", event.target.value)} required />
     </label>
