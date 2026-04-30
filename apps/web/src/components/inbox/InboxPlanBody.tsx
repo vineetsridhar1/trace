@@ -10,6 +10,8 @@ interface InboxPlanBodyProps {
   onApproveKeep: () => void;
   onRevise: (text: string) => void;
   onDismiss: () => void;
+  approveNewLabel?: string;
+  showKeepContext?: boolean;
 }
 
 export function InboxPlanBody({
@@ -19,6 +21,8 @@ export function InboxPlanBody({
   onApproveKeep,
   onRevise,
   onDismiss,
+  approveNewLabel = "New session",
+  showKeepContext = true,
 }: InboxPlanBodyProps) {
   const [reviseText, setReviseText] = useState("");
 
@@ -47,24 +51,26 @@ export function InboxPlanBody({
           )}
         >
           <PlayCircle size={12} />
-          New session
+          {approveNewLabel}
         </button>
-        <button
-          type="button"
-          disabled={sending}
-          onClick={(e: React.MouseEvent) => {
-            e.stopPropagation();
-            onApproveKeep();
-          }}
-          className={cn(
-            "flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium transition-colors",
-            "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
-            sending && "opacity-50",
-          )}
-        >
-          <Play size={12} />
-          Keep context
-        </button>
+        {showKeepContext ? (
+          <button
+            type="button"
+            disabled={sending}
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              onApproveKeep();
+            }}
+            className={cn(
+              "flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium transition-colors",
+              "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
+              sending && "opacity-50",
+            )}
+          >
+            <Play size={12} />
+            Keep context
+          </button>
+        ) : null}
         <button
           type="button"
           disabled={sending}

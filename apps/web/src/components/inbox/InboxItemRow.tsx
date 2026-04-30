@@ -114,6 +114,9 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
     | null
     | undefined;
   const sessionTool = useEntityField("sessions", sourceId ?? "", "tool") as string | undefined;
+  const sourceSessionRole = useEntityField("sessions", sourceId ?? "", "role") as
+    | string
+    | undefined;
   const sessionHosting = useEntityField("sessions", sourceId ?? "", "hosting") as
     | string
     | undefined;
@@ -137,6 +140,8 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
   const isQuestion = itemType === "question";
   const isSuggestion = isSuggestionType(itemType as string | undefined);
   const isUltraplanGate = ULTRAPLAN_GATE_TYPES.has(itemType as string);
+  const isUltraplanControllerPlan =
+    itemType === "plan" && sourceSessionRole === "ultraplan_controller_run";
   const isResolved = status === "resolved" || status === "dismissed" || status === "expired";
   const planContent = (payload?.planContent as string) ?? "";
   const questions = (payload?.questions as QuestionData[] | undefined) ?? [];
@@ -228,13 +233,13 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
     setSending(true);
     try {
       await client.mutation(DISMISS_INBOX_ITEM_MUTATION, { id }).toPromise();
-      if (sourceId) {
+      if (sourceId && !isUltraplanControllerPlan) {
         await client.mutation(DISMISS_SESSION_MUTATION, { id: sourceId }).toPromise();
       }
     } finally {
       setSending(false);
     }
-  }, [sending, id, sourceId]);
+  }, [sending, id, sourceId, isUltraplanControllerPlan]);
 
   const handleAcceptSuggestion = useCallback(
     async (edits?: Record<string, unknown>) => {
@@ -404,6 +409,8 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
           onApproveKeep={handleApproveKeepContext}
           onRevise={(text) => handleSendMessage(`Please revise the plan: ${text}`, "plan")}
           onDismiss={handleDismiss}
+          approveNewLabel={isUltraplanControllerPlan ? "Start worker session" : "New session"}
+          showKeepContext={!isUltraplanControllerPlan}
         />
       )}
     </div>
