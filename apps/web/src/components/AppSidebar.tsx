@@ -114,7 +114,8 @@ export function AppSidebar() {
           className="flex size-full flex-col border-r border-white/10 bg-transparent text-sidebar-foreground shadow-2xl shadow-black/30"
           style={{ backgroundColor: "transparent" }}
         >
-          <SidebarContent className="overflow-hidden">
+          <div className="app-region-drag h-10 shrink-0" />
+          <SidebarContent className="app-region-no-drag overflow-hidden">
             {features.messaging ? (
               <div
                 ref={expandedTabs.viewportRef}
@@ -162,7 +163,7 @@ export function AppSidebar() {
             )}
           </SidebarContent>
 
-          <SidebarFooter className="gap-0 p-0">
+          <SidebarFooter className="app-region-no-drag gap-0 p-0">
             {features.messaging && (
               <div className="px-3 py-2">
                 <SidebarTabSwitcher tabProgress={tabProgress} onTabClick={expandedTabs.selectTab} />
