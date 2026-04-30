@@ -111,10 +111,8 @@ export function AppSidebar() {
     <>
       <Sidebar collapsible="offcanvas" className="border-none">
         <div
-          className="flex size-full flex-col border-r border-white/10 bg-black/25 text-sidebar-foreground shadow-2xl shadow-black/30 backdrop-blur-2xl"
-          style={{
-            backgroundColor: `color-mix(in srgb, rgb(12 12 12 / 0.82) ${tabProgress * 100}%, rgb(22 34 80 / 0.62))`,
-          }}
+          className="flex size-full flex-col border-r border-white/10 bg-transparent text-sidebar-foreground shadow-2xl shadow-black/30"
+          style={{ backgroundColor: "transparent" }}
         >
           <SidebarContent className="overflow-hidden">
             {features.messaging ? (
