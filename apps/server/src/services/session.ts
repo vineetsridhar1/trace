@@ -2827,6 +2827,7 @@ export class SessionService {
       // Provision the new runtime (repo already included in initial select)
       const needsProvisioning = !!prev.repoId || newHosting === "cloud";
       if (needsProvisioning) {
+        const previousAdapterType = this.parseConnection(prev.connection).adapterType;
         this.provisionRuntime({
           sessionId,
           sessionGroupId: prev.sessionGroupId,
@@ -2844,7 +2845,8 @@ export class SessionService {
           createdById: actorId,
           organizationId,
           readOnly: prev.readOnlyWorkspace,
-          adapterType: this.parseConnection(prev.connection).adapterType,
+          ...(newHosting === prev.hosting &&
+            previousAdapterType && { adapterType: previousAdapterType }),
         });
       }
     }

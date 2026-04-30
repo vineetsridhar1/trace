@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, Monitor } from "lucide-react";
+import { AlertTriangle, Cloud, Monitor } from "lucide-react";
 import type { CodingTool, SessionConnection, SessionRuntimeInstance } from "@trace/gql";
 import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
@@ -13,6 +13,7 @@ import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
 import { cn } from "../../lib/utils";
 
 const UNBOUND_LOCAL_RUNTIME_ID = "__unbound_local__";
+const CLOUD_RUNTIME_ID = "__cloud__";
 
 const TOOL_LABELS: Record<string, string> = {
   claude_code: "Claude Code",
@@ -38,6 +39,7 @@ export function SessionInputOptions({
 }: SessionInputOptionsProps) {
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
+  const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
@@ -58,10 +60,16 @@ export function SessionInputOptions({
 
   const runtimeLabel = connection?.runtimeLabel ?? null;
   const runtimeInstanceId = connection?.runtimeInstanceId ?? null;
-  const currentRuntimeValue = runtimeInstanceId ?? UNBOUND_LOCAL_RUNTIME_ID;
+  const isCloudRuntime = hosting === "cloud";
+  const currentRuntimeValue = isCloudRuntime
+    ? CLOUD_RUNTIME_ID
+    : runtimeInstanceId ?? UNBOUND_LOCAL_RUNTIME_ID;
 
   // Fetch runtimes when not_started so user can switch
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
+  const connectedLocalRuntimes = runtimes.filter(
+    (r: SessionRuntimeInstance) => r.hostingMode === "local" && r.connected,
+  );
   useEffect(() => {
     if (!isNotStarted || isOptimistic) return;
     client
@@ -122,6 +130,37 @@ export function SessionInputOptions({
       if (isOptimistic || value === currentRuntimeValue) return;
       if (!value) return;
       if (value === UNBOUND_LOCAL_RUNTIME_ID) return;
+
+      if (value === CLOUD_RUNTIME_ID) {
+        const nextConnection: SessionConnection = {
+          __typename: connection?.__typename ?? "SessionConnection",
+          canMove: connection?.canMove ?? true,
+          canRetry: connection?.canRetry ?? true,
+          lastDeliveryFailureAt: connection?.lastDeliveryFailureAt ?? null,
+          lastError: connection?.lastError ?? null,
+          lastSeen: connection?.lastSeen ?? null,
+          retryCount: connection?.retryCount ?? 0,
+          runtimeInstanceId: null,
+          runtimeLabel: null,
+          state: connection?.state ?? "disconnected",
+        };
+
+        const rollback = applyOptimisticPatch("sessions", sessionId, {
+          hosting: "cloud",
+          connection: nextConnection,
+        });
+
+        try {
+          const result = await client
+            .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, hosting: "cloud" })
+            .toPromise();
+          if (result.error) throw result.error;
+        } catch (error) {
+          rollback();
+          console.error("Failed to update session runtime:", error);
+        }
+        return;
+      }
 
       const rt = runtimes.find((r: SessionRuntimeInstance) => r.id === value);
       const nextConnection: SessionConnection = {
@@ -244,7 +283,11 @@ export function SessionInputOptions({
           <SelectTrigger className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
             <SelectValue>
               <span className="flex items-center gap-1">
-                {!runtimeInstanceId ? (
+                {currentRuntimeValue === CLOUD_RUNTIME_ID ? (
+                  <>
+                    <Cloud size={12} className="text-sky-400" /> Cloud
+                  </>
+                ) : !runtimeInstanceId ? (
                   <>
                     <AlertTriangle size={12} className="text-amber-500" /> No local runtime
                   </>
@@ -257,31 +300,35 @@ export function SessionInputOptions({
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {!runtimeInstanceId && (
+            <SelectItem value={CLOUD_RUNTIME_ID}>
+              <span className="flex items-center gap-1.5">
+                <Cloud size={12} className="text-sky-400" /> Cloud
+              </span>
+            </SelectItem>
+            {(currentRuntimeValue === UNBOUND_LOCAL_RUNTIME_ID ||
+              connectedLocalRuntimes.length === 0) && (
               <SelectItem value={UNBOUND_LOCAL_RUNTIME_ID} disabled>
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <AlertTriangle size={12} className="text-amber-500" /> No local runtime
                 </span>
               </SelectItem>
             )}
-            {runtimes
-              .filter((r: SessionRuntimeInstance) => r.hostingMode === "local" && r.connected)
-              .map((r: SessionRuntimeInstance) => {
-                const lacksRepo = !!channelRepoId && !r.registeredRepoIds.includes(channelRepoId);
-                return (
-                  <SelectItem key={r.id} value={r.id} disabled={lacksRepo}>
-                    <span className="flex items-center gap-1.5">
-                      <Monitor size={12} className="text-green-400" /> {r.label}
-                      {lacksRepo && (
-                        <span className="flex items-center gap-0.5 text-xs text-amber-500">
-                          <AlertTriangle size={10} />
-                          repo not linked
-                        </span>
-                      )}
-                    </span>
-                  </SelectItem>
-                );
-              })}
+            {connectedLocalRuntimes.map((r: SessionRuntimeInstance) => {
+              const lacksRepo = !!channelRepoId && !r.registeredRepoIds.includes(channelRepoId);
+              return (
+                <SelectItem key={r.id} value={r.id} disabled={lacksRepo}>
+                  <span className="flex items-center gap-1.5">
+                    <Monitor size={12} className="text-green-400" /> {r.label}
+                    {lacksRepo && (
+                      <span className="flex items-center gap-0.5 text-xs text-amber-500">
+                        <AlertTriangle size={10} />
+                        repo not linked
+                      </span>
+                    )}
+                  </span>
+                </SelectItem>
+              );
+            })}
           </SelectContent>
         </Select>
       ) : null}
