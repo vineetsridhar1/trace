@@ -1783,6 +1783,8 @@ describe("SessionService", () => {
       expect(prismaMock.session.update).toHaveBeenCalledWith({
         where: { id: "session-1" },
         data: {
+          agentStatus: "active",
+          sessionStatus: "in_progress",
           pendingRun: expect.objectContaining({
             type: "run",
             prompt: "Ship it",
@@ -2081,7 +2083,7 @@ describe("SessionService", () => {
         .mockResolvedValueOnce({
           organizationId: "org-1",
           sessionGroupId: "group-1",
-          agentStatus: "not_started",
+          agentStatus: "active",
           sessionStatus: "in_progress",
         })
         .mockResolvedValueOnce({
@@ -2114,6 +2116,7 @@ describe("SessionService", () => {
         expect.objectContaining({
           eventType: "session_runtime_start_requested",
           payload: expect.objectContaining({
+            agentStatus: "active",
             lifecycleState: "requested",
             connection: expect.objectContaining({
               state: "requested",
