@@ -19,7 +19,7 @@ export type StartSessionRequest = {
   bridgeUrl: string;
   repo: TraceRepo | null;
   tool: "claude_code" | "codex";
-  model: string;
+  model: string | null;
   bootstrapEnv: Record<string, string>;
   metadata: {
     requestedBy: string;

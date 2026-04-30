@@ -24,7 +24,7 @@ export function validateStartSessionRequest(body: unknown): StartSessionRequest 
     bridgeUrl: requireString(value.bridgeUrl, "bridgeUrl"),
     repo,
     tool: requireOneOf(value.tool, ["claude_code", "codex"], "tool"),
-    model: requireString(value.model, "model"),
+    model: value.model === null ? null : requireString(value.model, "model"),
     bootstrapEnv,
     metadata: validateMetadata(value.metadata),
   };
@@ -65,7 +65,10 @@ function validateRepo(value: unknown): StartSessionRequest["repo"] {
 
 function validateMetadata(value: unknown): StartSessionRequest["metadata"] {
   const metadata = requireObject(value, "metadata");
-  const launcherMetadata = requireObject(metadata.launcherMetadata, "metadata.launcherMetadata");
+  const launcherMetadata =
+    metadata.launcherMetadata === null || metadata.launcherMetadata === undefined
+      ? {}
+      : requireObject(metadata.launcherMetadata, "metadata.launcherMetadata");
 
   return {
     requestedBy: requireString(metadata.requestedBy, "metadata.requestedBy"),

@@ -129,7 +129,7 @@ export function buildMachineEnv(request: StartSessionRequest): Record<string, st
   return {
     ...request.bootstrapEnv,
     TRACE_TOOL: request.tool,
-    TRACE_MODEL: request.model,
+    ...(request.model ? { TRACE_MODEL: request.model } : {}),
     ...(request.repo
       ? {
           TRACE_REPO_URL: request.repo.remoteUrl,
