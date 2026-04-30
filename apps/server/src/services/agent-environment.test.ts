@@ -127,6 +127,7 @@ describe("AgentEnvironmentService", () => {
         payload: {
           agentEnvironment: {
             id: "env-1",
+            orgId: "org-1",
             organizationId: "org-1",
             name: "Company Launcher",
             adapterType: "provisioned",
@@ -146,6 +147,7 @@ describe("AgentEnvironmentService", () => {
           agentEnvironments: [
             {
               id: "env-1",
+              orgId: "org-1",
               organizationId: "org-1",
               name: "Company Launcher",
               adapterType: "provisioned",

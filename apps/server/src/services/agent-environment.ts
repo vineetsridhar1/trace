@@ -123,6 +123,7 @@ function assertSupportsTool(environment: AgentEnvironmentRecord, tool: CodingToo
 function environmentPayload(environment: AgentEnvironmentRecord): Prisma.InputJsonObject {
   return {
     id: environment.id,
+    orgId: environment.organizationId,
     organizationId: environment.organizationId,
     name: environment.name,
     adapterType: environment.adapterType,
