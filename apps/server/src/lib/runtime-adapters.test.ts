@@ -232,7 +232,7 @@ describe("ProvisionedRuntimeAdapter", () => {
     expect(body.bootstrapEnv.TRACE_BRIDGE_URL).toBe("wss://trace-tunnel.example/bridge");
   });
 
-  it("extends runtime token lifetime to cover long startup timeouts", async () => {
+  it("keeps runtime bridge tokens valid beyond the startup window for reconnects", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-30T12:00:00.000Z"));
     try {
@@ -258,13 +258,13 @@ describe("ProvisionedRuntimeAdapter", () => {
 
       const init = fetchMock().mock.calls[0][1] as RequestInit;
       const body = JSON.parse(init.body as string) as { runtimeTokenExpiresAt: string };
-      expect(body.runtimeTokenExpiresAt).toBe("2026-04-30T12:31:00.000Z");
+      expect(body.runtimeTokenExpiresAt).toBe("2026-05-30T12:00:00.000Z");
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("rejects expired runtime bridge tokens", async () => {
+  it("accepts runtime bridge tokens across ordinary reconnect windows", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-29T12:00:00Z"));
     fetchMock().mockResolvedValueOnce(makeResponse({ runtimeId: "provider-runtime-1" }));
@@ -293,6 +293,8 @@ describe("ProvisionedRuntimeAdapter", () => {
 
     expect(authenticateProvisionedRuntimeToken(runtimeToken)).not.toBeNull();
     vi.setSystemTime(new Date("2026-04-29T12:16:00Z"));
+    expect(authenticateProvisionedRuntimeToken(runtimeToken)).not.toBeNull();
+    vi.setSystemTime(new Date("2026-05-30T12:00:01Z"));
     expect(authenticateProvisionedRuntimeToken(runtimeToken)).toBeNull();
     vi.useRealTimers();
   });

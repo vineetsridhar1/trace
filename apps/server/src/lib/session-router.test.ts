@@ -338,6 +338,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
   it("delegates provisioned startup through the injected adapter registry", async () => {
     const provisionedStart = vi.fn().mockResolvedValue({ status: "provisioning" });
+    const provisionedStop = vi.fn().mockResolvedValue({ ok: true, status: "stopping" });
     const provisionedAdapter: RuntimeAdapter = {
       type: "provisioned",
       async validateConfig() {},
@@ -648,6 +649,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
   it("times out startup using environment config and emits timed_out", async () => {
     vi.useFakeTimers();
+    const provisionedStop = vi.fn().mockResolvedValue({ ok: true, status: "stopping" });
     const provisionedAdapter: RuntimeAdapter = {
       type: "provisioned",
       async validateConfig() {},
@@ -657,12 +659,11 @@ describe("SessionRouter runtime adapter dispatch", () => {
       async startSession(input) {
         return {
           runtimeInstanceId: input.runtimeInstanceId ?? "runtime-1",
+          providerRuntimeId: "provider-runtime-1",
           status: "provisioning",
         };
       },
-      async stopSession() {
-        return { ok: true, status: "stopping" };
-      },
+      stopSession: provisionedStop,
       async getStatus() {
         return { status: "provisioning" };
       },
@@ -701,7 +702,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
         id: "env-1",
         name: "Provisioned",
         adapterType: "provisioned",
-        config: { startupTimeoutSeconds: 1 },
+        config: { startupTimeoutSeconds: 1, deprovisionPolicy: "on_session_end" },
       },
       tool: "codex",
       repo: null,
@@ -733,9 +734,18 @@ describe("SessionRouter runtime adapter dispatch", () => {
       "session_runtime_start_requested",
       "session_runtime_provisioning",
       "session_runtime_start_timed_out",
+      "session_runtime_stopping",
     ]);
     expect(lifecycleEvents[2]?.runtimeInstanceId).toBe(lifecycleEvents[0]?.runtimeInstanceId);
     expect(lifecycleEvents[2]?.error).toContain("1000ms");
+    expect(provisionedStop).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        reason: "startup_timeout",
+        connection: expect.objectContaining({ providerRuntimeId: "provider-runtime-1" }),
+      }),
+    );
     expect(onFailed).toHaveBeenCalledWith(expect.stringContaining("timed out"));
   });
 
@@ -934,6 +944,79 @@ describe("SessionRouter runtime adapter dispatch", () => {
         }),
       }),
     );
+  });
+
+  it("does not stop provisioned runtimes with manual deprovision policy on session unload", async () => {
+    const provisionedStop = vi.fn().mockResolvedValue({ ok: true, status: "stopped" });
+    const provisionedAdapter: RuntimeAdapter = {
+      type: "provisioned",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return { status: "connecting" };
+      },
+      stopSession: provisionedStop,
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    const localAdapter: RuntimeAdapter = {
+      type: "local",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return { status: "selected" };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce({
+      id: "env-manual",
+      name: "Shared Launcher",
+      adapterType: "provisioned",
+      config: {
+        startUrl: "https://launcher.example/start",
+        stopUrl: "https://launcher.example/stop",
+        statusUrl: "https://launcher.example/status",
+        auth: { type: "bearer", secretId: "secret-1" },
+        startupTimeoutSeconds: 120,
+        deprovisionPolicy: "manual",
+      },
+    });
+    const router = new SessionRouter(
+      new RuntimeAdapterRegistry([localAdapter, provisionedAdapter]),
+    );
+    const lifecycleEvents: string[] = [];
+
+    await router.destroyRuntime(
+      "session-1",
+      {
+        hosting: "cloud",
+        organizationId: "org-1",
+        connection: {
+          adapterType: "provisioned",
+          environmentId: "env-manual",
+          providerRuntimeId: "provider-1",
+        },
+      },
+      {
+        reason: "session_unloaded",
+        onLifecycle: (eventType) => {
+          lifecycleEvents.push(eventType);
+        },
+      },
+    );
+
+    expect(provisionedStop).not.toHaveBeenCalled();
+    expect(lifecycleEvents).toEqual([]);
   });
 
   it("emits stopping/stopped lifecycle events for a successful provisioned destroy", async () => {

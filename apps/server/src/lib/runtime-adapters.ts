@@ -29,7 +29,10 @@ const PROVISIONED_STATUS_VALUES = new Set([
   "failed",
 ]);
 const PROVISIONED_STOP_STATUS_VALUES = new Set(["stopping", "stopped", "not_found", "unsupported"]);
-const RUNTIME_TOKEN_TTL_SECONDS = 15 * 60;
+// Provisioned runtimes keep this bootstrap token for bridge reconnects. The
+// session/runtime binding is still checked on every hello, so expiry is not the
+// only revocation control.
+const RUNTIME_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 const RUNTIME_TOKEN_STARTUP_MARGIN_SECONDS = 60;
 const JWT_SECRET = resolveJwtSecret();
 const LAUNCHER_REQUEST_TIMEOUT_MS = 30_000;

@@ -165,7 +165,10 @@ export class ContainerBridge implements IBridgeClient {
   private static MAX_RECONNECT_FAILURES = 20;
   private sessionWorkdirs = new Map<string, string>();
   /** Coalesces concurrent createWorktree calls for the same worktree key (sessionGroupId or sessionId) */
-  private pendingWorktrees = new Map<string, Promise<{ workdir: string; slug: string }>>();
+  private pendingWorktrees = new Map<
+    string,
+    Promise<{ workdir: string; branch: string; slug: string }>
+  >();
   /** Sessions running in read-only mode (no worktree, using bare repo path) */
   private readOnlySessions = new Set<string>();
   /** Phase-1 git detection: sessionId → Map<toolUseId → {trigger, command}> */

@@ -215,6 +215,21 @@ function startupTimeoutMs(environment?: RuntimeEnvironment | null): number {
   return 120_000;
 }
 
+function deprovisionPolicy(environment?: RuntimeEnvironment | null): string | null {
+  const policy = environmentConfigRecord(environment).deprovisionPolicy;
+  return typeof policy === "string" && policy.trim() ? policy : null;
+}
+
+function shouldSkipProvisionedStopForPolicy(
+  adapter: RuntimeAdapter,
+  environment: RuntimeEnvironment | null,
+  reason: string,
+): boolean {
+  if (adapter.type !== "provisioned") return false;
+  if (deprovisionPolicy(environment) !== "manual") return false;
+  return reason !== "deprovision_reconciliation";
+}
+
 /**
  * Runtime-aware registry that tracks runtime instances, their capabilities,
  * and which sessions they own. Replaces the old bridge-only socket map.
@@ -1456,6 +1471,13 @@ export class SessionRouter {
               ...lifecycleUpdate,
               error: message,
             });
+            await this.cleanupFailedProvisionedStart(adapter, {
+              sessionId: options.sessionId,
+              organizationId: options.organizationId,
+              environment: options.environment ?? null,
+              lifecycleUpdate,
+              onLifecycle: options.onLifecycle,
+            });
             options.onFailed(`${adapterType} runtime timed out: ${message}`);
             return;
           }
@@ -1502,6 +1524,56 @@ export class SessionRouter {
     })();
   }
 
+  private async cleanupFailedProvisionedStart(
+    adapter: RuntimeAdapter,
+    input: {
+      sessionId: string;
+      organizationId: string;
+      environment: RuntimeEnvironment | null;
+      lifecycleUpdate: RuntimeLifecycleUpdate;
+      onLifecycle?: (
+        eventType: RuntimeLifecycleEventType,
+        update?: RuntimeLifecycleUpdate,
+      ) => Promise<void> | void;
+    },
+  ): Promise<void> {
+    if (adapter.type !== "provisioned") return;
+    if (!input.lifecycleUpdate.providerRuntimeId) return;
+    if (shouldSkipProvisionedStopForPolicy(adapter, input.environment, "startup_timeout")) return;
+
+    await input.onLifecycle?.("session_runtime_stopping", input.lifecycleUpdate);
+    try {
+      const stopResult = await this.attemptStopSession(
+        adapter,
+        {
+          sessionId: input.sessionId,
+          organizationId: input.organizationId,
+          environment: input.environment,
+          connection: input.lifecycleUpdate as Record<string, unknown>,
+          reason: "startup_timeout",
+        },
+        1,
+      );
+      if (stopResult.status === "stopped" || stopResult.status === "not_found") {
+        await input.onLifecycle?.("session_runtime_stopped", {
+          ...input.lifecycleUpdate,
+          providerStatus: stopResult.status,
+        });
+      } else if (stopResult.status === "unsupported") {
+        await input.onLifecycle?.("session_runtime_deprovision_failed", {
+          ...input.lifecycleUpdate,
+          error: stopResult.message ?? "Runtime adapter cannot stop timed-out startup",
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await input.onLifecycle?.("session_runtime_deprovision_failed", {
+        ...input.lifecycleUpdate,
+        error: message,
+      });
+    }
+  }
+
   /**
    * Destroy a session's runtime. Delegates to the correct adapter.
    *
@@ -1541,6 +1613,7 @@ export class SessionRouter {
     const environment = await this.resolveRuntimeEnvironment(connection);
     const reason = options?.reason ?? "session_deleted";
     const lifecycleSnapshot = lifecycleSnapshotFromConnection(connection);
+    const skipProviderStop = shouldSkipProvisionedStopForPolicy(adapter, environment, reason);
 
     const deliveryResult = this.send(sessionId, {
       type: "delete",
@@ -1552,6 +1625,16 @@ export class SessionRouter {
       console.warn(
         `[local-adapter] bridge did not receive delete for ${sessionId}: ${deliveryResult}`,
       );
+    }
+
+    if (skipProviderStop) {
+      this.unbindSession(sessionId);
+      runtimeDebug("skipped provisioned runtime stop due to manual deprovision policy", {
+        sessionId,
+        reason,
+        environmentId: environment?.id ?? null,
+      });
+      return;
     }
 
     await options?.onLifecycle?.("session_runtime_stopping", lifecycleSnapshot);
