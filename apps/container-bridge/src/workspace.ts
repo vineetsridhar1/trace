@@ -81,7 +81,7 @@ export async function createWorktree({
   sessionGroupId?: string;
   /** Pre-assigned animal slug. If absent, one is generated. */
   slug?: string;
-}): Promise<{ workdir: string; slug: string }> {
+}): Promise<{ workdir: string; branch: string; slug: string }> {
   const repoPath = `${REPOS_DIR}/${repoId}`;
   const worktreeSlug = slug ?? generateAnimalSlug(await getUsedSlugs(WORKSPACES_DIR, repoPath));
   const worktreePath = `${WORKSPACES_DIR}/${worktreeSlug}`;
@@ -109,7 +109,7 @@ export async function createWorktree({
     const currentBranch = await getCurrentBranch(worktreePath);
     await resetWorktreeToRef(worktreePath, baseRef);
     await setUpstreamIfRemote(repoPath, currentBranch ?? branchName, baseRef);
-    return { workdir: worktreePath, slug: worktreeSlug };
+    return { workdir: worktreePath, branch: currentBranch ?? branchName, slug: worktreeSlug };
   }
 
   // Check if the branch already exists
@@ -130,7 +130,7 @@ export async function createWorktree({
   await resetWorktreeToRef(worktreePath, baseRef);
   await setUpstreamIfRemote(repoPath, branchName, baseRef);
 
-  return { workdir: worktreePath, slug: worktreeSlug };
+  return { workdir: worktreePath, branch: branchName, slug: worktreeSlug };
 }
 
 async function getCurrentBranch(worktreePath: string): Promise<string | null> {

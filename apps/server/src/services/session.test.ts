@@ -3369,7 +3369,7 @@ describe("SessionService", () => {
         makeSession({
           hosting: "cloud",
           workdir: "/workspaces/gibbon",
-          branch: "trace/gibbon",
+          branch: null,
           connection: {
             state: "connected",
             runtimeInstanceId: "runtime-source",
@@ -3425,6 +3425,13 @@ describe("SessionService", () => {
       await service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1");
 
       expect(prismaMock.session.update).toHaveBeenCalled();
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            branch: "trace/gibbon",
+          }),
+        }),
+      );
       expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
         expect.objectContaining({
           branch: "trace/gibbon",

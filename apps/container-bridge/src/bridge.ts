@@ -446,10 +446,16 @@ export class ContainerBridge implements IBridgeClient {
                 this.pendingWorktrees.set(worktreeKey, worktreePromise);
                 worktreePromise.finally(() => this.pendingWorktrees.delete(worktreeKey));
               }
-              const { workdir, slug: worktreeSlug } = await worktreePromise;
+              const { workdir, branch: worktreeBranch, slug: worktreeSlug } = await worktreePromise;
               this.sessionWorkdirs.set(sessionId, workdir);
               this.send({ type: "register_session", sessionId });
-              this.send({ type: "workspace_ready", sessionId, workdir, slug: worktreeSlug });
+              this.send({
+                type: "workspace_ready",
+                sessionId,
+                workdir,
+                branch: worktreeBranch,
+                slug: worktreeSlug,
+              });
             }
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
@@ -476,7 +482,7 @@ export class ContainerBridge implements IBridgeClient {
           try {
             await ensureRepo(repoId, repoRemoteUrl);
             this.send({ type: "repo_linked", repoId });
-            const { workdir, slug: worktreeSlug } = await createWorktree({
+            const { workdir, branch: worktreeBranch, slug: worktreeSlug } = await createWorktree({
               repoId,
               sessionId,
               defaultBranch,
@@ -487,7 +493,13 @@ export class ContainerBridge implements IBridgeClient {
             });
             this.sessionWorkdirs.set(sessionId, workdir);
             this.readOnlySessions.delete(sessionId);
-            this.send({ type: "workspace_ready", sessionId, workdir, slug: worktreeSlug });
+            this.send({
+              type: "workspace_ready",
+              sessionId,
+              workdir,
+              branch: worktreeBranch,
+              slug: worktreeSlug,
+            });
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             console.error(`[container-bridge] workspace upgrade failed for ${sessionId}:`, message);
