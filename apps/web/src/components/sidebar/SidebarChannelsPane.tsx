@@ -12,6 +12,7 @@ import { SidebarChannelTree } from "./SidebarChannelTree";
 
 export interface SidebarChannelsPaneProps {
   activeChannelId: string | null;
+  activeSessionGroupId: string | null;
   activeOrgId: string | null;
   allChannelIds: string[];
   channelGroupsById: Record<string, ChannelGroup>;
@@ -20,12 +21,14 @@ export interface SidebarChannelsPaneProps {
   channelsLoading: boolean;
   groupIds: string[];
   onChannelClick: (id: string) => void;
+  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string) => void;
   onDragActiveChange?: (active: boolean) => void;
   topLevelItems: TopLevelItem[];
 }
 
 export function SidebarChannelsPane({
   activeChannelId,
+  activeSessionGroupId,
   activeOrgId,
   allChannelIds,
   channelGroupsById,
@@ -34,6 +37,7 @@ export function SidebarChannelsPane({
   channelsLoading,
   groupIds,
   onChannelClick,
+  onSessionClick,
   onDragActiveChange,
   topLevelItems,
 }: SidebarChannelsPaneProps) {
@@ -73,6 +77,7 @@ export function SidebarChannelsPane({
 
         <SidebarChannelTree
           activeChannelId={activeChannelId}
+          activeSessionGroupId={activeSessionGroupId}
           activeOrgId={activeOrgId}
           allChannelIds={allChannelIds}
           channelGroupsById={channelGroupsById}
@@ -85,6 +90,7 @@ export function SidebarChannelsPane({
             setCreateDialogOpen(true);
           }}
           onChannelClick={onChannelClick}
+          onSessionClick={onSessionClick}
           onDragActiveChange={onDragActiveChange}
           topLevelItems={topLevelItems}
         />

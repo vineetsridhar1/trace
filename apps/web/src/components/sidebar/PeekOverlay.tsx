@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useSidebarData } from "../../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../../hooks/useSidebarTabScroll";
 import { features } from "../../lib/features";
-import { useUIStore } from "../../stores/ui";
+import { navigateToSession, useUIStore } from "../../stores/ui";
 import { SidebarChannelsPane } from "./SidebarChannelsPane";
 import { SidebarDirectMessagesPane } from "./SidebarDirectMessagesPane";
 import { SidebarTabSwitcher } from "./SidebarTabSwitcher";
@@ -27,6 +27,9 @@ export function PeekOverlay({
 }: PeekOverlayProps) {
   const sidebarData = useSidebarData();
   const activeChannelId = useUIStore((s: { activeChannelId: string | null }) => s.activeChannelId);
+  const activeSessionGroupId = useUIStore(
+    (s: { activeSessionGroupId: string | null }) => s.activeSessionGroupId,
+  );
   const setActiveChannelId = useUIStore(
     (s: { setActiveChannelId: (id: string | null) => void }) => s.setActiveChannelId,
   );
@@ -67,6 +70,14 @@ export function PeekOverlay({
       onMouseLeave();
     },
     [setActiveChatId, onMouseLeave],
+  );
+
+  const handleSessionClick = useCallback(
+    (channelId: string, sessionGroupId: string, sessionId: string) => {
+      navigateToSession(channelId, sessionGroupId, sessionId);
+      onMouseLeave();
+    },
+    [onMouseLeave],
   );
 
   const handleDragActiveChange = useCallback((active: boolean) => {
@@ -114,6 +125,7 @@ export function PeekOverlay({
                 />
                 <SidebarChannelsPane
                   activeChannelId={activeChannelId}
+                  activeSessionGroupId={activeSessionGroupId}
                   activeOrgId={sidebarData.activeOrgId}
                   allChannelIds={sidebarData.allChannelIds}
                   channelGroupsById={sidebarData.channelGroupsById}
@@ -122,6 +134,7 @@ export function PeekOverlay({
                   channelsLoading={sidebarData.channelsLoading}
                   groupIds={sidebarData.groupIds}
                   onChannelClick={handleChannelClick}
+                  onSessionClick={handleSessionClick}
                   onDragActiveChange={handleDragActiveChange}
                   topLevelItems={sidebarData.topLevelItems}
                 />
@@ -130,6 +143,7 @@ export function PeekOverlay({
               <div className="flex min-h-0 flex-1">
                 <SidebarChannelsPane
                   activeChannelId={activeChannelId}
+                  activeSessionGroupId={activeSessionGroupId}
                   activeOrgId={sidebarData.activeOrgId}
                   allChannelIds={sidebarData.allChannelIds}
                   channelGroupsById={sidebarData.channelGroupsById}
@@ -138,6 +152,7 @@ export function PeekOverlay({
                   channelsLoading={sidebarData.channelsLoading}
                   groupIds={sidebarData.groupIds}
                   onChannelClick={handleChannelClick}
+                  onSessionClick={handleSessionClick}
                   onDragActiveChange={handleDragActiveChange}
                   topLevelItems={sidebarData.topLevelItems}
                 />

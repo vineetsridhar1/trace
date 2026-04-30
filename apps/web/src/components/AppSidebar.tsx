@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { useSidebarData } from "../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../hooks/useSidebarTabScroll";
 import { features } from "../lib/features";
-import { useUIStore, type UIState } from "../stores/ui";
+import { navigateToSession, useUIStore, type UIState } from "../stores/ui";
 import { ConnectionsButton } from "./sidebar/ConnectionsButton";
 import { SidebarChannelsPane } from "./sidebar/SidebarChannelsPane";
 import { SidebarDirectMessagesPane } from "./sidebar/SidebarDirectMessagesPane";
@@ -16,6 +16,7 @@ export function AppSidebar() {
   const activePage = useUIStore((s: UIState) => s.activePage);
   const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
   const setActiveChannelId = useUIStore((s: UIState) => s.setActiveChannelId);
+  const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
   const activeChatId = useUIStore((s: UIState) => s.activeChatId);
   const setActiveChatId = useUIStore((s: UIState) => s.setActiveChatId);
   const { state, isMobile, setOpenMobile } = useSidebar();
@@ -43,6 +44,14 @@ export function AppSidebar() {
       closeSidebar();
     },
     [setActiveChatId, closeSidebar],
+  );
+
+  const handleSessionClick = useCallback(
+    (channelId: string, sessionGroupId: string, sessionId: string) => {
+      navigateToSession(channelId, sessionGroupId, sessionId);
+      closeSidebar();
+    },
+    [closeSidebar],
   );
 
   const [peeking, setPeeking] = useState(false);
@@ -125,6 +134,7 @@ export function AppSidebar() {
                 />
                 <SidebarChannelsPane
                   activeChannelId={activeChannelId}
+                  activeSessionGroupId={activeSessionGroupId}
                   activeOrgId={sidebarData.activeOrgId}
                   allChannelIds={sidebarData.allChannelIds}
                   channelGroupsById={sidebarData.channelGroupsById}
@@ -133,6 +143,7 @@ export function AppSidebar() {
                   channelsLoading={sidebarData.channelsLoading}
                   groupIds={sidebarData.groupIds}
                   onChannelClick={handleChannelClick}
+                  onSessionClick={handleSessionClick}
                   topLevelItems={sidebarData.topLevelItems}
                 />
               </div>
@@ -140,6 +151,7 @@ export function AppSidebar() {
               <div className="flex size-full">
                 <SidebarChannelsPane
                   activeChannelId={activeChannelId}
+                  activeSessionGroupId={activeSessionGroupId}
                   activeOrgId={sidebarData.activeOrgId}
                   allChannelIds={sidebarData.allChannelIds}
                   channelGroupsById={sidebarData.channelGroupsById}
@@ -148,6 +160,7 @@ export function AppSidebar() {
                   channelsLoading={sidebarData.channelsLoading}
                   groupIds={sidebarData.groupIds}
                   onChannelClick={handleChannelClick}
+                  onSessionClick={handleSessionClick}
                   topLevelItems={sidebarData.topLevelItems}
                 />
               </div>

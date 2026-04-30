@@ -4,8 +4,7 @@ import { useSortable, SortableContext, verticalListSortingStrategy } from "@dnd-
 import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { useEntityField } from "@trace/client-core";
-import { ChannelItem } from "./ChannelItem";
-import { SidebarMenu } from "../ui/sidebar";
+import { SidebarChannelSection } from "./SidebarChannelSection";
 import { cn } from "../../lib/utils";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
@@ -25,8 +24,10 @@ export interface ChannelGroupSectionProps {
   id: string;
   channelIds: string[];
   activeChannelId: string | null;
+  activeSessionGroupId: string | null;
   onAddChannel: (groupId: string) => void;
   onChannelClick: (id: string) => void;
+  onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string) => void;
   onDeleteGroup: (groupId: string) => void;
 }
 
@@ -34,8 +35,10 @@ export function ChannelGroupSection({
   id,
   channelIds,
   activeChannelId,
+  activeSessionGroupId,
   onAddChannel,
   onChannelClick,
+  onSessionClick,
   onDeleteGroup,
 }: ChannelGroupSectionProps) {
   const name = useEntityField("channelGroups", id, "name");
@@ -131,14 +134,15 @@ export function ChannelGroupSection({
         >
           <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
             {channelIds.map((channelId) => (
-              <SidebarMenu key={channelId}>
-                <ChannelItem
-                  id={channelId}
-                  isActive={channelId === activeChannelId}
-                  onClick={() => onChannelClick(channelId)}
-                  groupId={id}
-                />
-              </SidebarMenu>
+              <SidebarChannelSection
+                key={channelId}
+                channelId={channelId}
+                groupId={id}
+                isChannelActive={channelId === activeChannelId}
+                hasActiveSession={activeSessionGroupId !== null}
+                onChannelClick={onChannelClick}
+                onSessionClick={onSessionClick}
+              />
             ))}
           </SortableContext>
           {channelIds.length === 0 && (

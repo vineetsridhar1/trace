@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import type { Channel, ChannelGroup, Chat, Repo, InboxItem } from "@trace/gql";
+import type { Channel, ChannelGroup, Chat, Repo, InboxItem, SessionGroup } from "@trace/gql";
 import { useAuthStore } from "@trace/client-core";
 import { useEntityStore, useEntityIds } from "@trace/client-core";
 import type { EntityTableMap } from "@trace/client-core";
@@ -89,6 +89,81 @@ const INBOX_ITEMS_QUERY = gql`
   }
 `;
 
+const OWNED_SESSIONS_QUERY = gql`
+  query SidebarOwnedSessions($organizationId: ID!) {
+    mySessions(organizationId: $organizationId, includeMerged: false, includeArchived: false) {
+      id
+      name
+      agentStatus
+      sessionStatus
+      tool
+      model
+      hosting
+      branch
+      prUrl
+      worktreeDeleted
+      sessionGroupId
+      lastMessageAt
+      connection {
+        state
+        runtimeInstanceId
+        runtimeLabel
+        lastError
+        retryCount
+        canRetry
+        canMove
+        autoRetryable
+      }
+      createdBy {
+        id
+        name
+        avatarUrl
+      }
+      repo {
+        id
+        name
+      }
+      channel {
+        id
+      }
+      sessionGroup {
+        id
+        name
+        slug
+        status
+        prUrl
+        worktreeDeleted
+        archivedAt
+        setupStatus
+        setupError
+        channel {
+          id
+        }
+        repo {
+          id
+          name
+        }
+        branch
+        workdir
+        connection {
+          state
+          runtimeInstanceId
+          runtimeLabel
+          lastError
+          retryCount
+          canRetry
+          canMove
+          autoRetryable
+        }
+        createdAt
+        updatedAt
+      }
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
 export type TopLevelItem =
   | { kind: "channel"; id: string; position: number }
   | { kind: "group"; id: string; position: number };
@@ -157,6 +232,30 @@ export function useSidebarData() {
     }
   }, [activeOrgId, upsertMany]);
 
+  const fetchOwnedSessions = useCallback(async () => {
+    if (!activeOrgId) return;
+    const result = await client
+      .query(OWNED_SESSIONS_QUERY, { organizationId: activeOrgId })
+      .toPromise();
+    if (!result.data?.mySessions) return;
+
+    const sessions = result.data.mySessions as Array<EntityTableMap["sessions"] & { id: string }>;
+    const sessionGroups = sessions
+      .map((session) => session.sessionGroup)
+      .filter((group): group is SessionGroup & { id: string } => Boolean(group?.id))
+      .map((group) => ({
+        ...group,
+        sessions: [],
+        _sortTimestamp: group.updatedAt,
+      }));
+
+    upsertMany("sessions", sessions);
+    upsertMany(
+      "sessionGroups",
+      sessionGroups as Array<EntityTableMap["sessionGroups"] & { id: string }>,
+    );
+  }, [activeOrgId, upsertMany]);
+
   // Initial fetch — channels, channelGroups, and chats are kept fresh by useOrgEvents,
   // so they don't need to refetch on refreshTick. Only inbox items need periodic refresh.
   useEffect(() => {
@@ -178,7 +277,8 @@ export function useSidebarData() {
 
   useEffect(() => {
     fetchInboxItems();
-  }, [fetchInboxItems, refreshTick]);
+    fetchOwnedSessions();
+  }, [fetchInboxItems, fetchOwnedSessions, refreshTick]);
 
   const chatIds = useEntityIds("chats");
 
