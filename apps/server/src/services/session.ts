@@ -1089,7 +1089,7 @@ export class SessionService {
           lastError: update.error ?? "Runtime deprovisioning failed",
           canRetry: !abandoned,
           canMove: false,
-          autoRetryable: !abandoned,
+          autoRetryable: false,
           ...(abandoned && { abandonedAt: now }),
         };
       }
@@ -4176,6 +4176,7 @@ export class SessionService {
         organizationId: true,
         agentStatus: true,
         sessionStatus: true,
+        hosting: true,
         connection: true,
         sessionGroupId: true,
       },
@@ -4193,6 +4194,7 @@ export class SessionService {
       runtimeInstanceId: runtimeInstanceId ?? conn.runtimeInstanceId,
       canRetry: true,
       canMove: true,
+      autoRetryable: session.hosting !== "cloud",
     };
 
     // Preserve agent/session status — the session may still be running on the
@@ -6159,7 +6161,13 @@ export class SessionService {
   ) {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { agentStatus: true, sessionStatus: true, connection: true, sessionGroupId: true },
+      select: {
+        agentStatus: true,
+        sessionStatus: true,
+        hosting: true,
+        connection: true,
+        sessionGroupId: true,
+      },
     });
     if (session && isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) return;
     const conn = this.parseConnection(session?.connection);
@@ -6179,7 +6187,7 @@ export class SessionService {
       canRetry: true,
       canMove: true,
       // Don't spin the auto-retry loop for a non-transient failure.
-      autoRetryable: !homeOffline,
+      autoRetryable: session?.hosting !== "cloud" && !homeOffline,
     };
 
     await prisma.session.update({
