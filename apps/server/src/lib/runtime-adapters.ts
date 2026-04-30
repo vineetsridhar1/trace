@@ -1,6 +1,5 @@
 import { createHmac, randomUUID } from "crypto";
 import jwt from "jsonwebtoken";
-import type { CloudMachineService } from "./cloud-machine-service.js";
 import {
   RuntimeAdapterRegistry,
   type RuntimeAdapter,
@@ -433,10 +432,6 @@ class LocalRuntimeAdapter implements RuntimeAdapter {
 export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
   readonly type = "provisioned" as const;
 
-  setCloudMachineService(_service: CloudMachineService): void {
-    // Kept for startup wiring compatibility while provisioned runtimes move to launcher endpoints.
-  }
-
   async validateConfig(config: Record<string, unknown>): Promise<void> {
     parseProvisionedConfig(config);
   }
@@ -608,10 +603,6 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
 }
 
 const provisionedRuntimeAdapter = new ProvisionedRuntimeAdapter();
-
-export function setProvisionedRuntimeCloudMachineService(service: CloudMachineService): void {
-  provisionedRuntimeAdapter.setCloudMachineService(service);
-}
 
 export const runtimeAdapterRegistry = new RuntimeAdapterRegistry([
   new LocalRuntimeAdapter(),

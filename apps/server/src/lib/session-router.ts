@@ -2,7 +2,6 @@ import type WebSocket from "ws";
 import type { EventType } from "@trace/gql";
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
-import type { CloudMachineService } from "./cloud-machine-service.js";
 import type {
   BridgeTerminalCreateCommand,
   BridgeTerminalInputCommand,
@@ -24,7 +23,6 @@ import { runtimeDebug } from "./runtime-debug.js";
 import {
   ProvisionedLauncherError,
   runtimeAdapterRegistry,
-  setProvisionedRuntimeCloudMachineService,
 } from "./runtime-adapters.js";
 import {
   RuntimeAdapterRegistry,
@@ -304,11 +302,6 @@ export class SessionRouter {
 
   /** Heartbeat timeout in ms — if no heartbeat in this window, runtime is considered stale */
   static HEARTBEAT_TIMEOUT_MS = 30_000;
-
-  /** Inject the CloudMachineService for the transitional provisioned adapter. */
-  setCloudMachineService(service: CloudMachineService): void {
-    setProvisionedRuntimeCloudMachineService(service);
-  }
 
   registerRuntime(runtime: {
     id: string;

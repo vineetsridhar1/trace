@@ -31,6 +31,26 @@ Owns plan lines:
 - Remove or isolate provider-specific imports from core session services.
 - Document how to run Fly through the generic provisioned lifecycle endpoint.
 
+## Compatibility decision
+
+Fly support stays only as a temporary cloud-machine compatibility layer while
+existing `CloudMachine` rows can still reconnect their bridge tokens and be
+idled or destroyed. It is not a runtime adapter, is not selected for new cloud
+session starts, and should be removed after existing Fly-backed records are
+migrated or expired.
+
+New cloud sessions must use `AgentEnvironment.adapterType = "provisioned"` and
+the generic launcher contract:
+
+- Configure a provisioned environment with `startUrl`, `stopUrl`, `statusUrl`,
+  `auth`, `startupTimeoutSeconds`, and `deprovisionPolicy`.
+- Implement Fly outside Trace core as a launcher service that receives the
+  provisioned start payload, creates or starts Fly compute, injects the
+  `TRACE_*` runtime bootstrap environment values, and returns a provider
+  `runtimeId`.
+- Keep Fly identifiers inside launcher metadata or `providerRuntimeId`; Trace
+  lifecycle events remain `session_runtime_*` provider-neutral events.
+
 ## Dependencies
 
 - [06 - Provisioned Lifecycle Adapter](06-provisioned-lifecycle-adapter.md)
@@ -40,11 +60,11 @@ Owns plan lines:
 
 ## Completion requirements
 
-- [ ] New cloud sessions do not require Fly-specific code paths.
-- [ ] Existing cloud sessions have a compatibility path or documented migration.
-- [ ] Fly-specific imports are removed from core services or isolated behind a temporary compatibility layer.
-- [ ] Event names remain provider-neutral.
-- [ ] Documentation explains that Fly belongs behind the provisioned launcher contract.
+- [x] New cloud sessions do not require Fly-specific code paths.
+- [x] Existing cloud sessions have a compatibility path or documented migration.
+- [x] Fly-specific imports are removed from core services or isolated behind a temporary compatibility layer.
+- [x] Event names remain provider-neutral.
+- [x] Documentation explains that Fly belongs behind the provisioned launcher contract.
 
 ## Implementation notes
 
