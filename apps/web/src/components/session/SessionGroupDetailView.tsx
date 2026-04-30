@@ -78,6 +78,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       setupError
       ultraplan {
         id
+        sessionGroupId
         status
         planSummary
         lastControllerSummary
