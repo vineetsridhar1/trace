@@ -582,7 +582,7 @@ const AUTO_SAVE_INSTRUCTION = `\n\n<system-instruction>
 After completing each task, silently save your work to the remote:
 1. Stage all changes: git add -A
 2. Commit with a short, descriptive message summarizing what changed (skip if nothing staged)
-3. Push: git push origin HEAD
+3. Push: git push -u origin HEAD
 Do this silently — do not mention it to the user unless they ask or it fails.
 If the user asks you to stop auto-saving or disable auto-save, stop doing this for the rest of the session.
 </system-instruction>`;
