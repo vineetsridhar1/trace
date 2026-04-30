@@ -2045,6 +2045,84 @@ describe("SessionService", () => {
         }),
       );
     });
+
+    it("records startup lifecycle for a deferred provisioned workspace after the first message", async () => {
+      const session = makeSession({
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
+        hosting: "cloud",
+        workdir: null,
+        toolSessionId: null,
+        pendingRun: null,
+        connection: {
+          state: "connected",
+          adapterType: "provisioned",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+          version: 0,
+        },
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(session);
+      prismaMock.session.update.mockResolvedValueOnce(session);
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "start work",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      const createRuntimeCall = sessionRouterMock.createRuntime.mock.calls[0]?.[0];
+      const onLifecycle = createRuntimeCall?.onLifecycle;
+      expect(onLifecycle).toBeTypeOf("function");
+
+      prismaMock.session.findUnique
+        .mockResolvedValueOnce({
+          organizationId: "org-1",
+          sessionGroupId: "group-1",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+        })
+        .mockResolvedValueOnce({
+          connection: session.connection,
+          sessionGroupId: "group-1",
+        });
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
+        makeSessionGroup({
+          id: "group-1",
+          sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
+        }),
+      );
+
+      await onLifecycle?.("session_runtime_start_requested", {
+        runtimeInstanceId: "runtime-provisioned-1",
+      });
+
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: {
+            connection: expect.objectContaining({
+              state: "requested",
+              runtimeInstanceId: "runtime-provisioned-1",
+            }),
+          },
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_runtime_start_requested",
+          payload: expect.objectContaining({
+            lifecycleState: "requested",
+            connection: expect.objectContaining({
+              state: "requested",
+              runtimeInstanceId: "runtime-provisioned-1",
+            }),
+          }),
+        }),
+      );
+    });
   });
 
   describe("recoverMissingToolSession", () => {

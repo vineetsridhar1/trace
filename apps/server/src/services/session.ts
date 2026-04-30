@@ -862,7 +862,11 @@ export class SessionService {
 
       const adapterType = this.lifecycleAdapterType(conn, update);
       const nextState = this.lifecycleConnectionState(eventType, adapterType);
-      if (conn.state === "connected" && isRuntimeStartupState(nextState)) {
+      if (
+        conn.state === "connected" &&
+        isRuntimeStartupState(nextState) &&
+        (conn.runtimeInstanceId || conn.providerRuntimeId || conn.connectedAt)
+      ) {
         return null;
       }
 
