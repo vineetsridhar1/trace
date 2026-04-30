@@ -15,22 +15,22 @@ Owns plan lines:
 
 ## What needs to happen
 
-- Add reference launcher documentation and/or example apps for:
+- Add an executable reference launcher for at least one provider and deployment documentation for:
   - AWS ECS Fargate
   - Fly
   - Kubernetes Job
-- Each launcher should implement:
+- Executable launcher examples should implement:
   - `POST /trace/start-session`
   - `POST /trace/stop-session`
   - `POST /trace/session-status`
-- Each launcher should verify Trace authentication.
-- Each launcher should honor idempotency keys for duplicate start/stop requests.
-- Bearer launchers should:
+- Executable launcher examples should verify Trace authentication.
+- Executable launcher examples should honor idempotency keys for duplicate start/stop requests.
+- Bearer launcher examples should:
   - require HTTPS
   - compare bearer tokens in constant time
   - avoid logging tokens
-- HMAC launchers should reject old timestamps and replayed request IDs.
-- Each launcher should inject runtime env vars:
+- HMAC launcher examples should reject old timestamps and replayed request IDs.
+- Executable launcher examples should inject runtime env vars:
   - `TRACE_SESSION_ID`
   - `TRACE_ORG_ID`
   - `TRACE_RUNTIME_INSTANCE_ID`

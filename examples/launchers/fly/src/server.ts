@@ -4,6 +4,7 @@ import { isAuthorized } from "./auth.js";
 import type { ControllerConfig } from "./config.js";
 import { FlyApiError, FlyMachinesClient } from "./fly.js";
 import { mapFlyStateToTraceStatus } from "./status.js";
+import type { FlyMachine, StartSessionRequest } from "./types.js";
 import {
   validateSessionStatusRequest,
   validateStartSessionRequest,
@@ -16,9 +17,19 @@ type RequestContext = {
   idempotencyKey: string | undefined;
 };
 
+export type FlyRuntimeClient = {
+  createRuntimeMachine(
+    request: StartSessionRequest,
+    idempotencyKey: string | undefined,
+  ): Promise<FlyMachine>;
+  getMachine(machineId: string): Promise<FlyMachine>;
+  stopMachine(machineId: string): Promise<void>;
+  deleteMachine(machineId: string): Promise<void>;
+};
+
 export function createServer(
   config: ControllerConfig,
-  flyClient = new FlyMachinesClient(config),
+  flyClient: FlyRuntimeClient = new FlyMachinesClient(config),
 ): Express {
   const app = express();
   app.disable("x-powered-by");
@@ -77,19 +88,17 @@ export function createServer(
         reason: body.reason,
       });
 
-      await flyClient.stopMachine(body.runtimeId);
-      if (config.deleteAfterStop) {
-        await flyClient.deleteMachine(body.runtimeId);
-      }
+      const result = await stopRuntimeMachine(flyClient, body.runtimeId, config.deleteAfterStop);
 
       log("stop_session_finished", {
         ...context,
         sessionId: body.sessionId,
         runtimeId: body.runtimeId,
-        deleted: config.deleteAfterStop,
+        deleted: result.deleted,
+        alreadyGone: result.alreadyGone,
       });
 
-      res.json({ ok: true, status: "stopped" });
+      res.json({ ok: true, status: result.alreadyGone ? "stopped" : "stopping" });
     } catch (error) {
       handleError(error, res, context);
     }
@@ -139,6 +148,39 @@ export function createServer(
   });
 
   return app;
+}
+
+async function stopRuntimeMachine(
+  flyClient: FlyRuntimeClient,
+  runtimeId: string,
+  deleteAfterStop: boolean,
+): Promise<{ deleted: boolean; alreadyGone: boolean }> {
+  let alreadyGone = false;
+
+  try {
+    await flyClient.stopMachine(runtimeId);
+  } catch (error) {
+    if (error instanceof FlyApiError && error.status === 404) {
+      alreadyGone = true;
+    } else {
+      throw error;
+    }
+  }
+
+  if (!deleteAfterStop || alreadyGone) {
+    return { deleted: false, alreadyGone };
+  }
+
+  try {
+    await flyClient.deleteMachine(runtimeId);
+    return { deleted: true, alreadyGone };
+  } catch (error) {
+    if (error instanceof FlyApiError && error.status === 404) {
+      return { deleted: false, alreadyGone: true };
+    }
+
+    throw error;
+  }
 }
 
 function authorize(
