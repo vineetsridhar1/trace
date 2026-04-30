@@ -53,7 +53,7 @@ export function SidebarChannelsPane({
         </div>
 
         <div className="mb-1 flex items-center justify-between px-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-white/35">
+          <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
             Projects
           </span>
           <div className="flex items-center gap-0.5">

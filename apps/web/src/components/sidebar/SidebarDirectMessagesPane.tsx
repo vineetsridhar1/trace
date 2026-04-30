@@ -44,7 +44,7 @@ export function SidebarDirectMessagesPane({
         </SidebarMenu>
 
         {!chatsLoading && chatIds.length === 0 && (
-          <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+          <p className="px-2 py-4 text-center text-xs text-foreground">
             No conversations yet
           </p>
         )}

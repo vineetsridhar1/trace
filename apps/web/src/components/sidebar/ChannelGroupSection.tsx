@@ -93,7 +93,7 @@ export function ChannelGroupSection({
         {...listeners}
       >
         <button
-          className="flex flex-1 cursor-pointer items-center gap-1 rounded-md px-0 py-1 text-xs font-semibold uppercase tracking-wider text-white/35 transition-colors hover:bg-white/10 hover:text-white/70"
+          className="flex flex-1 cursor-pointer items-center gap-1 rounded-md px-0 py-1 text-xs font-semibold uppercase tracking-wider text-foreground transition-colors hover:bg-white/10"
           onClick={toggleCollapse}
           onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
         >
@@ -102,21 +102,21 @@ export function ChannelGroupSection({
             className={cn("shrink-0 transition-transform duration-200", !collapsed && "rotate-90")}
           />
           <span className="truncate">{name}</span>
-          <span className="ml-1 text-[10px] text-muted-foreground/60">{channelIds.length}</span>
+          <span className="ml-1 text-[10px] text-foreground">{channelIds.length}</span>
         </button>
         <div
           className="flex items-center gap-0.5 opacity-0 group-hover/group-header:opacity-100 transition-opacity"
           onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
         >
           <button
-            className="flex cursor-pointer items-center justify-center rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+            className="flex cursor-pointer items-center justify-center rounded-md p-0.5 text-foreground transition-colors hover:bg-white/10"
             title="Add channel to group"
             onClick={() => onAddChannel(id)}
           >
             <Plus size={14} />
           </button>
           <button
-            className="flex cursor-pointer items-center justify-center rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-destructive"
+            className="flex cursor-pointer items-center justify-center rounded-md p-0.5 text-foreground transition-colors hover:bg-white/10 hover:text-destructive"
             title="Delete group"
             onClick={() => onDeleteGroup(id)}
           >
@@ -146,7 +146,7 @@ export function ChannelGroupSection({
             ))}
           </SortableContext>
           {channelIds.length === 0 && (
-            <p className="px-4 py-1 text-xs text-muted-foreground/60 italic">No channels</p>
+            <p className="px-4 py-1 text-xs text-foreground italic">No channels</p>
           )}
         </div>
       )}
