@@ -4554,7 +4554,7 @@ export class SessionService {
   ) {
     const session = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
-      include: SESSION_INCLUDE,
+      include: { ...SESSION_INCLUDE, projects: true },
     });
 
     if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
@@ -4587,6 +4587,20 @@ export class SessionService {
         sessionGroupId: session.sessionGroupId,
       });
     }
+    if (
+      session.hosting === "cloud" &&
+      (!homeRuntimeId || !sessionRouter.isRuntimeAvailable(homeRuntimeId))
+    ) {
+      return this.moveSessionInPlace({
+        session,
+        targetHosting: "cloud",
+        targetRuntimeInstanceId: null,
+        targetRuntimeLabel: null,
+        actorType,
+        actorId,
+      });
+    }
+
     const runtime = homeRuntimeId
       ? sessionRouter.isRuntimeAvailable(homeRuntimeId)
         ? sessionRouter.getRuntime(homeRuntimeId)
@@ -4942,13 +4956,17 @@ export class SessionService {
 
     const bootstrapPrompt = buildMigrationPrompt();
     const checkpointSha = sourceGitStatus?.branch ? null : (sourceGitStatus?.headCommitSha ?? null);
+    const sourceConnection = this.parseConnection(session.connection);
     const nextConnection = connJson(
       targetHosting === "local"
         ? defaultConnection({
             runtimeInstanceId: targetRuntimeInstanceId ?? undefined,
             runtimeLabel: targetRuntimeLabel ?? undefined,
           })
-        : defaultConnection(),
+        : defaultConnection({
+            adapterType: "provisioned",
+            environmentId: sourceConnection.environmentId,
+          }),
     );
 
     const movedSession = await prisma.session.update({
