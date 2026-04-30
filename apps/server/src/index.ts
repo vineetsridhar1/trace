@@ -23,8 +23,7 @@ import { handleBridgeConnection, type BridgeConnectionRequest } from "./lib/brid
 import { sessionRouter } from "./lib/session-router.js";
 import { authenticateProvisionedRuntimeToken } from "./lib/runtime-adapters.js";
 import { sessionService } from "./services/session.js";
-import { CloudMachineService } from "./lib/cloud-machine-service.js";
-import { flyProvider } from "./lib/fly-provider.js";
+import { createLegacyCloudMachineCompatibilityService } from "./lib/cloud-machine-compatibility.js";
 import { runtimeDebug } from "./lib/runtime-debug.js";
 import { handleTerminalConnection } from "./lib/terminal-handler.js";
 import { connectRedis, disconnectRedis } from "./lib/redis.js";
@@ -84,11 +83,7 @@ async function main() {
   app.get("/.well-known/apple-app-site-association", sendAppleAppSiteAssociation);
   app.get("/apple-app-site-association", sendAppleAppSiteAssociation);
 
-  // Initialize cloud machine service and inject into session router
-  const cloudMachineService = localMode ? null : new CloudMachineService(flyProvider, "fly");
-  if (cloudMachineService) {
-    sessionRouter.setCloudMachineService(cloudMachineService);
-  }
+  const cloudMachineService = createLegacyCloudMachineCompatibilityService({ localMode });
 
   app.use(
     cors({
