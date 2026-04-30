@@ -59,7 +59,7 @@ export const ChannelOwnedSessions = memo(function ChannelOwnedSessions({
   if (!expanded || sessionIds.length === 0) return null;
 
   return (
-    <div className="mt-1 space-y-1">
+    <div className="ml-6 mt-0.5 space-y-0.5 pl-2">
       {sessionIds.map((sessionId) => (
         <OwnedSessionItem
           key={sessionId}
