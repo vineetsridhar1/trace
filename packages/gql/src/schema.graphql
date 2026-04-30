@@ -63,6 +63,8 @@ enum SessionConnectionState {
   connected
   degraded
   disconnected
+  deprovision_failed
+  deprovisioned
   failed
   timed_out
   stopping

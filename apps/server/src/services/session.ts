@@ -1257,6 +1257,7 @@ export class SessionService {
           },
         ],
       },
+      orderBy: { updatedAt: "asc" },
       select: {
         id: true,
         hosting: true,

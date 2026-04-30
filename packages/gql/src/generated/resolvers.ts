@@ -1673,6 +1673,8 @@ export type SessionConnectionState =
   | "connected"
   | "connecting"
   | "degraded"
+  | "deprovision_failed"
+  | "deprovisioned"
   | "disconnected"
   | "failed"
   | "pending"

@@ -32,6 +32,7 @@ describe("AgentEnvironmentService", () => {
     prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({
       userId: "user-1",
       organizationId: "org-1",
+      role: "admin",
     });
   });
 
@@ -440,7 +441,7 @@ describe("AgentEnvironmentService", () => {
     expect(prismaMock.agentEnvironment.update).not.toHaveBeenCalled();
   });
 
-  it("checks actor organization access inside environment mutations", async () => {
+  it("requires admin access inside environment mutations", async () => {
     prismaMock.orgMember.findUniqueOrThrow.mockRejectedValueOnce(new Error("Not found"));
     prismaMock.agentEnvironment.findFirstOrThrow.mockResolvedValueOnce({
       id: "env-1",
@@ -467,9 +468,40 @@ describe("AgentEnvironmentService", () => {
           organizationId: "org-2",
         },
       },
-      select: { userId: true },
+      select: { userId: true, role: true },
     });
     expect(prismaMock.agentEnvironment.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-admin environment mutations", async () => {
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+    });
+
+    const service = new AgentEnvironmentService();
+
+    await expect(
+      service.create(
+        {
+          organizationId: "org-1",
+          name: "Launcher",
+          adapterType: "provisioned",
+          config: {
+            startUrl: "https://launcher.example/start",
+            stopUrl: "https://launcher.example/stop",
+            statusUrl: "https://launcher.example/status",
+            auth: { type: "bearer", secretId: "secret-1" },
+            startupTimeoutSeconds: 120,
+            deprovisionPolicy: "on_session_end",
+          },
+        },
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("Only admins can perform this action");
+    expect(prismaMock.agentEnvironment.create).not.toHaveBeenCalled();
   });
 
   it("does not report environment tests as successful before adapter validation exists", async () => {

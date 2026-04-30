@@ -2,7 +2,7 @@ import type { ActorType, CodingTool } from "@trace/gql";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
-import { assertActorOrgAccess } from "./actor-auth.js";
+import { assertActorOrgAccess, assertActorOrgAdmin } from "./actor-auth.js";
 import { runtimeAdapterRegistry } from "../lib/runtime-adapters.js";
 import type { RuntimeAdapterType } from "../lib/runtime-adapter-registry.js";
 import { logAgentEnvironmentTelemetry } from "../lib/agent-environment-telemetry.js";
@@ -205,7 +205,7 @@ export class AgentEnvironmentService {
     await runtimeAdapterRegistry.get(input.adapterType).validateConfig(config);
 
     const environment = await prisma.$transaction(async (tx: TxClient) => {
-      await assertActorOrgAccess(tx, input.organizationId, actorType, actorId);
+      await assertActorOrgAdmin(tx, input.organizationId, actorType, actorId);
       await this.lockOrganizationDefaults(tx, input.organizationId);
       const enabled = input.enabled ?? true;
       const isDefault = enabled && input.isDefault === true;
@@ -397,7 +397,7 @@ export class AgentEnvironmentService {
       const existing = await tx.agentEnvironment.findFirstOrThrow({
         where: { id },
       });
-      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
+      await assertActorOrgAdmin(tx, existing.organizationId, actorType, actorId);
       if (
         (existing.adapterType === "local" && input.adapterType && input.adapterType !== "local") ||
         (existing.adapterType !== "local" && input.adapterType === "local")
@@ -483,7 +483,7 @@ export class AgentEnvironmentService {
       const existing = await tx.agentEnvironment.findFirstOrThrow({
         where: { id },
       });
-      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
+      await assertActorOrgAdmin(tx, existing.organizationId, actorType, actorId);
 
       const referencingSessions = await tx.session.count({
         where: { connection: { path: ["environmentId"], equals: id } },
@@ -522,7 +522,7 @@ export class AgentEnvironmentService {
       const existing = await tx.agentEnvironment.findFirstOrThrow({
         where: { id },
       });
-      await assertActorOrgAccess(tx, existing.organizationId, actorType, actorId);
+      await assertActorOrgAdmin(tx, existing.organizationId, actorType, actorId);
       return existing;
     });
 

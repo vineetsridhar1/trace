@@ -147,6 +147,7 @@ describe("ProvisionedRuntimeAdapter", () => {
       const body = JSON.parse(init.body as string) as Record<string, unknown>;
 
       expect(url).toBe("https://launcher.example/start");
+      expect(init.signal).toBeInstanceOf(AbortSignal);
       expect(headers.Authorization).toBe("Bearer launcher-secret");
       expect(headers["Trace-Idempotency-Key"]).toBe("session:session-1:start");
       expect(typeof body.runtimeToken).toBe("string");
@@ -287,6 +288,7 @@ describe("ProvisionedRuntimeAdapter", () => {
 
     const stopInit = fetchMock().mock.calls[0][1] as RequestInit;
     const stopHeaders = stopInit.headers as Record<string, string>;
+    expect(stopInit.signal).toBeInstanceOf(AbortSignal);
     expect(stopHeaders["Trace-Idempotency-Key"]).toBe("session:session-1:stop");
 
     const stopBody = JSON.parse(stopInit.body as string) as Record<string, unknown>;
@@ -295,6 +297,48 @@ describe("ProvisionedRuntimeAdapter", () => {
       runtimeId: "provider-runtime-1",
       reason: "session_deleted",
     });
+  });
+
+  it("times out hung launcher requests", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((_url: string, init: RequestInit) => {
+          return new Promise<Response>((_resolve, reject) => {
+            init.signal?.addEventListener("abort", () => {
+              const error = new Error("aborted");
+              error.name = "AbortError";
+              reject(error);
+            });
+          });
+        }),
+      );
+      const adapter = new ProvisionedRuntimeAdapter();
+      const start = expect(
+        adapter.startSession({
+          sessionId: "session-timeout",
+          organizationId: "org-1",
+          actorId: "user-1",
+          environment: {
+            id: "env-1",
+            name: "Company Launcher",
+            adapterType: "provisioned",
+            config: {
+              ...provisionedConfig,
+              startupTimeoutSeconds: 1,
+            },
+          },
+          tool: "codex",
+          bridgeUrl: "wss://trace.example/bridge",
+        }),
+      ).rejects.toThrow("request timed out after 1000ms");
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await start;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("reuses idempotency keys for duplicate start and stop calls", async () => {

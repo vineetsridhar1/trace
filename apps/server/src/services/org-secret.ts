@@ -1,12 +1,12 @@
 import { prisma } from "../lib/db.js";
 import { decryptSecret, encryptSecret } from "../lib/encryption.js";
-import { assertActorOrgAccess } from "./actor-auth.js";
+import { assertActorOrgAdmin } from "./actor-auth.js";
 import type { ActorType } from "@trace/gql";
 
 export class OrgSecretService {
   async list(organizationId: string, actorType: ActorType, actorId: string) {
     return prisma.$transaction(async (tx) => {
-      await assertActorOrgAccess(tx, organizationId, actorType, actorId);
+      await assertActorOrgAdmin(tx, organizationId, actorType, actorId);
       return tx.orgSecret.findMany({
         where: { organizationId },
         orderBy: { name: "asc" },

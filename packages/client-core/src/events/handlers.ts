@@ -49,6 +49,11 @@ const SESSION_RUNTIME_EVENTS: Set<EventType> = new Set([
   "session_runtime_connected",
   "session_runtime_start_failed",
   "session_runtime_start_timed_out",
+  "session_runtime_stopping",
+  "session_runtime_stopped",
+  "session_runtime_deprovision_failed",
+  "session_runtime_disconnected",
+  "session_runtime_reconnected",
 ]);
 
 /** PR lifecycle events update the group PR URL; review state is derived from that. */

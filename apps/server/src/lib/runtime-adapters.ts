@@ -37,6 +37,7 @@ const PROVISIONED_STOP_STATUS_VALUES = new Set([
 const RUNTIME_TOKEN_TTL_SECONDS = 15 * 60;
 const RUNTIME_TOKEN_TTL_MS = RUNTIME_TOKEN_TTL_SECONDS * 1000;
 const JWT_SECRET = resolveJwtSecret();
+const LAUNCHER_REQUEST_TIMEOUT_MS = 30_000;
 
 type ProvisionedAuthConfig = {
   type: "bearer" | "hmac";
@@ -342,6 +343,7 @@ async function authenticatedLauncherRequest(params: {
   body: Record<string, unknown>;
   idempotencyKey?: string;
   endpointName: string;
+  timeoutMs?: number;
 }): Promise<unknown> {
   const secret = await orgSecretService.getDecryptedValue(
     params.organizationId,
@@ -372,19 +374,32 @@ async function authenticatedLauncherRequest(params: {
 
   let response: Response;
   const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    params.timeoutMs ?? LAUNCHER_REQUEST_TIMEOUT_MS,
+  );
   try {
     response = await fetch(params.url, {
       method: "POST",
       headers,
       body: rawBody,
+      signal: controller.signal,
     });
   } catch (err) {
     // Network-level failure (DNS, TCP reset, etc.) — retryable. Wrap so the
     // adapter caller sees a uniform error type.
-    const message = err instanceof Error ? err.message : String(err);
+    const message =
+      err instanceof Error && err.name === "AbortError"
+        ? `request timed out after ${params.timeoutMs ?? LAUNCHER_REQUEST_TIMEOUT_MS}ms`
+        : err instanceof Error
+          ? err.message
+          : String(err);
     throw new ProvisionedLauncherError(
       `Provisioned ${params.endpointName} request failed: ${message}`,
     );
+  } finally {
+    clearTimeout(timeout);
   }
   logAgentEnvironmentTelemetry("launcher.request", {
     organizationId: params.organizationId,
@@ -530,6 +545,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       body,
       idempotencyKey: idempotencyKey(input.sessionId, "start"),
       endpointName: "start",
+      timeoutMs: config.startupTimeoutSeconds * 1000,
     });
     const record = responseRecord(json, "start");
     const providerRuntimeId = optionalString(record.runtimeId);
@@ -582,6 +598,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       },
       idempotencyKey: idempotencyKey(input.sessionId, "stop"),
       endpointName: "stop",
+      timeoutMs: LAUNCHER_REQUEST_TIMEOUT_MS,
     });
     const record = responseRecord(json, "stop");
     const ok = record.ok === undefined ? true : record.ok === true;
@@ -610,6 +627,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
         runtimeId: providerRuntimeId,
       },
       endpointName: "status",
+      timeoutMs: LAUNCHER_REQUEST_TIMEOUT_MS,
     });
     const record = responseRecord(json, "status");
     return {
