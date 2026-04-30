@@ -65,10 +65,10 @@ Owns plan lines:
 
 ## How to test
 
-1. Open org settings and create a local environment.
-2. Create a provisioned environment with mock URLs.
-3. Set each as default and verify list updates.
-4. Disable an environment and verify it is unavailable for new sessions.
+1. Connect a local desktop bridge and verify local bridge/repo visibility in the chosen operator surface.
+2. Open org settings and create a provisioned environment with mock URLs.
+3. Set the provisioned environment as default and verify the list updates through environment events.
+4. Disable the provisioned environment and verify it is unavailable for new sessions.
 5. Run test connection and verify result handling.
 
 ## Review follow-ups
