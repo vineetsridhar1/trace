@@ -586,19 +586,10 @@ function RuntimeLifecycleNotice({
       : connectionState === "connecting"
         ? "The provider accepted the runtime request. Trace is waiting for the bridge to connect."
         : "Your message is queued while Trace waits for the runtime provider.";
-  const tone = failed
-    ? {
-        border: "border-destructive/30",
-        bg: "bg-destructive/10",
-        text: "text-destructive",
-        body: "text-destructive/80",
-      }
-    : {
-        border: "border-sky-500/30",
-        bg: "bg-sky-500/10",
-        text: "text-sky-100",
-        body: "text-sky-100/80",
-      };
+  const bannerTone = failed
+    ? "border-destructive/30 bg-destructive/5"
+    : "border-yellow-500/30 bg-yellow-500/5";
+  const iconTone = failed ? "text-destructive" : "text-yellow-500";
 
   const handleRetry = useCallback(async () => {
     setAction("retry");
@@ -629,26 +620,26 @@ function RuntimeLifecycleNotice({
   }, [sessionId]);
 
   return (
-    <div className="border-t px-4 py-3">
+    <div className="shrink-0 border-t border-border px-4 py-3">
       <div
-        className={`flex items-start gap-3 rounded-lg border ${tone.border} ${tone.bg} p-3 text-sm`}
+        className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 ${bannerTone}`}
       >
         {failed ? (
-          <AlertCircle size={16} className={`mt-0.5 shrink-0 ${tone.text}`} />
+          <AlertCircle size={16} className={`shrink-0 ${iconTone}`} />
         ) : (
-          <Cloud size={16} className={`mt-0.5 shrink-0 ${tone.text}`} />
+          <Cloud size={16} className={`shrink-0 ${iconTone}`} />
         )}
         <div className="min-w-0 flex-1">
-          <div className={`font-medium ${tone.text}`}>{label}</div>
-          <p className={`mt-1 text-xs leading-5 ${tone.body}`}>{body}</p>
+          <p className="text-sm font-medium text-foreground">{label}</p>
+          <p className="text-xs text-muted-foreground">{body}</p>
         </div>
         {failed && (
-          <div className="ml-auto flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
               disabled={action !== null}
               onClick={handleRetry}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground transition-colors hover:bg-surface-elevated disabled:opacity-50"
+              className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-50"
             >
               <RefreshCw size={12} className={action === "retry" ? "animate-spin" : ""} />
               Retry
@@ -657,7 +648,7 @@ function RuntimeLifecycleNotice({
               type="button"
               disabled={action !== null}
               onClick={handleNewCloud}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground transition-colors hover:bg-surface-elevated disabled:opacity-50"
+              className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-50"
             >
               {action === "cloud" ? (
                 <Loader2 size={12} className="animate-spin" />
