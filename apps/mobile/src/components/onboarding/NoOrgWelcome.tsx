@@ -5,6 +5,7 @@ import { useAuthStore, type AuthState } from "@trace/client-core";
 import { Button, Text } from "@/components/design-system";
 import { handleMobileSignOut } from "@/lib/auth";
 import { useTheme } from "@/theme";
+import { getConnectionMode } from "@/lib/connection-target";
 import { CreateOrganizationForm } from "@/components/settings/CreateOrganizationForm";
 
 export function NoOrgWelcome() {
@@ -15,6 +16,10 @@ export function NoOrgWelcome() {
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const email = user?.email ?? "";
+  const isPairedLocal = getConnectionMode() === "paired_local";
+  const welcomeMessage = isPairedLocal
+    ? "Create an organization to start your local workspace, or ask an admin to invite you and share the email below."
+    : "Trace is invite-only right now. Ask an admin to add you to an organization and share the email below.";
 
   useEffect(() => {
     return () => {
@@ -59,13 +64,14 @@ export function NoOrgWelcome() {
           Welcome to Trace
         </Text>
         <Text variant="footnote" color="mutedForeground" style={styles.message}>
-          Create an organization to start your own workspace, or ask an admin to invite you and
-          share the email below.
+          {welcomeMessage}
         </Text>
 
-        <View style={styles.createBlock}>
-          <CreateOrganizationForm />
-        </View>
+        {isPairedLocal ? (
+          <View style={styles.createBlock}>
+            <CreateOrganizationForm />
+          </View>
+        ) : null}
 
         <View style={styles.emailBlock}>
           <Text variant="caption1" color="dimForeground" style={styles.emailLabel}>

@@ -21,7 +21,9 @@ const eventServiceMock = eventService as any;
 describe("OrganizationService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
     prismaMock.orgMember.findUniqueOrThrow.mockResolvedValue({ userId: "user-1" });
+    prismaMock.orgMember.count.mockResolvedValue(1);
   });
 
   it("creates organizations with the creator as admin and emits organization_created", async () => {
@@ -94,6 +96,46 @@ describe("OrganizationService", () => {
       },
       prismaMock,
     );
+  });
+
+  it("rejects organization creation for users without an existing organization", async () => {
+    prismaMock.orgMember.count.mockResolvedValueOnce(0);
+
+    const service = new OrganizationService();
+    await expect(service.createOrganization({ name: "Acme" }, "user-1")).rejects.toThrow(
+      "You must be invited to an organization before creating one.",
+    );
+
+    expect(prismaMock.organization.create).not.toHaveBeenCalled();
+    expect(prismaMock.orgMember.create).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
+  });
+
+  it("allows first organization creation in local mode", async () => {
+    vi.stubEnv("TRACE_LOCAL_MODE", "1");
+    prismaMock.user.findUniqueOrThrow.mockResolvedValueOnce({ id: "user-1" });
+    prismaMock.user.upsert.mockResolvedValueOnce({ id: "00000000-0000-4000-a000-000000000001" });
+    prismaMock.organization.create.mockResolvedValueOnce({ id: "org-1", name: "Local" });
+    prismaMock.orgMember.create
+      .mockResolvedValueOnce({
+        organizationId: "org-1",
+        userId: "user-1",
+        role: "admin",
+        organization: { id: "org-1", name: "Local" },
+      })
+      .mockResolvedValueOnce({
+        organizationId: "org-1",
+        userId: "00000000-0000-4000-a000-000000000001",
+        role: "member",
+      });
+
+    const service = new OrganizationService();
+    await expect(service.createOrganization({ name: "Local" }, "user-1")).resolves.toMatchObject({
+      organizationId: "org-1",
+      userId: "user-1",
+      role: "admin",
+    });
+    expect(prismaMock.orgMember.count).not.toHaveBeenCalled();
   });
 
   it("deduplicates repos by remote url within an org", async () => {
