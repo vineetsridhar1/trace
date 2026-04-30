@@ -77,7 +77,10 @@ async function resolveDefaultRuntime(
  *
  * Starts the session, then navigates once the service returns the real IDs.
  */
-export async function createQuickSession(channelId: string): Promise<void> {
+export async function createQuickSession(
+  channelId: string,
+  options: { environmentId?: string | null; hosting?: "cloud" | "local" } = {},
+): Promise<void> {
   if (pendingQuickSessionChannels.has(channelId)) return;
   pendingQuickSessionChannels.add(channelId);
 
@@ -87,21 +90,26 @@ export async function createQuickSession(channelId: string): Promise<void> {
   const channelRepoId = getChannelRepoId(channelId);
 
   try {
-    const { runtimeInstanceId, unavailableReason } = await resolveDefaultRuntime(
-      prefTool,
-      channelRepoId,
-    );
-    if (!runtimeInstanceId) {
+    const usesEnvironment = !!options.environmentId;
+    const usesCloud = options.hosting === "cloud";
+    const { runtimeInstanceId, unavailableReason } = usesEnvironment || usesCloud
+      ? { runtimeInstanceId: undefined, unavailableReason: undefined }
+      : await resolveDefaultRuntime(prefTool, channelRepoId);
+    if (!usesEnvironment && !usesCloud && !runtimeInstanceId) {
       throw new Error(quickSessionUnavailableMessage(unavailableReason));
     }
+    const runtimeInput = usesEnvironment
+      ? { environmentId: options.environmentId }
+      : usesCloud
+        ? { hosting: "cloud" as const }
+        : { hosting: "local" as const, runtimeInstanceId };
 
     const result = await client
       .mutation(START_SESSION_MUTATION, {
         input: {
           tool: prefTool,
           model: prefModel ?? undefined,
-          hosting: "local",
-          runtimeInstanceId,
+          ...runtimeInput,
           channelId,
           repoId: channelRepoId ?? undefined,
         },

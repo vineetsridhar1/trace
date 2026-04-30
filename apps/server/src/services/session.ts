@@ -749,34 +749,75 @@ export class SessionService {
       config: Prisma.JsonValue;
     } | null;
   }): void {
-    sessionRouter.createRuntime({
-      sessionId: params.sessionId,
-      sessionGroupId: params.sessionGroupId ?? undefined,
-      slug: params.slug ?? undefined,
-      preserveBranchName: params.preserveBranchName,
-      hosting: params.hosting as "cloud" | "local",
-      adapterType: params.adapterType,
-      environment: params.environment,
-      tool: params.tool,
-      model: params.model ?? undefined,
-      repo: params.repo
-        ? {
-            id: params.repo.id,
-            name: params.repo.name,
-            remoteUrl: params.repo.remoteUrl,
-            defaultBranch: params.repo.defaultBranch,
-          }
-        : null,
-      branch: params.branch ?? undefined,
-      checkpointSha: params.checkpointSha ?? undefined,
-      createdById: params.createdById,
-      organizationId: params.organizationId,
-      readOnly: params.readOnly,
-      onLifecycle: (eventType, update) =>
-        this.recordRuntimeLifecycle(params.sessionId, eventType, update),
-      onFailed: (error) => this.workspaceFailed(params.sessionId, error),
-      onWorkspaceReady: (workdir) => this.workspaceReady(params.sessionId, workdir),
+    void (async () => {
+      const environment =
+        params.environment ?? (await this.resolveProvisioningEnvironment(params));
+
+      sessionRouter.createRuntime({
+        sessionId: params.sessionId,
+        sessionGroupId: params.sessionGroupId ?? undefined,
+        slug: params.slug ?? undefined,
+        preserveBranchName: params.preserveBranchName,
+        hosting: params.hosting as "cloud" | "local",
+        adapterType: params.adapterType,
+        environment,
+        tool: params.tool,
+        model: params.model ?? undefined,
+        repo: params.repo
+          ? {
+              id: params.repo.id,
+              name: params.repo.name,
+              remoteUrl: params.repo.remoteUrl,
+              defaultBranch: params.repo.defaultBranch,
+            }
+          : null,
+        branch: params.branch ?? undefined,
+        checkpointSha: params.checkpointSha ?? undefined,
+        createdById: params.createdById,
+        organizationId: params.organizationId,
+        readOnly: params.readOnly,
+        onLifecycle: (eventType, update) =>
+          this.recordRuntimeLifecycle(params.sessionId, eventType, update),
+        onFailed: (error) => this.workspaceFailed(params.sessionId, error),
+        onWorkspaceReady: (workdir) => this.workspaceReady(params.sessionId, workdir),
+      });
+    })().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      void this.workspaceFailed(params.sessionId, message);
     });
+  }
+
+  private async resolveProvisioningEnvironment(params: {
+    sessionId: string;
+    organizationId: string;
+    adapterType?: RuntimeAdapterType;
+  }): Promise<{
+    id: string;
+    name: string;
+    adapterType: RuntimeAdapterType;
+    config: Prisma.JsonValue;
+  } | null> {
+    if (params.adapterType !== "provisioned") return null;
+    const session = await prisma.session.findUnique({
+      where: { id: params.sessionId },
+      select: { connection: true },
+    });
+    const environmentId = this.parseConnection(session?.connection ?? null).environmentId;
+    if (!environmentId) return null;
+    const environment = await prisma.agentEnvironment.findFirst({
+      where: { id: environmentId, organizationId: params.organizationId },
+      select: { id: true, name: true, adapterType: true, config: true },
+    });
+    if (!environment) return null;
+    if (environment.adapterType !== "local" && environment.adapterType !== "provisioned") {
+      return null;
+    }
+    return {
+      id: environment.id,
+      name: environment.name,
+      adapterType: environment.adapterType,
+      config: environment.config,
+    };
   }
 
   private async recordRuntimeLifecycle(
@@ -1966,6 +2007,8 @@ export class SessionService {
     const requestedEnvironment = await agentEnvironmentService.resolveForSessionRequest({
       organizationId: input.organizationId,
       environmentId: input.environmentId ?? null,
+      adapterType:
+        input.hosting === "cloud" ? "provisioned" : input.hosting === "local" ? "local" : null,
       tool: input.tool,
       actorType: input.actorType ?? "user",
       actorId: input.createdById,
@@ -2729,6 +2772,9 @@ export class SessionService {
       let newHosting = config.hosting ?? prev.hosting;
       let runtimeInstanceId: string | undefined;
       let runtimeLabel: string | undefined;
+      let requestedEnvironment:
+        | Awaited<ReturnType<typeof agentEnvironmentService.resolveForSessionRequest>>
+        | null = null;
       if (config.runtimeInstanceId) {
         await this.assertRuntimeAccess({
           userId: actorId,
@@ -2742,6 +2788,17 @@ export class SessionService {
         runtimeInstanceId = runtime.id;
         runtimeLabel = runtime.label;
         sessionRouter.bindSession(sessionId, runtime.id);
+      } else if (newHosting === "cloud") {
+        requestedEnvironment = await agentEnvironmentService.resolveForSessionRequest({
+          organizationId,
+          adapterType: "provisioned",
+          tool: nextTool,
+          actorType,
+          actorId,
+        });
+        if (!requestedEnvironment) {
+          throw new Error("No enabled provisioned agent environment available");
+        }
       } else if (newHosting === "local") {
         const runtime = await this.resolveDefaultAccessibleLocalRuntime({
           userId: actorId,
@@ -2760,6 +2817,10 @@ export class SessionService {
       data.hosting = newHosting;
       data.connection = connJson(
         defaultConnection({
+          ...(requestedEnvironment && {
+            environmentId: requestedEnvironment.id,
+            adapterType: requestedEnvironment.adapterType,
+          }),
           ...(runtimeInstanceId && { runtimeInstanceId }),
           ...(runtimeLabel && { runtimeLabel }),
         }),
@@ -2770,6 +2831,10 @@ export class SessionService {
       // Provision the new runtime (repo already included in initial select)
       const needsProvisioning = !!prev.repoId || newHosting === "cloud";
       if (needsProvisioning) {
+        const previousAdapterType = this.parseConnection(prev.connection).adapterType;
+        const adapterType =
+          requestedEnvironment?.adapterType ??
+          (newHosting === prev.hosting ? previousAdapterType : undefined);
         this.provisionRuntime({
           sessionId,
           sessionGroupId: prev.sessionGroupId,
@@ -2783,7 +2848,8 @@ export class SessionService {
           createdById: actorId,
           organizationId,
           readOnly: prev.readOnlyWorkspace,
-          adapterType: this.parseConnection(prev.connection).adapterType,
+          environment: requestedEnvironment,
+          ...(adapterType && { adapterType }),
         });
       }
     }

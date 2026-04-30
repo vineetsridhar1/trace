@@ -121,7 +121,7 @@ Every line of [agent-environments-plan.md](agent-environments-plan.md) has an ow
 | 783-800 | Pending message delivery, bridge-only AI message channel, provisioned adapter does not receive AI messages | 08 |
 | 802-850 | Local/provisioned deprovisioning and environment deprovision policies | 09 |
 | 852-875 | Provider-neutral runtime lifecycle events | 01, 08, 09, 12 |
-| 877-928 | Org settings UI, local/provisioned forms, session environment selector | 10, 11 |
+| 877-928 | Org settings UI, provisioned form, local bridge/repo visibility, session environment selector | 10, 11 |
 | 930-957 | Secret storage, encrypted values, config secret references, service-layer resolution | 01, 03, 06, 10 |
 | 959-1020 | Migration phases from model through compatibility cleanup | 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12 |
 | 1022-1060 | Unit, service, and integration tests | 13 plus each implementation ticket's test section |

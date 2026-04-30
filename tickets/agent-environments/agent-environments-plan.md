@@ -923,18 +923,23 @@ The page should support:
 - enable/disable
 - set default
 - test connection
-- show last error/status
+- show latest in-page test status/error
 
 Initial forms:
 
+<!-- Updated after ticket 10 review: local environments are now auto-created
+     from connected desktop bridges by the service layer. The settings UI is
+     provisioned-focused for V1; local bridge/repo visibility belongs either in
+     Bridge Access or the session environment selector. If local environments
+     are shown in Agent Environments later, they should be read-only unless a
+     separate product decision reintroduces manual local environment editing. -->
+
 ### Local
 
-Fields:
-
-- name
-- default local runtime selection
-
-The UI should show connected local bridges and registered repos.
+Local environments are created automatically when local desktop bridges connect.
+Manual create/edit is not part of the V1 settings UI. The product should still
+surface connected local bridges and registered repos in an operator-visible
+place before session selection depends on them.
 
 ### Provisioned
 

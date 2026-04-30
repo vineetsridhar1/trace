@@ -520,6 +520,7 @@ export class AgentEnvironmentService {
   async resolveForSessionRequest(params: {
     organizationId: string;
     environmentId?: string | null;
+    adapterType?: RuntimeAdapterType | null;
     tool: CodingTool;
     actorType: ActorType;
     actorId: string;
@@ -530,9 +531,24 @@ export class AgentEnvironmentService {
         ? await tx.agentEnvironment.findFirstOrThrow({
             where: { id: params.environmentId, organizationId: params.organizationId },
           })
-        : await tx.agentEnvironment.findFirst({
-            where: { organizationId: params.organizationId, enabled: true, isDefault: true },
-          });
+        : ((await tx.agentEnvironment.findFirst({
+            where: {
+              organizationId: params.organizationId,
+              enabled: true,
+              isDefault: true,
+              ...(params.adapterType && { adapterType: params.adapterType }),
+            },
+          })) ??
+          (params.adapterType
+            ? await tx.agentEnvironment.findFirst({
+                where: {
+                  organizationId: params.organizationId,
+                  adapterType: params.adapterType,
+                  enabled: true,
+                },
+                orderBy: { createdAt: "asc" },
+              })
+            : null));
 
       if (!environment) return null;
       if (!environment.enabled) {

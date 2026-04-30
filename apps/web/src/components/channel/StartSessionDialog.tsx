@@ -6,6 +6,7 @@ import { client } from "../../lib/urql";
 import { createQuickSession, quickSessionUnavailableMessage } from "../../lib/create-quick-session";
 import { cn } from "../../lib/utils";
 import { usePreferencesStore } from "../../stores/preferences";
+import { CLOUD_SESSION_TARGET, SessionEnvironmentSelect } from "./SessionEnvironmentSelect";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 interface AvailableRuntimesQueryResult {
@@ -21,9 +22,17 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const defaultTool = usePreferencesStore((s) => s.defaultTool ?? "claude_code");
   const [repoNotLinked, setRepoNotLinked] = useState(false);
   const [checkingRepoLink, setCheckingRepoLink] = useState(false);
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    if (selectedTarget === null || selectedTarget === CLOUD_SESSION_TARGET) {
+      setRepoNotLinked(false);
+      setCheckingRepoLink(false);
+      return () => {
+        cancelled = true;
+      };
+    }
 
     if (!channelRepoId) {
       setRepoNotLinked(false);
@@ -66,14 +75,19 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [channelRepoId, defaultTool]);
+  }, [channelRepoId, defaultTool, selectedTarget]);
 
   const disabled = checkingRepoLink || repoNotLinked;
 
   const handleClick = useCallback(() => {
     if (disabled) return;
-    createQuickSession(channelId);
-  }, [channelId, disabled]);
+    createQuickSession(
+      channelId,
+      selectedTarget === null || selectedTarget === CLOUD_SESSION_TARGET
+        ? { hosting: "cloud" }
+        : { environmentId: selectedTarget },
+    );
+  }, [channelId, disabled, selectedTarget]);
 
   const tooltip = checkingRepoLink
     ? "Checking repo link..."
@@ -82,22 +96,29 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
       : "New session (⌘N)";
 
   return (
-    <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex" />}>
-        <button
-          onClick={handleClick}
-          disabled={disabled}
-          className={cn(
-            "flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground",
-            "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
-          )}
-          title={tooltip}
-          aria-label={tooltip}
-        >
-          <Plus size={16} />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent>{tooltip}</TooltipContent>
-    </Tooltip>
+    <div className="flex items-center gap-1">
+      <SessionEnvironmentSelect
+        tool={defaultTool}
+        selectedTarget={selectedTarget}
+        onSelectionChange={setSelectedTarget}
+      />
+      <Tooltip>
+        <TooltipTrigger render={<span className="inline-flex" />}>
+          <button
+            onClick={handleClick}
+            disabled={disabled}
+            className={cn(
+              "flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground",
+              "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+            )}
+            title={tooltip}
+            aria-label={tooltip}
+          >
+            <Plus size={16} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>{tooltip}</TooltipContent>
+      </Tooltip>
+    </div>
   );
 }
