@@ -57,7 +57,7 @@ export function AgentEnvironmentsSection() {
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="flex flex-col gap-3">
               {settings.environmentIds.map((id) => {
                 const environment = settings.environmentsById[id];
                 if (!environment) return null;
