@@ -14,9 +14,8 @@ type Props = {
 };
 
 export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }: Props) {
-  const selectedSecretId = orgSecrets.some((secret) => secret.id === draft.authSecretId)
-    ? draft.authSecretId
-    : "__manual__";
+  const selectedSecret = orgSecrets.find((secret) => secret.id === draft.authSecretId);
+  const selectedSecretId = selectedSecret ? draft.authSecretId : "__manual__";
 
   return (
     <div className="grid gap-3 rounded-lg border border-border bg-surface-deep p-3 md:grid-cols-2">
@@ -39,7 +38,7 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
         />
       </label>
       <label className="space-y-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Bearer secret ID</span>
+        <span className="text-xs font-medium text-muted-foreground">Bearer secret</span>
         {orgSecrets.length ? (
           <Select
             value={selectedSecretId}
@@ -48,7 +47,7 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
             }
           >
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue>{selectedSecret?.name ?? "Enter secret ID"}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               {orgSecrets.map((secret) => (
