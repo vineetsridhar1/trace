@@ -141,6 +141,7 @@ const MISSING_TOOL_SESSION_PATTERNS = [
   /\b(conversation|session|thread|chat)\b[\s\S]{0,80}\b(not found|does not exist|could not be found)\b/i,
   /\b(not found|does not exist|could not be found)\b[\s\S]{0,80}\b(conversation|session|thread|chat)\b/i,
   /\bresume\b[\s\S]{0,80}\b(not found|does not exist|could not be found)\b/i,
+  /\bno\s+rollout\s+found\s+for\s+thread\s+id\b/i,
 ];
 
 export function isMissingToolSessionError(message: string): boolean {
