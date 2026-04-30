@@ -104,7 +104,7 @@ function OwnedSessionItem({
     <button
       type="button"
       className={cn(
-        "flex h-10 w-full min-w-0 items-center gap-3 rounded-[18px] px-4 text-left text-[17px] leading-none transition-colors",
+        "flex h-8 w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-sm leading-none transition-colors",
         isActive
           ? "bg-white/10 text-white shadow-[inset_0_1px_0_rgb(255_255_255_/_0.06)]"
           : "text-white/75 hover:bg-white/5 hover:text-white",
@@ -123,7 +123,7 @@ function OwnedSessionItem({
       <span className={cn("truncate", hasDoneBadge && "font-semibold")}>
         {name ?? "Untitled session"}
       </span>
-      <span className="ml-auto shrink-0 text-[17px] text-white/35">{activityLabel}</span>
+      <span className="ml-auto shrink-0 text-xs text-white/35">{activityLabel}</span>
     </button>
   );
 }

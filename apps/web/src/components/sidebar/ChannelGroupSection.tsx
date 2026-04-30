@@ -93,7 +93,7 @@ export function ChannelGroupSection({
         {...listeners}
       >
         <button
-          className="flex flex-1 items-center gap-1 px-0 py-1 text-[15px] font-medium text-white/35 transition-colors hover:text-white/70"
+          className="flex flex-1 items-center gap-1 px-0 py-1 text-xs font-semibold uppercase tracking-wider text-white/35 transition-colors hover:text-white/70"
           onClick={toggleCollapse}
           onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
         >
