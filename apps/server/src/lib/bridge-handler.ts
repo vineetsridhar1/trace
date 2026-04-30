@@ -1,5 +1,6 @@
 import type { WebSocket } from "ws";
 import { randomUUID } from "crypto";
+import type { CodingTool } from "@trace/gql";
 import type {
   BridgeLinkedCheckoutStatus,
   BridgeLinkedCheckoutActionResultPayload,
@@ -10,6 +11,7 @@ import { sessionService } from "../services/session.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { terminalRelay } from "./terminal-relay.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
+import { agentEnvironmentService } from "../services/agent-environment.js";
 import { prisma } from "./db.js";
 
 /** Grace period before marking sessions disconnected — allows fast reconnects */
@@ -18,7 +20,7 @@ const DISCONNECT_GRACE_MS = 10_000;
 /** Interval between server→client pings to keep the WebSocket alive through proxies (e.g. Render). */
 const PING_INTERVAL_MS = 20_000;
 const BRIDGE_PROTOCOL_VERSION = 1;
-const CODING_TOOLS = new Set(["claude_code", "codex", "custom"]);
+const CODING_TOOLS = new Set<CodingTool>(["claude_code", "codex", "custom"]);
 
 type LocalBridgeAuth = {
   kind: "local";
@@ -54,13 +56,15 @@ function stringArray(value: unknown): string[] | null {
   return result;
 }
 
-function parseSupportedTools(value: unknown): string[] | null {
+function parseSupportedTools(value: unknown): CodingTool[] | null {
   const tools = stringArray(value);
   if (!tools) return null;
+  const result: CodingTool[] = [];
   for (const tool of tools) {
-    if (!CODING_TOOLS.has(tool)) return null;
+    if (!CODING_TOOLS.has(tool as CodingTool)) return null;
+    result.push(tool as CodingTool);
   }
-  return tools;
+  return result;
 }
 
 function isCompatibleProtocolVersion(value: unknown): boolean {
@@ -218,6 +222,20 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
                 registeredRepoIds,
               },
             });
+            await agentEnvironmentService
+              .ensureLocalBridgeEnvironment(
+                {
+                  organizationId: bridgeAuth.organizationId,
+                  runtimeInstanceId: newId,
+                  runtimeLabel: bridgeRuntime.label,
+                  supportedTools,
+                },
+                "user",
+                bridgeAuth.userId,
+              )
+              .catch((err: unknown) => {
+                console.error("[bridge] error ensuring local agent environment:", err);
+              });
 
             if (registered && oldId !== newId) {
               sessionRouter.unregisterRuntime(oldId, ws);
@@ -277,7 +295,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
                 ws.close(1008, "Invalid bridge capabilities");
                 return;
               }
-              if (bridgeAuth.tool && !supportedTools.includes(bridgeAuth.tool)) {
+              if (bridgeAuth.tool && !supportedTools.includes(bridgeAuth.tool as CodingTool)) {
                 runtimeDebug("cloud bridge auth rejected missing requested tool", {
                   runtimeId: newId,
                   requestedTool: bridgeAuth.tool,

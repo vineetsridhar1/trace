@@ -1810,6 +1810,62 @@ describe("SessionService", () => {
       });
       expect(connectionLostCalls.length).toBeGreaterThan(0);
     });
+
+    it("prepares a deferred local workspace even when the session is already bound to its bridge", async () => {
+      const session = makeSession({
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
+        hosting: "local",
+        workdir: null,
+        toolSessionId: null,
+        pendingRun: null,
+        connection: {
+          state: "connected",
+          adapterType: "local",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(session);
+      prismaMock.session.update.mockResolvedValueOnce(session);
+      sessionRouterMock.getRuntime.mockReturnValue({
+        id: "runtime-a",
+        label: "Laptop A",
+        hostingMode: "local",
+        registeredRepoIds: ["repo-1"],
+      });
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "runtime-a",
+        label: "Laptop A",
+      });
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "start work",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-1",
+          hosting: "local",
+          adapterType: "local",
+          repo: expect.objectContaining({ id: "repo-1" }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "message_sent",
+          payload: expect.objectContaining({
+            deliveryStatus: "pending_runtime",
+          }),
+        }),
+      );
+    });
   });
 
   describe("recoverMissingToolSession", () => {

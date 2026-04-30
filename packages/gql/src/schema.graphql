@@ -314,6 +314,14 @@ type AgentEnvironmentTestResult {
   message: String
 }
 
+type OrgSecret {
+  id: ID!
+  orgId: ID!
+  name: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
 type OrgMember {
   user: User!
   organization: Organization!
@@ -1101,6 +1109,7 @@ type Query {
   organization(id: ID!): Organization
   myOrganizations: [OrgMember!]!
   agentEnvironments(orgId: ID!): [AgentEnvironment!]!
+  orgSecrets(orgId: ID!): [OrgSecret!]!
   repos(organizationId: ID!): [Repo!]!
   repo(id: ID!): Repo
   projects(organizationId: ID!, repoId: ID): [Project!]!

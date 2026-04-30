@@ -54,6 +54,26 @@ describe("AgentEnvironmentService", () => {
       createdAt: now,
       updatedAt: now,
     });
+    prismaMock.agentEnvironment.findMany.mockResolvedValueOnce([
+      {
+        id: "env-1",
+        organizationId: "org-1",
+        name: "Company Launcher",
+        adapterType: "provisioned",
+        config: {
+          startUrl: "https://launcher.example/start",
+          stopUrl: "https://launcher.example/stop",
+          statusUrl: "https://launcher.example/status",
+          auth: { type: "bearer", secretId: "secret-1" },
+          startupTimeoutSeconds: 120,
+          deprovisionPolicy: "on_session_end",
+        },
+        enabled: true,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
 
     const service = new AgentEnvironmentService();
     const environment = await service.create(
@@ -107,6 +127,7 @@ describe("AgentEnvironmentService", () => {
         payload: {
           agentEnvironment: {
             id: "env-1",
+            orgId: "org-1",
             organizationId: "org-1",
             name: "Company Launcher",
             adapterType: "provisioned",
@@ -123,6 +144,27 @@ describe("AgentEnvironmentService", () => {
             createdAt: now.toISOString(),
             updatedAt: now.toISOString(),
           },
+          agentEnvironments: [
+            {
+              id: "env-1",
+              orgId: "org-1",
+              organizationId: "org-1",
+              name: "Company Launcher",
+              adapterType: "provisioned",
+              config: {
+                startUrl: "https://launcher.example/start",
+                stopUrl: "https://launcher.example/stop",
+                statusUrl: "https://launcher.example/status",
+                auth: { type: "bearer", secretId: "secret-1" },
+                startupTimeoutSeconds: 120,
+                deprovisionPolicy: "on_session_end",
+              },
+              enabled: true,
+              isDefault: true,
+              createdAt: now.toISOString(),
+              updatedAt: now.toISOString(),
+            },
+          ],
         },
         actorType: "user",
         actorId: "user-1",
@@ -148,6 +190,132 @@ describe("AgentEnvironmentService", () => {
     ).rejects.toThrow("auth config can only include type and secretId");
 
     expect(prismaMock.agentEnvironment.create).not.toHaveBeenCalled();
+  });
+
+  it("creates a default local environment for a newly connected bridge", async () => {
+    prismaMock.agentEnvironment.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    prismaMock.agentEnvironment.create.mockResolvedValueOnce({
+      id: "env-local-1",
+      organizationId: "org-1",
+      name: "Vineet MacBook",
+      adapterType: "local",
+      config: {
+        runtimeInstanceId: "bridge-1",
+        capabilities: { supportedTools: ["claude_code", "codex"] },
+      },
+      enabled: true,
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    prismaMock.agentEnvironment.findMany.mockResolvedValueOnce([
+      {
+        id: "env-local-1",
+        organizationId: "org-1",
+        name: "Vineet MacBook",
+        adapterType: "local",
+        config: {
+          runtimeInstanceId: "bridge-1",
+          capabilities: { supportedTools: ["claude_code", "codex"] },
+        },
+        enabled: true,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+
+    const service = new AgentEnvironmentService();
+    const environment = await service.ensureLocalBridgeEnvironment(
+      {
+        organizationId: "org-1",
+        runtimeInstanceId: "bridge-1",
+        runtimeLabel: "Vineet MacBook",
+        supportedTools: ["claude_code", "codex"],
+      },
+      "user",
+      "user-1",
+    );
+
+    expect(environment.id).toBe("env-local-1");
+    expect(prismaMock.agentEnvironment.findFirst).toHaveBeenNthCalledWith(1, {
+      where: {
+        organizationId: "org-1",
+        adapterType: "local",
+        config: { path: ["runtimeInstanceId"], equals: "bridge-1" },
+      },
+    });
+    expect(prismaMock.agentEnvironment.create).toHaveBeenCalledWith({
+      data: {
+        organizationId: "org-1",
+        name: "Vineet MacBook",
+        adapterType: "local",
+        config: {
+          runtimeInstanceId: "bridge-1",
+          capabilities: { supportedTools: ["claude_code", "codex"] },
+        },
+        enabled: true,
+        isDefault: true,
+      },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "agent_environment_created",
+        payload: expect.objectContaining({
+          agentEnvironment: expect.objectContaining({
+            id: "env-local-1",
+            adapterType: "local",
+            isDefault: true,
+          }),
+          agentEnvironments: [
+            expect.objectContaining({
+              id: "env-local-1",
+              isDefault: true,
+            }),
+          ],
+        }),
+      }),
+      prismaMock,
+    );
+  });
+
+  it("does not duplicate or rename an existing bridge environment", async () => {
+    const existing = {
+      id: "env-local-1",
+      organizationId: "org-1",
+      name: "My custom name",
+      adapterType: "local",
+      config: {
+        runtimeInstanceId: "bridge-1",
+        capabilities: { supportedTools: ["claude_code", "codex"] },
+      },
+      enabled: false,
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    prismaMock.agentEnvironment.findFirst
+      .mockResolvedValueOnce(existing)
+      .mockResolvedValueOnce(null);
+
+    const service = new AgentEnvironmentService();
+    const environment = await service.ensureLocalBridgeEnvironment(
+      {
+        organizationId: "org-1",
+        runtimeInstanceId: "bridge-1",
+        runtimeLabel: "New bridge label",
+        supportedTools: ["claude_code", "codex"],
+      },
+      "user",
+      "user-1",
+    );
+
+    expect(environment).toBe(existing);
+    expect(prismaMock.agentEnvironment.create).not.toHaveBeenCalled();
+    expect(prismaMock.agentEnvironment.update).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
   });
 
   it("rejects credential-shaped config keys that are not secret references", async () => {
@@ -182,7 +350,7 @@ describe("AgentEnvironmentService", () => {
     expect(prismaMock.agentEnvironment.create).not.toHaveBeenCalled();
   });
 
-  it("validates local environment runtime selection config", async () => {
+  it("rejects manual local environment creation", async () => {
     const service = new AgentEnvironmentService();
 
     await expect(
@@ -191,41 +359,12 @@ describe("AgentEnvironmentService", () => {
           organizationId: "org-1",
           name: "Local",
           adapterType: "local",
-          config: { runtimeSelection: "nearest_laptop" },
+          config: { runtimeSelection: "any_accessible_local" },
         },
         "user",
         "user-1",
       ),
-    ).rejects.toThrow("runtimeSelection must be any_accessible_local");
-
-    await expect(
-      service.create(
-        {
-          organizationId: "org-1",
-          name: "Local",
-          adapterType: "local",
-          config: { runtimeInstanceId: " " },
-        },
-        "user",
-        "user-1",
-      ),
-    ).rejects.toThrow("runtimeInstanceId must be a non-empty string");
-
-    await expect(
-      service.create(
-        {
-          organizationId: "org-1",
-          name: "Local",
-          adapterType: "local",
-          config: {
-            runtimeInstanceId: "runtime-1",
-            runtimeSelection: "any_accessible_local",
-          },
-        },
-        "user",
-        "user-1",
-      ),
-    ).rejects.toThrow("cannot set both runtimeInstanceId and runtimeSelection");
+    ).rejects.toThrow("created automatically by connected bridges");
 
     expect(prismaMock.agentEnvironment.create).not.toHaveBeenCalled();
   });
@@ -264,6 +403,41 @@ describe("AgentEnvironmentService", () => {
         isDefault: false,
       },
     });
+  });
+
+  it("rejects manual changes to a local environment bridge binding", async () => {
+    prismaMock.agentEnvironment.findFirstOrThrow.mockResolvedValueOnce({
+      id: "env-1",
+      organizationId: "org-1",
+      name: "Local",
+      adapterType: "local",
+      config: {
+        runtimeInstanceId: "runtime-1",
+        capabilities: { supportedTools: ["claude_code"] },
+      },
+      enabled: true,
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const service = new AgentEnvironmentService();
+
+    await expect(
+      service.update(
+        "env-1",
+        {
+          config: {
+            runtimeInstanceId: "runtime-2",
+            capabilities: { supportedTools: ["claude_code"] },
+          },
+        },
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("bridge binding cannot be changed manually");
+
+    expect(prismaMock.agentEnvironment.update).not.toHaveBeenCalled();
   });
 
   it("checks actor organization access inside environment mutations", async () => {

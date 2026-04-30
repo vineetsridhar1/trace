@@ -14,6 +14,7 @@ import {
 } from "./runtime-adapter-registry.js";
 import { orgSecretService } from "../services/org-secret.js";
 import { resolveJwtSecret } from "./jwt-secret.js";
+import { isLocalMode } from "./mode.js";
 
 const CODING_TOOLS = new Set(["claude_code", "codex", "custom"]);
 const PROVISIONED_DEPROVISION_POLICIES = new Set(["on_session_end", "manual"]);
@@ -159,10 +160,18 @@ function assertHttpsUrl(value: unknown, key: string): string {
   } catch {
     throw new Error(`Provisioned agent environment ${key} must be a valid URL`);
   }
+  if (url.protocol === "http:" && isDevelopmentLoopbackUrl(url)) {
+    return value;
+  }
   if (url.protocol !== "https:") {
     throw new Error(`Provisioned agent environment ${key} must use HTTPS`);
   }
   return value;
+}
+
+function isDevelopmentLoopbackUrl(url: URL): boolean {
+  if (process.env.NODE_ENV === "production" && !isLocalMode()) return false;
+  return url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1";
 }
 
 function assertProvisionedAuthConfig(value: unknown): ProvisionedAuthConfig {
