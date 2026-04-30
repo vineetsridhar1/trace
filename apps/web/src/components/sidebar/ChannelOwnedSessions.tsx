@@ -13,7 +13,7 @@ import {
   sessionStatusColor,
 } from "../session/sessionStatus";
 import { useUIStore, type UIState } from "../../stores/ui";
-import { cn } from "../../lib/utils";
+import { cn, timeAgo } from "../../lib/utils";
 
 type SessionGroupRef = {
   channel?: { id: string } | null;
@@ -59,7 +59,7 @@ export const ChannelOwnedSessions = memo(function ChannelOwnedSessions({
   if (!expanded || sessionIds.length === 0) return null;
 
   return (
-    <div className="ml-6 mt-0.5 space-y-0.5 border-l border-border/60 pl-2">
+    <div className="mt-1 space-y-1">
       {sessionIds.map((sessionId) => (
         <OwnedSessionItem
           key={sessionId}
@@ -86,6 +86,9 @@ function OwnedSessionItem({
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus");
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus");
   const prUrl = useEntityField("sessions", sessionId, "prUrl");
+  const lastMessageAt = useEntityField("sessions", sessionId, "lastMessageAt");
+  const updatedAt = useEntityField("sessions", sessionId, "updatedAt");
+  const createdAt = useEntityField("sessions", sessionId, "createdAt");
   const activeSessionId = useUIStore((s: UIState) => s.activeSessionId);
   const hasDoneBadge = useUIStore((s: UIState) => !!s.sessionDoneBadges[sessionId]);
 
@@ -93,6 +96,7 @@ function OwnedSessionItem({
   const displayAgentStatus = getDisplayAgentStatus(agentStatus, sessionStatus, prUrl);
   const color = sessionStatusColor[displaySessionStatus] ?? "text-muted-foreground";
   const isActive = activeSessionId === sessionId;
+  const activityLabel = formatSidebarActivity(lastMessageAt ?? updatedAt ?? createdAt);
 
   if (!sessionGroupId) return null;
 
@@ -100,10 +104,10 @@ function OwnedSessionItem({
     <button
       type="button"
       className={cn(
-        "flex h-7 w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
+        "flex h-10 w-full min-w-0 items-center gap-3 rounded-[18px] px-4 text-left text-[17px] leading-none transition-colors",
         isActive
-          ? "bg-sidebar-accent text-sidebar-accent-foreground"
-          : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+          ? "bg-white/10 text-white shadow-[inset_0_1px_0_rgb(255_255_255_/_0.06)]"
+          : "text-white/75 hover:bg-white/5 hover:text-white",
       )}
       title={name ?? "Untitled session"}
       onClick={() => onSessionClick(channelId, sessionGroupId, sessionId)}
@@ -119,6 +123,14 @@ function OwnedSessionItem({
       <span className={cn("truncate", hasDoneBadge && "font-semibold")}>
         {name ?? "Untitled session"}
       </span>
+      <span className="ml-auto shrink-0 text-[17px] text-white/35">{activityLabel}</span>
     </button>
   );
+}
+
+function formatSidebarActivity(timestamp: string | undefined): string {
+  if (!timestamp) return "";
+  const label = timeAgo(timestamp);
+  if (label === "just now") return "now";
+  return label.replace(" ago", "");
 }

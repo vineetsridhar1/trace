@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { useAuthStore, useEntityField, type AuthState } from "@trace/client-core";
 import { useUIStore, type UIState } from "./stores/ui";
-import { useDetailPanelStore, type DetailPanelState } from "./stores/detail-panel";
 import { AppSidebar } from "./components/AppSidebar";
 import { BridgeSyncHydrator } from "./components/BridgeSyncHydrator";
 import { ChannelView } from "./components/channel/ChannelView";
@@ -14,22 +13,17 @@ import { ConnectionsView } from "./components/connections/ConnectionsView";
 import { TicketsView } from "./components/tickets/TicketsView";
 import { AgentDebugPage } from "./components/agent-debug/AgentDebugPage";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
-import { DetailPanel } from "./components/ui/detail-panel";
 import { SidebarProvider, SidebarInset } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { useOrgEvents } from "./hooks/useOrgEvents";
 import { useHistorySync } from "./hooks/useHistorySync";
 import { useVisibilityRefresh } from "./hooks/useVisibilityRefresh";
 import { useBridgePendingRequestToasts } from "./hooks/useBridgePendingRequestToasts";
-import { useIsMobile } from "./hooks/use-mobile";
 import { Toaster } from "./components/ui/sonner";
 import { InstallBanner } from "./components/InstallBanner";
 import { LoginPage } from "./components/auth/LoginPage";
-import { cn } from "./lib/utils";
 import { features } from "./lib/features";
 import { createQuickSession } from "./lib/create-quick-session";
-
-const SETTINGS_DETAIL_PANEL_MAX_RATIO = 0.45;
 
 export function App() {
   const user = useAuthStore((s: AuthState) => s.user);
@@ -55,7 +49,7 @@ export function App() {
 
   if (loading) {
     return (
-      <div className="flex h-dvh items-center justify-center bg-surface-deep">
+      <div className="flex h-dvh items-center justify-center bg-transparent">
         <p className="text-muted-foreground">Loading...</p>
       </div>
     );
@@ -92,12 +86,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   const setActiveChatId = useUIStore((s: UIState) => s.setActiveChatId);
   const setActiveChannelId = useUIStore((s: UIState) => s.setActiveChannelId);
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
-  const setActiveSessionId = useUIStore((s: UIState) => s.setActiveSessionId);
-  const isFullscreen = useDetailPanelStore((s: DetailPanelState) => s.isFullscreen);
-  const isMobile = useIsMobile();
   const activeChannelType = useEntityField("channels", activeChannelId ?? "", "type");
-
-  const containerRef = useRef<HTMLDivElement>(null);
 
   // Cmd+N / Ctrl+N: create a new session with smart defaults
   useEffect(() => {
@@ -113,17 +102,6 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const closePanel = useCallback(() => setActiveSessionId(null), [setActiveSessionId]);
-
-  const [displayedSessionGroupId, setDisplayedSessionGroupId] = useState<string | null>(
-    activeSessionGroupId,
-  );
-  useEffect(() => {
-    if (activeSessionGroupId) {
-      setDisplayedSessionGroupId(activeSessionGroupId);
-    }
-  }, [activeSessionGroupId]);
-
   useEffect(() => {
     if (features.messaging || !activeChatId) return;
     setActiveChatId(null);
@@ -135,43 +113,25 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
     setActiveChannelId(null);
   }, [activeChannelId, activeChannelType, setActiveChannelId]);
 
-  const hasSession = !!activeSessionGroupId;
-  const isMainContentCollapsed = hasSession && isFullscreen && !isMobile;
-  const detailPanelMaxRatio =
-    activePage === "settings" ? SETTINGS_DETAIL_PANEL_MAX_RATIO : undefined;
   const shouldRenderChatView = features.messaging && !!activeChatId;
   const shouldRenderChannelView =
     !!activeChannelId &&
     (features.messaging || (activeChannelType !== undefined && activeChannelType !== "text"));
+  const shouldRenderSessionView = activePage === "main" && !!activeSessionGroupId;
 
   return (
     <TooltipProvider>
       <BridgeSyncHydrator />
       <div
-        className="flex h-dvh max-h-dvh min-h-dvh flex-col pt-[env(safe-area-inset-top)] bg-surface-deep"
-        style={{ backgroundColor: "var(--trace-shell-bg, var(--th-surface-deep))" }}
+        className="flex h-dvh max-h-dvh min-h-dvh flex-col pt-[env(safe-area-inset-top)] bg-transparent"
+        style={{ backgroundColor: "transparent" }}
       >
         <InstallBanner />
         <SidebarProvider className="min-h-0 flex-1 pt-2">
           <AppSidebar />
 
-          {/* Two-card container: main content + session panel */}
-          <div
-            ref={containerRef}
-            className="flex w-full flex-1 overflow-hidden pl-2 pr-2 md:pl-0 md:peer-data-[state=collapsed]:pl-2"
-          >
-            {/* Main content card */}
-            <div
-              className={cn(
-                "flex min-w-0 overflow-hidden rounded-tl-lg rounded-tr-lg border bg-background transition-[flex-grow,border-color] duration-300 ease-in-out",
-                isMainContentCollapsed ? "border-0" : undefined,
-              )}
-              style={{
-                flexBasis: "0%",
-                flexGrow: isMainContentCollapsed ? 0 : 1,
-                flexShrink: 1,
-              }}
-            >
+          <div className="flex w-full flex-1 overflow-hidden pr-2 md:peer-data-[state=collapsed]:pl-2">
+            <div className="flex min-w-0 flex-1 overflow-hidden rounded-tl-lg rounded-tr-lg border border-border/80 bg-background/95">
               <SidebarInset className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {activePage === "settings" ? (
                   <SettingsPage />
@@ -185,6 +145,11 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
                   <TicketsView />
                 ) : shouldRenderChatView ? (
                   <ChatView chatId={activeChatId} />
+                ) : shouldRenderSessionView ? (
+                  <SessionGroupDetailView
+                    key={activeSessionGroupId}
+                    sessionGroupId={activeSessionGroupId}
+                  />
                 ) : shouldRenderChannelView ? (
                   <ChannelView channelId={activeChannelId} />
                 ) : (
@@ -192,23 +157,6 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
                 )}
               </SidebarInset>
             </div>
-
-            {/* Session panel card (separate card, same level) */}
-            <DetailPanel
-              isOpen={hasSession}
-              onClose={closePanel}
-              containerRef={containerRef}
-              maxRatio={detailPanelMaxRatio}
-              onClosed={() => setDisplayedSessionGroupId(null)}
-            >
-              {displayedSessionGroupId && (
-                <SessionGroupDetailView
-                  key={displayedSessionGroupId}
-                  sessionGroupId={displayedSessionGroupId}
-                  panelMode
-                />
-              )}
-            </DetailPanel>
           </div>
         </SidebarProvider>
       </div>

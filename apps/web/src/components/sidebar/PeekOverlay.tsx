@@ -102,12 +102,12 @@ export function PeekOverlay({
           exit={{ x: "-100%" }}
           transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
           onMouseLeave={handleOverlayMouseLeave}
-          className="fixed inset-y-0 left-0 z-50 flex w-60 flex-col bg-surface-deep shadow-2xl shadow-black/50 ring-1 ring-border/50"
+          className="fixed inset-y-0 left-0 z-50 flex w-[22rem] flex-col bg-black/30 shadow-2xl shadow-black/50 ring-1 ring-white/10 backdrop-blur-2xl"
           style={{
             margin: "8px",
             height: "calc(100% - 16px)",
             borderRadius: "12px",
-            backgroundColor: `color-mix(in srgb, var(--sidebar) ${(features.messaging ? tabProgress : 1) * 100}%, var(--sidebar-dm))`,
+            backgroundColor: `color-mix(in srgb, rgb(12 12 12 / 0.82) ${(features.messaging ? tabProgress : 1) * 100}%, rgb(22 34 80 / 0.62))`,
           }}
         >
           <div className="flex flex-1 flex-col overflow-hidden rounded-xl">
@@ -164,7 +164,7 @@ export function PeekOverlay({
                 <SidebarTabSwitcher tabProgress={tabProgress} onTabClick={selectTab} />
               </div>
             )}
-            <div className="border-t border-border">
+            <div className="border-t border-white/10">
               <UserMenu />
             </div>
           </div>

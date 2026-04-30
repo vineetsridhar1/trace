@@ -33,8 +33,8 @@
   --chart-4: #2563eb;
   --chart-5: #1d4ed8;
 
-  --sidebar: #0a0a0a;
-  --sidebar-dm: #0b1340;
+  --sidebar: rgb(10 10 10 / 0.82);
+  --sidebar-dm: rgb(11 19 64 / 0.62);
   --sidebar-foreground: #d4d4d8;
   --sidebar-primary: #3b82f6;
   --sidebar-primary-foreground: #ffffff;
@@ -116,7 +116,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-surface-deep text-foreground;
+    @apply bg-transparent text-foreground;
   }
   html {
     @apply font-sans;

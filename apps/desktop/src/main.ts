@@ -82,6 +82,19 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    backgroundColor: "#00000000",
+    transparent: true,
+    ...(process.platform === "darwin"
+      ? {
+          vibrancy: "fullscreen-ui" as const,
+          titleBarStyle: "hiddenInset" as const,
+        }
+      : {}),
+    ...(process.platform === "win32"
+      ? {
+          backgroundMaterial: "acrylic" as const,
+        }
+      : {}),
     icon: appIconPath,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
