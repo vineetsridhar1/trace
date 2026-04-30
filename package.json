@@ -1,6 +1,7 @@
 {
   "name": "tracev2",
   "private": true,
+  "license": "FSL-1.1-ALv2",
   "packageManager": "pnpm@10.7.0",
   "scripts": {
     "dev": "pnpm -r --parallel dev & pnpm dev:agent & wait",
