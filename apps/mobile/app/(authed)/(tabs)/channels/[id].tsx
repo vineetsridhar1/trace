@@ -23,6 +23,7 @@ import { refreshOrgData } from "@/hooks/useHydrate";
 import { handleUnauthorized } from "@/lib/auth";
 import { getConnectionMode } from "@/lib/connection-target";
 import { createQuickSession } from "@/lib/createQuickSession";
+import { canUseMobileCloudHosting } from "@/lib/session-hosting";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
 
@@ -60,7 +61,7 @@ export default function ChannelDetail() {
   const userId = useAuthStore((s: AuthState) => s.user?.id ?? null);
   const channelName = useEntityField("channels", channelId, "name");
   const sections = useChannelSessionGroupSections(channelId, scope, userId);
-  const showCloudCreateButton = getConnectionMode() === "paired_local";
+  const showCloudCreateButton = canUseMobileCloudHosting(getConnectionMode());
 
   useEffect(() => {
     if (!channelId) return;

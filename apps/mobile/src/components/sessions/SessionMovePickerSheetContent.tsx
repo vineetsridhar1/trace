@@ -9,7 +9,9 @@ import {
 } from "@trace/client-core";
 import type { SessionConnection, SessionRuntimeInstance } from "@trace/gql";
 import { ListRow, Spinner, Text } from "@/components/design-system";
+import { getConnectionMode } from "@/lib/connection-target";
 import { haptic } from "@/lib/haptics";
+import { canUseMobileCloudHosting } from "@/lib/session-hosting";
 import { getClient } from "@/lib/urql";
 import { useTheme } from "@/theme";
 import { CLOUD_RUNTIME_ID } from "./session-input-composer/constants";
@@ -58,6 +60,7 @@ export function SessionMovePickerSheetContent({
     connection?.runtimeInstanceId ?? groupConnection?.runtimeInstanceId ?? null;
   const canMoveSession =
     sessionStatus !== "merged" && !isOptimistic && (connection?.canMove ?? true);
+  const canUseCloudRuntime = canUseMobileCloudHosting(getConnectionMode());
 
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,7 +94,7 @@ export function SessionMovePickerSheetContent({
   const rows = useMemo<RuntimeRow[]>(() => {
     const nextRows: RuntimeRow[] = [];
 
-    if (hosting !== "cloud") {
+    if (canUseCloudRuntime && hosting !== "cloud") {
       nextRows.push({
         key: "runtime:cloud",
         title: "Cloud",
@@ -125,7 +128,7 @@ export function SessionMovePickerSheetContent({
     }
 
     return nextRows;
-  }, [canMoveSession, currentRuntimeInstanceId, hosting, repo?.id, runtimes]);
+  }, [canMoveSession, canUseCloudRuntime, currentRuntimeInstanceId, hosting, repo?.id, runtimes]);
 
   const handleMoveToRuntime = useCallback(
     async (runtimeInstanceId: string) => {

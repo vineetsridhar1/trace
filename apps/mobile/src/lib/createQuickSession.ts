@@ -15,7 +15,7 @@ import type { CodingTool, HostingMode, SessionRuntimeInstance } from "@trace/gql
 import { getConnectionMode } from "@/lib/connection-target";
 import { getClient } from "@/lib/urql";
 import { haptic } from "@/lib/haptics";
-import { resolveMobileSessionHosting } from "@/lib/session-hosting";
+import { canUseMobileCloudHosting, resolveMobileSessionHosting } from "@/lib/session-hosting";
 import { fetchSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { useMobileUIStore } from "@/stores/ui";
 
@@ -64,11 +64,16 @@ export async function createQuickSession(
 
   const tool = DEFAULT_TOOL;
   const model = getDefaultModel(tool);
-  const hosting = options.hosting ?? resolveMobileSessionHosting(getConnectionMode());
+  const connectionMode = getConnectionMode();
+  const hosting = options.hosting ?? resolveMobileSessionHosting(connectionMode);
 
   void haptic.light();
 
   try {
+    if (hosting === "cloud" && !canUseMobileCloudHosting(connectionMode)) {
+      throw new Error("Cloud sessions are only available when connected to Trace Cloud.");
+    }
+
     const runtimeInstanceId =
       hosting === "local" ? await resolveDefaultRuntime(tool, channelRepoId) : undefined;
     if (hosting === "local" && !runtimeInstanceId) {

@@ -9,8 +9,10 @@ import {
 } from "@trace/client-core";
 import type { BridgeAccessCapability, SessionConnection, SessionRuntimeInstance } from "@trace/gql";
 import { ListRow, Spinner, Text } from "@/components/design-system";
+import { getConnectionMode } from "@/lib/connection-target";
 import { haptic } from "@/lib/haptics";
 import { applyOptimisticPatch } from "@/lib/optimisticEntity";
+import { canUseMobileCloudHosting } from "@/lib/session-hosting";
 import { getClient } from "@/lib/urql";
 import { subscribeBridgeAccessEvents } from "@/lib/bridge-access-events";
 import { alpha, useTheme } from "@/theme";
@@ -103,6 +105,7 @@ export function SessionRuntimePickerSheetContent({
   const canChangeBridge = agentStatus === "not_started" && !isOptimistic;
   const runtimeInstanceId = connection?.runtimeInstanceId ?? null;
   const currentRuntimeValue = hosting === "cloud" ? CLOUD_RUNTIME_ID : runtimeInstanceId;
+  const canUseCloudRuntime = canUseMobileCloudHosting(getConnectionMode());
 
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const [requestingRuntimeId, setRequestingRuntimeId] = useState<string | null>(null);
@@ -154,8 +157,10 @@ export function SessionRuntimePickerSheetContent({
   }, [canChangeBridge, fetchRuntimes]);
 
   const rows = useMemo<RuntimeRow[]>(() => {
-    const nextRows: RuntimeRow[] = [
-      {
+    const nextRows: RuntimeRow[] = [];
+
+    if (canUseCloudRuntime) {
+      nextRows.push({
         key: "runtime:cloud",
         title: "Cloud",
         subtitle: "Start this session in a cloud container.",
@@ -167,8 +172,8 @@ export function SessionRuntimePickerSheetContent({
         canRequestAccess: false,
         accessAllowed: true,
         lacksRepo: false,
-      },
-    ];
+      });
+    }
 
     for (const runtime of runtimes) {
       if (runtime.hostingMode !== "local" || !runtime.connected) continue;
@@ -199,7 +204,7 @@ export function SessionRuntimePickerSheetContent({
     }
 
     return nextRows;
-  }, [canChangeBridge, currentRuntimeValue, repo?.id, runtimes]);
+  }, [canChangeBridge, canUseCloudRuntime, currentRuntimeValue, repo?.id, runtimes]);
 
   const accessibleRows = useMemo(() => rows.filter((row) => row.accessAllowed), [rows]);
   const requestableRows = useMemo(() => rows.filter((row) => row.canRequestAccess), [rows]);

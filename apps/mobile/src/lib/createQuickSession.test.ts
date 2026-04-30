@@ -14,6 +14,7 @@ const reconcileOptimisticSessionPairMock = vi.fn();
 const rollbackOptimisticSessionPairMock = vi.fn();
 const tryOpenSessionPlayerMock = vi.fn();
 const closeSessionPlayerMock = vi.fn();
+const canUseMobileCloudHostingMock = vi.fn(() => true);
 
 const START_SESSION_MUTATION = "START_SESSION_MUTATION";
 const RUN_SESSION_MUTATION = "RUN_SESSION_MUTATION";
@@ -104,6 +105,7 @@ vi.mock("@/lib/connection-target", () => ({
 }));
 
 vi.mock("@/lib/session-hosting", () => ({
+  canUseMobileCloudHosting: canUseMobileCloudHostingMock,
   resolveMobileSessionHosting: vi.fn(() => "cloud"),
 }));
 
@@ -127,6 +129,8 @@ describe("createQuickSession", () => {
     rollbackOptimisticSessionPairMock.mockReset();
     tryOpenSessionPlayerMock.mockReset();
     closeSessionPlayerMock.mockReset();
+    canUseMobileCloudHostingMock.mockReset();
+    canUseMobileCloudHostingMock.mockReturnValue(true);
   });
 
   it("opens only the real session after it is created and hydrated", async () => {
@@ -207,6 +211,19 @@ describe("createQuickSession", () => {
 
     expect(pushMock).toHaveBeenCalledTimes(1);
   });
+
+  it("does not start explicit cloud sessions while paired to a local server", async () => {
+    canUseMobileCloudHostingMock.mockReturnValue(false);
+
+    const { createQuickSession } = await import("./createQuickSession");
+    await createQuickSession("channel_1", { hosting: "cloud" });
+
+    expect(mutationMock).not.toHaveBeenCalled();
+    expect(alertMock).toHaveBeenCalledWith(
+      "Couldn't start session",
+      "Cloud sessions are only available when connected to Trace Cloud.",
+    );
+  });
 });
 
 describe("startPlanImplementationSession", () => {
@@ -225,6 +242,8 @@ describe("startPlanImplementationSession", () => {
     rollbackOptimisticSessionPairMock.mockReset();
     tryOpenSessionPlayerMock.mockReset();
     closeSessionPlayerMock.mockReset();
+    canUseMobileCloudHostingMock.mockReset();
+    canUseMobileCloudHostingMock.mockReturnValue(true);
   });
 
   it("starts, runs, navigates, and terminates the source session", async () => {
